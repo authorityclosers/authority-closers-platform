@@ -46,6 +46,8 @@ grep -q 'apt-mark hold "${resolved_packages\[@\]}"' \
   "$foundation/scripts/install-os-baseline.sh"
 grep -q 'unhold_managed_packages' "$foundation/scripts/install-os-baseline.sh"
 grep -q 'restore_managed_hold_state' "$foundation/scripts/install-os-baseline.sh"
+grep -q 'ac_os_baseline_failure_disposition' "$foundation/scripts/install-os-baseline.sh"
+grep -q 'os-baseline-recovery-required.env' "$foundation/scripts/install-os-baseline.sh"
 grep -q 'hold_transition_committed=1' "$foundation/scripts/install-os-baseline.sh"
 
 printf 'PASS  OS package mutation is pinned and gated by a separately versioned baseline.\n'

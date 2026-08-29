@@ -7,6 +7,8 @@ policy_dir="$repo_root/config/release"
 policy="$policy_dir/os-baseline.env"
 packages_policy="$policy_dir/os-packages.tsv"
 resolved_packages_policy="$policy_dir/os-resolved-packages.tsv"
+# shellcheck source=/dev/null
+. "$repo_root/scripts/lib/os-baseline-transaction.sh"
 [[ -r "$policy" && -r "$packages_policy" && -r "$resolved_packages_policy" ]] || {
   printf 'OS baseline policy is incomplete.\n' >&2
   exit 1
@@ -87,8 +89,17 @@ hold_transition_started=0
 hold_transition_committed=0
 marker_path='/etc/authority-closers/os-baseline.env'
 target_manifest_path="/var/lib/authority-closers/baselines/${AC_OS_BASELINE_ID}.packages.tsv"
+recovery_marker_path='/etc/authority-closers/os-baseline-recovery-required.env'
+recovery_manifest_path='/var/lib/authority-closers/baselines/recovery-required.packages.tsv'
 marker_existed=0
 target_manifest_existed=0
+previous_baseline_id=''
+rollback_reference_manifest=''
+
+capture_live_package_graph() {
+  local destination=$1
+  dpkg-query -W -f='${binary:Package}\t${Version}\n' | LC_ALL=C sort > "$destination"
+}
 
 unhold_managed_packages() {
   local package held_output
@@ -128,12 +139,79 @@ restore_baseline_metadata() {
   fi
 }
 
+clear_active_baseline_metadata() {
+  rm -f -- "$marker_path"
+  if [[ "$target_manifest_existed" == 1 ]]; then
+    install -d -m 0750 /var/lib/authority-closers/baselines
+    cp --archive -- "$work_dir/target-packages.tsv.before" "$target_manifest_path"
+  else
+    rm -f -- "$target_manifest_path"
+  fi
+}
+
+freeze_managed_package_graph() {
+  local package status
+  local -a installed_managed=()
+  for package in "${!managed_hold_candidates[@]}"; do
+    status="$(dpkg-query -W -f='${db:Status-Abbrev}' "$package" 2>/dev/null || true)"
+    if [[ "$status" == 'ii '* ]]; then
+      installed_managed+=("$package")
+    fi
+  done
+  if ((${#installed_managed[@]} > 0)); then
+    apt-mark hold "${installed_managed[@]}" >/dev/null
+  fi
+}
+
+record_recovery_required() {
+  local live_graph=$1
+  local live_graph_sha='unavailable'
+  local rollback_graph_sha
+  local captured=0
+
+  install -d -o root -g root -m 0750 \
+    /etc/authority-closers /var/lib/authority-closers/baselines
+  if [[ -s "$live_graph" ]]; then
+    install -o root -g root -m 0640 "$live_graph" "$recovery_manifest_path"
+    live_graph_sha="$(sha256sum "$live_graph" | awk '{print $1}')"
+    captured=1
+  fi
+  rollback_graph_sha="$(sha256sum "$rollback_reference_manifest" | awk '{print $1}')"
+  printf '%s\n' \
+    'AC_OS_BASELINE_RECOVERY_REQUIRED=1' \
+    "AC_OS_BASELINE_TARGET_ID=$AC_OS_BASELINE_ID" \
+    "AC_OS_BASELINE_PREVIOUS_ID=${previous_baseline_id:-unrecorded}" \
+    "AC_OS_BASELINE_LIVE_GRAPH_CAPTURED=$captured" \
+    "AC_OS_BASELINE_LIVE_GRAPH_SHA256=$live_graph_sha" \
+    "AC_OS_BASELINE_ROLLBACK_GRAPH_SHA256=$rollback_graph_sha" \
+    > "$work_dir/os-baseline-recovery-required.env"
+  install -o root -g root -m 0640 \
+    "$work_dir/os-baseline-recovery-required.env" "$recovery_marker_path"
+}
+
 cleanup() {
   local status=$?
+  local disposition='recovery-required'
+  local live_graph="$work_dir/live-packages.after-failure.tsv"
   if [[ "$status" -ne 0 && "$hold_transition_started" == 1 \
     && "$hold_transition_committed" == 0 ]]; then
-    restore_managed_hold_state || status=1
-    restore_baseline_metadata || status=1
+    if capture_live_package_graph "$live_graph"; then
+      disposition="$(ac_os_baseline_failure_disposition \
+        "$rollback_reference_manifest" "$live_graph")" || disposition='recovery-required'
+    fi
+    if [[ "$disposition" == 'rollback-safe' ]]; then
+      restore_managed_hold_state || status=1
+      restore_baseline_metadata || status=1
+      rm -f -- "$recovery_marker_path" "$recovery_manifest_path" || status=1
+    else
+      freeze_managed_package_graph || status=1
+      clear_active_baseline_metadata || status=1
+      record_recovery_required "$live_graph" || status=1
+      printf '%s\n' \
+        'OS baseline promotion changed the live package graph before failing.' \
+        "The active baseline marker was removed; recovery evidence is at $recovery_marker_path." \
+        >&2
+    fi
   fi
   case "$work_dir" in
     /tmp/ac-os-baseline.*) rm -rf -- "$work_dir" ;;
@@ -182,6 +260,20 @@ if [[ -r "$previous_marker" ]]; then
     managed_hold_candidates[$package]=1
   done < "$previous_manifest"
 fi
+
+capture_live_package_graph "$work_dir/live-packages.before.tsv"
+if [[ -n "$previous_baseline_id" ]]; then
+  preflight_disposition="$(ac_os_baseline_failure_disposition \
+    "$previous_manifest" "$work_dir/live-packages.before.tsv")"
+  [[ "$preflight_disposition" == 'rollback-safe' ]] || {
+    printf 'Existing OS baseline marker does not match the complete live package graph.\n' >&2
+    exit 1
+  }
+  cp --archive -- "$previous_manifest" "$work_dir/rollback-reference.packages.tsv"
+else
+  cp --archive -- "$work_dir/live-packages.before.tsv" "$work_dir/rollback-reference.packages.tsv"
+fi
+rollback_reference_manifest="$work_dir/rollback-reference.packages.tsv"
 
 held_before_output="$(apt-mark showhold | LC_ALL=C sort)"
 while IFS= read -r package; do
@@ -256,5 +348,6 @@ printf '%s\n' \
 install -o root -g root -m 0644 "$marker_tmp" "$marker_path"
 
 AC_BASELINE_POLICY_DIR="$policy_dir" "$repo_root/scripts/ac-os-baseline-verify"
+rm -f -- "$recovery_marker_path" "$recovery_manifest_path"
 hold_transition_committed=1
 printf 'PASS  Installed and recorded separately versioned OS baseline %s.\n' "$AC_OS_BASELINE_ID"

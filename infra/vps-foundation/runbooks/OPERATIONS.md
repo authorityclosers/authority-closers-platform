@@ -57,6 +57,7 @@ Never run the lock-down phase on the strength of the same SSH session that perfo
 - Staged backups: `/srv/authority-closers/backups/`
 - Released operational material: `/srv/authority-closers/current/runbooks/`
 - Recorded host baseline: `/etc/authority-closers/os-baseline.env` and `/var/lib/authority-closers/baselines/`
+- Failed package transition evidence: `/etc/authority-closers/os-baseline-recovery-required.env` and `/var/lib/authority-closers/baselines/recovery-required.packages.tsv`; an active baseline marker is never restored unless the complete live package graph exactly matches its rollback manifest.
 - Release-scoped toolchain evidence: `/var/lib/authority-closers/toolchains/foundation-<full-git-sha>.env`
 - Root-only Infisical bootstrap: `/etc/authority-closers/secrets/infisical-bootstrap.env` (mode `600`; contains only machine-auth bootstrap values)
 - Transitional recovery export: `/etc/authority-closers/secrets/production.env` (mode `600`; do not use for runtime jobs and remove only after an independent recovery check)
@@ -161,12 +162,13 @@ The Infisical runtime and backup Universal Auth client secrets were rotated on 2
 1. Review pending Ubuntu, Docker, and Cloudflare package updates.
 2. Create a new `AC_OS_BASELINE_ID` and update every changed exact version/key checksum in `config/release/` through review and CI.
 3. Confirm fresh backup, restore, and rollback evidence.
-4. Run the reviewed `baseline` phase during a maintenance window. It snapshots the prior hold set, temporarily unholds only packages managed by the old/new baselines, installs and verifies the new exact graph, then holds the new graph. A failure restores the prior managed hold set. Never use an ad hoc `dist-upgrade` in a release phase.
+4. Run the reviewed `baseline` phase during a maintenance window. It snapshots the prior hold set, temporarily unholds only packages managed by the old/new baselines, installs and verifies the new exact graph, then holds the new graph. A failure restores the prior marker and hold set only if the complete live graph still exactly matches the rollback manifest. If packages changed before failure, the installer removes the active marker, freezes the managed graph, and writes recovery-required evidence. Never use an ad hoc `dist-upgrade` in a release phase.
 5. Reboot if `/var/run/reboot-required` exists, then run the complete local and external validation suite.
 
 ## Rollback
 
 - Host configuration archives are under `/root/ac-bootstrap-backups/`; each has exact package and package-hold sidecars for recovery.
+- If `os-baseline-recovery-required.env` exists, inspect its live and rollback graph hashes plus the captured `recovery-required.packages.tsv`. Re-run only the reviewed pinned baseline transition or restore exact versions from the archive sidecar; do not recreate `/etc/authority-closers/os-baseline.env` by hand. The installer clears recovery evidence only after the complete target graph, managed holds, recorded manifest, and policy all verify.
 - Restore only the required configuration subtree; do not overwrite unrelated current state.
 - Validate `sshd -t` before restarting SSH.
 - Keep an established SSH session open until a fresh session passes.
