@@ -32,13 +32,14 @@ The VPS is a deployment target, not a source-code workstation.
 ## Bootstrap gates
 
 1. `bootstrap-host.sh access /path/to/admin.pub`
-2. Verify a fresh SSH session as the named administrator.
-3. `bootstrap-host.sh harden`
+2. Verify a fresh public key-only SSH session as the named administrator.
+3. On a fresh host only, run `AC_ALLOW_PUBLIC_SSH_BOOTSTRAP=1 bootstrap-host.sh harden` to keep TCP/22 temporarily available.
 4. Verify SSH key-only access and firewall state.
 5. `bootstrap-host.sh runtime`
 6. Pin foundation images by digest and start the Compose project.
-7. Install the named Cloudflare Tunnel and validate the external hostname.
-8. Run `AC_PUBLIC_HEALTH_URL=https://infra.dipakvishwakarma.com/healthz scripts/validate-foundation.sh` as root.
-9. Before enabling any new R2 writer, run `scripts/r2-usage-guard.sh` with a metrics-capable API token and complete a reversible `scripts/r2-probe.sh` test using bucket-scoped credentials.
+7. Install the named Cloudflare Tunnel and prove a second, fresh Cloudflare Access SSH session.
+8. Run `AC_CLOUDFLARE_SSH_VERIFIED=YES bootstrap-host.sh lockdown` from the retained session, then prove another Access session while confirming UFW denies TCP/22.
+9. Run `AC_PUBLIC_HEALTH_URL=https://infra.dipakvishwakarma.com/healthz scripts/validate-foundation.sh` as root.
+10. Before enabling any new R2 writer, run `scripts/r2-usage-guard.sh` with a metrics-capable API token and complete a reversible `scripts/r2-probe.sh` test using bucket-scoped credentials.
 
 Never skip the fresh-session checks between gates.
