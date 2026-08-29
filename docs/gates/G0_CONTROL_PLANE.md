@@ -17,7 +17,7 @@ G0 is complete only when the implementation can be reproduced, reviewed, recover
 - [ ] Restored application jobs/outbox are held before side effects and explicitly reconciled.
 - [ ] Named access, MFA, break-glass recovery, and Infisical workload separation are evidenced.
 - [ ] Controlled Drive sources are indexed with version, URL, decision authority, and implementation traceability.
-- [ ] Repository rules and code ownership are enabled or a documented platform limitation is recorded.
+- [x] CODEOWNERS and CI are enabled; GitHub Free's private-branch-protection limitation and compensating controls are documented in `REPOSITORY_GOVERNANCE.md`.
 - [ ] No product endpoint is publicly exposed before the applicable authorization, isolation, recovery, and negative-path gates pass.
 
 ## Initial recovery objectives
