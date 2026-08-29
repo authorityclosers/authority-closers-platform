@@ -54,12 +54,15 @@ phase_harden() {
   id "$admin_user" >/dev/null
   id -nG "$admin_user" | grep -qw ssh-users
 
-  if ! systemctl is-active --quiet cloudflared && [[ "${AC_ALLOW_PUBLIC_SSH_BOOTSTRAP:-0}" != '1' ]]; then
+  if [[ "${AC_ALLOW_PUBLIC_SSH_BOOTSTRAP:-0}" != '1' && "${AC_CLOUDFLARE_SSH_VERIFIED:-}" != 'YES' ]]; then
     printf '%s\n' \
-      'Refusing to reset the firewall without an active Cloudflare connector.' \
-      'For a fresh host only, explicitly set AC_ALLOW_PUBLIC_SSH_BOOTSTRAP=1,' \
-      'then run the lockdown phase after the Access SSH path is verified.' >&2
+      'Refusing to reset the firewall without an explicit access-path decision.' \
+      'For a fresh host, set AC_ALLOW_PUBLIC_SSH_BOOTSTRAP=1 temporarily.' \
+      'After a second session proves Access SSH, set AC_CLOUDFLARE_SSH_VERIFIED=YES.' >&2
     exit 1
+  fi
+  if [[ "${AC_CLOUDFLARE_SSH_VERIFIED:-}" == 'YES' ]]; then
+    systemctl is-active --quiet cloudflared
   fi
 
   export DEBIAN_FRONTEND=noninteractive

@@ -13,5 +13,5 @@ Use the KVM4 VPS as a portable deployment target. Public HTTP ingress is deliver
 - Traefik and on-host public certificate automation are not required for the initial topology.
 - Cloudflare is an edge dependency, not product business logic.
 - The production apex can remain on the old VPS while a subdomain validates the new foundation.
-- Public SSH remains temporarily available with key-only authentication until a private management plane is enrolled.
-- External secret management, off-host backup key escrow, and production DNS cutover remain separate gates.
+- Public TCP/22 is denied after independently verified Cloudflare Access SSH enrollment. A public key-only rule is permitted only as an explicit, temporary fresh-host bootstrap exception.
+- Infisical secret management and encrypted off-host backup/restore are active. Production application DNS cutover remains a separate gate.

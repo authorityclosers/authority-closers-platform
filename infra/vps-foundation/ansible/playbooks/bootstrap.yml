@@ -4,14 +4,27 @@
   become: true
   gather_facts: true
   vars:
-    ac_bootstrap_phase: harden
-    ac_remote_payload: /tmp/authority-closers-infrastructure
+    ac_bootstrap_phase: ""
+    ac_remote_payload: /tmp/authority-closers-platform-foundation
+    ac_admin_public_key_path: ""
+    ac_allow_public_ssh_bootstrap: false
+    ac_cloudflare_ssh_verified: false
   pre_tasks:
     - name: Require Ubuntu 24.04
       ansible.builtin.assert:
         that:
           - ansible_distribution == 'Ubuntu'
           - ansible_distribution_version is version('24.04', '>=')
+    - name: Require an explicit supported bootstrap phase
+      ansible.builtin.assert:
+        that:
+          - ac_bootstrap_phase in ['access', 'harden', 'runtime', 'lockdown']
+        fail_msg: Set ac_bootstrap_phase explicitly; no host-changing phase is the default.
+    - name: Require the remote public-key path for access bootstrap
+      ansible.builtin.assert:
+        that:
+          - ac_admin_public_key_path | length > 0
+      when: ac_bootstrap_phase == 'access'
   tasks:
     - name: Copy reviewed infrastructure payload
       ansible.builtin.copy:
@@ -20,9 +33,21 @@
         owner: root
         group: root
         mode: preserve
-    - name: Run the selected idempotent bootstrap gate
+    - name: Run the access bootstrap gate
+      ansible.builtin.command:
+        argv:
+          - "{{ ac_remote_payload }}/scripts/bootstrap-host.sh"
+          - access
+          - "{{ ac_admin_public_key_path }}"
+      when: ac_bootstrap_phase == 'access'
+      changed_when: true
+    - name: Run the selected non-access bootstrap gate
       ansible.builtin.command:
         argv:
           - "{{ ac_remote_payload }}/scripts/bootstrap-host.sh"
           - "{{ ac_bootstrap_phase }}"
+      environment:
+        AC_ALLOW_PUBLIC_SSH_BOOTSTRAP: "{{ '1' if ac_allow_public_ssh_bootstrap | bool else '0' }}"
+        AC_CLOUDFLARE_SSH_VERIFIED: "{{ 'YES' if ac_cloudflare_ssh_verified | bool else '' }}"
+      when: ac_bootstrap_phase != 'access'
       changed_when: true
