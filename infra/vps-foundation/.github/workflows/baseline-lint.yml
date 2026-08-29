@@ -1,0 +1,51 @@
+name: Infrastructure baseline lint
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reject CRLF in Linux operational files
+        shell: bash
+        run: |
+          if git grep -Il $'\r'; then
+            echo 'CRLF detected in a Linux operational file.' >&2
+            exit 1
+          fi
+
+      - name: Validate shell syntax
+        shell: bash
+        run: |
+          files=()
+          while IFS= read -r -d '' candidate; do
+            if head -n 1 "$candidate" | grep -Eq '^#!.*(ba)?sh([[:space:]]|$)'; then
+              files+=("$candidate")
+            fi
+          done < <(find scripts -maxdepth 1 -type f -print0)
+          bash -n "${files[@]}"
+
+      - name: Run ShellCheck
+        shell: bash
+        run: |
+          files=()
+          while IFS= read -r -d '' candidate; do
+            if head -n 1 "$candidate" | grep -Eq '^#!.*(ba)?sh([[:space:]]|$)'; then
+              files+=("$candidate")
+            fi
+          done < <(find scripts -maxdepth 1 -type f -print0)
+          shellcheck "${files[@]}"
+
+      - name: Require digest-pinned Compose images
+        env:
+          CADDY_IMAGE: caddy@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          OTEL_IMAGE: otel/opentelemetry-collector-contrib@sha256:1111111111111111111111111111111111111111111111111111111111111111
+        run: scripts/validate-images-pinned.sh

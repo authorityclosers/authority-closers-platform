@@ -1,0 +1,10 @@
+[Unit]
+Description=Run the Authority Closers encrypted backup daily
+
+[Timer]
+OnCalendar=*-*-* 02:15:00 UTC
+RandomizedDelaySec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

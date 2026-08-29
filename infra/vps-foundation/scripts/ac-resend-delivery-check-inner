@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+message_id="${1:?Pass the Resend message id returned by ac-resend-send-test}"
+: "${RESEND_API_KEY:?RESEND_API_KEY is required}"
+
+response_file="$(mktemp -t ac-resend-delivery.XXXXXX.json)"
+cleanup() { rm -f -- "$response_file"; }
+trap cleanup EXIT
+
+http_status="$(curl --silent --show-error --max-time 20 \
+  -H "Authorization: Bearer $RESEND_API_KEY" \
+  -o "$response_file" \
+  -w '%{http_code}' \
+  "https://api.resend.com/emails/$message_id")"
+
+if [[ "$http_status" == "401" ]]; then
+  printf '%s\n' 'SKIP Resend delivery lookup requires a read-capable API key; the runtime key is intentionally sending-only.'
+  exit 0
+fi
+
+if [[ "$http_status" -ge 400 ]]; then
+  cat "$response_file" >&2
+  exit 1
+fi
+
+jq -r '[.id, (.last_event // "unknown"), (.created_at // "unknown")] | @tsv' "$response_file"

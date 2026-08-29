@@ -1,0 +1,21 @@
+name: Control-plane validation
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install shell validation tools
+        run: sudo apt-get update && sudo apt-get install --yes shellcheck
+
+      - name: Validate repository control plane
+        run: bash scripts/validate-control-plane.sh

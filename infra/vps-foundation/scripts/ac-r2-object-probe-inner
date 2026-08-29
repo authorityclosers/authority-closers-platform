@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+: "${R2_ENDPOINT:?R2_ENDPOINT is required}"
+: "${R2_ACCESS_KEY_ID:?R2_ACCESS_KEY_ID is required}"
+: "${R2_SECRET_ACCESS_KEY:?R2_SECRET_ACCESS_KEY is required}"
+
+remote_name='ac_r2_object_probe'
+remote_prefix="${remote_name^^}"
+export "RCLONE_CONFIG_${remote_prefix}_TYPE=s3"
+export "RCLONE_CONFIG_${remote_prefix}_PROVIDER=Cloudflare"
+export "RCLONE_CONFIG_${remote_prefix}_ACCESS_KEY_ID=$R2_ACCESS_KEY_ID"
+export "RCLONE_CONFIG_${remote_prefix}_SECRET_ACCESS_KEY=$R2_SECRET_ACCESS_KEY"
+export "RCLONE_CONFIG_${remote_prefix}_ENDPOINT=$R2_ENDPOINT"
+export "RCLONE_CONFIG_${remote_prefix}_REGION=auto"
+export "RCLONE_CONFIG_${remote_prefix}_NO_CHECK_BUCKET=true"
+
+bucket="${R2_BACKUP_BUCKET:-authority-closers-backups-prod}"
+probe_target="$remote_name:$bucket/foundation-probes/object-write-read-$(date -u +%Y%m%dT%H%M%SZ)-$$.txt"
+cleanup() { rclone deletefile "$probe_target" >/dev/null 2>&1 || true; }
+trap cleanup EXIT
+
+expected='authority-closers-r2-object-probe-ok'
+printf '%s' "$expected" | rclone rcat "$probe_target"
+actual="$(rclone cat "$probe_target")"
+[[ "$actual" == "$expected" ]]
+printf 'PASS  R2 object write/read/delete succeeded in the backup bucket.\n'

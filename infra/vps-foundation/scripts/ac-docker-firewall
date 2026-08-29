@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+external_interface="${AC_EXTERNAL_INTERFACE:-eth0}"
+
+install_rule() {
+  local binary="$1"
+  shift
+  if ! "$binary" -C DOCKER-USER "$@" 2>/dev/null; then
+    "$binary" -I DOCKER-USER 1 "$@"
+  fi
+}
+
+if iptables -nL DOCKER-USER >/dev/null 2>&1; then
+  install_rule iptables -i "$external_interface" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+  if ! iptables -C DOCKER-USER -i "$external_interface" -j DROP 2>/dev/null; then
+    iptables -A DOCKER-USER -i "$external_interface" -j DROP
+  fi
+fi
+
+if ip6tables -nL DOCKER-USER >/dev/null 2>&1; then
+  install_rule ip6tables -i "$external_interface" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+  if ! ip6tables -C DOCKER-USER -i "$external_interface" -j DROP 2>/dev/null; then
+    ip6tables -A DOCKER-USER -i "$external_interface" -j DROP
+  fi
+fi

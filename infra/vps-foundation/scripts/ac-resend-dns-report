@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+exec /usr/local/sbin/ac-infisical-run \
+  -- /usr/local/sbin/ac-resend-dns-report-inner

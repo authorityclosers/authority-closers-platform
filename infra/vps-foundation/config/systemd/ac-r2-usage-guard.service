@@ -1,0 +1,17 @@
+[Unit]
+Description=Authority Closers R2 conservative usage guard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/ac-r2-usage-guard
+User=root
+Group=root
+Environment=AC_IPV4_ONLY=1
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+RestrictAddressFamilies=AF_INET AF_UNIX
+ReadOnlyPaths=/etc/authority-closers/secrets/infisical-bootstrap.env /srv/authority-closers /usr/local/sbin

@@ -1,0 +1,10 @@
+[Unit]
+Description=Run the Authority Closers weekly Restic restore drill
+
+[Timer]
+OnCalendar=Sun *-*-* 04:15:00 UTC
+RandomizedDelaySec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

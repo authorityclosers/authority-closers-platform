@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+: "${R2_ENDPOINT:?R2_ENDPOINT is required}"
+: "${R2_ACCESS_KEY_ID:?R2_ACCESS_KEY_ID is required}"
+: "${R2_SECRET_ACCESS_KEY:?R2_SECRET_ACCESS_KEY is required}"
+: "${R2_BACKUP_BUCKET:?R2_BACKUP_BUCKET is required}"
+: "${RESTIC_PASSWORD:?RESTIC_PASSWORD is required}"
+
+export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID"
+export AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
+export RESTIC_REPOSITORY="${RESTIC_REPOSITORY:-s3:${R2_ENDPOINT#https://}/${R2_BACKUP_BUCKET}}"
+export RESTIC_CACHE_DIR='/var/cache/authority-closers-restic'
+: "${AC_FOUNDATION_RPO_TARGET_SECONDS:=86400}"
+: "${AC_FOUNDATION_RESTORE_TARGET_SECONDS:=14400}"
+
+started_epoch="$(date +%s)"
+snapshots_json="$(restic snapshots --latest 1 --json)"
+snapshot_count="$(jq 'length' <<<"$snapshots_json")"
+(( snapshot_count > 0 )) || { printf 'FAIL  No Restic snapshots exist.\n' >&2; exit 1; }
+
+latest_snapshot_time="$(jq -r '.[0].time' <<<"$snapshots_json")"
+latest_snapshot_epoch="$(date --date="$latest_snapshot_time" +%s)"
+snapshot_age_seconds="$((started_epoch - latest_snapshot_epoch))"
+if ((snapshot_age_seconds < 0 || snapshot_age_seconds > AC_FOUNDATION_RPO_TARGET_SECONDS)); then
+  printf 'FAIL  Latest snapshot age %s seconds exceeds the %s-second foundation RPO target.\n' \
+    "$snapshot_age_seconds" "$AC_FOUNDATION_RPO_TARGET_SECONDS" >&2
+  exit 1
+fi
+
+restore_dir="$(mktemp -d -t ac-restic-restore.XXXXXX)"
+cleanup() { rm -rf -- "$restore_dir"; }
+trap cleanup EXIT
+
+restic restore latest --target "$restore_dir" >/dev/null
+[[ -d "$restore_dir/srv/authority-closers" ]] || {
+  printf 'FAIL  Restored tree is missing /srv/authority-closers.\n' >&2
+  exit 1
+}
+
+restic check --read-data-subset=1/20 >/dev/null
+finished_epoch="$(date +%s)"
+restore_duration_seconds="$((finished_epoch - started_epoch))"
+if ((restore_duration_seconds > AC_FOUNDATION_RESTORE_TARGET_SECONDS)); then
+  printf 'FAIL  Restore drill took %s seconds, exceeding the %s-second foundation target.\n' \
+    "$restore_duration_seconds" "$AC_FOUNDATION_RESTORE_TARGET_SECONDS" >&2
+  exit 1
+fi
+
+printf 'PASS  Restic repository restore: snapshot_age_seconds=%s restore_duration_seconds=%s integrity_sample=1/20.\n' \
+  "$snapshot_age_seconds" "$restore_duration_seconds"

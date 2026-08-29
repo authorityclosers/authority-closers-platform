@@ -1,0 +1,10 @@
+secrets/
+*.env
+*.key
+*.pem
+*.tfstate
+*.tfstate.*
+.terraform/
+.ansible/
+artifacts/
+reports/

@@ -1,0 +1,9 @@
+-w /etc/ssh/ -p wa -k ac_ssh_config
+-w /etc/sudoers -p wa -k ac_privilege
+-w /etc/sudoers.d/ -p wa -k ac_privilege
+-w /etc/docker/ -p wa -k ac_docker_config
+-w /etc/cloudflared/ -p wa -k ac_tunnel_config
+-w /etc/authority-closers/ -p wa -k ac_secrets_config
+-w /srv/authority-closers/compose/ -p wa -k ac_deploy_config
+-w /srv/authority-closers/env/ -p wa -k ac_runtime_config
+-w /usr/local/sbin/ -p wa -k ac_ops_tools

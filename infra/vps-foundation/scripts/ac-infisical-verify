@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+/usr/local/sbin/ac-infisical-run \
+  -- sh -c 'test -n "$R2_ENDPOINT" && test -n "$R2_ACCESS_KEY_ID" && test -n "$RESTIC_REPOSITORY" && test -n "$RESEND_API_KEY"'
+
+printf 'PASS  VPS Infisical CLI can inject the production configuration without printing values.\n'

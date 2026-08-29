@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+env_file='/etc/authority-closers/secrets/infisical-bootstrap.env'
+[[ -r "$env_file" ]] || { printf 'Infisical bootstrap is not readable: %s\n' "$env_file" >&2; exit 1; }
+
+set -a
+# shellcheck disable=SC1090
+source "$env_file"
+set +a
+
+: "${INFISICAL_BACKUP_CLIENT_ID:?INFISICAL_BACKUP_CLIENT_ID is required}"
+: "${INFISICAL_BACKUP_CLIENT_SECRET:?INFISICAL_BACKUP_CLIENT_SECRET is required}"
+project_id="${INFISICAL_PROJECT_ID:-b421c44e-4599-4394-8df6-758ed8aedfed}"
+
+token="$(infisical login \
+  --domain='https://app.infisical.com' \
+  --method='universal-auth' \
+  --client-id="$INFISICAL_BACKUP_CLIENT_ID" \
+  --client-secret="$INFISICAL_BACKUP_CLIENT_SECRET" \
+  --plain \
+  --silent \
+  --telemetry=false 2>/dev/null)"
+
+[[ "$token" == eyJ* ]] || { printf 'Infisical backup login did not return an access token.\n' >&2; exit 1; }
+
+exec infisical run \
+  --token="$token" \
+  --projectId="$project_id" \
+  --env='prod' \
+  --path='/' \
+  "$@"

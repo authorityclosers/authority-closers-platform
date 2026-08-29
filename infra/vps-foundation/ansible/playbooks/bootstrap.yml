@@ -1,0 +1,28 @@
+---
+- name: Bootstrap Authority Closers VPS foundation
+  hosts: authority_closers
+  become: true
+  gather_facts: true
+  vars:
+    ac_bootstrap_phase: harden
+    ac_remote_payload: /tmp/authority-closers-infrastructure
+  pre_tasks:
+    - name: Require Ubuntu 24.04
+      ansible.builtin.assert:
+        that:
+          - ansible_distribution == 'Ubuntu'
+          - ansible_distribution_version is version('24.04', '>=')
+  tasks:
+    - name: Copy reviewed infrastructure payload
+      ansible.builtin.copy:
+        src: ../../
+        dest: "{{ ac_remote_payload }}/"
+        owner: root
+        group: root
+        mode: preserve
+    - name: Run the selected idempotent bootstrap gate
+      ansible.builtin.command:
+        argv:
+          - "{{ ac_remote_payload }}/scripts/bootstrap-host.sh"
+          - "{{ ac_bootstrap_phase }}"
+      changed_when: true

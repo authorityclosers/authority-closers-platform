@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "${AC_IPV4_ONLY:-0}" != '1' ]]; then
+  exec systemd-run --quiet --wait --collect --pipe \
+    --setenv=AC_IPV4_ONLY=1 \
+    -p 'RestrictAddressFamilies=AF_INET AF_UNIX' \
+    "$0" "$@"
+fi
+
+exec /usr/local/sbin/ac-infisical-run-backup \
+  -- /srv/authority-closers/current/scripts/r2-probe.sh

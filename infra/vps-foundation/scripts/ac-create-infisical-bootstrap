@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+source_file='/etc/authority-closers/secrets/production.env'
+target_file='/etc/authority-closers/secrets/infisical-bootstrap.env'
+[[ -r "$source_file" ]] || { printf 'Recovery export is not readable: %s\n' "$source_file" >&2; exit 1; }
+
+umask 077
+tmp_file="$(mktemp '/etc/authority-closers/secrets/.infisical-bootstrap.XXXXXX')"
+cleanup() { rm -f -- "$tmp_file"; }
+trap cleanup EXIT
+
+printf 'INFISICAL_PROJECT_ID=b421c44e-4599-4394-8df6-758ed8aedfed\n' > "$tmp_file"
+grep -E '^(INFISICAL_VPS_CLIENT_ID|INFISICAL_VPS_CLIENT_SECRET|INFISICAL_BACKUP_CLIENT_ID|INFISICAL_BACKUP_CLIENT_SECRET)=' \
+  "$source_file" >> "$tmp_file"
+
+for required in \
+  INFISICAL_VPS_CLIENT_ID \
+  INFISICAL_VPS_CLIENT_SECRET \
+  INFISICAL_BACKUP_CLIENT_ID \
+  INFISICAL_BACKUP_CLIENT_SECRET; do
+  grep -q "^${required}=" "$tmp_file" || {
+    printf 'Required bootstrap key is missing: %s\n' "$required" >&2
+    exit 1
+  }
+done
+
+chown root:root "$tmp_file"
+chmod 600 "$tmp_file"
+install -o root -g root -m 600 "$tmp_file" "$target_file"
+printf 'PASS  Identity-only Infisical bootstrap installed at %s.\n' "$target_file"
