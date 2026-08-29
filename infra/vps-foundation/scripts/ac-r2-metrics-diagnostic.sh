@@ -21,6 +21,8 @@ printf 'REST_RESPONSE_OK=true\n'
 
 month_start="$(date -u +%Y-%m-01T00:00:00Z)"
 month_end="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+# Dollar-prefixed names are GraphQL variables, not shell expansions.
+# shellcheck disable=SC2016
 graphql_query='query R2Monthly($accountTag: string!, $startDate: Time!, $endDate: Time!) { viewer { accounts(filter: {accountTag: $accountTag}) { r2OperationsAdaptiveGroups(limit: 10000, filter: {datetime_geq: $startDate, datetime_leq: $endDate}) { sum { requests } dimensions { actionType } } } } }'
 graphql_body="$(jq -n \
   --arg query "$graphql_query" \
