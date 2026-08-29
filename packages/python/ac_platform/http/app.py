@@ -7,6 +7,8 @@ import structlog
 from fastapi import FastAPI, Request, Response, status
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
+from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from ac_platform import __version__
 from ac_platform.application.settings import get_settings
@@ -36,6 +38,22 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
     register_problem_handlers(application)
+    application.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts)
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.allowed_origins,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=[
+            "authorization",
+            "content-type",
+            "idempotency-key",
+            "if-match",
+            "x-request-id",
+        ],
+        expose_headers=["etag", "x-request-id", "x-ac-release-id"],
+        max_age=600,
+    )
 
     @application.middleware("http")
     async def request_context(request: Request, call_next) -> Response:  # type: ignore[no-untyped-def]

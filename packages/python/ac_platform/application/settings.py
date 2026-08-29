@@ -29,6 +29,21 @@ class Settings(BaseSettings):
     admin_app_url: AnyHttpUrl = AnyHttpUrl("http://localhost:3001")
     api_url: AnyHttpUrl = AnyHttpUrl("http://localhost:8000")
 
+    @property
+    def allowed_hosts(self) -> list[str]:
+        hosts = {
+            value.host
+            for value in (self.public_app_url, self.admin_app_url, self.api_url)
+            if value.host is not None
+        }
+        if self.environment in {"local", "test"}:
+            hosts.update({"localhost", "127.0.0.1", "test"})
+        return sorted(hosts)
+
+    @property
+    def allowed_origins(self) -> list[str]:
+        return [str(self.public_app_url).rstrip("/"), str(self.admin_app_url).rstrip("/")]
+
 
 @lru_cache
 def get_settings() -> Settings:
