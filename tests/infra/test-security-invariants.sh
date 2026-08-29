@@ -13,6 +13,8 @@ fi
 grep -q 'export INFISICAL_TOKEN=' "$foundation/scripts/ac-infisical-run"
 grep -q 'export INFISICAL_TOKEN=' "$foundation/scripts/ac-infisical-run-backup"
 
+# The PowerShell token is intentionally literal in this static policy check.
+# shellcheck disable=SC2016
 if grep -Eq '\[Parameter\(Mandatory = \$true\)\].*(ApiToken|ApiKey)' \
   "$foundation/scripts/configure-cloudflare.ps1" \
   "$foundation/scripts/configure-resend-domain.ps1"; then

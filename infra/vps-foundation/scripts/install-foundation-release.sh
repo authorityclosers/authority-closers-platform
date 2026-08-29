@@ -84,9 +84,11 @@ else
   printf '%s\n' "$release_id" > "$stage_dir/RELEASE-ID"
   (
     cd "$stage_dir"
-    find . -type f ! -name RELEASE-FILES.sha256 -print0 \
-      | LC_ALL=C sort -z \
-      | xargs -0 sha256sum > RELEASE-FILES.sha256
+    mapfile -d '' -t release_files < <(find . -type f -print0 | LC_ALL=C sort -z)
+    : > RELEASE-FILES.sha256
+    for release_file in "${release_files[@]}"; do
+      sha256sum "$release_file" >> RELEASE-FILES.sha256
+    done
     sha256sum --check --strict RELEASE-FILES.sha256 >/dev/null
   )
   find "$stage_dir" -type d -exec chmod 0750 {} +
