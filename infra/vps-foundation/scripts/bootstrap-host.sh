@@ -240,6 +240,7 @@ phase_runtime() {
   getent passwd cloudflared >/dev/null || useradd --system --user-group --home-dir /var/lib/cloudflared --shell /usr/sbin/nologin cloudflared
   install -d -m 0750 -o root -g cloudflared /etc/cloudflared
 
+  "$repo_root/scripts/install-pinned-toolchain.sh"
   AC_RELEASE_ID="$release_id" "$repo_root/scripts/install-foundation-release.sh"
 
   docker network inspect ac_edge >/dev/null 2>&1 || docker network create ac_edge
