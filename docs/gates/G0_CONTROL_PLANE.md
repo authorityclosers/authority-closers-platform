@@ -9,7 +9,7 @@ G0 is complete only when the implementation can be reproduced, reviewed, recover
 - [x] The working branch is `codex/g0-control-plane`.
 - [x] The live VPS foundation source is migrated into the platform repository with provenance.
 - [ ] All currently live operational scripts and systemd units are committed and released immutably.
-- [ ] CI validates shell syntax, ShellCheck, credential signatures, and digest-only container images.
+- [x] CI validates shell syntax, ShellCheck, credential signatures, line endings, and digest-only container images (GitHub Actions run `33270276432`).
 - [ ] Re-running host hardening cannot silently reopen public SSH.
 - [ ] Current host package updates are assessed, applied safely, and verified.
 - [ ] R2 documentation matches the enabled encrypted backup and restore state.
