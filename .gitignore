@@ -24,5 +24,6 @@ test-results/
 .ruff_cache/
 __pycache__/
 *.py[cod]
+*.tsbuildinfo
 .DS_Store
 Thumbs.db
