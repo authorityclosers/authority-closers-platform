@@ -23,10 +23,17 @@ rclone lsf "$remote_name:$object_bucket" --max-depth 1 >/dev/null
 
 probe_targets=()
 cleanup() {
-  local target
+  local target status cleanup_failed=0
+  status=$?
+  set +e
   for target in "${probe_targets[@]}"; do
-    rclone deletefile "$target" >/dev/null 2>&1 || true
+    if ! rclone deletefile "$target" >/dev/null 2>&1; then
+      printf 'FAIL  R2 probe cleanup could not delete %s.\n' "$target" >&2
+      cleanup_failed=1
+    fi
   done
+  ((cleanup_failed == 0)) || exit 1
+  exit "$status"
 }
 trap cleanup EXIT
 
@@ -44,6 +51,7 @@ probe_bucket() {
   actual="$(rclone cat "$probe_target")"
   [[ "$actual" == "$expected" ]]
   rclone deletefile "$probe_target"
+  probe_targets=("${probe_targets[@]:0:${#probe_targets[@]}-1}")
 }
 
 probe_bucket "$backup_bucket"

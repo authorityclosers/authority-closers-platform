@@ -1,24 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-env_file='/etc/authority-closers/secrets/infisical-bootstrap.env'
-[[ -r "$env_file" ]] || { printf 'Secret environment is not readable: %s\n' "$env_file" >&2; exit 1; }
+/usr/local/sbin/ac-infisical-run -- true >/dev/null
 
-set -a
-# shellcheck disable=SC1090
-source "$env_file"
-set +a
-
-: "${INFISICAL_VPS_CLIENT_ID:?INFISICAL_VPS_CLIENT_ID is required}"
-: "${INFISICAL_VPS_CLIENT_SECRET:?INFISICAL_VPS_CLIENT_SECRET is required}"
-
-infisical login \
-  --domain='https://app.infisical.com' \
-  --method='universal-auth' \
-  --client-id="$INFISICAL_VPS_CLIENT_ID" \
-  --client-secret="$INFISICAL_VPS_CLIENT_SECRET" \
-  --silent \
-  --telemetry=false \
-  >/dev/null 2>&1
-
-printf 'PASS  VPS Infisical Universal Auth login completed.\n'
+printf 'PASS  VPS Infisical Universal Auth exchange completed without an argv credential.\n'

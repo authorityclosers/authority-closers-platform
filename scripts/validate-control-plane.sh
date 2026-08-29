@@ -28,9 +28,17 @@ if git grep -nEI \
 fi
 
 if [[ -x infra/vps-foundation/scripts/validate-images-pinned.sh ]]; then
-  CADDY_IMAGE="caddy@sha256:$(printf '0%.0s' {1..64})" \
-  OTEL_IMAGE="otel/opentelemetry-collector-contrib@sha256:$(printf '1%.0s' {1..64})" \
-    infra/vps-foundation/scripts/validate-images-pinned.sh
+  infra/vps-foundation/scripts/validate-images-pinned.sh
 fi
+
+if [[ -x tests/infra/run.sh ]]; then
+  tests/infra/run.sh
+fi
+
+command -v pwsh >/dev/null 2>&1 || {
+  printf 'PowerShell is required to parse operational .ps1 files.\n' >&2
+  exit 1
+}
+pwsh -NoProfile -NonInteractive -File scripts/validate-powershell.ps1
 
 printf 'PASS  Control-plane validation completed.\n'

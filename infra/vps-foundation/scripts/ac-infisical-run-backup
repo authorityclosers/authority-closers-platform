@@ -13,19 +13,38 @@ set +a
 : "${INFISICAL_BACKUP_CLIENT_SECRET:?INFISICAL_BACKUP_CLIENT_SECRET is required}"
 project_id="${INFISICAL_PROJECT_ID:-b421c44e-4599-4394-8df6-758ed8aedfed}"
 
-token="$(infisical login \
-  --domain='https://app.infisical.com' \
-  --method='universal-auth' \
-  --client-id="$INFISICAL_BACKUP_CLIENT_ID" \
-  --client-secret="$INFISICAL_BACKUP_CLIENT_SECRET" \
-  --plain \
-  --silent \
-  --telemetry=false 2>/dev/null)"
+# Credentials and the resulting short-lived token travel only through a
+# root-owned environment/stdin pipe, never through process arguments.
+token="$(
+  AC_INFISICAL_CLIENT_ID="$INFISICAL_BACKUP_CLIENT_ID" \
+  AC_INFISICAL_CLIENT_SECRET="$INFISICAL_BACKUP_CLIENT_SECRET" \
+    python3 - <<'PY' \
+      | curl --fail --silent --show-error \
+          --request POST \
+          --header 'Content-Type: application/json' \
+          --data-binary @- \
+          'https://app.infisical.com/api/v1/auth/universal-auth/login' \
+      | jq --exit-status --raw-output '.accessToken | select(type == "string" and length > 20)'
+import json
+import os
 
-[[ "$token" == eyJ* ]] || { printf 'Infisical backup login did not return an access token.\n' >&2; exit 1; }
+print(json.dumps({
+    "clientId": os.environ["AC_INFISICAL_CLIENT_ID"],
+    "clientSecret": os.environ["AC_INFISICAL_CLIENT_SECRET"],
+}))
+PY
+)"
+
+[[ ${#token} -gt 20 ]] || { printf 'Infisical backup login did not return an access token.\n' >&2; exit 1; }
+
+export INFISICAL_TOKEN="$token"
+export INFISICAL_API_URL='https://app.infisical.com'
+export INFISICAL_DISABLE_UPDATE_CHECK='true'
+unset token
+unset INFISICAL_VPS_CLIENT_ID INFISICAL_VPS_CLIENT_SECRET
+unset INFISICAL_BACKUP_CLIENT_ID INFISICAL_BACKUP_CLIENT_SECRET
 
 exec infisical run \
-  --token="$token" \
   --projectId="$project_id" \
   --env='prod' \
   --path='/' \

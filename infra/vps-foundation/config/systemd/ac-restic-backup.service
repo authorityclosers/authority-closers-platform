@@ -14,5 +14,5 @@ PrivateTmp=true
 ProtectHome=true
 ProtectSystem=strict
 RestrictAddressFamilies=AF_INET AF_UNIX
-ReadOnlyPaths=/etc/authority-closers/secrets/infisical-bootstrap.env /srv/authority-closers /etc/ssh /etc/systemd/system /etc/fail2ban /usr/local/sbin /var/lib/docker/volumes
+ReadOnlyPaths=/etc/authority-closers/secrets/infisical-bootstrap.env /srv/authority-closers /etc/ssh /etc/apt/apt.conf.d /etc/audit/rules.d /etc/docker /etc/systemd/system /etc/fail2ban /etc/systemd/journald.conf.d /etc/sysctl.d /etc/security/limits.d /etc/ufw /usr/local/libexec/authority-closers /usr/local/sbin /var/lib/docker/volumes
 ReadWritePaths=/var/cache/authority-closers-restic

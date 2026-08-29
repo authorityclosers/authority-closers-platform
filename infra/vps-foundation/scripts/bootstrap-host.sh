@@ -14,14 +14,51 @@ require_root() {
 }
 
 backup_host_config() {
-  local stamp archive
+  local stamp archive candidate
+  local -a candidates paths
   stamp="$(date -u +%Y%m%dT%H%M%SZ)"
   archive="/root/ac-bootstrap-backups/pre-change-${stamp}.tar.gz"
   install -d -m 0700 /root/ac-bootstrap-backups
-  tar --acls --xattrs -czf "$archive" \
-    /etc/ssh /etc/ufw /etc/apt/apt.conf.d /etc/systemd/journald.conf \
-    /etc/systemd/journald.conf.d /etc/sysctl.conf /etc/sysctl.d \
-    /etc/fstab 2>/dev/null || true
+
+  shopt -s nullglob
+  candidates=(
+    /etc/ssh
+    /etc/ufw
+    /etc/apt/apt.conf.d
+    /etc/apt/sources.list.d
+    /etc/systemd/journald.conf
+    /etc/systemd/journald.conf.d
+    /etc/systemd/system/ac-*.service
+    /etc/systemd/system/ac-*.timer
+    /etc/systemd/system/cloudflared.service
+    /etc/sysctl.conf
+    /etc/sysctl.d
+    /etc/fail2ban
+    /etc/audit/rules.d
+    /etc/security/limits.d
+    /etc/docker
+    /etc/fstab
+    /usr/local/sbin/ac-*
+    /srv/authority-closers/current
+  )
+  shopt -u nullglob
+  paths=()
+  for candidate in "${candidates[@]}"; do
+    if [[ -e "$candidate" || -L "$candidate" ]]; then
+      paths+=("${candidate#/}")
+    fi
+  done
+  ((${#paths[@]} > 0)) || {
+    printf 'No rollback source paths exist; refusing to continue.\n' >&2
+    exit 1
+  }
+
+  tar --acls --xattrs --numeric-owner --directory=/ --create --gzip --file="$archive" "${paths[@]}"
+  tar --list --gzip --file="$archive" etc/ssh >/dev/null || {
+    printf 'Rollback archive verification failed: %s\n' "$archive" >&2
+    rm -f -- "$archive"
+    exit 1
+  }
   chmod 0600 "$archive"
   printf 'Created rollback archive %s\n' "$archive"
 }
@@ -70,19 +107,9 @@ phase_harden() {
   apt-get -y dist-upgrade
   apt-get install -y --no-install-recommends \
     apparmor apparmor-utils auditd audispd-plugins ca-certificates curl fail2ban \
-    gnupg jq logrotate needrestart rclone restic rsync sysstat ufw unattended-upgrades unzip
+    gnupg jq logrotate needrestart python3 python3-yaml restic rsync sysstat ufw unattended-upgrades unzip
 
-  # Infisical moved its CLI packages from Cloudsmith to its official repository.
-  # Keep future rebuilds on the supported source before installing the CLI.
-  if [[ ! -f /etc/apt/sources.list.d/infisical.list ]]; then
-    curl -1sLf https://artifacts-cli.infisical.com/setup.deb.sh | bash
-  fi
-  apt-get update
-  apt-get install -y --no-install-recommends infisical
-
-  # The Ubuntu package can lag behind R2 S3 API behavior. Keep the single
-  # static client on the current official stable release.
-  curl --fail --silent --show-error https://rclone.org/install.sh | bash
+  "$repo_root/scripts/install-pinned-toolchain.sh"
 
   hostnamectl set-hostname ac-kvm4-prod
   if ! grep -qE '^127\.0\.1\.1[[:space:]]+ac-kvm4-prod([[:space:]]|$)' /etc/hosts; then
@@ -135,16 +162,25 @@ phase_harden() {
 }
 
 phase_lockdown() {
+  local rule_number
+  local -a public_ssh_rules
   if [[ "${AC_CLOUDFLARE_SSH_VERIFIED:-}" != 'YES' ]]; then
     printf 'Set AC_CLOUDFLARE_SSH_VERIFIED=YES only after a second session proves the Access SSH path.\n' >&2
     exit 1
   fi
 
   systemctl is-active --quiet cloudflared
-  ufw --force delete allow 22/tcp >/dev/null 2>&1 || true
+  mapfile -t public_ssh_rules < <(
+    ufw status numbered \
+      | awk '/(22\/tcp|OpenSSH)/ && /ALLOW/ {number=$1; gsub(/[^0-9]/, "", number); if (number != "") print number}' \
+      | sort -rn
+  )
+  for rule_number in "${public_ssh_rules[@]}"; do
+    ufw --force delete "$rule_number"
+  done
   ufw reload
 
-  if ufw status | grep -qE '(^|[[:space:]])22/tcp[[:space:]]+ALLOW'; then
+  if ufw status numbered | grep -Ei '(22/tcp|OpenSSH)' | grep -Eq '[[:space:]]ALLOW([[:space:]]|$)'; then
     printf 'Public SSH allow rule still exists after lock-down.\n' >&2
     exit 1
   fi
@@ -153,6 +189,14 @@ phase_lockdown() {
 }
 
 phase_runtime() {
+  local release_id compose_file image_env_file
+  release_id="${AC_RELEASE_ID:-}"
+  [[ "$release_id" =~ ^foundation-[0-9a-f]{7,40}$ ]] || {
+    printf 'Set AC_RELEASE_ID=foundation-<reviewed-git-sha> for the runtime phase.\n' >&2
+    exit 2
+  }
+
+  backup_host_config
   export DEBIAN_FRONTEND=noninteractive
   install -m 0755 -d /etc/apt/keyrings
   curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
@@ -180,11 +224,10 @@ phase_runtime() {
   install -d -m 0755 /etc/docker
   install -m 0644 "$repo_root/config/docker/daemon.json" /etc/docker/daemon.json
   dockerd --validate --config-file=/etc/docker/daemon.json
+  systemctl restart docker
 
   install -d -m 2750 -o root -g acops \
-    /srv/authority-closers/compose/foundation \
     /srv/authority-closers/releases \
-    /srv/authority-closers/runbooks \
     /srv/authority-closers/backups \
     /srv/authority-closers/volumes/postgres \
     /srv/authority-closers/volumes/blob \
@@ -192,28 +235,71 @@ phase_runtime() {
     /srv/authority-closers/volumes/mailpit \
     /srv/authority-closers/volumes/otel
   install -d -m 0750 -o root -g acops /srv/authority-closers/env
-
-  install -m 0640 -o root -g acops "$repo_root/compose/foundation/compose.yaml" /srv/authority-closers/compose/foundation/compose.yaml
-  # These are non-secret bind-mounted configs and must be readable by the
-  # unprivileged UIDs inside their containers.
-  install -m 0644 -o root -g acops "$repo_root/compose/foundation/Caddyfile" /srv/authority-closers/compose/foundation/Caddyfile
-  install -m 0644 -o root -g acops "$repo_root/compose/foundation/otel-collector.yaml" /srv/authority-closers/compose/foundation/otel-collector.yaml
-  install -m 0640 -o root -g acops "$repo_root/runbooks/OPERATIONS.md" /srv/authority-closers/runbooks/OPERATIONS.md
-
-  install -m 0755 "$repo_root/scripts/ac-docker-firewall" /usr/local/sbin/ac-docker-firewall
-  install -m 0755 "$repo_root/scripts/ac-foundation-health" /usr/local/sbin/ac-foundation-health
-  install -m 0644 "$repo_root/config/systemd/ac-docker-firewall.service" /etc/systemd/system/ac-docker-firewall.service
-  install -m 0644 "$repo_root/config/systemd/ac-foundation-health.service" /etc/systemd/system/ac-foundation-health.service
-  install -m 0644 "$repo_root/config/systemd/ac-foundation-health.timer" /etc/systemd/system/ac-foundation-health.timer
-  install -m 0644 "$repo_root/config/systemd/cloudflared.service" /etc/systemd/system/cloudflared.service
+  install -d -m 0750 /var/cache/authority-closers-restic
+  install -d -m 0700 /etc/authority-closers/secrets
   getent passwd cloudflared >/dev/null || useradd --system --user-group --home-dir /var/lib/cloudflared --shell /usr/sbin/nologin cloudflared
   install -d -m 0750 -o root -g cloudflared /etc/cloudflared
 
-  systemctl daemon-reload
-  systemctl restart docker
+  AC_RELEASE_ID="$release_id" "$repo_root/scripts/install-foundation-release.sh"
+
   docker network inspect ac_edge >/dev/null 2>&1 || docker network create ac_edge
   docker network inspect ac_telemetry >/dev/null 2>&1 || docker network create ac_telemetry --internal
-  systemctl enable --now ac-docker-firewall.service ac-foundation-health.timer
+  systemctl enable --now ac-docker-firewall.service
+
+  compose_file='/srv/authority-closers/current/compose/foundation/compose.yaml'
+  image_env_file='/srv/authority-closers/current/config/release/foundation-images.env'
+  docker compose --env-file "$image_env_file" -f "$compose_file" config --quiet
+  docker compose --env-file "$image_env_file" -f "$compose_file" up --detach --remove-orphans
+
+  systemctl enable --now ac-foundation-health.timer
+  if [[ -f /etc/cloudflared/tunnel-token ]]; then
+    [[ "$(stat -c '%U:%G %a' /etc/cloudflared/tunnel-token)" == 'root:cloudflared 640' ]] || {
+      printf 'Cloudflare Tunnel token ownership or mode is unsafe.\n' >&2
+      exit 1
+    }
+    systemctl enable --now cloudflared.service
+  else
+    printf 'PENDING  Cloudflared is installed but not activated because the root-owned tunnel token is absent.\n'
+  fi
+
+  /usr/local/sbin/ac-foundation-health
+}
+
+phase_activate() {
+  local target="${1:-}"
+  [[ -L /srv/authority-closers/current ]] || {
+    printf 'Install a reviewed immutable runtime release before activation.\n' >&2
+    exit 1
+  }
+
+  case "$target" in
+    cloudflared)
+      [[ -f /etc/cloudflared/tunnel-token ]] || { printf 'Cloudflare Tunnel token is absent.\n' >&2; exit 1; }
+      [[ "$(stat -c '%U:%G %a' /etc/cloudflared/tunnel-token)" == 'root:cloudflared 640' ]] || {
+        printf 'Cloudflare Tunnel token ownership or mode is unsafe.\n' >&2
+        exit 1
+      }
+      systemctl enable --now cloudflared.service
+      systemctl is-active --quiet cloudflared.service
+      ;;
+    r2-jobs)
+      [[ -r /etc/authority-closers/secrets/infisical-bootstrap.env ]] || {
+        printf 'Infisical bootstrap is absent; refusing to activate R2 writers.\n' >&2
+        exit 1
+      }
+      /usr/local/sbin/ac-infisical-verify
+      /usr/local/sbin/ac-r2-usage-guard
+      /usr/local/sbin/ac-restic-restore-check
+      systemctl enable --now \
+        ac-r2-usage-guard.timer \
+        ac-restic-backup.timer \
+        ac-restic-restore-check.timer
+      ;;
+    *)
+      printf 'Usage: %s activate {cloudflared|r2-jobs}\n' "$0" >&2
+      exit 2
+      ;;
+  esac
 }
 
 require_root
@@ -222,5 +308,6 @@ case "$phase" in
   harden) phase_harden ;;
   lockdown) phase_lockdown ;;
   runtime) phase_runtime ;;
-  *) printf 'Usage: %s {access PUBLIC_KEY_PATH|harden|lockdown|runtime}\n' "$0" >&2; exit 2 ;;
+  activate) phase_activate "$admin_key_path" ;;
+  *) printf 'Usage: %s {access PUBLIC_KEY_PATH|harden|runtime|activate TARGET|lockdown}\n' "$0" >&2; exit 2 ;;
 esac

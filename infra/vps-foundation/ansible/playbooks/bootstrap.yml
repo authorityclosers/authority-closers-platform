@@ -7,6 +7,8 @@
     ac_bootstrap_phase: ""
     ac_remote_payload: /tmp/authority-closers-platform-foundation
     ac_admin_public_key_path: ""
+    ac_release_id: ""
+    ac_activation_target: ""
     ac_allow_public_ssh_bootstrap: false
     ac_cloudflare_ssh_verified: false
   pre_tasks:
@@ -18,13 +20,23 @@
     - name: Require an explicit supported bootstrap phase
       ansible.builtin.assert:
         that:
-          - ac_bootstrap_phase in ['access', 'harden', 'runtime', 'lockdown']
+          - ac_bootstrap_phase in ['access', 'harden', 'runtime', 'activate', 'lockdown']
         fail_msg: Set ac_bootstrap_phase explicitly; no host-changing phase is the default.
     - name: Require the remote public-key path for access bootstrap
       ansible.builtin.assert:
         that:
           - ac_admin_public_key_path | length > 0
       when: ac_bootstrap_phase == 'access'
+    - name: Require reviewed release identity for runtime installation
+      ansible.builtin.assert:
+        that:
+          - ac_release_id is match('^foundation-[0-9a-f]{7,40}$')
+      when: ac_bootstrap_phase == 'runtime'
+    - name: Require an explicit provider activation target
+      ansible.builtin.assert:
+        that:
+          - ac_activation_target in ['cloudflared', 'r2-jobs']
+      when: ac_bootstrap_phase == 'activate'
   tasks:
     - name: Copy reviewed infrastructure payload
       ansible.builtin.copy:
@@ -46,8 +58,10 @@
         argv:
           - "{{ ac_remote_payload }}/scripts/bootstrap-host.sh"
           - "{{ ac_bootstrap_phase }}"
+          - "{{ ac_activation_target if ac_bootstrap_phase == 'activate' else '' }}"
       environment:
         AC_ALLOW_PUBLIC_SSH_BOOTSTRAP: "{{ '1' if ac_allow_public_ssh_bootstrap | bool else '0' }}"
         AC_CLOUDFLARE_SSH_VERIFIED: "{{ 'YES' if ac_cloudflare_ssh_verified | bool else '' }}"
+        AC_RELEASE_ID: "{{ ac_release_id }}"
       when: ac_bootstrap_phase != 'access'
       changed_when: true

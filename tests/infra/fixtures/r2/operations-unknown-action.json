@@ -1,0 +1,13 @@
+{
+  "data": {
+    "viewer": {
+      "accounts": [
+        {
+          "r2OperationsAdaptiveGroups": [
+            {"dimensions": {"actionType": "FutureBillableOperation"}, "sum": {"requests": 1}}
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,5 +1,7 @@
 secrets/
 *.env
+!config/release/foundation-images.env
+!config/release/toolchain.env
 *.key
 *.pem
 *.tfstate

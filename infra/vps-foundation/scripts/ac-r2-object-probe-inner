@@ -17,11 +17,20 @@ export "RCLONE_CONFIG_${remote_prefix}_NO_CHECK_BUCKET=true"
 
 bucket="${R2_BACKUP_BUCKET:-authority-closers-backups-prod}"
 probe_target="$remote_name:$bucket/foundation-probes/object-write-read-$(date -u +%Y%m%dT%H%M%SZ)-$$.txt"
-cleanup() { rclone deletefile "$probe_target" >/dev/null 2>&1 || true; }
+cleanup() {
+  local status=$?
+  if ! rclone deletefile "$probe_target" >/dev/null 2>&1; then
+    printf 'FAIL  R2 probe cleanup could not delete %s.\n' "$probe_target" >&2
+    exit 1
+  fi
+  exit "$status"
+}
 trap cleanup EXIT
 
 expected='authority-closers-r2-object-probe-ok'
 printf '%s' "$expected" | rclone rcat "$probe_target"
 actual="$(rclone cat "$probe_target")"
 [[ "$actual" == "$expected" ]]
+rclone deletefile "$probe_target"
+trap - EXIT
 printf 'PASS  R2 object write/read/delete succeeded in the backup bucket.\n'

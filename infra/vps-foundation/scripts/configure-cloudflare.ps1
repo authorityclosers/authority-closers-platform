@@ -1,14 +1,20 @@
 param(
-    [Parameter(Mandatory = $true)][string]$ApiToken,
-    [Parameter(Mandatory = $true)][string]$AccountId,
-    [Parameter(Mandatory = $true)][string]$ZoneId,
+    [string]$AccountId = $env:CLOUDFLARE_ACCOUNT_ID,
+    [string]$ZoneId = $env:CLOUDFLARE_ZONE_ID,
     [string]$TunnelName = "ac-kvm4-prod",
     [string]$Hostname = "infra.dipakvishwakarma.com",
     [string]$Origin = "http://localhost:8080"
 )
 
 $ErrorActionPreference = "Stop"
-$headers = @{ Authorization = "Bearer $ApiToken" }
+$apiToken = $env:CLOUDFLARE_API_TOKEN
+if ([string]::IsNullOrWhiteSpace($apiToken)) {
+    throw "Set CLOUDFLARE_API_TOKEN in the process environment; credentials are not accepted as command-line parameters."
+}
+if ([string]::IsNullOrWhiteSpace($AccountId) -or [string]::IsNullOrWhiteSpace($ZoneId)) {
+    throw "Set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_ZONE_ID or pass the non-secret IDs explicitly."
+}
+$headers = @{ Authorization = "Bearer $apiToken" }
 $api = "https://api.cloudflare.com/client/v4"
 
 function Invoke-CloudflareApi {

@@ -2,6 +2,8 @@
 set -euo pipefail
 
 failures=0
+external_interface="${AC_EXTERNAL_INTERFACE:-eth0}"
+
 check() {
   local description="$1"
   shift
@@ -13,11 +15,23 @@ check() {
   fi
 }
 
+ufw_denies_public_ssh() {
+  local status
+  status="$(ufw status numbered)"
+  grep -qx 'Status: active' <<<"$status"
+  if grep -Ei '(22/tcp|OpenSSH)' <<<"$status" | grep -Eq '[[:space:]]ALLOW([[:space:]]|$)'; then
+    return 1
+  fi
+  ufw status verbose | grep -q 'Default: deny (incoming), allow (outgoing), deny (routed)'
+  grep -Eq '^IPV6=yes$' /etc/default/ufw
+}
+
 check 'named administrator exists' id suyash
 check 'root SSH login disabled' bash -c "sshd -T | grep -qx 'permitrootlogin no'"
 check 'SSH password authentication disabled' bash -c "sshd -T | grep -qx 'passwordauthentication no'"
 check 'SSH restricted to operator group' bash -c "sshd -T | grep -qx 'allowgroups ssh-users'"
 check 'UFW active' bash -c "ufw status | grep -qx 'Status: active'"
+check 'UFW effectively denies public IPv4 and IPv6 TCP/22' ufw_denies_public_ssh
 check 'auditd active' systemctl is-active --quiet auditd
 check 'fail2ban active' systemctl is-active --quiet fail2ban
 check 'fail2ban SSH jail active' bash -c "fail2ban-client status sshd | grep -q 'Status for the jail: sshd'"
@@ -28,7 +42,10 @@ check 'Docker active' systemctl is-active --quiet docker
 check 'Docker default log driver is local' bash -c "docker info --format '{{.LoggingDriver}}' | grep -qx local"
 check 'Docker socket is not TCP exposed' bash -c "! ss -ltn | grep -Eq ':(2375|2376)[[:space:]]'"
 check 'Docker group has no users' bash -c "getent group docker | grep -Eq '^docker:x:[0-9]+:$'"
-check 'Docker public-ingress guard installed' bash -c "iptables -S DOCKER-USER | grep -qx -- '-A DOCKER-USER -i eth0 -j DROP'"
+check 'Docker IPv4 public-ingress guard installed' \
+  iptables -C DOCKER-USER -i "$external_interface" -j DROP
+check 'Docker IPv6 public-ingress guard installed' \
+  ip6tables -C DOCKER-USER -i "$external_interface" -j DROP
 check 'AC edge network exists' docker network inspect ac_edge
 check 'AC telemetry network exists' docker network inspect ac_telemetry
 check 'no public HTTP listener on host' bash -c "! ss -ltn | grep -Eq '(^|[[:space:]])(0\.0\.0\.0|\[::\]):(80|443)[[:space:]]'"

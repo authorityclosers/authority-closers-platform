@@ -1,0 +1,13 @@
+{
+  "data": {
+    "viewer": {
+      "accounts": [
+        {
+          "r2OperationsAdaptiveGroups": [
+            {"dimensions": {"actionType": "PutObject"}, "sum": {"requests": null}}
+          ]
+        }
+      ]
+    }
+  }
+}

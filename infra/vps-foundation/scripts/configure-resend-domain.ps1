@@ -1,14 +1,20 @@
 param(
-    [Parameter(Mandatory = $true)][string]$ResendApiKey,
-    [Parameter(Mandatory = $true)][string]$CloudflareApiToken,
-    [Parameter(Mandatory = $true)][string]$ZoneId,
+    [string]$ZoneId = $env:CLOUDFLARE_ZONE_ID,
     [string]$ZoneName = "dipakvishwakarma.com",
     [string]$DomainName = "notify.dipakvishwakarma.com"
 )
 
 $ErrorActionPreference = "Stop"
-$resendHeaders = @{ Authorization = "Bearer $ResendApiKey" }
-$cloudflareHeaders = @{ Authorization = "Bearer $CloudflareApiToken" }
+$resendApiKey = $env:RESEND_API_KEY
+$cloudflareApiToken = $env:CLOUDFLARE_API_TOKEN
+if ([string]::IsNullOrWhiteSpace($resendApiKey) -or [string]::IsNullOrWhiteSpace($cloudflareApiToken)) {
+    throw "Set RESEND_API_KEY and CLOUDFLARE_API_TOKEN in the process environment; credentials are not accepted as command-line parameters."
+}
+if ([string]::IsNullOrWhiteSpace($ZoneId)) {
+    throw "Set CLOUDFLARE_ZONE_ID or pass the non-secret zone ID explicitly."
+}
+$resendHeaders = @{ Authorization = "Bearer $resendApiKey" }
+$cloudflareHeaders = @{ Authorization = "Bearer $cloudflareApiToken" }
 
 function Invoke-ResendApi {
     param([string]$Method, [string]$Path, $Body = $null)

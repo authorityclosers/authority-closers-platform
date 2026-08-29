@@ -10,4 +10,4 @@ fi
 
 export R2_POLICY_FILE='/srv/authority-closers/current/config/r2/free-tier-policy.conf'
 exec /usr/local/sbin/ac-infisical-run-backup \
-  -- /srv/authority-closers/current/scripts/r2-usage-guard.sh
+  -- /usr/local/libexec/authority-closers/r2-usage-guard

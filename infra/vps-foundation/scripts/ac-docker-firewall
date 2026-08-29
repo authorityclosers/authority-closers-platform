@@ -3,6 +3,11 @@ set -euo pipefail
 
 external_interface="${AC_EXTERNAL_INTERFACE:-eth0}"
 
+ip link show dev "$external_interface" >/dev/null 2>&1 || {
+  printf 'External interface does not exist: %s\n' "$external_interface" >&2
+  exit 1
+}
+
 install_rule() {
   local binary="$1"
   shift
@@ -11,16 +16,21 @@ install_rule() {
   fi
 }
 
-if iptables -nL DOCKER-USER >/dev/null 2>&1; then
-  install_rule iptables -i "$external_interface" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
-  if ! iptables -C DOCKER-USER -i "$external_interface" -j DROP 2>/dev/null; then
-    iptables -A DOCKER-USER -i "$external_interface" -j DROP
-  fi
-fi
+for binary in iptables ip6tables; do
+  command -v "$binary" >/dev/null 2>&1 || {
+    printf 'Required firewall binary is unavailable: %s\n' "$binary" >&2
+    exit 1
+  }
+  "$binary" -nL DOCKER-USER >/dev/null 2>&1 || {
+    printf '%s DOCKER-USER chain is unavailable; refusing an unguarded Docker runtime.\n' "$binary" >&2
+    exit 1
+  }
 
-if ip6tables -nL DOCKER-USER >/dev/null 2>&1; then
-  install_rule ip6tables -i "$external_interface" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
-  if ! ip6tables -C DOCKER-USER -i "$external_interface" -j DROP 2>/dev/null; then
-    ip6tables -A DOCKER-USER -i "$external_interface" -j DROP
+  install_rule "$binary" -i "$external_interface" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+  if ! "$binary" -C DOCKER-USER -i "$external_interface" -j DROP 2>/dev/null; then
+    "$binary" -A DOCKER-USER -i "$external_interface" -j DROP
   fi
-fi
+
+  "$binary" -C DOCKER-USER -i "$external_interface" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+  "$binary" -C DOCKER-USER -i "$external_interface" -j DROP
+done

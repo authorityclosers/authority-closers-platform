@@ -13,7 +13,7 @@ export RESTIC_REPOSITORY="${RESTIC_REPOSITORY:-s3:${R2_ENDPOINT#https://}/${R2_B
 export RESTIC_CACHE_DIR='/var/cache/authority-closers-restic'
 
 # Fail closed before every write if the conservative R2 envelope is exceeded.
-/srv/authority-closers/current/scripts/r2-usage-guard.sh
+/usr/local/libexec/authority-closers/r2-usage-guard
 
 restic snapshots >/dev/null
 
@@ -25,8 +25,16 @@ restic backup \
   /srv/authority-closers \
   /etc/authority-closers \
   /etc/ssh \
+  /etc/apt/apt.conf.d \
+  /etc/audit/rules.d \
+  /etc/docker \
   /etc/systemd/system \
   /etc/fail2ban \
+  /etc/systemd/journald.conf.d \
+  /etc/sysctl.d \
+  /etc/security/limits.d \
+  /etc/ufw \
+  /usr/local/libexec/authority-closers \
   /usr/local/sbin \
   /var/lib/docker/volumes
 

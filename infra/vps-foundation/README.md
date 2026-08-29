@@ -28,6 +28,7 @@ The VPS is a deployment target, not a source-code workstation.
 - `ansible/` - controller entry point for repeatable provisioning.
 - `runbooks/` - operations and recovery procedures.
 - `docs/adr/` - consequential architecture decisions.
+- `config/release/` - committed image digests, tool versions/checksums, and the complete host install manifest.
 
 ## Bootstrap gates
 
@@ -35,11 +36,13 @@ The VPS is a deployment target, not a source-code workstation.
 2. Verify a fresh public key-only SSH session as the named administrator.
 3. On a fresh host only, run `AC_ALLOW_PUBLIC_SSH_BOOTSTRAP=1 bootstrap-host.sh harden` to keep TCP/22 temporarily available.
 4. Verify SSH key-only access and firewall state.
-5. `bootstrap-host.sh runtime`
-6. Pin foundation images by digest and start the Compose project.
-7. Install the named Cloudflare Tunnel and prove a second, fresh Cloudflare Access SSH session.
-8. Run `AC_CLOUDFLARE_SSH_VERIFIED=YES bootstrap-host.sh lockdown` from the retained session, then prove another Access session while confirming UFW denies TCP/22.
-9. Run `AC_PUBLIC_HEALTH_URL=https://infra.dipakvishwakarma.com/healthz scripts/validate-foundation.sh` as root.
-10. Before enabling any new R2 writer, run `scripts/r2-usage-guard.sh` with a metrics-capable API token and complete a reversible `scripts/r2-probe.sh` test using bucket-scoped credentials.
+5. Set `AC_RELEASE_ID=foundation-<reviewed-git-sha>` and run `bootstrap-host.sh runtime`. This installs the full immutable release, every managed script/unit, and the committed digest-pinned Compose foundation.
+6. Provision the root-owned Cloudflare Tunnel token, then run `bootstrap-host.sh activate cloudflared`.
+7. Prove a second, fresh Cloudflare Access SSH session.
+8. Run `AC_CLOUDFLARE_SSH_VERIFIED=YES bootstrap-host.sh lockdown` from the retained session, then prove another Access session while confirming UFW denies IPv4 and IPv6 TCP/22.
+9. Run `AC_PUBLIC_HEALTH_URL=https://infra.dipakvishwakarma.com/healthz /usr/local/sbin/ac-validate-foundation` as root.
+10. After the Infisical bootstrap, R2 repository, first backup, and restore evidence exist, run `bootstrap-host.sh activate r2-jobs`. Activation fails closed unless current usage and restore checks pass.
+
+CI smoke-tests the installer against a clean synthetic filesystem root and requires every `ac-*` operational script and systemd unit to appear in the explicit install manifest. Provider-dependent activation remains a separate, named gate so a clean host cannot silently start an unconfigured external writer.
 
 Never skip the fresh-session checks between gates.

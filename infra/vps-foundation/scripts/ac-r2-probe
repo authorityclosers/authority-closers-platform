@@ -9,4 +9,4 @@ if [[ "${AC_IPV4_ONLY:-0}" != '1' ]]; then
 fi
 
 exec /usr/local/sbin/ac-infisical-run-backup \
-  -- /srv/authority-closers/current/scripts/r2-probe.sh
+  -- /usr/local/libexec/authority-closers/r2-probe

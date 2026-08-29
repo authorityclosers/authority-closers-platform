@@ -38,19 +38,21 @@ Never run the lock-down phase on the strength of the same SSH session that perfo
 
 ## Runtime layout
 
-- Compose manifests: `/srv/authority-closers/compose/`
+- Active immutable release: `/srv/authority-closers/current` -> `/srv/authority-closers/releases/foundation-<git-sha>`
+- Compose manifests: `/srv/authority-closers/current/compose/`
 - Protected configuration: `/srv/authority-closers/env/`
 - Durable state: `/srv/authority-closers/volumes/`
 - Staged backups: `/srv/authority-closers/backups/`
-- Released operational material: `/srv/authority-closers/runbooks/`
+- Released operational material: `/srv/authority-closers/current/runbooks/`
 - Root-only Infisical bootstrap: `/etc/authority-closers/secrets/infisical-bootstrap.env` (mode `600`; contains only machine-auth bootstrap values)
 - Transitional recovery export: `/etc/authority-closers/secrets/production.env` (mode `600`; do not use for runtime jobs and remove only after an independent recovery check)
 
 ## Foundation commands
 
 ```bash
-sudo docker compose --env-file /srv/authority-closers/env/foundation.env \
-  -f /srv/authority-closers/compose/foundation/compose.yaml ps
+sudo docker compose \
+  --env-file /srv/authority-closers/current/config/release/foundation-images.env \
+  -f /srv/authority-closers/current/compose/foundation/compose.yaml ps
 sudo systemctl status cloudflared
 sudo systemctl status ac-foundation-health.timer
 sudo journalctl -u ac-foundation-health.service --since today
@@ -91,7 +93,7 @@ The current pre-platform recovery export is root-only at `/etc/authority-closers
 4. Run `scripts/r2-probe.sh`; it requires both buckets to exist, performs reversible write/read/delete tests in both, and leaves no probe object.
 5. Configure Cloudflare account budget email alerts as an additional notification layer. Alerts are not hard caps.
 
-Restic is enabled with the current IP-restricted R2 credential, a human-escrowed passphrase, the usage guard, and successful restore drills. `ac-r2-usage-guard.timer` runs every 30 minutes; `ac-restic-backup.timer` runs daily; `ac-restic-restore-check.timer` runs weekly. Do not enable public R2 domains, Infrequent Access, Data Catalog, SQL, Sippy, Super Slurper, or another ingestion path without a new cost review.
+Restic is enabled with the current IP-restricted R2 credential, a human-escrowed passphrase, the usage guard, and successful restore drills. `ac-r2-usage-guard.timer` runs every 30 minutes; `ac-restic-backup.timer` runs daily; `ac-restic-restore-check.timer` runs weekly. The metrics evaluator distinguishes a present empty dataset (valid zero) from a missing field/account/dataset (hard failure). Do not enable public R2 domains, Infrequent Access, Data Catalog, SQL, Sippy, Super Slurper, or another ingestion path without a new cost review.
 
 Useful checks:
 
@@ -102,7 +104,7 @@ sudo systemctl start ac-restic-restore-check.service
 systemctl list-timers --all | grep -E 'ac-(r2|restic|foundation)'
 ```
 
-The backup captures `/srv/authority-closers`, selected host configuration, `/usr/local/sbin`, and Docker volumes while excluding `/etc/authority-closers/secrets`. Retention is 7 daily, 4 weekly, and 6 monthly snapshots.
+The backup captures `/srv/authority-closers`, managed host configuration, `/usr/local/sbin`, `/usr/local/libexec/authority-closers`, and Docker volumes while excluding `/etc/authority-closers/secrets`. Retention is 7 daily, 4 weekly, and 6 monthly snapshots. The weekly drill restores into an isolated target and verifies the release checksum manifest, installed-file content/modes/ownership, shell/config syntax, Compose resolution, secret exclusion, snapshot age, restore time, and a repository integrity sample.
 
 ## Infisical runtime injection
 
@@ -115,7 +117,18 @@ sudo /usr/local/sbin/ac-infisical-run -- sh -c 'exec your-command'
 sudo /usr/local/sbin/ac-infisical-run-backup -- sh -c 'exec backup-command'
 ```
 
-The wrappers obtain short-lived machine tokens without printing them and inject the Production project into the child process. The VPS bootstrap file is identity-only; use the separate backup identity for backup jobs and separate projects/paths for each future workload.
+The wrappers exchange Universal Auth credentials through a root-owned environment/stdin pipe, expose the short-lived token through `INFISICAL_TOKEN`, remove the bootstrap credentials before the workload starts, and never place either credential or token in process arguments. The VPS bootstrap file is identity-only; use the separate backup identity for backup jobs and separate projects/paths for each future workload.
+
+## Immutable foundation release
+
+The release installer takes a reviewed Git-derived ID and never overwrites an existing release:
+
+```bash
+sudo AC_RELEASE_ID=foundation-<reviewed-git-sha> \
+  /path/to/reviewed/infra/vps-foundation/scripts/bootstrap-host.sh runtime
+```
+
+It verifies a content checksum manifest, installs every explicitly declared script and unit, atomically changes `current`, starts the digest-pinned Compose foundation, and starts Cloudflared only when the token already has the required ownership and mode. Provider writers remain disabled until the separate `activate r2-jobs` gate succeeds. Rollback changes only the `current` symlink to a previously verified immutable release, reinstalls that release's manifest, reloads units, and re-runs the complete validation suite.
 
 Resend uses a domain-restricted Sending-access key. A send test returning HTTP 200 is the expected runtime check; delivery-log lookup is intentionally unavailable to a sending-only key. Google Workspace remains the receiving system for both domains.
 
