@@ -119,7 +119,7 @@ sudo systemctl start ac-restic-restore-check.service
 systemctl list-timers --all | grep -E 'ac-(r2|restic|foundation)'
 ```
 
-The backup captures `/srv/authority-closers`, managed host configuration, baseline/toolchain records, released Infisical/rclone binaries, `/usr/local/sbin`, `/usr/local/libexec/authority-closers`, and Docker volumes while excluding `/etc/authority-closers/secrets`. Retention is 7 daily, 4 weekly, and 6 monthly snapshots. The weekly drill restores into an isolated target and verifies the release checksum manifest and commit identity, OS baseline record, toolchain hashes, installed-file content/modes/ownership, shell/config syntax, Compose resolution, secret exclusion, snapshot age, restore time, and a repository integrity sample.
+The backup captures `/srv/authority-closers`, managed host configuration, baseline/toolchain records, released Infisical/rclone binaries, `/usr/local/sbin`, `/usr/local/libexec/authority-closers`, and Docker volumes while excluding `/etc/authority-closers/secrets`. Retention is 7 daily, 4 weekly, and 6 monthly snapshots. The weekly drill restores into an isolated no-exec target and verifies the restored release against the independently installed immutable release, the OS baseline record and complete dependency graph, toolchain hashes, installed-file content/modes/ownership, shell/config syntax, Compose resolution, secret exclusion, snapshot age, restore time, and a repository integrity sample. Restored binaries are never executed by the credentialed drill.
 
 ## Infisical runtime injection
 
@@ -150,7 +150,7 @@ sudo AC_RELEASE_ID="foundation-${release_sha}" \
   /path/to/reviewed/infra/vps-foundation/scripts/bootstrap-host.sh runtime
 ```
 
-The installer verifies the archive SHA-256 and embedded Git commit, rejects unexpected archive paths and non-regular entries, requires the complete bootstrap payload to equal that archive, generates a release content manifest, reconciles Infisical/rclone to binary hashes in the release policy, installs every explicitly declared script and unit, recreates and health-checks the target Compose foundation, and only then changes `current`. Provider writers remain disabled until the separate `activate r2-jobs` gate succeeds.
+The trusted controller verifies the archive before any remote extraction. The installer then verifies the SHA-256 and embedded Git commit again, rejects unexpected archive paths and non-regular entries, requires the complete bootstrap payload to equal that archive, generates a release content manifest, reconciles Infisical/rclone to binary hashes in the release policy, installs every explicitly declared script and unit, recreates and health-checks the target Compose foundation, and only then changes `current`. A transaction snapshot restores the previous binaries, managed files, symlink, Compose project, firewall, and timers if any post-mutation gate fails. Provider writers remain disabled until the separate `activate r2-jobs` gate succeeds.
 
 Resend uses a domain-restricted Sending-access key. A send test returning HTTP 200 is the expected runtime check; delivery-log lookup is intentionally unavailable to a sending-only key. Google Workspace remains the receiving system for both domains.
 

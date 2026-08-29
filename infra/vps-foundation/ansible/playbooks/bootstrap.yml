@@ -40,6 +40,18 @@
         that:
           - ac_activation_target in ['cloudflared', 'r2-jobs']
       when: ac_bootstrap_phase == 'activate'
+    - name: Validate the exact archive on the trusted controller before remote mutation
+      ansible.builtin.command:
+        argv:
+          - python3
+          - "{{ playbook_dir }}/../../scripts/verify-git-release-archive.py"
+          - "{{ ac_release_archive_local }}"
+          - "{{ ac_release_archive_sha256 }}"
+          - "{{ ac_release_id | regex_replace('^foundation-', '') }}"
+      delegate_to: localhost
+      become: false
+      run_once: true
+      changed_when: false
   tasks:
     - name: Copy checksum-verified exact-commit release archive
       ansible.builtin.copy:

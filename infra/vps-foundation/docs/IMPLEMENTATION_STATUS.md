@@ -69,3 +69,5 @@
 - Docker ingress rules are lifecycle-bound to Docker and continuously revalidated by a one-minute systemd timer; IPv4 and IPv6 UFW numbered-rule fixtures protect the TCP/22 lockdown parser.
 - Every mutating bootstrap phase must now run from the checksum-verified exact Git archive; the official Ansible path no longer copies a mutable working payload.
 - Baseline verification compares the complete live package manifest to the recorded baseline, restore validation anchors operational binaries directly to release-policy hashes/versions, and rollback recreates plus health-checks the target Compose foundation before changing `current`.
+- Controller-side archive verification now precedes remote extraction and the verifier must byte-match its exact-commit archive member. The OS baseline commits the complete resolved dependency graph, not only top-level pins.
+- Release installation is transactional across toolchain binaries, managed host files, `current`, Compose, firewall, and timers. The credentialed restore drill treats restored executables as inert no-exec data and anchors them to the separately installed immutable release.

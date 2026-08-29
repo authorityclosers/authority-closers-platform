@@ -6,7 +6,8 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 policy_dir="$repo_root/config/release"
 policy="$policy_dir/os-baseline.env"
 packages_policy="$policy_dir/os-packages.tsv"
-[[ -r "$policy" && -r "$packages_policy" ]] || {
+resolved_packages_policy="$policy_dir/os-resolved-packages.tsv"
+[[ -r "$policy" && -r "$packages_policy" && -r "$resolved_packages_policy" ]] || {
   printf 'OS baseline policy is incomplete.\n' >&2
   exit 1
 }
@@ -16,12 +17,13 @@ AC_OS_ID=''
 AC_OS_VERSION_ID=''
 AC_OS_CODENAME=''
 AC_OS_ARCH=''
+AC_OS_RESOLVED_PACKAGES_SHA256=''
 DOCKER_APT_KEY_SHA256=''
 CLOUDFLARE_APT_KEY_SHA256=''
 while IFS='=' read -r key value; do
   [[ -z "$key" || "$key" == \#* ]] && continue
   case "$key" in
-    AC_OS_BASELINE_ID|AC_OS_ID|AC_OS_VERSION_ID|AC_OS_CODENAME|AC_OS_ARCH|DOCKER_APT_KEY_SHA256|CLOUDFLARE_APT_KEY_SHA256)
+    AC_OS_BASELINE_ID|AC_OS_ID|AC_OS_VERSION_ID|AC_OS_CODENAME|AC_OS_ARCH|AC_OS_RESOLVED_PACKAGES_SHA256|DOCKER_APT_KEY_SHA256|CLOUDFLARE_APT_KEY_SHA256)
       printf -v "$key" '%s' "$value"
       ;;
     *) printf 'Unknown OS baseline policy key: %s\n' "$key" >&2; exit 1 ;;
@@ -29,8 +31,11 @@ while IFS='=' read -r key value; do
 done < "$policy"
 
 [[ "$AC_OS_BASELINE_ID" =~ ^[a-z0-9][a-z0-9.-]{7,127}$ ]]
+[[ "$AC_OS_RESOLVED_PACKAGES_SHA256" =~ ^[0-9a-f]{64}$ ]]
 [[ "$DOCKER_APT_KEY_SHA256" =~ ^[0-9a-f]{64}$ ]]
 [[ "$CLOUDFLARE_APT_KEY_SHA256" =~ ^[0-9a-f]{64}$ ]]
+[[ "$AC_OS_RESOLVED_PACKAGES_SHA256" == \
+  "$(sha256sum "$resolved_packages_policy" | awk '{print $1}')" ]]
 # shellcheck source=/dev/null
 . /etc/os-release
 [[ "$ID" == "$AC_OS_ID" && "$VERSION_ID" == "$AC_OS_VERSION_ID" && "$VERSION_CODENAME" == "$AC_OS_CODENAME" ]] || {
@@ -57,6 +62,18 @@ while IFS=$'\t' read -r package version extra; do
   package_specs+=("$package=$version")
 done < "$packages_policy"
 ((${#packages[@]} > 0)) || { printf 'Pinned package policy is empty.\n' >&2; exit 1; }
+
+resolved_packages=()
+while IFS=$'\t' read -r package version extra; do
+  [[ -z "$package" || "$package" == \#* ]] && continue
+  [[ -z "$extra" && "$package" =~ ^[a-z0-9][a-z0-9+.-]*(:[a-z0-9-]+)?$ \
+    && -n "$version" ]] || {
+    printf 'Invalid resolved package row: %s %s\n' "$package" "$version" >&2
+    exit 1
+  }
+  resolved_packages+=("$package")
+done < "$resolved_packages_policy"
+((${#resolved_packages[@]} > 100)) || { printf 'Resolved package policy is incomplete.\n' >&2; exit 1; }
 
 for conflicting in docker.io containerd runc; do
   if dpkg-query -W "$conflicting" >/dev/null 2>&1; then
@@ -112,23 +129,28 @@ for package in "${packages[@]}"; do
     exit 1
   }
 done
-apt-mark hold "${packages[@]}" >/dev/null
-
 record_root='/var/lib/authority-closers/baselines'
 marker_root='/etc/authority-closers'
 install -d -o root -g root -m 0750 "$record_root" "$marker_root"
 manifest="$record_root/${AC_OS_BASELINE_ID}.packages.tsv"
 dpkg-query -W -f='${binary:Package}\t${Version}\n' | LC_ALL=C sort > "$work_dir/packages.tsv"
-install -o root -g root -m 0640 "$work_dir/packages.tsv" "$manifest"
+if ! cmp --silent "$resolved_packages_policy" "$work_dir/packages.tsv"; then
+  printf 'Resolved package graph differs from the committed baseline manifest.\n' >&2
+  exit 1
+fi
+apt-mark hold "${resolved_packages[@]}" >/dev/null
+install -o root -g root -m 0640 "$resolved_packages_policy" "$manifest"
 manifest_sha="$(sha256sum "$manifest" | awk '{print $1}')"
 policy_sha="$(sha256sum "$policy" | awk '{print $1}')"
 packages_policy_sha="$(sha256sum "$packages_policy" | awk '{print $1}')"
+resolved_packages_policy_sha="$(sha256sum "$resolved_packages_policy" | awk '{print $1}')"
 marker_tmp="$work_dir/os-baseline.env"
 printf '%s\n' \
   "AC_OS_BASELINE_ID=$AC_OS_BASELINE_ID" \
   "AC_OS_BASELINE_MANIFEST_SHA256=$manifest_sha" \
   "AC_OS_BASELINE_POLICY_SHA256=$policy_sha" \
   "AC_OS_PACKAGES_POLICY_SHA256=$packages_policy_sha" \
+  "AC_OS_RESOLVED_PACKAGES_POLICY_SHA256=$resolved_packages_policy_sha" \
   > "$marker_tmp"
 install -o root -g root -m 0644 "$marker_tmp" "$marker_root/os-baseline.env"
 

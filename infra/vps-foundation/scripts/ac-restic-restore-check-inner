@@ -63,6 +63,15 @@ release_id="${release_target##*/}"
 release_sha="${release_id#foundation-}"
 [[ "$(<"$release_dir/RELEASE-ID")" == "$release_id" ]]
 [[ "$(<"$release_dir/RELEASE-COMMIT")" == "$release_sha" ]]
+trusted_release_dir="/srv/authority-closers/releases/$release_id"
+[[ -d "$trusted_release_dir" && -r "$trusted_release_dir/RELEASE-FILES.sha256" ]] || {
+  printf 'FAIL  Restored release has no independently installed trust anchor.\n' >&2
+  exit 1
+}
+cmp --silent "$trusted_release_dir/RELEASE-FILES.sha256" "$release_dir/RELEASE-FILES.sha256" || {
+  printf 'FAIL  Restored release manifest differs from the independently installed release.\n' >&2
+  exit 1
+}
 
 baseline_marker="$restore_dir/etc/authority-closers/os-baseline.env"
 [[ -r "$baseline_marker" ]] || { printf 'FAIL  Restored OS baseline marker is absent.\n' >&2; exit 1; }
@@ -70,17 +79,24 @@ baseline_id="$(awk -F= '$1 == "AC_OS_BASELINE_ID" {print $2}' "$baseline_marker"
 baseline_manifest_sha="$(awk -F= '$1 == "AC_OS_BASELINE_MANIFEST_SHA256" {print $2}' "$baseline_marker")"
 baseline_policy_sha="$(awk -F= '$1 == "AC_OS_BASELINE_POLICY_SHA256" {print $2}' "$baseline_marker")"
 baseline_packages_sha="$(awk -F= '$1 == "AC_OS_PACKAGES_POLICY_SHA256" {print $2}' "$baseline_marker")"
+baseline_resolved_packages_sha="$(awk -F= '$1 == "AC_OS_RESOLVED_PACKAGES_POLICY_SHA256" {print $2}' "$baseline_marker")"
 [[ "$baseline_id" =~ ^[a-z0-9][a-z0-9.-]{7,127}$ ]]
 [[ "$baseline_manifest_sha" =~ ^[0-9a-f]{64}$ ]]
 [[ "$baseline_policy_sha" == "$(sha256sum "$release_dir/config/release/os-baseline.env" | awk '{print $1}')" ]]
 [[ "$baseline_packages_sha" == "$(sha256sum "$release_dir/config/release/os-packages.tsv" | awk '{print $1}')" ]]
+[[ "$baseline_resolved_packages_sha" == \
+  "$(sha256sum "$release_dir/config/release/os-resolved-packages.tsv" | awk '{print $1}')" ]]
 restored_baseline_manifest="$restore_dir/var/lib/authority-closers/baselines/${baseline_id}.packages.tsv"
 [[ -r "$restored_baseline_manifest" ]]
 [[ "$baseline_manifest_sha" == "$(sha256sum "$restored_baseline_manifest" | awk '{print $1}')" ]]
 
 toolchain_marker="$restore_dir/var/lib/authority-closers/toolchains/${release_id}.env"
 [[ -r "$toolchain_marker" ]] || { printf 'FAIL  Restored release toolchain marker is absent.\n' >&2; exit 1; }
-toolchain_policy="$release_dir/config/release/toolchain.env"
+toolchain_policy="$trusted_release_dir/config/release/toolchain.env"
+cmp --silent "$toolchain_policy" "$release_dir/config/release/toolchain.env" || {
+  printf 'FAIL  Restored toolchain policy differs from the independently installed release.\n' >&2
+  exit 1
+}
 expected_infisical_version=''
 expected_infisical_binary_sha=''
 expected_rclone_version=''
@@ -116,8 +132,6 @@ restored_rclone="$restore_dir/usr/local/bin/rclone"
   "$expected_infisical_version" ]]
 [[ "$(awk -F= '$1 == "RCLONE_VERSION" {print $2}' "$toolchain_marker")" == \
   "$expected_rclone_version" ]]
-"$restored_infisical" --version | grep -Fq "$expected_infisical_version"
-"$restored_rclone" version | grep -Fq "rclone v${expected_rclone_version}"
 
 install_manifest="$release_dir/config/release/install-manifest.tsv"
 [[ -r "$install_manifest" ]] || { printf 'FAIL  Restored install manifest is absent.\n' >&2; exit 1; }

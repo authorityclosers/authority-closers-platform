@@ -8,9 +8,23 @@ release_archive="${AC_RELEASE_ARCHIVE:-}"
 release_archive_sha="${AC_RELEASE_ARCHIVE_SHA256:-}"
 test_mode="${AC_TEST_MODE:-0}"
 install_root="${AC_INSTALL_ROOT:-}"
+test_fail_after_install="${AC_TEST_FAIL_AFTER_INSTALL:-0}"
+test_fail_after_activate="${AC_TEST_FAIL_AFTER_ACTIVATE:-0}"
 
 [[ "$test_mode" == 0 || "$test_mode" == 1 ]] || {
   printf 'AC_TEST_MODE must be 0 or 1.\n' >&2
+  exit 2
+}
+[[ "$test_fail_after_install" == 0 || "$test_fail_after_install" == 1 ]] || {
+  printf 'AC_TEST_FAIL_AFTER_INSTALL must be 0 or 1.\n' >&2
+  exit 2
+}
+[[ "$test_fail_after_activate" == 0 || "$test_fail_after_activate" == 1 ]] || {
+  printf 'AC_TEST_FAIL_AFTER_ACTIVATE must be 0 or 1.\n' >&2
+  exit 2
+}
+[[ "$test_mode" == 1 || ( "$test_fail_after_install" == 0 && "$test_fail_after_activate" == 0 ) ]] || {
+  printf 'Failure injection is accepted only in test mode.\n' >&2
   exit 2
 }
 
@@ -60,18 +74,149 @@ releases_root="$srv_root/releases"
 release_dir="$releases_root/$release_id"
 current_link="$srv_root/current"
 stage_dir=''
+rollback_dir=''
+transaction_active=0
+transaction_committed=0
+compose_mutated=0
+previous_link_target=''
+previous_release_dir=''
+declare -a transaction_targets=()
+
+reconcile_compose_release() {
+  local target_release compose_file image_env_file
+  local -a expected_services running_services
+  target_release="$1"
+  compose_file="$target_release/compose/foundation/compose.yaml"
+  image_env_file="$target_release/config/release/foundation-images.env"
+  docker compose --env-file "$image_env_file" -f "$compose_file" config --quiet
+  mapfile -t expected_services < <(
+    docker compose --env-file "$image_env_file" -f "$compose_file" config --services
+  )
+  ((${#expected_services[@]} > 0))
+  docker compose --env-file "$image_env_file" -f "$compose_file" \
+    up --detach --remove-orphans --wait --wait-timeout 120
+  mapfile -t running_services < <(
+    docker compose --env-file "$image_env_file" -f "$compose_file" \
+      ps --status running --services
+  )
+  [[ "${#running_services[@]}" -eq "${#expected_services[@]}" ]]
+  curl --fail --silent --show-error --max-time 5 http://127.0.0.1:8080/healthz >/dev/null
+}
+
+restore_current_link() {
+  local rollback_link
+  if [[ -n "$previous_link_target" ]]; then
+    rollback_link="$srv_root/.rollback-current-${release_id}.$$"
+    rm -f -- "$rollback_link"
+    ln -s "$previous_link_target" "$rollback_link"
+    mv --no-target-directory --force "$rollback_link" "$current_link"
+  else
+    rm -f -- "$current_link"
+  fi
+}
+
+restore_failed_transaction() {
+  local rollback_failed=0 target
+  printf 'ROLLBACK  Restoring host state after failed release %s.\n' "$release_id" >&2
+
+  for target in "${transaction_targets[@]}"; do
+    rm -f -- "$target" || rollback_failed=1
+  done
+  if [[ -s "$rollback_dir/host-files.tar" ]]; then
+    tar --acls --xattrs --numeric-owner --directory=/ \
+      --extract --file="$rollback_dir/host-files.tar" || rollback_failed=1
+  fi
+  restore_current_link || rollback_failed=1
+
+  if [[ "$test_mode" == 0 ]]; then
+    systemctl daemon-reload || rollback_failed=1
+    if [[ "$compose_mutated" == 1 ]]; then
+      if [[ -n "$previous_release_dir" ]]; then
+        reconcile_compose_release "$previous_release_dir" || rollback_failed=1
+        /usr/local/sbin/ac-docker-firewall || rollback_failed=1
+        systemctl enable --now \
+          ac-docker-firewall.service \
+          ac-docker-firewall.timer \
+          ac-foundation-health.timer || rollback_failed=1
+      else
+        docker compose \
+          --env-file "$release_dir/config/release/foundation-images.env" \
+          -f "$release_dir/compose/foundation/compose.yaml" \
+          down --remove-orphans --timeout 30 || rollback_failed=1
+        systemctl disable --now ac-docker-firewall.timer ac-foundation-health.timer \
+          >/dev/null 2>&1 || true
+      fi
+    fi
+  fi
+
+  if [[ "$rollback_failed" == 0 ]]; then
+    printf 'ROLLBACK  Previous host and Compose state restored.\n' >&2
+    return 0
+  fi
+  printf 'FAIL  Automatic release rollback was incomplete; use the pre-change host archive.\n' >&2
+  return 1
+}
 
 cleanup() {
   local status=$?
+  if [[ "$status" -ne 0 && "$transaction_active" == 1 && "$transaction_committed" == 0 ]]; then
+    restore_failed_transaction || status=1
+  fi
   if [[ -n "$stage_dir" && -e "$stage_dir" ]]; then
     case "$stage_dir" in
       "$releases_root"/.stage-*) rm -rf -- "$stage_dir" ;;
       *) printf 'Refusing to remove unexpected staging path: %s\n' "$stage_dir" >&2; status=1 ;;
     esac
   fi
+  if [[ -n "$rollback_dir" && -e "$rollback_dir" ]]; then
+    case "$rollback_dir" in
+      /tmp/ac-release-rollback.*) rm -rf -- "$rollback_dir" ;;
+      *) printf 'Refusing to remove unexpected rollback path: %s\n' "$rollback_dir" >&2; status=1 ;;
+    esac
+  fi
   exit "$status"
 }
 trap cleanup EXIT
+
+begin_transaction() {
+  local target previous_id
+  local -a snapshot_paths
+  rollback_dir="$(mktemp -d /tmp/ac-release-rollback.XXXXXX)"
+
+  if [[ -L "$current_link" ]]; then
+    previous_link_target="$(readlink "$current_link")"
+    previous_release_dir="$(readlink -f "$current_link")"
+    [[ "$(dirname "$previous_release_dir")" == "$releases_root" ]] || {
+      printf 'Current release resolves outside the immutable release root.\n' >&2
+      exit 1
+    }
+    previous_id="${previous_release_dir##*/}"
+    if [[ "$test_mode" == 1 ]]; then
+      [[ "$previous_id" =~ ^foundation-test-[a-z0-9-]+$ ]]
+    else
+      [[ "$previous_id" =~ ^foundation-[0-9a-f]{40}$ ]]
+    fi
+    [[ -r "$previous_release_dir/RELEASE-FILES.sha256" ]]
+    (cd "$previous_release_dir" && sha256sum --check --strict RELEASE-FILES.sha256 >/dev/null)
+  elif [[ -e "$current_link" ]]; then
+    printf 'Current release path exists but is not a symbolic link: %s\n' "$current_link" >&2
+    exit 1
+  fi
+
+  snapshot_paths=()
+  for target in "${transaction_targets[@]}"; do
+    if [[ -e "$target" || -L "$target" ]]; then
+      snapshot_paths+=("${target#/}")
+    fi
+  done
+  if ((${#snapshot_paths[@]} > 0)); then
+    tar --acls --xattrs --numeric-owner --directory=/ \
+      --create --file="$rollback_dir/host-files.tar" "${snapshot_paths[@]}"
+  else
+    : > "$rollback_dir/host-files.tar"
+  fi
+  transaction_active=1
+}
 
 if [[ "$test_mode" == 1 ]]; then
   install -d -m 0750 "$srv_root" "$releases_root"
@@ -150,15 +295,9 @@ fi
 
 manifest="$release_dir/config/release/install-manifest.tsv"
 [[ -r "$manifest" ]] || { printf 'Released install manifest is not readable: %s\n' "$manifest" >&2; exit 1; }
-if [[ "$test_mode" == 0 ]]; then
-  AC_BASELINE_POLICY_DIR="$release_dir/config/release" \
-    "$release_dir/scripts/ac-os-baseline-verify"
-  AC_RELEASE_ID="$release_id" \
-  AC_TOOLCHAIN_POLICY="$release_dir/config/release/toolchain.env" \
-    "$release_dir/scripts/install-pinned-toolchain.sh"
-fi
-
 declare -A installed_targets=()
+declare -a install_sources=() install_targets=()
+declare -a install_modes=() install_owners=() install_groups=()
 while IFS=$'\t' read -r kind source target mode owner group; do
   [[ -z "$kind" || "$kind" == \#* ]] && continue
   [[ "$kind" == executable || "$kind" == unit ]] || {
@@ -183,10 +322,42 @@ while IFS=$'\t' read -r kind source target mode owner group; do
     exit 1
   }
   installed_targets[$target]=1
+  source_path="$release_dir/$source"
+  [[ -f "$source_path" ]] || { printf 'Manifest source is missing: %s\n' "$source" >&2; exit 1; }
+  install_sources+=("$source")
+  install_targets+=("$target")
+  install_modes+=("$mode")
+  install_owners+=("$owner")
+  install_groups+=("$group")
+  transaction_targets+=("${install_root}${target}")
+done < "$manifest"
 
+((${#install_targets[@]} > 0)) || { printf 'Released install manifest is empty.\n' >&2; exit 1; }
+if [[ "$test_mode" == 0 ]]; then
+  AC_BASELINE_POLICY_DIR="$release_dir/config/release" \
+    "$release_dir/scripts/ac-os-baseline-verify"
+  transaction_targets+=(
+    /usr/local/bin/infisical
+    /usr/local/bin/rclone
+    "/var/lib/authority-closers/toolchains/${release_id}.env"
+  )
+fi
+begin_transaction
+
+if [[ "$test_mode" == 0 ]]; then
+  AC_RELEASE_ID="$release_id" \
+  AC_TOOLCHAIN_POLICY="$release_dir/config/release/toolchain.env" \
+    "$release_dir/scripts/install-pinned-toolchain.sh"
+fi
+
+for index in "${!install_targets[@]}"; do
+  source="${install_sources[$index]}"
+  target="${install_targets[$index]}"
+  mode="${install_modes[$index]}"
+  owner="${install_owners[$index]}"
+  group="${install_groups[$index]}"
   source_path="$release_dir/$source"
   destination="${install_root}${target}"
-  [[ -f "$source_path" ]] || { printf 'Manifest source is missing: %s\n' "$source" >&2; exit 1; }
   install -d -m 0755 "$(dirname "$destination")"
   if [[ "$test_mode" == 1 ]]; then
     install -m "$mode" "$source_path" "$destination"
@@ -201,7 +372,12 @@ while IFS=$'\t' read -r kind source target mode owner group; do
     printf 'Installed mode differs from manifest for %s.\n' "$target" >&2
     exit 1
   }
-done < "$release_dir/config/release/install-manifest.tsv"
+done
+
+if [[ "$test_fail_after_install" == 1 ]]; then
+  printf 'TEST  Injecting a post-install failure.\n' >&2
+  exit 97
+fi
 
 activate_current_release() {
   local current_tmp
@@ -220,15 +396,8 @@ activate_current_release() {
 
 if [[ "$test_mode" == 0 ]]; then
   systemctl daemon-reload
-  compose_file="$release_dir/compose/foundation/compose.yaml"
-  image_env_file="$release_dir/config/release/foundation-images.env"
-  docker compose --env-file "$image_env_file" -f "$compose_file" config --quiet
-  docker compose --env-file "$image_env_file" -f "$compose_file" \
-    up --detach --remove-orphans --wait --wait-timeout 120
-  running_count="$(docker compose --env-file "$image_env_file" -f "$compose_file" \
-    ps --status running --quiet | wc -l)"
-  [[ "$running_count" -eq 2 ]]
-  curl --fail --silent --show-error --max-time 5 http://127.0.0.1:8080/healthz >/dev/null
+  compose_mutated=1
+  reconcile_compose_release "$release_dir"
   /usr/local/sbin/ac-docker-firewall
   activate_current_release
   systemctl enable --now \
@@ -239,6 +408,11 @@ if [[ "$test_mode" == 0 ]]; then
 else
   activate_current_release
 fi
+if [[ "$test_fail_after_activate" == 1 ]]; then
+  printf 'TEST  Injecting a post-activation failure.\n' >&2
+  exit 98
+fi
+transaction_committed=1
 
 printf 'PASS  Installed and reconciled immutable foundation release %s with %s managed host files.\n' \
   "$release_id" "${#installed_targets[@]}"

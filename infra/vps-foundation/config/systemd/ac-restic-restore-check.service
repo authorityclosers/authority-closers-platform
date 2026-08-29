@@ -15,6 +15,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true
 ProtectSystem=strict
+NoExecPaths=/tmp
 RestrictAddressFamilies=AF_INET AF_UNIX
 ReadOnlyPaths=/etc/authority-closers/secrets/infisical-bootstrap.env /usr/local/sbin
 ReadWritePaths=/var/cache/authority-closers-restic

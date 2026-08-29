@@ -50,6 +50,16 @@ grep -Eq '^RCLONE_LINUX_AMD64_BINARY_SHA256=[0-9a-f]{64}$' "$foundation/config/r
 grep -q 'expected_infisical_binary_sha' "$foundation/scripts/ac-restic-restore-check-inner"
 grep -q 'expected_rclone_binary_sha' "$foundation/scripts/ac-restic-restore-check-inner"
 # shellcheck disable=SC2016  # This static assertion intentionally matches a literal variable reference.
+grep -q 'trusted_release_dir="/srv/authority-closers/releases/$release_id"' \
+  "$foundation/scripts/ac-restic-restore-check-inner"
+# shellcheck disable=SC2016  # Restored binaries must remain inert data during the credentialed drill.
+if grep -Eq '^"\$restored_(infisical|rclone)"' \
+  "$foundation/scripts/ac-restic-restore-check-inner"; then
+  printf 'Restore validation executes a binary sourced from the snapshot.\n' >&2
+  exit 1
+fi
+grep -Fxq 'NoExecPaths=/tmp' "$foundation/config/systemd/ac-restic-restore-check.service"
+# shellcheck disable=SC2016  # This static assertion intentionally matches a literal variable reference.
 grep -q 'AC_TOOLCHAIN_POLICY="$release_dir/config/release/toolchain.env"' \
   "$foundation/scripts/install-foundation-release.sh"
 grep -q 'git .*archive --format=tar' "$foundation/scripts/install-foundation-release.sh"
@@ -58,9 +68,18 @@ grep -q 'verify-git-release-archive.py' "$foundation/scripts/install-foundation-
 grep -q 'AC_RELEASE_ARCHIVE="${AC_RELEASE_ARCHIVE:-}"' "$foundation/scripts/bootstrap-host.sh"
 grep -q 'AC_RELEASE_ARCHIVE: "{{ ac_release_archive_remote }}"' \
   "$foundation/ansible/playbooks/bootstrap.yml"
+controller_verify_line="$(grep -n 'Validate the exact archive on the trusted controller' \
+  "$foundation/ansible/playbooks/bootstrap.yml" | cut -d: -f1)"
+remote_extract_line="$(grep -n 'Extract only the checksum-verified Git archive' \
+  "$foundation/ansible/playbooks/bootstrap.yml" | cut -d: -f1)"
+[[ "$controller_verify_line" -lt "$remote_extract_line" ]]
 grep -q 'Running installer differs from the checksum-verified release archive' \
   "$foundation/scripts/install-foundation-release.sh"
 grep -q 'up --detach --remove-orphans --wait --wait-timeout 120' \
+  "$foundation/scripts/install-foundation-release.sh"
+grep -q 'restore_failed_transaction' "$foundation/scripts/install-foundation-release.sh"
+# shellcheck disable=SC2016  # This static assertion intentionally matches a literal variable reference.
+grep -q 'reconcile_compose_release "$previous_release_dir"' \
   "$foundation/scripts/install-foundation-release.sh"
 grep -q 'full 40-character lowercase Git SHA' "$foundation/scripts/install-foundation-release.sh"
 

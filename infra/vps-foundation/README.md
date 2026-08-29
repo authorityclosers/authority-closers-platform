@@ -35,7 +35,7 @@ The VPS is a deployment target, not a source-code workstation.
 1. Build one Git archive from the full reviewed 40-character commit and record its SHA-256. Every phase must execute from that checksum-verified archive; the bootstrap refuses a payload that differs by even one tracked or extra file.
 2. Run the archive-extracted `bootstrap-host.sh access /path/to/admin.pub` with `AC_RELEASE_ID`, `AC_RELEASE_ARCHIVE`, and `AC_RELEASE_ARCHIVE_SHA256`.
 3. Verify a fresh public key-only SSH session as the named administrator.
-4. Run the same archive-extracted `bootstrap-host.sh baseline`. This is a separately versioned, exact-package host baseline; it records the complete resolved package set and fails if any package later drifts.
+4. Run the same archive-extracted `bootstrap-host.sh baseline`. This is a separately versioned host baseline with top-level pins plus a checksum-bound complete 555-package dependency graph; installation fails unless the live graph matches it exactly and later fails on any drift.
 5. On a fresh host only, run `AC_ALLOW_PUBLIC_SSH_BOOTSTRAP=1 bootstrap-host.sh harden` from the same archive to keep TCP/22 temporarily available.
 6. Verify SSH key-only access and firewall state.
 7. Run `bootstrap-host.sh runtime` from the same archive. This installs the exact-commit immutable release, release-scoped toolchain, every managed script/unit, and the digest-pinned Compose foundation.
@@ -45,6 +45,6 @@ The VPS is a deployment target, not a source-code workstation.
 11. Run `AC_PUBLIC_HEALTH_URL=https://infra.dipakvishwakarma.com/healthz /usr/local/sbin/ac-validate-foundation` as root.
 12. After the Infisical bootstrap, R2 repository, first backup, and restore evidence exist, run `bootstrap-host.sh activate r2-jobs` from the same archive. Activation fails closed unless current usage and restore checks pass.
 
-CI proves that working-tree mutations cannot enter an exact-commit release, smoke-tests the installer against a clean synthetic filesystem root, and requires every `ac-*` operational script and systemd unit to appear in the explicit install manifest. Provider-dependent activation remains a separate, named gate so a clean host cannot silently start an unconfigured external writer.
+CI proves that working-tree mutations cannot enter an exact-commit release, rejects a mutated controller verifier and unsafe archive path, failure-injects host installation both before and after symlink activation to prove automatic rollback, smoke-tests the installer against a clean synthetic filesystem root, and requires every `ac-*` operational script and systemd unit to appear in the explicit install manifest. Provider-dependent activation remains a separate, named gate so a clean host cannot silently start an unconfigured external writer.
 
 Never skip the fresh-session checks between gates.

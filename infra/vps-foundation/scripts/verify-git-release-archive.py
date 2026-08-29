@@ -39,6 +39,7 @@ required_files = {
     "infra/vps-foundation/config/release/install-manifest.tsv",
 }
 seen_files: set[str] = set()
+verifier_member_sha = ""
 try:
     with tarfile.open(archive_path, mode="r:") as release_archive:
         archive_commit = release_archive.pax_headers.get("comment", "")
@@ -57,11 +58,19 @@ try:
                 fail(f"release archive contains a non-regular entry: {name}")
             if member.isfile():
                 seen_files.add(name)
+                if name == "infra/vps-foundation/scripts/verify-git-release-archive.py":
+                    member_file = release_archive.extractfile(member)
+                    if member_file is None:
+                        fail("release archive verifier member cannot be read")
+                    verifier_member_sha = hashlib.sha256(member_file.read()).hexdigest()
 except (OSError, tarfile.TarError) as error:
     fail(f"release archive cannot be validated: {error}")
 
 missing = sorted(required_files - seen_files)
 if missing:
     fail("release archive is missing required files: " + ", ".join(missing))
+local_verifier_sha = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+if verifier_member_sha != local_verifier_sha:
+    fail("trusted verifier differs from the verifier in the exact-commit archive")
 
 print(f"PASS  Git archive is path-safe, checksum-verified, and commit-bound to {expected_commit}.")

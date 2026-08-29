@@ -74,6 +74,13 @@ if python3 "$source_foundation/scripts/verify-git-release-archive.py" \
   printf 'Archive verifier accepted an incorrect embedded Git commit.\n' >&2
   exit 1
 fi
+tampered_verifier="$source_foundation/scripts/verify-git-release-archive-tampered.py"
+cp "$source_foundation/scripts/verify-git-release-archive.py" "$tampered_verifier"
+printf '# controller mutation\n' >> "$tampered_verifier"
+if python3 "$tampered_verifier" "$archive" "$archive_sha" "$release_sha" >/dev/null 2>&1; then
+  printf 'Archive verifier accepted a controller verifier outside the exact commit.\n' >&2
+  exit 1
+fi
 
 unsafe_archive="$tmp_dir/unsafe-release.tar"
 python3 - "$unsafe_archive" "$release_sha" <<'PY'
@@ -163,5 +170,34 @@ if AC_TEST_MODE=1 \
   exit 1
 fi
 
+installed_health="$tmp_dir/root/usr/local/sbin/ac-foundation-health"
+installed_health_sha="$(sha256sum "$installed_health" | awk '{print $1}')"
+printf '# candidate transaction fixture\n' >> "$source_foundation/scripts/ac-foundation-health"
+git -C "$source_repo" add infra/vps-foundation/scripts/ac-foundation-health
+git -C "$source_repo" commit -qm 'fixture: candidate release transaction'
+candidate_sha="$(git -C "$source_repo" rev-parse HEAD)"
+if AC_TEST_MODE=1 \
+  AC_TEST_FAIL_AFTER_INSTALL=1 \
+  AC_INSTALL_ROOT="$tmp_dir/root" \
+  AC_RELEASE_ID=foundation-test-transaction \
+  AC_RELEASE_GIT_SHA="$candidate_sha" \
+  bash "$installer" >/dev/null 2>&1; then
+  printf 'Injected post-install failure unexpectedly succeeded.\n' >&2
+  exit 1
+fi
+[[ "$(readlink -f "$current")" == "$release" ]]
+[[ "$(sha256sum "$installed_health" | awk '{print $1}')" == "$installed_health_sha" ]]
+if AC_TEST_MODE=1 \
+  AC_TEST_FAIL_AFTER_ACTIVATE=1 \
+  AC_INSTALL_ROOT="$tmp_dir/root" \
+  AC_RELEASE_ID=foundation-test-transaction \
+  AC_RELEASE_GIT_SHA="$candidate_sha" \
+  bash "$installer" >/dev/null 2>&1; then
+  printf 'Injected post-activation failure unexpectedly succeeded.\n' >&2
+  exit 1
+fi
+[[ "$(readlink -f "$current")" == "$release" ]]
+[[ "$(sha256sum "$installed_health" | awk '{print $1}')" == "$installed_health_sha" ]]
+
 bash "$foundation/scripts/validate-images-pinned.sh" >/dev/null
-printf 'PASS  Immutable installer covers all host files and binds Git/archive modes to the exact commit.\n'
+printf 'PASS  Immutable installer binds release evidence and rolls back a failed host transaction.\n'
