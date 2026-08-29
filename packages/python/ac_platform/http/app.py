@@ -2,17 +2,17 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from uuid import uuid4
 
 import structlog
 from fastapi import FastAPI, Request, Response, status
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
-from starlette.middleware.base import RequestResponseEndpoint
 
 from ac_platform import __version__
 from ac_platform.application.settings import get_settings
 from ac_platform.db.session import engine
+from ac_platform.http.problem import problem_response, register_problem_handlers
+from ac_platform.http.request_context import request_context_middleware
 
 logger = structlog.get_logger()
 settings = get_settings()
@@ -35,14 +35,16 @@ def create_app() -> FastAPI:
         redoc_url=None,
         lifespan=lifespan,
     )
+    register_problem_handlers(application)
 
     @application.middleware("http")
-    async def request_context(request: Request, call_next: RequestResponseEndpoint) -> Response:
-        request_id = request.headers.get("x-request-id") or str(uuid4())
-        response = await call_next(request)
-        response.headers["x-request-id"] = request_id
-        response.headers["x-ac-release-id"] = settings.release_id
-        return response
+    async def request_context(request: Request, call_next) -> Response:  # type: ignore[no-untyped-def]
+        return await request_context_middleware(
+            request,
+            call_next,
+            release_id=settings.release_id,
+            environment=settings.environment,
+        )
 
     @application.get("/health/live", tags=["operations"])
     async def live() -> dict[str, str]:
@@ -55,15 +57,12 @@ def create_app() -> FastAPI:
                 await connection.execute(text("SELECT 1"))
         except Exception:
             logger.exception("readiness_database_failed")
-            return JSONResponse(
+            return problem_response(
+                request=request,
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                content={
-                    "type": "https://authorityclosers.com/problems/not-ready",
-                    "title": "Service is not ready",
-                    "status": 503,
-                    "detail": "A critical dependency is unavailable.",
-                    "instance": str(request.url.path),
-                },
+                code="not_ready",
+                title="Service is not ready",
+                detail="A critical dependency is unavailable.",
             )
         return JSONResponse({"status": "ready", "release_id": settings.release_id})
 
