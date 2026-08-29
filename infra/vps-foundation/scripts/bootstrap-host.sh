@@ -13,13 +13,45 @@ require_root() {
   fi
 }
 
+verify_bootstrap_source() {
+  local release_id archive archive_sha release_sha verified_root
+  release_id="${AC_RELEASE_ID:-}"
+  archive="${AC_RELEASE_ARCHIVE:-}"
+  archive_sha="${AC_RELEASE_ARCHIVE_SHA256:-}"
+  [[ "$release_id" =~ ^foundation-[0-9a-f]{40}$ ]] || {
+    printf 'Every bootstrap phase requires AC_RELEASE_ID with the full reviewed Git SHA.\n' >&2
+    exit 2
+  }
+  [[ "$archive" == /* && -r "$archive" && "$archive_sha" =~ ^[0-9a-f]{64}$ ]] || {
+    printf 'Every bootstrap phase requires the absolute exact-commit archive and SHA-256.\n' >&2
+    exit 2
+  }
+  release_sha="${release_id#foundation-}"
+  python3 "$repo_root/scripts/verify-git-release-archive.py" "$archive" "$archive_sha" "$release_sha"
+
+  verified_root="$(mktemp -d /tmp/ac-bootstrap-source.XXXXXX)"
+  tar --extract --file="$archive" --directory="$verified_root" --strip-components=2
+  if ! diff --brief --recursive --no-dereference "$verified_root" "$repo_root" >/dev/null; then
+    case "$verified_root" in
+      /tmp/ac-bootstrap-source.*) rm -rf -- "$verified_root" ;;
+      *) printf 'Refusing to remove unexpected verification path: %s\n' "$verified_root" >&2 ;;
+    esac
+    printf 'Bootstrap payload differs from the checksum-verified exact-commit archive.\n' >&2
+    exit 1
+  fi
+  case "$verified_root" in
+    /tmp/ac-bootstrap-source.*) rm -rf -- "$verified_root" ;;
+    *) printf 'Refusing to remove unexpected verification path: %s\n' "$verified_root" >&2; exit 1 ;;
+  esac
+}
+
 backup_host_config() {
-  local stamp archive package_manifest candidate
+  local stamp archive package_manifest package_manifest_tmp candidate
   local -a candidates paths
-  stamp="$(date -u +%Y%m%dT%H%M%SZ)"
-  archive="/root/ac-bootstrap-backups/pre-change-${stamp}.tar.gz"
-  package_manifest="/root/ac-bootstrap-backups/pre-change-${stamp}.packages.tsv"
+  stamp="$(date -u +%Y%m%dT%H%M%S.%NZ)"
   install -d -m 0700 /root/ac-bootstrap-backups
+  archive="$(mktemp "/root/ac-bootstrap-backups/pre-change-${stamp}.XXXXXX.tar.gz")"
+  package_manifest="${archive%.tar.gz}.packages.tsv"
 
   shopt -s nullglob
   candidates=(
@@ -56,19 +88,34 @@ backup_host_config() {
     fi
   done
   ((${#paths[@]} > 0)) || {
+    rm -f -- "$archive"
     printf 'No rollback source paths exist; refusing to continue.\n' >&2
     exit 1
   }
 
-  tar --acls --xattrs --numeric-owner --directory=/ --create --gzip --file="$archive" "${paths[@]}"
+  if ! tar --acls --xattrs --numeric-owner --directory=/ --create --gzip --file="$archive" "${paths[@]}"; then
+    rm -f -- "$archive"
+    printf 'Rollback archive creation failed.\n' >&2
+    exit 1
+  fi
   tar --list --gzip --file="$archive" etc/ssh >/dev/null || {
     printf 'Rollback archive verification failed: %s\n' "$archive" >&2
     rm -f -- "$archive"
     exit 1
   }
   chmod 0600 "$archive"
-  dpkg-query -W -f='${binary:Package}\t${Version}\n' | LC_ALL=C sort > "$package_manifest"
-  [[ -s "$package_manifest" ]] || { printf 'Rollback package manifest is empty.\n' >&2; exit 1; }
+  package_manifest_tmp="$(mktemp "/root/ac-bootstrap-backups/.packages-${stamp}.XXXXXX.tmp")"
+  if ! dpkg-query -W -f='${binary:Package}\t${Version}\n' | LC_ALL=C sort > "$package_manifest_tmp"; then
+    rm -f -- "$package_manifest_tmp" "$archive"
+    printf 'Rollback package manifest generation failed.\n' >&2
+    exit 1
+  fi
+  [[ -s "$package_manifest_tmp" ]] || {
+    rm -f -- "$package_manifest_tmp" "$archive"
+    printf 'Rollback package manifest is empty.\n' >&2
+    exit 1
+  }
+  mv --no-target-directory "$package_manifest_tmp" "$package_manifest"
   chmod 0600 "$package_manifest"
   printf 'Created rollback archive %s\n' "$archive"
 }
@@ -197,7 +244,7 @@ phase_lockdown() {
 }
 
 phase_runtime() {
-  local release_id compose_file image_env_file
+  local release_id
   release_id="${AC_RELEASE_ID:-}"
   [[ "$release_id" =~ ^foundation-[0-9a-f]{40}$ ]] || {
     printf 'Set AC_RELEASE_ID=foundation-<full-reviewed-git-sha> for the runtime phase.\n' >&2
@@ -226,18 +273,13 @@ phase_runtime() {
   getent passwd cloudflared >/dev/null || useradd --system --user-group --home-dir /var/lib/cloudflared --shell /usr/sbin/nologin cloudflared
   install -d -m 0750 -o root -g cloudflared /etc/cloudflared
 
-  AC_RELEASE_ID="$release_id" "$repo_root/scripts/install-foundation-release.sh"
-
   docker network inspect ac_edge >/dev/null 2>&1 || docker network create ac_edge
   docker network inspect ac_telemetry >/dev/null 2>&1 || docker network create ac_telemetry --internal
-  systemctl enable --now ac-docker-firewall.service ac-docker-firewall.timer
+  AC_RELEASE_ID="$release_id" \
+  AC_RELEASE_ARCHIVE="${AC_RELEASE_ARCHIVE:-}" \
+  AC_RELEASE_ARCHIVE_SHA256="${AC_RELEASE_ARCHIVE_SHA256:-}" \
+    "$repo_root/scripts/install-foundation-release.sh"
 
-  compose_file='/srv/authority-closers/current/compose/foundation/compose.yaml'
-  image_env_file='/srv/authority-closers/current/config/release/foundation-images.env'
-  docker compose --env-file "$image_env_file" -f "$compose_file" config --quiet
-  docker compose --env-file "$image_env_file" -f "$compose_file" up --detach --remove-orphans
-
-  systemctl enable --now ac-foundation-health.timer
   if [[ -f /etc/cloudflared/tunnel-token ]]; then
     [[ "$(stat -c '%U:%G %a' /etc/cloudflared/tunnel-token)" == 'root:cloudflared 640' ]] || {
       printf 'Cloudflare Tunnel token ownership or mode is unsafe.\n' >&2
@@ -290,6 +332,7 @@ phase_activate() {
 }
 
 require_root
+verify_bootstrap_source
 case "$phase" in
   access) phase_access ;;
   baseline) phase_baseline ;;

@@ -26,5 +26,7 @@ if grep -Eq 'dist-upgrade|apt-get install -y docker-ce|apt-get install -y cloudf
 fi
 grep -q 'install-os-baseline.sh' "$bootstrap"
 grep -q 'ac-os-baseline-verify' "$bootstrap"
+grep -q 'Current installed package set differs from recorded baseline' \
+  "$foundation/scripts/ac-os-baseline-verify"
 
 printf 'PASS  OS package mutation is pinned and gated by a separately versioned baseline.\n'

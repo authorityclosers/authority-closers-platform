@@ -22,12 +22,14 @@ expected_policy="/srv/authority-closers/releases/$release_id/config/release/tool
 
 INFISICAL_VERSION=''
 INFISICAL_LINUX_AMD64_SHA256=''
+INFISICAL_LINUX_AMD64_BINARY_SHA256=''
 RCLONE_VERSION=''
 RCLONE_LINUX_AMD64_SHA256=''
+RCLONE_LINUX_AMD64_BINARY_SHA256=''
 while IFS='=' read -r key value; do
   [[ -z "$key" || "$key" == \#* ]] && continue
   case "$key" in
-    INFISICAL_VERSION|INFISICAL_LINUX_AMD64_SHA256|RCLONE_VERSION|RCLONE_LINUX_AMD64_SHA256)
+    INFISICAL_VERSION|INFISICAL_LINUX_AMD64_SHA256|INFISICAL_LINUX_AMD64_BINARY_SHA256|RCLONE_VERSION|RCLONE_LINUX_AMD64_SHA256|RCLONE_LINUX_AMD64_BINARY_SHA256)
       printf -v "$key" '%s' "$value"
       ;;
     *) printf 'Unknown toolchain policy key: %s\n' "$key" >&2; exit 1 ;;
@@ -37,7 +39,9 @@ done < "$policy"
 [[ "$INFISICAL_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
 [[ "$RCLONE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
 [[ "$INFISICAL_LINUX_AMD64_SHA256" =~ ^[0-9a-f]{64}$ ]]
+[[ "$INFISICAL_LINUX_AMD64_BINARY_SHA256" =~ ^[0-9a-f]{64}$ ]]
 [[ "$RCLONE_LINUX_AMD64_SHA256" =~ ^[0-9a-f]{64}$ ]]
+[[ "$RCLONE_LINUX_AMD64_BINARY_SHA256" =~ ^[0-9a-f]{64}$ ]]
 
 work_dir="$(mktemp -d /tmp/ac-toolchain.XXXXXX)"
 infisical_stage=''
@@ -73,6 +77,11 @@ curl --fail --silent --show-error --location \
 printf '%s  %s\n' "$RCLONE_LINUX_AMD64_SHA256" "$rclone_archive" | sha256sum --check --strict
 unzip -q "$rclone_archive" "rclone-v${RCLONE_VERSION}-linux-amd64/rclone" -d "$work_dir"
 
+printf '%s  %s\n' "$INFISICAL_LINUX_AMD64_BINARY_SHA256" "$work_dir/infisical" | sha256sum --check --strict
+printf '%s  %s\n' \
+  "$RCLONE_LINUX_AMD64_BINARY_SHA256" \
+  "$work_dir/rclone-v${RCLONE_VERSION}-linux-amd64/rclone" \
+  | sha256sum --check --strict
 "$work_dir/infisical" --version | grep -q "$INFISICAL_VERSION"
 "$work_dir/rclone-v${RCLONE_VERSION}-linux-amd64/rclone" version | grep -q "rclone v${RCLONE_VERSION}"
 install -d -o root -g root -m 0755 /usr/local/bin
@@ -95,9 +104,9 @@ printf '%s\n' \
   "AC_RELEASE_ID=$release_id" \
   "TOOLCHAIN_POLICY_SHA256=$(sha256sum "$policy" | awk '{print $1}')" \
   "INFISICAL_VERSION=$INFISICAL_VERSION" \
-  "INFISICAL_BINARY_SHA256=$(sha256sum /usr/local/bin/infisical | awk '{print $1}')" \
+  "INFISICAL_BINARY_SHA256=$INFISICAL_LINUX_AMD64_BINARY_SHA256" \
   "RCLONE_VERSION=$RCLONE_VERSION" \
-  "RCLONE_BINARY_SHA256=$(sha256sum /usr/local/bin/rclone | awk '{print $1}')" \
+  "RCLONE_BINARY_SHA256=$RCLONE_LINUX_AMD64_BINARY_SHA256" \
   > "$marker"
 install -o root -g root -m 0640 "$marker" "$marker_root/${release_id}.env"
 printf 'PASS  Installed checksum-pinned Infisical %s and rclone %s.\n' \

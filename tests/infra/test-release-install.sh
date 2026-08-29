@@ -62,6 +62,40 @@ git -C "$source_repo" add infra/vps-foundation
 git -C "$source_repo" commit -qm 'fixture: exact foundation release'
 release_sha="$(git -C "$source_repo" rev-parse HEAD)"
 installer="$source_foundation/scripts/install-foundation-release.sh"
+archive="$tmp_dir/foundation-${release_sha}.tar"
+git -C "$source_repo" archive --format=tar --output="$archive" \
+  "$release_sha" -- infra/vps-foundation
+archive_sha="$(sha256sum "$archive" | awk '{print $1}')"
+python3 "$source_foundation/scripts/verify-git-release-archive.py" \
+  "$archive" "$archive_sha" "$release_sha" >/dev/null
+wrong_release_sha="$(printf '0%.0s' {1..40})"
+if python3 "$source_foundation/scripts/verify-git-release-archive.py" \
+  "$archive" "$archive_sha" "$wrong_release_sha" >/dev/null 2>&1; then
+  printf 'Archive verifier accepted an incorrect embedded Git commit.\n' >&2
+  exit 1
+fi
+
+unsafe_archive="$tmp_dir/unsafe-release.tar"
+python3 - "$unsafe_archive" "$release_sha" <<'PY'
+from __future__ import annotations
+
+import io
+import sys
+import tarfile
+
+with tarfile.open(sys.argv[1], "w", format=tarfile.PAX_FORMAT,
+                  pax_headers={"comment": sys.argv[2]}) as archive:
+    payload = b"escape\n"
+    entry = tarfile.TarInfo("../escape")
+    entry.size = len(payload)
+    archive.addfile(entry, io.BytesIO(payload))
+PY
+unsafe_archive_sha="$(sha256sum "$unsafe_archive" | awk '{print $1}')"
+if python3 "$source_foundation/scripts/verify-git-release-archive.py" \
+  "$unsafe_archive" "$unsafe_archive_sha" "$release_sha" >/dev/null 2>&1; then
+  printf 'Archive verifier accepted a path traversal entry.\n' >&2
+  exit 1
+fi
 printf 'UNTRACKED-WORKTREE-MUTATION\n' >> "$source_foundation/compose/foundation/Caddyfile"
 
 AC_TEST_MODE=1 \
@@ -90,5 +124,44 @@ while IFS=$'\t' read -r kind source target mode owner group; do
   [[ "$owner:$group" == 'root:root' ]]
 done < "$release/config/release/install-manifest.tsv"
 
+AC_TEST_MODE=1 \
+AC_INSTALL_ROOT="$tmp_dir/archive-root" \
+AC_RELEASE_ID=foundation-test-archive \
+AC_RELEASE_GIT_SHA="$release_sha" \
+AC_RELEASE_ARCHIVE="$archive" \
+AC_RELEASE_ARCHIVE_SHA256="$archive_sha" \
+  bash "$installer" >/dev/null
+archive_release="$tmp_dir/archive-root/srv/authority-closers/releases/foundation-test-archive"
+[[ "$(<"$archive_release/RELEASE-COMMIT")" == "$release_sha" ]]
+if grep -q 'UNTRACKED-WORKTREE-MUTATION' "$archive_release/compose/foundation/Caddyfile"; then
+  printf 'Archive-mode release included a working-tree mutation.\n' >&2
+  exit 1
+fi
+
+if AC_TEST_MODE=1 \
+  AC_INSTALL_ROOT="$tmp_dir/bad-hash-root" \
+  AC_RELEASE_ID=foundation-test-bad-hash \
+  AC_RELEASE_GIT_SHA="$release_sha" \
+  AC_RELEASE_ARCHIVE="$archive" \
+  AC_RELEASE_ARCHIVE_SHA256="$(printf '0%.0s' {1..64})" \
+  bash "$installer" >/dev/null 2>&1; then
+  printf 'Archive mode accepted an incorrect SHA-256.\n' >&2
+  exit 1
+fi
+
+tampered_installer="$source_foundation/scripts/install-foundation-release-tampered.sh"
+cp "$installer" "$tampered_installer"
+printf '# working-tree mutation\n' >> "$tampered_installer"
+if AC_TEST_MODE=1 \
+  AC_INSTALL_ROOT="$tmp_dir/tampered-installer-root" \
+  AC_RELEASE_ID=foundation-test-tampered-installer \
+  AC_RELEASE_GIT_SHA="$release_sha" \
+  AC_RELEASE_ARCHIVE="$archive" \
+  AC_RELEASE_ARCHIVE_SHA256="$archive_sha" \
+  bash "$tampered_installer" >/dev/null 2>&1; then
+  printf 'Archive mode accepted an installer outside the exact commit.\n' >&2
+  exit 1
+fi
+
 bash "$foundation/scripts/validate-images-pinned.sh" >/dev/null
-printf 'PASS  Immutable release installer covers all operational scripts/units and survives a clean-root smoke test.\n'
+printf 'PASS  Immutable installer covers all host files and binds Git/archive modes to the exact commit.\n'

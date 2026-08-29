@@ -22,17 +22,28 @@ Host ac
 
 Keep `cloudflared` installed on the operator workstation. A successful `ssh ac` test proves the Access policy, tunnel, local key, and UFW lock-down are all working together.
 
-For a fresh host, public TCP/22 is an explicit, temporary bootstrap exception:
+For a fresh host, use the Ansible playbook with the reviewed archive path/SHA/release ID in `reviewed-release.yml`. It verifies the remote checksum, extracts only that archive, verifies its embedded Git commit and paths, and executes every bootstrap control from the extracted payload. Public TCP/22 is an explicit, temporary bootstrap exception:
+
+```yaml
+ac_release_id: foundation-<full-reviewed-git-sha>
+ac_release_archive_local: /absolute/controller/path/ac-foundation-<full-reviewed-git-sha>.tar
+ac_release_archive_sha256: <reviewed-archive-sha256>
+```
 
 ```bash
-sudo scripts/bootstrap-host.sh baseline
-sudo AC_ALLOW_PUBLIC_SSH_BOOTSTRAP=1 scripts/bootstrap-host.sh harden
+ansible-playbook -i <inventory> ansible/playbooks/bootstrap.yml \
+  --extra-vars @reviewed-release.yml --extra-vars ac_bootstrap_phase=baseline
+ansible-playbook -i <inventory> ansible/playbooks/bootstrap.yml \
+  --extra-vars @reviewed-release.yml \
+  --extra-vars '{"ac_bootstrap_phase":"harden","ac_allow_public_ssh_bootstrap":true}'
 ```
 
 After a second operator session independently proves Cloudflare Access SSH, remove the exception:
 
 ```bash
-sudo AC_CLOUDFLARE_SSH_VERIFIED=YES scripts/bootstrap-host.sh lockdown
+ansible-playbook -i <inventory> ansible/playbooks/bootstrap.yml \
+  --extra-vars @reviewed-release.yml \
+  --extra-vars '{"ac_bootstrap_phase":"lockdown","ac_cloudflare_ssh_verified":true}'
 ```
 
 Never run the lock-down phase on the strength of the same SSH session that performed the bootstrap.
@@ -139,7 +150,7 @@ sudo AC_RELEASE_ID="foundation-${release_sha}" \
   /path/to/reviewed/infra/vps-foundation/scripts/bootstrap-host.sh runtime
 ```
 
-The installer verifies the archive SHA-256 and embedded Git commit, rejects unexpected archive paths and symlinks, generates a release content manifest, reconciles Infisical/rclone to the release's checksum-pinned toolchain, installs every explicitly declared script and unit, atomically changes `current`, and starts the digest-pinned Compose foundation. Provider writers remain disabled until the separate `activate r2-jobs` gate succeeds.
+The installer verifies the archive SHA-256 and embedded Git commit, rejects unexpected archive paths and non-regular entries, requires the complete bootstrap payload to equal that archive, generates a release content manifest, reconciles Infisical/rclone to binary hashes in the release policy, installs every explicitly declared script and unit, recreates and health-checks the target Compose foundation, and only then changes `current`. Provider writers remain disabled until the separate `activate r2-jobs` gate succeeds.
 
 Resend uses a domain-restricted Sending-access key. A send test returning HTTP 200 is the expected runtime check; delivery-log lookup is intentionally unavailable to a sending-only key. Google Workspace remains the receiving system for both domains.
 
@@ -159,7 +170,7 @@ The Infisical runtime and backup Universal Auth client secrets were rotated on 2
 - Restore only the required configuration subtree; do not overwrite unrelated current state.
 - Validate `sshd -t` before restarting SSH.
 - Keep an established SSH session open until a fresh session passes.
-- To roll back a foundation release, run the installer from the already verified target release with its own full release ID. It re-installs that release's host manifest and reconciles its toolchain before changing `current`:
+- To roll back a foundation release, run the installer from the already verified target release with its own full release ID. It revalidates the recorded OS package set, re-installs that release's host manifest, reconciles its binary-pinned toolchain, recreates the target Compose foundation, verifies local health, and only then changes `current`:
 
 ```bash
 sudo AC_RELEASE_ID=foundation-<previous-full-git-sha> \

@@ -67,3 +67,5 @@
 - New releases require a full 40-character reviewed commit and are materialized from an exact Git archive; working-tree and untracked files cannot enter a trusted release ID.
 - Infisical/rclone versions and checksums are release content, are reconciled on rollback, and are covered by backup/isolated-restore evidence.
 - Docker ingress rules are lifecycle-bound to Docker and continuously revalidated by a one-minute systemd timer; IPv4 and IPv6 UFW numbered-rule fixtures protect the TCP/22 lockdown parser.
+- Every mutating bootstrap phase must now run from the checksum-verified exact Git archive; the official Ansible path no longer copies a mutable working payload.
+- Baseline verification compares the complete live package manifest to the recorded baseline, restore validation anchors operational binaries directly to release-policy hashes/versions, and rollback recreates plus health-checks the target Compose foundation before changing `current`.

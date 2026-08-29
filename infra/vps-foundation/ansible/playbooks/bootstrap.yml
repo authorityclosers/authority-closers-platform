@@ -5,7 +5,6 @@
   gather_facts: true
   vars:
     ac_bootstrap_phase: ""
-    ac_remote_payload: /tmp/authority-closers-platform-foundation
     ac_admin_public_key_path: ""
     ac_release_id: ""
     ac_release_archive_local: ""
@@ -25,31 +24,23 @@
         that:
           - ac_bootstrap_phase in ['access', 'baseline', 'harden', 'runtime', 'activate', 'lockdown']
         fail_msg: Set ac_bootstrap_phase explicitly; no host-changing phase is the default.
-    - name: Require the remote public-key path for access bootstrap
-      ansible.builtin.assert:
-        that:
-          - ac_admin_public_key_path | length > 0
-      when: ac_bootstrap_phase == 'access'
-    - name: Require reviewed release identity for runtime installation
+    - name: Require exact-commit archive identity for every mutating phase
       ansible.builtin.assert:
         that:
           - ac_release_id is match('^foundation-[0-9a-f]{40}$')
           - ac_release_archive_local | length > 0
           - ac_release_archive_sha256 is match('^[0-9a-f]{64}$')
-      when: ac_bootstrap_phase == 'runtime'
+    - name: Require the remote public-key path for access bootstrap
+      ansible.builtin.assert:
+        that:
+          - ac_admin_public_key_path | length > 0
+      when: ac_bootstrap_phase == 'access'
     - name: Require an explicit provider activation target
       ansible.builtin.assert:
         that:
           - ac_activation_target in ['cloudflared', 'r2-jobs']
       when: ac_bootstrap_phase == 'activate'
   tasks:
-    - name: Copy reviewed infrastructure payload
-      ansible.builtin.copy:
-        src: ../../
-        dest: "{{ ac_remote_payload }}/"
-        owner: root
-        group: root
-        mode: preserve
     - name: Copy checksum-verified exact-commit release archive
       ansible.builtin.copy:
         src: "{{ ac_release_archive_local }}"
@@ -57,26 +48,76 @@
         owner: root
         group: root
         mode: '0600'
-      when: ac_bootstrap_phase == 'runtime'
-    - name: Run the access bootstrap gate
-      ansible.builtin.command:
-        argv:
-          - "{{ ac_remote_payload }}/scripts/bootstrap-host.sh"
-          - access
-          - "{{ ac_admin_public_key_path }}"
-      when: ac_bootstrap_phase == 'access'
-      changed_when: true
-    - name: Run the selected non-access bootstrap gate
-      ansible.builtin.command:
-        argv:
-          - "{{ ac_remote_payload }}/scripts/bootstrap-host.sh"
-          - "{{ ac_bootstrap_phase }}"
-          - "{{ ac_activation_target if ac_bootstrap_phase == 'activate' else '' }}"
-      environment:
-        AC_ALLOW_PUBLIC_SSH_BOOTSTRAP: "{{ '1' if ac_allow_public_ssh_bootstrap | bool else '0' }}"
-        AC_CLOUDFLARE_SSH_VERIFIED: "{{ 'YES' if ac_cloudflare_ssh_verified | bool else '' }}"
-        AC_RELEASE_ID: "{{ ac_release_id }}"
-        AC_RELEASE_ARCHIVE: "{{ ac_release_archive_remote if ac_bootstrap_phase == 'runtime' else '' }}"
-        AC_RELEASE_ARCHIVE_SHA256: "{{ ac_release_archive_sha256 if ac_bootstrap_phase == 'runtime' else '' }}"
-      when: ac_bootstrap_phase != 'access'
-      changed_when: true
+    - name: Hash the remote exact-commit release archive
+      ansible.builtin.stat:
+        path: "{{ ac_release_archive_remote }}"
+        checksum_algorithm: sha256
+      register: ac_remote_release_archive
+    - name: Require the remote archive checksum to match controller evidence
+      ansible.builtin.assert:
+        that:
+          - ac_remote_release_archive.stat.checksum == ac_release_archive_sha256
+    - name: Create the root-owned bootstrap staging parent
+      ansible.builtin.file:
+        path: /var/lib/authority-closers
+        state: directory
+        owner: root
+        group: root
+        mode: '0750'
+    - name: Create an isolated bootstrap extraction directory
+      ansible.builtin.tempfile:
+        state: directory
+        path: /var/lib/authority-closers
+        prefix: ac-bootstrap-
+      register: ac_bootstrap_stage
+    - name: Execute the bootstrap gate from the exact archive
+      block:
+        - name: Extract only the checksum-verified Git archive
+          ansible.builtin.unarchive:
+            src: "{{ ac_release_archive_remote }}"
+            dest: "{{ ac_bootstrap_stage.path }}"
+            remote_src: true
+            owner: root
+            group: root
+        - name: Verify archive paths and embedded Git commit before bootstrap
+          ansible.builtin.command:
+            argv:
+              - python3
+              - "{{ ac_bootstrap_stage.path }}/infra/vps-foundation/scripts/verify-git-release-archive.py"
+              - "{{ ac_release_archive_remote }}"
+              - "{{ ac_release_archive_sha256 }}"
+              - "{{ ac_release_id | regex_replace('^foundation-', '') }}"
+          changed_when: false
+        - name: Run the access bootstrap gate
+          ansible.builtin.command:
+            argv:
+              - "{{ ac_bootstrap_stage.path }}/infra/vps-foundation/scripts/bootstrap-host.sh"
+              - access
+              - "{{ ac_admin_public_key_path }}"
+          environment:
+            AC_RELEASE_ID: "{{ ac_release_id }}"
+            AC_RELEASE_ARCHIVE: "{{ ac_release_archive_remote }}"
+            AC_RELEASE_ARCHIVE_SHA256: "{{ ac_release_archive_sha256 }}"
+          when: ac_bootstrap_phase == 'access'
+          changed_when: true
+        - name: Run the selected non-access bootstrap gate
+          ansible.builtin.command:
+            argv:
+              - "{{ ac_bootstrap_stage.path }}/infra/vps-foundation/scripts/bootstrap-host.sh"
+              - "{{ ac_bootstrap_phase }}"
+              - "{{ ac_activation_target if ac_bootstrap_phase == 'activate' else '' }}"
+          environment:
+            AC_ALLOW_PUBLIC_SSH_BOOTSTRAP: "{{ '1' if ac_allow_public_ssh_bootstrap | bool else '0' }}"
+            AC_CLOUDFLARE_SSH_VERIFIED: "{{ 'YES' if ac_cloudflare_ssh_verified | bool else '' }}"
+            AC_RELEASE_ID: "{{ ac_release_id }}"
+            AC_RELEASE_ARCHIVE: "{{ ac_release_archive_remote }}"
+            AC_RELEASE_ARCHIVE_SHA256: "{{ ac_release_archive_sha256 }}"
+          when: ac_bootstrap_phase != 'access'
+          changed_when: true
+      always:
+        - name: Remove the isolated bootstrap extraction directory
+          ansible.builtin.file:
+            path: "{{ ac_bootstrap_stage.path }}"
+            state: absent
+          when:
+            - ac_bootstrap_stage.path is match('^/var/lib/authority-closers/ac-bootstrap-[A-Za-z0-9._-]+$')

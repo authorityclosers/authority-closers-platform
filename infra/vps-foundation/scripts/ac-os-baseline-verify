@@ -53,6 +53,10 @@ manifest="/var/lib/authority-closers/baselines/${AC_OS_BASELINE_ID}.packages.tsv
 [[ -r "$manifest" && "$recorded_manifest_sha" == "$(sha256sum "$manifest" | awk '{print $1}')" ]]
 [[ "$(stat -c '%U:%G %a' "$marker")" == 'root:root 644' ]]
 [[ "$(stat -c '%U:%G %a' "$manifest")" == 'root:root 640' ]]
+if ! cmp --silent "$manifest" <(dpkg-query -W -f='${binary:Package}\t${Version}\n' | LC_ALL=C sort); then
+  printf 'Current installed package set differs from recorded baseline %s.\n' "$AC_OS_BASELINE_ID" >&2
+  exit 1
+fi
 
 # shellcheck source=/dev/null
 . /etc/os-release

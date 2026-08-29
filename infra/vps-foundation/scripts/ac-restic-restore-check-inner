@@ -80,16 +80,44 @@ restored_baseline_manifest="$restore_dir/var/lib/authority-closers/baselines/${b
 
 toolchain_marker="$restore_dir/var/lib/authority-closers/toolchains/${release_id}.env"
 [[ -r "$toolchain_marker" ]] || { printf 'FAIL  Restored release toolchain marker is absent.\n' >&2; exit 1; }
+toolchain_policy="$release_dir/config/release/toolchain.env"
+expected_infisical_version=''
+expected_infisical_binary_sha=''
+expected_rclone_version=''
+expected_rclone_binary_sha=''
+while IFS='=' read -r key value; do
+  [[ -z "$key" || "$key" == \#* ]] && continue
+  case "$key" in
+    INFISICAL_VERSION) expected_infisical_version="$value" ;;
+    INFISICAL_LINUX_AMD64_BINARY_SHA256) expected_infisical_binary_sha="$value" ;;
+    RCLONE_VERSION) expected_rclone_version="$value" ;;
+    RCLONE_LINUX_AMD64_BINARY_SHA256) expected_rclone_binary_sha="$value" ;;
+    INFISICAL_LINUX_AMD64_SHA256|RCLONE_LINUX_AMD64_SHA256) ;;
+    *) printf 'FAIL  Unknown restored toolchain policy key: %s\n' "$key" >&2; exit 1 ;;
+  esac
+done < "$toolchain_policy"
+[[ "$expected_infisical_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+[[ "$expected_rclone_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+[[ "$expected_infisical_binary_sha" =~ ^[0-9a-f]{64}$ ]]
+[[ "$expected_rclone_binary_sha" =~ ^[0-9a-f]{64}$ ]]
 [[ "$(awk -F= '$1 == "AC_RELEASE_ID" {print $2}' "$toolchain_marker")" == "$release_id" ]]
 [[ "$(awk -F= '$1 == "TOOLCHAIN_POLICY_SHA256" {print $2}' "$toolchain_marker")" == \
-  "$(sha256sum "$release_dir/config/release/toolchain.env" | awk '{print $1}')" ]]
+  "$(sha256sum "$toolchain_policy" | awk '{print $1}')" ]]
 restored_infisical="$restore_dir/usr/local/bin/infisical"
 restored_rclone="$restore_dir/usr/local/bin/rclone"
 [[ -f "$restored_infisical" && -f "$restored_rclone" ]]
+[[ "$expected_infisical_binary_sha" == "$(sha256sum "$restored_infisical" | awk '{print $1}')" ]]
+[[ "$expected_rclone_binary_sha" == "$(sha256sum "$restored_rclone" | awk '{print $1}')" ]]
 [[ "$(awk -F= '$1 == "INFISICAL_BINARY_SHA256" {print $2}' "$toolchain_marker")" == \
-  "$(sha256sum "$restored_infisical" | awk '{print $1}')" ]]
+  "$expected_infisical_binary_sha" ]]
 [[ "$(awk -F= '$1 == "RCLONE_BINARY_SHA256" {print $2}' "$toolchain_marker")" == \
-  "$(sha256sum "$restored_rclone" | awk '{print $1}')" ]]
+  "$expected_rclone_binary_sha" ]]
+[[ "$(awk -F= '$1 == "INFISICAL_VERSION" {print $2}' "$toolchain_marker")" == \
+  "$expected_infisical_version" ]]
+[[ "$(awk -F= '$1 == "RCLONE_VERSION" {print $2}' "$toolchain_marker")" == \
+  "$expected_rclone_version" ]]
+"$restored_infisical" --version | grep -Fq "$expected_infisical_version"
+"$restored_rclone" version | grep -Fq "rclone v${expected_rclone_version}"
 
 install_manifest="$release_dir/config/release/install-manifest.tsv"
 [[ -r "$install_manifest" ]] || { printf 'FAIL  Restored install manifest is absent.\n' >&2; exit 1; }

@@ -43,15 +43,15 @@ else
     exit 2
   }
   release_sha="${release_id#foundation-}"
-  if [[ -n "$release_archive" || -n "$release_archive_sha" ]]; then
-    [[ "$release_archive" == /* && -r "$release_archive" && "$release_archive_sha" =~ ^[0-9a-f]{64}$ ]] || {
-      printf 'Archive mode requires an absolute readable archive and its SHA-256.\n' >&2
-      exit 2
-    }
-  fi
   getent group acops >/dev/null || {
     printf 'Required operator group does not exist: acops\n' >&2
     exit 1
+  }
+fi
+if [[ -n "$release_archive" || -n "$release_archive_sha" ]]; then
+  [[ "$release_archive" == /* && -r "$release_archive" && "$release_archive_sha" =~ ^[0-9a-f]{64}$ ]] || {
+    printf 'Archive mode requires an absolute readable archive and its SHA-256.\n' >&2
+    exit 2
   }
 fi
 
@@ -92,23 +92,8 @@ if [[ -e "$release_dir" ]]; then
 else
   stage_dir="$(mktemp -d "$releases_root/.stage-${release_id}.XXXXXX")"
   if [[ -n "$release_archive" ]]; then
-    printf '%s  %s\n' "$release_archive_sha" "$release_archive" | sha256sum --check --strict
-    archive_commit="$(git get-tar-commit-id < "$release_archive")"
-    [[ "$archive_commit" == "$release_sha" ]] || {
-      printf 'Git archive commit does not match release ID.\n' >&2
-      exit 1
-    }
-    while IFS= read -r archive_entry; do
-      if [[ "$archive_entry" == /* || "$archive_entry" == .. || "$archive_entry" == ../* \
-        || "$archive_entry" == */../* || "$archive_entry" == */.. ]]; then
-        printf 'Release archive contains an unsafe path: %s\n' "$archive_entry" >&2
-        exit 1
-      fi
-      case "$archive_entry" in
-        infra|infra/|infra/vps-foundation|infra/vps-foundation/*) ;;
-        *) printf 'Release archive contains an unexpected path: %s\n' "$archive_entry" >&2; exit 1 ;;
-      esac
-    done < <(tar --list --file="$release_archive")
+    python3 "$repo_root/scripts/verify-git-release-archive.py" \
+      "$release_archive" "$release_archive_sha" "$release_sha"
     tar --extract --file="$release_archive" --directory="$stage_dir" --strip-components=2
     cmp --silent "$stage_dir/scripts/install-foundation-release.sh" "${BASH_SOURCE[0]}" || {
       printf 'Running installer differs from the checksum-verified release archive.\n' >&2
@@ -166,6 +151,8 @@ fi
 manifest="$release_dir/config/release/install-manifest.tsv"
 [[ -r "$manifest" ]] || { printf 'Released install manifest is not readable: %s\n' "$manifest" >&2; exit 1; }
 if [[ "$test_mode" == 0 ]]; then
+  AC_BASELINE_POLICY_DIR="$release_dir/config/release" \
+    "$release_dir/scripts/ac-os-baseline-verify"
   AC_RELEASE_ID="$release_id" \
   AC_TOOLCHAIN_POLICY="$release_dir/config/release/toolchain.env" \
     "$release_dir/scripts/install-pinned-toolchain.sh"
@@ -216,21 +203,42 @@ while IFS=$'\t' read -r kind source target mode owner group; do
   }
 done < "$release_dir/config/release/install-manifest.tsv"
 
-if [[ -e "$current_link" && ! -L "$current_link" ]]; then
-  printf 'Current release path exists but is not a symbolic link: %s\n' "$current_link" >&2
-  exit 1
-fi
-current_tmp="$srv_root/.current-${release_id}.$$"
-ln -s "$release_dir" "$current_tmp"
-mv --no-target-directory --force "$current_tmp" "$current_link"
-[[ "$(readlink -f "$current_link")" == "$release_dir" ]] || {
-  printf 'Current release link verification failed.\n' >&2
-  exit 1
+activate_current_release() {
+  local current_tmp
+  if [[ -e "$current_link" && ! -L "$current_link" ]]; then
+    printf 'Current release path exists but is not a symbolic link: %s\n' "$current_link" >&2
+    exit 1
+  fi
+  current_tmp="$srv_root/.current-${release_id}.$$"
+  ln -s "$release_dir" "$current_tmp"
+  mv --no-target-directory --force "$current_tmp" "$current_link"
+  [[ "$(readlink -f "$current_link")" == "$release_dir" ]] || {
+    printf 'Current release link verification failed.\n' >&2
+    exit 1
+  }
 }
 
 if [[ "$test_mode" == 0 ]]; then
   systemctl daemon-reload
+  compose_file="$release_dir/compose/foundation/compose.yaml"
+  image_env_file="$release_dir/config/release/foundation-images.env"
+  docker compose --env-file "$image_env_file" -f "$compose_file" config --quiet
+  docker compose --env-file "$image_env_file" -f "$compose_file" \
+    up --detach --remove-orphans --wait --wait-timeout 120
+  running_count="$(docker compose --env-file "$image_env_file" -f "$compose_file" \
+    ps --status running --quiet | wc -l)"
+  [[ "$running_count" -eq 2 ]]
+  curl --fail --silent --show-error --max-time 5 http://127.0.0.1:8080/healthz >/dev/null
+  /usr/local/sbin/ac-docker-firewall
+  activate_current_release
+  systemctl enable --now \
+    ac-docker-firewall.service \
+    ac-docker-firewall.timer \
+    ac-foundation-health.timer
+  curl --fail --silent --show-error --max-time 5 http://127.0.0.1:8080/healthz >/dev/null
+else
+  activate_current_release
 fi
 
-printf 'PASS  Installed immutable foundation release %s with %s managed host files.\n' \
+printf 'PASS  Installed and reconciled immutable foundation release %s with %s managed host files.\n' \
   "$release_id" "${#installed_targets[@]}"
