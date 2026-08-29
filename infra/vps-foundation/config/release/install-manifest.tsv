@@ -1,5 +1,6 @@
 # kind	source	target	mode	owner	group
 executable	scripts/ac-create-infisical-bootstrap	/usr/local/sbin/ac-create-infisical-bootstrap	0755	root	root
+executable	scripts/ac-docker-firewall-validate	/usr/local/sbin/ac-docker-firewall-validate	0755	root	root
 executable	scripts/ac-docker-firewall	/usr/local/sbin/ac-docker-firewall	0755	root	root
 executable	scripts/ac-foundation-health	/usr/local/sbin/ac-foundation-health	0755	root	root
 executable	scripts/ac-os-baseline-verify	/usr/local/sbin/ac-os-baseline-verify	0755	root	root

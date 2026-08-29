@@ -44,5 +44,8 @@ grep -q 'Resolved package graph differs from the committed baseline manifest' \
 # shellcheck disable=SC2016  # This static assertion intentionally matches a literal array reference.
 grep -q 'apt-mark hold "${resolved_packages\[@\]}"' \
   "$foundation/scripts/install-os-baseline.sh"
+grep -q 'unhold_managed_packages' "$foundation/scripts/install-os-baseline.sh"
+grep -q 'restore_managed_hold_state' "$foundation/scripts/install-os-baseline.sh"
+grep -q 'hold_transition_committed=1' "$foundation/scripts/install-os-baseline.sh"
 
 printf 'PASS  OS package mutation is pinned and gated by a separately versioned baseline.\n'

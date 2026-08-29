@@ -46,12 +46,13 @@ verify_bootstrap_source() {
 }
 
 backup_host_config() {
-  local stamp archive package_manifest package_manifest_tmp candidate
+  local stamp archive package_manifest package_manifest_tmp hold_manifest hold_manifest_tmp candidate
   local -a candidates paths
   stamp="$(date -u +%Y%m%dT%H%M%S.%NZ)"
   install -d -m 0700 /root/ac-bootstrap-backups
   archive="$(mktemp "/root/ac-bootstrap-backups/pre-change-${stamp}.XXXXXX.tar.gz")"
   package_manifest="${archive%.tar.gz}.packages.tsv"
+  hold_manifest="${archive%.tar.gz}.holds.txt"
 
   shopt -s nullglob
   candidates=(
@@ -117,7 +118,15 @@ backup_host_config() {
   }
   mv --no-target-directory "$package_manifest_tmp" "$package_manifest"
   chmod 0600 "$package_manifest"
-  printf 'Created rollback archive %s\n' "$archive"
+  hold_manifest_tmp="$(mktemp "/root/ac-bootstrap-backups/.holds-${stamp}.XXXXXX.tmp")"
+  if ! apt-mark showhold | LC_ALL=C sort > "$hold_manifest_tmp"; then
+    rm -f -- "$hold_manifest_tmp" "$package_manifest" "$archive"
+    printf 'Rollback package-hold manifest generation failed.\n' >&2
+    exit 1
+  fi
+  mv --no-target-directory "$hold_manifest_tmp" "$hold_manifest"
+  chmod 0600 "$hold_manifest"
+  printf 'Created rollback archive %s with package and hold manifests.\n' "$archive"
 }
 
 phase_access() {

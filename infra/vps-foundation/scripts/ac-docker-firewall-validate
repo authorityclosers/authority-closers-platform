@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+external_interface="${1:-}"
+[[ "$external_interface" =~ ^[a-zA-Z0-9_.:-]+$ ]] || {
+  printf 'Usage: %s EXTERNAL_INTERFACE < iptables-save-rules\n' "$0" >&2
+  exit 2
+}
+
+mapfile -t chain_rules < <(awk '/^-A DOCKER-USER /')
+expected_accept="-A DOCKER-USER -i ${external_interface} -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT"
+expected_drop="-A DOCKER-USER -i ${external_interface} -j DROP"
+
+((${#chain_rules[@]} >= 2)) || {
+  printf 'DOCKER-USER does not contain both managed ingress rules.\n' >&2
+  exit 1
+}
+[[ "${chain_rules[0]}" == "$expected_accept" ]] || {
+  printf 'Managed established-connection rule is not first in DOCKER-USER.\n' >&2
+  exit 1
+}
+[[ "${chain_rules[1]}" == "$expected_drop" ]] || {
+  printf 'Managed public-ingress drop is not second in DOCKER-USER.\n' >&2
+  exit 1
+}
+
+accept_count=0
+drop_count=0
+for rule in "${chain_rules[@]}"; do
+  [[ "$rule" == "$expected_accept" ]] && accept_count=$((accept_count + 1))
+  [[ "$rule" == "$expected_drop" ]] && drop_count=$((drop_count + 1))
+done
+[[ "$accept_count" -eq 1 && "$drop_count" -eq 1 ]] || {
+  printf 'DOCKER-USER contains duplicate managed ingress rules.\n' >&2
+  exit 1
+}
+
+printf 'PASS  Managed ingress rules precede every Docker RETURN or custom rule.\n'

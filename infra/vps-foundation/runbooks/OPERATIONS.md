@@ -88,7 +88,7 @@ sudo /usr/local/sbin/ac-resend-check
 - The remotely managed tunnel configuration includes a terminal HTTP 404 rule.
 - The connector token is root-owned at `/etc/cloudflared/tunnel-token` and readable only by the dedicated `cloudflared` group.
 - Restart with `sudo systemctl restart cloudflared`, then validate both the local and public health URLs.
-- The one-minute `ac-docker-firewall.timer` re-applies and verifies IPv4/IPv6 `DOCKER-USER` ingress guards after Docker or firewall lifecycle changes. The five-minute `ac-foundation-health.timer` checks that guard, Docker, both foundation containers, loopback health, the connector, and the complete public Cloudflare path.
+- The one-minute `ac-docker-firewall.timer` removes duplicate managed rules and inserts established-connection acceptance plus public-ingress drop as rules 1 and 2 in both IPv4/IPv6 `DOCKER-USER`, before Docker's terminal `RETURN`. The five-minute `ac-foundation-health.timer` checks that ordering, Docker, both foundation containers, loopback health, the connector, and the complete public Cloudflare path.
 - The GitHub-hosted external probe is intentionally disabled while Free Bot Fight Mode challenges GitHub runner IPs. Do not disable Bot Fight Mode or broadly allow GitHub address ranges merely to make that check green.
 
 ## R2 cost and activation gate
@@ -161,12 +161,12 @@ The Infisical runtime and backup Universal Auth client secrets were rotated on 2
 1. Review pending Ubuntu, Docker, and Cloudflare package updates.
 2. Create a new `AC_OS_BASELINE_ID` and update every changed exact version/key checksum in `config/release/` through review and CI.
 3. Confirm fresh backup, restore, and rollback evidence.
-4. Run the reviewed `baseline` phase during a maintenance window; never use an ad hoc `dist-upgrade` in a release phase.
+4. Run the reviewed `baseline` phase during a maintenance window. It snapshots the prior hold set, temporarily unholds only packages managed by the old/new baselines, installs and verifies the new exact graph, then holds the new graph. A failure restores the prior managed hold set. Never use an ad hoc `dist-upgrade` in a release phase.
 5. Reboot if `/var/run/reboot-required` exists, then run the complete local and external validation suite.
 
 ## Rollback
 
-- Host configuration archives are under `/root/ac-bootstrap-backups/`.
+- Host configuration archives are under `/root/ac-bootstrap-backups/`; each has exact package and package-hold sidecars for recovery.
 - Restore only the required configuration subtree; do not overwrite unrelated current state.
 - Validate `sshd -t` before restarting SSH.
 - Keep an established SSH session open until a fresh session passes.

@@ -26,6 +26,12 @@ ufw_denies_public_ssh() {
   grep -Eq '^IPV6=yes$' /etc/default/ufw
 }
 
+docker_ingress_guard_ordered() {
+  local binary="$1"
+  "$binary" -S DOCKER-USER \
+    | /usr/local/sbin/ac-docker-firewall-validate "$external_interface" >/dev/null
+}
+
 check 'named administrator exists' id suyash
 check 'root SSH login disabled' bash -c "sshd -T | grep -qx 'permitrootlogin no'"
 check 'SSH password authentication disabled' bash -c "sshd -T | grep -qx 'passwordauthentication no'"
@@ -44,10 +50,10 @@ check 'Docker ingress guard timer active' systemctl is-active --quiet ac-docker-
 check 'Docker default log driver is local' bash -c "docker info --format '{{.LoggingDriver}}' | grep -qx local"
 check 'Docker socket is not TCP exposed' bash -c "! ss -ltn | grep -Eq ':(2375|2376)[[:space:]]'"
 check 'Docker group has no users' bash -c "getent group docker | grep -Eq '^docker:x:[0-9]+:$'"
-check 'Docker IPv4 public-ingress guard installed' \
-  iptables -C DOCKER-USER -i "$external_interface" -j DROP
-check 'Docker IPv6 public-ingress guard installed' \
-  ip6tables -C DOCKER-USER -i "$external_interface" -j DROP
+check 'Docker IPv4 public-ingress guard is ordered before RETURN' \
+  docker_ingress_guard_ordered iptables
+check 'Docker IPv6 public-ingress guard is ordered before RETURN' \
+  docker_ingress_guard_ordered ip6tables
 check 'AC edge network exists' docker network inspect ac_edge
 check 'AC telemetry network exists' docker network inspect ac_telemetry
 check 'no public HTTP listener on host' bash -c "! ss -ltn | grep -Eq '(^|[[:space:]])(0\.0\.0\.0|\[::\]):(80|443)[[:space:]]'"

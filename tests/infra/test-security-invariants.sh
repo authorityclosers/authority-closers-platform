@@ -23,6 +23,12 @@ if grep -Eq '\[Parameter\(Mandatory = \$true\)\].*(ApiToken|ApiKey)' \
 fi
 
 grep -q 'DOCKER-USER chain is unavailable' "$foundation/scripts/ac-docker-firewall"
+grep -q 'ac-docker-firewall-validate' "$foundation/scripts/ac-docker-firewall"
+# shellcheck disable=SC2016  # This static assertion intentionally matches a literal variable reference.
+if grep -q '"$binary" -A DOCKER-USER' "$foundation/scripts/ac-docker-firewall"; then
+  printf 'Docker ingress DROP is appended after Docker-managed rules.\n' >&2
+  exit 1
+fi
 grep -q 'OnUnitActiveSec=60s' "$foundation/config/systemd/ac-docker-firewall.timer"
 grep -q 'PartOf=docker.service' "$foundation/config/systemd/ac-docker-firewall.service"
 grep -q 'ac-docker-firewall.timer' "$foundation/scripts/validate-foundation.sh"
@@ -35,6 +41,7 @@ if grep -n 'tar .*|| true' "$foundation/scripts/bootstrap-host.sh"; then
   printf 'Rollback archive creation still suppresses tar failures.\n' >&2
   exit 1
 fi
+grep -q 'apt-mark showhold' "$foundation/scripts/bootstrap-host.sh"
 
 if find "$foundation/.github" -type f 2>/dev/null | grep -q .; then
   printf 'Nested GitHub workflows are inert and prohibited; checks belong at repository root.\n' >&2

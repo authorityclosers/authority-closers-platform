@@ -2,19 +2,22 @@
 set -euo pipefail
 
 external_interface="${AC_EXTERNAL_INTERFACE:-eth0}"
+validator="${AC_DOCKER_FIREWALL_VALIDATOR:-/usr/local/sbin/ac-docker-firewall-validate}"
 
 ip link show dev "$external_interface" >/dev/null 2>&1 || {
   printf 'External interface does not exist: %s\n' "$external_interface" >&2
   exit 1
 }
 
-install_rule() {
+remove_rule() {
   local binary="$1"
   shift
-  if ! "$binary" -C DOCKER-USER "$@" 2>/dev/null; then
-    "$binary" -I DOCKER-USER 1 "$@"
-  fi
+  while "$binary" -C DOCKER-USER "$@" 2>/dev/null; do
+    "$binary" -D DOCKER-USER "$@"
+  done
 }
+
+[[ -x "$validator" ]] || { printf 'Firewall order validator is unavailable: %s\n' "$validator" >&2; exit 1; }
 
 for binary in iptables ip6tables; do
   command -v "$binary" >/dev/null 2>&1 || {
@@ -26,11 +29,10 @@ for binary in iptables ip6tables; do
     exit 1
   }
 
-  install_rule "$binary" -i "$external_interface" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
-  if ! "$binary" -C DOCKER-USER -i "$external_interface" -j DROP 2>/dev/null; then
-    "$binary" -A DOCKER-USER -i "$external_interface" -j DROP
-  fi
-
-  "$binary" -C DOCKER-USER -i "$external_interface" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
-  "$binary" -C DOCKER-USER -i "$external_interface" -j DROP
+  remove_rule "$binary" -i "$external_interface" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+  remove_rule "$binary" -i "$external_interface" -j DROP
+  "$binary" -I DOCKER-USER 1 -i "$external_interface" -j DROP
+  "$binary" -I DOCKER-USER 1 -i "$external_interface" \
+    -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+  "$binary" -S DOCKER-USER | "$validator" "$external_interface" >/dev/null
 done
