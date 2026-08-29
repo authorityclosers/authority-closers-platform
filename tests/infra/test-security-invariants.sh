@@ -45,6 +45,7 @@ grep -Eq '^CADDY_IMAGE=.*@sha256:[0-9a-f]{64}$' "$foundation/config/release/foun
 grep -Eq '^OTEL_IMAGE=.*@sha256:[0-9a-f]{64}$' "$foundation/config/release/foundation-images.env"
 grep -Eq '^INFISICAL_LINUX_AMD64_SHA256=[0-9a-f]{64}$' "$foundation/config/release/toolchain.env"
 grep -Eq '^RCLONE_LINUX_AMD64_SHA256=[0-9a-f]{64}$' "$foundation/config/release/toolchain.env"
+# shellcheck disable=SC2016  # This static assertion intentionally matches a literal variable reference.
 grep -q 'AC_TOOLCHAIN_POLICY="$release_dir/config/release/toolchain.env"' \
   "$foundation/scripts/install-foundation-release.sh"
 grep -q 'git .*archive --format=tar' "$foundation/scripts/install-foundation-release.sh"
