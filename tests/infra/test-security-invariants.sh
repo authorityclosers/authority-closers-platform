@@ -50,6 +50,8 @@ grep -q 'AC_TOOLCHAIN_POLICY="$release_dir/config/release/toolchain.env"' \
   "$foundation/scripts/install-foundation-release.sh"
 grep -q 'git .*archive --format=tar' "$foundation/scripts/install-foundation-release.sh"
 grep -q 'git get-tar-commit-id' "$foundation/scripts/install-foundation-release.sh"
+grep -q 'Running installer differs from the checksum-verified release archive' \
+  "$foundation/scripts/install-foundation-release.sh"
 grep -q 'full 40-character lowercase Git SHA' "$foundation/scripts/install-foundation-release.sh"
 
 if grep -Eq 'dist-upgrade|apt-get install -y docker-ce|apt-get install -y cloudflared' \

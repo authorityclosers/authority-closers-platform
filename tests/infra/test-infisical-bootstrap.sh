@@ -54,4 +54,17 @@ if AC_TEST_MODE=1 \
 fi
 [[ ! -e "$duplicate_target" ]]
 
+empty_source="$tmp_dir/empty.env"
+sed 's/^INFISICAL_VPS_CLIENT_SECRET=.*/INFISICAL_VPS_CLIENT_SECRET=/' "$source_file" \
+  | sed '$d' > "$empty_source"
+empty_target="$tmp_dir/secrets/empty.env"
+if AC_TEST_MODE=1 \
+  AC_PRODUCTION_ENV_SOURCE="$empty_source" \
+  AC_INFISICAL_BOOTSTRAP_TARGET="$empty_target" \
+  bash "$script" >/dev/null 2>&1; then
+  printf 'Empty bootstrap value was accepted.\n' >&2
+  exit 1
+fi
+[[ ! -e "$empty_target" ]]
+
 printf 'PASS  Infisical bootstrap serializes metacharacters without evaluation and rejects duplicates.\n'

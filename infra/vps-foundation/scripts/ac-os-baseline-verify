@@ -15,13 +15,17 @@ AC_OS_ID=''
 AC_OS_VERSION_ID=''
 AC_OS_CODENAME=''
 AC_OS_ARCH=''
+DOCKER_APT_KEY_SHA256=''
+CLOUDFLARE_APT_KEY_SHA256=''
 while IFS='=' read -r key value; do
   [[ -z "$key" || "$key" == \#* ]] && continue
   case "$key" in
     AC_OS_BASELINE_ID|AC_OS_ID|AC_OS_VERSION_ID|AC_OS_CODENAME|AC_OS_ARCH)
       printf -v "$key" '%s' "$value"
       ;;
-    DOCKER_APT_KEY_SHA256|CLOUDFLARE_APT_KEY_SHA256) ;;
+    DOCKER_APT_KEY_SHA256|CLOUDFLARE_APT_KEY_SHA256)
+      printf -v "$key" '%s' "$value"
+      ;;
     *) printf 'Unknown OS baseline policy key: %s\n' "$key" >&2; exit 1 ;;
   esac
 done < "$policy"
@@ -54,6 +58,8 @@ manifest="/var/lib/authority-closers/baselines/${AC_OS_BASELINE_ID}.packages.tsv
 . /etc/os-release
 [[ "$ID" == "$AC_OS_ID" && "$VERSION_ID" == "$AC_OS_VERSION_ID" && "$VERSION_CODENAME" == "$AC_OS_CODENAME" ]]
 [[ "$(dpkg --print-architecture)" == "$AC_OS_ARCH" ]]
+[[ "$DOCKER_APT_KEY_SHA256" == "$(sha256sum /etc/apt/keyrings/docker.asc | awk '{print $1}')" ]]
+[[ "$CLOUDFLARE_APT_KEY_SHA256" == "$(sha256sum /etc/apt/keyrings/cloudflare-main.gpg | awk '{print $1}')" ]]
 held_packages="$(apt-mark showhold)"
 while IFS=$'\t' read -r package version extra; do
   [[ -z "$package" || "$package" == \#* ]] && continue

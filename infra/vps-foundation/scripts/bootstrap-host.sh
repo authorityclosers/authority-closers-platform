@@ -14,10 +14,11 @@ require_root() {
 }
 
 backup_host_config() {
-  local stamp archive candidate
+  local stamp archive package_manifest candidate
   local -a candidates paths
   stamp="$(date -u +%Y%m%dT%H%M%SZ)"
   archive="/root/ac-bootstrap-backups/pre-change-${stamp}.tar.gz"
+  package_manifest="/root/ac-bootstrap-backups/pre-change-${stamp}.packages.tsv"
   install -d -m 0700 /root/ac-bootstrap-backups
 
   shopt -s nullglob
@@ -66,6 +67,9 @@ backup_host_config() {
     exit 1
   }
   chmod 0600 "$archive"
+  dpkg-query -W -f='${binary:Package}\t${Version}\n' | LC_ALL=C sort > "$package_manifest"
+  [[ -s "$package_manifest" ]] || { printf 'Rollback package manifest is empty.\n' >&2; exit 1; }
+  chmod 0600 "$package_manifest"
   printf 'Created rollback archive %s\n' "$archive"
 }
 

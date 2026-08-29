@@ -110,6 +110,10 @@ else
       esac
     done < <(tar --list --file="$release_archive")
     tar --extract --file="$release_archive" --directory="$stage_dir" --strip-components=2
+    cmp --silent "$stage_dir/scripts/install-foundation-release.sh" "${BASH_SOURCE[0]}" || {
+      printf 'Running installer differs from the checksum-verified release archive.\n' >&2
+      exit 1
+    }
   else
     git_root="$(git -C "$repo_root" rev-parse --show-toplevel 2>/dev/null)" || {
       printf 'Release source is not a Git checkout; provide a checksum-verified Git archive.\n' >&2

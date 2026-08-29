@@ -20,7 +20,7 @@ fi
 umask 077
 install -d -m 0700 "$(dirname "$target_file")"
 tmp_file="$(mktemp "$(dirname "$target_file")/.infisical-bootstrap.XXXXXX")"
-cleanup() { rm -f -- "$tmp_file"; }
+cleanup() { [[ -z "$tmp_file" ]] || rm -f -- "$tmp_file"; }
 trap cleanup EXIT
 
 python3 - "$source_file" "$tmp_file" <<'PY'
@@ -57,6 +57,8 @@ for line_number, line in enumerate(source.read_text(encoding="utf-8").splitlines
         if len(parsed) != 1:
             raise SystemExit(f"quoted dotenv value for {key} must decode to one value")
         value = parsed[0]
+    if not value or "\x00" in value:
+        raise SystemExit(f"bootstrap value for {key} must be non-empty text without NUL bytes")
     values[key] = value
 
 missing = [key for key in required if key not in values]
@@ -72,10 +74,9 @@ with target.open("w", encoding="utf-8", newline="\n") as output:
 PY
 
 chmod 600 "$tmp_file"
-if [[ "$test_mode" == 1 ]]; then
-  install -m 600 "$tmp_file" "$target_file"
-else
+if [[ "$test_mode" == 0 ]]; then
   chown root:root "$tmp_file"
-  install -o root -g root -m 600 "$tmp_file" "$target_file"
 fi
+mv --no-target-directory --force "$tmp_file" "$target_file"
+tmp_file=''
 printf 'PASS  Identity-only Infisical bootstrap installed at %s.\n' "$target_file"
