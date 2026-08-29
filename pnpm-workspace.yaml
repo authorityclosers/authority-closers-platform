@@ -1,0 +1,12 @@
+packages:
+  - apps/learner-web
+  - apps/admin-web
+  - packages/typescript/*
+
+allowBuilds:
+  sharp: true
+  unrs-resolver: true
+
+minimumReleaseAgeExclude:
+  - lucide-react@1.37.0
+  - zod@4.5.4
