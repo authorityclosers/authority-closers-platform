@@ -8,6 +8,9 @@
     ac_remote_payload: /tmp/authority-closers-platform-foundation
     ac_admin_public_key_path: ""
     ac_release_id: ""
+    ac_release_archive_local: ""
+    ac_release_archive_remote: /tmp/authority-closers-foundation-release.tar
+    ac_release_archive_sha256: ""
     ac_activation_target: ""
     ac_allow_public_ssh_bootstrap: false
     ac_cloudflare_ssh_verified: false
@@ -20,7 +23,7 @@
     - name: Require an explicit supported bootstrap phase
       ansible.builtin.assert:
         that:
-          - ac_bootstrap_phase in ['access', 'harden', 'runtime', 'activate', 'lockdown']
+          - ac_bootstrap_phase in ['access', 'baseline', 'harden', 'runtime', 'activate', 'lockdown']
         fail_msg: Set ac_bootstrap_phase explicitly; no host-changing phase is the default.
     - name: Require the remote public-key path for access bootstrap
       ansible.builtin.assert:
@@ -30,7 +33,9 @@
     - name: Require reviewed release identity for runtime installation
       ansible.builtin.assert:
         that:
-          - ac_release_id is match('^foundation-[0-9a-f]{7,40}$')
+          - ac_release_id is match('^foundation-[0-9a-f]{40}$')
+          - ac_release_archive_local | length > 0
+          - ac_release_archive_sha256 is match('^[0-9a-f]{64}$')
       when: ac_bootstrap_phase == 'runtime'
     - name: Require an explicit provider activation target
       ansible.builtin.assert:
@@ -45,6 +50,14 @@
         owner: root
         group: root
         mode: preserve
+    - name: Copy checksum-verified exact-commit release archive
+      ansible.builtin.copy:
+        src: "{{ ac_release_archive_local }}"
+        dest: "{{ ac_release_archive_remote }}"
+        owner: root
+        group: root
+        mode: '0600'
+      when: ac_bootstrap_phase == 'runtime'
     - name: Run the access bootstrap gate
       ansible.builtin.command:
         argv:
@@ -63,5 +76,7 @@
         AC_ALLOW_PUBLIC_SSH_BOOTSTRAP: "{{ '1' if ac_allow_public_ssh_bootstrap | bool else '0' }}"
         AC_CLOUDFLARE_SSH_VERIFIED: "{{ 'YES' if ac_cloudflare_ssh_verified | bool else '' }}"
         AC_RELEASE_ID: "{{ ac_release_id }}"
+        AC_RELEASE_ARCHIVE: "{{ ac_release_archive_remote if ac_bootstrap_phase == 'runtime' else '' }}"
+        AC_RELEASE_ARCHIVE_SHA256: "{{ ac_release_archive_sha256 if ac_bootstrap_phase == 'runtime' else '' }}"
       when: ac_bootstrap_phase != 'access'
       changed_when: true

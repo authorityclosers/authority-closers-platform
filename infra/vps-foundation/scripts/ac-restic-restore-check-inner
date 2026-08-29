@@ -48,7 +48,7 @@ restic restore "$snapshot_id" --target "$restore_dir" >/dev/null
 current_link="$restore_dir/srv/authority-closers/current"
 [[ -L "$current_link" ]] || { printf 'FAIL  Restored current release is not a symbolic link.\n' >&2; exit 1; }
 release_target="$(readlink "$current_link")"
-[[ "$release_target" =~ ^/srv/authority-closers/releases/foundation-[0-9a-f]{7,40}$ ]] || {
+[[ "$release_target" =~ ^/srv/authority-closers/releases/foundation-[0-9a-f]{40}$ ]] || {
   printf 'FAIL  Restored current release target is invalid: %s\n' "$release_target" >&2
   exit 1
 }
@@ -59,6 +59,37 @@ release_dir="$restore_dir$release_target"
   exit 1
 }
 (cd "$release_dir" && sha256sum --check --strict RELEASE-FILES.sha256 >/dev/null)
+release_id="${release_target##*/}"
+release_sha="${release_id#foundation-}"
+[[ "$(<"$release_dir/RELEASE-ID")" == "$release_id" ]]
+[[ "$(<"$release_dir/RELEASE-COMMIT")" == "$release_sha" ]]
+
+baseline_marker="$restore_dir/etc/authority-closers/os-baseline.env"
+[[ -r "$baseline_marker" ]] || { printf 'FAIL  Restored OS baseline marker is absent.\n' >&2; exit 1; }
+baseline_id="$(awk -F= '$1 == "AC_OS_BASELINE_ID" {print $2}' "$baseline_marker")"
+baseline_manifest_sha="$(awk -F= '$1 == "AC_OS_BASELINE_MANIFEST_SHA256" {print $2}' "$baseline_marker")"
+baseline_policy_sha="$(awk -F= '$1 == "AC_OS_BASELINE_POLICY_SHA256" {print $2}' "$baseline_marker")"
+baseline_packages_sha="$(awk -F= '$1 == "AC_OS_PACKAGES_POLICY_SHA256" {print $2}' "$baseline_marker")"
+[[ "$baseline_id" =~ ^[a-z0-9][a-z0-9.-]{7,127}$ ]]
+[[ "$baseline_manifest_sha" =~ ^[0-9a-f]{64}$ ]]
+[[ "$baseline_policy_sha" == "$(sha256sum "$release_dir/config/release/os-baseline.env" | awk '{print $1}')" ]]
+[[ "$baseline_packages_sha" == "$(sha256sum "$release_dir/config/release/os-packages.tsv" | awk '{print $1}')" ]]
+restored_baseline_manifest="$restore_dir/var/lib/authority-closers/baselines/${baseline_id}.packages.tsv"
+[[ -r "$restored_baseline_manifest" ]]
+[[ "$baseline_manifest_sha" == "$(sha256sum "$restored_baseline_manifest" | awk '{print $1}')" ]]
+
+toolchain_marker="$restore_dir/var/lib/authority-closers/toolchains/${release_id}.env"
+[[ -r "$toolchain_marker" ]] || { printf 'FAIL  Restored release toolchain marker is absent.\n' >&2; exit 1; }
+[[ "$(awk -F= '$1 == "AC_RELEASE_ID" {print $2}' "$toolchain_marker")" == "$release_id" ]]
+[[ "$(awk -F= '$1 == "TOOLCHAIN_POLICY_SHA256" {print $2}' "$toolchain_marker")" == \
+  "$(sha256sum "$release_dir/config/release/toolchain.env" | awk '{print $1}')" ]]
+restored_infisical="$restore_dir/usr/local/bin/infisical"
+restored_rclone="$restore_dir/usr/local/bin/rclone"
+[[ -f "$restored_infisical" && -f "$restored_rclone" ]]
+[[ "$(awk -F= '$1 == "INFISICAL_BINARY_SHA256" {print $2}' "$toolchain_marker")" == \
+  "$(sha256sum "$restored_infisical" | awk '{print $1}')" ]]
+[[ "$(awk -F= '$1 == "RCLONE_BINARY_SHA256" {print $2}' "$toolchain_marker")" == \
+  "$(sha256sum "$restored_rclone" | awk '{print $1}')" ]]
 
 install_manifest="$release_dir/config/release/install-manifest.tsv"
 [[ -r "$install_manifest" ]] || { printf 'FAIL  Restored install manifest is absent.\n' >&2; exit 1; }

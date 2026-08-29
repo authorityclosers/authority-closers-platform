@@ -38,7 +38,13 @@ backup_host_config() {
     /etc/security/limits.d
     /etc/docker
     /etc/fstab
+    /etc/authority-closers/os-baseline.env
+    /var/lib/authority-closers/baselines
+    /var/lib/authority-closers/toolchains
+    /usr/local/bin/infisical
+    /usr/local/bin/rclone
     /usr/local/sbin/ac-*
+    /usr/local/libexec/authority-closers
     /srv/authority-closers/current
   )
   shopt -u nullglob
@@ -87,9 +93,15 @@ phase_access() {
   visudo --check --file "/etc/sudoers.d/90-${admin_user}"
 }
 
+phase_baseline() {
+  backup_host_config
+  "$repo_root/scripts/install-os-baseline.sh"
+}
+
 phase_harden() {
   id "$admin_user" >/dev/null
   id -nG "$admin_user" | grep -qw ssh-users
+  AC_BASELINE_POLICY_DIR="$repo_root/config/release" "$repo_root/scripts/ac-os-baseline-verify"
 
   if [[ "${AC_ALLOW_PUBLIC_SSH_BOOTSTRAP:-0}" != '1' && "${AC_CLOUDFLARE_SSH_VERIFIED:-}" != 'YES' ]]; then
     printf '%s\n' \
@@ -102,14 +114,7 @@ phase_harden() {
     systemctl is-active --quiet cloudflared
   fi
 
-  export DEBIAN_FRONTEND=noninteractive
-  apt-get update
-  apt-get -y dist-upgrade
-  apt-get install -y --no-install-recommends \
-    apparmor apparmor-utils auditd audispd-plugins ca-certificates curl fail2ban \
-    gnupg jq logrotate needrestart python3 python3-yaml restic rsync sysstat ufw unattended-upgrades unzip
-
-  "$repo_root/scripts/install-pinned-toolchain.sh"
+  backup_host_config
 
   hostnamectl set-hostname ac-kvm4-prod
   if ! grep -qE '^127\.0\.1\.1[[:space:]]+ac-kvm4-prod([[:space:]]|$)' /etc/hosts; then
@@ -170,10 +175,9 @@ phase_lockdown() {
   fi
 
   systemctl is-active --quiet cloudflared
+  backup_host_config
   mapfile -t public_ssh_rules < <(
-    ufw status numbered \
-      | awk '/(22\/tcp|OpenSSH)/ && /ALLOW/ {number=$1; gsub(/[^0-9]/, "", number); if (number != "") print number}' \
-      | sort -rn
+    ufw status numbered | "$repo_root/scripts/parse-ufw-ssh-rules.sh"
   )
   for rule_number in "${public_ssh_rules[@]}"; do
     ufw --force delete "$rule_number"
@@ -191,35 +195,13 @@ phase_lockdown() {
 phase_runtime() {
   local release_id compose_file image_env_file
   release_id="${AC_RELEASE_ID:-}"
-  [[ "$release_id" =~ ^foundation-[0-9a-f]{7,40}$ ]] || {
-    printf 'Set AC_RELEASE_ID=foundation-<reviewed-git-sha> for the runtime phase.\n' >&2
+  [[ "$release_id" =~ ^foundation-[0-9a-f]{40}$ ]] || {
+    printf 'Set AC_RELEASE_ID=foundation-<full-reviewed-git-sha> for the runtime phase.\n' >&2
     exit 2
   }
 
+  AC_BASELINE_POLICY_DIR="$repo_root/config/release" "$repo_root/scripts/ac-os-baseline-verify"
   backup_host_config
-  export DEBIAN_FRONTEND=noninteractive
-  install -m 0755 -d /etc/apt/keyrings
-  curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-  chmod a+r /etc/apt/keyrings/docker.asc
-  arch="$(dpkg --print-architecture)"
-  # shellcheck source=/dev/null
-  codename="$(. /etc/os-release && printf '%s' "$VERSION_CODENAME")"
-  printf '%s\n' \
-    'Types: deb' \
-    'URIs: https://download.docker.com/linux/ubuntu' \
-    "Suites: $codename" \
-    'Components: stable' \
-    "Architectures: $arch" \
-    'Signed-By: /etc/apt/keyrings/docker.asc' \
-    > /etc/apt/sources.list.d/docker.sources
-  apt-get update
-  apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-
-  curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg -o /etc/apt/keyrings/cloudflare-main.gpg
-  chmod a+r /etc/apt/keyrings/cloudflare-main.gpg
-  install -m 0644 "$repo_root/config/apt/cloudflared.list" /etc/apt/sources.list.d/cloudflared.list
-  apt-get update
-  apt-get install -y cloudflared
 
   install -d -m 0755 /etc/docker
   install -m 0644 "$repo_root/config/docker/daemon.json" /etc/docker/daemon.json
@@ -240,12 +222,11 @@ phase_runtime() {
   getent passwd cloudflared >/dev/null || useradd --system --user-group --home-dir /var/lib/cloudflared --shell /usr/sbin/nologin cloudflared
   install -d -m 0750 -o root -g cloudflared /etc/cloudflared
 
-  "$repo_root/scripts/install-pinned-toolchain.sh"
   AC_RELEASE_ID="$release_id" "$repo_root/scripts/install-foundation-release.sh"
 
   docker network inspect ac_edge >/dev/null 2>&1 || docker network create ac_edge
   docker network inspect ac_telemetry >/dev/null 2>&1 || docker network create ac_telemetry --internal
-  systemctl enable --now ac-docker-firewall.service
+  systemctl enable --now ac-docker-firewall.service ac-docker-firewall.timer
 
   compose_file='/srv/authority-closers/current/compose/foundation/compose.yaml'
   image_env_file='/srv/authority-closers/current/config/release/foundation-images.env'
@@ -272,6 +253,7 @@ phase_activate() {
     printf 'Install a reviewed immutable runtime release before activation.\n' >&2
     exit 1
   }
+  backup_host_config
 
   case "$target" in
     cloudflared)
@@ -306,9 +288,10 @@ phase_activate() {
 require_root
 case "$phase" in
   access) phase_access ;;
+  baseline) phase_baseline ;;
   harden) phase_harden ;;
   lockdown) phase_lockdown ;;
   runtime) phase_runtime ;;
   activate) phase_activate "$admin_key_path" ;;
-  *) printf 'Usage: %s {access PUBLIC_KEY_PATH|harden|runtime|activate TARGET|lockdown}\n' "$0" >&2; exit 2 ;;
+  *) printf 'Usage: %s {access PUBLIC_KEY_PATH|baseline|harden|runtime|activate TARGET|lockdown}\n' "$0" >&2; exit 2 ;;
 esac

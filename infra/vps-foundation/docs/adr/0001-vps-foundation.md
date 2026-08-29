@@ -15,3 +15,5 @@ Use the KVM4 VPS as a portable deployment target. Public HTTP ingress is deliver
 - The production apex can remain on the old VPS while a subdomain validates the new foundation.
 - Public TCP/22 is denied after independently verified Cloudflare Access SSH enrollment. A public key-only rule is permitted only as an explicit, temporary fresh-host bootstrap exception.
 - Infisical secret management and encrypted off-host backup/restore are active. Production application DNS cutover remains a separate gate.
+- Host packages are promoted as a separately versioned, exact-package OS baseline. Foundation releases contain no mutable package upgrade step.
+- A foundation release is materialized only from a checksum-verified Git archive whose embedded full commit matches the release ID; release-scoped operational binaries are reconciled during both promotion and rollback.

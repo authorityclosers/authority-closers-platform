@@ -2,6 +2,7 @@
 executable	scripts/ac-create-infisical-bootstrap	/usr/local/sbin/ac-create-infisical-bootstrap	0755	root	root
 executable	scripts/ac-docker-firewall	/usr/local/sbin/ac-docker-firewall	0755	root	root
 executable	scripts/ac-foundation-health	/usr/local/sbin/ac-foundation-health	0755	root	root
+executable	scripts/ac-os-baseline-verify	/usr/local/sbin/ac-os-baseline-verify	0755	root	root
 executable	scripts/ac-infisical-login	/usr/local/sbin/ac-infisical-login	0755	root	root
 executable	scripts/ac-infisical-run	/usr/local/sbin/ac-infisical-run	0755	root	root
 executable	scripts/ac-infisical-run-backup	/usr/local/sbin/ac-infisical-run-backup	0755	root	root
@@ -32,6 +33,7 @@ executable	scripts/r2-probe.sh	/usr/local/libexec/authority-closers/r2-probe	075
 executable	scripts/r2-usage-guard.sh	/usr/local/libexec/authority-closers/r2-usage-guard	0755	root	root
 executable	scripts/r2-usage-evaluate.sh	/usr/local/libexec/authority-closers/r2-usage-evaluate.sh	0755	root	root
 unit	config/systemd/ac-docker-firewall.service	/etc/systemd/system/ac-docker-firewall.service	0644	root	root
+unit	config/systemd/ac-docker-firewall.timer	/etc/systemd/system/ac-docker-firewall.timer	0644	root	root
 unit	config/systemd/ac-foundation-health.service	/etc/systemd/system/ac-foundation-health.service	0644	root	root
 unit	config/systemd/ac-foundation-health.timer	/etc/systemd/system/ac-foundation-health.timer	0644	root	root
 unit	config/systemd/ac-r2-usage-guard.service	/etc/systemd/system/ac-r2-usage-guard.service	0644	root	root

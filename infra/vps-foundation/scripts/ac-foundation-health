@@ -30,6 +30,8 @@ foundation_public_health() {
 }
 
 retry systemctl is-active --quiet docker
+retry systemctl is-active --quiet ac-docker-firewall.timer
+retry /usr/local/sbin/ac-docker-firewall
 
 if [[ -r /srv/authority-closers/current/config/release/foundation-images.env ]]; then
   retry foundation_containers_running

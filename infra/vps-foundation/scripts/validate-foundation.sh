@@ -39,6 +39,8 @@ check 'unattended upgrades active' systemctl is-active --quiet unattended-upgrad
 check 'AppArmor enabled' bash -c "aa-status | grep -q 'apparmor module is loaded'"
 check 'swap enabled' bash -c "swapon --show=NAME --noheadings | grep -q ."
 check 'Docker active' systemctl is-active --quiet docker
+check 'versioned OS baseline matches policy' /usr/local/sbin/ac-os-baseline-verify
+check 'Docker ingress guard timer active' systemctl is-active --quiet ac-docker-firewall.timer
 check 'Docker default log driver is local' bash -c "docker info --format '{{.LoggingDriver}}' | grep -qx local"
 check 'Docker socket is not TCP exposed' bash -c "! ss -ltn | grep -Eq ':(2375|2376)[[:space:]]'"
 check 'Docker group has no users' bash -c "getent group docker | grep -Eq '^docker:x:[0-9]+:$'"

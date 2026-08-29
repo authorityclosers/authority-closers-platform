@@ -34,15 +34,16 @@ The VPS is a deployment target, not a source-code workstation.
 
 1. `bootstrap-host.sh access /path/to/admin.pub`
 2. Verify a fresh public key-only SSH session as the named administrator.
-3. On a fresh host only, run `AC_ALLOW_PUBLIC_SSH_BOOTSTRAP=1 bootstrap-host.sh harden` to keep TCP/22 temporarily available.
-4. Verify SSH key-only access and firewall state.
-5. Set `AC_RELEASE_ID=foundation-<reviewed-git-sha>` and run `bootstrap-host.sh runtime`. This installs the full immutable release, every managed script/unit, and the committed digest-pinned Compose foundation.
-6. Provision the root-owned Cloudflare Tunnel token, then run `bootstrap-host.sh activate cloudflared`.
-7. Prove a second, fresh Cloudflare Access SSH session.
-8. Run `AC_CLOUDFLARE_SSH_VERIFIED=YES bootstrap-host.sh lockdown` from the retained session, then prove another Access session while confirming UFW denies IPv4 and IPv6 TCP/22.
-9. Run `AC_PUBLIC_HEALTH_URL=https://infra.dipakvishwakarma.com/healthz /usr/local/sbin/ac-validate-foundation` as root.
-10. After the Infisical bootstrap, R2 repository, first backup, and restore evidence exist, run `bootstrap-host.sh activate r2-jobs`. Activation fails closed unless current usage and restore checks pass.
+3. Run `bootstrap-host.sh baseline`. This is a separately versioned, exact-package host baseline; it records the resolved package set and holds controlled packages against silent drift.
+4. On a fresh host only, run `AC_ALLOW_PUBLIC_SSH_BOOTSTRAP=1 bootstrap-host.sh harden` to keep TCP/22 temporarily available.
+5. Verify SSH key-only access and firewall state.
+6. Build a Git archive from the full reviewed 40-character commit, record its SHA-256, and run `bootstrap-host.sh runtime` with `AC_RELEASE_ID`, `AC_RELEASE_ARCHIVE`, and `AC_RELEASE_ARCHIVE_SHA256`. This installs the exact-commit immutable release, release-scoped toolchain, every managed script/unit, and the digest-pinned Compose foundation.
+7. Provision the root-owned Cloudflare Tunnel token, then run `bootstrap-host.sh activate cloudflared`.
+8. Prove a second, fresh Cloudflare Access SSH session.
+9. Run `AC_CLOUDFLARE_SSH_VERIFIED=YES bootstrap-host.sh lockdown` from the retained session, then prove another Access session while confirming UFW denies IPv4 and IPv6 TCP/22.
+10. Run `AC_PUBLIC_HEALTH_URL=https://infra.dipakvishwakarma.com/healthz /usr/local/sbin/ac-validate-foundation` as root.
+11. After the Infisical bootstrap, R2 repository, first backup, and restore evidence exist, run `bootstrap-host.sh activate r2-jobs`. Activation fails closed unless current usage and restore checks pass.
 
-CI smoke-tests the installer against a clean synthetic filesystem root and requires every `ac-*` operational script and systemd unit to appear in the explicit install manifest. Provider-dependent activation remains a separate, named gate so a clean host cannot silently start an unconfigured external writer.
+CI proves that working-tree mutations cannot enter an exact-commit release, smoke-tests the installer against a clean synthetic filesystem root, and requires every `ac-*` operational script and systemd unit to appear in the explicit install manifest. Provider-dependent activation remains a separate, named gate so a clean host cannot silently start an unconfigured external writer.
 
 Never skip the fresh-session checks between gates.

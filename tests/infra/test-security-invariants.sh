@@ -23,9 +23,13 @@ if grep -Eq '\[Parameter\(Mandatory = \$true\)\].*(ApiToken|ApiKey)' \
 fi
 
 grep -q 'DOCKER-USER chain is unavailable' "$foundation/scripts/ac-docker-firewall"
+grep -q 'OnUnitActiveSec=60s' "$foundation/config/systemd/ac-docker-firewall.timer"
+grep -q 'PartOf=docker.service' "$foundation/config/systemd/ac-docker-firewall.service"
+grep -q 'ac-docker-firewall.timer' "$foundation/scripts/validate-foundation.sh"
 grep -q 'ip6tables' "$foundation/scripts/validate-foundation.sh"
 grep -q 'IPV6=yes' "$foundation/scripts/validate-foundation.sh"
 grep -q 'ufw status numbered' "$foundation/scripts/bootstrap-host.sh"
+grep -q 'parse-ufw-ssh-rules.sh' "$foundation/scripts/bootstrap-host.sh"
 
 if grep -n 'tar .*|| true' "$foundation/scripts/bootstrap-host.sh"; then
   printf 'Rollback archive creation still suppresses tar failures.\n' >&2
@@ -41,5 +45,16 @@ grep -Eq '^CADDY_IMAGE=.*@sha256:[0-9a-f]{64}$' "$foundation/config/release/foun
 grep -Eq '^OTEL_IMAGE=.*@sha256:[0-9a-f]{64}$' "$foundation/config/release/foundation-images.env"
 grep -Eq '^INFISICAL_LINUX_AMD64_SHA256=[0-9a-f]{64}$' "$foundation/config/release/toolchain.env"
 grep -Eq '^RCLONE_LINUX_AMD64_SHA256=[0-9a-f]{64}$' "$foundation/config/release/toolchain.env"
+grep -q 'AC_TOOLCHAIN_POLICY="$release_dir/config/release/toolchain.env"' \
+  "$foundation/scripts/install-foundation-release.sh"
+grep -q 'git .*archive --format=tar' "$foundation/scripts/install-foundation-release.sh"
+grep -q 'git get-tar-commit-id' "$foundation/scripts/install-foundation-release.sh"
+grep -q 'full 40-character lowercase Git SHA' "$foundation/scripts/install-foundation-release.sh"
+
+if grep -Eq 'dist-upgrade|apt-get install -y docker-ce|apt-get install -y cloudflared' \
+  "$foundation/scripts/bootstrap-host.sh"; then
+  printf 'Bootstrap contains mutable package installation outside the OS baseline gate.\n' >&2
+  exit 1
+fi
 
 printf 'PASS  Foundation security invariants are represented in executable controls.\n'

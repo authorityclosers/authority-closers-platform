@@ -25,6 +25,7 @@ Keep `cloudflared` installed on the operator workstation. A successful `ssh ac` 
 For a fresh host, public TCP/22 is an explicit, temporary bootstrap exception:
 
 ```bash
+sudo scripts/bootstrap-host.sh baseline
 sudo AC_ALLOW_PUBLIC_SSH_BOOTSTRAP=1 scripts/bootstrap-host.sh harden
 ```
 
@@ -38,12 +39,14 @@ Never run the lock-down phase on the strength of the same SSH session that perfo
 
 ## Runtime layout
 
-- Active immutable release: `/srv/authority-closers/current` -> `/srv/authority-closers/releases/foundation-<git-sha>`
+- Active immutable release: `/srv/authority-closers/current` -> `/srv/authority-closers/releases/foundation-<full-40-character-git-sha>`
 - Compose manifests: `/srv/authority-closers/current/compose/`
 - Protected configuration: `/srv/authority-closers/env/`
 - Durable state: `/srv/authority-closers/volumes/`
 - Staged backups: `/srv/authority-closers/backups/`
 - Released operational material: `/srv/authority-closers/current/runbooks/`
+- Recorded host baseline: `/etc/authority-closers/os-baseline.env` and `/var/lib/authority-closers/baselines/`
+- Release-scoped toolchain evidence: `/var/lib/authority-closers/toolchains/foundation-<full-git-sha>.env`
 - Root-only Infisical bootstrap: `/etc/authority-closers/secrets/infisical-bootstrap.env` (mode `600`; contains only machine-auth bootstrap values)
 - Transitional recovery export: `/etc/authority-closers/secrets/production.env` (mode `600`; do not use for runtime jobs and remove only after an independent recovery check)
 
@@ -54,6 +57,7 @@ sudo docker compose \
   --env-file /srv/authority-closers/current/config/release/foundation-images.env \
   -f /srv/authority-closers/current/compose/foundation/compose.yaml ps
 sudo systemctl status cloudflared
+sudo systemctl status ac-docker-firewall.timer
 sudo systemctl status ac-foundation-health.timer
 sudo journalctl -u ac-foundation-health.service --since today
 sudo /usr/local/sbin/ac-foundation-health
@@ -73,7 +77,7 @@ sudo /usr/local/sbin/ac-resend-check
 - The remotely managed tunnel configuration includes a terminal HTTP 404 rule.
 - The connector token is root-owned at `/etc/cloudflared/tunnel-token` and readable only by the dedicated `cloudflared` group.
 - Restart with `sudo systemctl restart cloudflared`, then validate both the local and public health URLs.
-- The five-minute `ac-foundation-health.timer` checks Docker, both foundation containers, loopback health, the connector, and the complete public Cloudflare path.
+- The one-minute `ac-docker-firewall.timer` re-applies and verifies IPv4/IPv6 `DOCKER-USER` ingress guards after Docker or firewall lifecycle changes. The five-minute `ac-foundation-health.timer` checks that guard, Docker, both foundation containers, loopback health, the connector, and the complete public Cloudflare path.
 - The GitHub-hosted external probe is intentionally disabled while Free Bot Fight Mode challenges GitHub runner IPs. Do not disable Bot Fight Mode or broadly allow GitHub address ranges merely to make that check green.
 
 ## R2 cost and activation gate
@@ -104,7 +108,7 @@ sudo systemctl start ac-restic-restore-check.service
 systemctl list-timers --all | grep -E 'ac-(r2|restic|foundation)'
 ```
 
-The backup captures `/srv/authority-closers`, managed host configuration, `/usr/local/sbin`, `/usr/local/libexec/authority-closers`, and Docker volumes while excluding `/etc/authority-closers/secrets`. Retention is 7 daily, 4 weekly, and 6 monthly snapshots. The weekly drill restores into an isolated target and verifies the release checksum manifest, installed-file content/modes/ownership, shell/config syntax, Compose resolution, secret exclusion, snapshot age, restore time, and a repository integrity sample.
+The backup captures `/srv/authority-closers`, managed host configuration, baseline/toolchain records, released Infisical/rclone binaries, `/usr/local/sbin`, `/usr/local/libexec/authority-closers`, and Docker volumes while excluding `/etc/authority-closers/secrets`. Retention is 7 daily, 4 weekly, and 6 monthly snapshots. The weekly drill restores into an isolated target and verifies the release checksum manifest and commit identity, OS baseline record, toolchain hashes, installed-file content/modes/ownership, shell/config syntax, Compose resolution, secret exclusion, snapshot age, restore time, and a repository integrity sample.
 
 ## Infisical runtime injection
 
@@ -121,14 +125,21 @@ The wrappers exchange Universal Auth credentials through a root-owned environmen
 
 ## Immutable foundation release
 
-The release installer takes a reviewed Git-derived ID and never overwrites an existing release:
+The release installer accepts only a full reviewed Git commit and never overwrites an existing release. Build the archive on the trusted workstation from the exact checked-out commit:
 
 ```bash
-sudo AC_RELEASE_ID=foundation-<reviewed-git-sha> \
+release_sha="$(git rev-parse HEAD)"
+git archive --format=tar --output="ac-foundation-${release_sha}.tar" \
+  "$release_sha" -- infra/vps-foundation
+release_archive_sha="$(sha256sum "ac-foundation-${release_sha}.tar" | awk '{print $1}')"
+
+sudo AC_RELEASE_ID="foundation-${release_sha}" \
+  AC_RELEASE_ARCHIVE="/absolute/path/ac-foundation-${release_sha}.tar" \
+  AC_RELEASE_ARCHIVE_SHA256="$release_archive_sha" \
   /path/to/reviewed/infra/vps-foundation/scripts/bootstrap-host.sh runtime
 ```
 
-It verifies a content checksum manifest, installs every explicitly declared script and unit, atomically changes `current`, starts the digest-pinned Compose foundation, and starts Cloudflared only when the token already has the required ownership and mode. Provider writers remain disabled until the separate `activate r2-jobs` gate succeeds. Rollback changes only the `current` symlink to a previously verified immutable release, reinstalls that release's manifest, reloads units, and re-runs the complete validation suite.
+The installer verifies the archive SHA-256 and embedded Git commit, rejects unexpected archive paths and symlinks, generates a release content manifest, reconciles Infisical/rclone to the release's checksum-pinned toolchain, installs every explicitly declared script and unit, atomically changes `current`, and starts the digest-pinned Compose foundation. Provider writers remain disabled until the separate `activate r2-jobs` gate succeeds.
 
 Resend uses a domain-restricted Sending-access key. A send test returning HTTP 200 is the expected runtime check; delivery-log lookup is intentionally unavailable to a sending-only key. Google Workspace remains the receiving system for both domains.
 
@@ -136,11 +147,11 @@ The Infisical runtime and backup Universal Auth client secrets were rotated on 2
 
 ## Patch procedure
 
-1. Review pending Ubuntu and Docker repository updates.
-2. Confirm the latest backup and rollback artifact.
-3. Apply updates during a maintenance window.
-4. Reboot if `/var/run/reboot-required` exists.
-5. Run `scripts/validate-foundation.sh` and the external health check.
+1. Review pending Ubuntu, Docker, and Cloudflare package updates.
+2. Create a new `AC_OS_BASELINE_ID` and update every changed exact version/key checksum in `config/release/` through review and CI.
+3. Confirm fresh backup, restore, and rollback evidence.
+4. Run the reviewed `baseline` phase during a maintenance window; never use an ad hoc `dist-upgrade` in a release phase.
+5. Reboot if `/var/run/reboot-required` exists, then run the complete local and external validation suite.
 
 ## Rollback
 
@@ -148,6 +159,12 @@ The Infisical runtime and backup Universal Auth client secrets were rotated on 2
 - Restore only the required configuration subtree; do not overwrite unrelated current state.
 - Validate `sshd -t` before restarting SSH.
 - Keep an established SSH session open until a fresh session passes.
+- To roll back a foundation release, run the installer from the already verified target release with its own full release ID. It re-installs that release's host manifest and reconciles its toolchain before changing `current`:
+
+```bash
+sudo AC_RELEASE_ID=foundation-<previous-full-git-sha> \
+  /srv/authority-closers/releases/foundation-<previous-full-git-sha>/scripts/install-foundation-release.sh
+```
 
 ## Non-negotiable deployment rule
 

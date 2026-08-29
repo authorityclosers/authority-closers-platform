@@ -63,3 +63,7 @@
 - CI now rejects mutable Compose image references and validates all operational scripts.
 - Host hardening now refuses to reset the firewall without an active Cloudflare connector unless temporary public SSH is explicitly requested. A separate, confirmation-gated `lockdown` phase removes TCP/22 after independent Access-path verification.
 - Initial foundation targets are RPO <= 24 hours and repository-restore duration <= 4 hours. The restore drill reports observed snapshot age and duration; full application recovery and side-effect reconciliation remain G1 gates.
+- Host packages are now a separately versioned exact-package baseline. Runtime releases cannot mutate APT state and fail unless the recorded baseline matches policy.
+- New releases require a full 40-character reviewed commit and are materialized from an exact Git archive; working-tree and untracked files cannot enter a trusted release ID.
+- Infisical/rclone versions and checksums are release content, are reconciled on rollback, and are covered by backup/isolated-restore evidence.
+- Docker ingress rules are lifecycle-bound to Docker and continuously revalidated by a one-minute systemd timer; IPv4 and IPv6 UFW numbered-rule fixtures protect the TCP/22 lockdown parser.

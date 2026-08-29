@@ -35,7 +35,10 @@ restic backup \
   /etc/security/limits.d \
   /etc/ufw \
   /usr/local/libexec/authority-closers \
+  /usr/local/bin/infisical \
+  /usr/local/bin/rclone \
   /usr/local/sbin \
+  /var/lib/authority-closers \
   /var/lib/docker/volumes
 
 restic forget \
