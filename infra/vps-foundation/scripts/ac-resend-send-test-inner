@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+: "${RESEND_API_KEY:?RESEND_API_KEY is required}"
+
+response_file="$(mktemp -t ac-resend-send.XXXXXX.json)"
+cleanup() { rm -f -- "$response_file"; }
+trap cleanup EXIT
+
+status="$(curl --silent --show-error --max-time 20 \
+  -o "$response_file" \
+  -w '%{http_code}' \
+  -H "Authorization: Bearer $RESEND_API_KEY" \
+  -H 'Content-Type: application/json' \
+  --data-raw "$(jq -nc --arg to 'rsuyash123@gmail.com' '{from:"AC Infrastructure <infra@authorityclosers.com>", to:[$to], subject:"AC infrastructure Resend delivery test", text:"This is a one-time Authority Closers infrastructure email-delivery test. Receiving remains handled by Google Workspace."}')" \
+  https://api.resend.com/emails)"
+
+printf 'Resend send status=%s\n' "$status"
+if [[ "$status" == 2* ]]; then
+  printf 'Resend message id=%s\n' "$(jq -r '.id // "unknown"' "$response_file")"
+  printf 'PASS  Resend accepted the delivery test.\n'
+else
+  jq -c '.' "$response_file"
+  exit 1
+fi

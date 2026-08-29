@@ -1,0 +1,12 @@
+[Unit]
+Description=Authority Closers Docker ingress guard
+After=docker.service ufw.service
+Requires=docker.service
+PartOf=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/ac-docker-firewall
+
+[Install]
+WantedBy=docker.service

@@ -1,0 +1,8 @@
+Status: active
+
+     To                         Action      From
+     --                         ------      ----
+[ 5] 443/tcp (v6)               ALLOW IN    Anywhere (v6)
+[ 6] 22/tcp (v6)                ALLOW IN    Anywhere (v6)              # TEMPORARY Authority Closers SSH bootstrap
+[ 7] OpenSSH (v6)               ALLOW IN    2001:db8::/32
+[ 8] 22/tcp (v6)                DENY IN     2001:db8:1::/48

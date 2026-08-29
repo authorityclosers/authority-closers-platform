@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# The child shell must expand these variables only after Infisical injection.
+# shellcheck disable=SC2016
+/usr/local/sbin/ac-infisical-run \
+  -- sh -c 'test -n "$R2_ENDPOINT" && test -n "$R2_ACCESS_KEY_ID" && test -n "$RESTIC_REPOSITORY" && test -n "$RESEND_API_KEY"'
+
+printf 'PASS  VPS Infisical CLI can inject the production configuration without printing values.\n'

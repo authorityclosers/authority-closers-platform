@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+external_interface="${AC_EXTERNAL_INTERFACE:-eth0}"
+validator="${AC_DOCKER_FIREWALL_VALIDATOR:-/usr/local/sbin/ac-docker-firewall-validate}"
+
+ip link show dev "$external_interface" >/dev/null 2>&1 || {
+  printf 'External interface does not exist: %s\n' "$external_interface" >&2
+  exit 1
+}
+
+remove_rule() {
+  local binary="$1"
+  shift
+  while "$binary" -C DOCKER-USER "$@" 2>/dev/null; do
+    "$binary" -D DOCKER-USER "$@"
+  done
+}
+
+[[ -x "$validator" ]] || { printf 'Firewall order validator is unavailable: %s\n' "$validator" >&2; exit 1; }
+
+for binary in iptables ip6tables; do
+  command -v "$binary" >/dev/null 2>&1 || {
+    printf 'Required firewall binary is unavailable: %s\n' "$binary" >&2
+    exit 1
+  }
+  "$binary" -nL DOCKER-USER >/dev/null 2>&1 || {
+    printf '%s DOCKER-USER chain is unavailable; refusing an unguarded Docker runtime.\n' "$binary" >&2
+    exit 1
+  }
+
+  remove_rule "$binary" -i "$external_interface" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+  remove_rule "$binary" -i "$external_interface" -j DROP
+  "$binary" -I DOCKER-USER 1 -i "$external_interface" -j DROP
+  "$binary" -I DOCKER-USER 1 -i "$external_interface" \
+    -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+  "$binary" -S DOCKER-USER | "$validator" "$external_interface" >/dev/null
+done

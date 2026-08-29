@@ -1,0 +1,21 @@
+[Unit]
+Description=Authority Closers Restic restore and integrity drill
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/ac-restic-restore-check
+User=root
+Group=root
+Environment=AC_IPV4_ONLY=1
+Environment=AC_FOUNDATION_RPO_TARGET_SECONDS=86400
+Environment=AC_FOUNDATION_RESTORE_TARGET_SECONDS=14400
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+NoExecPaths=/tmp
+RestrictAddressFamilies=AF_INET AF_UNIX
+ReadOnlyPaths=/etc/authority-closers/secrets/infisical-bootstrap.env /usr/local/sbin
+ReadWritePaths=/var/cache/authority-closers-restic

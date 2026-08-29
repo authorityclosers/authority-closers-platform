@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+env_file='/etc/authority-closers/secrets/infisical-bootstrap.env'
+[[ -r "$env_file" ]] || { printf 'Secret environment is not readable: %s\n' "$env_file" >&2; exit 1; }
+
+set -a
+# shellcheck disable=SC1090
+source "$env_file"
+set +a
+
+: "${INFISICAL_VPS_CLIENT_ID:?INFISICAL_VPS_CLIENT_ID is required}"
+: "${INFISICAL_VPS_CLIENT_SECRET:?INFISICAL_VPS_CLIENT_SECRET is required}"
+project_id="${INFISICAL_PROJECT_ID:-b421c44e-4599-4394-8df6-758ed8aedfed}"
+
+# Credentials and the resulting short-lived token travel only through a
+# root-owned environment/stdin pipe, never through process arguments.
+token="$(
+  AC_INFISICAL_CLIENT_ID="$INFISICAL_VPS_CLIENT_ID" \
+  AC_INFISICAL_CLIENT_SECRET="$INFISICAL_VPS_CLIENT_SECRET" \
+    python3 - <<'PY' \
+      | curl --fail --silent --show-error \
+          --request POST \
+          --header 'Content-Type: application/json' \
+          --data-binary @- \
+          'https://app.infisical.com/api/v1/auth/universal-auth/login' \
+      | jq --exit-status --raw-output '.accessToken | select(type == "string" and length > 20)'
+import json
+import os
+
+print(json.dumps({
+    "clientId": os.environ["AC_INFISICAL_CLIENT_ID"],
+    "clientSecret": os.environ["AC_INFISICAL_CLIENT_SECRET"],
+}))
+PY
+)"
+
+[[ ${#token} -gt 20 ]] || { printf 'Infisical login did not return an access token.\n' >&2; exit 1; }
+
+export INFISICAL_TOKEN="$token"
+export INFISICAL_API_URL='https://app.infisical.com'
+export INFISICAL_DISABLE_UPDATE_CHECK='true'
+unset token
+unset INFISICAL_VPS_CLIENT_ID INFISICAL_VPS_CLIENT_SECRET
+unset INFISICAL_BACKUP_CLIENT_ID INFISICAL_BACKUP_CLIENT_SECRET
+
+exec infisical run \
+  --projectId="$project_id" \
+  --env='prod' \
+  --path='/' \
+  "$@"

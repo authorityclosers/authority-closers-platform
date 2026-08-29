@@ -1,0 +1,227 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+: "${R2_ENDPOINT:?R2_ENDPOINT is required}"
+: "${R2_ACCESS_KEY_ID:?R2_ACCESS_KEY_ID is required}"
+: "${R2_SECRET_ACCESS_KEY:?R2_SECRET_ACCESS_KEY is required}"
+: "${R2_BACKUP_BUCKET:?R2_BACKUP_BUCKET is required}"
+: "${RESTIC_PASSWORD:?RESTIC_PASSWORD is required}"
+
+export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID"
+export AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
+export RESTIC_REPOSITORY="${RESTIC_REPOSITORY:-s3:${R2_ENDPOINT#https://}/${R2_BACKUP_BUCKET}}"
+export RESTIC_CACHE_DIR='/var/cache/authority-closers-restic'
+: "${AC_FOUNDATION_RPO_TARGET_SECONDS:=86400}"
+: "${AC_FOUNDATION_RESTORE_TARGET_SECONDS:=14400}"
+
+[[ "$AC_FOUNDATION_RPO_TARGET_SECONDS" =~ ^[0-9]+$ ]]
+[[ "$AC_FOUNDATION_RESTORE_TARGET_SECONDS" =~ ^[0-9]+$ ]]
+
+started_epoch="$(date +%s)"
+snapshots_json="$(restic snapshots --latest 1 --json)"
+snapshot_count="$(jq 'length' <<<"$snapshots_json")"
+((snapshot_count == 1)) || { printf 'FAIL  Restic did not return exactly one latest snapshot.\n' >&2; exit 1; }
+
+snapshot_id="$(jq -er '.[0].short_id | select(type == "string" and length > 0)' <<<"$snapshots_json")"
+latest_snapshot_time="$(jq -er '.[0].time | select(type == "string" and length > 0)' <<<"$snapshots_json")"
+latest_snapshot_epoch="$(date --date="$latest_snapshot_time" +%s)"
+snapshot_age_seconds="$((started_epoch - latest_snapshot_epoch))"
+if ((snapshot_age_seconds < 0 || snapshot_age_seconds > AC_FOUNDATION_RPO_TARGET_SECONDS)); then
+  printf 'FAIL  Latest snapshot age %s seconds exceeds the %s-second foundation RPO target.\n' \
+    "$snapshot_age_seconds" "$AC_FOUNDATION_RPO_TARGET_SECONDS" >&2
+  exit 1
+fi
+
+restore_dir="$(mktemp -d -t ac-restic-restore.XXXXXX)"
+cleanup() {
+  local status=$?
+  case "$restore_dir" in
+    /tmp/ac-restic-restore.*) rm -rf -- "$restore_dir" ;;
+    *) printf 'Refusing to remove unexpected restore path: %s\n' "$restore_dir" >&2; status=1 ;;
+  esac
+  exit "$status"
+}
+trap cleanup EXIT
+
+restic restore "$snapshot_id" --target "$restore_dir" >/dev/null
+
+current_link="$restore_dir/srv/authority-closers/current"
+[[ -L "$current_link" ]] || { printf 'FAIL  Restored current release is not a symbolic link.\n' >&2; exit 1; }
+release_target="$(readlink "$current_link")"
+[[ "$release_target" =~ ^/srv/authority-closers/releases/foundation-[0-9a-f]{40}$ ]] || {
+  printf 'FAIL  Restored current release target is invalid: %s\n' "$release_target" >&2
+  exit 1
+}
+release_dir="$restore_dir$release_target"
+[[ -d "$release_dir" ]] || { printf 'FAIL  Restored immutable release directory is absent.\n' >&2; exit 1; }
+[[ -r "$release_dir/RELEASE-FILES.sha256" ]] || {
+  printf 'FAIL  Restored release checksum manifest is absent.\n' >&2
+  exit 1
+}
+(cd "$release_dir" && sha256sum --check --strict RELEASE-FILES.sha256 >/dev/null)
+release_id="${release_target##*/}"
+release_sha="${release_id#foundation-}"
+[[ "$(<"$release_dir/RELEASE-ID")" == "$release_id" ]]
+[[ "$(<"$release_dir/RELEASE-COMMIT")" == "$release_sha" ]]
+trusted_release_dir="/srv/authority-closers/releases/$release_id"
+[[ -d "$trusted_release_dir" && -r "$trusted_release_dir/RELEASE-FILES.sha256" ]] || {
+  printf 'FAIL  Restored release has no independently installed trust anchor.\n' >&2
+  exit 1
+}
+cmp --silent "$trusted_release_dir/RELEASE-FILES.sha256" "$release_dir/RELEASE-FILES.sha256" || {
+  printf 'FAIL  Restored release manifest differs from the independently installed release.\n' >&2
+  exit 1
+}
+
+baseline_marker="$restore_dir/etc/authority-closers/os-baseline.env"
+[[ -r "$baseline_marker" ]] || { printf 'FAIL  Restored OS baseline marker is absent.\n' >&2; exit 1; }
+baseline_id="$(awk -F= '$1 == "AC_OS_BASELINE_ID" {print $2}' "$baseline_marker")"
+baseline_manifest_sha="$(awk -F= '$1 == "AC_OS_BASELINE_MANIFEST_SHA256" {print $2}' "$baseline_marker")"
+baseline_policy_sha="$(awk -F= '$1 == "AC_OS_BASELINE_POLICY_SHA256" {print $2}' "$baseline_marker")"
+baseline_packages_sha="$(awk -F= '$1 == "AC_OS_PACKAGES_POLICY_SHA256" {print $2}' "$baseline_marker")"
+baseline_resolved_packages_sha="$(awk -F= '$1 == "AC_OS_RESOLVED_PACKAGES_POLICY_SHA256" {print $2}' "$baseline_marker")"
+[[ "$baseline_id" =~ ^[a-z0-9][a-z0-9.-]{7,127}$ ]]
+[[ "$baseline_manifest_sha" =~ ^[0-9a-f]{64}$ ]]
+[[ "$baseline_policy_sha" == "$(sha256sum "$release_dir/config/release/os-baseline.env" | awk '{print $1}')" ]]
+[[ "$baseline_packages_sha" == "$(sha256sum "$release_dir/config/release/os-packages.tsv" | awk '{print $1}')" ]]
+[[ "$baseline_resolved_packages_sha" == \
+  "$(sha256sum "$release_dir/config/release/os-resolved-packages.tsv" | awk '{print $1}')" ]]
+restored_baseline_manifest="$restore_dir/var/lib/authority-closers/baselines/${baseline_id}.packages.tsv"
+[[ -r "$restored_baseline_manifest" ]]
+[[ "$baseline_manifest_sha" == "$(sha256sum "$restored_baseline_manifest" | awk '{print $1}')" ]]
+
+toolchain_marker="$restore_dir/var/lib/authority-closers/toolchains/${release_id}.env"
+[[ -r "$toolchain_marker" ]] || { printf 'FAIL  Restored release toolchain marker is absent.\n' >&2; exit 1; }
+toolchain_policy="$trusted_release_dir/config/release/toolchain.env"
+cmp --silent "$toolchain_policy" "$release_dir/config/release/toolchain.env" || {
+  printf 'FAIL  Restored toolchain policy differs from the independently installed release.\n' >&2
+  exit 1
+}
+expected_infisical_version=''
+expected_infisical_binary_sha=''
+expected_rclone_version=''
+expected_rclone_binary_sha=''
+while IFS='=' read -r key value; do
+  [[ -z "$key" || "$key" == \#* ]] && continue
+  case "$key" in
+    INFISICAL_VERSION) expected_infisical_version="$value" ;;
+    INFISICAL_LINUX_AMD64_BINARY_SHA256) expected_infisical_binary_sha="$value" ;;
+    RCLONE_VERSION) expected_rclone_version="$value" ;;
+    RCLONE_LINUX_AMD64_BINARY_SHA256) expected_rclone_binary_sha="$value" ;;
+    INFISICAL_LINUX_AMD64_SHA256|RCLONE_LINUX_AMD64_SHA256) ;;
+    *) printf 'FAIL  Unknown restored toolchain policy key: %s\n' "$key" >&2; exit 1 ;;
+  esac
+done < "$toolchain_policy"
+[[ "$expected_infisical_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+[[ "$expected_rclone_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+[[ "$expected_infisical_binary_sha" =~ ^[0-9a-f]{64}$ ]]
+[[ "$expected_rclone_binary_sha" =~ ^[0-9a-f]{64}$ ]]
+[[ "$(awk -F= '$1 == "AC_RELEASE_ID" {print $2}' "$toolchain_marker")" == "$release_id" ]]
+[[ "$(awk -F= '$1 == "TOOLCHAIN_POLICY_SHA256" {print $2}' "$toolchain_marker")" == \
+  "$(sha256sum "$toolchain_policy" | awk '{print $1}')" ]]
+restored_infisical="$restore_dir/usr/local/bin/infisical"
+restored_rclone="$restore_dir/usr/local/bin/rclone"
+[[ -f "$restored_infisical" && -f "$restored_rclone" ]]
+[[ "$expected_infisical_binary_sha" == "$(sha256sum "$restored_infisical" | awk '{print $1}')" ]]
+[[ "$expected_rclone_binary_sha" == "$(sha256sum "$restored_rclone" | awk '{print $1}')" ]]
+[[ "$(awk -F= '$1 == "INFISICAL_BINARY_SHA256" {print $2}' "$toolchain_marker")" == \
+  "$expected_infisical_binary_sha" ]]
+[[ "$(awk -F= '$1 == "RCLONE_BINARY_SHA256" {print $2}' "$toolchain_marker")" == \
+  "$expected_rclone_binary_sha" ]]
+[[ "$(awk -F= '$1 == "INFISICAL_VERSION" {print $2}' "$toolchain_marker")" == \
+  "$expected_infisical_version" ]]
+[[ "$(awk -F= '$1 == "RCLONE_VERSION" {print $2}' "$toolchain_marker")" == \
+  "$expected_rclone_version" ]]
+
+install_manifest="$release_dir/config/release/install-manifest.tsv"
+[[ -r "$install_manifest" ]] || { printf 'FAIL  Restored install manifest is absent.\n' >&2; exit 1; }
+while IFS=$'\t' read -r kind source target mode owner group; do
+  [[ -z "$kind" || "$kind" == \#* ]] && continue
+  source_path="$release_dir/$source"
+  restored_target="$restore_dir$target"
+  [[ -f "$source_path" && -f "$restored_target" ]] || {
+    printf 'FAIL  Restored managed file is absent: %s\n' "$target" >&2
+    exit 1
+  }
+  cmp --silent "$source_path" "$restored_target" || {
+    printf 'FAIL  Restored managed file differs from release: %s\n' "$target" >&2
+    exit 1
+  }
+  [[ "$(stat -c '%a' "$restored_target")" == "${mode#0}" ]] || {
+    printf 'FAIL  Restored managed file mode differs from manifest: %s\n' "$target" >&2
+    exit 1
+  }
+  [[ "$(stat -c '%u:%g' "$restored_target")" == '0:0' && "$owner:$group" == 'root:root' ]] || {
+    printf 'FAIL  Restored managed file ownership differs from manifest: %s\n' "$target" >&2
+    exit 1
+  }
+done < "$install_manifest"
+
+if [[ -d "$restore_dir/etc/authority-closers/secrets" ]] \
+  && find "$restore_dir/etc/authority-closers/secrets" -type f -print -quit | grep -q .; then
+  printf 'FAIL  Secret files were included in the Restic snapshot.\n' >&2
+  exit 1
+fi
+
+shell_files=()
+while IFS= read -r -d '' candidate; do
+  if head -n 1 "$candidate" | grep -Eq '^#!.*(ba)?sh([[:space:]]|$)'; then
+    shell_files+=("$candidate")
+  fi
+done < <(find "$release_dir/scripts" -maxdepth 1 -type f -print0)
+((${#shell_files[@]} > 0))
+bash -n "${shell_files[@]}"
+jq empty "$release_dir/config/docker/daemon.json"
+python3 - "$release_dir/compose/foundation/otel-collector.yaml" <<'PY'
+from pathlib import Path
+import sys
+
+import yaml
+
+document = yaml.safe_load(Path(sys.argv[1]).read_text(encoding="utf-8"))
+if not isinstance(document, dict) or not document:
+    raise SystemExit("OpenTelemetry collector configuration is not a non-empty mapping")
+PY
+docker compose \
+  --env-file "$release_dir/config/release/foundation-images.env" \
+  -f "$release_dir/compose/foundation/compose.yaml" \
+  config --quiet
+cmp --silent \
+  "$release_dir/config/ssh/00-authority-closers.conf" \
+  "$restore_dir/etc/ssh/sshd_config.d/00-authority-closers.conf"
+for mapping in \
+  'config/apt/52authority-closers-unattended-upgrades:etc/apt/apt.conf.d/52authority-closers-unattended-upgrades' \
+  'config/audit/90-authority-closers.rules:etc/audit/rules.d/90-authority-closers.rules' \
+  'config/docker/daemon.json:etc/docker/daemon.json' \
+  'config/fail2ban/authority-closers.local:etc/fail2ban/jail.d/authority-closers.local' \
+  'config/journald/90-authority-closers.conf:etc/systemd/journald.conf.d/90-authority-closers.conf' \
+  'config/limits/90-authority-closers.conf:etc/security/limits.d/90-authority-closers.conf' \
+  'config/sysctl/90-authority-closers.conf:etc/sysctl.d/90-authority-closers.conf'; do
+  source_relative="${mapping%%:*}"
+  target_relative="${mapping#*:}"
+  cmp --silent "$release_dir/$source_relative" "$restore_dir/$target_relative" || {
+    printf 'FAIL  Restored host configuration differs from release: /%s\n' "$target_relative" >&2
+    exit 1
+  }
+done
+
+data_validated_epoch="$(date +%s)"
+restore_duration_seconds="$((data_validated_epoch - started_epoch))"
+if ((restore_duration_seconds > AC_FOUNDATION_RESTORE_TARGET_SECONDS)); then
+  printf 'FAIL  Restore validation took %s seconds, exceeding the %s-second foundation target.\n' \
+    "$restore_duration_seconds" "$AC_FOUNDATION_RESTORE_TARGET_SECONDS" >&2
+  exit 1
+fi
+
+restic check --read-data-subset=1/20 >/dev/null
+finished_epoch="$(date +%s)"
+integrity_duration_seconds="$((finished_epoch - started_epoch))"
+
+printf '%s\n' \
+  'PASS  Restic repository restore and managed configuration reconstruction succeeded.' \
+  "RPO_TARGET_SECONDS=$AC_FOUNDATION_RPO_TARGET_SECONDS" \
+  "RPO_OBSERVED_SECONDS=$snapshot_age_seconds" \
+  "RESTORE_TARGET_SECONDS=$AC_FOUNDATION_RESTORE_TARGET_SECONDS" \
+  "RESTORE_OBSERVED_SECONDS=$restore_duration_seconds" \
+  "INTEGRITY_OBSERVED_SECONDS=$integrity_duration_seconds" \
+  'INTEGRITY_SAMPLE=1/20'

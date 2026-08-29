@@ -1,0 +1,14 @@
+[Unit]
+Description=Continuously revalidate Authority Closers Docker ingress guard
+After=docker.service ufw.service
+Requires=docker.service
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=60s
+AccuracySec=10s
+Persistent=true
+Unit=ac-docker-firewall.service
+
+[Install]
+WantedBy=timers.target

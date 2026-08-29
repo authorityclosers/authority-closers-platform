@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+: "${R2_ENDPOINT:?R2_ENDPOINT is required}"
+: "${R2_ACCESS_KEY_ID:?R2_ACCESS_KEY_ID is required}"
+: "${R2_SECRET_ACCESS_KEY:?R2_SECRET_ACCESS_KEY is required}"
+: "${R2_BACKUP_BUCKET:?R2_BACKUP_BUCKET is required}"
+: "${RESTIC_PASSWORD:?RESTIC_PASSWORD is required}"
+
+export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID"
+export AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
+export RESTIC_REPOSITORY="${RESTIC_REPOSITORY:-s3:${R2_ENDPOINT#https://}/${R2_BACKUP_BUCKET}}"
+export RESTIC_CACHE_DIR='/var/cache/authority-closers-restic'
+
+# Fail closed before every write if the conservative R2 envelope is exceeded.
+/usr/local/libexec/authority-closers/r2-usage-guard
+
+restic snapshots >/dev/null
+
+restic backup \
+  --tag authority-closers-foundation \
+  --exclude-caches \
+  --exclude='/etc/authority-closers/secrets' \
+  --exclude='/etc/authority-closers/secrets/**' \
+  /srv/authority-closers \
+  /etc/authority-closers \
+  /etc/ssh \
+  /etc/apt/apt.conf.d \
+  /etc/audit/rules.d \
+  /etc/docker \
+  /etc/systemd/system \
+  /etc/fail2ban \
+  /etc/systemd/journald.conf.d \
+  /etc/sysctl.d \
+  /etc/security/limits.d \
+  /etc/ufw \
+  /usr/local/libexec/authority-closers \
+  /usr/local/bin/infisical \
+  /usr/local/bin/rclone \
+  /usr/local/sbin \
+  /var/lib/authority-closers \
+  /var/lib/docker/volumes
+
+restic forget \
+  --keep-daily 7 \
+  --keep-weekly 4 \
+  --keep-monthly 6 \
+  --prune
+
+printf 'PASS  Restic backup and retention completed.\n'

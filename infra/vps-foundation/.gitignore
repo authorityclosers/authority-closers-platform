@@ -1,0 +1,13 @@
+secrets/
+*.env
+!config/release/foundation-images.env
+!config/release/toolchain.env
+!config/release/os-baseline.env
+*.key
+*.pem
+*.tfstate
+*.tfstate.*
+.terraform/
+.ansible/
+artifacts/
+reports/

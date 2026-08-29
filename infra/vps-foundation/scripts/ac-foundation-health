@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+retry() {
+  for _ in 1 2 3 4 5 6; do
+    if "$@"; then
+      return 0
+    fi
+    sleep 2
+  done
+  return 1
+}
+
+foundation_containers_running() {
+  local running_count
+  running_count="$(docker compose \
+    --env-file /srv/authority-closers/current/config/release/foundation-images.env \
+    -f /srv/authority-closers/current/compose/foundation/compose.yaml \
+    ps --status running --quiet | wc -l)"
+  [[ "$running_count" -eq 2 ]]
+}
+
+foundation_local_health() {
+  curl --fail --silent --show-error --max-time 5 http://127.0.0.1:8080/healthz >/dev/null
+}
+
+foundation_public_health() {
+  curl --fail --silent --show-error --max-time 15 \
+    https://infra.dipakvishwakarma.com/healthz >/dev/null
+}
+
+retry systemctl is-active --quiet docker
+retry systemctl is-active --quiet ac-docker-firewall.timer
+retry /usr/local/sbin/ac-docker-firewall
+
+if [[ -r /srv/authority-closers/current/config/release/foundation-images.env ]]; then
+  retry foundation_containers_running
+  retry foundation_local_health
+fi
+
+if [[ -f /etc/cloudflared/tunnel-token ]]; then
+  retry systemctl is-active --quiet cloudflared
+  retry foundation_public_health
+fi

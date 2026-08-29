@@ -1,0 +1,13 @@
+{
+  "success": true,
+  "result": {
+    "standard": {
+      "uploaded": {"payloadSize": 100, "metadataSize": 10},
+      "published": {"payloadSize": 200, "metadataSize": 20}
+    },
+    "infrequentAccess": {
+      "uploaded": {"payloadSize": 0, "metadataSize": 0},
+      "published": {"payloadSize": 0, "metadataSize": 0}
+    }
+  }
+}

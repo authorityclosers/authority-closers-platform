@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+policy_dir="${AC_BASELINE_POLICY_DIR:-/srv/authority-closers/current/config/release}"
+policy="$policy_dir/os-baseline.env"
+packages_policy="$policy_dir/os-packages.tsv"
+resolved_packages_policy="$policy_dir/os-resolved-packages.tsv"
+marker='/etc/authority-closers/os-baseline.env'
+[[ -r "$policy" && -r "$packages_policy" && -r "$resolved_packages_policy" && -r "$marker" ]] || {
+  printf 'OS baseline policy or host marker is missing.\n' >&2
+  exit 1
+}
+
+AC_OS_BASELINE_ID=''
+AC_OS_ID=''
+AC_OS_VERSION_ID=''
+AC_OS_CODENAME=''
+AC_OS_ARCH=''
+AC_OS_RESOLVED_PACKAGES_SHA256=''
+DOCKER_APT_KEY_SHA256=''
+CLOUDFLARE_APT_KEY_SHA256=''
+while IFS='=' read -r key value; do
+  [[ -z "$key" || "$key" == \#* ]] && continue
+  case "$key" in
+    AC_OS_BASELINE_ID|AC_OS_ID|AC_OS_VERSION_ID|AC_OS_CODENAME|AC_OS_ARCH|AC_OS_RESOLVED_PACKAGES_SHA256)
+      printf -v "$key" '%s' "$value"
+      ;;
+    DOCKER_APT_KEY_SHA256|CLOUDFLARE_APT_KEY_SHA256)
+      printf -v "$key" '%s' "$value"
+      ;;
+    *) printf 'Unknown OS baseline policy key: %s\n' "$key" >&2; exit 1 ;;
+  esac
+done < "$policy"
+
+[[ "$AC_OS_RESOLVED_PACKAGES_SHA256" =~ ^[0-9a-f]{64}$ ]]
+[[ "$AC_OS_RESOLVED_PACKAGES_SHA256" == \
+  "$(sha256sum "$resolved_packages_policy" | awk '{print $1}')" ]]
+
+recorded_id=''
+recorded_manifest_sha=''
+recorded_policy_sha=''
+recorded_packages_policy_sha=''
+recorded_resolved_packages_policy_sha=''
+while IFS='=' read -r key value; do
+  [[ -z "$key" || "$key" == \#* ]] && continue
+  case "$key" in
+    AC_OS_BASELINE_ID) recorded_id="$value" ;;
+    AC_OS_BASELINE_MANIFEST_SHA256) recorded_manifest_sha="$value" ;;
+    AC_OS_BASELINE_POLICY_SHA256) recorded_policy_sha="$value" ;;
+    AC_OS_PACKAGES_POLICY_SHA256) recorded_packages_policy_sha="$value" ;;
+    AC_OS_RESOLVED_PACKAGES_POLICY_SHA256) recorded_resolved_packages_policy_sha="$value" ;;
+    *) printf 'Unknown host baseline marker key: %s\n' "$key" >&2; exit 1 ;;
+  esac
+done < "$marker"
+
+[[ "$recorded_id" == "$AC_OS_BASELINE_ID" ]]
+[[ "$recorded_manifest_sha" =~ ^[0-9a-f]{64}$ ]]
+[[ "$recorded_policy_sha" == "$(sha256sum "$policy" | awk '{print $1}')" ]]
+[[ "$recorded_packages_policy_sha" == "$(sha256sum "$packages_policy" | awk '{print $1}')" ]]
+[[ "$recorded_resolved_packages_policy_sha" == \
+  "$(sha256sum "$resolved_packages_policy" | awk '{print $1}')" ]]
+manifest="/var/lib/authority-closers/baselines/${AC_OS_BASELINE_ID}.packages.tsv"
+[[ -r "$manifest" && "$recorded_manifest_sha" == "$(sha256sum "$manifest" | awk '{print $1}')" ]]
+[[ "$(stat -c '%U:%G %a' "$marker")" == 'root:root 644' ]]
+[[ "$(stat -c '%U:%G %a' "$manifest")" == 'root:root 640' ]]
+cmp --silent "$resolved_packages_policy" "$manifest"
+if ! cmp --silent "$manifest" <(dpkg-query -W -f='${binary:Package}\t${Version}\n' | LC_ALL=C sort); then
+  printf 'Current installed package set differs from recorded baseline %s.\n' "$AC_OS_BASELINE_ID" >&2
+  exit 1
+fi
+
+# shellcheck source=/dev/null
+. /etc/os-release
+[[ "$ID" == "$AC_OS_ID" && "$VERSION_ID" == "$AC_OS_VERSION_ID" && "$VERSION_CODENAME" == "$AC_OS_CODENAME" ]]
+[[ "$(dpkg --print-architecture)" == "$AC_OS_ARCH" ]]
+[[ "$DOCKER_APT_KEY_SHA256" == "$(sha256sum /etc/apt/keyrings/docker.asc | awk '{print $1}')" ]]
+[[ "$CLOUDFLARE_APT_KEY_SHA256" == "$(sha256sum /etc/apt/keyrings/cloudflare-main.gpg | awk '{print $1}')" ]]
+held_packages="$(apt-mark showhold)"
+while IFS=$'\t' read -r package version extra; do
+  [[ -z "$package" || "$package" == \#* ]] && continue
+  [[ -z "$extra" ]]
+  [[ "$(dpkg-query -W -f='${Version}' "$package")" == "$version" ]]
+  grep -Fxq "$package" <<<"$held_packages"
+done < "$packages_policy"
+
+while IFS=$'\t' read -r package version extra; do
+  [[ -z "$package" || "$package" == \#* ]] && continue
+  [[ -z "$extra" && -n "$version" ]]
+  grep -Fxq "$package" <<<"$held_packages"
+done < "$resolved_packages_policy"
+
+printf 'PASS  OS baseline %s matches its policy, package pins, and recorded manifest.\n' "$AC_OS_BASELINE_ID"
