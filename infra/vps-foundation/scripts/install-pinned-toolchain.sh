@@ -43,6 +43,16 @@ done < "$policy"
 [[ "$RCLONE_LINUX_AMD64_SHA256" =~ ^[0-9a-f]{64}$ ]]
 [[ "$RCLONE_LINUX_AMD64_BINARY_SHA256" =~ ^[0-9a-f]{64}$ ]]
 
+download_release_asset() {
+  local url=$1
+  local destination=$2
+
+  curl --ipv4 --fail --silent --show-error --location \
+    --connect-timeout 10 --max-time 180 \
+    --retry 3 --retry-all-errors --retry-delay 2 \
+    "$url" --output "$destination"
+}
+
 work_dir="$(mktemp -d /tmp/ac-toolchain.XXXXXX)"
 infisical_stage=''
 rclone_stage=''
@@ -64,16 +74,16 @@ cleanup() {
 trap cleanup EXIT
 
 infisical_archive="$work_dir/infisical.tar.gz"
-curl --fail --silent --show-error --location \
+download_release_asset \
   "https://github.com/Infisical/cli/releases/download/v${INFISICAL_VERSION}/cli_${INFISICAL_VERSION}_linux_amd64.tar.gz" \
-  --output "$infisical_archive"
+  "$infisical_archive"
 printf '%s  %s\n' "$INFISICAL_LINUX_AMD64_SHA256" "$infisical_archive" | sha256sum --check --strict
 tar --extract --gzip --file "$infisical_archive" --directory "$work_dir" infisical
 
 rclone_archive="$work_dir/rclone.zip"
-curl --fail --silent --show-error --location \
+download_release_asset \
   "https://github.com/rclone/rclone/releases/download/v${RCLONE_VERSION}/rclone-v${RCLONE_VERSION}-linux-amd64.zip" \
-  --output "$rclone_archive"
+  "$rclone_archive"
 printf '%s  %s\n' "$RCLONE_LINUX_AMD64_SHA256" "$rclone_archive" | sha256sum --check --strict
 unzip -q "$rclone_archive" "rclone-v${RCLONE_VERSION}-linux-amd64/rclone" -d "$work_dir"
 

@@ -54,6 +54,9 @@ grep -Eq '^INFISICAL_LINUX_AMD64_SHA256=[0-9a-f]{64}$' "$foundation/config/relea
 grep -Eq '^INFISICAL_LINUX_AMD64_BINARY_SHA256=[0-9a-f]{64}$' "$foundation/config/release/toolchain.env"
 grep -Eq '^RCLONE_LINUX_AMD64_SHA256=[0-9a-f]{64}$' "$foundation/config/release/toolchain.env"
 grep -Eq '^RCLONE_LINUX_AMD64_BINARY_SHA256=[0-9a-f]{64}$' "$foundation/config/release/toolchain.env"
+grep -q -- '--ipv4' "$foundation/scripts/install-pinned-toolchain.sh"
+grep -q -- '--connect-timeout 10 --max-time 180' "$foundation/scripts/install-pinned-toolchain.sh"
+grep -q -- '--retry 3 --retry-all-errors --retry-delay 2' "$foundation/scripts/install-pinned-toolchain.sh"
 grep -q 'expected_infisical_binary_sha' "$foundation/scripts/ac-restic-restore-check-inner"
 grep -q 'expected_rclone_binary_sha' "$foundation/scripts/ac-restic-restore-check-inner"
 grep -Fq -- "--exclude='/srv/authority-closers/application/artifacts/**'" \
