@@ -240,7 +240,8 @@ fi
 declare -A managed_hold_candidates=()
 declare -a held_before_managed=()
 for package in "${resolved_packages[@]}"; do
-  managed_hold_candidates[$package]=1
+  hold_name="$(ac_os_package_hold_name "$package")"
+  managed_hold_candidates[$hold_name]=1
 done
 
 previous_marker='/etc/authority-closers/os-baseline.env'
@@ -257,7 +258,8 @@ if [[ -r "$previous_marker" ]]; then
   }
   while IFS=$'\t' read -r package _version _extra; do
     [[ -z "$package" || "$package" == \#* ]] && continue
-    managed_hold_candidates[$package]=1
+    hold_name="$(ac_os_package_hold_name "$package")"
+    managed_hold_candidates[$hold_name]=1
   done < "$previous_manifest"
 fi
 

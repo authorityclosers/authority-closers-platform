@@ -80,13 +80,15 @@ while IFS=$'\t' read -r package version extra; do
   [[ -z "$package" || "$package" == \#* ]] && continue
   [[ -z "$extra" ]]
   [[ "$(dpkg-query -W -f='${Version}' "$package")" == "$version" ]]
-  grep -Fxq "$package" <<<"$held_packages"
+  hold_name="${package%%:*}"
+  grep -Fxq "$hold_name" <<<"$held_packages"
 done < "$packages_policy"
 
 while IFS=$'\t' read -r package version extra; do
   [[ -z "$package" || "$package" == \#* ]] && continue
   [[ -z "$extra" && -n "$version" ]]
-  grep -Fxq "$package" <<<"$held_packages"
+  hold_name="${package%%:*}"
+  grep -Fxq "$hold_name" <<<"$held_packages"
 done < "$resolved_packages_policy"
 
 printf 'PASS  OS baseline %s matches its policy, package pins, and recorded manifest.\n' "$AC_OS_BASELINE_ID"
