@@ -286,6 +286,7 @@ rollback_release() {
   printf 'ROLLBACK  Restoring %s after failed release %s.\n' "$target_environment" "$release_id" >&2
   compose_for "$release_dir" stop api worker learner-web admin-web >/dev/null 2>&1 || rollback_failed=1
   if [[ "$backup_ready" == 1 ]]; then
+    # shellcheck disable=SC2016  # PostgreSQL container variables expand inside `sh -euc`.
     if ! compose_for "$release_dir" exec -T postgres sh -euc '
       export PGPASSWORD="$POSTGRES_PASSWORD"
       psql -h 127.0.0.1 -U "$POSTGRES_USER" -d postgres -v ON_ERROR_STOP=1 \
@@ -321,6 +322,7 @@ trap finish EXIT
 mutation_started=1
 compose_for "$release_dir" up --detach --wait --wait-timeout 180 postgres
 umask 077
+# shellcheck disable=SC2016  # Backup credentials and database name expand only in the container.
 compose_for "$release_dir" exec -T postgres sh -euc '
   export PGPASSWORD="$AC_DB_BACKUP_PASSWORD"
   pg_dump -h 127.0.0.1 -U ac_backup -d "$POSTGRES_DB" --format=custom --create
