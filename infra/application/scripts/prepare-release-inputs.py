@@ -320,6 +320,13 @@ def _parse_manifest(payload: bytes, expected_release_id: str) -> dict[str, str]:
         raise ReleaseInputError("release image manifest has an incomplete key contract")
     if values["AC_RELEASE_ID"] != expected_release_id:
         raise ReleaseInputError("release image manifest does not match the source release")
+    for component in ("ADMIN", "API", "LEARNER"):
+        runtime_identity = values[f"AC_{component}_IMAGE"]
+        transport_identity = values[f"AC_{component}_TRANSPORT_DIGEST"]
+        if runtime_identity != transport_identity:
+            raise ReleaseInputError(
+                f"release image manifest AC_{component}_IMAGE must match its OCI transport digest"
+            )
     return values
 
 

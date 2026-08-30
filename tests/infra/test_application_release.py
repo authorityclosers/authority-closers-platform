@@ -297,11 +297,11 @@ def test_release_is_built_off_host_and_installed_with_backup_and_rollback() -> N
     assert "AC_MIGRATION_HEAD=%s" in WORKFLOW and "migration_head" in WORKFLOW
     assert "AC_MIGRATION_HEAD" in INSTALLER
     assert "OCI transport manifest does not reference the reviewed image config" in WORKFLOW
-    assert "printf 'AC_API_IMAGE=%s\\n' \"$api_id\"" in WORKFLOW
+    assert "printf 'AC_API_IMAGE=%s\\n' \"$api_transport_digest\"" in WORKFLOW
     assert "printf 'AC_API_TRANSPORT_DIGEST=%s\\n' \"$api_transport_digest\"" in WORKFLOW
     assert 'verify-bundle "$artifact_dir" "$GITHUB_SHA"' in WORKFLOW
     assert "AC_API_TRANSPORT_DIGEST" in RELEASE_INPUT_PREPARER
-    assert "Application deployment requires exact local image config IDs" in INSTALLER
+    assert "Application deployment requires exact local OCI manifest IDs" in INSTALLER
     assert "Application deployment requires exact OCI transport manifest digests" in INSTALLER
     assert "Loaded API image release marker does not match the release ID" in INSTALLER
     assert (
@@ -372,10 +372,13 @@ def test_api_image_bakes_a_root_owned_read_only_release_marker() -> None:
     assert PYTHON_DOCKERFILE.index("/app/.ac-release-id") < PYTHON_DOCKERFILE.index("USER ac")
 
 
-def test_release_bundle_separates_loaded_image_ids_from_transport_provenance() -> None:
+def test_release_bundle_uses_verified_transport_manifests_as_runtime_ids() -> None:
     assert 'verify_transport_config "$api_transport_digest" "$api_id"' in WORKFLOW
     for component in ("api", "learner", "admin"):
-        assert f"printf 'AC_{component.upper()}_IMAGE=%s\\n' \"${component}_id\"" in WORKFLOW
+        assert (
+            f"printf 'AC_{component.upper()}_IMAGE=%s\\n' "
+            f'"${component}_transport_digest"'
+        ) in WORKFLOW
         assert (
             f"printf 'AC_{component.upper()}_TRANSPORT_DIGEST=%s\\n' "
             f'"${component}_transport_digest"'

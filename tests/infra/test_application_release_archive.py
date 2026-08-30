@@ -30,15 +30,15 @@ REQUIRED_FILES = (
 )
 COMMIT = "0123456789abcdef0123456789abcdef01234567"
 IMAGE_VALUES = {
-    "AC_ADMIN_IMAGE": "sha256:" + "a" * 64,
+    "AC_ADMIN_IMAGE": "sha256:" + "1" * 64,
     "AC_ADMIN_REGISTRY_DIGEST": (
         "ghcr.io/authorityclosers/authority-closers-admin-web@sha256:" + "b" * 64
     ),
     "AC_ADMIN_TRANSPORT_DIGEST": "sha256:" + "1" * 64,
-    "AC_API_IMAGE": "sha256:" + "c" * 64,
+    "AC_API_IMAGE": "sha256:" + "2" * 64,
     "AC_API_REGISTRY_DIGEST": ("ghcr.io/authorityclosers/authority-closers-api@sha256:" + "d" * 64),
     "AC_API_TRANSPORT_DIGEST": "sha256:" + "2" * 64,
-    "AC_LEARNER_IMAGE": "sha256:" + "e" * 64,
+    "AC_LEARNER_IMAGE": "sha256:" + "3" * 64,
     "AC_LEARNER_REGISTRY_DIGEST": (
         "ghcr.io/authorityclosers/authority-closers-learner-web@sha256:" + "f" * 64
     ),
@@ -579,7 +579,9 @@ def test_manifest_shell_syntax_is_rejected_without_execution(tmp_path: Path) -> 
     assert not marker.exists()
 
 
-@pytest.mark.parametrize("mutation", ["missing", "extra", "duplicate", "wrong-repository"])
+@pytest.mark.parametrize(
+    "mutation", ["missing", "extra", "duplicate", "wrong-repository", "runtime-mismatch"]
+)
 def test_manifest_requires_exact_keys_and_key_specific_values(
     tmp_path: Path,
     mutation: str,
@@ -591,6 +593,8 @@ def test_manifest_requires_exact_keys_and_key_specific_values(
         values["AC_UNREVIEWED"] = "value"
     elif mutation == "wrong-repository":
         values["AC_ADMIN_REGISTRY_DIGEST"] = values["AC_API_REGISTRY_DIGEST"]
+    elif mutation == "runtime-mismatch":
+        values["AC_API_IMAGE"] = "sha256:" + "9" * 64
     bundle = tmp_path / f"malformed-{mutation}"
     _write_image_bundle(bundle, values)
     if mutation == "duplicate":

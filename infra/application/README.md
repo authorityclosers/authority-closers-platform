@@ -146,7 +146,10 @@ sudo AC_TARGET_ENVIRONMENT=staging \
 
 The installer verifies the Git archive and image bundle, preserves the bundle
 under `/srv/authority-closers/application/artifacts/<commit>`, and loads only
-exact image IDs. Before the pre-migration PostgreSQL custom-format backup, it
+exact OCI manifest IDs. The workflow separately proves that every transport
+manifest references the reviewed image config and records registry provenance;
+the runtime IDs use the transport manifests imported by the foundation's
+containerd image store. Before the pre-migration PostgreSQL custom-format backup, it
 stops the live API and worker, revokes database `CONNECT` from the runtime and
 migrator roles, terminates any remaining sessions, and proves the writer count
 is zero. Only the migrator regains access for the forward migration; the

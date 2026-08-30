@@ -328,14 +328,17 @@ jobs:
           gzip -9 < "$transport_tar" > "$artifact_dir/application-images.tar.gz"
           {
             printf 'AC_RELEASE_ID=%s\n' "$GITHUB_SHA"
-            printf 'AC_API_IMAGE=%s\n' "$api_id"
+            # The foundation uses Docker's containerd image store, where an
+            # imported OCI image is addressed by its manifest digest. The
+            # config ID remains independently bound by verify_transport_config.
+            printf 'AC_API_IMAGE=%s\n' "$api_transport_digest"
             printf 'AC_API_REGISTRY_DIGEST=%s\n' "$api_digest"
             printf 'AC_API_TRANSPORT_DIGEST=%s\n' "$api_transport_digest"
-            printf 'AC_LEARNER_IMAGE=%s\n' "$learner_id"
+            printf 'AC_LEARNER_IMAGE=%s\n' "$learner_transport_digest"
             printf 'AC_LEARNER_REGISTRY_DIGEST=%s\n' "$learner_digest"
             printf 'AC_LEARNER_TRANSPORT_DIGEST=%s\n' "$learner_transport_digest"
             printf 'AC_MIGRATION_HEAD=%s\n' "$migration_head"
-            printf 'AC_ADMIN_IMAGE=%s\n' "$admin_id"
+            printf 'AC_ADMIN_IMAGE=%s\n' "$admin_transport_digest"
             printf 'AC_ADMIN_REGISTRY_DIGEST=%s\n' "$admin_digest"
             printf 'AC_ADMIN_TRANSPORT_DIGEST=%s\n' "$admin_transport_digest"
           } > "$artifact_dir/release-images.env"

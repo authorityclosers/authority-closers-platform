@@ -147,7 +147,7 @@ unset release_image_values
 [[ "$AC_RELEASE_ID" == "$release_id" ]]
 for image_id in "$AC_API_IMAGE" "$AC_LEARNER_IMAGE" "$AC_ADMIN_IMAGE"; do
   [[ "$image_id" =~ ^sha256:[0-9a-f]{64}$ ]] || {
-    printf 'Application deployment requires exact local image config IDs.\n' >&2
+    printf 'Application deployment requires exact local OCI manifest IDs.\n' >&2
     exit 1
   }
 done
