@@ -13,6 +13,15 @@ PYTHON_DOCKERFILE = (APPLICATION / "Dockerfile.python").read_text(encoding="utf-
 CADDYFILE = (ROOT / "infra" / "vps-foundation" / "compose" / "foundation" / "Caddyfile").read_text(
     encoding="utf-8"
 )
+FOUNDATION_COMPOSE = (
+    ROOT / "infra" / "vps-foundation" / "compose" / "foundation" / "compose.yaml"
+).read_text(encoding="utf-8")
+FOUNDATION_BOOTSTRAP = (
+    ROOT / "infra" / "vps-foundation" / "scripts" / "bootstrap-host.sh"
+).read_text(encoding="utf-8")
+FOUNDATION_VALIDATOR = (
+    ROOT / "infra" / "vps-foundation" / "scripts" / "validate-foundation.sh"
+).read_text(encoding="utf-8")
 INSTALLER = (APPLICATION / "scripts" / "install-application-release.sh").read_text(encoding="utf-8")
 INFISICAL_RUNNER = (ROOT / "infra" / "vps-foundation" / "scripts" / "ac-infisical-run").read_text(
     encoding="utf-8"
@@ -87,6 +96,14 @@ def test_database_and_edge_networks_are_explicitly_separated() -> None:
         assert alias in COMPOSE
 
 
+def test_rate_limit_proxy_boundary_uses_one_deterministic_edge_address() -> None:
+    assert "ipv4_address: 172.18.0.2" in FOUNDATION_COMPOSE
+    assert "--subnet 172.18.0.0/16" in FOUNDATION_BOOTSTRAP
+    assert "--gateway 172.18.0.1" in FOUNDATION_BOOTSTRAP
+    assert "Existing ac_edge network does not use the reviewed" in FOUNDATION_BOOTSTRAP
+    assert "edge router uses exact trusted proxy address" in FOUNDATION_VALIDATOR
+
+
 def test_caddy_routes_only_named_application_hosts() -> None:
     for hostname, upstream in (
         ("app.authorityclosers.com", "ac-production-learner:3000"),
@@ -140,6 +157,8 @@ def test_environment_profiles_isolate_state_hosts_and_edge_aliases() -> None:
     assert "AC_STATE_ROOT=/srv/authority-closers/state/application/production" in production
     assert "AC_API_HOST=api-staging.authorityclosers.com" in staging
     assert "AC_API_HOST=api.authorityclosers.com" in production
+    assert "AC_TRUSTED_PROXY_ADDRESSES=172.18.0.2" in staging
+    assert "AC_TRUSTED_PROXY_ADDRESSES=172.18.0.2" in production
     assert "AC_EDGE_API_ALIAS=ac-staging-api" in staging
     assert "AC_EDGE_API_ALIAS=ac-production-api" in production
     assert ".staging.authorityclosers.com" not in staging

@@ -35,7 +35,9 @@ only valid release ID is the full reviewed Git commit from a verified archive.
   never derives a person, tenant, role, permission, or resource owner from
   caller-controlled proxy or request fields.
 - The in-process anonymous-operation limiter trusts `CF-Connecting-IP` only
-  from the exact versioned `AC_TRUSTED_PROXY_ADDRESSES` peer. It is a bounded,
+  from the exact versioned `AC_TRUSTED_PROXY_ADDRESSES` peer. The foundation
+  pins Caddy to `172.18.0.2` on the reviewed `172.18.0.0/16` bridge and validates
+  both values before activation. It is a bounded,
   fail-closed defense for the single Uvicorn worker shipped here, not a
   distributed limit across multiple API replicas. Keep Cloudflare edge limits
   as the fleet-wide control before adding workers or replicas.
