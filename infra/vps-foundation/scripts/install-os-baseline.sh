@@ -78,7 +78,7 @@ done < "$resolved_packages_policy"
 ((${#resolved_packages[@]} > 100)) || { printf 'Resolved package policy is incomplete.\n' >&2; exit 1; }
 
 for conflicting in docker.io containerd runc; do
-  if dpkg-query -W "$conflicting" >/dev/null 2>&1; then
+  if ac_os_package_is_installed "$conflicting"; then
     printf 'Conflicting distribution package is installed: %s\n' "$conflicting" >&2
     exit 1
   fi

@@ -5,6 +5,17 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=infra/vps-foundation/scripts/lib/os-baseline-transaction.sh
 . "$repo_root/infra/vps-foundation/scripts/lib/os-baseline-transaction.sh"
 
+dpkg_query_status='un '
+dpkg-query() {
+  printf '%s' "$dpkg_query_status"
+}
+
+! ac_os_package_is_installed docker.io
+dpkg_query_status='rc '
+! ac_os_package_is_installed docker.io
+dpkg_query_status='ii '
+ac_os_package_is_installed docker.io
+
 work_dir="$(mktemp -d)"
 trap 'rm -rf -- "$work_dir"' EXIT
 
