@@ -12,7 +12,9 @@ const INTERNAL_HEALTH_PATH = "/healthz";
 const INTERNAL_HEALTH_HOSTS = new Set(["127.0.0.1:3001", "localhost:3001"]);
 
 function isInternalHealthRequest(request: NextRequest) {
-  const requestHost = (request.headers.get("host") ?? request.nextUrl.host).toLowerCase();
+  const requestHost = (
+    request.headers.get("host") ?? request.nextUrl.host
+  ).toLowerCase();
   return (
     request.nextUrl.pathname === INTERNAL_HEALTH_PATH &&
     INTERNAL_HEALTH_HOSTS.has(requestHost)
