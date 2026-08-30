@@ -6,6 +6,7 @@ R2_GUARD_STOP_TIMEOUT_SECONDS=30
 
 if [[ "${AC_IPV4_ONLY:-0}" != '1' ]]; then
   transient_unit="ac-r2-usage-guard-$$"
+  # shellcheck disable=SC2329  # Invoked by the EXIT/INT/TERM trap below.
   cancel_transient_unit() {
     systemctl stop "$transient_unit" >/dev/null 2>&1 || true
   }

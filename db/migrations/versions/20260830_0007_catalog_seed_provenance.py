@@ -32,22 +32,22 @@ def upgrade() -> None:
         ["program_id", "content_digest"],
     )
     op.create_check_constraint(
-        "ck_program_versions_content_digest_sha256",
+        op.f("ck_program_versions_content_digest_sha256"),
         "program_versions",
         "content_digest IS NULL OR length(content_digest) = 64",
     )
     op.create_check_constraint(
-        "ck_program_versions_content_source_ref_nonblank",
+        op.f("ck_program_versions_content_source_ref_nonblank"),
         "program_versions",
         "content_source_ref IS NULL OR length(trim(content_source_ref)) > 0",
     )
     op.create_check_constraint(
-        "ck_program_versions_content_reviewed_by_nonblank",
+        op.f("ck_program_versions_content_reviewed_by_nonblank"),
         "program_versions",
         "content_reviewed_by IS NULL OR length(trim(content_reviewed_by)) > 0",
     )
     op.create_check_constraint(
-        "ck_program_versions_release_id_nonblank",
+        op.f("ck_program_versions_release_id_nonblank"),
         "program_versions",
         "release_id IS NULL OR length(trim(release_id)) > 0",
     )

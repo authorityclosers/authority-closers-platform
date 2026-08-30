@@ -153,6 +153,12 @@ while IFS='=' read -r key value; do
   esac
 done < "$policy_file"
 
+# These bounds are enforced by the PostgreSQL backup writer. This evaluator
+# still requires and validates them so one shared policy cannot drift.
+: "$R2_POSTGRES_LOGICAL_MAX_DUMP_BYTES"
+: "$R2_POSTGRES_LOGICAL_RETENTION_POINTS_PER_ENVIRONMENT"
+: "$R2_POSTGRES_LOGICAL_MAX_ENVIRONMENTS"
+
 for key in \
   R2_MAX_STANDARD_BYTES \
   R2_MAX_CLASS_A_MONTH \

@@ -346,12 +346,12 @@ mutation_started=0
 backup_ready=0
 release_committed=0
 current_switch_armed=0
-database_writers_fenced=0
 current_tmp=''
 evidence_tmp=''
 
 set_database_writer_access() {
   local access_mode="$1"
+  # shellcheck disable=SC2016  # PostgreSQL container variables expand inside `sh -euc`.
   compose_for "$release_dir" exec -T postgres sh -euc '
     export PGPASSWORD="$POSTGRES_PASSWORD"
     [ "$POSTGRES_DB" = ac_platform ] || {
@@ -438,7 +438,6 @@ rollback_release() {
     >/dev/null 2>&1 || rollback_failed=1
   if set_database_writer_access fence; then
     rollback_fenced=1
-    database_writers_fenced=1
   else
     rollback_failed=1
   fi
@@ -456,7 +455,7 @@ rollback_release() {
   fi
   if [[ "$rollback_fenced" == 1 && "$rollback_failed" == 0 ]]; then
     if set_database_writer_access runtime; then
-      database_writers_fenced=0
+      : # The database is reopened only after its restore completed successfully.
     else
       rollback_failed=1
     fi
@@ -503,7 +502,6 @@ fi
 compose_for "$writer_release" stop --timeout 30 api worker
 compose_for "$release_dir" up --detach --wait --wait-timeout 180 postgres
 set_database_writer_access fence
-database_writers_fenced=1
 umask 077
 # shellcheck disable=SC2016  # Backup credentials and database name expand only in the container.
 compose_for "$release_dir" exec -T postgres sh -euc '
@@ -516,7 +514,6 @@ backup_ready=1
 set_database_writer_access migrator
 compose_for "$release_dir" --profile release run --rm migrate
 set_database_writer_access runtime
-database_writers_fenced=0
 compose_for "$release_dir" up --detach --remove-orphans --wait --wait-timeout 180 \
   api worker learner-web admin-web
 

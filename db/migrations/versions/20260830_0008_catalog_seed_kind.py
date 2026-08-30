@@ -16,7 +16,7 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     op.add_column("program_versions", sa.Column("content_seed_kind", sa.String(length=64)))
     op.create_check_constraint(
-        "ck_program_versions_content_seed_kind_nonblank",
+        op.f("ck_program_versions_content_seed_kind_nonblank"),
         "program_versions",
         "content_seed_kind IS NULL OR length(trim(content_seed_kind)) > 0",
     )
