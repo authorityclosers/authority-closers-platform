@@ -262,7 +262,9 @@ def test_exported_snapshot_identity_is_validated_before_command_binding(
 
 def test_publish_retention_happens_after_upload_and_failed_upload_keeps_verified_dump(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(backup, "is_root_owned", lambda _path: True)
     logical_dir = tmp_path / "staging" / "logical"
     logical_dir.mkdir(parents=True)
     old_capture = logical_dir / "20260101T000000.000000Z-100-staging"
@@ -427,7 +429,11 @@ def test_local_ring_refuses_incomplete_backup_pairs(tmp_path: Path) -> None:
         backup.prune_local_ring(logical_dir, 1)
 
 
-def test_local_ring_recovers_atomic_capture_and_prune_directories(tmp_path: Path) -> None:
+def test_local_ring_recovers_atomic_capture_and_prune_directories(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(backup, "is_root_owned", lambda _path: True)
     stale_capture = tmp_path / ".staging-abcd.capture.tmp"
     stale_capture.mkdir()
     (stale_capture / "backup.dump").write_text("partial", encoding="utf-8")
@@ -440,6 +446,22 @@ def test_local_ring_recovers_atomic_capture_and_prune_directories(tmp_path: Path
 
     assert not stale_capture.exists()
     assert not stale_prune.exists()
+
+
+def test_capture_cleanup_refuses_a_non_root_owned_directory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    capture = tmp_path / ".staging-abcd.capture.tmp"
+    capture.mkdir()
+    (capture / "backup.dump").write_text("partial", encoding="utf-8")
+    monkeypatch.setattr(backup, "is_root_owned", lambda _path: False)
+
+    with pytest.raises(backup.BackupError, match="capture directory is unsafe"):
+        backup.remove_capture_directory(capture, temporary=True)
+
+    assert capture.exists()
+    assert (capture / "backup.dump").exists()
 
 
 def test_logical_restic_retention_groups_changing_paths_by_tag() -> None:

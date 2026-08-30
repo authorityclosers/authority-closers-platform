@@ -702,18 +702,21 @@ def prepare_directory(path: Path) -> None:
         ) from exc
 
 
+def is_root_owned(path: Path) -> bool:
+    """Return whether *path* is owned by root without following symlinks."""
+    return getattr(path.lstat(), "st_uid", None) == 0
+
+
 def remove_capture_directory(path: Path, *, temporary: bool) -> None:
-    metadata = path.lstat()
-    if path.is_symlink() or not path.is_dir() or metadata.st_uid != 0:
+    if path.is_symlink() or not path.is_dir() or not is_root_owned(path):
         raise BackupError("A logical-backup capture directory is unsafe.")
     allowed_names = {"backup.dump", "metadata.json"}
     for candidate in path.iterdir():
-        candidate_metadata = candidate.lstat()
         if (
             candidate.name not in allowed_names
             or candidate.is_symlink()
             or not candidate.is_file()
-            or candidate_metadata.st_uid != 0
+            or not is_root_owned(candidate)
         ):
             raise BackupError("A logical-backup capture directory contains an unsafe entry.")
         candidate.unlink()
@@ -903,12 +906,11 @@ def prune_local_ring(logical_dir: Path, keep_points: int) -> None:
         match = CAPTURE_DIR_RE.fullmatch(candidate.name)
         if match is None or match.group(1) != environment:
             raise BackupError("The local logical-backup ring contains an unknown entry.")
-        metadata = candidate.lstat()
-        if candidate.is_symlink() or not candidate.is_dir() or metadata.st_uid != 0:
+        if candidate.is_symlink() or not candidate.is_dir() or not is_root_owned(candidate):
             raise BackupError("The local logical-backup ring contains an incomplete pair.")
         entries = {entry.name: entry for entry in candidate.iterdir()}
         if set(entries) != {"backup.dump", "metadata.json"} or any(
-            entry.is_symlink() or not entry.is_file() or entry.lstat().st_uid != 0
+            entry.is_symlink() or not entry.is_file() or not is_root_owned(entry)
             for entry in entries.values()
         ):
             raise BackupError("The local logical-backup ring contains an incomplete pair.")
