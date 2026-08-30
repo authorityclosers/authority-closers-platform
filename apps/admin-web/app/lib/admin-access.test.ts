@@ -108,6 +108,11 @@ describe("admin route access policy", () => {
     const internal = await proxy(
       new NextRequest("http://127.0.0.1:3001/healthz"),
     );
+    const normalizedRuntimeOrigin = await proxy(
+      new NextRequest("http://localhost:3000/healthz", {
+        headers: { host: "127.0.0.1:3001" },
+      }),
+    );
     const external = await proxy(
       new NextRequest("https://admin.authorityclosers.com/healthz"),
     );
@@ -118,6 +123,7 @@ describe("admin route access policy", () => {
       status: "ok",
       service: "authority-closers-admin",
     });
+    expect(normalizedRuntimeOrigin.status).toBe(200);
     expect(external.status).toBe(403);
   });
 
