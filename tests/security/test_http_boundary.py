@@ -1,6 +1,142 @@
-from httpx import ASGITransport, AsyncClient
+from collections.abc import AsyncIterator
+
+import pytest
+from fastapi import FastAPI, Request
+from fastapi.responses import PlainTextResponse
+from httpx import ASGITransport, AsyncByteStream, AsyncClient
 
 from ac_platform.http.app import app
+from ac_platform.http.request_limits import MAX_REQUEST_BODY_BYTES, RequestBodyLimitMiddleware
+
+
+class ChunkedBody(AsyncByteStream):
+    def __init__(self, *chunks: bytes) -> None:
+        self.chunks = chunks
+
+    async def __aiter__(self) -> AsyncIterator[bytes]:
+        for chunk in self.chunks:
+            yield chunk
+
+
+def _body_limit_app() -> RequestBodyLimitMiddleware:
+    test_app = FastAPI()
+
+    @test_app.api_route(
+        "/v1/activities/{activity_id}/draft",
+        methods=["PUT"],
+    )
+    async def draft(request: Request) -> PlainTextResponse:
+        await request.body()
+        return PlainTextResponse("accepted")
+
+    @test_app.api_route(
+        "/v1/activities/{activity_id}/evidence",
+        methods=["POST"],
+    )
+    async def evidence(request: Request) -> PlainTextResponse:
+        await request.body()
+        return PlainTextResponse("accepted")
+
+    @test_app.api_route("/health/live", methods=["GET", "HEAD", "OPTIONS"])
+    async def health(request: Request) -> PlainTextResponse:
+        await request.body()
+        return PlainTextResponse("accepted")
+
+    @test_app.api_route("/internal/v1/providers/{provider}/webhooks", methods=["POST"])
+    async def webhook(request: Request) -> PlainTextResponse:
+        await request.body()
+        return PlainTextResponse("accepted")
+
+    return RequestBodyLimitMiddleware(test_app)
+
+
+async def test_content_length_is_rejected_before_the_endpoint_reads_the_body() -> None:
+    transport = ASGITransport(app=_body_limit_app())
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.put(
+            "/v1/activities/123/draft",
+            content=b"x" * (64 * 1024 + 1),
+            headers={"x-request-id": "security-test"},
+        )
+
+    assert response.status_code == 413
+    assert response.headers["content-type"] == "application/problem+json"
+    assert response.json() == {
+        "type": "https://authorityclosers.com/problems/request-body-too-large",
+        "title": "Request body too large",
+        "status": 413,
+        "detail": "The request body exceeds the permitted size.",
+        "instance": "/v1/activities/123/draft",
+        "code": "request_body_too_large",
+        "request_id": "security-test",
+    }
+
+
+async def test_streamed_body_is_counted_without_buffering_and_exact_limit_succeeds() -> None:
+    transport = ASGITransport(app=_body_limit_app())
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        accepted = await client.post(
+            "/v1/activities/123/evidence",
+            content=ChunkedBody(b"x" * (128 * 1024), b"x" * (128 * 1024)),
+        )
+        rejected = await client.post(
+            "/v1/activities/123/evidence",
+            content=ChunkedBody(b"x" * (256 * 1024), b"x"),
+        )
+
+    assert accepted.status_code == 200
+    assert rejected.status_code == 413
+    assert rejected.headers["content-type"] == "application/problem+json"
+    assert "x" * 32 not in rejected.text
+
+
+@pytest.mark.parametrize("method", ["GET", "HEAD", "OPTIONS"])
+async def test_global_limit_and_safe_method_body_behavior(method: str) -> None:
+    transport = ASGITransport(app=_body_limit_app())
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        rejected = await client.post(
+            "/health/live",
+            content=b"x" * (MAX_REQUEST_BODY_BYTES + 1),
+        )
+        accepted_get = await client.request(
+            method,
+            "/health/live",
+            content=ChunkedBody(b"x" * (MAX_REQUEST_BODY_BYTES + 1)),
+        )
+
+    assert rejected.status_code == 413
+    assert accepted_get.status_code == 200
+
+
+async def test_shipped_app_413_keeps_request_context_security_headers() -> None:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.put(
+            "/v1/activities/123/draft",
+            content=b"x" * (64 * 1024 + 1),
+            headers={"x-request-id": "boundary-request"},
+        )
+
+    assert response.status_code == 413
+    assert response.headers["x-request-id"] == "boundary-request"
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["referrer-policy"] == "strict-origin-when-cross-origin"
+
+
+async def test_provider_webhook_limit_is_512_kibibytes() -> None:
+    transport = ASGITransport(app=_body_limit_app())
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        accepted = await client.post(
+            "/internal/v1/providers/provider/webhooks",
+            content=ChunkedBody(b"x" * (512 * 1024)),
+        )
+        rejected = await client.post(
+            "/internal/v1/providers/provider/webhooks",
+            content=ChunkedBody(b"x" * (512 * 1024), b"x"),
+        )
+
+    assert accepted.status_code == 200
+    assert rejected.status_code == 413
 
 
 async def test_api_emits_baseline_security_headers() -> None:

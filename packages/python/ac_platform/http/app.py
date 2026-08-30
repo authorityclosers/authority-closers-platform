@@ -22,6 +22,7 @@ from ac_platform.http.learning import install_learning_http
 from ac_platform.http.operations import install_operations_http
 from ac_platform.http.problem import problem_response, register_problem_handlers
 from ac_platform.http.request_context import request_context_middleware
+from ac_platform.http.request_limits import RequestBodyLimitMiddleware
 
 logger = structlog.get_logger()
 settings = get_settings()
@@ -50,7 +51,10 @@ def create_app(*, identity_provider: OAuthIdentityProvider | None = None) -> Fas
     application = FastAPI(
         title="Authority Closers Platform API",
         version=__version__,
-        docs_url="/docs" if settings.environment != "production" else None,
+        docs_url="/docs" if settings.environment not in {"staging", "production"} else None,
+        openapi_url=(
+            "/openapi.json" if settings.environment not in {"staging", "production"} else None
+        ),
         redoc_url=None,
         lifespan=lifespan,
     )
@@ -87,6 +91,7 @@ def create_app(*, identity_provider: OAuthIdentityProvider | None = None) -> Fas
         sessions=session_factory,
         require_actor=require_actor,
     )
+    application.add_middleware(RequestBodyLimitMiddleware)
     application.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts)
     application.add_middleware(
         CORSMiddleware,
