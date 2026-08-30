@@ -935,7 +935,7 @@ def repository_lock(host_root: Path) -> Iterator[int]:
     lock_path = host_path(host_root, LOCK_ROOT) / "ac-restic-repository.lock"
     lock_path.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
     with lock_path.open("a+") as lock_file:
-        lock_file.chmod(0o640)
+        os.fchmod(lock_file.fileno(), 0o640)
         if grp is not None:
             with contextlib.suppress(KeyError, OSError):
                 lock_path.chown(0, grp.getgrnam("acops").gr_gid)
@@ -955,7 +955,7 @@ def environment_lock(environment: str, host_root: Path) -> Iterator[None]:
     lock_path = host_path(host_root, LOCK_ROOT) / f"ac-postgres-backup-{environment}.lock"
     lock_path.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
     with lock_path.open("a+") as lock_file:
-        lock_file.chmod(0o640)
+        os.fchmod(lock_file.fileno(), 0o640)
         if grp is not None:
             with contextlib.suppress(KeyError, OSError):
                 lock_path.chown(0, grp.getgrnam("acops").gr_gid)

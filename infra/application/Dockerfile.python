@@ -44,4 +44,4 @@ COPY --chown=ac:ac db db
 
 USER ac
 EXPOSE 8000
-CMD ["uvicorn", "ac_platform.http.app:app", "--host", "0.0.0.0", "--port", "8000", "--no-proxy-headers"]
+CMD ["uvicorn", "ac_platform.http.app:app", "--host", "0.0.0.0", "--port", "8000", "--no-proxy-headers", "--no-access-log"]

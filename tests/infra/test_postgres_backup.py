@@ -96,6 +96,24 @@ def test_projection_rejects_a_boundary_that_would_exceed_the_envelope() -> None:
         backup.projected_logical_bytes(unsafe)
 
 
+def test_lock_files_are_hardened_through_the_open_descriptor() -> None:
+    source = SCRIPT.read_text(encoding="utf-8")
+
+    assert source.count("os.fchmod(lock_file.fileno(), 0o640)") == 2
+    assert "lock_file.chmod" not in source
+
+
+@pytest.mark.skipif(backup.fcntl is None, reason="POSIX file locks are unavailable")
+def test_lock_contexts_create_exact_mode_files_on_posix(tmp_path: Path) -> None:
+    with backup.environment_lock("staging", tmp_path):
+        environment_path = tmp_path / "run" / "lock" / "ac-postgres-backup-staging.lock"
+        assert environment_path.stat().st_mode & 0o777 == 0o640
+
+    with backup.repository_lock(tmp_path):
+        repository_path = tmp_path / "run" / "lock" / "ac-restic-repository.lock"
+        assert repository_path.stat().st_mode & 0o777 == 0o640
+
+
 def test_dump_command_is_custom_format_ac_backup_and_does_not_contain_a_password(
     tmp_path: Path,
 ) -> None:

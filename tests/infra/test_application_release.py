@@ -57,6 +57,7 @@ def test_runtime_containers_are_not_privileged_or_host_published() -> None:
     assert "read_only: true" in COMPOSE
     assert '"--forwarded-allow-ips", "*"' not in PYTHON_DOCKERFILE
     assert '"--no-proxy-headers"' in PYTHON_DOCKERFILE
+    assert '"--no-access-log"' in PYTHON_DOCKERFILE
     assert "container_name:" not in COMPOSE
     assert "build:" not in COMPOSE
     assert COMPOSE.count("pull_policy: never") == 5

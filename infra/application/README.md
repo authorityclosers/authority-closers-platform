@@ -130,6 +130,26 @@ git archive --format=tar --output="ac-application-${release_sha}.tar" \
 sha256sum "ac-application-${release_sha}.tar"
 ```
 
+For routine staging releases, the trusted Windows controller performs that
+exact flow plus artifact/CI binding, transfer, installation, and the compact
+public security smoke in one idempotent command:
+
+```powershell
+.\scripts\Deploy-Staging.ps1 -ReleaseSha <full-reviewed-commit>
+```
+
+If staging already runs that exact commit, the command downloads and mutates
+nothing; it only re-proves the exact release path and checksums, running image
+identities, all five service states, learner/API route identities, protected
+Admin ingress, disabled public API docs, and the unchanged WordPress apex/`www`.
+The Google OAuth start proof runs only after a real deployment because issuing
+an authorization transaction is intentionally stateful. A new deployment uses
+a private fresh local and remote stage, validates the GitHub artifact ZIP
+against the API's SHA-256 before inspecting its own checksum manifest, creates
+the Git archive fresh from the exact commit, and removes both stages. The
+command never targets production, accepts no secret values, and does not
+release external side effects.
+
 After the archive and downloaded image bundle are transferred to the VPS, run
 the installer from the verified archive. The invocation is permitted only after
 action-time approval naming the target environment, exact commit, backup,
