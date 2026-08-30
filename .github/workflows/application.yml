@@ -168,25 +168,70 @@ jobs:
         run: |
           set -euo pipefail
           artifact_dir="$RUNNER_TEMP/ac-application-${GITHUB_SHA}"
+          transport_tar="$RUNNER_TEMP/ac-application-${GITHUB_SHA}.tar"
+          transport_index="$RUNNER_TEMP/ac-application-${GITHUB_SHA}-index.json"
           mkdir -p "$artifact_dir"
           # One archive deduplicates the shared Node image layers used by the
           # learner and admin runtimes. This keeps the one-day transport
           # artifact inside the GitHub Free storage allowance.
-          docker save "$API_IMAGE" "$LEARNER_IMAGE" "$ADMIN_IMAGE" \
-            | gzip -9 > "$artifact_dir/application-images.tar.gz"
+          docker save --output "$transport_tar" \
+            "$API_IMAGE" "$LEARNER_IMAGE" "$ADMIN_IMAGE"
+          tar --extract --to-stdout --file "$transport_tar" index.json > "$transport_index"
+
+          transport_digest_for() {
+            image="$1"
+            mapfile -t matches < <(
+              jq --raw-output --arg image "$image" \
+                '.manifests[] | select(.annotations["io.containerd.image.name"] == $image) | .digest' \
+                "$transport_index"
+            )
+            if [ "${#matches[@]}" -ne 1 ] || ! [[ "${matches[0]}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              printf 'OCI transport index does not contain exactly one manifest for %s\n' "$image" >&2
+              exit 1
+            fi
+            printf '%s\n' "${matches[0]}"
+          }
+
+          verify_transport_config() {
+            transport_digest="$1"
+            expected_config_digest="$2"
+            manifest_path="blobs/sha256/${transport_digest#sha256:}"
+            actual_transport_digest="sha256:$(
+              tar --extract --to-stdout --file "$transport_tar" "$manifest_path" | sha256sum | cut -d' ' -f1
+            )"
+            [ "$actual_transport_digest" = "$transport_digest" ] || {
+              printf 'OCI transport manifest digest verification failed: %s\n' "$transport_digest" >&2
+              exit 1
+            }
+            transported_config_digest="$(
+              tar --extract --to-stdout --file "$transport_tar" "$manifest_path" | jq --raw-output '.config.digest'
+            )"
+            [ "$transported_config_digest" = "$expected_config_digest" ] || {
+              printf 'OCI transport manifest does not reference the reviewed image config.\n' >&2
+              exit 1
+            }
+          }
+
           api_id="$(docker image inspect --format '{{.Id}}' "$API_IMAGE")"
           learner_id="$(docker image inspect --format '{{.Id}}' "$LEARNER_IMAGE")"
           admin_id="$(docker image inspect --format '{{.Id}}' "$ADMIN_IMAGE")"
           api_digest="$(docker image inspect --format '{{index .RepoDigests 0}}' "$API_IMAGE")"
           learner_digest="$(docker image inspect --format '{{index .RepoDigests 0}}' "$LEARNER_IMAGE")"
           admin_digest="$(docker image inspect --format '{{index .RepoDigests 0}}' "$ADMIN_IMAGE")"
+          api_transport_digest="$(transport_digest_for "$API_IMAGE")"
+          learner_transport_digest="$(transport_digest_for "$LEARNER_IMAGE")"
+          admin_transport_digest="$(transport_digest_for "$ADMIN_IMAGE")"
+          verify_transport_config "$api_transport_digest" "$api_id"
+          verify_transport_config "$learner_transport_digest" "$learner_id"
+          verify_transport_config "$admin_transport_digest" "$admin_id"
+          gzip -9 < "$transport_tar" > "$artifact_dir/application-images.tar.gz"
           {
             printf 'AC_RELEASE_ID=%s\n' "$GITHUB_SHA"
-            printf 'AC_API_IMAGE=%s\n' "$api_id"
+            printf 'AC_API_IMAGE=%s\n' "$api_transport_digest"
             printf 'AC_API_REGISTRY_DIGEST=%s\n' "$api_digest"
-            printf 'AC_LEARNER_IMAGE=%s\n' "$learner_id"
+            printf 'AC_LEARNER_IMAGE=%s\n' "$learner_transport_digest"
             printf 'AC_LEARNER_REGISTRY_DIGEST=%s\n' "$learner_digest"
-            printf 'AC_ADMIN_IMAGE=%s\n' "$admin_id"
+            printf 'AC_ADMIN_IMAGE=%s\n' "$admin_transport_digest"
             printf 'AC_ADMIN_REGISTRY_DIGEST=%s\n' "$admin_digest"
           } > "$artifact_dir/release-images.env"
           (

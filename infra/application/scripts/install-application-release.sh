@@ -111,7 +111,7 @@ set +a
 }
 for image_id in "$AC_API_IMAGE" "$AC_LEARNER_IMAGE" "$AC_ADMIN_IMAGE"; do
   [[ "$image_id" =~ ^sha256:[0-9a-f]{64}$ ]] || {
-    printf 'Application deployment requires exact local image IDs.\n' >&2
+    printf 'Application deployment requires exact OCI transport manifest digests.\n' >&2
     exit 1
   }
 done

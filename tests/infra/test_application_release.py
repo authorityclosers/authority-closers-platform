@@ -152,6 +152,12 @@ def test_release_is_built_off_host_and_installed_with_backup_and_rollback() -> N
     assert WORKFLOW.count("load: true") == 3
     assert "Refusing to overwrite immutable release tag" in WORKFLOW
     assert "release-images.env" in WORKFLOW
+    assert 'tar --extract --to-stdout --file "$transport_tar" index.json' in WORKFLOW
+    assert "transport_digest_for" in WORKFLOW
+    assert "verify_transport_config" in WORKFLOW
+    assert "OCI transport manifest does not reference the reviewed image config" in WORKFLOW
+    assert "AC_API_IMAGE=%s" in WORKFLOW and "api_transport_digest" in WORKFLOW
+    assert "Application deployment requires exact OCI transport manifest digests" in INSTALLER
     assert "max_artifact_bytes=450000000" in WORKFLOW
     assert "refusing upload above" in WORKFLOW
     assert "retention-days: 1" in WORKFLOW

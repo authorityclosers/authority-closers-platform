@@ -63,9 +63,12 @@ only valid release ID is the full reviewed Git commit from a verified archive.
 
 The manual `Application validation` workflow first runs the complete validation
 job on GitHub-hosted infrastructure. It then builds Linux/AMD64 images, publishes
-an immutable full-SHA tag to private GHCR, records both registry manifest digests
-and local image IDs, and uploads checksum-bound transport archives. A rerun is
-allowed only when an existing full-SHA tag resolves to the identical image ID.
+an immutable full-SHA tag to private GHCR, and records both registry provenance
+digests and the OCI transport manifest digests used by the VPS. Before upload,
+each transport manifest is hash-verified and required to reference the exact
+reviewed image config. This avoids storage-driver-dependent local image IDs while
+preserving a cryptographic build-to-transport binding. A rerun is allowed only
+when an existing full-SHA tag resolves to the identical image config.
 The transport artifact expires after one day to keep pooled GitHub Actions
 storage inside the Free-plan allowance; the checksum-identical copy retained on
 the VPS is the rollback transport source. GitHub currently does not bill
