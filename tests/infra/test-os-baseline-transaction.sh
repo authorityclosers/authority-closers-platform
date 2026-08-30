@@ -10,9 +10,15 @@ dpkg-query() {
   printf '%s' "$dpkg_query_status"
 }
 
-! ac_os_package_is_installed docker.io
+if ac_os_package_is_installed docker.io; then
+  printf 'A not-installed dpkg stub was treated as installed.\n' >&2
+  exit 1
+fi
 dpkg_query_status='rc '
-! ac_os_package_is_installed docker.io
+if ac_os_package_is_installed docker.io; then
+  printf 'A removed/config-files dpkg stub was treated as installed.\n' >&2
+  exit 1
+fi
 dpkg_query_status='ii '
 ac_os_package_is_installed docker.io
 
