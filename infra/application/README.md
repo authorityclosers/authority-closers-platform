@@ -135,13 +135,20 @@ exact flow plus artifact/CI binding, transfer, installation, and the compact
 public security smoke in one idempotent command:
 
 ```powershell
-.\scripts\Deploy-Staging.ps1 -ReleaseSha <full-reviewed-commit>
+pwsh -NoProfile -File .\scripts\Deploy-Staging.ps1 -ReleaseSha <full-reviewed-commit>
 ```
+
+The controller requires PowerShell 7.4 or newer so native binary artifact
+downloads remain byte-exact. Its random local stage is immediately reduced to
+the current operating-system identity and the verified ZIP remains exclusively
+open from digest calculation through extraction.
 
 If staging already runs that exact commit, the command downloads and mutates
 nothing; it only re-proves the exact release path and checksums, running image
-identities, all five service states, learner/API route identities, protected
-Admin ingress, disabled public API docs, and the unchanged WordPress apex/`www`.
+identities (including the pinned PostgreSQL image), all five service states,
+learner/API route identities, protected Admin ingress on the reviewed
+`restless-cherry-c46f.cloudflareaccess.com` tenant, disabled public API docs,
+and the unchanged WordPress apex/`www`.
 The Google OAuth start proof runs only after a real deployment because issuing
 an authorization transaction is intentionally stateful. A new deployment uses
 a private fresh local and remote stage, validates the GitHub artifact ZIP

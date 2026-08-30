@@ -1,3 +1,5 @@
+#requires -Version 7.4
+
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
@@ -15,6 +17,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
+$expectedAccessTeamHost = "restless-cherry-c46f.cloudflareaccess.com"
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 if ([string]::IsNullOrWhiteSpace($TransferRoot)) {
@@ -87,7 +90,7 @@ function Assert-AdminAccessBoundary {
     if (
         $result.Location.Scheme -ne "https" -or
         -not $result.Location.IsDefaultPort -or
-        -not $result.Location.Host.EndsWith(".cloudflareaccess.com", [StringComparison]::OrdinalIgnoreCase) -or
+        -not $result.Location.Host.Equals($expectedAccessTeamHost, [StringComparison]::OrdinalIgnoreCase) -or
         $result.Location.AbsolutePath -ne "/cdn-cgi/access/login/admin-staging.authorityclosers.com"
     ) {
         throw "Admin staging returned an unexpected Access destination."
@@ -201,12 +204,14 @@ assert_container() {
 api_image="`$(expected_image AC_API_IMAGE)"
 learner_image="`$(expected_image AC_LEARNER_IMAGE)"
 admin_image="`$(expected_image AC_ADMIN_IMAGE)"
+postgres_ref="`$(sed -n 's/^    image: `${AC_POSTGRES_IMAGE:-\(postgres@sha256:[0-9a-f]\{64\}\)}$/\1/p' "`$release_dir/compose.yaml")"
+test -n "`$postgres_ref"
+postgres_image="`$(sudo docker image inspect --format '{{.Id}}' "`$postgres_ref")"
 assert_container ac-application-staging-api-1 "`$api_image" healthy yes
 assert_container ac-application-staging-worker-1 "`$api_image" running yes
 assert_container ac-application-staging-learner-web-1 "`$learner_image" healthy no
 assert_container ac-application-staging-admin-web-1 "`$admin_image" healthy no
-test "`$(sudo docker inspect --format '{{.State.Status}}' ac-application-staging-postgres-1)" = running
-test "`$(sudo docker inspect --format '{{.State.Health.Status}}' ac-application-staging-postgres-1)" = healthy
+assert_container ac-application-staging-postgres-1 "`$postgres_image" healthy no
 printf 'PASS  Staging release files and running images match exact release %s.\n' "`$release_id"
 "@
     Invoke-SshScript -Script $remoteProof
@@ -224,11 +229,15 @@ printf 'PASS  Staging release files and running images match exact release %s.\n
 
 function Expand-ExactArtifact {
     param(
-        [Parameter(Mandatory = $true)][string]$ZipPath,
+        [Parameter(Mandatory = $true)][System.IO.Stream]$ZipStream,
         [Parameter(Mandatory = $true)][string]$Destination
     )
     $expected = @("SHA256SUMS", "application-images.tar.gz", "release-images.env")
-    $archive = [System.IO.Compression.ZipFile]::OpenRead($ZipPath)
+    $archive = [System.IO.Compression.ZipArchive]::new(
+        $ZipStream,
+        [System.IO.Compression.ZipArchiveMode]::Read,
+        $true
+    )
     try {
         $entries = @($archive.Entries)
         if ($entries.Count -ne $expected.Count) {
@@ -254,6 +263,60 @@ function Expand-ExactArtifact {
         }
     }
     finally { $archive.Dispose() }
+}
+
+function Protect-PrivateStage {
+    param([Parameter(Mandatory = $true)][string]$StagePath)
+    $directory = Get-Item -LiteralPath $StagePath -Force
+    if (-not $directory.PSIsContainer -or ($directory.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+        throw "Local staging path must be a real directory."
+    }
+    if ($IsWindows) {
+        $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+        $security = [System.Security.AccessControl.DirectorySecurity]::new()
+        $security.SetOwner($identity.User)
+        $security.SetAccessRuleProtection($true, $false)
+        $rule = [System.Security.AccessControl.FileSystemAccessRule]::new(
+            $identity.User,
+            [System.Security.AccessControl.FileSystemRights]::FullControl,
+            [System.Security.AccessControl.InheritanceFlags]"ContainerInherit, ObjectInherit",
+            [System.Security.AccessControl.PropagationFlags]::None,
+            [System.Security.AccessControl.AccessControlType]::Allow
+        )
+        $security.SetAccessRule($rule)
+        [System.IO.FileSystemAclExtensions]::SetAccessControl($directory, $security)
+        $verified = [System.IO.FileSystemAclExtensions]::GetAccessControl($directory)
+        $rules = @($verified.GetAccessRules(
+                $true,
+                $true,
+                [System.Security.Principal.SecurityIdentifier]
+            ))
+        if (
+            -not $verified.AreAccessRulesProtected -or
+            $rules.Count -ne 1 -or
+            $rules[0].IdentityReference -ne $identity.User -or
+            $rules[0].AccessControlType -ne [System.Security.AccessControl.AccessControlType]::Allow -or
+            ($rules[0].FileSystemRights -band [System.Security.AccessControl.FileSystemRights]::FullControl) -eq 0
+        ) {
+            throw "Local staging ACL is not private to the current identity."
+        }
+    }
+    else {
+        & chmod 700 -- $StagePath
+        Assert-NativeSuccess "Private local staging permissions"
+        $mode = [System.IO.File]::GetUnixFileMode($StagePath)
+        $forbidden = (
+            [System.IO.UnixFileMode]::GroupRead -bor
+            [System.IO.UnixFileMode]::GroupWrite -bor
+            [System.IO.UnixFileMode]::GroupExecute -bor
+            [System.IO.UnixFileMode]::OtherRead -bor
+            [System.IO.UnixFileMode]::OtherWrite -bor
+            [System.IO.UnixFileMode]::OtherExecute
+        )
+        if (($mode -band $forbidden) -ne 0) {
+            throw "Local staging permissions are not private to the current identity."
+        }
+    }
 }
 
 function Remove-PrivateStage {
@@ -287,7 +350,7 @@ if ($resolvedCommit -ne $ReleaseSha) {
 
 $expectedReleasePath = "/srv/authority-closers/application/releases/$ReleaseSha"
 $currentReleaseCommand = 'readlink -f /srv/authority-closers/application/current-staging 2>/dev/null || true'
-$currentRelease = (& ssh $SshHost $currentReleaseCommand).Trim()
+$currentRelease = ([string](& ssh $SshHost $currentReleaseCommand)).Trim()
 Assert-NativeSuccess "Current staging release lookup"
 if ($currentRelease -eq $expectedReleasePath) {
     Write-Output "SKIP  Staging already targets $ReleaseSha; running read-only proof only."
@@ -322,17 +385,34 @@ if (-not $transferRootItem.PSIsContainer -or ($transferRootItem.Attributes -band
 $stageDirectory = Join-Path $TransferRoot ".stage-$ReleaseSha-$([Guid]::NewGuid().ToString('N'))"
 $remoteDirectory = ""
 New-Item -ItemType Directory -Path $stageDirectory | Out-Null
+Protect-PrivateStage -StagePath $stageDirectory
 try {
     $bundleDirectory = Join-Path $stageDirectory "bundle"
     New-Item -ItemType Directory -Path $bundleDirectory | Out-Null
     $artifactZip = Join-Path $stageDirectory "artifact.zip"
     & gh api "repos/$GitHubRepository/actions/artifacts/$($artifact.id)/zip" > $artifactZip
     Assert-NativeSuccess "Digest-bound GitHub artifact download"
-    $artifactDigest = (Get-FileHash -LiteralPath $artifactZip -Algorithm SHA256).Hash.ToLowerInvariant()
-    if ("sha256:$artifactDigest" -ne $artifact.digest) {
-        throw "Downloaded GitHub artifact does not match its API digest."
+    $artifactStream = [System.IO.File]::Open(
+        $artifactZip,
+        [System.IO.FileMode]::Open,
+        [System.IO.FileAccess]::Read,
+        [System.IO.FileShare]::None
+    )
+    try {
+        $hasher = [System.Security.Cryptography.SHA256]::Create()
+        try {
+            $artifactDigest = [System.Convert]::ToHexString(
+                $hasher.ComputeHash($artifactStream)
+            ).ToLowerInvariant()
+        }
+        finally { $hasher.Dispose() }
+        if ("sha256:$artifactDigest" -ne $artifact.digest) {
+            throw "Downloaded GitHub artifact does not match its API digest."
+        }
+        $artifactStream.Position = 0
+        Expand-ExactArtifact -ZipStream $artifactStream -Destination $bundleDirectory
     }
-    Expand-ExactArtifact -ZipPath $artifactZip -Destination $bundleDirectory
+    finally { $artifactStream.Dispose() }
 
     $checksumFile = Join-Path $bundleDirectory "SHA256SUMS"
     $expectedBundleFiles = @("application-images.tar.gz", "release-images.env")

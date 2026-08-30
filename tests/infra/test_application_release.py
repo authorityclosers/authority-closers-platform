@@ -63,6 +63,14 @@ def test_runtime_containers_are_not_privileged_or_host_published() -> None:
     assert COMPOSE.count("pull_policy: never") == 5
 
 
+def test_edge_and_application_logs_redact_oauth_credentials() -> None:
+    assert '"--no-access-log"' in PYTHON_DOCKERFILE
+    assert "request>uri query" in CADDYFILE
+    for field in ("code", "state", "access_token", "refresh_token", "id_token", "client_secret"):
+        assert f"replace {field} REDACTED" in CADDYFILE
+    assert "wrap json" in CADDYFILE
+
+
 def test_release_fails_closed_on_identity_and_database_secrets() -> None:
     required_markers = (
         "AC_RELEASE_ID:?",

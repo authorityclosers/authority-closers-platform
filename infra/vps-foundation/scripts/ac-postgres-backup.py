@@ -12,6 +12,7 @@ import os
 import queue
 import re
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
@@ -36,6 +37,7 @@ APPLICATION_ROOT = Path("/srv/authority-closers/application")
 FOUNDATION_CURRENT = Path("/srv/authority-closers/current")
 BACKUP_ROOT = Path("/srv/authority-closers/backups/application")
 LOCK_ROOT = Path("/run/lock")
+PRIVATE_LOCK_ROOT = LOCK_ROOT / "authority-closers"
 INFISICAL_RUN = "/usr/local/sbin/ac-infisical-run"
 R2_USAGE_GUARD = "/usr/local/sbin/ac-r2-usage-guard"
 RESTIC_LOGICAL_BACKUP = "/usr/local/sbin/ac-infisical-run-backup"
@@ -929,38 +931,93 @@ def prune_local_ring(logical_dir: Path, keep_points: int) -> None:
 
 
 @contextlib.contextmanager
-def repository_lock(host_root: Path) -> Iterator[int]:
+def secure_lock_file(host_root: Path, filename: str) -> Iterator[int]:
     if fcntl is None:
         raise BackupError("The Linux file-lock implementation is unavailable.")
-    lock_path = host_path(host_root, LOCK_ROOT) / "ac-restic-repository.lock"
-    lock_path.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
-    with lock_path.open("a+") as lock_file:
-        os.fchmod(lock_file.fileno(), 0o640)
-        if grp is not None:
-            with contextlib.suppress(KeyError, OSError):
-                lock_path.chown(0, grp.getgrnam("acops").gr_gid)
+    no_follow = getattr(os, "O_NOFOLLOW", None)
+    directory_flag = getattr(os, "O_DIRECTORY", None)
+    if no_follow is None or directory_flag is None:
+        raise BackupError("The Linux no-follow lock boundary is unavailable.")
+    lock_parent = host_path(host_root, LOCK_ROOT)
+    lock_parent.mkdir(mode=0o755, parents=True, exist_ok=True)
+    if host_root == Path("/"):
+        parent_stat = os.stat(lock_parent, follow_symlinks=False)
+        if (
+            not stat.S_ISDIR(parent_stat.st_mode)
+            or parent_stat.st_uid != 0
+            or not parent_stat.st_mode & stat.S_ISVTX
+        ):
+            raise BackupError("The system lock parent is not a root-owned sticky directory.")
+    lock_directory = host_path(host_root, PRIVATE_LOCK_ROOT)
+    with contextlib.suppress(FileExistsError):
+        lock_directory.mkdir(mode=0o750)
+    try:
+        directory_fd = os.open(
+            lock_directory,
+            os.O_RDONLY | os.O_CLOEXEC | directory_flag | no_follow,
+        )
+    except OSError as exc:
+        raise BackupError("The private lock directory could not be opened safely.") from exc
+    expected_uid = 0 if host_root == Path("/") else os.geteuid()
+    expected_gid = os.getegid()
+    if host_root == Path("/"):
+        if grp is None:
+            os.close(directory_fd)
+            raise BackupError("The system group database is unavailable.")
         try:
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            expected_gid = grp.getgrnam("acops").gr_gid
+        except KeyError as exc:
+            os.close(directory_fd)
+            raise BackupError("The acops group is unavailable.") from exc
+    lock_fd: int | None = None
+    try:
+        try:
+            directory_stat = os.fstat(directory_fd)
+            if not stat.S_ISDIR(directory_stat.st_mode) or directory_stat.st_uid != expected_uid:
+                raise BackupError("The private lock directory has an unsafe identity.")
+            os.fchmod(directory_fd, 0o750)
+            os.fchown(directory_fd, expected_uid, expected_gid)
+            lock_fd = os.open(
+                filename,
+                os.O_RDWR | os.O_CREAT | os.O_CLOEXEC | no_follow,
+                0o640,
+                dir_fd=directory_fd,
+            )
+            lock_stat = os.fstat(lock_fd)
+            if (
+                not stat.S_ISREG(lock_stat.st_mode)
+                or lock_stat.st_uid != expected_uid
+                or lock_stat.st_nlink != 1
+            ):
+                raise BackupError("The lock file has an unsafe identity.")
+            os.fchmod(lock_fd, 0o640)
+            os.fchown(lock_fd, expected_uid, expected_gid)
+        except OSError as exc:
+            raise BackupError("The private lock boundary could not be opened safely.") from exc
+        yield lock_fd
+    finally:
+        if lock_fd is not None:
+            os.close(lock_fd)
+        os.close(directory_fd)
+
+
+@contextlib.contextmanager
+def repository_lock(host_root: Path) -> Iterator[int]:
+    with secure_lock_file(host_root, "ac-restic-repository.lock") as lock_fd:
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError as exc:
             raise BackupError(
                 "Another Restic backup, prune, or logical dump is already active."
             ) from exc
-        yield lock_file.fileno()
+        yield lock_fd
 
 
 @contextlib.contextmanager
 def environment_lock(environment: str, host_root: Path) -> Iterator[None]:
-    if fcntl is None:
-        raise BackupError("The Linux file-lock implementation is unavailable.")
-    lock_path = host_path(host_root, LOCK_ROOT) / f"ac-postgres-backup-{environment}.lock"
-    lock_path.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
-    with lock_path.open("a+") as lock_file:
-        os.fchmod(lock_file.fileno(), 0o640)
-        if grp is not None:
-            with contextlib.suppress(KeyError, OSError):
-                lock_path.chown(0, grp.getgrnam("acops").gr_gid)
+    with secure_lock_file(host_root, f"ac-postgres-backup-{environment}.lock") as lock_fd:
         try:
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError as exc:
             raise BackupError(f"Another {environment} logical backup is already active.") from exc
         yield

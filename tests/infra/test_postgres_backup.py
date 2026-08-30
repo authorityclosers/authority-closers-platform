@@ -99,19 +99,40 @@ def test_projection_rejects_a_boundary_that_would_exceed_the_envelope() -> None:
 def test_lock_files_are_hardened_through_the_open_descriptor() -> None:
     source = SCRIPT.read_text(encoding="utf-8")
 
-    assert source.count("os.fchmod(lock_file.fileno(), 0o640)") == 2
+    assert "os.O_RDWR | os.O_CREAT | os.O_CLOEXEC | no_follow" in source
+    assert "dir_fd=directory_fd" in source
+    assert "os.fchmod(lock_fd, 0o640)" in source
+    assert "os.fchown(lock_fd, expected_uid, expected_gid)" in source
     assert "lock_file.chmod" not in source
+    assert "lock_path.chown(" not in source
 
 
 @pytest.mark.skipif(backup.fcntl is None, reason="POSIX file locks are unavailable")
 def test_lock_contexts_create_exact_mode_files_on_posix(tmp_path: Path) -> None:
     with backup.environment_lock("staging", tmp_path):
-        environment_path = tmp_path / "run" / "lock" / "ac-postgres-backup-staging.lock"
+        lock_root = tmp_path / "run" / "lock" / "authority-closers"
+        environment_path = lock_root / "ac-postgres-backup-staging.lock"
+        assert lock_root.stat().st_mode & 0o777 == 0o750
         assert environment_path.stat().st_mode & 0o777 == 0o640
 
     with backup.repository_lock(tmp_path):
-        repository_path = tmp_path / "run" / "lock" / "ac-restic-repository.lock"
+        repository_path = lock_root / "ac-restic-repository.lock"
         assert repository_path.stat().st_mode & 0o777 == 0o640
+
+
+@pytest.mark.skipif(backup.fcntl is None, reason="POSIX file locks are unavailable")
+def test_lock_context_rejects_a_precreated_private_directory_symlink(tmp_path: Path) -> None:
+    lock_parent = tmp_path / "run" / "lock"
+    attacker_directory = tmp_path / "attacker"
+    lock_parent.mkdir(parents=True)
+    attacker_directory.mkdir()
+    try:
+        (lock_parent / "authority-closers").symlink_to(attacker_directory, target_is_directory=True)
+    except OSError as exc:
+        pytest.skip(f"fixture symlinks are unavailable: {exc}")
+
+    with pytest.raises(backup.BackupError), backup.environment_lock("staging", tmp_path):
+        pass
 
 
 def test_dump_command_is_custom_format_ac_backup_and_does_not_contain_a_password(

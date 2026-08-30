@@ -7,6 +7,7 @@ CONTROLLER = (ROOT / "scripts" / "Deploy-Staging.ps1").read_text(encoding="utf-8
 
 
 def test_staging_controller_is_exact_sha_and_idempotent() -> None:
+    assert CONTROLLER.startswith("#requires -Version 7.4")
     assert 'ValidatePattern("^[0-9a-f]{40}$")' in CONTROLLER
     assert "if ($currentRelease -eq $expectedReleasePath)" in CONTROLLER
     assert "running read-only proof only" in CONTROLLER
@@ -53,7 +54,7 @@ def test_staging_controller_has_compact_security_smoke() -> None:
     assert 'test "`$(readlink -f "`$current")" = "`$release_dir"' in CONTROLLER
     assert "RELEASE-FILES.sha256" in CONTROLLER
     assert "{{.Image}}" in CONTROLLER
-    assert ".cloudflareaccess.com" in CONTROLLER
+    assert "restless-cherry-c46f.cloudflareaccess.com" in CONTROLLER
     assert "/cdn-cgi/access/login/admin-staging.authorityclosers.com" in CONTROLLER
     assert "wp-content|wp-includes" in CONTROLLER
     assert "162.210.70.199" in CONTROLLER
@@ -72,6 +73,12 @@ def test_staging_controller_uses_private_bounded_stages_and_read_only_noop() -> 
     assert "Remove-PrivateStage -StagePath $stageDirectory" in CONTROLLER
     assert "Refusing cleanup outside the release-transfer root" in CONTROLLER
     assert "Refusing cleanup of a reparse-point staging directory" in CONTROLLER
+    assert "Protect-PrivateStage -StagePath $stageDirectory" in CONTROLLER
+    assert "SetAccessRuleProtection($true, $false)" in CONTROLLER
+    assert "FileShare]::None" in CONTROLLER
+    assert "Expand-ExactArtifact -ZipStream $artifactStream" in CONTROLLER
+    assert "assert_container ac-application-staging-postgres-1" in CONTROLLER
+    assert "([string](& ssh $SshHost $currentReleaseCommand)).Trim()" in CONTROLLER
     noop = CONTROLLER.split("if ($currentRelease -eq $expectedReleasePath)", maxsplit=1)[1].split(
         "$artifactName", maxsplit=1
     )[0]
