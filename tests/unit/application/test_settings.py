@@ -67,11 +67,14 @@ def test_production_accepts_independent_non_default_identity_material() -> None:
     )
 
 
-def test_production_runtime_does_not_require_migration_credential() -> None:
+def test_production_runtime_does_not_require_migration_credential(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("AC_DATABASE_MIGRATOR_URL", raising=False)
     values = _production_values()
     del values["database_migrator_url"]
 
-    settings = Settings(environment="production", **values)  # type: ignore[arg-type]
+    settings = Settings(environment="production", _env_file=None, **values)  # type: ignore[arg-type]
 
     assert settings.database_migrator_url is None
 

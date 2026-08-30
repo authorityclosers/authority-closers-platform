@@ -10,7 +10,7 @@ import subprocess
 import sys
 from collections.abc import AsyncIterator, Coroutine, Iterator
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
 from uuid import UUID, uuid4
@@ -30,6 +30,7 @@ from ac_platform.http.operations import install_operations_http
 from ac_platform.http.problem import register_problem_handlers
 from ac_platform.identity.application import ResolvedActorContext
 from ac_platform.identity.models import Person
+from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.outbox.models import (
     Job,
@@ -54,6 +55,7 @@ class _Harness:
 class _Seed:
     tenant_id: UUID
     person_id: UUID
+    session_id: UUID
     job_id: UUID
     outbox_event_id: UUID
 
@@ -149,6 +151,7 @@ def postgres_harness() -> Iterator[_Harness]:
 def _seed(engine: Engine) -> _Seed:
     tenant_id = uuid4()
     person_id = uuid4()
+    session_id = uuid4()
     job_id = uuid4()
     outbox_event_id = uuid4()
     aggregate_id = uuid4()
@@ -165,6 +168,17 @@ def _seed(engine: Engine) -> _Seed:
         )
         database.flush()
         database.add(Membership(tenant_id=tenant_id, person_id=person_id, role="admin"))
+        database.flush()
+        database.add(
+            IdentitySession(
+                id=session_id,
+                person_id=person_id,
+                token_hash=uuid4().bytes + uuid4().bytes,
+                created_at=NOW,
+                expires_at=NOW + timedelta(days=1),
+                selected_tenant_id=tenant_id,
+            )
+        )
         database.flush()
         database.add(
             Job(
@@ -203,7 +217,7 @@ def _seed(engine: Engine) -> _Seed:
             )
         )
         database.commit()
-    return _Seed(tenant_id, person_id, job_id, outbox_event_id)
+    return _Seed(tenant_id, person_id, session_id, job_id, outbox_event_id)
 
 
 def _settings() -> Settings:
@@ -285,7 +299,7 @@ def test_operations_http_postgresql_authorization_replay_and_webhook_journey(
             )
             authorized_actor = ActorContext(
                 person_id=seed.person_id,
-                session_id=uuid4(),
+                session_id=seed.session_id,
                 tenant_id=seed.tenant_id,
                 permissions=frozenset({"job_retry", "recovery_reconcile"}),
             )

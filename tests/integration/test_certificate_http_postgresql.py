@@ -278,22 +278,25 @@ def _seed(engine: Engine) -> _Seed:
                     status="published",
                     published_at=NOW,
                 ),
-                Enrollment(
-                    id=enrollment_id,
-                    tenant_id=tenant_id,
-                    person_id=learner_id,
-                    program_version_id=program_version_id,
-                    program_id=program_id,
-                    program_scope=CatalogScope.TENANT.value,
-                    program_tenant_id=tenant_id,
-                    program_owner_key=tenant_id,
-                    source="free_self",
-                    status="active",
-                    enrolled_at=NOW,
-                    created_at=NOW,
-                    updated_at=NOW,
-                ),
             ]
+        )
+        database.flush()
+        database.add(
+            Enrollment(
+                id=enrollment_id,
+                tenant_id=tenant_id,
+                person_id=learner_id,
+                program_version_id=program_version_id,
+                program_id=program_id,
+                program_scope=CatalogScope.TENANT.value,
+                program_tenant_id=tenant_id,
+                program_owner_key=tenant_id,
+                source="free_self",
+                status="active",
+                enrolled_at=NOW,
+                created_at=NOW,
+                updated_at=NOW,
+            )
         )
         database.flush()
         database.add(

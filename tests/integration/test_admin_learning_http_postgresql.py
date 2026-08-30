@@ -171,15 +171,18 @@ def _seed(engine: Engine) -> _Seed:
             [
                 Membership(tenant_id=tenant_id, person_id=admin_id, role="admin"),
                 Membership(tenant_id=tenant_id, person_id=learner_id, role="learner"),
-                IdentitySession(
-                    id=admin_session_id,
-                    person_id=admin_id,
-                    token_hash=uuid4().bytes + uuid4().bytes,
-                    created_at=NOW,
-                    expires_at=NOW + timedelta(days=1),
-                    selected_tenant_id=tenant_id,
-                ),
             ]
+        )
+        database.flush()
+        database.add(
+            IdentitySession(
+                id=admin_session_id,
+                person_id=admin_id,
+                token_hash=uuid4().bytes + uuid4().bytes,
+                created_at=NOW,
+                expires_at=NOW + timedelta(days=1),
+                selected_tenant_id=tenant_id,
+            )
         )
         database.flush()
         database.add(
