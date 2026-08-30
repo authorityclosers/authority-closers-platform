@@ -697,7 +697,7 @@ def prepare_directory(path: Path) -> None:
     if grp is None:
         raise BackupError("The Linux ownership implementation is unavailable.")
     try:
-        path.chown(0, grp.getgrnam("acops").gr_gid)
+        os.chown(path, 0, grp.getgrnam("acops").gr_gid, follow_symlinks=False)
     except (KeyError, OSError) as exc:
         raise BackupError(
             "The logical backup directory must be root-owned and acops-readable."
@@ -766,7 +766,7 @@ def capture_dump(
         temporary_dir.rmdir()
         raise BackupError("The Linux ownership implementation is unavailable.")
     try:
-        temporary_dir.chown(0, grp.getgrnam("acops").gr_gid)
+        os.chown(temporary_dir, 0, grp.getgrnam("acops").gr_gid, follow_symlinks=False)
     except (KeyError, OSError) as exc:
         temporary_dir.rmdir()
         raise BackupError("The logical capture must be root-owned and acops-readable.") from exc
@@ -858,9 +858,9 @@ def capture_dump(
         if grp is None:
             raise BackupError("The Linux ownership implementation is unavailable.")
         try:
-            metadata_path_tmp.chown(0, grp.getgrnam("acops").gr_gid)
+            os.chown(metadata_path_tmp, 0, grp.getgrnam("acops").gr_gid, follow_symlinks=False)
             temporary_path.chmod(0o640)
-            temporary_path.chown(0, grp.getgrnam("acops").gr_gid)
+            os.chown(temporary_path, 0, grp.getgrnam("acops").gr_gid, follow_symlinks=False)
         except (KeyError, OSError) as exc:
             raise BackupError(
                 "Logical capture files must be root-owned and acops-readable."

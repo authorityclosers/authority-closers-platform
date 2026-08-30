@@ -40,8 +40,33 @@ function Assert-NativeSuccess {
 
 function Invoke-SshScript {
     param([Parameter(Mandatory = $true)][string]$Script)
-    ($Script -replace "`r", "") | & ssh $SshHost bash -s
-    Assert-NativeSuccess "Remote command"
+    $normalized = $Script -replace "`r", ""
+    if (-not $normalized.EndsWith("`n", [StringComparison]::Ordinal)) {
+        $normalized += "`n"
+    }
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = (Get-Command ssh -ErrorAction Stop).Source
+    $startInfo.ArgumentList.Add($SshHost)
+    $startInfo.ArgumentList.Add("bash")
+    $startInfo.ArgumentList.Add("-s")
+    $startInfo.UseShellExecute = $false
+    $startInfo.RedirectStandardInput = $true
+    $startInfo.CreateNoWindow = $true
+    $process = [System.Diagnostics.Process]::new()
+    $process.StartInfo = $startInfo
+    try {
+        if (-not $process.Start()) {
+            throw "Remote command could not start."
+        }
+        $process.StandardInput.NewLine = "`n"
+        $process.StandardInput.Write($normalized)
+        $process.StandardInput.Close()
+        $process.WaitForExit()
+        if ($process.ExitCode -ne 0) {
+            throw "Remote command failed with exit code $($process.ExitCode)."
+        }
+    }
+    finally { $process.Dispose() }
 }
 
 function Get-HttpResult {

@@ -105,6 +105,15 @@ def test_lock_files_are_hardened_through_the_open_descriptor() -> None:
     assert "os.fchown(lock_fd, expected_uid, expected_gid)" in source
     assert "lock_file.chmod" not in source
     assert "lock_path.chown(" not in source
+    for path_call in (
+        "path.chown(",
+        "temporary_dir.chown(",
+        "metadata_path_tmp.chown(",
+        "temporary_path.chown(",
+    ):
+        assert path_call not in source
+    assert source.count("os.chown(") == 4
+    assert source.count("follow_symlinks=False") >= 5
 
 
 def test_every_restic_entrypoint_uses_the_same_private_repository_lock() -> None:
