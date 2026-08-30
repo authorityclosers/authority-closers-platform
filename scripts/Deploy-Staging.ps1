@@ -10,23 +10,26 @@ param(
     [string]$SshHost = "ac",
 
     [ValidatePattern("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")]
-    [string]$GitHubRepository = "authorityclosers/authority-closers-platform",
-
-    [string]$TransferRoot
+    [string]$GitHubRepository = "authorityclosers/authority-closers-platform"
 )
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 $expectedAccessTeamHost = "restless-cherry-c46f.cloudflareaccess.com"
+if (-not $IsWindows) {
+    throw "The staging controller requires the trusted Windows operator host."
+}
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
-if ([string]::IsNullOrWhiteSpace($TransferRoot)) {
-    $TransferRoot = Join-Path (Split-Path -Parent $repositoryRoot) "authority-closers-release-transfer"
+$localApplicationData = [System.Environment]::GetFolderPath(
+    [System.Environment+SpecialFolder]::LocalApplicationData
+)
+if ([string]::IsNullOrWhiteSpace($localApplicationData)) {
+    throw "The current Windows identity has no LocalApplicationData boundary."
 }
+$trustedTransferParent = Join-Path $localApplicationData "AuthorityClosers"
+$TransferRoot = Join-Path $trustedTransferParent "authority-closers-release-transfer"
 $TransferRoot = [System.IO.Path]::GetFullPath($TransferRoot)
-if ([System.IO.Path]::GetFileName($TransferRoot) -ne "authority-closers-release-transfer") {
-    throw "TransferRoot must be a dedicated authority-closers-release-transfer directory."
-}
 
 function Assert-NativeSuccess {
     param([Parameter(Mandatory = $true)][string]$Operation)
@@ -380,6 +383,15 @@ if ($run.status -ne "completed" -or $run.conclusion -ne "success" -or $run.headS
     throw "The exact-SHA packaging run is not successful."
 }
 
+$localApplicationDataItem = Get-Item -LiteralPath $localApplicationData -Force
+if (
+    -not $localApplicationDataItem.PSIsContainer -or
+    ($localApplicationDataItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint)
+) {
+    throw "LocalApplicationData must be a real trusted directory."
+}
+New-Item -ItemType Directory -Force -Path $trustedTransferParent | Out-Null
+Protect-PrivateStage -StagePath $trustedTransferParent
 New-Item -ItemType Directory -Force -Path $TransferRoot | Out-Null
 $transferRootItem = Get-Item -LiteralPath $TransferRoot -Force
 if (-not $transferRootItem.PSIsContainer -or ($transferRootItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
