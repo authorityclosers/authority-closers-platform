@@ -24,6 +24,9 @@ if ([string]::IsNullOrWhiteSpace($TransferRoot)) {
     $TransferRoot = Join-Path (Split-Path -Parent $repositoryRoot) "authority-closers-release-transfer"
 }
 $TransferRoot = [System.IO.Path]::GetFullPath($TransferRoot)
+if ([System.IO.Path]::GetFileName($TransferRoot) -ne "authority-closers-release-transfer") {
+    throw "TransferRoot must be a dedicated authority-closers-release-transfer directory."
+}
 
 function Assert-NativeSuccess {
     param([Parameter(Mandatory = $true)][string]$Operation)
@@ -382,6 +385,7 @@ $transferRootItem = Get-Item -LiteralPath $TransferRoot -Force
 if (-not $transferRootItem.PSIsContainer -or ($transferRootItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
     throw "TransferRoot must be a real local directory, not a reparse point."
 }
+Protect-PrivateStage -StagePath $TransferRoot
 $stageDirectory = Join-Path $TransferRoot ".stage-$ReleaseSha-$([Guid]::NewGuid().ToString('N'))"
 $remoteDirectory = ""
 New-Item -ItemType Directory -Path $stageDirectory | Out-Null

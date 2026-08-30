@@ -107,6 +107,44 @@ def test_lock_files_are_hardened_through_the_open_descriptor() -> None:
     assert "lock_path.chown(" not in source
 
 
+def test_every_restic_entrypoint_uses_the_same_private_repository_lock() -> None:
+    scripts = (
+        "ac-restic-backup-inner",
+        "ac-restic-init-inner",
+        "ac-restic-restore-check-inner",
+        "ac-restic-postgres-backup-inner",
+    )
+    for name in scripts:
+        source = (FOUNDATION / "scripts" / name).read_text(encoding="utf-8")
+        assert "restic_lock_dir='/run/lock/authority-closers'" in source
+        assert 'restic_lock_file="$restic_lock_dir/ac-restic-repository.lock"' in source
+        assert ">>/run/lock/ac-restic-repository.lock" not in source
+        assert "stat --dereference --format='%u:%g:%a:%h' -- /proc/self/fd/9" in source
+        assert "0:$acops_gid:640:1" in source
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Bash syntax proof runs on POSIX CI")
+@pytest.mark.parametrize(
+    "name",
+    (
+        "ac-restic-backup-inner",
+        "ac-restic-init-inner",
+        "ac-restic-restore-check-inner",
+        "ac-restic-postgres-backup-inner",
+    ),
+)
+def test_restic_entrypoint_has_valid_bash_syntax(name: str) -> None:
+    bash = Path("/usr/bin/bash")
+    assert bash.is_file()
+    result = subprocess.run(  # noqa: S603 - fixed interpreter and parameterized trusted fixture
+        [str(bash), "-n", str(FOUNDATION / "scripts" / name)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+
+
 @pytest.mark.skipif(backup.fcntl is None, reason="POSIX file locks are unavailable")
 def test_lock_contexts_create_exact_mode_files_on_posix(tmp_path: Path) -> None:
     with backup.environment_lock("staging", tmp_path):

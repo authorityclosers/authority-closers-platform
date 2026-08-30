@@ -74,6 +74,8 @@ def test_staging_controller_uses_private_bounded_stages_and_read_only_noop() -> 
     assert "Refusing cleanup outside the release-transfer root" in CONTROLLER
     assert "Refusing cleanup of a reparse-point staging directory" in CONTROLLER
     assert "Protect-PrivateStage -StagePath $stageDirectory" in CONTROLLER
+    assert "Protect-PrivateStage -StagePath $TransferRoot" in CONTROLLER
+    assert "authority-closers-release-transfer directory" in CONTROLLER
     assert "SetAccessRuleProtection($true, $false)" in CONTROLLER
     assert "FileShare]::None" in CONTROLLER
     assert "Expand-ExactArtifact -ZipStream $artifactStream" in CONTROLLER
