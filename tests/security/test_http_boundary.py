@@ -4,6 +4,7 @@ import pytest
 from fastapi import FastAPI, Request
 from fastapi.responses import PlainTextResponse
 from httpx import ASGITransport, AsyncByteStream, AsyncClient
+from starlette.types import Message, Receive, Scope, Send
 
 from ac_platform.http.app import app
 from ac_platform.http.request_limits import MAX_REQUEST_BODY_BYTES, RequestBodyLimitMiddleware
@@ -104,6 +105,50 @@ async def test_streamed_limit_is_enforced_before_a_bodyless_endpoint_runs() -> N
 
     assert response.status_code == 413
     assert response.headers["content-type"] == "application/problem+json"
+
+
+async def test_fragment_flood_is_coalesced_and_replay_delegates_disconnect() -> None:
+    fragment_count = 100_000
+    origin_receive_calls = 0
+    downstream_messages: list[Message] = []
+
+    async def origin_receive() -> Message:
+        nonlocal origin_receive_calls
+        origin_receive_calls += 1
+        if origin_receive_calls <= fragment_count:
+            return {"type": "http.request", "body": b"x", "more_body": True}
+        if origin_receive_calls == fragment_count + 1:
+            return {"type": "http.request", "body": b"", "more_body": False}
+        return {"type": "http.disconnect"}
+
+    async def downstream(_scope: Scope, receive: Receive, _send: Send) -> None:
+        downstream_messages.append(await receive())
+        downstream_messages.append(await receive())
+
+    async def unused_send(_message: Message) -> None:
+        raise AssertionError("The downstream test app must not send a response")
+
+    middleware = RequestBodyLimitMiddleware(downstream)
+    await middleware(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/fragmented",
+            "headers": [],
+        },
+        origin_receive,
+        unused_send,
+    )
+
+    assert origin_receive_calls == fragment_count + 2
+    assert downstream_messages == [
+        {
+            "type": "http.request",
+            "body": b"x" * fragment_count,
+            "more_body": False,
+        },
+        {"type": "http.disconnect"},
+    ]
 
 
 @pytest.mark.parametrize("method", ["GET", "HEAD", "OPTIONS"])

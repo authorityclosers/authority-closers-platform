@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import re
-from collections import deque
 from collections.abc import Awaitable, Callable, Iterable, MutableMapping
 from typing import Any
 
@@ -101,27 +100,43 @@ class RequestBodyLimitMiddleware:
             await _send_too_large(scope, send)
             return
 
-        buffered: deque[Message] = deque()
+        body_buffer = bytearray()
+        disconnected = False
         received = 0
         while True:
             message = await receive()
             if message.get("type") == "http.request":
-                received += len(message.get("body", b""))
+                chunk = message.get("body", b"")
+                received += len(chunk)
                 if received > limit:
                     await _send_too_large(scope, send)
                     return
-                buffered.append(message)
+                body_buffer.extend(chunk)
                 if not message.get("more_body", False):
                     break
             elif message.get("type") == "http.disconnect":
-                buffered.append(message)
+                disconnected = True
                 break
             else:
-                buffered.append(message)
+                raise RuntimeError(f"Unexpected ASGI request message: {message.get('type')!r}")
+
+        body = bytes(body_buffer)
+        del body_buffer
+        replayed_body = False
+        replayed_disconnect = False
 
         async def replay_receive() -> Message:
-            if buffered:
-                return buffered.popleft()
-            return {"type": "http.request", "body": b"", "more_body": False}
+            nonlocal replayed_body, replayed_disconnect
+            if not replayed_body and (body or not disconnected):
+                replayed_body = True
+                return {
+                    "type": "http.request",
+                    "body": body,
+                    "more_body": disconnected,
+                }
+            if disconnected and not replayed_disconnect:
+                replayed_disconnect = True
+                return {"type": "http.disconnect"}
+            return await receive()
 
         await self.app(scope, replay_receive, send)
