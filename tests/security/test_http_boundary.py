@@ -47,6 +47,10 @@ def _body_limit_app() -> RequestBodyLimitMiddleware:
         await request.body()
         return PlainTextResponse("accepted")
 
+    @test_app.post("/ignored-body")
+    async def ignored_body() -> PlainTextResponse:
+        return PlainTextResponse("accepted")
+
     return RequestBodyLimitMiddleware(test_app)
 
 
@@ -88,6 +92,18 @@ async def test_streamed_body_is_counted_without_buffering_and_exact_limit_succee
     assert rejected.status_code == 413
     assert rejected.headers["content-type"] == "application/problem+json"
     assert "x" * 32 not in rejected.text
+
+
+async def test_streamed_limit_is_enforced_before_a_bodyless_endpoint_runs() -> None:
+    transport = ASGITransport(app=_body_limit_app())
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/ignored-body",
+            content=ChunkedBody(b"x" * MAX_REQUEST_BODY_BYTES, b"x"),
+        )
+
+    assert response.status_code == 413
+    assert response.headers["content-type"] == "application/problem+json"
 
 
 @pytest.mark.parametrize("method", ["GET", "HEAD", "OPTIONS"])

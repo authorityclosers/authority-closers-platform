@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections import deque
 from collections.abc import Awaitable, Callable, Iterable, MutableMapping
 from typing import Any
 
@@ -100,32 +101,27 @@ class RequestBodyLimitMiddleware:
             await _send_too_large(scope, send)
             return
 
+        buffered: deque[Message] = deque()
         received = 0
-        overflowed = False
-
-        async def limited_receive() -> Message:
-            nonlocal received, overflowed
-            if overflowed:
-                return {"type": "http.request", "body": b"", "more_body": False}
+        while True:
             message = await receive()
             if message.get("type") == "http.request":
-                body = message.get("body", b"")
-                received += len(body)
+                received += len(message.get("body", b""))
                 if received > limit:
-                    overflowed = True
-                    return {"type": "http.request", "body": b"", "more_body": False}
-            return message
+                    await _send_too_large(scope, send)
+                    return
+                buffered.append(message)
+                if not message.get("more_body", False):
+                    break
+            elif message.get("type") == "http.disconnect":
+                buffered.append(message)
+                break
+            else:
+                buffered.append(message)
 
-        response_started = False
+        async def replay_receive() -> Message:
+            if buffered:
+                return buffered.popleft()
+            return {"type": "http.request", "body": b"", "more_body": False}
 
-        async def tracked_send(message: Message) -> None:
-            nonlocal response_started
-            if overflowed and not response_started:
-                return
-            if message.get("type") == "http.response.start":
-                response_started = True
-            await send(message)
-
-        await self.app(scope, limited_receive, tracked_send)
-        if overflowed and not response_started:
-            await _send_too_large(scope, send)
+        await self.app(scope, replay_receive, send)

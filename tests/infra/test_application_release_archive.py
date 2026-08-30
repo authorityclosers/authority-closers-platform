@@ -302,9 +302,8 @@ def test_installer_serializes_deployments_and_routes_signals_through_finish() ->
     finish_body = installer[installer.index("finish() {") : installer.index("trap 'exit 129' HUP")]
     assert "trap - EXIT" in finish_body
     assert "trap '' HUP INT TERM" in finish_body
-    assert finish_body.index("trap '' HUP INT TERM") < finish_body.index(
-        "rollback_release || status=1"
-    )
+    assert finish_body.index("trap '' HUP INT TERM") < finish_body.index("trap - EXIT")
+    assert finish_body.index("trap - EXIT") < finish_body.index("rollback_release || status=1")
 
 
 def test_installer_restores_current_link_and_writes_evidence_atomically() -> None:

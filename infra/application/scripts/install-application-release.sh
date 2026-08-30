@@ -374,10 +374,10 @@ rollback_release() {
 
 finish() {
   local status=$?
-  trap - EXIT
   # Once finalization starts, allow the rollback to finish unless the host or
   # process is forcibly killed. A second catchable signal must not recurse.
   trap '' HUP INT TERM
+  trap - EXIT
   if [[ "$status" -ne 0 && "$mutation_started" == 1 && "$release_committed" == 0 ]]; then
     rollback_release || status=1
   fi

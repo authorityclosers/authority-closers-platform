@@ -104,9 +104,13 @@ The installer verifies the Git archive and image bundle, preserves the bundle
 under `/srv/authority-closers/application/artifacts/<commit>`, loads only exact
 image IDs, creates a pre-migration PostgreSQL custom-format backup, migrates,
 starts the hardened services with provider effects held, proves the loopback
-Caddy route identity, and atomically advances `current-<environment>`. Failure
-stops the candidate, restores the database backup, and reconciles the previous
-release. Deployment evidence contains no secret values.
+Caddy route identity, and atomically advances `current-<environment>`. A
+catchable command failure or `HUP`/`INT`/`TERM` stops the candidate, restores
+the database backup, and reconciles the previous release. `SIGKILL`, kernel
+failure, and abrupt host power loss are outside shell-trap rollback; keep
+external effects held and perform the documented restore/reconciliation check
+before treating an interrupted deployment as committed. Deployment evidence
+contains no secret values.
 
 Staging is promoted by invoking the installer for production with the same
 source archive and the same `release-images.env`; images are never rebuilt
