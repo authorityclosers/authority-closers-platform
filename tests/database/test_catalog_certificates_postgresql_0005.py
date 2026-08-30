@@ -108,8 +108,7 @@ def _seed(engine: Engine) -> tuple[UUID, UUID, UUID, UUID, UUID, UUID, UUID, UUI
             owner_key=tenant_id,
             tenant_id=tenant_id,
             version_number=1,
-            status="published",
-            published_at=datetime.now(UTC),
+            status="draft",
         )
         enrollment = Enrollment(
             id=enrollment_id,
@@ -160,6 +159,20 @@ def _seed(engine: Engine) -> tuple[UUID, UUID, UUID, UUID, UUID, UUID, UUID, UUI
         database.add(program)
         database.flush()
         database.add(version)
+        database.flush()
+        reviewed_at = datetime.now(UTC)
+        version.content_digest = database.scalar(
+            text("SELECT ac_catalog_content_digest(:version_id)"),
+            {"version_id": version_id},
+        )
+        version.content_source_ref = __file__
+        version.content_reviewed_by = "certificate-invariant-test@example.test"
+        version.content_reviewed_at = reviewed_at
+        version.release_id = "a" * 40
+        version.content_seed_kind = "technical-validation"
+        database.flush()
+        version.status = "published"
+        version.published_at = reviewed_at
         database.flush()
         database.add(enrollment)
         database.flush()
