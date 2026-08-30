@@ -2,11 +2,17 @@ name: Application validation
 
 on:
   push:
+    branches:
+      - main
   pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: application-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 
 jobs:
   validate:
@@ -75,6 +81,19 @@ jobs:
             IF has_schema_privilege('ac_runtime', 'public', 'CREATE') THEN
               RAISE EXCEPTION 'runtime role may create schema objects';
             END IF;
+            IF has_database_privilege('ac_runtime', current_database(), 'CREATE')
+               OR has_database_privilege('ac_runtime', current_database(), 'TEMP') THEN
+              RAISE EXCEPTION 'runtime role may create database or temporary objects';
+            END IF;
+            IF EXISTS (
+              SELECT 1
+              FROM pg_roles
+              WHERE rolname = 'ac_runtime'
+                AND (rolsuper OR rolcreatedb OR rolcreaterole OR rolinherit
+                     OR rolreplication OR rolbypassrls)
+            ) THEN
+              RAISE EXCEPTION 'runtime role has an elevated role attribute';
+            END IF;
             IF EXISTS (
               SELECT 1
               FROM pg_tables
@@ -82,10 +101,54 @@ jobs:
             ) THEN
               RAISE EXCEPTION 'a migrated table is not owned by the migrator role';
             END IF;
+            IF EXISTS (
+              SELECT 1
+              FROM pg_class relation
+              JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+              JOIN pg_roles owner_role ON owner_role.oid = relation.relowner
+              WHERE namespace.nspname = 'public' AND owner_role.rolname = 'ac_runtime'
+            ) OR EXISTS (
+              SELECT 1
+              FROM pg_proc procedure
+              JOIN pg_namespace namespace ON namespace.oid = procedure.pronamespace
+              JOIN pg_roles owner_role ON owner_role.oid = procedure.proowner
+              WHERE namespace.nspname = 'public' AND owner_role.rolname = 'ac_runtime'
+            ) THEN
+              RAISE EXCEPTION 'runtime role owns a migrated relation or function';
+            END IF;
+            IF EXISTS (
+              SELECT 1
+              FROM pg_tables
+              WHERE schemaname = 'public'
+                AND (
+                  has_table_privilege('ac_runtime', format('%I.%I', schemaname, tablename), 'TRUNCATE')
+                  OR has_table_privilege('ac_runtime', format('%I.%I', schemaname, tablename), 'REFERENCES')
+                  OR has_table_privilege('ac_runtime', format('%I.%I', schemaname, tablename), 'TRIGGER')
+                )
+            ) THEN
+              RAISE EXCEPTION 'runtime role has a forbidden structural table privilege';
+            END IF;
           END
           $$;
           SQL
+      - name: Prove staging seed PostgreSQL serialization
+        env:
+          AC_REQUIRE_STAGING_SEED_POSTGRES_TEST: "1"
+        run: uv run pytest tests/integration/test_staging_seed_postgresql.py
+      - name: Prove catalog publication locking and runtime database boundary
+        env:
+          AC_REQUIRE_CATALOG_POSTGRES_TEST: "1"
+          AC_REQUIRE_DATABASE_RUNTIME_PRIVILEGES_TEST: "1"
+          AC_REQUIRE_LEARNING_HTTP_POSTGRES_TEST: "1"
+        run: >-
+          uv run pytest
+          tests/integration/test_catalog_publication_concurrency_postgresql.py
+          tests/integration/test_catalog_publication_migration_postgresql.py
+          tests/integration/test_database_runtime_privileges_postgresql.py
+          tests/integration/test_learning_http_postgresql.py
       - name: Validate application
+        env:
+          AC_REQUIRE_RESTORE_INPUT_DOCKER_TEST: "1"
         run: pnpm validate
 
   package-release-images:
@@ -93,7 +156,11 @@ jobs:
     needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    concurrency:
+      group: application-release-packaging
+      cancel-in-progress: false
     permissions:
+      actions: write
       contents: read
       packages: write
     env:
@@ -119,6 +186,8 @@ jobs:
           platforms: linux/amd64
           load: true
           tags: ${{ env.API_IMAGE }}
+          build-args: |
+            AC_RELEASE_ID=${{ github.sha }}
           cache-from: type=gha,scope=application-api
           cache-to: type=gha,mode=max,scope=application-api
       - name: Build learner release image
@@ -218,6 +287,24 @@ jobs:
           api_digest="$(docker image inspect --format '{{index .RepoDigests 0}}' "$API_IMAGE")"
           learner_digest="$(docker image inspect --format '{{index .RepoDigests 0}}' "$LEARNER_IMAGE")"
           admin_digest="$(docker image inspect --format '{{index .RepoDigests 0}}' "$ADMIN_IMAGE")"
+          api_release_id="$(
+            docker run --rm --network none --entrypoint /bin/sh "$api_id" \
+              -c 'cat /app/.ac-release-id'
+          )"
+          [ "$api_release_id" = "$GITHUB_SHA" ] || {
+            printf 'API image release marker does not match the workflow commit.\n' >&2
+            exit 1
+          }
+          mapfile -t migration_heads < <(
+            docker run --rm --network none --entrypoint alembic "$api_id" heads \
+              | awk '$2 == "(head)" { print $1 }'
+          )
+          if [ "${#migration_heads[@]}" -ne 1 ] \
+            || ! [[ "${migration_heads[0]}" =~ ^[0-9]{8}_[0-9]{4}$ ]]; then
+            printf 'API image must contain exactly one valid Alembic head.\n' >&2
+            exit 1
+          fi
+          migration_head="${migration_heads[0]}"
           api_transport_digest="$(transport_digest_for "$API_IMAGE")"
           learner_transport_digest="$(transport_digest_for "$LEARNER_IMAGE")"
           admin_transport_digest="$(transport_digest_for "$ADMIN_IMAGE")"
@@ -227,30 +314,79 @@ jobs:
           gzip -9 < "$transport_tar" > "$artifact_dir/application-images.tar.gz"
           {
             printf 'AC_RELEASE_ID=%s\n' "$GITHUB_SHA"
-            printf 'AC_API_IMAGE=%s\n' "$api_transport_digest"
+            printf 'AC_API_IMAGE=%s\n' "$api_id"
             printf 'AC_API_REGISTRY_DIGEST=%s\n' "$api_digest"
-            printf 'AC_LEARNER_IMAGE=%s\n' "$learner_transport_digest"
+            printf 'AC_API_TRANSPORT_DIGEST=%s\n' "$api_transport_digest"
+            printf 'AC_LEARNER_IMAGE=%s\n' "$learner_id"
             printf 'AC_LEARNER_REGISTRY_DIGEST=%s\n' "$learner_digest"
-            printf 'AC_ADMIN_IMAGE=%s\n' "$admin_transport_digest"
+            printf 'AC_LEARNER_TRANSPORT_DIGEST=%s\n' "$learner_transport_digest"
+            printf 'AC_MIGRATION_HEAD=%s\n' "$migration_head"
+            printf 'AC_ADMIN_IMAGE=%s\n' "$admin_id"
             printf 'AC_ADMIN_REGISTRY_DIGEST=%s\n' "$admin_digest"
+            printf 'AC_ADMIN_TRANSPORT_DIGEST=%s\n' "$admin_transport_digest"
           } > "$artifact_dir/release-images.env"
           (
             cd "$artifact_dir"
             sha256sum application-images.tar.gz release-images.env > SHA256SUMS
           )
-      - name: Enforce GitHub Free artifact ceiling
+          python infra/application/scripts/prepare-release-inputs.py \
+            verify-bundle "$artifact_dir" "$GITHUB_SHA" > /dev/null
+      - name: Reclaim superseded release artifacts and enforce pooled ceiling
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           artifact_dir="$RUNNER_TEMP/ac-application-${GITHUB_SHA}"
-          artifact_bytes="$(du --bytes --summarize "$artifact_dir" | cut -f1)"
+          candidate_bytes="$(du --bytes --summarize "$artifact_dir" | cut -f1)"
           max_artifact_bytes=450000000
-          if [ "$artifact_bytes" -gt "$max_artifact_bytes" ]; then
+          max_artifact_pool_bytes=450000000
+          if [ "$candidate_bytes" -gt "$max_artifact_bytes" ]; then
             printf 'Release artifact is %s bytes; refusing upload above %s bytes.\n' \
-              "$artifact_bytes" "$max_artifact_bytes" >&2
+              "$candidate_bytes" "$max_artifact_bytes" >&2
             exit 1
           fi
-          printf 'Release artifact is %s bytes (ceiling %s).\n' \
-            "$artifact_bytes" "$max_artifact_bytes"
+
+          list_repository_artifacts() {
+            gh api --paginate \
+              --header 'Accept: application/vnd.github+json' \
+              --header 'X-GitHub-Api-Version: 2026-03-10' \
+              "/repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" \
+              | jq --slurp '[.[].artifacts[]]'
+          }
+
+          artifacts_before="$RUNNER_TEMP/repository-artifacts-before.json"
+          list_repository_artifacts > "$artifacts_before"
+          mapfile -t release_artifact_ids < <(
+            jq --raw-output \
+              '.[] | select((.name // "") | test("^ac-application-[0-9a-f]{40}$")) | .id' \
+              "$artifacts_before"
+          )
+          for artifact_id in "${release_artifact_ids[@]}"; do
+            [[ "$artifact_id" =~ ^[0-9]+$ ]] || {
+              printf 'Refusing malformed release artifact identity.\n' >&2
+              exit 1
+            }
+            gh api --method DELETE \
+              --header 'Accept: application/vnd.github+json' \
+              --header 'X-GitHub-Api-Version: 2026-03-10' \
+              "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}"
+          done
+
+          artifacts_after="$RUNNER_TEMP/repository-artifacts-after.json"
+          list_repository_artifacts > "$artifacts_after"
+          retained_bytes="$(jq '[.[].size_in_bytes] | add // 0' "$artifacts_after")"
+          [[ "$retained_bytes" =~ ^[0-9]+$ ]] || {
+            printf 'Repository artifact usage could not be proven.\n' >&2
+            exit 1
+          }
+          projected_artifact_pool_bytes=$((retained_bytes + candidate_bytes))
+          if [ "$projected_artifact_pool_bytes" -gt "$max_artifact_pool_bytes" ]; then
+            printf 'Projected repository artifact pool is %s bytes; refusing upload above %s bytes.\n' \
+              "$projected_artifact_pool_bytes" "$max_artifact_pool_bytes" >&2
+            exit 1
+          fi
+          printf 'Release artifact is %s bytes; projected repository pool is %s bytes (ceiling %s).\n' \
+            "$candidate_bytes" "$projected_artifact_pool_bytes" "$max_artifact_pool_bytes"
       - name: Upload reviewed release bundle
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:

@@ -17,7 +17,7 @@ secret_path="${AC_INFISICAL_PATH:-/application}"
   printf 'AC_RELEASE_ID must be a full lowercase Git commit SHA.\n' >&2
   exit 2
 }
-[[ "$release_archive" == /* && -f "$release_archive" ]] || {
+[[ "$release_archive" == /* && -f "$release_archive" && ! -L "$release_archive" ]] || {
   printf 'AC_RELEASE_ARCHIVE must be an absolute regular file.\n' >&2
   exit 2
 }
@@ -35,99 +35,12 @@ secret_path="${AC_INFISICAL_PATH:-/application}"
 }
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-python3 "$script_dir/verify-release-archive.py" \
-  "$release_archive" "$release_archive_sha256" "$release_id"
-
-expected_bundle_files=(
-  SHA256SUMS
-  application-images.tar.gz
-  release-images.env
-)
-mapfile -t actual_bundle_files < <(
-  find "$image_bundle_dir" -mindepth 1 -maxdepth 1 -type f -printf '%f\n' | LC_ALL=C sort
-)
-[[ "${actual_bundle_files[*]}" == "${expected_bundle_files[*]}" ]] || {
-  printf 'Image bundle does not contain the exact reviewed file set.\n' >&2
-  exit 1
-}
-if find "$image_bundle_dir" -mindepth 1 -maxdepth 1 ! -type f -print -quit | grep -q .; then
-  printf 'Image bundle contains a non-regular entry.\n' >&2
-  exit 1
-fi
-
-declare -A expected_checksums=()
-while read -r checksum filename; do
-  [[ "$checksum" =~ ^[0-9a-f]{64}$ ]] || { printf 'Malformed bundle checksum.\n' >&2; exit 1; }
-  case "$filename" in
-    application-images.tar.gz|release-images.env) ;;
-    *) printf 'Unexpected path in bundle checksum manifest: %s\n' "$filename" >&2; exit 1 ;;
-  esac
-  [[ -z "${expected_checksums[$filename]:-}" ]] || {
-    printf 'Duplicate bundle checksum entry: %s\n' "$filename" >&2
-    exit 1
-  }
-  expected_checksums[$filename]="$checksum"
-done < "$image_bundle_dir/SHA256SUMS"
-[[ "${#expected_checksums[@]}" -eq 2 ]] || {
-  printf 'Bundle checksum manifest is incomplete.\n' >&2
-  exit 1
-}
-for filename in "${!expected_checksums[@]}"; do
-  actual_checksum="$(sha256sum "$image_bundle_dir/$filename" | awk '{print $1}')"
-  [[ "$actual_checksum" == "${expected_checksums[$filename]}" ]] || {
-    printf 'Bundle checksum mismatch: %s\n' "$filename" >&2
-    exit 1
-  }
-done
-
-release_images_file="$image_bundle_dir/release-images.env"
-expected_image_keys=(
-  AC_ADMIN_IMAGE
-  AC_ADMIN_REGISTRY_DIGEST
-  AC_API_IMAGE
-  AC_API_REGISTRY_DIGEST
-  AC_LEARNER_IMAGE
-  AC_LEARNER_REGISTRY_DIGEST
-  AC_RELEASE_ID
-)
-mapfile -t actual_image_keys < <(
-  sed -n 's/^\([A-Z0-9_]\+\)=.*/\1/p' "$release_images_file" | LC_ALL=C sort
-)
-[[ "${actual_image_keys[*]}" == "${expected_image_keys[*]}" ]] || {
-  printf 'Release image manifest has an unexpected key set.\n' >&2
-  exit 1
-}
-if grep -Ev '^[A-Z0-9_]+=[A-Za-z0-9./:@_-]+$' "$release_images_file" | grep -q .; then
-  printf 'Release image manifest contains unsafe syntax.\n' >&2
-  exit 1
-fi
-set -a
-# shellcheck disable=SC1090
-source "$release_images_file"
-set +a
-[[ "$AC_RELEASE_ID" == "$release_id" ]] || {
-  printf 'Image bundle release ID does not match the source release.\n' >&2
-  exit 1
-}
-for image_id in "$AC_API_IMAGE" "$AC_LEARNER_IMAGE" "$AC_ADMIN_IMAGE"; do
-  [[ "$image_id" =~ ^sha256:[0-9a-f]{64}$ ]] || {
-    printf 'Application deployment requires exact OCI transport manifest digests.\n' >&2
-    exit 1
-  }
-done
-for registry_digest in \
-  "$AC_API_REGISTRY_DIGEST" "$AC_LEARNER_REGISTRY_DIGEST" "$AC_ADMIN_REGISTRY_DIGEST"; do
-  [[ "$registry_digest" =~ ^ghcr\.io/authorityclosers/[a-z0-9-]+@sha256:[0-9a-f]{64}$ ]] || {
-    printf 'Application registry provenance digest is malformed.\n' >&2
-    exit 1
-  }
-done
-
 getent group acops >/dev/null || { printf 'Required operator group acops is absent.\n' >&2; exit 1; }
 application_root=/srv/authority-closers/application
 releases_root="$application_root/releases"
 release_dir="$releases_root/$release_id"
 current_link="$application_root/current-$target_environment"
+input_stage=''
 stage_dir=''
 artifact_stage=''
 install -d -m 2750 -o root -g acops "$application_root" "$releases_root"
@@ -148,29 +61,116 @@ artifacts_root="$application_root/artifacts"
 artifact_dir="$artifacts_root/$release_id"
 install -d -m 2750 -o root -g acops "$artifacts_root"
 
-cleanup_stage() {
-  local status=$?
-  if [[ -n "$stage_dir" && -e "$stage_dir" ]]; then
+cleanup_stages() {
+  local cleanup_failed=0
+  if [[ -n "$input_stage" && ( -e "$input_stage" || -L "$input_stage" ) ]]; then
+    case "$input_stage" in
+      "$application_root"/.inputs-*)
+        rm -rf -- "$input_stage" || cleanup_failed=1
+        [[ ! -e "$input_stage" && ! -L "$input_stage" ]] || cleanup_failed=1
+        ;;
+      *) printf 'Refusing unexpected input staging cleanup path: %s\n' "$input_stage" >&2; cleanup_failed=1 ;;
+    esac
+  fi
+  if [[ -n "$stage_dir" && ( -e "$stage_dir" || -L "$stage_dir" ) ]]; then
     case "$stage_dir" in
-      "$releases_root"/.stage-*) rm -rf -- "$stage_dir" ;;
-      *) printf 'Refusing unexpected staging cleanup path: %s\n' "$stage_dir" >&2; status=1 ;;
+      "$releases_root"/.stage-*)
+        rm -rf -- "$stage_dir" || cleanup_failed=1
+        [[ ! -e "$stage_dir" && ! -L "$stage_dir" ]] || cleanup_failed=1
+        ;;
+      *) printf 'Refusing unexpected staging cleanup path: %s\n' "$stage_dir" >&2; cleanup_failed=1 ;;
     esac
   fi
-  if [[ -n "$artifact_stage" && -e "$artifact_stage" ]]; then
+  if [[ -n "$artifact_stage" && ( -e "$artifact_stage" || -L "$artifact_stage" ) ]]; then
     case "$artifact_stage" in
-      "$artifacts_root"/.stage-*) rm -rf -- "$artifact_stage" ;;
-      *) printf 'Refusing unexpected artifact cleanup path: %s\n' "$artifact_stage" >&2; status=1 ;;
+      "$artifacts_root"/.stage-*)
+        rm -rf -- "$artifact_stage" || cleanup_failed=1
+        [[ ! -e "$artifact_stage" && ! -L "$artifact_stage" ]] || cleanup_failed=1
+        ;;
+      *) printf 'Refusing unexpected artifact cleanup path: %s\n' "$artifact_stage" >&2; cleanup_failed=1 ;;
     esac
   fi
-  return "$status"
+  return "$cleanup_failed"
 }
-trap cleanup_stage EXIT
 
-if [[ -e "$artifact_dir" ]]; then
+finish_before_mutation() {
+  local status=$?
+  trap '' HUP INT TERM
+  trap - EXIT
+  if ! cleanup_stages; then
+    [[ "$status" -ne 0 ]] || status=1
+  fi
+  exit "$status"
+}
+trap finish_before_mutation EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+input_stage="$(mktemp -d "$application_root/.inputs-${release_id}.XXXXXX")"
+chmod 0700 "$input_stage"
+chown root:root "$input_stage"
+python3 "$script_dir/prepare-release-inputs.py" stage \
+  "$release_archive" "$image_bundle_dir" "$input_stage"
+release_archive="$input_stage/release-archive.tar"
+image_bundle_dir="$input_stage/image-bundle"
+
+python3 "$script_dir/verify-release-archive.py" \
+  "$release_archive" "$release_archive_sha256" "$release_id"
+
+manifest_values_file="$input_stage/release-image-values"
+umask 077
+python3 "$script_dir/prepare-release-inputs.py" verify-bundle \
+  "$image_bundle_dir" "$release_id" > "$manifest_values_file"
+mapfile -t release_image_values < "$manifest_values_file"
+rm -- "$manifest_values_file"
+[[ "${#release_image_values[@]}" -eq 11 ]] || {
+  printf 'Release image manifest parser returned an unexpected value contract.\n' >&2
+  exit 1
+}
+AC_ADMIN_IMAGE="${release_image_values[0]}"
+AC_ADMIN_REGISTRY_DIGEST="${release_image_values[1]}"
+AC_ADMIN_TRANSPORT_DIGEST="${release_image_values[2]}"
+AC_API_IMAGE="${release_image_values[3]}"
+AC_API_REGISTRY_DIGEST="${release_image_values[4]}"
+AC_API_TRANSPORT_DIGEST="${release_image_values[5]}"
+AC_LEARNER_IMAGE="${release_image_values[6]}"
+AC_LEARNER_REGISTRY_DIGEST="${release_image_values[7]}"
+AC_LEARNER_TRANSPORT_DIGEST="${release_image_values[8]}"
+AC_MIGRATION_HEAD="${release_image_values[9]}"
+AC_RELEASE_ID="${release_image_values[10]}"
+unset release_image_values
+[[ "$AC_RELEASE_ID" == "$release_id" ]]
+for image_id in "$AC_API_IMAGE" "$AC_LEARNER_IMAGE" "$AC_ADMIN_IMAGE"; do
+  [[ "$image_id" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+    printf 'Application deployment requires exact local image config IDs.\n' >&2
+    exit 1
+  }
+done
+for transport_digest in \
+  "$AC_API_TRANSPORT_DIGEST" \
+  "$AC_LEARNER_TRANSPORT_DIGEST" \
+  "$AC_ADMIN_TRANSPORT_DIGEST"; do
+  [[ "$transport_digest" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+    printf 'Application deployment requires exact OCI transport manifest digests.\n' >&2
+    exit 1
+  }
+done
+
+expected_bundle_files=(
+  SHA256SUMS
+  application-images.tar.gz
+  release-images.env
+)
+release_images_file="$image_bundle_dir/release-images.env"
+
+if [[ -e "$artifact_dir" || -L "$artifact_dir" ]]; then
   [[ -d "$artifact_dir" && ! -L "$artifact_dir" ]] || {
     printf 'Existing release artifact path is not a directory.\n' >&2
     exit 1
   }
+  python3 "$script_dir/prepare-release-inputs.py" verify-bundle \
+    "$artifact_dir" "$release_id" > /dev/null
   for filename in "${expected_bundle_files[@]}"; do
     cmp --silent "$artifact_dir/$filename" "$image_bundle_dir/$filename" || {
       printf 'Existing immutable image artifact differs: %s\n' "$filename" >&2
@@ -182,15 +182,16 @@ else
   for filename in "${expected_bundle_files[@]}"; do
     cp -- "$image_bundle_dir/$filename" "$artifact_stage/$filename"
   done
+  python3 "$script_dir/prepare-release-inputs.py" verify-bundle \
+    "$artifact_stage" "$release_id" > /dev/null
   find "$artifact_stage" -type d -exec chmod 0750 {} +
   find "$artifact_stage" -type f -exec chmod 0640 {} +
   chown -R root:acops "$artifact_stage"
-  mv -- "$artifact_stage" "$artifact_dir"
+  mv --no-target-directory "$artifact_stage" "$artifact_dir"
   artifact_stage=''
 fi
-image_bundle_dir="$artifact_dir"
 
-if [[ -e "$release_dir" ]]; then
+if [[ -e "$release_dir" || -L "$release_dir" ]]; then
   [[ -f "$release_dir/RELEASE-COMMIT" && "$(<"$release_dir/RELEASE-COMMIT")" == "$release_id" ]]
   (cd "$release_dir" && sha256sum --check --strict RELEASE-FILES.sha256 >/dev/null)
   cmp --silent "$release_dir/release-images.env" "$release_images_file" || {
@@ -224,9 +225,27 @@ else
   find "$stage_dir/postgres/init" -type f -exec chmod 0644 {} +
   find "$stage_dir/scripts" -type f -exec chmod 0750 {} +
   chown -R root:acops "$stage_dir"
-  mv -- "$stage_dir" "$release_dir"
+  mv --no-target-directory "$stage_dir" "$release_dir"
   stage_dir=''
 fi
+
+secret_environment="$target_environment"
+[[ "$target_environment" == production ]] && secret_environment=prod
+
+with_release_secrets() {
+  env \
+    -u AC_GOOGLE_OAUTH_CLIENT_ID \
+    -u AC_GOOGLE_OAUTH_CLIENT_SECRET \
+    AC_INFISICAL_ENVIRONMENT="$secret_environment" \
+    AC_INFISICAL_PATH="$secret_path" \
+    /usr/local/sbin/ac-infisical-run -- "$@"
+}
+
+# Infisical may supply a syntactically present but whitespace-only value that
+# Compose's `${VAR:?}` interpolation accepts. Reject that state before loading
+# images, creating environment state, or issuing any Docker Compose command.
+with_release_secrets \
+  python3 "$release_dir/scripts/validate-google-oauth-secrets.py"
 
 gzip --decompress --stdout "$image_bundle_dir/application-images.tar.gz" | docker load >/dev/null
 for image_id in "$AC_API_IMAGE" "$AC_LEARNER_IMAGE" "$AC_ADMIN_IMAGE"; do
@@ -236,9 +255,34 @@ for image_id in "$AC_API_IMAGE" "$AC_LEARNER_IMAGE" "$AC_ADMIN_IMAGE"; do
   }
 done
 
+api_release_marker_file="$input_stage/api-release-marker"
+expected_api_release_marker_file="$input_stage/expected-api-release-marker"
+docker run --rm --pull never --network none --read-only \
+  --security-opt no-new-privileges:true --cap-drop ALL \
+  --entrypoint /bin/sh "$AC_API_IMAGE" -euc 'cat /app/.ac-release-id' \
+  > "$api_release_marker_file"
+printf '%s\n' "$release_id" > "$expected_api_release_marker_file"
+if ! cmp --silent "$api_release_marker_file" "$expected_api_release_marker_file"; then
+  printf 'Loaded API image release marker does not match the release ID.\n' >&2
+  exit 1
+fi
+rm -- "$api_release_marker_file" "$expected_api_release_marker_file"
+
+api_migration_heads_file="$input_stage/api-migration-heads"
+docker run --rm --pull never --network none --read-only \
+  --security-opt no-new-privileges:true --cap-drop ALL \
+  --entrypoint alembic "$AC_API_IMAGE" heads > "$api_migration_heads_file"
+mapfile -t loaded_api_migration_heads < "$api_migration_heads_file"
+rm -- "$api_migration_heads_file"
+if [[ "${#loaded_api_migration_heads[@]}" -ne 1 \
+  || ! "${loaded_api_migration_heads[0]}" =~ ^([0-9]{8}_[0-9]{4})[[:space:]]+\(head\)$ \
+  || "${BASH_REMATCH[1]}" != "$AC_MIGRATION_HEAD" ]]; then
+  printf 'Loaded API image migration head does not match the reviewed bundle.\n' >&2
+  exit 1
+fi
+unset loaded_api_migration_heads
+
 profile_file="$release_dir/environments/$target_environment.env"
-secret_environment="$target_environment"
-[[ "$target_environment" == production ]] && secret_environment=prod
 if LC_ALL=C grep -q $'\r' "$profile_file"; then
   printf 'Released environment profile must use canonical LF line endings.\n' >&2
   exit 1
@@ -254,10 +298,8 @@ install -d -m 0700 -o 999 -g 999 "$state_root/postgres"
 compose_for() {
   local target_release="$1"
   shift
-  AC_INFISICAL_ENVIRONMENT="$secret_environment" \
-  AC_INFISICAL_PATH="$secret_path" \
-    /usr/local/sbin/ac-infisical-run -- \
-      env \
+  with_release_secrets \
+    env \
         -u AC_COMPOSE_PROJECT \
         -u AC_ENVIRONMENT \
         -u AC_STATE_ROOT \
@@ -265,6 +307,7 @@ compose_for() {
         -u AC_ADMIN_APP_URL \
         -u AC_API_URL \
         -u AC_API_HOST \
+        -u AC_INTERNAL_API_HOST \
         -u AC_TRUSTED_PROXY_ADDRESSES \
         -u AC_EDGE_API_ALIAS \
         -u AC_EDGE_LEARNER_ALIAS \
@@ -275,11 +318,11 @@ compose_for() {
         -u AC_API_IMAGE \
         -u AC_LEARNER_IMAGE \
         -u AC_ADMIN_IMAGE \
-      docker compose \
-        --env-file "$target_release/environments/$target_environment.env" \
-        --env-file "$target_release/release-images.env" \
-        --file "$target_release/compose.yaml" \
-        "$@"
+    docker compose \
+      --env-file "$target_release/environments/$target_environment.env" \
+      --env-file "$target_release/release-images.env" \
+      --file "$target_release/compose.yaml" \
+      "$@"
 }
 
 compose_for "$release_dir" config --quiet
@@ -303,8 +346,53 @@ mutation_started=0
 backup_ready=0
 release_committed=0
 current_switch_armed=0
+database_writers_fenced=0
 current_tmp=''
 evidence_tmp=''
+
+set_database_writer_access() {
+  local access_mode="$1"
+  compose_for "$release_dir" exec -T postgres sh -euc '
+    export PGPASSWORD="$POSTGRES_PASSWORD"
+    [ "$POSTGRES_DB" = ac_platform ] || {
+      printf "Unexpected application database identity.\n" >&2
+      exit 1
+    }
+    case "$1" in
+      fence)
+        psql -h 127.0.0.1 -U "$POSTGRES_USER" -d postgres -v ON_ERROR_STOP=1 <<SQL
+REVOKE CONNECT ON DATABASE ac_platform FROM PUBLIC, ac_runtime, ac_migrator;
+GRANT CONNECT ON DATABASE ac_platform TO ac_owner, ac_backup;
+SELECT pg_terminate_backend(pid)
+  FROM pg_stat_activity
+ WHERE datname = '\''ac_platform'\''
+   AND usename IN ('\''ac_runtime'\'', '\''ac_migrator'\'')
+   AND pid <> pg_backend_pid();
+SQL
+        remaining="$(
+          psql -h 127.0.0.1 -U "$POSTGRES_USER" -d postgres -Atqc \
+            "SELECT count(*) FROM pg_stat_activity WHERE datname = '\''ac_platform'\'' AND usename IN ('\''ac_runtime'\'', '\''ac_migrator'\'')"
+        )"
+        [ "$remaining" = 0 ] || {
+          printf "Application database writers did not quiesce.\n" >&2
+          exit 1
+        }
+        ;;
+      migrator)
+        psql -h 127.0.0.1 -U "$POSTGRES_USER" -d postgres -v ON_ERROR_STOP=1 \
+          -c "GRANT CONNECT ON DATABASE ac_platform TO ac_migrator"
+        ;;
+      runtime)
+        psql -h 127.0.0.1 -U "$POSTGRES_USER" -d postgres -v ON_ERROR_STOP=1 \
+          -c "GRANT CONNECT ON DATABASE ac_platform TO ac_migrator, ac_runtime"
+        ;;
+      *)
+        printf "Unsupported database access mode.\n" >&2
+        exit 1
+        ;;
+    esac
+  ' sh "$access_mode"
+}
 
 restore_current_link() {
   local rollback_tmp current_target
@@ -338,7 +426,7 @@ restore_current_link() {
 }
 
 rollback_release() {
-  local rollback_failed=0
+  local rollback_failed=0 rollback_fenced=0
   printf 'ROLLBACK  Restoring %s after failed release %s.\n' "$target_environment" "$release_id" >&2
   if [[ -n "$current_tmp" && -L "$current_tmp" ]]; then
     rm -- "$current_tmp" || rollback_failed=1
@@ -346,8 +434,15 @@ rollback_release() {
   if [[ -n "$evidence_tmp" && -f "$evidence_tmp" ]]; then
     rm -- "$evidence_tmp" || rollback_failed=1
   fi
-  compose_for "$release_dir" stop api worker learner-web admin-web >/dev/null 2>&1 || rollback_failed=1
-  if [[ "$backup_ready" == 1 ]]; then
+  compose_for "$release_dir" stop --timeout 30 api worker learner-web admin-web \
+    >/dev/null 2>&1 || rollback_failed=1
+  if set_database_writer_access fence; then
+    rollback_fenced=1
+    database_writers_fenced=1
+  else
+    rollback_failed=1
+  fi
+  if [[ "$backup_ready" == 1 && "$rollback_fenced" == 1 ]]; then
     # shellcheck disable=SC2016  # PostgreSQL container variables expand inside `sh -euc`.
     if ! compose_for "$release_dir" exec -T postgres sh -euc '
       export PGPASSWORD="$POSTGRES_PASSWORD"
@@ -359,12 +454,23 @@ rollback_release() {
       rollback_failed=1
     fi
   fi
-  restore_current_link || rollback_failed=1
-  if [[ -n "$previous_release" ]]; then
-    compose_for "$previous_release" up --detach --remove-orphans --wait --wait-timeout 180 \
-      || rollback_failed=1
-  else
-    compose_for "$release_dir" down --remove-orphans --timeout 30 || rollback_failed=1
+  if [[ "$rollback_fenced" == 1 && "$rollback_failed" == 0 ]]; then
+    if set_database_writer_access runtime; then
+      database_writers_fenced=0
+    else
+      rollback_failed=1
+    fi
+  fi
+  if [[ "$rollback_failed" == 0 ]]; then
+    restore_current_link || rollback_failed=1
+  fi
+  if [[ "$rollback_failed" == 0 ]]; then
+    if [[ -n "$previous_release" ]]; then
+      compose_for "$previous_release" up --detach --remove-orphans --wait --wait-timeout 180 \
+        || rollback_failed=1
+    else
+      compose_for "$release_dir" down --remove-orphans --timeout 30 || rollback_failed=1
+    fi
   fi
   [[ "$rollback_failed" == 0 ]] || {
     printf 'FAIL  Automatic application rollback was incomplete.\n' >&2
@@ -382,15 +488,22 @@ finish() {
   if [[ "$status" -ne 0 && "$mutation_started" == 1 && "$release_committed" == 0 ]]; then
     rollback_release || status=1
   fi
+  if ! cleanup_stages; then
+    [[ "$status" -ne 0 ]] || status=1
+  fi
   exit "$status"
 }
-trap 'exit 129' HUP
-trap 'exit 130' INT
-trap 'exit 143' TERM
 trap finish EXIT
 
 mutation_started=1
+writer_release="$release_dir"
+if [[ -n "$previous_release" ]]; then
+  writer_release="$previous_release"
+fi
+compose_for "$writer_release" stop --timeout 30 api worker
 compose_for "$release_dir" up --detach --wait --wait-timeout 180 postgres
+set_database_writer_access fence
+database_writers_fenced=1
 umask 077
 # shellcheck disable=SC2016  # Backup credentials and database name expand only in the container.
 compose_for "$release_dir" exec -T postgres sh -euc '
@@ -400,7 +513,10 @@ compose_for "$release_dir" exec -T postgres sh -euc '
 compose_for "$release_dir" exec -T postgres pg_restore --list < "$backup_file" >/dev/null
 backup_ready=1
 
+set_database_writer_access migrator
 compose_for "$release_dir" --profile release run --rm migrate
+set_database_writer_access runtime
+database_writers_fenced=0
 compose_for "$release_dir" up --detach --remove-orphans --wait --wait-timeout 180 \
   api worker learner-web admin-web
 
@@ -452,10 +568,14 @@ evidence_tmp="$(mktemp "$evidence_root/.deployment-${release_id}.XXXXXX")"
   printf 'AC_PRE_MIGRATION_BACKUP=%s\n' "$backup_file"
   printf 'AC_API_IMAGE=%s\n' "$AC_API_IMAGE"
   printf 'AC_API_REGISTRY_DIGEST=%s\n' "$AC_API_REGISTRY_DIGEST"
+  printf 'AC_API_TRANSPORT_DIGEST=%s\n' "$AC_API_TRANSPORT_DIGEST"
   printf 'AC_LEARNER_IMAGE=%s\n' "$AC_LEARNER_IMAGE"
   printf 'AC_LEARNER_REGISTRY_DIGEST=%s\n' "$AC_LEARNER_REGISTRY_DIGEST"
+  printf 'AC_LEARNER_TRANSPORT_DIGEST=%s\n' "$AC_LEARNER_TRANSPORT_DIGEST"
+  printf 'AC_MIGRATION_HEAD=%s\n' "$AC_MIGRATION_HEAD"
   printf 'AC_ADMIN_IMAGE=%s\n' "$AC_ADMIN_IMAGE"
   printf 'AC_ADMIN_REGISTRY_DIGEST=%s\n' "$AC_ADMIN_REGISTRY_DIGEST"
+  printf 'AC_ADMIN_TRANSPORT_DIGEST=%s\n' "$AC_ADMIN_TRANSPORT_DIGEST"
 } > "$evidence_tmp"
 chmod 0640 "$evidence_tmp"
 chown root:acops "$evidence_tmp"

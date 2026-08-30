@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+[[ $# -eq 3 ]] || {
+  printf 'Usage: %s DUMP_FILE METADATA_FILE ENVIRONMENT\n' "$0" >&2
+  exit 2
+}
+dump_file="$1"
+metadata_file="$2"
+environment="$3"
+[[ "$environment" == staging || "$environment" == production ]] || {
+  printf 'Logical backup environment is invalid.\n' >&2
+  exit 2
+}
+logical_root="/srv/authority-closers/backups/application/$environment/logical"
+dump_file="$(realpath --canonicalize-existing -- "$dump_file")"
+metadata_file="$(realpath --canonicalize-existing -- "$metadata_file")"
+capture_dir="$(dirname -- "$dump_file")"
+[[ "$(dirname -- "$capture_dir")" == "$logical_root" ]] || {
+  printf 'Logical dump path is outside the bounded application backup ring.\n' >&2
+  exit 1
+}
+[[ "$(basename -- "$capture_dir")" =~ ^[0-9]{8}T[0-9]{6}\.[0-9]{6}Z-[0-9]+-$environment$ ]] || {
+  printf 'Logical capture directory has an invalid identity.\n' >&2
+  exit 1
+}
+[[ "$(basename -- "$dump_file")" == 'backup.dump' && -f "$dump_file" && ! -L "$dump_file" ]] || {
+  printf 'Logical dump is not a regular file.\n' >&2
+  exit 1
+}
+[[ "$metadata_file" == "$capture_dir/metadata.json" && -f "$metadata_file" && ! -L "$metadata_file" ]] || {
+  printf 'Logical metadata does not match the verified dump.\n' >&2
+  exit 1
+}
+
+: "${R2_ENDPOINT:?R2_ENDPOINT is required}"
+: "${R2_ACCESS_KEY_ID:?R2_ACCESS_KEY_ID is required}"
+: "${R2_SECRET_ACCESS_KEY:?R2_SECRET_ACCESS_KEY is required}"
+: "${R2_BACKUP_BUCKET:?R2_BACKUP_BUCKET is required}"
+: "${RESTIC_PASSWORD:?RESTIC_PASSWORD is required}"
+
+export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID"
+export AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
+export RESTIC_REPOSITORY="${RESTIC_REPOSITORY:-s3:${R2_ENDPOINT#https://}/${R2_BACKUP_BUCKET}}"
+export RESTIC_CACHE_DIR='/var/cache/authority-closers-restic'
+
+if [[ -n "${AC_RESTIC_LOCK_FD:-}" ]]; then
+  [[ "$AC_RESTIC_LOCK_FD" =~ ^[0-9]+$ && "$AC_RESTIC_LOCK_FD" -le 255 ]] || {
+    printf 'Invalid inherited Restic lock descriptor.\n' >&2
+    exit 1
+  }
+  flock --exclusive --nonblock "$AC_RESTIC_LOCK_FD" || {
+    printf 'Another Restic backup or prune is already active.\n' >&2
+    exit 1
+  }
+else
+  exec 9>>/run/lock/ac-restic-repository.lock
+  flock --exclusive --nonblock 9 || {
+    printf 'Another Restic backup or prune is already active.\n' >&2
+    exit 1
+  }
+fi
+
+# The guard queries live R2 usage and adds the full retained logical-dump model
+# before this individual Restic write. It is deliberately repeated per write.
+/usr/local/libexec/authority-closers/r2-usage-guard
+
+restic backup \
+  --retry-lock 0 \
+  --tag authority-closers-postgres-logical \
+  --tag "environment=$environment" \
+  "$dump_file" "$metadata_file"
+
+printf 'PASS  Encrypted logical PostgreSQL snapshot uploaded for %s.\n' "$environment"

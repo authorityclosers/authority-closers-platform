@@ -39,6 +39,8 @@
 
 ## Explicit gates
 
+- A bounded logical PostgreSQL backup writer was added on 2026-08-30. It is installed only by the immutable foundation release and remains disabled until `activate postgres-backup` validates exact units, current R2 usage plus the 5.25 GiB worst-case logical projection, a dry-run, and a local capture with `pg_restore --list` verification. No live activation, successful off-host logical snapshot, measured 900-second RPO, or new restore-drill evidence is claimed by this repository change.
+
 - The supplied Cloudflare API token remains read-only for tunnel and DNS writes; future automation requires a least-privilege replacement token.
 - Cloudflare Free Bot Fight Mode challenges GitHub-hosted runners, so the GitHub external-health schedule is disabled instead of weakening protection or accepting a false-green 403. Cloudflare security events identified the service and matching runner requests.
 - The originally supplied R2 key is read-only in practice and was not persisted. The replacement production token is bucket-scoped, IP-restricted, and stored in Infisical; operational jobs receive it only through short-lived injection.

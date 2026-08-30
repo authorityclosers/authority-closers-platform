@@ -23,12 +23,12 @@ depends_on: str | Sequence[str] | None = None
 
 
 def _active_postgresql_schema() -> tuple[str, str]:
-    """Return the connection's trusted default schema and a quoted identifier."""
+    """Return the schema selected by this connection's active search path."""
 
     bind = op.get_bind()
-    schema = bind.dialect.default_schema_name
+    schema = bind.execute(sa.text("SELECT current_schema()")).scalar_one()
     if not isinstance(schema, str) or not schema:
-        raise RuntimeError("PostgreSQL migrations require a resolved default schema")
+        raise RuntimeError("PostgreSQL migrations require a resolved active schema")
     return schema, bind.dialect.identifier_preparer.quote_schema(schema)
 
 

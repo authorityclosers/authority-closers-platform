@@ -1,5 +1,7 @@
 export const ROUTES = {
   home: "/",
+  privacy: "/privacy",
+  terms: "/terms",
   login: "/login",
   callback: "/auth/callback",
   onboarding: "/onboarding",

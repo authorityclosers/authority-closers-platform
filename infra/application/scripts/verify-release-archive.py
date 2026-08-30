@@ -6,9 +6,10 @@ import re
 import sys
 import tarfile
 from pathlib import Path, PurePosixPath
+from typing import Never
 
 
-def fail(message: str) -> None:
+def fail(message: str) -> Never:
     raise SystemExit(f"FAIL  {message}")
 
 
@@ -37,6 +38,9 @@ required_files = {
     "infra/application/environments/staging.env",
     "infra/application/environments/production.env",
     "infra/application/scripts/install-application-release.sh",
+    "infra/application/scripts/prepare-release-inputs.py",
+    "infra/application/scripts/restore-drill.py",
+    "infra/application/scripts/validate-google-oauth-secrets.py",
     "infra/application/scripts/verify-release-archive.py",
 }
 seen_files: set[str] = set()

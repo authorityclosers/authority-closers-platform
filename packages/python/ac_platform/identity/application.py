@@ -429,6 +429,7 @@ class AsyncIdentityApplication:
         ip_address: str | None,
     ) -> IssuedSession:
         token = secrets.token_urlsafe(self._token_length_bytes)
+        selected_tenant_id = await self._repository.get_sole_active_tenant_id(person.id)
         stored = StoredSession(
             id=uuid4(),
             person_id=person.id,
@@ -437,6 +438,7 @@ class AsyncIdentityApplication:
             expires_at=current_time + self._session_ttl,
             user_agent=_optional_text(user_agent, "user_agent", 512),
             ip_address=_optional_text(ip_address, "ip_address", 64),
+            selected_tenant_id=selected_tenant_id,
         )
         await self._repository.save_session(stored)
         return IssuedSession(token=token, metadata=self._metadata(stored))

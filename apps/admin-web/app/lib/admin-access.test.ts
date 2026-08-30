@@ -9,6 +9,8 @@ import {
   renderPermissionDeniedDocument,
 } from "./admin-access";
 
+const DEPLOYMENT_SESSION_TOKEN = "s".repeat(43);
+
 describe("admin route access policy", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
@@ -143,24 +145,43 @@ describe("admin route access policy", () => {
 
   it("allows production only after the internal API verifies session and admin context", async () => {
     vi.stubEnv("NODE_ENV", "production");
-    vi.stubEnv("AC_INTERNAL_API_URL", "http://api:8000");
-    vi.stubEnv("AC_INTERNAL_API_HOST", "api.authorityclosers.com");
+    vi.stubEnv(
+      "AC_INTERNAL_API_URL",
+      "http://api.production.ac.internal.invalid:8000",
+    );
+    vi.stubEnv("AC_INTERNAL_API_HOST", "api.production.ac.internal.invalid");
     vi.stubGlobal(
       "fetch",
-      vi.fn<typeof fetch>().mockResolvedValue(
-        Response.json({
-          person_id: "11111111-1111-4111-8111-111111111111",
-          session_id: "22222222-2222-4222-8222-222222222222",
-          tenant_id: "33333333-3333-4333-8333-333333333333",
-          membership_role: "admin",
-          permissions: ["admin_surface"],
-        }),
+      vi.fn<typeof fetch>().mockImplementation((input) =>
+        Promise.resolve(
+          Response.json(
+            String(input).endsWith("/me")
+              ? {
+                  person_id: "11111111-1111-4111-8111-111111111111",
+                  email: "admin@authorityclosers.com",
+                  display_name: "AC Admin",
+                  email_verified_at: "2026-08-30T00:00:00Z",
+                  selected_tenant_id: "33333333-3333-4333-8333-333333333333",
+                  membership_role: "admin",
+                  permissions: ["admin_surface"],
+                }
+              : {
+                  person_id: "11111111-1111-4111-8111-111111111111",
+                  session_id: "22222222-2222-4222-8222-222222222222",
+                  tenant_id: "33333333-3333-4333-8333-333333333333",
+                  membership_role: "admin",
+                  permissions: ["admin_surface"],
+                },
+          ),
+        ),
       ),
     );
 
     const response = await proxy(
       new NextRequest("https://admin.authorityclosers.test/catalog", {
-        headers: { cookie: "ac_session=opaque-session-token" },
+        headers: {
+          cookie: `__Host-ac_session=${DEPLOYMENT_SESSION_TOKEN}`,
+        },
       }),
     );
 
@@ -170,8 +191,11 @@ describe("admin route access policy", () => {
 
   it("keeps production denied when spoofed claims accompany an API rejection", async () => {
     vi.stubEnv("NODE_ENV", "production");
-    vi.stubEnv("AC_INTERNAL_API_URL", "http://api:8000");
-    vi.stubEnv("AC_INTERNAL_API_HOST", "api.authorityclosers.com");
+    vi.stubEnv(
+      "AC_INTERNAL_API_URL",
+      "http://api.production.ac.internal.invalid:8000",
+    );
+    vi.stubEnv("AC_INTERNAL_API_HOST", "api.production.ac.internal.invalid");
     vi.stubGlobal(
       "fetch",
       vi
@@ -182,7 +206,7 @@ describe("admin route access policy", () => {
     const response = await proxy(
       new NextRequest("https://admin.authorityclosers.test/?role=owner", {
         headers: {
-          cookie: "ac_session=invalid; role=owner",
+          cookie: "__Host-ac_session=invalid; role=owner",
           "x-admin-role": "owner",
         },
       }),

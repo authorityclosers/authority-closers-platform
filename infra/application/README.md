@@ -18,13 +18,38 @@ only valid release ID is the full reviewed Git commit from a verified archive.
 - Environment profiles fix distinct Compose project names, state roots, public
   origins, trusted API hosts, and `ac_edge` aliases. No generic alias is shared
   between staging and production.
+- On each environment's isolated `app` network, the API service owns only its
+  reserved, non-public `AC_INTERNAL_API_HOST`: `api.staging.ac.internal.invalid`
+  or `api.production.ac.internal.invalid`. The admin server calls exactly
+  `http://<AC_INTERNAL_API_HOST>:8000`; its adapter rejects any other host or URL
+  before network access and lets Node derive the wire `Host` from that canonical
+  URL. It forwards exactly one syntactically valid `__Host-ac_session` cookie
+  and no other browser cookies. If the Docker alias is absent, `.invalid` DNS
+  fails instead of falling back to a public plaintext destination. The separate
+  public `AC_API_HOST` remains the API health and edge-host contract.
 - PostgreSQL is reachable only on the internal data network. The owner,
   migrator, runtime, and backup credentials are distinct Infisical secrets.
+- The modular monolith runtime role deliberately retains table-level
+  `SELECT`, `INSERT`, `UPDATE`, and `DELETE` because its reviewed persistence
+  adapters span the identity, tenancy, catalog, enrollment, learning,
+  certificate, and operations modules in one database. That credential is a
+  process trust boundary, not a user or authorization identity: every request
+  still resolves its actor, tenant, membership, permission, enrollment, and
+  immutable catalog version in application code. PostgreSQL independently
+  enforces structural, provenance, append-only, and published-content
+  invariants. The runtime owns no relations or functions and receives no
+  schema/database/temporary-object creation, DDL, `TRUNCATE`, `REFERENCES`, or
+  `TRIGGER` privilege. Splitting module-specific credentials is deferred until
+  module processes and transaction ownership are split; claiming row-level
+  actor isolation from the shared runtime credential would be false.
 - Session tokens are stored only as peppered digests; the token pepper and the
   independent OAuth-transaction signing secret are required Infisical values
   and never enter an image, repository, URL, log, or browser-readable cookie.
-- Learner and admin sessions use host-only cookies: no cookie carries a
-  `Domain` attribute for `authorityclosers.com`. Caddy routes `/v1/*` on
+- Activated staging and production use exactly `__Host-ac_session` and
+  `__Host-ac_oauth_transaction`. Both are `Secure`, `HttpOnly`, `SameSite=Lax`,
+  scoped to `Path=/`, and carry no `Domain` attribute. The API reads raw Cookie
+  fields and rejects missing, malformed, or duplicate security cookies before
+  actor or callback resolution. Caddy routes `/v1/*` on
   `app.authorityclosers.com` and `admin.authorityclosers.com` to the API before
   their Next.js fallbacks, so Google callbacks return to the initiating
   surface without extending trust to the WordPress apex or the other surface.
@@ -76,9 +101,19 @@ each transport manifest is hash-verified and required to reference the exact
 reviewed image config. This avoids storage-driver-dependent local image IDs while
 preserving a cryptographic build-to-transport binding. A rerun is allowed only
 when an existing full-SHA tag resolves to the identical image config.
-The transport artifact expires after one day to keep pooled GitHub Actions
-storage inside the Free-plan allowance; the checksum-identical copy retained on
-the VPS is the rollback transport source. GitHub currently does not bill
+The checksummed `release-images.env` has an exact fixed contract: each API,
+learner, and admin image records a local Docker config ID in `AC_*_IMAGE`, its
+OCI transport-manifest digest in `AC_*_TRANSPORT_DIGEST`, and its immutable GHCR
+digest in `AC_*_REGISTRY_DIGEST`, plus one `AC_RELEASE_ID` and one
+`AC_MIGRATION_HEAD`. Local config IDs are the only values used to start services;
+the two digest families are retained as independently named provenance.
+Release packaging is globally serialized. After the candidate bundle is fully
+verified, the workflow deletes only artifacts whose names exactly match the AC
+release-artifact contract and refuses upload when the retained repository
+artifacts plus the candidate would exceed the conservative 450,000,000-byte
+pool ceiling. The new transport artifact expires after one day; the
+checksum-identical copy retained on the VPS is the rollback transport source.
+GitHub currently does not bill
 Container registry image storage or bandwidth, but this assumption must be
 rechecked if GitHub announces a policy change.
 
@@ -108,16 +143,29 @@ sudo AC_TARGET_ENVIRONMENT=staging \
 ```
 
 The installer verifies the Git archive and image bundle, preserves the bundle
-under `/srv/authority-closers/application/artifacts/<commit>`, loads only exact
-image IDs, creates a pre-migration PostgreSQL custom-format backup, migrates,
+under `/srv/authority-closers/application/artifacts/<commit>`, and loads only
+exact image IDs. Before the pre-migration PostgreSQL custom-format backup, it
+stops the live API and worker, revokes database `CONNECT` from the runtime and
+migrator roles, terminates any remaining sessions, and proves the writer count
+is zero. Only the migrator regains access for the forward migration; the
+runtime role regains access only after migration succeeds. The installer then
 starts the hardened services with provider effects held, proves the loopback
-Caddy route identity, and atomically advances `current-<environment>`. A
-catchable command failure or `HUP`/`INT`/`TERM` stops the candidate, restores
-the database backup, and reconciles the previous release. `SIGKILL`, kernel
-failure, and abrupt host power loss are outside shell-trap rollback; keep
+Caddy route identity, and atomically advances `current-<environment>`.
+
+A catchable command failure or `HUP`/`INT`/`TERM` stops the candidate and fences
+database writers again before restoring the backup. It reopens runtime access,
+restores the previous release link, and restarts the previous services only
+after the restore succeeds. A failed restore or access grant remains fenced and
+does not restart an application against an uncertain database. `SIGKILL`,
+kernel failure, and abrupt host power loss are outside shell-trap rollback; keep
 external effects held and perform the documented restore/reconciliation check
 before treating an interrupted deployment as committed. Deployment evidence
 contains no secret values.
+
+Alembic revisions are forward-only by project policy. Release rollback never
+uses `alembic downgrade`; it restores the immutable previous application
+artifact together with the installer-created pre-migration database backup,
+then runs the documented reconciliation proof before side effects are released.
 
 Staging is promoted by invoking the installer for production with the same
 source archive and the same `release-images.env`; images are never rebuilt
@@ -125,15 +173,22 @@ between environments. Production still requires a separate action-time
 approval. Admin ingress must be protected by Cloudflare Access before either
 admin hostname is activated.
 
-Google OAuth remains fail-closed when `AC_GOOGLE_OAUTH_CLIENT_ID` and
-`AC_GOOGLE_OAUTH_CLIENT_SECRET` are absent. When enabled, both values must be
-provided together from Infisical, and the Google web client must register both
-same-surface callbacks:
+Google OAuth is mandatory for every activated staging and production release.
+`AC_GOOGLE_OAUTH_CLIENT_ID` and `AC_GOOGLE_OAUTH_CLIENT_SECRET` must both be
+provided from Infisical. Before image loading or any Compose command, the
+installer clears ambient values and rejects a missing, empty, whitespace-only,
+or partial pair without printing either value. Compose, settings validation,
+and application composition provide additional fail-closed checks. Deployment
+composition constructs the Google adapter only from validated settings and
+rejects disabled or custom injected providers. The Google web client must
+register both same-surface callbacks:
 
 - `https://app.authorityclosers.com/v1/auth/google/callback`
 - `https://admin.authorityclosers.com/v1/auth/google/callback`
 
 Staging uses the equivalent callbacks on `staging.authorityclosers.com` and
-`admin-staging.authorityclosers.com`. Keep `AC_EMAIL_PROVIDER=fake` and
+`admin-staging.authorityclosers.com`. The preflight proves configuration
+presence only; credential rotation and a real Google login/callback remain
+deployment-time operational evidence. Keep `AC_EMAIL_PROVIDER=fake` and
 `AC_EXTERNAL_SIDE_EFFECTS_HOLD=true` until a separately reviewed provider
 activation gate is approved.

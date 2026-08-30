@@ -12,4 +12,10 @@ export AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
 export RESTIC_REPOSITORY="${RESTIC_REPOSITORY:-s3:${R2_ENDPOINT#https://}/${R2_BACKUP_BUCKET}}"
 export RESTIC_CACHE_DIR='/var/cache/authority-closers-restic'
 
+exec 9>>/run/lock/ac-restic-repository.lock
+flock --exclusive --nonblock 9 || {
+  printf 'Another Restic backup or prune is already active.\n' >&2
+  exit 1
+}
+
 restic init

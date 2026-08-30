@@ -6,11 +6,15 @@ import ActivityPage from "../activity/[activityId]/page";
 import CallbackPage from "../auth/callback/page";
 import CertificatePage from "../certificates/[certificateId]/page";
 import { ActivityRenderer } from "../components/activity-renderers";
-import { CoursePath } from "../components/course-path";
+import {
+  ConnectedActivityWorkspace,
+  LearningActivityNavigation,
+  LearnerHomeEnrollmentCard,
+} from "../components/learner-runtime";
 import { LoginForm } from "../components/login-form";
 import { OnboardingForm } from "../components/onboarding-form";
 import { ActivityStatusPill, ProgressMeter } from "../components/shared-ui";
-import { Breadcrumbs } from "../components/site-shell";
+import { Breadcrumbs, LearnerShell } from "../components/site-shell";
 import { SurfaceStatePanel } from "../components/surface-state";
 import LearnerHomePage from "../home/page";
 import ProgramLearningPage from "../learn/[programSlug]/page";
@@ -19,7 +23,9 @@ import ModulePage from "../learn/[programSlug]/module/[moduleId]/page";
 import LoginPage from "../login/page";
 import OnboardingPage from "../onboarding/page";
 import PublicHomePage from "../page";
+import PrivacyPage from "../privacy/page";
 import ProgramDetailPage from "../programs/[slug]/page";
+import TermsPage from "../terms/page";
 import {
   freeCourse,
   getActivityById,
@@ -35,6 +41,7 @@ import {
   SURFACE_STATE_ORDER,
   type SurfaceState,
 } from "./surface-state";
+import type { ActivityResponse } from "./learner-api";
 
 function h1Count(html: string): number {
   return html.match(/<h1(?:\s|>)/g)?.length ?? 0;
@@ -163,6 +170,8 @@ describe("learner route and state primitives", () => {
   });
 
   it("keeps the canonical learner journey route shapes stable", () => {
+    expect(ROUTES.privacy).toBe("/privacy");
+    expect(ROUTES.terms).toBe("/terms");
     expect(ROUTES.programDetail("free-course")).toBe("/programs/free-course");
     expect(ROUTES.programLearning("free-course")).toBe("/learn/free-course");
     expect(ROUTES.module("free-course", "module-01")).toBe(
@@ -175,6 +184,22 @@ describe("learner route and state primitives", () => {
     expect(ROUTES.certificate("preview-certificate")).toBe(
       "/certificates/preview-certificate",
     );
+  });
+});
+
+describe("staging consent support pages", () => {
+  it("publishes honest privacy and terms boundaries without production claims", () => {
+    const privacy = renderToStaticMarkup(createElement(PrivacyPage));
+    const terms = renderToStaticMarkup(createElement(TermsPage));
+
+    expect(h1Count(privacy)).toBe(1);
+    expect(h1Count(terms)).toBe(1);
+    expect(privacy).toContain("Staging test document");
+    expect(privacy).toContain("does not receive your Google password");
+    expect(terms).toContain("Not final production legal terms");
+    expect(terms).toContain("No purchase");
+    expect(privacy).toContain("admin@authorityclosers.com");
+    expect(terms).toContain("admin@authorityclosers.com");
   });
 });
 
@@ -220,56 +245,50 @@ describe("canonical progression access", () => {
   });
 
   it.each(["review", "improve"])(
-    "fails closed for direct locked activity URL %s regardless of query state",
+    "does not substitute local preview data for direct activity URL %s",
     async (activityId) => {
       const page = await ActivityPage({
         params: Promise.resolve({ activityId }),
-        searchParams: Promise.resolve({ state: "success-feedback" }),
+        searchParams: Promise.resolve({}),
       });
       const html = renderToStaticMarkup(page);
 
-      expect(html).toContain('data-state="LOCKED"');
-      expect(html).toContain("Complete the previous step first");
-      expect(html).not.toContain("Success feedback");
+      expect(html).toContain("Activity");
+      expect(html).toContain("Loading server data");
+      expect(html).not.toContain('data-state="LOCKED"');
+      expect(html).not.toContain("Complete the previous step first");
       expect(html).not.toContain("Your turn.");
       expect(html).not.toContain("<form");
       expect(html).not.toContain("<textarea");
     },
   );
 
-  it("fails closed for a direct locked module URL regardless of query state", async () => {
+  it("does not substitute the local module fixture for a direct module URL", async () => {
     const page = await ModulePage({
       params: Promise.resolve({
         programSlug: "free-course",
         moduleId: "module-02",
       }),
-      searchParams: Promise.resolve({ state: "partial" }),
+      searchParams: Promise.resolve({}),
     });
     const html = renderToStaticMarkup(page);
 
-    expect(html).toContain('data-state="LOCKED"');
-    expect(html).not.toContain("Some information is unavailable");
+    expect(html).toContain("Module");
+    expect(html).toContain("Loading server data");
+    expect(html).not.toContain('data-state="LOCKED"');
     expect(html).not.toContain("Module sequence");
     expect(html).not.toContain("Open first activity");
   });
 
-  it("does not link an available activity or course path directly into locked work", async () => {
+  it("keeps API-backed activity navigation free of local fixture links", async () => {
     const activityPage = await ActivityPage({
       params: Promise.resolve({ activityId: "implement" }),
       searchParams: Promise.resolve({}),
     });
     const activityHtml = renderToStaticMarkup(activityPage);
-    const pathHtml = renderToStaticMarkup(
-      createElement(CoursePath, {
-        programSlug: freeCourse.slug,
-        modules: freeCourse.modules,
-      }),
-    );
-
-    expect(activityHtml).toContain("Next activity locked");
+    expect(activityHtml).toContain("Loading server data");
     expect(activityHtml).not.toContain('href="/activity/review"');
-    expect(pathHtml).not.toContain('href="/activity/review"');
-    expect(pathHtml).not.toContain('href="/activity/improve"');
+    expect(activityHtml).not.toContain('href="/activity/improve"');
   });
 });
 
@@ -349,14 +368,16 @@ describe("accessibility semantics", () => {
     }
   });
 
-  it("keeps the home preview CTA and zero-evidence progress copy explicit", async () => {
+  it("keeps the authenticated home empty of invented progress while the API loads", async () => {
     const html = renderToStaticMarkup(
       await LearnerHomePage({ searchParams: Promise.resolve({}) }),
     );
 
-    expect(html).toContain("Open reflect preview");
-    expect(html).toContain('aria-valuenow="0"');
-    expect(html).toContain("0 / 5 · preview only");
+    expect(html).toContain("Learner workspace");
+    expect(html).toContain("Loading server data");
+    expect(html).not.toContain("Open reflect preview");
+    expect(html).not.toContain("preview only");
+    expect(html).not.toContain('aria-valuenow="0"');
   });
 
   it("announces retryable errors as alerts with an honest retry action", () => {
@@ -449,6 +470,141 @@ describe("accessibility semantics", () => {
     const html = renderToStaticMarkup(page);
 
     expect(html.match(/<h1(?:\s|>)/g)).toHaveLength(1);
-    expect(html).toContain('<h2 id="certificate-title">');
+    expect(html).toContain("Certificate");
+    expect(html).toContain("Loading server data");
+    expect(html).not.toContain("preview-certificate · issued");
+  });
+});
+
+describe("connected learner ready states", () => {
+  const baseActivity: ActivityResponse = {
+    id: "activity-1",
+    module_id: "module-1",
+    program_version_id: "version-1",
+    position: 1,
+    kind: "REFLECTION",
+    title: "A server-owned activity title",
+    prompt: null,
+    state: "available",
+    revision: 5,
+    required: true,
+    explanation: {
+      activity_id: "activity-1",
+      state: "available",
+      required: true,
+      reason: "server_resolved_activity_state",
+      missing_activity_ids: [],
+      missing_module_ids: [],
+    },
+    allowed_actions: [],
+    enrollment_id: "enrollment-1",
+    draft_revision: 0,
+    draft_payload: null,
+  };
+
+  it("keeps activity controls disabled when the server has no prompt", () => {
+    const html = renderToStaticMarkup(
+      createElement(ConnectedActivityWorkspace, {
+        activity: {
+          ...baseActivity,
+          prompt: null,
+          allowed_actions: ["save_draft", "submit_evidence"],
+        },
+      }),
+    );
+
+    expect(html).toContain("No learner-facing prompt is published.");
+    expect(html).toContain('id="activity-response"');
+    expect(html.match(/disabled=""/g)).toHaveLength(3);
+    expect(html).not.toContain('class="prompt-card"');
+  });
+
+  it("restores a server draft and enables only a prompted available activity", () => {
+    const html = renderToStaticMarkup(
+      createElement(ConnectedActivityWorkspace, {
+        activity: {
+          ...baseActivity,
+          prompt: "Describe the next deliberate move.",
+          state: "in_progress",
+          draft_revision: 3,
+          draft_payload: { response: "Restored server draft" },
+          allowed_actions: ["save_draft"],
+        },
+      }),
+    );
+
+    expect(html).toContain("Describe the next deliberate move.");
+    expect(html).toContain("Restored server draft");
+    expect(html).not.toContain("No learner-facing prompt is published.");
+    expect(html).not.toContain('id="activity-response" disabled=""');
+    expect(html).not.toContain('type="submit" disabled=""');
+    expect(html).toContain('type="button" disabled=""');
+  });
+
+  it("keeps all mutations disabled when the server exposes no allowed action", () => {
+    const html = renderToStaticMarkup(
+      createElement(ConnectedActivityWorkspace, {
+        activity: {
+          ...baseActivity,
+          prompt: "A prompt alone is not authorization.",
+          allowed_actions: [],
+        },
+      }),
+    );
+
+    expect(html).toContain("A prompt alone is not authorization.");
+    expect(html).toMatch(/id="activity-response"[^>]*disabled=""/);
+    expect(html.match(/disabled=""/g)).toHaveLength(3);
+  });
+
+  it("renders locked server activities without navigable links", () => {
+    const locked = renderToStaticMarkup(
+      createElement(LearningActivityNavigation, {
+        activity: {
+          ...baseActivity,
+          prompt: null,
+          state: "locked",
+          allowed_actions: [],
+        },
+      }),
+    );
+    const available = renderToStaticMarkup(
+      createElement(LearningActivityNavigation, {
+        activity: {
+          ...baseActivity,
+          prompt: "Server-owned prompt",
+          state: "available",
+          allowed_actions: ["save_draft"],
+        },
+      }),
+    );
+
+    expect(locked).toContain('aria-disabled="true"');
+    expect(locked).not.toContain("href=");
+    expect(available).toContain('href="/activity/activity-1"');
+  });
+
+  it("shows no current course until the server selects an enrollment", () => {
+    const html = renderToStaticMarkup(
+      createElement(LearnerHomeEnrollmentCard, { learning: undefined }),
+    );
+
+    expect(html).toContain("No current course selected.");
+    expect(html).toContain(
+      "No catalog item is substituted as a current course.",
+    );
+    expect(html).toContain('href="/"');
+    expect(html).not.toContain("/learn/free-course");
+  });
+
+  it("does not expose guessed course, certificate, or preview identity navigation", () => {
+    const html = renderToStaticMarkup(
+      createElement(LearnerShell, { current: "course" }, "content"),
+    );
+
+    expect(html).not.toContain("free-course");
+    expect(html).not.toContain("preview-certificate");
+    expect(html).not.toContain("Preview identity");
+    expect(html.match(/aria-disabled="true"/g)).toHaveLength(2);
   });
 });

@@ -33,6 +33,7 @@ from ac_platform.catalog.models import (
     ProgramVersion,
     ProgramVersionStatus,
 )
+from ac_platform.catalog.services import CatalogService, SqlAlchemyCatalogStore
 from ac_platform.enrollment.models import (
     Enrollment,
     EnrollmentEligibilityFact,
@@ -216,9 +217,18 @@ def _seed(engine: Engine) -> _Seed:
             )
         )
         database.flush()
-        version.status = ProgramVersionStatus.PUBLISHED.value
-        version.published_at = NOW
+        store = SqlAlchemyCatalogStore(database)
+        catalog = CatalogService(store, clock=lambda: NOW)
+        snapshot = store.get_version(version_id)
+        assert snapshot is not None
+        version.content_digest = catalog._canonical_content_digest(snapshot)  # noqa: SLF001
+        version.content_source_ref = __file__
+        version.content_reviewed_by = "course-http-reviewer@example.test"
+        version.content_reviewed_at = NOW
+        version.release_id = "f" * 40
+        version.content_seed_kind = "reviewed"
         database.flush()
+        catalog.publish_version(version_id, tenant_id=None, now=NOW)
         database.add(
             EnrollmentEligibilityFact(
                 id=uuid4(),

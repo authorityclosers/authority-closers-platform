@@ -109,7 +109,7 @@ The current pre-platform recovery export is root-only at `/etc/authority-closers
 4. Run `scripts/r2-probe.sh`; it requires both buckets to exist, performs reversible write/read/delete tests in both, and leaves no probe object.
 5. Configure Cloudflare account budget email alerts as an additional notification layer. Alerts are not hard caps.
 
-Restic is enabled with the current IP-restricted R2 credential, a human-escrowed passphrase, the usage guard, and successful restore drills. `ac-r2-usage-guard.timer` runs every 30 minutes; `ac-restic-backup.timer` runs daily; `ac-restic-restore-check.timer` runs weekly. The metrics evaluator distinguishes a present empty dataset (valid zero) from a missing field/account/dataset (hard failure). Do not enable public R2 domains, Infrequent Access, Data Catalog, SQL, Sippy, Super Slurper, or another ingestion path without a new cost review.
+Restic is enabled with the current IP-restricted R2 credential, a human-escrowed passphrase, the usage guard, and successful restore drills. `ac-r2-usage-guard.timer` runs every 30 minutes; `ac-restic-backup.timer` runs daily; `ac-restic-restore-check.timer` runs weekly. The metrics evaluator distinguishes a present empty dataset (valid zero) from a missing field/account/dataset (hard failure). The logical PostgreSQL path adds an 8 MiB initial per-dump bound and a two-environment, 336-points-per-environment projection before every write. Do not enable public R2 domains, Infrequent Access, Data Catalog, SQL, Sippy, Super Slurper, or another ingestion path without a new cost review.
 
 Useful checks:
 
@@ -118,6 +118,25 @@ sudo systemctl start ac-r2-usage-guard.service
 sudo systemctl start ac-restic-backup.service
 sudo systemctl start ac-restic-restore-check.service
 systemctl list-timers --all | grep -E 'ac-(r2|restic|foundation)'
+```
+
+The logical PostgreSQL writer is a separate disabled-by-default gate. It uses only `/srv/authority-closers/application/current-staging` and, when present and healthy, `/srv/authority-closers/application/current-production`; it never accepts a free-standing database URL. The runtime Infisical wrapper supplies `AC_DB_BACKUP_PASSWORD` to the exact compose `postgres` service, and the backup Infisical identity supplies only the Restic/R2 environment. A failed upload does not remove the verified local dump.
+
+Before enabling it on the VPS, use the exact reviewed release archive and run:
+
+```bash
+sudo /srv/authority-closers/current/scripts/bootstrap-host.sh activate postgres-backup
+```
+
+That gate verifies the installed units byte-for-byte against the current foundation release, checks current R2 usage, performs a no-write dry-run, captures and verifies a local dump with `pg_restore --list`, rechecks R2 usage, and only then enables the five-minute timer. It does not prove a measured 900-second RPO; record successful timer runs and recovery evidence separately before changing G0/G1 status.
+
+Useful post-activation checks:
+
+```bash
+sudo systemctl status ac-postgres-backup.timer
+sudo systemctl start ac-postgres-backup.service
+sudo journalctl -u ac-postgres-backup.service --since today
+sudo find /srv/authority-closers/backups/application -path '*/logical/*' -maxdepth 4 -type f -printf '%p %s bytes\n'
 ```
 
 The backup captures `/srv/authority-closers`, managed host configuration, baseline/toolchain records, released Infisical/rclone binaries, `/usr/local/sbin`, `/usr/local/libexec/authority-closers`, and Docker volumes while excluding `/etc/authority-closers/secrets`. Retention is 7 daily, 4 weekly, and 6 monthly snapshots. The weekly drill restores into an isolated no-exec target and verifies the restored release against the independently installed immutable release, the OS baseline record and complete dependency graph, toolchain hashes, installed-file content/modes/ownership, shell/config syntax, Compose resolution, secret exclusion, snapshot age, restore time, and a repository integrity sample. Restored binaries are never executed by the credentialed drill.

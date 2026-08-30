@@ -254,12 +254,42 @@ class AsyncSqlAlchemyTenantRepository:
         )
         return None if row is None else _tenant_snapshot(row)
 
+    async def get_tenant_by_slug_for_update(self, slug: str) -> TenantSnapshot | None:
+        """Lock the tenant identified by its unique slug."""
+
+        row = cast(
+            Tenant | None,
+            await self._session.scalar(
+                select(Tenant)
+                .where(Tenant.slug == slug)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            ),
+        )
+        return None if row is None else _tenant_snapshot(row)
+
     async def get_membership(self, tenant_id: UUID, person_id: UUID) -> MembershipSnapshot | None:
         row = cast(
             Membership | None,
             await self._session.scalar(
                 select(Membership)
                 .where(Membership.tenant_id == tenant_id, Membership.person_id == person_id)
+                .execution_options(populate_existing=True)
+            ),
+        )
+        return None if row is None else _membership_snapshot(row)
+
+    async def get_membership_for_update(
+        self, tenant_id: UUID, person_id: UUID
+    ) -> MembershipSnapshot | None:
+        """Lock one composite membership key for an idempotent transition."""
+
+        row = cast(
+            Membership | None,
+            await self._session.scalar(
+                select(Membership)
+                .where(Membership.tenant_id == tenant_id, Membership.person_id == person_id)
+                .with_for_update()
                 .execution_options(populate_existing=True)
             ),
         )

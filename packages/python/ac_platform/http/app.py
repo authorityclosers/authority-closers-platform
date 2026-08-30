@@ -11,7 +11,7 @@ from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from ac_platform import __version__
-from ac_platform.application.settings import get_settings
+from ac_platform.application.settings import Settings, get_settings
 from ac_platform.db.session import engine, session_factory
 from ac_platform.http.admin_learning import install_admin_learning_http
 from ac_platform.http.auth import install_identity_http
@@ -27,6 +27,22 @@ from ac_platform.http.request_limits import RequestBodyLimitMiddleware
 
 logger = structlog.get_logger()
 settings = get_settings()
+_DEPLOYMENT_ENVIRONMENTS = {"staging", "production"}
+
+
+def _google_provider_from_settings(settings: Settings) -> OAuthIdentityProvider:
+    if not settings.google_oauth_configured:
+        raise RuntimeError(
+            "staging and production application composition requires a configured Google OAuth pair"
+        )
+    client_secret = settings.google_oauth_client_secret
+    client_id = settings.google_oauth_client_id
+    if client_secret is None or client_id is None:
+        raise RuntimeError("validated Google OAuth settings are incomplete")
+    return create_google_provider(
+        client_id=client_id,
+        client_secret=client_secret.get_secret_value(),
+    )
 
 
 @asynccontextmanager
@@ -39,16 +55,17 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app(*, identity_provider: OAuthIdentityProvider | None = None) -> FastAPI:
-    configured_identity_provider = identity_provider
-    if configured_identity_provider is None and settings.google_oauth_configured:
-        client_secret = settings.google_oauth_client_secret
-        client_id = settings.google_oauth_client_id
-        if client_secret is None or client_id is None:
-            raise RuntimeError("validated Google OAuth settings are incomplete")
-        configured_identity_provider = create_google_provider(
-            client_id=client_id,
-            client_secret=client_secret.get_secret_value(),
-        )
+    configured_identity_provider: OAuthIdentityProvider | None
+    if settings.environment in _DEPLOYMENT_ENVIRONMENTS:
+        if identity_provider is not None:
+            raise RuntimeError(
+                "staging and production application composition rejects injected identity providers"
+            )
+        configured_identity_provider = _google_provider_from_settings(settings)
+    else:
+        configured_identity_provider = identity_provider
+        if configured_identity_provider is None and settings.google_oauth_configured:
+            configured_identity_provider = _google_provider_from_settings(settings)
     application = FastAPI(
         title="Authority Closers Platform API",
         version=__version__,
@@ -98,21 +115,22 @@ def create_app(*, identity_provider: OAuthIdentityProvider | None = None) -> Fas
         trusted_proxy_addresses=settings.rate_limit_trusted_proxy_addresses,
     )
     application.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts)
-    application.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.allowed_origins,
-        allow_credentials=True,
-        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=[
-            "authorization",
-            "content-type",
-            "idempotency-key",
-            "if-match",
-            "x-request-id",
-        ],
-        expose_headers=["etag", "x-request-id", "x-ac-release-id"],
-        max_age=600,
-    )
+    if settings.environment in {"local", "test", "development"}:
+        application.add_middleware(
+            CORSMiddleware,
+            allow_origins=settings.allowed_origins,
+            allow_credentials=True,
+            allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+            allow_headers=[
+                "authorization",
+                "content-type",
+                "idempotency-key",
+                "if-match",
+                "x-request-id",
+            ],
+            expose_headers=["etag", "x-request-id", "x-ac-release-id"],
+            max_age=600,
+        )
 
     @application.middleware("http")
     async def request_context(request: Request, call_next) -> Response:  # type: ignore[no-untyped-def]

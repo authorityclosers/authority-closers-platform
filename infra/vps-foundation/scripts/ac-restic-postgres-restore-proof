@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+[[ $# -eq 2 && "$1" == '--environment' ]] || {
+  printf 'Usage: %s --environment {staging|production}\n' "$0" >&2
+  exit 2
+}
+[[ "$2" == staging || "$2" == production ]] || {
+  printf 'Logical restore-proof environment is invalid.\n' >&2
+  exit 2
+}
+
+if [[ "${AC_IPV4_ONLY:-0}" != '1' ]]; then
+  exec systemd-run --quiet --wait --collect --pipe \
+    --setenv=AC_IPV4_ONLY=1 \
+    -p 'RestrictAddressFamilies=AF_INET AF_UNIX' \
+    "$0" "$@"
+fi
+
+# The backup Infisical identity supplies only the Restic/R2 environment.  The
+# Python helper never emits that environment or child command output.
+exec /usr/local/sbin/ac-infisical-run-backup \
+  -- /usr/local/libexec/authority-closers/ac-restic-postgres-restore-proof.py "$@"

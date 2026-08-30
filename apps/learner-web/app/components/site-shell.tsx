@@ -21,7 +21,7 @@ export function PublicShell({
   children,
   current = "home",
 }: {
-  children: React.ReactNode;
+  children?: React.ReactNode;
   current?: PublicCurrent;
 }) {
   return (
@@ -42,9 +42,10 @@ export function PublicShell({
             <Link href={ROUTES.login}>Sign in</Link>
             <Link
               className="button button--small button--outline"
-              href={ROUTES.programDetail("free-course")}
+              href={ROUTES.home}
             >
-              Explore the course <ArrowUpRight size={15} aria-hidden="true" />
+              Explore published programs{" "}
+              <ArrowUpRight size={15} aria-hidden="true" />
             </Link>
           </nav>
         </div>
@@ -54,9 +55,13 @@ export function PublicShell({
         <div className="site-footer__inner">
           <BrandLink />
           <p>Preview surface · learning primitives for deliberate practice.</p>
-          <Link href={ROUTES.login}>
-            Sign in <ArrowUpRight size={14} aria-hidden="true" />
-          </Link>
+          <nav className="site-footer__links" aria-label="Legal and access">
+            <Link href={ROUTES.privacy}>Privacy</Link>
+            <Link href={ROUTES.terms}>Terms</Link>
+            <Link href={ROUTES.login}>
+              Sign in <ArrowUpRight size={14} aria-hidden="true" />
+            </Link>
+          </nav>
         </div>
       </footer>
     </div>
@@ -86,11 +91,26 @@ function LearnerNavLink({
   );
 }
 
+function LearnerNavDisabled({
+  label,
+  icon,
+}: {
+  label: string;
+  icon: React.ReactNode;
+}) {
+  return (
+    <span className="learner-nav__link is-disabled" aria-disabled="true">
+      {icon}
+      <span>{label}</span>
+    </span>
+  );
+}
+
 export function LearnerShell({
   children,
   current = "home",
 }: {
-  children: React.ReactNode;
+  children?: React.ReactNode;
   current?: LearnerCurrent;
 }) {
   return (
@@ -108,25 +128,15 @@ export function LearnerShell({
               current={current === "home"}
               icon={<Home size={17} aria-hidden="true" />}
             />
-            <LearnerNavLink
-              href={ROUTES.programLearning("free-course")}
+            <LearnerNavDisabled
               label="Course"
-              current={current === "course"}
               icon={<BookOpen size={17} aria-hidden="true" />}
             />
-            <LearnerNavLink
-              href={ROUTES.certificate("preview-certificate")}
+            <LearnerNavDisabled
               label="Certificate"
-              current={current === "certificate"}
               icon={<Medal size={17} aria-hidden="true" />}
             />
           </nav>
-          <div className="learner-identity" aria-label="Current identity">
-            <span className="learner-identity__initials" aria-hidden="true">
-              PV
-            </span>
-            <span className="learner-identity__name">Preview identity</span>
-          </div>
         </div>
       </header>
       {children}

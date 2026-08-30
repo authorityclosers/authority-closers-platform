@@ -301,7 +301,7 @@ def test_operations_http_postgresql_authorization_replay_and_webhook_journey(
                 person_id=seed.person_id,
                 session_id=seed.session_id,
                 tenant_id=seed.tenant_id,
-                permissions=frozenset({"job_retry", "recovery_reconcile"}),
+                permissions=frozenset({"admin_surface", "job_retry", "recovery_reconcile"}),
             )
             application = _application(
                 sessions=sessions,
@@ -311,7 +311,7 @@ def test_operations_http_postgresql_authorization_replay_and_webhook_journey(
             transport = httpx.ASGITransport(app=application)
             async with httpx.AsyncClient(
                 transport=transport,
-                base_url="https://api.authorityclosers.test",
+                base_url="https://admin.authorityclosers.test",
             ) as client:
                 retry_headers = {
                     "Origin": "https://admin.authorityclosers.test",
@@ -501,7 +501,7 @@ def test_operations_http_postgresql_denies_unprivileged_and_cross_tenant_actors(
                     person_id=seed.person_id,
                     session_id=uuid4(),
                     tenant_id=uuid4(),
-                    permissions=frozenset({"job_retry"}),
+                    permissions=frozenset({"admin_surface", "job_retry"}),
                 ),
             ):
                 application = _application(
@@ -511,7 +511,7 @@ def test_operations_http_postgresql_denies_unprivileged_and_cross_tenant_actors(
                 )
                 async with httpx.AsyncClient(
                     transport=httpx.ASGITransport(app=application),
-                    base_url="https://api.authorityclosers.test",
+                    base_url="https://admin.authorityclosers.test",
                 ) as client:
                     response = await client.post(
                         f"/v1/admin/jobs/{seed.job_id}/retry",

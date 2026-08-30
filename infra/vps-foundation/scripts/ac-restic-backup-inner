@@ -12,12 +12,92 @@ export AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
 export RESTIC_REPOSITORY="${RESTIC_REPOSITORY:-s3:${R2_ENDPOINT#https://}/${R2_BACKUP_BUCKET}}"
 export RESTIC_CACHE_DIR='/var/cache/authority-closers-restic'
 
+backup_sources=(
+  /srv/authority-closers
+  /etc/authority-closers
+  /etc/ssh
+  /etc/apt/apt.conf.d
+  /etc/audit/rules.d
+  /etc/docker
+  /etc/systemd/system
+  /etc/fail2ban
+  /etc/systemd/journald.conf.d
+  /etc/sysctl.d
+  /etc/security/limits.d
+  /etc/ufw
+  /usr/local/libexec/authority-closers
+  /usr/local/bin/infisical
+  /usr/local/bin/rclone
+  /usr/local/sbin
+  /var/lib/authority-closers
+  /var/lib/docker/volumes
+)
+
+# The local source size is a deliberately conservative upper bound for a new
+# foundation snapshot. Restic compression and deduplication are never used to
+# justify crossing the account storage envelope.
+foundation_projection="$({ python3 - "${backup_sources[@]}" <<'PY'
+import os
+import sys
+
+ceiling = 8_589_934_592
+excluded = {
+    "/etc/authority-closers/secrets",
+    "/srv/authority-closers/application/artifacts",
+    "/srv/authority-closers/application/releases",
+    "/srv/authority-closers/backups/application",
+}
+total = 0
+stack = [os.path.abspath(path) for path in sys.argv[1:]]
+seen = set()
+while stack:
+    path = stack.pop()
+    if path in excluded or any(path.startswith(item + os.sep) for item in excluded):
+        continue
+    try:
+        stat = os.lstat(path)
+    except OSError as error:
+        raise SystemExit(f"Foundation backup source is unreadable: {path}") from error
+    identity = (stat.st_dev, stat.st_ino)
+    if identity in seen:
+        continue
+    seen.add(identity)
+    if os.path.isdir(path) and not os.path.islink(path):
+        try:
+            with os.scandir(path) as entries:
+                stack.extend(entry.path for entry in entries)
+        except OSError as error:
+            raise SystemExit(f"Foundation backup source cannot be scanned: {path}") from error
+        continue
+    total += max(stat.st_size, getattr(stat, "st_blocks", 0) * 512)
+    if total > ceiling:
+        print(ceiling + 1)
+        raise SystemExit(0)
+print(total)
+PY
+} 2>/dev/null)" || {
+  printf 'Foundation backup source projection failed.\n' >&2
+  exit 1
+}
+[[ "$foundation_projection" =~ ^[0-9]+$ ]] || {
+  printf 'Foundation backup source projection is malformed.\n' >&2
+  exit 1
+}
+
+exec 9>>/run/lock/ac-restic-repository.lock
+flock --exclusive --nonblock 9 || {
+  printf 'Another Restic backup or prune is already active.\n' >&2
+  exit 1
+}
+
 # Fail closed before every write if the conservative R2 envelope is exceeded.
-/usr/local/libexec/authority-closers/r2-usage-guard
+R2_PROJECTED_ADDITIONAL_BYTES="$foundation_projection" \
+  /usr/local/libexec/authority-closers/r2-usage-guard
 
 restic snapshots >/dev/null
 
 restic backup \
+  --retry-lock 0 \
   --tag authority-closers-foundation \
   --exclude-caches \
   --exclude='/etc/authority-closers/secrets' \
@@ -26,29 +106,23 @@ restic backup \
   --exclude='/srv/authority-closers/application/artifacts/**' \
   --exclude='/srv/authority-closers/application/releases' \
   --exclude='/srv/authority-closers/application/releases/**' \
-  /srv/authority-closers \
-  /etc/authority-closers \
-  /etc/ssh \
-  /etc/apt/apt.conf.d \
-  /etc/audit/rules.d \
-  /etc/docker \
-  /etc/systemd/system \
-  /etc/fail2ban \
-  /etc/systemd/journald.conf.d \
-  /etc/sysctl.d \
-  /etc/security/limits.d \
-  /etc/ufw \
-  /usr/local/libexec/authority-closers \
-  /usr/local/bin/infisical \
-  /usr/local/bin/rclone \
-  /usr/local/sbin \
-  /var/lib/authority-closers \
-  /var/lib/docker/volumes
+  --exclude='/srv/authority-closers/backups/application' \
+  --exclude='/srv/authority-closers/backups/application/**' \
+  "${backup_sources[@]}"
 
 restic forget \
+  --tag authority-closers-foundation \
   --keep-daily 7 \
   --keep-weekly 4 \
-  --keep-monthly 6 \
-  --prune
+  --keep-monthly 6
+
+# Logical application snapshots are retained independently and pruned only by
+# this daily foundation job, never by the five-minute capture path.
+restic forget \
+  --tag authority-closers-postgres-logical \
+  --group-by host,tags \
+  --keep-within 27h
+
+restic prune
 
 printf 'PASS  Restic backup and retention completed.\n'

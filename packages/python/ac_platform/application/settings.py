@@ -3,11 +3,39 @@ from __future__ import annotations
 import ipaddress
 import re
 from functools import lru_cache
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import AnyHttpUrl, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import make_url
+
+from ac_platform.application.release_identity import require_baked_release_id
+
+_DEPLOYMENT_ORIGINS = {
+    "staging": {
+        "public_app_url": "https://staging.authorityclosers.com",
+        "admin_app_url": "https://admin-staging.authorityclosers.com",
+        "api_url": "https://api-staging.authorityclosers.com",
+    },
+    "production": {
+        "public_app_url": "https://app.authorityclosers.com",
+        "admin_app_url": "https://admin.authorityclosers.com",
+        "api_url": "https://api.authorityclosers.com",
+    },
+}
+_DEPLOYMENT_URL_ENV_FIELDS = {
+    "public_app_url": "AC_PUBLIC_APP_URL",
+    "admin_app_url": "AC_ADMIN_APP_URL",
+    "api_url": "AC_API_URL",
+}
+_DEPLOYMENT_INTERNAL_API_HOSTS = {
+    "staging": "api.staging.ac.internal.invalid",
+    "production": "api.production.ac.internal.invalid",
+}
+_DEPLOYMENT_COOKIE_NAMES = {
+    "session_cookie_name": "__Host-ac_session",
+    "oauth_transaction_cookie_name": "__Host-ac_oauth_transaction",
+}
 
 
 class Settings(BaseSettings):
@@ -29,6 +57,7 @@ class Settings(BaseSettings):
     public_app_url: AnyHttpUrl = AnyHttpUrl("http://localhost:3000")
     admin_app_url: AnyHttpUrl = AnyHttpUrl("http://localhost:3001")
     api_url: AnyHttpUrl = AnyHttpUrl("http://localhost:8000")
+    internal_api_host: str = "localhost"
     session_token_pepper: SecretStr = SecretStr(
         "local-session-token-pepper-change-before-production"
     )
@@ -40,6 +69,27 @@ class Settings(BaseSettings):
     google_oauth_client_id: str | None = None
     google_oauth_client_secret: SecretStr | None = None
     trusted_proxy_addresses: str = ""
+
+    @model_validator(mode="before")
+    @classmethod
+    def require_exact_raw_deployment_origins(cls, values: Any) -> Any:
+        if not isinstance(values, dict):
+            return values
+        environment = values.get("environment")
+        if not isinstance(environment, str) or environment not in _DEPLOYMENT_ORIGINS:
+            return values
+        expected_origins = _DEPLOYMENT_ORIGINS[environment]
+        for field, environment_field in _DEPLOYMENT_URL_ENV_FIELDS.items():
+            raw_value = values.get(field)
+            if raw_value is None:
+                continue
+            expected_origin = expected_origins[field]
+            if not isinstance(raw_value, str) or raw_value not in {
+                expected_origin,
+                f"{expected_origin}/",
+            }:
+                raise ValueError(f"{environment_field} must be the canonical HTTPS origin")
+        return values
 
     @model_validator(mode="after")
     def require_deployment_identity_secrets(self) -> Settings:
@@ -60,34 +110,33 @@ class Settings(BaseSettings):
             raise ValueError("deployment identity secrets must be independent")
         if re.fullmatch(r"[0-9a-f]{40}", self.release_id) is None:
             raise ValueError("AC_RELEASE_ID must be the full lowercase Git commit SHA")
-        expected_hosts = (
-            {
-                "public": "app.authorityclosers.com",
-                "admin": "admin.authorityclosers.com",
-                "api": "api.authorityclosers.com",
-            }
-            if self.environment == "production"
-            else {
-                "public": "staging.authorityclosers.com",
-                "admin": "admin-staging.authorityclosers.com",
-                "api": "api-staging.authorityclosers.com",
-            }
-        )
+        expected_origins = _DEPLOYMENT_ORIGINS[self.environment]
         self._validate_deployment_url(
             self.public_app_url,
             field="AC_PUBLIC_APP_URL",
-            expected_host=expected_hosts["public"],
+            expected_origin=expected_origins["public_app_url"],
         )
         self._validate_deployment_url(
             self.admin_app_url,
             field="AC_ADMIN_APP_URL",
-            expected_host=expected_hosts["admin"],
+            expected_origin=expected_origins["admin_app_url"],
         )
         self._validate_deployment_url(
             self.api_url,
             field="AC_API_URL",
-            expected_host=expected_hosts["api"],
+            expected_origin=expected_origins["api_url"],
         )
+        expected_internal_api_host = _DEPLOYMENT_INTERNAL_API_HOSTS[self.environment]
+        if self.internal_api_host != expected_internal_api_host:
+            raise ValueError(
+                "AC_INTERNAL_API_HOST must be the environment's reserved internal hostname"
+            )
+        for field, expected_name in _DEPLOYMENT_COOKIE_NAMES.items():
+            if getattr(self, field) != expected_name:
+                environment_field = f"AC_{field.upper()}"
+                raise ValueError(f"{environment_field} must use the exact __Host cookie name")
+        if not self.secure_cookies:  # pragma: no cover - deployment environments imply Secure
+            raise ValueError("deployment cookies must be Secure")
         self._validate_deployment_database(
             self.database_url,
             field="AC_DATABASE_URL",
@@ -101,7 +150,7 @@ class Settings(BaseSettings):
             )
         if not self.rate_limit_trusted_proxy_addresses:
             raise ValueError("AC_TRUSTED_PROXY_ADDRESSES must contain at least one exact proxy IP")
-        self._validate_google_oauth_pair()
+        self._validate_google_oauth_pair(require_configured=True)
         return self
 
     @staticmethod
@@ -109,9 +158,9 @@ class Settings(BaseSettings):
         value: AnyHttpUrl,
         *,
         field: str,
-        expected_host: str,
+        expected_origin: str,
     ) -> None:
-        if value.scheme != "https" or value.host != expected_host or value.path not in {"", "/"}:
+        if str(value) != f"{expected_origin}/":
             raise ValueError(f"{field} must be the canonical HTTPS origin")
 
     @staticmethod
@@ -136,7 +185,7 @@ class Settings(BaseSettings):
         ):
             raise ValueError(f"{field} must use the dedicated deployment PostgreSQL role")
 
-    def _validate_google_oauth_pair(self) -> None:
+    def _validate_google_oauth_pair(self, *, require_configured: bool = False) -> None:
         client_id = (self.google_oauth_client_id or "").strip()
         client_secret = (
             ""
@@ -147,6 +196,10 @@ class Settings(BaseSettings):
             raise ValueError(
                 "AC_GOOGLE_OAUTH_CLIENT_ID and AC_GOOGLE_OAUTH_CLIENT_SECRET must be set together"
             )
+        if require_configured and not (client_id and client_secret):
+            raise ValueError(
+                "AC_GOOGLE_OAUTH_CLIENT_ID and AC_GOOGLE_OAUTH_CLIENT_SECRET are required"
+            )
         if client_id and (
             len(client_id) > 512 or not client_id.endswith(".apps.googleusercontent.com")
         ):
@@ -154,7 +207,13 @@ class Settings(BaseSettings):
 
     @property
     def google_oauth_configured(self) -> bool:
-        return bool(self.google_oauth_client_id and self.google_oauth_client_secret)
+        client_id = (self.google_oauth_client_id or "").strip()
+        client_secret = (
+            ""
+            if self.google_oauth_client_secret is None
+            else self.google_oauth_client_secret.get_secret_value().strip()
+        )
+        return bool(client_id and client_secret)
 
     @property
     def rate_limit_trusted_proxy_addresses(
@@ -185,6 +244,7 @@ class Settings(BaseSettings):
             for value in (self.public_app_url, self.admin_app_url, self.api_url)
             if value.host is not None
         }
+        hosts.add(self.internal_api_host)
         if self.environment in {"local", "test"}:
             hosts.update({"localhost", "127.0.0.1", "test"})
         return sorted(hosts)
@@ -200,4 +260,7 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    configured = Settings()
+    if configured.environment in {"staging", "production"}:
+        require_baked_release_id(configured.release_id)
+    return configured

@@ -26,11 +26,11 @@ import {
 import { AuditPanel, CapabilityBoundary } from "./components/ops-primitives";
 
 const previewForms = [
-  LearnerLookupForm,
-  CorrectionForm,
-  ManualGrantForm,
-  HeldJobRetryForm,
-  ReconciliationForm,
+  createElement(LearnerLookupForm),
+  createElement(CorrectionForm),
+  createElement(ManualGrantForm),
+  createElement(HeldJobRetryForm),
+  createElement(ReconciliationForm),
 ];
 
 function relativeLuminance(hex: string) {
@@ -91,23 +91,23 @@ describe("G1 admin inert form seams", () => {
     expect(tabEvent.stopPropagation).not.toHaveBeenCalled();
   });
 
-  it("renders every preview form with no successful controls or submitter", () => {
-    for (const Form of previewForms) {
-      const markup = renderToStaticMarkup(createElement(Form));
+  it("renders every command form fail-closed until a server target is resolved", () => {
+    for (const form of previewForms) {
+      const markup = renderToStaticMarkup(form);
       const formTag = markup.match(/<form\b[^>]*>/)?.[0] ?? "";
       const buttons = [...markup.matchAll(/<button\b[^>]*>/g)].map(
         (match) => match[0],
       );
 
       expect(formTag).toContain('data-preview-inert="true"');
-      expect(formTag).not.toMatch(/\s(?:action|method)=/);
+      expect(formTag).not.toMatch(/\saction=/);
       expect(markup).toMatch(/<fieldset[^>]*disabled/);
       expect(markup).not.toMatch(/\sname=/);
-      expect(markup).not.toContain('type="submit"');
+      expect(markup).toContain('type="submit"');
       expect(buttons.length).toBeGreaterThan(0);
       expect(buttons.every((button) => button.includes("disabled"))).toBe(true);
       expect(markup).toContain("LOOKUP UNAVAILABLE");
-      expect(markup).toContain("raw identifiers are not accepted");
+      expect(markup).toContain("raw identifiers are never accepted");
     }
   });
 
@@ -156,9 +156,7 @@ describe("G1 admin inert form seams", () => {
     );
     expect(markup).toMatch(/<input[^>]*type="checkbox"[^>]*disabled/);
     expect(markup).toMatch(/<fieldset[^>]*disabled/);
-    expect(markup).toMatch(
-      /<button[^>]*disabled[^>]*>.*Review diagnosis request/,
-    );
+    expect(markup).toMatch(/<button[^>]*disabled[^>]*>.*Run diagnosis/);
     expect(formTag).not.toMatch(/\s(?:action|method|name)=/);
     expect(markup).not.toMatch(
       /id="[^"]*(?:learner_support|safeguarding_review|accessibility_review)/,

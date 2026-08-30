@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import os
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -8,6 +11,8 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 APPLICATION = ROOT / "infra" / "application"
 COMPOSE = (APPLICATION / "compose.yaml").read_text(encoding="utf-8")
+APPLICATION_README = (APPLICATION / "README.md").read_text(encoding="utf-8")
+APPLICATION_SECRETS = (APPLICATION / "SECRETS.md").read_text(encoding="utf-8")
 WEB_DOCKERFILE = (APPLICATION / "Dockerfile.web").read_text(encoding="utf-8")
 PYTHON_DOCKERFILE = (APPLICATION / "Dockerfile.python").read_text(encoding="utf-8")
 CADDYFILE = (ROOT / "infra" / "vps-foundation" / "compose" / "foundation" / "Caddyfile").read_text(
@@ -23,6 +28,10 @@ FOUNDATION_VALIDATOR = (
     ROOT / "infra" / "vps-foundation" / "scripts" / "validate-foundation.sh"
 ).read_text(encoding="utf-8")
 INSTALLER = (APPLICATION / "scripts" / "install-application-release.sh").read_text(encoding="utf-8")
+RELEASE_INPUT_PREPARER = (APPLICATION / "scripts" / "prepare-release-inputs.py").read_text(
+    encoding="utf-8"
+)
+OAUTH_SECRET_PREFLIGHT = APPLICATION / "scripts" / "validate-google-oauth-secrets.py"
 INFISICAL_RUNNER = (ROOT / "infra" / "vps-foundation" / "scripts" / "ac-infisical-run").read_text(
     encoding="utf-8"
 )
@@ -60,6 +69,8 @@ def test_release_fails_closed_on_identity_and_database_secrets() -> None:
         "AC_DATABASE_MIGRATOR_URL:?",
         "AC_SESSION_TOKEN_PEPPER:?",
         "AC_OAUTH_TRANSACTION_SECRET:?",
+        "AC_GOOGLE_OAUTH_CLIENT_ID:?",
+        "AC_GOOGLE_OAUTH_CLIENT_SECRET:?",
         "AC_POSTGRES_OWNER_PASSWORD:?",
         "AC_DB_MIGRATOR_PASSWORD:?",
         "AC_DB_RUNTIME_PASSWORD:?",
@@ -79,6 +90,100 @@ def test_release_fails_closed_on_identity_and_database_secrets() -> None:
     assert "migrate:\n" in COMPOSE
     assert "<<: *migration-environment" in COMPOSE
     assert "-u AC_TRUSTED_PROXY_ADDRESSES" in INSTALLER
+
+
+def test_deployment_oauth_documentation_matches_mandatory_compose_contract() -> None:
+    for document in (APPLICATION_README, APPLICATION_SECRETS):
+        assert "Google OAuth is mandatory" in document
+        assert "AC_GOOGLE_OAUTH_CLIENT_ID" in document
+        assert "AC_GOOGLE_OAUTH_CLIENT_SECRET" in document
+
+    assert "omit both and leave Google login disabled" not in APPLICATION_SECRETS
+    assert "Google OAuth remains fail-closed" not in APPLICATION_README
+    assert "rejects disabled or custom injected providers" in APPLICATION_README
+    for document in (APPLICATION_README, APPLICATION_SECRETS):
+        normalized_document = " ".join(document.split())
+        assert (
+            "real Google login/callback remain deployment-time operational evidence"
+            in normalized_document
+        )
+
+
+@pytest.mark.parametrize(
+    "client_id, client_secret",
+    [
+        (None, None),
+        (None, "fixture-client-secret"),
+        ("", "fixture-client-secret"),
+        (" \t\n", "fixture-client-secret"),
+        ("123.apps.googleusercontent.com", None),
+        ("123.apps.googleusercontent.com", ""),
+        ("123.apps.googleusercontent.com", " \t\r\n"),
+        ("123.apps.googleusercontent.com", "\u2003"),
+    ],
+)
+def test_oauth_secret_preflight_rejects_missing_or_whitespace_values_without_leaking(
+    client_id: str | None,
+    client_secret: str | None,
+) -> None:
+    environment = os.environ.copy()
+    environment.pop("AC_GOOGLE_OAUTH_CLIENT_ID", None)
+    environment.pop("AC_GOOGLE_OAUTH_CLIENT_SECRET", None)
+    if client_id is not None:
+        environment["AC_GOOGLE_OAUTH_CLIENT_ID"] = client_id
+    if client_secret is not None:
+        environment["AC_GOOGLE_OAUTH_CLIENT_SECRET"] = client_secret
+
+    result = subprocess.run(  # noqa: S603 - checked repository script and interpreter
+        [sys.executable, str(OAUTH_SECRET_PREFLIGHT)],
+        capture_output=True,
+        check=False,
+        env=environment,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    output = result.stdout + result.stderr
+    for value in (client_id, client_secret):
+        if value and value.strip():
+            assert value not in output
+
+
+def test_oauth_secret_preflight_accepts_both_values_without_printing_them() -> None:
+    environment = os.environ.copy()
+    client_id = "123.apps.googleusercontent.com"
+    client_secret = "fixture-client-secret"  # noqa: S105
+    environment["AC_GOOGLE_OAUTH_CLIENT_ID"] = client_id
+    environment["AC_GOOGLE_OAUTH_CLIENT_SECRET"] = client_secret
+
+    result = subprocess.run(  # noqa: S603 - checked repository script and interpreter
+        [sys.executable, str(OAUTH_SECRET_PREFLIGHT)],
+        capture_output=True,
+        check=False,
+        env=environment,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    output = result.stdout + result.stderr
+    assert client_id not in output
+    assert client_secret not in output
+
+
+def test_oauth_secret_preflight_runs_before_image_loading_and_compose_mutation() -> None:
+    preflight = 'python3 "$release_dir/scripts/validate-google-oauth-secrets.py"'
+    image_load = 'gzip --decompress --stdout "$image_bundle_dir/application-images.tar.gz"'
+    compose_config = 'compose_for "$release_dir" config --quiet'
+    mutation_start = "mutation_started=1"
+    secret_wrapper = INSTALLER.split("with_release_secrets() {", maxsplit=1)[1].split(
+        "\n}", maxsplit=1
+    )[0]
+
+    assert INSTALLER.index(preflight) < INSTALLER.index(image_load)
+    assert INSTALLER.index(preflight) < INSTALLER.index(compose_config)
+    assert INSTALLER.index(preflight) < INSTALLER.index(mutation_start)
+    assert "-u AC_GOOGLE_OAUTH_CLIENT_ID" in secret_wrapper
+    assert "-u AC_GOOGLE_OAUTH_CLIENT_SECRET" in secret_wrapper
 
 
 def test_database_and_edge_networks_are_explicitly_separated() -> None:
@@ -137,10 +242,19 @@ def test_caddy_routes_only_named_application_hosts() -> None:
         assert f'X-Authority-Closers-Route "{route}"' in CADDYFILE
 
 
-def test_api_healthcheck_uses_canonical_trusted_host() -> None:
+def test_api_and_admin_adapter_use_canonical_trusted_internal_dns() -> None:
+    api_service = COMPOSE.split("\n  api:\n", maxsplit=1)[1].split("\n  worker:\n", maxsplit=1)[0]
+    admin_service = COMPOSE.split("\n  admin-web:\n", maxsplit=1)[1].split(
+        "\nnetworks:\n", maxsplit=1
+    )[0]
+    internal_api_host = "${AC_INTERNAL_API_HOST:?AC_INTERNAL_API_HOST is required}"
+
     assert "http://127.0.0.1:8000/health/ready" in COMPOSE
     assert "headers={'Host': os.environ['AC_API_HOST']}" in COMPOSE
-    assert "AC_INTERNAL_API_HOST: ${AC_API_HOST:?" in COMPOSE
+    assert f"app:\n        aliases:\n          - {internal_api_host}" in api_service
+    assert f'AC_INTERNAL_API_URL: "http://{internal_api_host}:8000"' in admin_service
+    assert f"AC_INTERNAL_API_HOST: {internal_api_host}" in admin_service
+    assert "AC_INTERNAL_API_APPROVED_ORIGINS" not in COMPOSE
 
 
 def test_admin_healthcheck_uses_loopback_only_health_boundary() -> None:
@@ -178,16 +292,48 @@ def test_release_is_built_off_host_and_installed_with_backup_and_rollback() -> N
     assert 'tar --extract --to-stdout --file "$transport_tar" index.json' in WORKFLOW
     assert "transport_digest_for" in WORKFLOW
     assert "verify_transport_config" in WORKFLOW
+    assert "AC_RELEASE_ID=${{ github.sha }}" in WORKFLOW
+    assert "API image release marker does not match the workflow commit" in WORKFLOW
+    assert "AC_MIGRATION_HEAD=%s" in WORKFLOW and "migration_head" in WORKFLOW
+    assert "AC_MIGRATION_HEAD" in INSTALLER
     assert "OCI transport manifest does not reference the reviewed image config" in WORKFLOW
-    assert "AC_API_IMAGE=%s" in WORKFLOW and "api_transport_digest" in WORKFLOW
+    assert "printf 'AC_API_IMAGE=%s\\n' \"$api_id\"" in WORKFLOW
+    assert "printf 'AC_API_TRANSPORT_DIGEST=%s\\n' \"$api_transport_digest\"" in WORKFLOW
+    assert 'verify-bundle "$artifact_dir" "$GITHUB_SHA"' in WORKFLOW
+    assert "AC_API_TRANSPORT_DIGEST" in RELEASE_INPUT_PREPARER
+    assert "Application deployment requires exact local image config IDs" in INSTALLER
     assert "Application deployment requires exact OCI transport manifest digests" in INSTALLER
+    assert "Loaded API image release marker does not match the release ID" in INSTALLER
+    assert (
+        'cmp --silent "$api_release_marker_file" "$expected_api_release_marker_file"' in INSTALLER
+    )
+    assert "Loaded API image migration head does not match the reviewed bundle" in INSTALLER
+    assert INSTALLER.index("Loaded API image migration head") < INSTALLER.index(
+        "mutation_started=1"
+    )
     assert "max_artifact_bytes=450000000" in WORKFLOW
+    assert "max_artifact_pool_bytes=450000000" in WORKFLOW
     assert "refusing upload above" in WORKFLOW
+    assert "group: application-release-packaging" in WORKFLOW
+    assert "actions: write" in WORKFLOW
+    assert 'test("^ac-application-[0-9a-f]{40}$")' in WORKFLOW
+    assert "gh api --method DELETE" in WORKFLOW
+    assert "projected_artifact_pool_bytes" in WORKFLOW
+    assert WORKFLOW.index('verify-bundle "$artifact_dir" "$GITHUB_SHA"') < WORKFLOW.index(
+        "Reclaim superseded release artifacts and enforce pooled ceiling"
+    )
     assert "retention-days: 1" in WORKFLOW
+    assert "Prove staging seed PostgreSQL serialization" in WORKFLOW
+    assert 'AC_REQUIRE_STAGING_SEED_POSTGRES_TEST: "1"' in WORKFLOW
+    assert "pytest tests/integration/test_staging_seed_postgresql.py" in WORKFLOW
+    assert 'AC_REQUIRE_RESTORE_INPUT_DOCKER_TEST: "1"' in WORKFLOW
     assert "docker build" not in INSTALLER
     assert "docker load" in INSTALLER
     assert "pg_dump" in INSTALLER and "--create" in INSTALLER
     assert "pg_restore" in INSTALLER and "--clean" in INSTALLER
+    assert "alembic downgrade" not in INSTALLER
+    assert "Alembic revisions are forward-only" in APPLICATION_README
+    assert "installer-created pre-migration database backup" in APPLICATION_README
     assert "ROLLBACK" in INSTALLER
     assert "flock --exclusive --nonblock 9" in INSTALLER
     assert "Another application deployment is already active." in INSTALLER
@@ -209,6 +355,34 @@ def test_release_is_built_off_host_and_installed_with_backup_and_rollback() -> N
         encoding="utf-8"
     )
     assert "GRANT USAGE, SELECT ON SEQUENCES TO ac_backup" in postgres_bootstrap
+
+
+def test_api_image_bakes_a_root_owned_read_only_release_marker() -> None:
+    assert "ARG AC_RELEASE_ID" in PYTHON_DOCKERFILE
+    assert "^[0-9a-f]{40}$" in PYTHON_DOCKERFILE
+    assert "printf '%s\\n' \"$AC_RELEASE_ID\" > /app/.ac-release-id" in PYTHON_DOCKERFILE
+    assert "--chmod=0444 /app/.ac-release-id /app/.ac-release-id" in PYTHON_DOCKERFILE
+    assert PYTHON_DOCKERFILE.index("/app/.ac-release-id") < PYTHON_DOCKERFILE.index("USER ac")
+
+
+def test_release_bundle_separates_loaded_image_ids_from_transport_provenance() -> None:
+    assert 'verify_transport_config "$api_transport_digest" "$api_id"' in WORKFLOW
+    for component in ("api", "learner", "admin"):
+        assert f"printf 'AC_{component.upper()}_IMAGE=%s\\n' \"${component}_id\"" in WORKFLOW
+        assert (
+            f"printf 'AC_{component.upper()}_TRANSPORT_DIGEST=%s\\n' "
+            f'"${component}_transport_digest"'
+        ) in WORKFLOW
+
+    image_load = 'gzip --decompress --stdout "$image_bundle_dir/application-images.tar.gz"'
+    loaded_id_check = "docker image inspect --format '{{.Id}}' \"$image_id\""
+    marker_check = '--entrypoint /bin/sh "$AC_API_IMAGE"'
+    migration_check = '--entrypoint alembic "$AC_API_IMAGE" heads'
+    mutation_start = "mutation_started=1"
+    assert INSTALLER.index(image_load) < INSTALLER.index(loaded_id_check)
+    assert INSTALLER.index(loaded_id_check) < INSTALLER.index(marker_check)
+    assert INSTALLER.index(marker_check) < INSTALLER.index(migration_check)
+    assert INSTALLER.index(migration_check) < INSTALLER.index(mutation_start)
 
 
 def test_infisical_runner_accepts_only_named_environment_and_safe_path() -> None:

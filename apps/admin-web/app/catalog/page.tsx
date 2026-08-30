@@ -1,6 +1,7 @@
-import { BookOpenCheck, GitBranch, LockKeyhole } from "lucide-react";
+import { BookOpenCheck, GitBranch } from "lucide-react";
 
 import { AdminShell } from "../components/admin-shell";
+import { PublishVersionForm } from "../components/admin-forms";
 import {
   AuditPanel,
   CapabilityBoundary,
@@ -107,16 +108,7 @@ export default function CatalogPage() {
               </tbody>
             </table>
           </div>
-          <div className="form-footer publish-footer">
-            <span className="form-lock-note">
-              <LockKeyhole size={14} aria-hidden="true" /> No version payload
-              loaded
-            </span>
-            <button className="button button-locked" type="button" disabled>
-              <LockKeyhole size={15} aria-hidden="true" /> Publish version
-              (locked)
-            </button>
-          </div>
+          <PublishVersionForm />
         </section>
 
         <CapabilityBoundary

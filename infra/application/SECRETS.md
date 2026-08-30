@@ -17,19 +17,28 @@ to disk.
 | `AC_DATABASE_MIGRATOR_URL`    | `postgresql+psycopg://ac_migrator:<migrator-password>@postgres/ac_platform` |
 | `AC_SESSION_TOKEN_PEPPER`     | independent random value of at least 32 bytes                               |
 | `AC_OAUTH_TRANSACTION_SECRET` | independent random value of at least 32 bytes                               |
+| `AC_GOOGLE_OAUTH_CLIENT_ID`   | Google web client ID ending in `.apps.googleusercontent.com`                |
+| `AC_GOOGLE_OAUTH_CLIENT_SECRET` | non-empty secret for that exact Google web client                         |
 
 The four database passwords must be distinct. The two SQLAlchemy URLs must be
 constructed from the matching role passwords and must never use the owner or
 backup role.
 
-## Optional, fail-closed integrations
+Google OAuth is mandatory for every activated staging and production release.
+The installer clears ambient OAuth credentials, loads the Infisical values,
+and rejects a missing, empty, whitespace-only, or partial pair before image
+loading or any Compose command. This preflight reports variable names only,
+never values. Compose, settings validation, and application composition retain
+independent required-pair checks. The Google web client must contain the exact
+same-surface callback URLs listed in the application release contract.
+This preflight proves configuration presence only; credential rotation and a
+real Google login/callback remain deployment-time operational evidence.
 
-`AC_GOOGLE_OAUTH_CLIENT_ID` and `AC_GOOGLE_OAUTH_CLIENT_SECRET` are an
-all-or-nothing pair. Until the Google web client contains the exact staging or
-production same-surface callback URLs, omit both and leave Google login
-disabled. `RESEND_API_KEY` may be present, but the checked-in environment
-profile keeps `AC_EMAIL_PROVIDER=fake` and external effects held until a
-separate provider activation gate.
+## Held integrations
+
+`RESEND_API_KEY` may be present, but the checked-in environment profile keeps
+`AC_EMAIL_PROVIDER=fake` and external effects held until a separate provider
+activation gate.
 
 Release SHA, image IDs, registry digests, URLs, Compose project names, state
 paths, and edge aliases are non-secret reviewed release metadata. They belong

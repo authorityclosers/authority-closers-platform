@@ -82,7 +82,9 @@ def test_tenant_identifier_field_is_rejected_as_high_cardinality() -> None:
 
 
 def test_identifier_shaped_values_cannot_hide_under_safe_categorical_keys() -> None:
-    with pytest.raises(ValueError, match="bounded scalar values"):
+    # Redaction can conservatively replace a digit-heavy UUID before the
+    # categorical vocabulary check. Either bounded guard must reject it.
+    with pytest.raises(ValueError, match=r"bounded (?:scalar values|vocabulary)"):
         TelemetryEvent(
             name="worker.job.failed",
             attributes={"status": str(uuid4())},

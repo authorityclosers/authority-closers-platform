@@ -225,12 +225,25 @@ svg {
   color: var(--ink);
 }
 
-.site-footer__inner > a:last-child {
+.site-footer__links,
+.site-footer__links > a {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+.site-footer__links {
+  gap: 18px;
+}
+
+.site-footer__links > a {
   color: var(--ink);
   font-weight: 800;
+}
+
+.site-footer__links > a:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
 }
 
 .learner-nav__link {
@@ -273,6 +286,169 @@ svg {
 .learner-main .page-container {
   padding-top: 28px;
   padding-bottom: 92px;
+}
+
+.policy-page {
+  background:
+    linear-gradient(
+      90deg,
+      transparent 0 74%,
+      rgba(180, 255, 38, 0.16) 74% 100%
+    ),
+    var(--paper);
+}
+
+.policy-page__back {
+  margin: 18px 0 56px;
+}
+
+.policy-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 72px;
+  align-items: end;
+  padding-bottom: 64px;
+  border-bottom: 1px solid var(--ink);
+}
+
+.policy-hero h1 {
+  max-width: 860px;
+  margin: 22px 0 26px;
+  font-family: var(--font-serif), Georgia, serif;
+  font-size: clamp(4rem, 8vw, 7.8rem);
+  font-weight: 500;
+  letter-spacing: -0.07em;
+  line-height: 0.84;
+}
+
+.policy-hero__summary {
+  max-width: 760px;
+  color: var(--muted);
+  font-size: clamp(1rem, 1.8vw, 1.28rem);
+  line-height: 1.65;
+}
+
+.policy-hero__status {
+  display: grid;
+  gap: 10px;
+  padding: 23px;
+  border: 1px solid var(--ink);
+  background: var(--acid);
+  box-shadow: 8px 8px 0 var(--ink);
+}
+
+.policy-hero__status p,
+.policy-hero__status span {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.policy-hero__status strong {
+  font-size: 1.18rem;
+  line-height: 1.2;
+}
+
+.policy-layout {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 72px;
+  padding: 72px 0;
+}
+
+.policy-boundary {
+  align-self: start;
+  padding: 24px;
+  border-top: 8px solid var(--ink);
+  background: var(--paper-strong);
+}
+
+.policy-boundary h2 {
+  margin: 14px 0 18px;
+  font-family: var(--font-serif), Georgia, serif;
+  font-size: 2.35rem;
+  font-weight: 500;
+  letter-spacing: -0.05em;
+  line-height: 1;
+}
+
+.policy-boundary > p:not(.kicker) {
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.policy-boundary > div {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 10px;
+  margin-top: 18px;
+  font-size: 0.8rem;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+.policy-copy {
+  border-top: 1px solid var(--ink);
+}
+
+.policy-copy > section {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 24px;
+  padding: 34px 0 38px;
+  border-bottom: 1px solid var(--line);
+}
+
+.policy-copy > section > span {
+  padding-top: 5px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 850;
+  letter-spacing: 0.12em;
+}
+
+.policy-copy h2 {
+  margin-bottom: 15px;
+  font-family: var(--font-serif), Georgia, serif;
+  font-size: clamp(2rem, 3vw, 3.15rem);
+  font-weight: 500;
+  letter-spacing: -0.045em;
+  line-height: 1;
+}
+
+.policy-copy p {
+  max-width: 760px;
+  color: var(--muted);
+  line-height: 1.75;
+}
+
+.policy-copy p + p {
+  margin-top: 14px;
+}
+
+.policy-contact {
+  padding: 44px;
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.policy-contact h2 {
+  margin: 12px 0 22px;
+  font-family: var(--font-serif), Georgia, serif;
+  font-size: clamp(2.5rem, 4.5vw, 4.6rem);
+  font-weight: 500;
+  letter-spacing: -0.055em;
+  line-height: 0.95;
+}
+
+.policy-contact a {
+  color: var(--acid);
+  font-size: clamp(0.95rem, 2vw, 1.35rem);
+  font-weight: 850;
+  text-decoration: underline;
+  text-underline-offset: 6px;
 }
 
 .kicker,
@@ -2901,6 +3077,49 @@ svg {
   .site-footer__inner p {
     order: 3;
     width: 100%;
+  }
+
+  .site-footer__links {
+    gap: 12px;
+  }
+
+  .policy-page {
+    background: var(--paper);
+  }
+
+  .policy-page__back {
+    margin-bottom: 36px;
+  }
+
+  .policy-hero,
+  .policy-layout {
+    grid-template-columns: 1fr;
+    gap: 36px;
+  }
+
+  .policy-hero {
+    padding-bottom: 45px;
+  }
+
+  .policy-hero h1 {
+    font-size: clamp(3.6rem, 17vw, 5.8rem);
+  }
+
+  .policy-hero__status {
+    box-shadow: 5px 5px 0 var(--ink);
+  }
+
+  .policy-layout {
+    padding: 52px 0;
+  }
+
+  .policy-copy > section {
+    grid-template-columns: 36px minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .policy-contact {
+    padding: 28px 21px;
   }
 
   .public-main .page-container,

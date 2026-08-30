@@ -79,6 +79,12 @@ def _normalized_email(value: str | None, field_name: str = "email") -> str:
     return canonical
 
 
+def normalize_email(value: str | None, field_name: str = "email") -> str:
+    """Return the canonical email form used by identity comparisons."""
+
+    return _normalized_email(value, field_name)
+
+
 def _emails_equal(left: str, right: str) -> bool:
     return hmac.compare_digest(left.casefold(), right.casefold())
 
@@ -1615,6 +1621,7 @@ __all__ = [
     "ValidatedProviderAssertion",
     "VerifiedProviderAssertion",
     "require_verified_person",
+    "normalize_email",
     "build_provider_authorization",
     "consume_provider_authorization_callback",
     "issue_provider_authorization",

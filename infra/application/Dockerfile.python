@@ -7,6 +7,8 @@ FROM ${UV_IMAGE} AS uv
 
 FROM ${PYTHON_IMAGE} AS build
 
+ARG AC_RELEASE_ID
+
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
     UV_NO_PROGRESS=1 \
@@ -21,6 +23,9 @@ COPY packages/python packages/python
 RUN --mount=type=cache,id=ac-uv-cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-editable --compile-bytecode
 
+RUN printf '%s\n' "$AC_RELEASE_ID" | grep -Eq '^[0-9a-f]{40}$' && \
+    printf '%s\n' "$AC_RELEASE_ID" > /app/.ac-release-id
+
 FROM ${PYTHON_IMAGE} AS runtime
 
 ENV PATH="/app/.venv/bin:${PATH}" \
@@ -33,6 +38,7 @@ RUN groupadd --gid 10001 ac && \
 WORKDIR /app
 
 COPY --from=build --chown=ac:ac /app/.venv /app/.venv
+COPY --from=build --chmod=0444 /app/.ac-release-id /app/.ac-release-id
 COPY --chown=ac:ac alembic.ini ./
 COPY --chown=ac:ac db db
 

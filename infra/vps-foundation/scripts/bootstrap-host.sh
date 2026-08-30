@@ -331,6 +331,46 @@ phase_activate() {
       systemctl enable --now cloudflared.service
       systemctl is-active --quiet cloudflared.service
       ;;
+    postgres-backup)
+      local foundation_release unit_name source_unit installed_unit
+      foundation_release="$(readlink -f /srv/authority-closers/current)"
+      [[ -d "$foundation_release/config/systemd" ]] || {
+        printf 'Current foundation release has no reviewed systemd unit source.\n' >&2
+        exit 1
+      }
+      for unit_name in ac-postgres-backup.service ac-postgres-backup.timer; do
+        source_unit="$foundation_release/config/systemd/$unit_name"
+        installed_unit="/etc/systemd/system/$unit_name"
+        [[ -f "$source_unit" && -f "$installed_unit" ]] || {
+          printf 'PostgreSQL backup unit is missing from the exact current release: %s\n' "$unit_name" >&2
+          exit 1
+        }
+        cmp --silent "$source_unit" "$installed_unit" || {
+          printf 'Installed PostgreSQL backup unit differs from the exact current release: %s\n' "$unit_name" >&2
+          exit 1
+        }
+        systemd-analyze verify "$installed_unit"
+      done
+      [[ -L /srv/authority-closers/application/current-staging ]] || {
+        printf 'A current staging application release is required before PostgreSQL backup activation.\n' >&2
+        exit 1
+      }
+      [[ -r /etc/authority-closers/secrets/infisical-bootstrap.env ]] || {
+        printf 'Infisical bootstrap is absent; refusing to activate PostgreSQL backup.\n' >&2
+        exit 1
+      }
+      /usr/local/sbin/ac-infisical-verify
+      /usr/local/sbin/ac-r2-usage-guard
+      /usr/local/sbin/ac-postgres-backup --dry-run
+      # This captures staging and any healthy production release that exists,
+      # then verifies pg_restore --list without writing to R2.
+      /usr/local/sbin/ac-postgres-backup --capture-only
+      /usr/local/sbin/ac-r2-usage-guard
+      systemctl daemon-reload
+      systemctl enable --now ac-postgres-backup.timer
+      systemctl is-enabled --quiet ac-postgres-backup.timer
+      systemctl is-active --quiet ac-postgres-backup.timer
+      ;;
     r2-jobs)
       [[ -r /etc/authority-closers/secrets/infisical-bootstrap.env ]] || {
         printf 'Infisical bootstrap is absent; refusing to activate R2 writers.\n' >&2
@@ -345,7 +385,7 @@ phase_activate() {
         ac-restic-restore-check.timer
       ;;
     *)
-      printf 'Usage: %s activate {cloudflared|r2-jobs}\n' "$0" >&2
+      printf 'Usage: %s activate {cloudflared|r2-jobs|postgres-backup}\n' "$0" >&2
       exit 2
       ;;
   esac

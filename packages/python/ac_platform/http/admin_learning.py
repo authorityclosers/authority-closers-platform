@@ -39,7 +39,13 @@ from ac_platform.enrollment.services import (
     EnrollmentPolicyInput,
     ManualEnrollmentGrantCommand,
 )
-from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, require_safe_origin
+from ac_platform.http.auth import (
+    ROLE_PERMISSIONS,
+    AuthenticatedTransaction,
+    RequireActor,
+    require_admin_surface,
+    require_safe_origin,
+)
 from ac_platform.identity.models import Person, PersonStatus
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.kernel.errors import (
@@ -233,7 +239,7 @@ async def _require_named_admin(
     tenant_id = actor.tenant_id
     if tenant_id is None:
         raise AdminTenantContextRequired("Select an active tenant before using admin commands.")
-    if permission not in actor.permissions:
+    if "admin_surface" not in actor.permissions or permission not in actor.permissions:
         raise AdminAuthorizationDenied(f"The actor lacks the {permission} permission.")
 
     result = await auth.database.execute(
@@ -256,10 +262,17 @@ async def _require_named_admin(
         or tenant.status != TenantStatus.ACTIVE.value
         or membership.status != MembershipStatus.ACTIVE.value
         or membership.ended_at is not None
-        or membership.role not in {"admin", "owner"}
+        or not _role_allows_permission(membership.role, permission)
     ):
         raise AdminAuthorizationDenied("The actor has no active admin membership in this tenant.")
     return actor, tenant_id
+
+
+def _role_allows_permission(role: str, permission: str) -> bool:
+    """Apply the same named-permission policy used to build actor contexts."""
+
+    role_permissions = ROLE_PERMISSIONS.get(role, frozenset())
+    return "admin_surface" in role_permissions and permission in role_permissions
 
 
 def _request_id(request: Request) -> str | None:
@@ -379,7 +392,14 @@ def install_admin_learning_http(
     supplies its required redacted, purpose-bound admin query.
     """
 
-    router = APIRouter(prefix="/v1", tags=["admin-learning"])
+    def require_admin_route_surface(request: Request) -> None:
+        require_admin_surface(request, settings)
+
+    router = APIRouter(
+        prefix="/v1",
+        tags=["admin-learning"],
+        dependencies=[Depends(require_admin_route_surface)],
+    )
     actor_dependency = Depends(require_actor)
     resolved_activity = activity_resolver or _default_activity_resolver
     resolved_reviewer = reviewer_resolver or (lambda _access: None)
@@ -401,7 +421,10 @@ def install_admin_learning_http(
             permission="catalog_publish",
         )
         try:
-            version = await AsyncCatalogApplication(auth.database).publish_version(
+            version = await AsyncCatalogApplication(
+                auth.database,
+                allow_technical_validation_publication=settings.environment == "staging",
+            ).publish_version(
                 program_version_id,
                 actor=actor,
                 tenant_id=tenant_id,

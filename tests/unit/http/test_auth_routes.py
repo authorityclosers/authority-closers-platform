@@ -1,16 +1,17 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from typing import Any, cast
 from urllib.parse import urlencode, urlsplit
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.testclient import TestClient
 
 import ac_platform.http.auth as auth_module
 from ac_platform.application.settings import Settings
-from ac_platform.http.auth import install_identity_http
+from ac_platform.http.auth import install_identity_http, require_safe_origin
 from ac_platform.http.auth_transactions import AuthTransaction, AuthTransactionCodec
 from ac_platform.http.problem import register_problem_handlers
 from ac_platform.identity.services import (
@@ -21,6 +22,10 @@ from ac_platform.identity.services import (
 )
 
 TEST_TRANSACTION_KEY = "test-route-transaction-signing-key-long-enough"  # noqa: S105
+VALID_SESSION_TOKEN = "s" * 43  # noqa: S105
+SECOND_VALID_SESSION_TOKEN = "t" * 43  # noqa: S105
+DEPLOYMENT_SESSION_COOKIE = "__Host-ac_session"
+DEPLOYMENT_OAUTH_COOKIE = "__Host-ac_oauth_transaction"
 
 
 class _AsyncContext:
@@ -95,6 +100,53 @@ class _RecordingProvider:
         )
 
 
+class _SuccessfulProvider(_RecordingProvider):
+    def __init__(self) -> None:
+        self.redirect_uris: list[str] = []
+
+    async def exchange_code(
+        self,
+        code: str,
+        transaction: AuthTransaction,
+        *,
+        callback_state: str,
+        redirect_uri: str,
+    ) -> VerifiedProviderAssertion:
+        assert code == "google-authorization-code"
+        self.redirect_uris.append(redirect_uri)
+        return VerifiedProviderAssertion(
+            issuer="https://accounts.google.com",
+            subject="google-subject",
+            audience=self.audience,
+            state=callback_state,
+            nonce=transaction.nonce,
+            authorization_type=transaction.authorization_type,
+            email="person@authorityclosers.com",
+            email_verified=True,
+        )
+
+
+class _CallbackIdentityApplication(_IdentityApplication):
+    async def authenticate_provider(
+        self,
+        transaction_id: object,
+        assertion: VerifiedProviderAssertion,
+        *,
+        pkce_verifier: str,
+        user_agent: str | None = None,
+    ) -> SimpleNamespace:
+        del transaction_id, assertion, pkce_verifier, user_agent
+        return SimpleNamespace(token=VALID_SESSION_TOKEN)
+
+
+class _ForbiddenActorResolutionApplication(_IdentityApplication):
+    actor_resolution_calls = 0
+
+    async def resolve_actor(self, _token: str) -> object:
+        type(self).actor_resolution_calls += 1
+        raise AssertionError("actor resolution must not run for a rejected raw cookie")
+
+
 def _settings() -> Settings:
     return Settings(
         environment="test",
@@ -120,22 +172,53 @@ def _staging_settings() -> Settings:
         ),
         session_token_pepper="staging-session-token-pepper-that-is-long-enough",  # noqa: S106
         oauth_transaction_secret="staging-oauth-transaction-secret-that-is-long-enough",  # noqa: S106
+        google_oauth_client_id="123.apps.googleusercontent.com",
+        google_oauth_client_secret="test-google-client-secret",  # noqa: S106
         public_app_url="https://staging.authorityclosers.com",
         admin_app_url="https://admin-staging.authorityclosers.com",
         api_url="https://api-staging.authorityclosers.com",
+        internal_api_host="api.staging.ac.internal.invalid",
+        session_cookie_name=DEPLOYMENT_SESSION_COOKIE,
+        oauth_transaction_cookie_name=DEPLOYMENT_OAUTH_COOKIE,
+        trusted_proxy_addresses="172.18.0.2",
     )
 
 
-def _client(*, configured: bool = True, settings: Settings | None = None) -> TestClient:
+def _client(
+    *,
+    configured: bool = True,
+    settings: Settings | None = None,
+    provider: object | None = None,
+) -> TestClient:
     application = FastAPI()
     register_problem_handlers(application)
     install_identity_http(
         application,
         settings=settings or _settings(),
         sessions=cast(Any, _sessions),
-        provider=_RecordingProvider() if configured else None,
+        provider=provider
+        if provider is not None
+        else (_RecordingProvider() if configured else None),
     )
     return TestClient(application)
+
+
+def _request_with_raw_cookie_headers(*cookie_headers: str) -> Request:
+    return Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "scheme": "https",
+            "path": "/v1/context",
+            "headers": [
+                (b"host", b"api.staging.ac.internal.invalid"),
+                *((b"cookie", value.encode("latin-1")) for value in cookie_headers),
+            ],
+            "query_string": b"",
+            "server": ("api.staging.ac.internal.invalid", 8000),
+            "client": ("127.0.0.1", 1),
+        }
+    )
 
 
 def test_auth_start_binds_state_nonce_pkce_and_safe_return_in_signed_cookie() -> None:
@@ -163,7 +246,7 @@ def test_auth_start_binds_state_nonce_pkce_and_safe_return_in_signed_cookie() ->
     set_cookie = response.headers["set-cookie"].lower()
     assert "httponly" in set_cookie
     assert "samesite=lax" in set_cookie
-    assert "path=/v1/auth/google/callback" in set_cookie
+    assert "path=/" in set_cookie
     assert response.headers["cache-control"] == "no-store"
 
 
@@ -212,6 +295,13 @@ def test_staging_auth_start_accepts_only_the_selected_surface_host(
 
     assert response.status_code == 303
     assert urlsplit(response.headers["location"]).hostname == "accounts.example.test"
+    set_cookie = response.headers["set-cookie"].lower()
+    assert f"{DEPLOYMENT_OAUTH_COOKIE.lower()}=" in set_cookie
+    assert "secure" in set_cookie
+    assert "httponly" in set_cookie
+    assert "samesite=lax" in set_cookie
+    assert "path=/" in set_cookie
+    assert "domain=" not in set_cookie
 
 
 def test_staging_callback_rejects_cross_surface_host_before_provider_exchange() -> None:
@@ -222,7 +312,7 @@ def test_staging_callback_rejects_cross_surface_host_before_provider_exchange() 
         headers={"host": "admin-staging.authorityclosers.com"},
         follow_redirects=False,
     )
-    encoded = started.cookies["ac_oauth_transaction"]
+    encoded = started.cookies[DEPLOYMENT_OAUTH_COOKIE]
     transaction = AuthTransactionCodec(
         "staging-oauth-transaction-secret-that-is-long-enough"
     ).decode(encoded)
@@ -232,13 +322,228 @@ def test_staging_callback_rejects_cross_surface_host_before_provider_exchange() 
         params={"state": transaction.state, "code": "unused-code"},
         headers={
             "host": "staging.authorityclosers.com",
-            "cookie": f"ac_oauth_transaction={encoded}",
+            "cookie": f"{DEPLOYMENT_OAUTH_COOKIE}={encoded}",
         },
         follow_redirects=False,
     )
 
     assert response.status_code == 400
     assert response.json()["code"] == "invalid_auth_transaction"
+
+
+def test_staging_callback_uses_exact_surface_uri_and_issues_host_only_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(auth_module, "AsyncIdentityApplication", _CallbackIdentityApplication)
+    provider = _SuccessfulProvider()
+    client = _client(settings=_staging_settings(), provider=provider)
+    started = client.get(
+        "/v1/auth/google/start",
+        params={
+            "action": "authenticate",
+            "surface": "learner",
+            "return_path": "/home?from=google",
+        },
+        headers={"host": "staging.authorityclosers.com"},
+        follow_redirects=False,
+    )
+    encoded = started.cookies[DEPLOYMENT_OAUTH_COOKIE]
+    transaction = AuthTransactionCodec(
+        "staging-oauth-transaction-secret-that-is-long-enough"
+    ).decode(encoded)
+
+    response = client.get(
+        "/v1/auth/google/callback",
+        params={"state": transaction.state, "code": "google-authorization-code"},
+        headers={
+            "host": "staging.authorityclosers.com",
+            "cookie": f"{DEPLOYMENT_OAUTH_COOKIE}={encoded}",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == ("https://staging.authorityclosers.com/home?from=google")
+    assert provider.redirect_uris == [
+        "https://staging.authorityclosers.com/v1/auth/google/callback"
+    ]
+    set_cookie_headers = [value.lower() for value in response.headers.get_list("set-cookie")]
+    session_cookie = next(
+        value
+        for value in set_cookie_headers
+        if value.startswith(f"{DEPLOYMENT_SESSION_COOKIE.lower()}=")
+    )
+    transaction_delete = next(
+        value
+        for value in set_cookie_headers
+        if value.startswith(f"{DEPLOYMENT_OAUTH_COOKIE.lower()}=")
+    )
+    assert f"{DEPLOYMENT_SESSION_COOKIE.lower()}={VALID_SESSION_TOKEN}" in session_cookie
+    for value in (session_cookie, transaction_delete):
+        assert "secure" in value
+        assert "httponly" in value
+        assert "samesite=lax" in value
+        assert "path=/" in value
+        assert "domain=" not in value
+
+
+def test_deployment_session_cookie_rejects_raw_duplicate_fields_before_actor_resolution(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _ForbiddenActorResolutionApplication.actor_resolution_calls = 0
+    monkeypatch.setattr(
+        auth_module,
+        "AsyncIdentityApplication",
+        _ForbiddenActorResolutionApplication,
+    )
+    client = _client(settings=_staging_settings())
+
+    response = client.get(
+        "/v1/context",
+        headers=[
+            ("host", "api.staging.ac.internal.invalid"),
+            ("cookie", f"{DEPLOYMENT_SESSION_COOKIE}={VALID_SESSION_TOKEN}"),
+            ("cookie", f"{DEPLOYMENT_SESSION_COOKIE}={SECOND_VALID_SESSION_TOKEN}"),
+        ],
+    )
+
+    assert response.status_code == 401
+    assert response.json()["code"] == "authentication_required"
+    assert _ForbiddenActorResolutionApplication.actor_resolution_calls == 0
+
+
+@pytest.mark.parametrize(
+    "cookie_headers",
+    [
+        (
+            f"{DEPLOYMENT_SESSION_COOKIE}={VALID_SESSION_TOKEN}",
+            f"{DEPLOYMENT_SESSION_COOKIE}={SECOND_VALID_SESSION_TOKEN}",
+        ),
+        (
+            f"{DEPLOYMENT_SESSION_COOKIE}={VALID_SESSION_TOKEN}; "
+            f"{DEPLOYMENT_SESSION_COOKIE}={SECOND_VALID_SESSION_TOKEN}",
+        ),
+        (f"{DEPLOYMENT_SESSION_COOKIE}=too-short",),
+        (f"{DEPLOYMENT_SESSION_COOKIE}={VALID_SESSION_TOKEN},second",),
+    ],
+)
+def test_deployment_session_cookie_raw_parser_rejects_duplicates_and_malformed_values(
+    cookie_headers: tuple[str, ...],
+) -> None:
+    with pytest.raises(auth_module.AuthenticationRequired):
+        auth_module._session_cookie(  # noqa: SLF001 - security boundary unit test
+            _request_with_raw_cookie_headers(*cookie_headers),
+            _staging_settings(),
+        )
+
+
+def test_deployment_session_cookie_raw_parser_accepts_one_value_across_split_headers() -> None:
+    token = auth_module._session_cookie(  # noqa: SLF001 - security boundary unit test
+        _request_with_raw_cookie_headers(
+            "unrelated=value",
+            f"{DEPLOYMENT_SESSION_COOKIE}={VALID_SESSION_TOKEN}; another=value",
+        ),
+        _staging_settings(),
+    )
+
+    assert token == VALID_SESSION_TOKEN
+
+
+def test_deployment_oauth_cookie_rejects_raw_duplicate_fields_before_callback_exchange() -> None:
+    provider = _SuccessfulProvider()
+    client = _client(settings=_staging_settings(), provider=provider)
+    started = client.get(
+        "/v1/auth/google/start",
+        params={"action": "authenticate", "surface": "learner"},
+        headers={"host": "staging.authorityclosers.com"},
+        follow_redirects=False,
+    )
+    encoded = started.cookies[DEPLOYMENT_OAUTH_COOKIE]
+    transaction = AuthTransactionCodec(
+        "staging-oauth-transaction-secret-that-is-long-enough"
+    ).decode(encoded)
+    client.cookies.clear()
+
+    response = client.get(
+        "/v1/auth/google/callback",
+        params={"state": transaction.state, "code": "google-authorization-code"},
+        headers=[
+            ("host", "staging.authorityclosers.com"),
+            ("cookie", f"{DEPLOYMENT_OAUTH_COOKIE}={encoded}"),
+            ("cookie", f"{DEPLOYMENT_OAUTH_COOKIE}={encoded}"),
+        ],
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "invalid_auth_transaction"
+    assert provider.redirect_uris == []
+
+
+def test_deployment_oauth_cookie_raw_parser_rejects_malformed_value() -> None:
+    request = _request_with_raw_cookie_headers(f"{DEPLOYMENT_OAUTH_COOKIE}=not.valid")
+
+    with pytest.raises(auth_module.InvalidAuthTransaction):
+        auth_module._oauth_transaction_cookie(  # noqa: SLF001 - security boundary unit test
+            request,
+            _staging_settings(),
+        )
+
+
+def test_deployment_session_cookie_delete_keeps_host_prefix_attributes() -> None:
+    response = Response()
+
+    auth_module._delete_session_cookie(  # noqa: SLF001 - cookie attribute regression test
+        response,
+        _staging_settings(),
+    )
+
+    set_cookie = response.headers["set-cookie"].lower()
+    assert set_cookie.startswith(f"{DEPLOYMENT_SESSION_COOKIE.lower()}=")
+    assert "secure" in set_cookie
+    assert "httponly" in set_cookie
+    assert "samesite=lax" in set_cookie
+    assert "path=/" in set_cookie
+    assert "domain=" not in set_cookie
+
+
+def _request_with_host_and_origin(*, host: str, origin: str) -> Request:
+    return Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "scheme": "https",
+            "path": "/v1/auth/logout",
+            "headers": [
+                (b"host", host.encode("ascii")),
+                (b"origin", origin.encode("ascii")),
+            ],
+            "query_string": b"",
+            "server": (host, 443),
+            "client": ("127.0.0.1", 1),
+        }
+    )
+
+
+def test_staging_cookie_mutations_require_the_request_surface_origin() -> None:
+    settings = _staging_settings()
+
+    require_safe_origin(
+        _request_with_host_and_origin(
+            host="admin-staging.authorityclosers.com",
+            origin="https://admin-staging.authorityclosers.com",
+        ),
+        settings,
+    )
+
+    with pytest.raises(auth_module.RequestOriginDenied):
+        require_safe_origin(
+            _request_with_host_and_origin(
+                host="admin-staging.authorityclosers.com",
+                origin="https://staging.authorityclosers.com",
+            ),
+            settings,
+        )
 
 
 def test_external_return_url_is_rejected_without_contacting_provider() -> None:

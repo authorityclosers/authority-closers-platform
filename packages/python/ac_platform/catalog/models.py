@@ -73,6 +73,7 @@ ProgramScope = CatalogScope
 VersionStatus = ProgramVersionStatus
 
 SUPPORTED_ACTIVITY_KINDS: frozenset[str] = frozenset(kind.value for kind in ActivityKind)
+ACTIVITY_PROMPT_MAX_LENGTH = 2000
 IMMUTABLE_VERSION_STATUSES: frozenset[str] = frozenset(
     {ProgramVersionStatus.PUBLISHED.value, ProgramVersionStatus.SUPERSEDED.value}
 )
@@ -221,6 +222,11 @@ class ProgramVersion(Base):
             "version_number",
             name="uq_program_versions_program_number",
         ),
+        UniqueConstraint(
+            "program_id",
+            "content_digest",
+            name="uq_program_versions_content_digest",
+        ),
         CheckConstraint("version_number > 0", name="version_number_positive"),
         CheckConstraint(
             "status IN ('draft', 'published', 'superseded')",
@@ -233,6 +239,26 @@ class ProgramVersion(Base):
         CheckConstraint(
             "supersedes_version_id IS NULL OR supersedes_version_id <> id",
             name="cannot_supersede_self",
+        ),
+        CheckConstraint(
+            "content_digest IS NULL OR length(content_digest) = 64",
+            name="content_digest_sha256",
+        ),
+        CheckConstraint(
+            "content_source_ref IS NULL OR length(trim(content_source_ref)) > 0",
+            name="content_source_ref_nonblank",
+        ),
+        CheckConstraint(
+            "content_reviewed_by IS NULL OR length(trim(content_reviewed_by)) > 0",
+            name="content_reviewed_by_nonblank",
+        ),
+        CheckConstraint(
+            "release_id IS NULL OR length(trim(release_id)) > 0",
+            name="release_id_nonblank",
+        ),
+        CheckConstraint(
+            "content_seed_kind IS NULL OR length(trim(content_seed_kind)) > 0",
+            name="content_seed_kind_nonblank",
         ),
         *_scope_constraints("program_versions"),
         _owner_key_constraint("program_versions"),
@@ -270,6 +296,14 @@ class ProgramVersion(Base):
     supersedes_version_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     superseded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    content_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    content_source_ref: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    content_reviewed_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    content_reviewed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    release_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    content_seed_kind: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now, server_default=func.now()
     )
@@ -494,6 +528,10 @@ class Activity(Base):
             name="kind_supported",
         ),
         CheckConstraint("length(trim(title)) > 0", name="title_nonblank"),
+        CheckConstraint(
+            "prompt IS NULL OR (length(trim(prompt)) > 0 AND length(prompt) <= 2000)",
+            name="prompt_valid",
+        ),
         *_scope_constraints("activities"),
         _owner_key_constraint("activities"),
         Index("ix_activities_module_position", "module_id", "position"),
@@ -518,6 +556,7 @@ class Activity(Base):
     position: Mapped[int] = mapped_column(Integer, nullable=False)
     kind: Mapped[str] = mapped_column(String(32), nullable=False)
     title: Mapped[str] = mapped_column(String(240), nullable=False)
+    prompt: Mapped[str | None] = mapped_column(String(ACTIVITY_PROMPT_MAX_LENGTH), nullable=True)
     is_required: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default=text("true")
     )
@@ -644,6 +683,12 @@ _VERSION_PROTECTED_ATTRIBUTES = (
     "version_number",
     "supersedes_version_id",
     "published_at",
+    "content_digest",
+    "content_source_ref",
+    "content_reviewed_by",
+    "content_reviewed_at",
+    "release_id",
+    "content_seed_kind",
 )
 
 

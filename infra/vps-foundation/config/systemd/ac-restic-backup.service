@@ -6,6 +6,9 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 ExecStart=/usr/local/sbin/ac-restic-backup
+TimeoutStartSec=90min
+TimeoutStopSec=30s
+KillMode=mixed
 User=root
 Group=root
 Environment=AC_IPV4_ONLY=1
@@ -15,4 +18,4 @@ ProtectHome=true
 ProtectSystem=strict
 RestrictAddressFamilies=AF_INET AF_UNIX
 ReadOnlyPaths=/etc/authority-closers/secrets/infisical-bootstrap.env /srv/authority-closers /etc/ssh /etc/apt/apt.conf.d /etc/audit/rules.d /etc/docker /etc/systemd/system /etc/fail2ban /etc/systemd/journald.conf.d /etc/sysctl.d /etc/security/limits.d /etc/ufw /usr/local/libexec/authority-closers /usr/local/sbin /var/lib/docker/volumes
-ReadWritePaths=/var/cache/authority-closers-restic
+ReadWritePaths=/var/cache/authority-closers-restic /run/lock

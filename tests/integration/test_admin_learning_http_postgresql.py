@@ -33,6 +33,7 @@ from ac_platform.catalog.models import (
     ProgramVersion,
     ProgramVersionStatus,
 )
+from ac_platform.catalog.services import CatalogService, SqlAlchemyCatalogStore
 from ac_platform.enrollment.models import EnrollmentProvenance, Entitlement
 from ac_platform.http.admin_learning import install_admin_learning_http
 from ac_platform.http.auth import AuthenticatedTransaction
@@ -146,7 +147,7 @@ def postgres_harness() -> Iterator[_Harness]:
         admin_engine.dispose()
 
 
-def _seed(engine: Engine) -> _Seed:
+def _seed(engine: Engine, *, reviewed: bool = True) -> _Seed:
     tenant_id, admin_id, learner_id = uuid4(), uuid4(), uuid4()
     admin_session_id = uuid4()
     program_id, version_id, module_id, activity_id = uuid4(), uuid4(), uuid4(), uuid4()
@@ -196,17 +197,16 @@ def _seed(engine: Engine) -> _Seed:
             )
         )
         database.flush()
-        database.add(
-            ProgramVersion(
-                id=version_id,
-                program_id=program_id,
-                scope=CatalogScope.TENANT.value,
-                owner_key=tenant_id,
-                tenant_id=tenant_id,
-                version_number=1,
-                status=ProgramVersionStatus.DRAFT.value,
-            )
+        version = ProgramVersion(
+            id=version_id,
+            program_id=program_id,
+            scope=CatalogScope.TENANT.value,
+            owner_key=tenant_id,
+            tenant_id=tenant_id,
+            version_number=1,
+            status=ProgramVersionStatus.DRAFT.value,
         )
+        database.add(version)
         database.flush()
         database.add(
             Module(
@@ -233,9 +233,22 @@ def _seed(engine: Engine) -> _Seed:
                 position=1,
                 kind=ActivityKind.REFLECTION.value,
                 title="Admin review activity",
+                prompt="Describe the reviewed administrative test case.",
                 is_required=True,
             )
         )
+        database.flush()
+        if reviewed:
+            store = SqlAlchemyCatalogStore(database)
+            service = CatalogService(store, clock=lambda: NOW)
+            snapshot = store.get_version(version_id)
+            assert snapshot is not None
+            version.content_digest = service._canonical_content_digest(snapshot)  # noqa: SLF001
+            version.content_source_ref = __file__
+            version.content_reviewed_by = "admin-integration-reviewer@example.test"
+            version.content_reviewed_at = NOW
+            version.release_id = "d" * 40
+            version.content_seed_kind = "reviewed"
         database.commit()
     return _Seed(
         tenant_id=tenant_id,
@@ -387,7 +400,13 @@ def test_admin_commands_persist_audit_outbox_and_learning_supersession(
         tenant_id=seed.tenant_id,
         session_id=seed.admin_session_id,
         permissions=frozenset(
-            {"catalog_publish", "learning_correct", "learning_review", "enrollment_grant"}
+            {
+                "admin_surface",
+                "catalog_publish",
+                "learning_correct",
+                "learning_review",
+                "enrollment_grant",
+            }
         ),
         reviewer_id=seed.admin_id,
     )
@@ -397,9 +416,9 @@ def test_admin_commands_persist_audit_outbox_and_learning_supersession(
             transport = httpx.ASGITransport(app=application)
             async with httpx.AsyncClient(
                 transport=transport,
-                base_url="https://api.authorityclosers.test",
+                base_url="https://admin.authorityclosers.test",
             ) as client:
-                origin = {"Origin": "https://app.authorityclosers.test"}
+                origin = {"Origin": "https://admin.authorityclosers.test"}
                 publish = await client.post(
                     f"/v1/admin/program-versions/{seed.version_id}/publish",
                     json={"reason": "the tenant catalog review is complete"},
@@ -508,6 +527,52 @@ def test_admin_commands_persist_audit_outbox_and_learning_supersession(
         assert progress.revision == 2
 
 
+def test_admin_reason_alone_cannot_publish_unreviewed_catalog_content(
+    postgres_harness: _Harness,
+) -> None:
+    seed = _seed(postgres_harness.engine, reviewed=False)
+    application, _actor = _application(
+        postgres_harness.schema_url,
+        person_id=seed.admin_id,
+        tenant_id=seed.tenant_id,
+        session_id=seed.admin_session_id,
+        permissions=frozenset({"admin_surface", "catalog_publish"}),
+        reviewer_id=None,
+    )
+
+    async def scenario() -> None:
+        try:
+            transport = httpx.ASGITransport(app=application)
+            async with httpx.AsyncClient(
+                transport=transport,
+                base_url="https://admin.authorityclosers.test",
+            ) as client:
+                response = await client.post(
+                    f"/v1/admin/program-versions/{seed.version_id}/publish",
+                    json={"reason": "an operator reason is not content provenance"},
+                    headers={"Origin": "https://admin.authorityclosers.test"},
+                )
+                assert response.status_code == 422
+                assert response.json()["code"] == "catalog_publication_rejected"
+        finally:
+            await application.state.async_engine.dispose()
+
+    _run_async(scenario())
+
+    with Session(postgres_harness.engine) as database:
+        version = database.get(ProgramVersion, seed.version_id)
+        assert version is not None
+        assert version.status == ProgramVersionStatus.DRAFT.value
+        assert (
+            database.scalar(
+                select(func.count())
+                .select_from(AuditEvent)
+                .where(AuditEvent.tenant_id == seed.tenant_id)
+            )
+            == 0
+        )
+
+
 def test_admin_commands_deny_unknown_canonical_membership_without_mutation(
     postgres_harness: _Harness,
 ) -> None:
@@ -518,7 +583,7 @@ def test_admin_commands_deny_unknown_canonical_membership_without_mutation(
         person_id=unknown_id,
         tenant_id=seed.tenant_id,
         session_id=None,
-        permissions=frozenset({"catalog_publish", "enrollment_grant"}),
+        permissions=frozenset({"admin_surface", "catalog_publish", "enrollment_grant"}),
         reviewer_id=None,
     )
 
@@ -527,9 +592,9 @@ def test_admin_commands_deny_unknown_canonical_membership_without_mutation(
             transport = httpx.ASGITransport(app=application)
             async with httpx.AsyncClient(
                 transport=transport,
-                base_url="https://api.authorityclosers.test",
+                base_url="https://admin.authorityclosers.test",
             ) as client:
-                origin = {"Origin": "https://app.authorityclosers.test"}
+                origin = {"Origin": "https://admin.authorityclosers.test"}
                 publish = await client.post(
                     f"/v1/admin/program-versions/{seed.version_id}/publish",
                     json={"reason": "unknown actor must be denied"},

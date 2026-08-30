@@ -24,7 +24,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from ac_platform.application.settings import Settings
 from ac_platform.audit.models import AuditEvent
 from ac_platform.audit.service import AuditRepository, build_audit_tenant_lock_statement
-from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, require_safe_origin
+from ac_platform.http.auth import (
+    AuthenticatedTransaction,
+    RequireActor,
+    require_admin_surface,
+    require_safe_origin,
+)
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.kernel.errors import DomainError
 from ac_platform.outbox.errors import (
@@ -195,6 +200,7 @@ def _normalize_reason(reason: str) -> str:
 def _require_operations_actor(actor: ActorContext, permission: str) -> None:
     if actor.tenant_id is None:
         raise OperationsTenantRequired("Select an active operations tenant before continuing.")
+    actor.require_permission("admin_surface")
     actor.require_permission(permission)
 
 
@@ -423,7 +429,14 @@ def install_operations_http(
     surface by accident.
     """
 
-    router = APIRouter(prefix="/v1", tags=["operations"])
+    def require_admin_route_surface(request: Request) -> None:
+        require_admin_surface(request, settings)
+
+    router = APIRouter(
+        prefix="/v1",
+        tags=["operations"],
+        dependencies=[Depends(require_admin_route_surface)],
+    )
     actor_dependency = Depends(require_actor)
 
     @router.post("/admin/jobs/{job_id}/retry", response_model=JobRetryResponse)

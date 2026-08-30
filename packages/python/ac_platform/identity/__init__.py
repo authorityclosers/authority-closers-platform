@@ -101,6 +101,7 @@ for _name in (
     "ValidatedProviderAssertion",
     "VerifiedProviderAssertion",
     "require_verified_person",
+    "normalize_email",
     "build_provider_authorization",
     "consume_provider_authorization_callback",
     "issue_provider_authorization",
@@ -189,5 +190,6 @@ __all__ = [
     "create_production_identity_services",
     "create_sync_identity_store_for_tests",
     "require_verified_person",
+    "normalize_email",
     "validate_verified_provider_assertion",
 ]

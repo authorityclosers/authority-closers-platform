@@ -26,6 +26,7 @@ from sqlalchemy.schema import CreateSchema, DropSchema, UniqueConstraint
 from ac_platform.catalog.models import Activity as CatalogActivity
 from ac_platform.catalog.models import Module as CatalogModule
 from ac_platform.catalog.models import Program, ProgramVersion
+from ac_platform.catalog.services import CatalogService, SqlAlchemyCatalogStore
 from ac_platform.db.models import model_metadata
 from ac_platform.enrollment.models import (
     CommandIdempotency,
@@ -280,9 +281,18 @@ def _seed_learning_scope(engine: Engine, *, include_second_activity: bool = Fals
             )
         database.add_all(activities)
         database.flush()
-        version.status = "published"
-        version.published_at = NOW
+        store = SqlAlchemyCatalogStore(database)
+        catalog = CatalogService(store, clock=lambda: NOW)
+        snapshot = store.get_version(seed.program_version_id)
+        assert snapshot is not None
+        version.content_digest = catalog._canonical_content_digest(snapshot)  # noqa: SLF001
+        version.content_source_ref = __file__
+        version.content_reviewed_by = "learning-database-reviewer@example.test"
+        version.content_reviewed_at = NOW
+        version.release_id = "2" * 40
+        version.content_seed_kind = "reviewed"
         database.flush()
+        catalog.publish_version(seed.program_version_id, tenant_id=seed.tenant_id, now=NOW)
 
         enrollment_command = CommandIdempotency(
             id=command_id,
@@ -427,7 +437,7 @@ def test_fresh_migration_matches_learning_models_and_installs_append_only_guards
     inspector = inspect(learning_postgres_engine)
     with learning_postgres_engine.connect() as connection:
         schema = connection.scalar(text("SELECT current_schema()"))
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "20260830_0006"
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "20260830_0010"
         trigger_names = set(
             connection.scalars(
                 text(

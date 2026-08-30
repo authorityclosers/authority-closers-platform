@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
-import { isContentVisible, stateQuery } from "../lib/surface-state";
+import { stateQuery } from "../lib/surface-state";
 import type { SurfaceState } from "../lib/surface-state";
 
 type StatePanelProps = {
@@ -137,7 +137,7 @@ export function SurfaceStatePanel({
     state === "ERROR_RETRYABLE" || state === "ERROR_TERMINAL"
       ? "alert"
       : "status";
-  const Heading = pageHeadingPresent || isContentVisible(state) ? "h2" : "h1";
+  const Heading = pageHeadingPresent ? "h2" : "h1";
 
   return (
     <section

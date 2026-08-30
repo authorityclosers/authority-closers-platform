@@ -9,6 +9,7 @@ pinning port without becoming a catalog writer.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
@@ -20,7 +21,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session, SessionTransactionOrigin
 
+from ac_platform.catalog.content import (
+    CanonicalActivityContent,
+    CanonicalModuleContent,
+    canonical_catalog_content_digest,
+)
 from ac_platform.catalog.models import (
+    ACTIVITY_PROMPT_MAX_LENGTH,
     GLOBAL_CATALOG_OWNER_KEY,
     Activity,
     ActivityKind,
@@ -38,6 +45,10 @@ from ac_platform.tenancy.models import Membership, MembershipStatus, Tenant, Ten
 
 CATALOG_WRITE_PERMISSION = "catalog_write"
 CATALOG_PUBLISH_PERMISSION = "catalog_publish"
+_CONTENT_DIGEST = re.compile(r"^[0-9a-f]{64}$")
+_RELEASE_ID = re.compile(r"^[0-9a-f]{40}$")
+_REVIEWED_CONTENT_KIND = "reviewed"
+_TECHNICAL_VALIDATION_CONTENT_KIND = "technical-validation"
 _T = TypeVar("_T")
 
 
@@ -58,6 +69,14 @@ def _required_text(value: str, field_name: str, maximum: int) -> str:
     if len(normalized) > maximum:
         raise CatalogValidationError(f"{field_name} must be at most {maximum} characters")
     return normalized
+
+
+def _optional_text(value: str | None, field_name: str, maximum: int) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise CatalogValidationError(f"{field_name} must be a string or null")
+    return _required_text(value, field_name, maximum)
 
 
 def _scope_value(scope: CatalogScope | str | None, tenant_id: UUID | None) -> str:
@@ -126,6 +145,14 @@ class CatalogValidationError(CatalogServiceError):
 
 class CatalogConflictError(CatalogServiceError):
     """The command conflicts with an existing stable catalog identity."""
+
+
+class CatalogPublicationProvenanceError(CatalogValidationError):
+    """Publication lacks a complete, valid review and release provenance."""
+
+
+class CatalogContentDigestMismatchError(CatalogValidationError):
+    """Stored review digest does not match the locked canonical content."""
 
 
 class CatalogTransactionRequiredError(CatalogServiceError):
@@ -198,6 +225,12 @@ class ProgramVersionSnapshot:
     published_at: datetime | None
     superseded_at: datetime | None
     created_at: datetime
+    content_digest: str | None = None
+    content_source_ref: str | None = None
+    content_reviewed_by: str | None = None
+    content_reviewed_at: datetime | None = None
+    release_id: str | None = None
+    content_seed_kind: str | None = None
 
     @property
     def is_immutable(self) -> bool:
@@ -246,6 +279,14 @@ class ActivitySnapshot:
     kind: str
     title: str
     is_required: bool
+    prompt: str | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "prompt",
+            _optional_text(self.prompt, "prompt", ACTIVITY_PROMPT_MAX_LENGTH),
+        )
 
     @property
     def owner_key(self) -> UUID:
@@ -572,6 +613,14 @@ def _version_snapshot(row: ProgramVersion) -> ProgramVersionSnapshot:
         published_at=_as_utc(row.published_at) if row.published_at is not None else None,
         superseded_at=_as_utc(row.superseded_at) if row.superseded_at is not None else None,
         created_at=_as_utc(row.created_at),
+        content_digest=row.content_digest,
+        content_source_ref=row.content_source_ref,
+        content_reviewed_by=row.content_reviewed_by,
+        content_reviewed_at=(
+            _as_utc(row.content_reviewed_at) if row.content_reviewed_at is not None else None
+        ),
+        release_id=row.release_id,
+        content_seed_kind=row.content_seed_kind,
     )
 
 
@@ -599,6 +648,7 @@ def _activity_snapshot(row: Activity) -> ActivitySnapshot:
         kind=row.kind,
         title=row.title,
         is_required=row.is_required,
+        prompt=row.prompt,
     )
 
 
@@ -682,6 +732,7 @@ class SqlAlchemyCatalogStore:
             select(ProgramVersion)
             .where(ProgramVersion.program_id == program_id)
             .order_by(ProgramVersion.version_number.asc(), ProgramVersion.id.asc())
+            .execution_options(populate_existing=True)
         ).all()
         return tuple(_version_snapshot(row) for row in rows)
 
@@ -700,6 +751,12 @@ class SqlAlchemyCatalogStore:
             supersedes_version_id=version.supersedes_version_id,
             published_at=version.published_at,
             superseded_at=version.superseded_at,
+            content_digest=version.content_digest,
+            content_source_ref=version.content_source_ref,
+            content_reviewed_by=version.content_reviewed_by,
+            content_reviewed_at=version.content_reviewed_at,
+            release_id=version.release_id,
+            content_seed_kind=version.content_seed_kind,
             created_at=version.created_at,
             updated_at=version.created_at,
         )
@@ -728,22 +785,37 @@ class SqlAlchemyCatalogStore:
             ) from exc
 
     def lock_for_publication(self, version_id: UUID) -> ProgramVersionSnapshot:
-        candidate = self._session.scalar(
-            select(ProgramVersion).where(ProgramVersion.id == version_id)
+        return _version_snapshot(self._lock_program_and_version(version_id))
+
+    def _lock_program_and_version(self, version_id: UUID) -> ProgramVersion:
+        candidate_program_id = self._session.scalar(
+            select(ProgramVersion.program_id).where(ProgramVersion.id == version_id)
         )
-        if candidate is None:
+        if candidate_program_id is None:
             raise CatalogNotFoundError("program version does not exist")
         # The stable program row serializes all publication decisions for one
-        # catalog identity. Child writers also acquire this version lock.
-        self._session.scalar(
-            select(Program).where(Program.id == candidate.program_id).with_for_update()
+        # catalog identity. Keep Program -> ProgramVersion ordering everywhere.
+        locked_program = self._session.scalar(
+            select(Program)
+            .where(Program.id == candidate_program_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
+        if locked_program is None:
+            raise CatalogConflictError("program version references a missing program")
         locked = self._session.scalar(
-            select(ProgramVersion).where(ProgramVersion.id == version_id).with_for_update()
+            select(ProgramVersion)
+            .where(ProgramVersion.id == version_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
         if locked is None:
             raise CatalogNotFoundError("program version does not exist")
-        return _version_snapshot(locked)
+        if locked.program_id != locked_program.id:
+            raise CatalogConflictError(
+                "program version identity changed while publication locks were acquired"
+            )
+        return locked
 
     def publish_version_atomically(
         self,
@@ -751,9 +823,13 @@ class SqlAlchemyCatalogStore:
         *,
         expected_supersedes_version_id: UUID | None,
         published_at: datetime,
+        content_digest: str,
     ) -> ProgramVersionSnapshot:
         candidate = self._session.scalar(
-            select(ProgramVersion).where(ProgramVersion.id == version_id).with_for_update()
+            select(ProgramVersion)
+            .where(ProgramVersion.id == version_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
         if candidate is None:
             raise CatalogNotFoundError("program version does not exist")
@@ -764,6 +840,7 @@ class SqlAlchemyCatalogStore:
                 ProgramVersion.status == ProgramVersionStatus.PUBLISHED.value,
             )
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
         if candidate.status != ProgramVersionStatus.DRAFT.value:
             raise PublishedVersionImmutableError(
@@ -773,14 +850,20 @@ class SqlAlchemyCatalogStore:
             raise SupersessionRequiredError(
                 "the publication target changed; explicitly supersede the current version"
             )
-        if current is not None:
-            current.status = ProgramVersionStatus.SUPERSEDED.value
-            current.superseded_at = published_at
-        candidate.status = ProgramVersionStatus.PUBLISHED.value
-        candidate.published_at = published_at
         try:
             with self._session.begin_nested():
-                self._session.flush()
+                # Release the partial unique "current published" slot before
+                # publishing the candidate. SQLAlchemy orders a multi-row
+                # UPDATE by primary key, which is not the required semantic
+                # order when the candidate UUID sorts before the current UUID.
+                if current is not None:
+                    current.status = ProgramVersionStatus.SUPERSEDED.value
+                    current.superseded_at = published_at
+                    self._session.flush([current])
+                candidate.content_digest = content_digest
+                candidate.status = ProgramVersionStatus.PUBLISHED.value
+                candidate.published_at = published_at
+                self._session.flush([candidate])
         except IntegrityError as exc:
             raise CatalogConflictError(
                 "publication violated the current-version invariant"
@@ -796,11 +879,12 @@ class SqlAlchemyCatalogStore:
             select(Module)
             .where(Module.program_version_id == program_version_id)
             .order_by(Module.position.asc(), Module.id.asc())
+            .execution_options(populate_existing=True)
         ).all()
         return tuple(_module_snapshot(row) for row in rows)
 
     def save_module(self, module: ModuleSnapshot) -> None:
-        self._lock_version(module.program_version_id)
+        self._lock_draft_version_for_authoring(module.program_version_id)
         row = Module(
             id=module.id,
             program_version_id=module.program_version_id,
@@ -827,6 +911,7 @@ class SqlAlchemyCatalogStore:
             select(Activity)
             .where(Activity.module_id == module_id)
             .order_by(Activity.position.asc(), Activity.id.asc())
+            .execution_options(populate_existing=True)
         ).all()
         return tuple(_activity_snapshot(row) for row in rows)
 
@@ -834,7 +919,7 @@ class SqlAlchemyCatalogStore:
         module = self._session.get(Module, activity.module_id)
         if module is None:
             raise CatalogNotFoundError("module does not exist")
-        self._lock_version(module.program_version_id)
+        self._lock_draft_version_for_authoring(module.program_version_id)
         row = Activity(
             id=activity.id,
             module_id=activity.module_id,
@@ -847,6 +932,7 @@ class SqlAlchemyCatalogStore:
             kind=activity.kind,
             title=activity.title,
             is_required=activity.is_required,
+            prompt=activity.prompt,
         )
         try:
             with self._session.begin_nested():
@@ -862,11 +948,13 @@ class SqlAlchemyCatalogStore:
         return tuple(_prerequisite_snapshot(row) for row in rows)
 
     def list_all_prerequisites(self) -> Sequence[ModulePrerequisiteSnapshot]:
-        rows = self._session.scalars(select(ModulePrerequisite)).all()
+        rows = self._session.scalars(
+            select(ModulePrerequisite).execution_options(populate_existing=True)
+        ).all()
         return tuple(_prerequisite_snapshot(row) for row in rows)
 
     def save_prerequisite(self, prerequisite: ModulePrerequisiteSnapshot) -> None:
-        self._lock_version(prerequisite.program_version_id)
+        self._lock_draft_version_for_authoring(prerequisite.program_version_id)
         row = ModulePrerequisite(
             id=prerequisite.id,
             program_version_id=prerequisite.program_version_id,
@@ -953,12 +1041,12 @@ class SqlAlchemyCatalogStore:
             is not None
         )
 
-    def _lock_version(self, version_id: UUID) -> ProgramVersion:
-        row = self._session.scalar(
-            select(ProgramVersion).where(ProgramVersion.id == version_id).with_for_update()
-        )
-        if row is None:
-            raise CatalogNotFoundError("program version does not exist")
+    def _lock_draft_version_for_authoring(self, version_id: UUID) -> ProgramVersion:
+        row = self._lock_program_and_version(version_id)
+        if row.status != ProgramVersionStatus.DRAFT.value:
+            raise PublishedVersionImmutableError(
+                "published catalog versions are immutable; create a new version"
+            )
         return row
 
 
@@ -998,9 +1086,16 @@ class SqlAlchemyCatalogUnitOfWork:
 class CatalogService:
     """Author, order, publish, and query the versioned catalog."""
 
-    def __init__(self, store: CatalogStore, *, clock: Callable[[], datetime] | None = None) -> None:
+    def __init__(
+        self,
+        store: CatalogStore,
+        *,
+        clock: Callable[[], datetime] | None = None,
+        allow_technical_validation_publication: bool = False,
+    ) -> None:
         self._store = store
         self._clock = clock or (lambda: datetime.now(UTC))
+        self._allow_technical_validation_publication = allow_technical_validation_publication
 
     def create_program(
         self,
@@ -1050,6 +1145,12 @@ class CatalogService:
         version_number: int | None = None,
         supersedes_version_id: UUID | None = None,
         version_id: UUID | None = None,
+        content_digest: str | None = None,
+        content_source_ref: str | None = None,
+        content_reviewed_by: str | None = None,
+        content_reviewed_at: datetime | None = None,
+        release_id: str | None = None,
+        content_seed_kind: str | None = None,
         now: datetime | None = None,
     ) -> ProgramVersionSnapshot:
         program = self.get_program(program_id, tenant_id=tenant_id)
@@ -1090,6 +1191,12 @@ class CatalogService:
             published_at=None,
             superseded_at=None,
             created_at=_now(now or self._clock()),
+            content_digest=content_digest,
+            content_source_ref=content_source_ref,
+            content_reviewed_by=content_reviewed_by,
+            content_reviewed_at=content_reviewed_at,
+            release_id=release_id,
+            content_seed_kind=content_seed_kind,
         )
         self._store.save_version(version)
         return version
@@ -1144,6 +1251,7 @@ class CatalogService:
         tenant_id: UUID | None,
         kind: ActivityKind | str,
         title: str,
+        prompt: str | None = None,
         position: int | None = None,
         activity_id: UUID | None = None,
         program_version_id: UUID | None = None,
@@ -1157,6 +1265,7 @@ class CatalogService:
         if program_version_id is not None and program_version_id != version.id:
             raise CatalogAccessDeniedError("activity version does not match its module")
         normalized_title = _required_text(title, "title", 240)
+        normalized_prompt = _optional_text(prompt, "prompt", ACTIVITY_PROMPT_MAX_LENGTH)
         kind_value = _activity_kind_value(kind)
         activities = tuple(self._store.list_activities(module.id))
         next_position = (
@@ -1178,6 +1287,7 @@ class CatalogService:
             kind=kind_value,
             title=normalized_title,
             is_required=is_required,
+            prompt=normalized_prompt,
         )
         self._store.save_activity(activity)
         return activity
@@ -1250,6 +1360,12 @@ class CatalogService:
             version = self._require_version(program_version_id, tenant_id=tenant_id, writing=True)
         self._require_draft(version)
         self._validate_structure(version)
+        self._validate_publication_provenance(version)
+        canonical_digest = self._canonical_content_digest(version)
+        if version.content_digest != canonical_digest:
+            raise CatalogContentDigestMismatchError(
+                "content_digest does not match the locked canonical catalog content"
+            )
         versions = tuple(self._store.list_versions(version.program_id))
         current = max(
             (
@@ -1275,12 +1391,14 @@ class CatalogService:
                     version.id,
                     expected_supersedes_version_id=current.id if current is not None else None,
                     published_at=published_at,
+                    content_digest=canonical_digest,
                 ),
             )
         published = replace(
             version,
             status=ProgramVersionStatus.PUBLISHED.value,
             published_at=published_at,
+            content_digest=canonical_digest,
         )
         if current is not None:
             self._store.replace_version(
@@ -1305,6 +1423,12 @@ class CatalogService:
         tenant_id: UUID | None,
         version_number: int | None = None,
         version_id: UUID | None = None,
+        content_digest: str | None = None,
+        content_source_ref: str | None = None,
+        content_reviewed_by: str | None = None,
+        content_reviewed_at: datetime | None = None,
+        release_id: str | None = None,
+        content_seed_kind: str | None = None,
         now: datetime | None = None,
     ) -> ProgramVersionSnapshot:
         prior = self._require_version(prior_version_id, tenant_id=tenant_id, writing=False)
@@ -1316,6 +1440,12 @@ class CatalogService:
             version_number=version_number,
             supersedes_version_id=prior.id,
             version_id=version_id,
+            content_digest=content_digest,
+            content_source_ref=content_source_ref,
+            content_reviewed_by=content_reviewed_by,
+            content_reviewed_at=content_reviewed_at,
+            release_id=release_id,
+            content_seed_kind=content_seed_kind,
             now=now,
         )
 
@@ -1538,6 +1668,92 @@ class CatalogService:
             if positions[edge.prerequisite_module_id] >= positions[edge.module_id]:
                 raise PrerequisiteConflictError("prerequisites must point to earlier modules")
 
+    def _validate_publication_provenance(self, version: ProgramVersionSnapshot) -> None:
+        if (
+            version.content_digest is None
+            or _CONTENT_DIGEST.fullmatch(version.content_digest) is None
+        ):
+            raise CatalogPublicationProvenanceError(
+                "publication requires a lowercase SHA-256 content_digest"
+            )
+        for field_name, value in (
+            ("content_source_ref", version.content_source_ref),
+            ("content_reviewed_by", version.content_reviewed_by),
+        ):
+            if value is None or not value.strip():
+                raise CatalogPublicationProvenanceError(
+                    f"publication requires non-blank {field_name}"
+                )
+        if version.content_reviewed_at is None:
+            raise CatalogPublicationProvenanceError("publication requires content_reviewed_at")
+        if (
+            version.content_reviewed_at.tzinfo is None
+            or version.content_reviewed_at.utcoffset() is None
+        ):
+            raise CatalogPublicationProvenanceError(
+                "publication requires a timezone-aware content_reviewed_at"
+            )
+        _as_utc(version.content_reviewed_at)
+        if version.release_id is None or _RELEASE_ID.fullmatch(version.release_id) is None:
+            raise CatalogPublicationProvenanceError(
+                "publication requires a full lowercase Git release_id"
+            )
+        if version.content_seed_kind == _TECHNICAL_VALIDATION_CONTENT_KIND:
+            if not self._allow_technical_validation_publication:
+                raise CatalogPublicationProvenanceError(
+                    "technical-validation content publication is disabled in this environment"
+                )
+        elif version.content_seed_kind != _REVIEWED_CONTENT_KIND:
+            raise CatalogPublicationProvenanceError(
+                "publication requires reviewed or technical-validation content provenance"
+            )
+
+    def _canonical_content_digest(self, version: ProgramVersionSnapshot) -> str:
+        program = self._store.get_program(version.program_id)
+        if program is None:
+            raise CatalogConflictError("program version references a missing program")
+        modules = tuple(
+            sorted(
+                self._store.list_modules(version.id),
+                key=lambda module: (module.position, module.id.hex),
+            )
+        )
+        positions = {module.id: module.position for module in modules}
+        prerequisites_by_module: dict[UUID, list[int]] = {}
+        for edge in self._all_prerequisites():
+            if edge.program_version_id != version.id:
+                continue
+            prerequisite_position = positions.get(edge.prerequisite_module_id)
+            if edge.module_id not in positions or prerequisite_position is None:
+                raise PrerequisiteConflictError("prerequisite edge references another version")
+            prerequisites_by_module.setdefault(edge.module_id, []).append(prerequisite_position)
+        canonical_modules = tuple(
+            CanonicalModuleContent(
+                position=module.position,
+                title=module.title,
+                prerequisite_positions=tuple(sorted(prerequisites_by_module.get(module.id, ()))),
+                activities=tuple(
+                    CanonicalActivityContent(
+                        position=activity.position,
+                        kind=activity.kind,
+                        title=activity.title,
+                        is_required=activity.is_required,
+                        prompt=activity.prompt,
+                    )
+                    for activity in sorted(
+                        self._store.list_activities(module.id),
+                        key=lambda item: (item.position, item.id.hex),
+                    )
+                ),
+            )
+            for module in modules
+        )
+        return canonical_catalog_content_digest(
+            program_slug=program.slug,
+            program_title=program.title,
+            modules=canonical_modules,
+        )
+
     def _all_prerequisites(self) -> tuple[ModulePrerequisiteSnapshot, ...]:
         if isinstance(self._store, InMemoryCatalogStore):
             return tuple(self._store.prerequisites.values())
@@ -1573,9 +1789,11 @@ class AsyncCatalogApplication:
         session: AsyncSession,
         *,
         clock: Callable[[], datetime] | None = None,
+        allow_technical_validation_publication: bool = False,
     ) -> None:
         self._session = session
         self._clock = clock
+        self._allow_technical_validation_publication = allow_technical_validation_publication
 
     def _require_transaction(self) -> None:
         transaction = self._session.get_transaction()
@@ -1637,7 +1855,13 @@ class AsyncCatalogApplication:
 
                 def invoke(sync_session: Session) -> _T:
                     return operation(
-                        CatalogService(SqlAlchemyCatalogStore(sync_session), clock=self._clock)
+                        CatalogService(
+                            SqlAlchemyCatalogStore(sync_session),
+                            clock=self._clock,
+                            allow_technical_validation_publication=(
+                                self._allow_technical_validation_publication
+                            ),
+                        )
                     )
 
                 result = await transaction.run_sync(invoke)
@@ -1676,6 +1900,12 @@ class AsyncCatalogApplication:
         version_number: int | None = None,
         supersedes_version_id: UUID | None = None,
         version_id: UUID | None = None,
+        content_digest: str | None = None,
+        content_source_ref: str | None = None,
+        content_reviewed_by: str | None = None,
+        content_reviewed_at: datetime | None = None,
+        release_id: str | None = None,
+        content_seed_kind: str | None = None,
         now: datetime | None = None,
     ) -> ProgramVersionSnapshot:
         await self._authorize_admin(actor, tenant_id=tenant_id, permission=CATALOG_WRITE_PERMISSION)
@@ -1686,6 +1916,12 @@ class AsyncCatalogApplication:
                 version_number=version_number,
                 supersedes_version_id=supersedes_version_id,
                 version_id=version_id,
+                content_digest=content_digest,
+                content_source_ref=content_source_ref,
+                content_reviewed_by=content_reviewed_by,
+                content_reviewed_at=content_reviewed_at,
+                release_id=release_id,
+                content_seed_kind=content_seed_kind,
                 now=now,
             )
         )
@@ -1719,6 +1955,7 @@ class AsyncCatalogApplication:
         tenant_id: UUID | None,
         kind: ActivityKind | str,
         title: str,
+        prompt: str | None = None,
         position: int | None = None,
         activity_id: UUID | None = None,
         is_required: bool = True,
@@ -1730,6 +1967,7 @@ class AsyncCatalogApplication:
                 tenant_id=tenant_id,
                 kind=kind,
                 title=title,
+                prompt=prompt,
                 position=position,
                 activity_id=activity_id,
                 is_required=is_required,
@@ -1945,7 +2183,9 @@ __all__ = [
     "CatalogAccessDeniedError",
     "CatalogApplicationService",
     "CatalogConflictError",
+    "CatalogContentDigestMismatchError",
     "CatalogNotFoundError",
+    "CatalogPublicationProvenanceError",
     "CatalogService",
     "CatalogServiceError",
     "CatalogStore",

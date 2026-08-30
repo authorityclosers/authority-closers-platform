@@ -22,7 +22,8 @@ from sqlalchemy.orm import Session
 
 from ac_platform.application.settings import Settings
 from ac_platform.catalog.models import Activity as CatalogActivity
-from ac_platform.catalog.models import ProgramVersion
+from ac_platform.catalog.models import ActivityKind, ProgramVersion
+from ac_platform.catalog.models import Program as CatalogProgram
 from ac_platform.enrollment.models import Enrollment
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, require_safe_origin
 from ac_platform.kernel.authz import ActorContext
@@ -53,6 +54,7 @@ _ETAG_PATTERN = re.compile(
 )
 
 ActivityResolver = Callable[[object, object], ActivityDefinition]
+PromptResolver = Callable[[object, object], str | None]
 ReviewerResolver = Callable[[LearningAccessContext], UUID | None]
 PolicyResolver = Callable[[LearningAccessContext], VideoEvidencePolicy]
 
@@ -92,24 +94,67 @@ class MissingPlaybackToken(DomainError):
     status = 401
 
 
+class ActivityActionUnavailable(DomainError):
+    code = "activity_action_unavailable"
+    title = "This activity action is unavailable"
+    status = 403
+
+
+type ActivityAllowedAction = Literal["save_draft", "submit_evidence", "complete_video"]
+
+
+class ActivityReasonResponse(BaseModel):
+    """The exact server-owned activity reason projection exposed to learners."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    activity_id: UUID
+    state: ActivityState
+    required: bool
+    reason: str
+    missing_activity_ids: list[UUID]
+    missing_module_ids: list[UUID]
+
+
+class LearningProjectionResponse(BaseModel):
+    """The exact progress projection consumed by the learner web app."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    scope_type: str
+    scope_id: UUID
+    program_version: str
+    projection_version: str
+    denominator: int
+    completed_count: int
+    percentage: float
+    predicate: str
+    missing_module_ids: list[UUID]
+    activity_reasons: list[ActivityReasonResponse]
+
+
 class ActivityRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id: UUID
     module_id: UUID
     program_version_id: UUID
+    position: int
     kind: str
     title: str
+    prompt: str | None
     state: ActivityState
     revision: int
     required: bool
-    explanation: dict[str, Any]
+    explanation: ActivityReasonResponse
+    allowed_actions: list[ActivityAllowedAction]
 
 
 class ModuleLearningResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id: UUID
+    position: int
     title: str
     activities: list[ActivityRequest]
 
@@ -119,15 +164,20 @@ class LearningResponse(BaseModel):
 
     program_id: UUID
     program_version_id: UUID
+    program_slug: str
+    program_title: str
+    version_number: int
     enrollment_id: UUID
     modules: list[ModuleLearningResponse]
-    projection: dict[str, Any]
+    projection: LearningProjectionResponse
 
 
 class ActivityDetailResponse(ActivityRequest):
     model_config = ConfigDict(extra="forbid")
 
     enrollment_id: UUID
+    draft_revision: int
+    draft_payload: dict[str, Any] | None
 
 
 class DraftRequest(BaseModel):
@@ -142,6 +192,7 @@ class DraftResponse(BaseModel):
     id: UUID
     activity_id: UUID
     revision: int
+    activity_revision: int
     status: str
     payload: dict[str, Any]
     saved_at: datetime
@@ -164,6 +215,7 @@ class EvidenceResponse(BaseModel):
     evidence_id: UUID
     submission_id: UUID
     activity_id: UUID
+    activity_revision: int
     evidence_type: str
     submission_status: str
 
@@ -251,6 +303,20 @@ def _default_activity_resolver(row: object, _version: object) -> ActivityDefinit
     )
 
 
+def _default_activity_prompt_resolver(row: object, _version: object) -> str | None:
+    """Read only the explicit learner prompt field from catalog data.
+
+    Legacy catalog rows may have no prompt. Returning ``None`` is intentional:
+    the learner surface must not turn an activity title or a progress
+    explanation into instructions.
+    """
+
+    value = getattr(row, "prompt", None)
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
+
+
 def _missing_policy(_access: LearningAccessContext) -> VideoEvidencePolicy:
     raise DomainError("No server-owned playback policy is configured for this deployment.")
 
@@ -279,6 +345,57 @@ def _activity_state(value: ActivityState | str) -> ActivityState:
     return value if isinstance(value, ActivityState) else ActivityState(value)
 
 
+def _allowed_actions(
+    access: LearningAccessContext,
+    *,
+    state: ActivityState,
+    prompt: str | None,
+    playback_enabled: bool,
+) -> list[ActivityAllowedAction]:
+    if state not in {ActivityState.AVAILABLE, ActivityState.IN_PROGRESS} or prompt is None:
+        return []
+    actions: list[ActivityAllowedAction] = ["save_draft"]
+    kind = ActivityKind(_enum_value(access.activity.kind).upper())
+    if kind is ActivityKind.VIDEO:
+        if playback_enabled and access.activity.video_duration_seconds is not None:
+            actions.append("complete_video")
+        return actions
+    reviewer_id = access.assigned_reviewer_id
+    if reviewer_id is not None and reviewer_id != access.person_id:
+        actions.append("submit_evidence")
+    return actions
+
+
+def _require_action(
+    action: ActivityAllowedAction,
+    allowed_actions: list[ActivityAllowedAction],
+) -> None:
+    if action not in allowed_actions:
+        raise ActivityActionUnavailable(
+            "The server has not enabled this action for the current activity state."
+        )
+
+
+def _reason_response(
+    explanation: object,
+    *,
+    activity_id: UUID,
+    state: ActivityState,
+    required: bool,
+) -> ActivityReasonResponse:
+    for item in explanation.activity_reasons:  # type: ignore[attr-defined]
+        if item.activity_id == activity_id:
+            return ActivityReasonResponse.model_validate(item.as_dict())
+    return ActivityReasonResponse(
+        activity_id=activity_id,
+        state=state,
+        required=required,
+        reason="server_resolved_activity_state",
+        missing_activity_ids=[],
+        missing_module_ids=[],
+    )
+
+
 def _idempotency(value: str | None) -> str:
     if value is None or not value.strip():
         raise MissingIdempotencyKey("Mutating learning commands require Idempotency-Key.")
@@ -298,11 +415,12 @@ def _no_store(response: Response, *, kind: str | None = None, revision: int | No
         response.headers["etag"] = _etag(kind, revision)
 
 
-def _draft_response(draft: DraftSnapshot) -> DraftResponse:
+def _draft_response(draft: DraftSnapshot, *, activity_revision: int) -> DraftResponse:
     return DraftResponse(
         id=draft.id,
         activity_id=draft.activity_id,
         revision=draft.revision,
+        activity_revision=activity_revision,
         status=_enum_value(draft.status),
         payload=dict(draft.payload),
         saved_at=draft.saved_at,
@@ -310,12 +428,16 @@ def _draft_response(draft: DraftSnapshot) -> DraftResponse:
 
 
 def _evidence_response(
-    evidence: EvidenceSnapshot, submission: EvidenceSubmissionSnapshot
+    evidence: EvidenceSnapshot,
+    submission: EvidenceSubmissionSnapshot,
+    *,
+    activity_revision: int,
 ) -> EvidenceResponse:
     return EvidenceResponse(
         evidence_id=evidence.id,
         submission_id=submission.id,
         activity_id=evidence.activity_id,
+        activity_revision=activity_revision,
         evidence_type=_enum_value(evidence.evidence_type),
         submission_status=_enum_value(submission.status),
     )
@@ -329,16 +451,22 @@ def _require_playback_token(value: str | None) -> str:
 
 def _scope_for_program(
     database: Session, actor: ActorContext, program_id: UUID
-) -> tuple[Enrollment, ProgramVersion]:
+) -> tuple[Enrollment, ProgramVersion, CatalogProgram]:
     tenant_id = _tenant(actor)
     row = database.execute(
-        select(Enrollment, ProgramVersion)
+        select(Enrollment, ProgramVersion, CatalogProgram)
         .join(
             ProgramVersion,
             (ProgramVersion.id == Enrollment.program_version_id)
             & (ProgramVersion.program_id == Enrollment.program_id)
             & (ProgramVersion.scope == Enrollment.program_scope)
             & (ProgramVersion.owner_key == Enrollment.program_owner_key),
+        )
+        .join(
+            CatalogProgram,
+            (CatalogProgram.id == ProgramVersion.program_id)
+            & (CatalogProgram.scope == ProgramVersion.scope)
+            & (CatalogProgram.owner_key == ProgramVersion.owner_key),
         )
         .where(
             Enrollment.tenant_id == tenant_id,
@@ -350,7 +478,7 @@ def _scope_for_program(
     ).one_or_none()
     if row is None:
         raise LearningResourceUnavailable("The enrolled learning resource is unavailable.")
-    return cast(tuple[Enrollment, ProgramVersion], row)
+    return cast(tuple[Enrollment, ProgramVersion, CatalogProgram], row)
 
 
 def _scope_for_activity(
@@ -420,6 +548,7 @@ def install_learning_http(
     settings: Settings,
     require_actor: RequireActor,
     activity_resolver: ActivityResolver | None = None,
+    prompt_resolver: PromptResolver | None = None,
     reviewer_resolver: ReviewerResolver | None = None,
     policy_resolver: PolicyResolver | None = None,
 ) -> None:
@@ -431,8 +560,10 @@ def install_learning_http(
     """
 
     resolved_activity = activity_resolver or _default_activity_resolver
+    resolved_prompt = prompt_resolver or _default_activity_prompt_resolver
     resolved_reviewer = reviewer_resolver or (lambda _access: None)
     resolved_policy = policy_resolver or _missing_policy
+    playback_enabled = policy_resolver is not None
     router = APIRouter(prefix="/v1", tags=["learning"])
     actor_dependency = Depends(require_actor)
 
@@ -453,7 +584,7 @@ def install_learning_http(
         actor = auth.resolved.actor
 
         def read(database: Session) -> LearningResponse:
-            enrollment, version = _scope_for_program(database, actor, program_id)
+            enrollment, version, catalog_program = _scope_for_program(database, actor, program_id)
             catalog_activities = tuple(
                 database.scalars(
                     select(CatalogActivity)
@@ -470,6 +601,7 @@ def install_learning_http(
             )
             if not catalog_activities:
                 raise LearningResourceUnavailable("The enrolled learning resource is unavailable.")
+            prompts = {row.id: resolved_prompt(row, version) for row in catalog_activities}
             bundle = bundle_for(database)
             first_access = bundle.store.resolve_access(
                 actor=actor,
@@ -492,6 +624,13 @@ def install_learning_http(
             for module in first_access.program.modules:
                 for definition in module.activities:
                     current = progress.get(definition.id)
+                    access = bundle.store.resolve_access(
+                        actor=actor,
+                        tenant_id=_tenant(actor),
+                        enrollment_id=enrollment.id,
+                        program_version_id=version.id,
+                        activity_id=definition.id,
+                    )
                     state = bundle.activities.current_state(
                         actor=actor,
                         tenant_id=_tenant(actor),
@@ -499,33 +638,44 @@ def install_learning_http(
                         program_version_id=version.id,
                         activity_id=definition.id,
                     )
+                    prompt = None if state is ActivityState.LOCKED else prompts.get(definition.id)
                     by_module.setdefault(module.id, []).append(
                         ActivityRequest(
                             id=definition.id,
                             module_id=definition.module_id,
                             program_version_id=definition.program_version_id,
+                            position=definition.order,
                             kind=_enum_value(definition.kind),
                             title=definition.title,
+                            prompt=prompt,
                             state=state,
                             revision=current.revision if current else 0,
                             required=definition.required,
-                            explanation=next(
-                                (
-                                    item.as_dict()
-                                    for item in explanation.activity_reasons
-                                    if item.activity_id == definition.id
-                                ),
-                                {"activity_id": str(definition.id), "state": _enum_value(state)},
+                            explanation=_reason_response(
+                                explanation,
+                                activity_id=definition.id,
+                                state=state,
+                                required=definition.required,
+                            ),
+                            allowed_actions=_allowed_actions(
+                                access,
+                                state=state,
+                                prompt=prompt,
+                                playback_enabled=playback_enabled,
                             ),
                         )
                     )
             return LearningResponse(
                 program_id=first_access.program.id,
                 program_version_id=version.id,
+                program_slug=catalog_program.slug,
+                program_title=catalog_program.title,
+                version_number=version.version_number,
                 enrollment_id=enrollment.id,
                 modules=[
                     ModuleLearningResponse(
                         id=module.id,
+                        position=module.order,
                         title=module.title,
                         activities=by_module.get(module.id, []),
                     )
@@ -547,7 +697,9 @@ def install_learning_http(
         actor = auth.resolved.actor
 
         def read(database: Session) -> ActivityDetailResponse:
-            enrollment, version, _catalog = _scope_for_activity(database, actor, activity_id)
+            enrollment, version, catalog_activity = _scope_for_activity(
+                database, actor, activity_id
+            )
             bundle = bundle_for(database)
             access = bundle.store.resolve_access(
                 actor=actor,
@@ -574,25 +726,49 @@ def install_learning_http(
                 )
             }
             explanation = ProgressProjector().explain(access.program, progress_by_activity)
-            reason = next(
-                (
-                    item.as_dict()
-                    for item in explanation.activity_reasons
-                    if item.activity_id == activity_id
-                ),
-                {"activity_id": str(activity_id), "state": _enum_value(state)},
+            reason = _reason_response(
+                explanation,
+                activity_id=activity_id,
+                state=state,
+                required=access.activity.required,
+            )
+            prompt = (
+                None
+                if state is ActivityState.LOCKED
+                else resolved_prompt(catalog_activity, version)
+            )
+            draft = (
+                None
+                if state is ActivityState.LOCKED
+                else bundle.drafts.get(
+                    actor=actor,
+                    tenant_id=_tenant(actor),
+                    enrollment_id=enrollment.id,
+                    program_version_id=version.id,
+                    activity_id=activity_id,
+                )
             )
             return ActivityDetailResponse(
                 id=access.activity.id,
                 module_id=access.activity.module_id,
                 program_version_id=access.program_version_id,
+                position=access.activity.order,
                 kind=_enum_value(access.activity.kind),
                 title=access.activity.title,
+                prompt=prompt,
                 state=state,
                 revision=progress.revision if progress else 0,
                 required=access.activity.required,
                 explanation=reason,
+                allowed_actions=_allowed_actions(
+                    access,
+                    state=state,
+                    prompt=prompt,
+                    playback_enabled=playback_enabled,
+                ),
                 enrollment_id=enrollment.id,
+                draft_revision=draft.revision if draft is not None else 0,
+                draft_payload=dict(draft.payload) if draft is not None else None,
             )
 
         result = await _run_in_auth_transaction(auth, read)
@@ -616,9 +792,40 @@ def install_learning_http(
         expected_revision = _revision(if_match, kind="draft")
         command_key = _idempotency(idempotency_key)
 
-        def mutate(database: Session) -> DraftSnapshot:
-            enrollment, version, _catalog = _scope_for_activity(database, actor, activity_id)
-            return bundle_for(database).drafts.save(
+        def mutate(database: Session) -> tuple[DraftSnapshot, int]:
+            enrollment, version, catalog_activity = _scope_for_activity(
+                database, actor, activity_id
+            )
+            bundle = bundle_for(database)
+            access = bundle.store.resolve_access(
+                actor=actor,
+                tenant_id=_tenant(actor),
+                enrollment_id=enrollment.id,
+                program_version_id=version.id,
+                activity_id=activity_id,
+            )
+            activity_state = bundle.activities.current_state(
+                actor=actor,
+                tenant_id=_tenant(actor),
+                enrollment_id=enrollment.id,
+                program_version_id=version.id,
+                activity_id=activity_id,
+            )
+            prompt = (
+                None
+                if activity_state is ActivityState.LOCKED
+                else resolved_prompt(catalog_activity, version)
+            )
+            _require_action(
+                "save_draft",
+                _allowed_actions(
+                    access,
+                    state=activity_state,
+                    prompt=prompt,
+                    playback_enabled=playback_enabled,
+                ),
+            )
+            draft = bundle.drafts.save(
                 actor=actor,
                 tenant_id=_tenant(actor),
                 enrollment_id=enrollment.id,
@@ -628,10 +835,20 @@ def install_learning_http(
                 expected_revision=expected_revision,
                 idempotency_key=command_key,
             )
+            progress = bundle.store.get_progress(
+                _tenant(actor),
+                enrollment.id,
+                actor.person_id,
+                version.id,
+                activity_id,
+            )
+            if progress is None:
+                raise DomainError("The draft command completed without progress state.")
+            return draft, progress.revision
 
-        result = await _run_in_auth_transaction(auth, mutate)
+        result, activity_revision = await _run_in_auth_transaction(auth, mutate)
         _no_store(response, kind="draft", revision=result.revision)
-        return _draft_response(result)
+        return _draft_response(result, activity_revision=activity_revision)
 
     @router.post("/activities/{activity_id}/evidence", response_model=EvidenceResponse)
     async def submit_evidence(
@@ -653,8 +870,43 @@ def install_learning_http(
         def mutate(
             database: Session,
         ) -> tuple[EvidenceSnapshot, EvidenceSubmissionSnapshot, int]:
-            enrollment, version, _catalog = _scope_for_activity(database, actor, activity_id)
+            enrollment, version, catalog_activity = _scope_for_activity(
+                database, actor, activity_id
+            )
             bundle = bundle_for(database)
+            access = bundle.store.resolve_access(
+                actor=actor,
+                tenant_id=_tenant(actor),
+                enrollment_id=enrollment.id,
+                program_version_id=version.id,
+                activity_id=activity_id,
+            )
+            activity_state = bundle.activities.current_state(
+                actor=actor,
+                tenant_id=_tenant(actor),
+                enrollment_id=enrollment.id,
+                program_version_id=version.id,
+                activity_id=activity_id,
+            )
+            prompt = (
+                None
+                if activity_state is ActivityState.LOCKED
+                else resolved_prompt(catalog_activity, version)
+            )
+            required_action: ActivityAllowedAction = (
+                "complete_video"
+                if body.evidence_type == EvidenceType.VIDEO_WATCH.value
+                else "submit_evidence"
+            )
+            _require_action(
+                required_action,
+                _allowed_actions(
+                    access,
+                    state=activity_state,
+                    prompt=prompt,
+                    playback_enabled=playback_enabled,
+                ),
+            )
             evidence, submission = bundle.evidence.submit(
                 actor=actor,
                 tenant_id=_tenant(actor),
@@ -683,7 +935,11 @@ def install_learning_http(
         _no_store(response)
         response.status_code = status.HTTP_201_CREATED
         response.headers["etag"] = _etag("activity", progress_revision)
-        return _evidence_response(evidence, submission)
+        return _evidence_response(
+            evidence,
+            submission,
+            activity_revision=progress_revision,
+        )
 
     @router.post("/evidence/{submission_id}/review", response_model=ReviewResponse)
     async def review_evidence(
@@ -744,8 +1000,39 @@ def install_learning_http(
             command_key = _idempotency(idempotency_key)
 
             def mutate(database: Session) -> PlaybackSessionSnapshot:
-                enrollment, version, _catalog = _scope_for_activity(database, actor, activity_id)
-                return bundle_for(database).playback.start_session(
+                enrollment, version, catalog_activity = _scope_for_activity(
+                    database, actor, activity_id
+                )
+                bundle = bundle_for(database)
+                access = bundle.store.resolve_access(
+                    actor=actor,
+                    tenant_id=_tenant(actor),
+                    enrollment_id=enrollment.id,
+                    program_version_id=version.id,
+                    activity_id=activity_id,
+                )
+                activity_state = bundle.activities.current_state(
+                    actor=actor,
+                    tenant_id=_tenant(actor),
+                    enrollment_id=enrollment.id,
+                    program_version_id=version.id,
+                    activity_id=activity_id,
+                )
+                prompt = (
+                    None
+                    if activity_state is ActivityState.LOCKED
+                    else resolved_prompt(catalog_activity, version)
+                )
+                _require_action(
+                    "complete_video",
+                    _allowed_actions(
+                        access,
+                        state=activity_state,
+                        prompt=prompt,
+                        playback_enabled=playback_enabled,
+                    ),
+                )
+                return bundle.playback.start_session(
                     actor=actor,
                     tenant_id=_tenant(actor),
                     enrollment_id=enrollment.id,
@@ -868,6 +1155,8 @@ def install_learning_http(
 
 
 __all__ = [
+    "ActivityActionUnavailable",
+    "ActivityAllowedAction",
     "ActivityDetailResponse",
     "ActivityRequest",
     "DraftRequest",

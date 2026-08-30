@@ -26,6 +26,7 @@ from sqlalchemy.schema import CreateSchema, DropSchema
 
 from ac_platform.application.settings import Settings
 from ac_platform.catalog.models import CatalogScope, Program, ProgramVersion
+from ac_platform.catalog.services import CatalogService, SqlAlchemyCatalogStore
 from ac_platform.certificates.models import CertificateEvent, CourseCompletionCertificate
 from ac_platform.certificates.models import CompletionSnapshot as CompletionSnapshotRecord
 from ac_platform.certificates.services import (
@@ -258,29 +259,39 @@ def _seed(engine: Engine) -> _Seed:
             ]
         )
         database.flush()
-        database.add_all(
-            [
-                Program(
-                    id=program_id,
-                    scope=CatalogScope.TENANT.value,
-                    owner_key=tenant_id,
-                    tenant_id=tenant_id,
-                    slug=f"certificate-http-program-{uuid4().hex[:10]}",
-                    title="Certificate HTTP program",
-                ),
-                ProgramVersion(
-                    id=program_version_id,
-                    program_id=program_id,
-                    scope=CatalogScope.TENANT.value,
-                    owner_key=tenant_id,
-                    tenant_id=tenant_id,
-                    version_number=1,
-                    status="published",
-                    published_at=NOW,
-                ),
-            ]
+        program = Program(
+            id=program_id,
+            scope=CatalogScope.TENANT.value,
+            owner_key=tenant_id,
+            tenant_id=tenant_id,
+            slug=f"certificate-http-program-{uuid4().hex[:10]}",
+            title="Certificate HTTP program",
         )
+        version = ProgramVersion(
+            id=program_version_id,
+            program_id=program_id,
+            scope=CatalogScope.TENANT.value,
+            owner_key=tenant_id,
+            tenant_id=tenant_id,
+            version_number=1,
+            status="draft",
+        )
+        database.add(program)
         database.flush()
+        database.add(version)
+        database.flush()
+        store = SqlAlchemyCatalogStore(database)
+        catalog = CatalogService(store, clock=lambda: NOW)
+        snapshot = store.get_version(program_version_id)
+        assert snapshot is not None
+        version.content_digest = catalog._canonical_content_digest(snapshot)  # noqa: SLF001
+        version.content_source_ref = __file__
+        version.content_reviewed_by = "certificate-http-reviewer@example.test"
+        version.content_reviewed_at = NOW
+        version.release_id = "1" * 40
+        version.content_seed_kind = "reviewed"
+        database.flush()
+        catalog.publish_version(program_version_id, tenant_id=tenant_id, now=NOW)
         database.add(
             Enrollment(
                 id=enrollment_id,

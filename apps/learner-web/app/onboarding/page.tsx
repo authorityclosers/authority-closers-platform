@@ -30,11 +30,9 @@ export default async function OnboardingPage({
             className="onboarding-intro"
             aria-labelledby="onboarding-title"
           >
-            <Link
-              className="text-link"
-              href={ROUTES.programDetail("free-course")}
-            >
-              <ArrowLeft size={15} aria-hidden="true" /> Back to course detail
+            <Link className="text-link" href={ROUTES.home}>
+              <ArrowLeft size={15} aria-hidden="true" /> Back to published
+              programs
             </Link>
             <p className="eyebrow">
               <span aria-hidden="true" /> Start with context
@@ -63,7 +61,7 @@ export default async function OnboardingPage({
             <SurfaceStatePanel
               state={state}
               retryHref={ROUTES.onboarding}
-              backHref={ROUTES.programDetail("free-course")}
+              backHref={ROUTES.home}
               pageHeadingPresent
             />
             {isContentVisible(state) ? (

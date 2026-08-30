@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 
 import ac_platform.http.admin_learning as admin_module
 from ac_platform.application.settings import Settings
+from ac_platform.catalog.services import CatalogPublicationProvenanceError
 from ac_platform.enrollment.services import EnrollmentResult, ManualEnrollmentGrantCommand
 from ac_platform.http.admin_learning import install_admin_learning_http
 from ac_platform.http.auth import AuthenticatedTransaction
@@ -56,9 +57,17 @@ class _CatalogApplication:
         published_at=NOW,
     )
     call: dict[str, Any] | None = None
+    error: Exception | None = None
+    allow_technical_validation_publication: bool | None = None
 
-    def __init__(self, database: object) -> None:
+    def __init__(
+        self,
+        database: object,
+        *,
+        allow_technical_validation_publication: bool = False,
+    ) -> None:
         self.database = database
+        type(self).allow_technical_validation_publication = allow_technical_validation_publication
 
     async def publish_version(
         self,
@@ -72,6 +81,8 @@ class _CatalogApplication:
             "actor": actor,
             "tenant_id": tenant_id,
         }
+        if type(self).error is not None:
+            raise type(self).error
         return type(self).result
 
 
@@ -163,7 +174,13 @@ def harness(monkeypatch: pytest.MonkeyPatch) -> tuple[TestClient, ActorContext, 
         session_id=uuid4(),
         tenant_id=tenant_id,
         permissions=frozenset(
-            {"catalog_publish", "learning_correct", "enrollment_grant", "learning_review"}
+            {
+                "admin_surface",
+                "catalog_publish",
+                "learning_correct",
+                "enrollment_grant",
+                "learning_review",
+            }
         ),
     )
     database = _Database(_membership_row(actor))
@@ -177,17 +194,24 @@ def harness(monkeypatch: pytest.MonkeyPatch) -> tuple[TestClient, ActorContext, 
     monkeypatch.setattr(admin_module, "_bundle", lambda *_args, **_kwargs: _Bundle())
     monkeypatch.setattr(admin_module, "_append_admin_audit", record_audit)
     _CatalogApplication.call = None
+    _CatalogApplication.error = None
+    _CatalogApplication.allow_technical_validation_publication = None
     _EnrollmentApplication.command = None
     _EnrollmentApplication.actor = None
     _Evidence.call = None
 
+    application = FastAPI()
+    application.state.actor_calls = []
+    application.state.membership_role = "admin"
+
     async def require_actor(_request: Request) -> AsyncIterator[AuthenticatedTransaction]:
+        application.state.actor_calls.append(application.state.membership_role)
         yield AuthenticatedTransaction(
             database=cast(Any, database),
             identity=cast(Any, object()),
             resolved=ResolvedActorContext(
                 actor=actor,
-                membership_role="admin",
+                membership_role=application.state.membership_role,
                 person_revision=0,
                 session_revision=0,
                 tenant_revision=0,
@@ -196,7 +220,6 @@ def harness(monkeypatch: pytest.MonkeyPatch) -> tuple[TestClient, ActorContext, 
             token="admin-http-opaque-session-token",  # noqa: S106
         )
 
-    application = FastAPI()
     register_problem_handlers(application)
     install_admin_learning_http(
         application,
@@ -210,7 +233,10 @@ def harness(monkeypatch: pytest.MonkeyPatch) -> tuple[TestClient, ActorContext, 
 
 
 def _origin() -> dict[str, str]:
-    return {"Origin": "https://app.authorityclosers.test"}
+    return {
+        "Host": "admin.authorityclosers.test",
+        "Origin": "https://admin.authorityclosers.test",
+    }
 
 
 def _app(client: TestClient) -> FastAPI:
@@ -238,10 +264,31 @@ def test_publish_uses_trusted_admin_context_and_appends_audit(
         "actor": actor,
         "tenant_id": actor.tenant_id,
     }
+    assert _CatalogApplication.allow_technical_validation_publication is False
     assert database.run_sync_calls == 0
     audit_calls = cast(list[dict[str, Any]], _app(client).state.audit_calls)
     assert audit_calls[0]["action"] == "audit.catalog.version.published.v1"
     assert audit_calls[0]["reason"] == "release reviewed by the curriculum owner"
+
+
+def test_admin_reason_cannot_publish_without_complete_content_provenance(
+    harness: tuple[TestClient, ActorContext, _Database],
+) -> None:
+    client, _actor, _database = harness
+    _CatalogApplication.error = CatalogPublicationProvenanceError(
+        "publication requires complete reviewed content provenance"
+    )
+
+    response = client.post(
+        f"/v1/admin/program-versions/{uuid4()}/publish",
+        json={"reason": "an operator reason is not a content review record"},
+        headers=_origin(),
+    )
+
+    assert response.status_code == 422
+    assert response.json()["code"] == "catalog_publication_rejected"
+    assert response.json()["detail"] == "The program version failed catalog validation."
+    assert cast(list[dict[str, Any]], _app(client).state.audit_calls) == []
 
 
 def test_missing_named_permission_is_denied_before_domain_service(
@@ -288,13 +335,139 @@ def test_inactive_or_non_admin_canonical_membership_is_denied(
     assert _CatalogApplication.call is None
 
 
+@pytest.mark.parametrize(
+    ("permission", "allowed"),
+    [
+        ("learning_correct", True),
+        ("enrollment_grant", True),
+        ("catalog_publish", False),
+    ],
+)
+def test_support_role_is_limited_to_its_named_permissions(
+    harness: tuple[TestClient, ActorContext, _Database],
+    permission: str,
+    allowed: bool,
+) -> None:
+    _client, actor, database = harness
+    support_actor = ActorContext(
+        person_id=actor.person_id,
+        session_id=actor.session_id,
+        tenant_id=actor.tenant_id,
+        permissions=frozenset({"admin_surface", permission}),
+    )
+    database.row = _membership_row(support_actor, role="support")
+    auth = AuthenticatedTransaction(
+        database=cast(Any, database),
+        identity=cast(Any, object()),
+        resolved=ResolvedActorContext(
+            actor=support_actor,
+            membership_role="support",
+            person_revision=0,
+            session_revision=0,
+            tenant_revision=0,
+            membership_revision=0,
+        ),
+        token="opaque-support-http-token",  # noqa: S106
+    )
+
+    if allowed:
+        resolved_actor, tenant_id = asyncio.run(
+            admin_module._require_named_admin(auth, permission=permission)
+        )
+        assert resolved_actor == support_actor
+        assert tenant_id == actor.tenant_id
+    else:
+        with pytest.raises(admin_module.AdminAuthorizationDenied):
+            asyncio.run(admin_module._require_named_admin(auth, permission=permission))
+
+
+@pytest.mark.parametrize("membership_role", ["owner", "admin"])
+@pytest.mark.parametrize(
+    "host",
+    ["app.authorityclosers.test", "api.authorityclosers.test"],
+)
+@pytest.mark.parametrize(
+    ("path", "body", "operation_headers"),
+    [
+        (
+            f"/v1/admin/program-versions/{uuid4()}/publish",
+            {"reason": "reviewed publish"},
+            {},
+        ),
+        (
+            "/v1/admin/corrections",
+            {
+                "submission_id": str(uuid4()),
+                "decision": "approved",
+                "reason": "reviewed correction",
+            },
+            {
+                "If-Match": '"submission-revision-0"',
+                "Idempotency-Key": "wrong-host-correction",
+            },
+        ),
+        (
+            "/v1/admin/enrollment-grants",
+            {
+                "person_id": str(uuid4()),
+                "program_version_id": str(uuid4()),
+                "reason": "reviewed grant",
+            },
+            {"Idempotency-Key": "wrong-host-grant"},
+        ),
+    ],
+    ids=["publish", "correction", "enrollment-grant"],
+)
+def test_admin_learning_routes_require_admin_host_before_actor_resolution(
+    harness: tuple[TestClient, ActorContext, _Database],
+    membership_role: str,
+    host: str,
+    path: str,
+    body: dict[str, object],
+    operation_headers: dict[str, str],
+) -> None:
+    client, _actor, _database = harness
+    application = _app(client)
+    application.state.membership_role = membership_role
+    application.state.actor_calls.clear()
+
+    response = client.post(
+        path,
+        json=body,
+        headers={"Host": host, "Origin": f"https://{host}"} | operation_headers,
+    )
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "admin_surface_required"
+    assert application.state.actor_calls == []
+    assert _CatalogApplication.call is None
+    assert _EnrollmentApplication.command is None
+    assert _Evidence.call is None
+
+
+def test_admin_host_boundary_does_not_intercept_public_routes(
+    harness: tuple[TestClient, ActorContext, _Database],
+) -> None:
+    client, _actor, _database = harness
+    application = _app(client)
+
+    @application.get("/v1/public-boundary-probe")
+    async def public_boundary_probe() -> dict[str, str]:
+        return {"status": "available"}
+
+    for host in ("app.authorityclosers.test", "api.authorityclosers.test"):
+        response = client.get("/v1/public-boundary-probe", headers={"Host": host})
+        assert response.status_code == 200
+        assert response.json() == {"status": "available"}
+
+
 @pytest.mark.parametrize("origin", [None, "https://evil.example"])
 def test_state_changing_admin_routes_require_allowed_origin(
     harness: tuple[TestClient, ActorContext, _Database],
     origin: str | None,
 ) -> None:
     client, _actor, _database = harness
-    headers: dict[str, str] = {}
+    headers: dict[str, str] = {"Host": "admin.authorityclosers.test"}
     if origin is not None:
         headers["Origin"] = origin
 

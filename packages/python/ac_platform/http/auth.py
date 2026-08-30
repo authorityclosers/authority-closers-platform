@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hmac
+import re
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, replace
 from datetime import datetime
@@ -39,6 +40,8 @@ from ac_platform.kernel.authz import ActorContext
 from ac_platform.kernel.errors import DomainError, ResourceNotFound
 
 SESSION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60
+SESSION_COOKIE_VALUE_PATTERN = re.compile(r"[A-Za-z0-9_-]{43,512}\Z")
+OAUTH_TRANSACTION_COOKIE_VALUE_PATTERN = re.compile(r"[A-Za-z0-9_-]{1,4000}\.[A-Za-z0-9_-]{43}\Z")
 
 ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
     "owner": frozenset(
@@ -94,6 +97,12 @@ class AuthenticationRequired(DomainError):
 class RequestOriginDenied(DomainError):
     code = "request_origin_denied"
     title = "The request origin is not allowed"
+    status = 403
+
+
+class AdminSurfaceRequired(DomainError):
+    code = "admin_surface_required"
+    title = "The admin surface is required"
     status = 403
 
 
@@ -193,20 +202,101 @@ def _session_response(session: SessionMetadata) -> SessionResponse:
     )
 
 
+def require_admin_surface(request: Request, settings: Settings) -> None:
+    """Keep privileged routes behind the configured admin-host ingress boundary."""
+
+    if request.url.hostname != settings.admin_app_url.host:
+        raise AdminSurfaceRequired(
+            "Admin operations are available only through the configured admin host."
+        )
+
+
 def require_safe_origin(request: Request, settings: Settings) -> None:
     origin = request.headers.get("origin")
-    if origin is None or origin.rstrip("/") not in settings.allowed_origins:
+    normalized_origin = None if origin is None else origin.rstrip("/")
+    if normalized_origin not in settings.allowed_origins:
         raise RequestOriginDenied("Cookie-authenticated state changes require an allowed Origin.")
+    if settings.environment not in {"staging", "production"}:
+        return
+
+    expected_origin = None
+    if request.url.hostname == settings.public_app_url.host:
+        expected_origin = str(settings.public_app_url).rstrip("/")
+    elif request.url.hostname == settings.admin_app_url.host:
+        expected_origin = str(settings.admin_app_url).rstrip("/")
+    if normalized_origin != expected_origin:
+        raise RequestOriginDenied(
+            "Cookie-authenticated state changes require a same-surface Origin."
+        )
 
 
-def _session_cookie(request: Request, settings: Settings) -> str:
-    token = request.cookies.get(settings.session_cookie_name)
-    if token is None:
-        raise AuthenticationRequired("A valid Authority Closers session is required.")
+class _InvalidRawCookie(ValueError):
+    """A security-sensitive cookie is missing, duplicated, or malformed."""
+
+
+def _single_raw_cookie(
+    request: Request,
+    *,
+    name: str,
+    pattern: re.Pattern[str],
+    required: bool,
+) -> str | None:
+    values: list[str] = []
+    for raw_name, raw_value in request.scope.get("headers", []):
+        if raw_name.lower() != b"cookie":
+            continue
+        for segment in raw_value.decode("latin-1").split(";"):
+            pair = segment.strip()
+            separator = pair.find("=")
+            if separator < 1:
+                if pair == name:
+                    raise _InvalidRawCookie
+                continue
+            raw_cookie_name = pair[:separator]
+            if raw_cookie_name.strip() != name:
+                continue
+            if raw_cookie_name != name:
+                raise _InvalidRawCookie
+            values.append(pair[separator + 1 :])
+
+    if not values and not required:
+        return None
+    if len(values) != 1 or pattern.fullmatch(values[0]) is None:
+        raise _InvalidRawCookie
+    return values[0]
+
+
+def _session_cookie(request: Request, settings: Settings, *, required: bool = True) -> str | None:
+    try:
+        token = _single_raw_cookie(
+            request,
+            name=settings.session_cookie_name,
+            pattern=SESSION_COOKIE_VALUE_PATTERN,
+            required=required,
+        )
+    except _InvalidRawCookie:
+        raise AuthenticationRequired("A valid Authority Closers session is required.") from None
     return token
 
 
+def _oauth_transaction_cookie(request: Request, settings: Settings) -> str:
+    try:
+        encoded = _single_raw_cookie(
+            request,
+            name=settings.oauth_transaction_cookie_name,
+            pattern=OAUTH_TRANSACTION_COOKIE_VALUE_PATTERN,
+            required=True,
+        )
+    except _InvalidRawCookie:
+        raise InvalidAuthTransaction("The sign-in transaction cookie is invalid.") from None
+    if encoded is None:  # pragma: no cover - required=True narrows this value
+        raise InvalidAuthTransaction("The sign-in transaction cookie is invalid.")
+    return encoded
+
+
 def _set_session_cookie(response: Response, token: str, settings: Settings) -> None:
+    if SESSION_COOKIE_VALUE_PATTERN.fullmatch(token) is None:
+        raise RuntimeError("Refusing to set a malformed session cookie.")
     response.set_cookie(
         settings.session_cookie_name,
         token,
@@ -221,6 +311,34 @@ def _set_session_cookie(response: Response, token: str, settings: Settings) -> N
 def _delete_session_cookie(response: Response, settings: Settings) -> None:
     response.delete_cookie(
         settings.session_cookie_name,
+        httponly=True,
+        secure=settings.secure_cookies,
+        samesite="lax",
+        path="/",
+    )
+
+
+def _set_oauth_transaction_cookie(
+    response: Response,
+    encoded_transaction: str,
+    settings: Settings,
+) -> None:
+    if OAUTH_TRANSACTION_COOKIE_VALUE_PATTERN.fullmatch(encoded_transaction) is None:
+        raise RuntimeError("Refusing to set a malformed OAuth transaction cookie.")
+    response.set_cookie(
+        settings.oauth_transaction_cookie_name,
+        encoded_transaction,
+        max_age=AUTH_TRANSACTION_MAX_AGE_SECONDS,
+        httponly=True,
+        secure=settings.secure_cookies,
+        samesite="lax",
+        path="/",
+    )
+
+
+def _delete_oauth_transaction_cookie(response: Response, settings: Settings) -> None:
+    response.delete_cookie(
+        settings.oauth_transaction_cookie_name,
         httponly=True,
         secure=settings.secure_cookies,
         samesite="lax",
@@ -302,6 +420,8 @@ def install_identity_http(
 
     async def require_actor(request: Request) -> AsyncIterator[AuthenticatedTransaction]:
         token = _session_cookie(request, settings)
+        if token is None:  # pragma: no cover - required session cookie narrows this value
+            raise AuthenticationRequired("A valid Authority Closers session is required.")
         async with sessions() as database, database.begin():
             identity = AsyncIdentityApplication(database, token_pepper=token_pepper)
             resolved = _with_role_permissions(await identity.resolve_actor(token))
@@ -329,6 +449,8 @@ def install_identity_http(
             identity = AsyncIdentityApplication(database, token_pepper=token_pepper)
             if authorization_type is ProviderAuthorizationType.LINK:
                 token = _session_cookie(request, settings)
+                if token is None:  # pragma: no cover - required session cookie narrows this value
+                    raise AuthenticationRequired("A valid Authority Closers session is required.")
                 resolved = await identity.resolve_actor(token)
                 person_id = resolved.actor.person_id
             issued = await identity.begin_provider_authorization(
@@ -347,15 +469,7 @@ def install_identity_http(
             redirect_uri=redirect_uri,
         )
         response = RedirectResponse(authorization_url, status_code=status.HTTP_303_SEE_OTHER)
-        response.set_cookie(
-            settings.oauth_transaction_cookie_name,
-            codec.encode(transaction),
-            max_age=AUTH_TRANSACTION_MAX_AGE_SECONDS,
-            httponly=True,
-            secure=settings.secure_cookies,
-            samesite="lax",
-            path="/v1/auth/google/callback",
-        )
+        _set_oauth_transaction_cookie(response, codec.encode(transaction), settings)
         response.headers["cache-control"] = "no-store"
         response.headers["pragma"] = "no-cache"
         return response
@@ -366,18 +480,18 @@ def install_identity_http(
         state_value: Annotated[str, Query(alias="state", min_length=32, max_length=160)],
         code: Annotated[str, Query(min_length=1, max_length=4096)],
     ) -> Response:
-        encoded_transaction = request.cookies.get(settings.oauth_transaction_cookie_name)
-        if encoded_transaction is None:
-            raise InvalidAuthTransaction("The sign-in transaction cookie is missing.")
+        encoded_transaction = _oauth_transaction_cookie(request, settings)
+        presented_session_token = _session_cookie(request, settings, required=False)
         transaction = codec.decode(encoded_transaction)
         _require_surface_host(request, settings, transaction.surface)
         if not hmac.compare_digest(transaction.state, state_value):
             raise InvalidAuthTransaction("The callback state does not match the transaction.")
-        link_session_token = (
-            _session_cookie(request, settings)
-            if transaction.authorization_type is ProviderAuthorizationType.LINK
-            else None
-        )
+        link_session_token = presented_session_token
+        if (
+            transaction.authorization_type is ProviderAuthorizationType.LINK
+            and link_session_token is None
+        ):
+            raise AuthenticationRequired("A valid Authority Closers session is required.")
         redirect_uri = _surface_callback_uri(settings, transaction.surface)
         assertion = await identity_provider.exchange_code(
             code,
@@ -421,13 +535,7 @@ def install_identity_http(
             f"{str(base_url).rstrip('/')}{transaction.return_path}",
             status_code=status.HTTP_303_SEE_OTHER,
         )
-        response.delete_cookie(
-            settings.oauth_transaction_cookie_name,
-            httponly=True,
-            secure=settings.secure_cookies,
-            samesite="lax",
-            path="/v1/auth/google/callback",
-        )
+        _delete_oauth_transaction_cookie(response, settings)
         if session_token is not None:
             _set_session_cookie(response, session_token, settings)
         response.headers["cache-control"] = "no-store"
@@ -507,6 +615,7 @@ def install_identity_http(
 
 
 __all__ = [
+    "AdminSurfaceRequired",
     "AuthenticatedTransaction",
     "AuthenticationRequired",
     "ContextResponse",
@@ -514,5 +623,6 @@ __all__ = [
     "RequestOriginDenied",
     "RequireActor",
     "install_identity_http",
+    "require_admin_surface",
     "require_safe_origin",
 ]

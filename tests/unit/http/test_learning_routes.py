@@ -11,11 +11,12 @@ from uuid import UUID, uuid4
 import pytest
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from ac_platform.application.settings import Settings
 from ac_platform.http import learning as learning_module
 from ac_platform.http.auth import AuthenticatedTransaction
-from ac_platform.http.learning import install_learning_http
+from ac_platform.http.learning import LearningProjectionResponse, install_learning_http
 from ac_platform.http.problem import register_problem_handlers
 from ac_platform.identity.application import ResolvedActorContext
 from ac_platform.kernel.authz import ActorContext
@@ -41,8 +42,12 @@ class _Store:
                 module_id=uuid4(),
                 kind="reflection",
                 title="Write the first reflection",
+                order=1,
                 required=True,
+                video_duration_seconds=None,
             ),
+            person_id=actor.person_id,
+            assigned_reviewer_id=None,
             program_version_id=uuid4(),
             program=SimpleNamespace(
                 id=uuid4(),
@@ -78,6 +83,7 @@ class _Drafts:
         self.calls.append(kwargs)
         if self.raise_stale:
             raise DraftRevisionConflict(expected_revision=2, actual_revision=3)
+        self.store.progress = SimpleNamespace(revision=1)
         return SimpleNamespace(
             id=uuid4(),
             activity_id=kwargs["activity_id"],
@@ -86,6 +92,9 @@ class _Drafts:
             payload=kwargs["payload"],
             saved_at=datetime(2026, 8, 30, tzinfo=UTC),
         )
+
+    def get(self, **_kwargs: Any) -> Any:
+        return None
 
 
 class _Activities:
@@ -126,7 +135,7 @@ def harness(monkeypatch: pytest.MonkeyPatch) -> tuple[TestClient, ActorContext, 
         return (
             SimpleNamespace(id=uuid4()),
             SimpleNamespace(id=bundle.store.access.program_version_id),
-            SimpleNamespace(id=activity_id),
+            SimpleNamespace(id=activity_id, prompt="Answer the server-owned prompt."),
         )
 
     monkeypatch.setattr(learning_module, "_scope_for_activity", scope)
@@ -180,6 +189,7 @@ def test_draft_uses_only_authenticated_actor_and_existing_transaction(
     assert response.status_code == 200
     assert response.headers["cache-control"] == "no-store"
     assert response.headers["etag"] == '"draft-revision-1"'
+    assert response.json()["activity_revision"] == 1
     assert database.run_sync_calls == 1
     call = bundle.drafts.calls[0]
     assert call["actor"] is actor
@@ -266,3 +276,113 @@ def test_activity_query_is_protected_and_returns_an_etag(harness: Any) -> None:
     assert response.headers["cache-control"] == "no-store"
     assert response.headers["etag"] == '"activity-revision-0"'
     assert response.json()["state"] == "available"
+    assert response.json()["position"] == 1
+    assert response.json()["prompt"] == "Answer the server-owned prompt."
+    assert response.json()["allowed_actions"] == ["save_draft"]
+    assert response.json()["draft_revision"] == 0
+    assert response.json()["draft_payload"] is None
+
+
+def test_activity_query_reads_an_explicit_catalog_prompt_only(
+    harness: tuple[TestClient, ActorContext, _Database, _Bundle],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, _actor, _database, bundle = harness
+    activity_id = bundle.store.access.activity.id
+    monkeypatch.setattr(
+        learning_module,
+        "_scope_for_activity",
+        lambda *_args: (
+            SimpleNamespace(id=uuid4()),
+            SimpleNamespace(id=bundle.store.access.program_version_id),
+            SimpleNamespace(id=activity_id, prompt="Use the published question."),
+        ),
+    )
+
+    response = client.get(f"/v1/activities/{activity_id}")
+
+    assert response.status_code == 200
+    assert response.json()["prompt"] == "Use the published question."
+    assert response.json()["allowed_actions"] == ["save_draft"]
+
+
+def test_locked_activity_redacts_prompt_and_discloses_no_actions(
+    harness: tuple[TestClient, ActorContext, _Database, _Bundle],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, _actor, _database, bundle = harness
+    activity_id = bundle.store.access.activity.id
+    monkeypatch.setattr(
+        learning_module,
+        "_scope_for_activity",
+        lambda *_args: (
+            SimpleNamespace(id=uuid4()),
+            SimpleNamespace(id=bundle.store.access.program_version_id),
+            SimpleNamespace(id=activity_id, prompt="Secret prerequisite-gated prompt."),
+        ),
+    )
+    monkeypatch.setattr(
+        bundle.activities,
+        "current_state",
+        lambda **_kwargs: ActivityState.LOCKED,
+    )
+
+    response = client.get(f"/v1/activities/{activity_id}")
+
+    assert response.status_code == 200
+    assert response.json()["state"] == "locked"
+    assert response.json()["prompt"] is None
+    assert response.json()["allowed_actions"] == []
+    assert response.json()["draft_payload"] is None
+
+
+def test_promptless_activity_denies_draft_before_the_learning_service(
+    harness: tuple[TestClient, ActorContext, _Database, _Bundle],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, _actor, _database, bundle = harness
+    activity_id = bundle.store.access.activity.id
+    monkeypatch.setattr(
+        learning_module,
+        "_scope_for_activity",
+        lambda *_args: (
+            SimpleNamespace(id=uuid4()),
+            SimpleNamespace(id=bundle.store.access.program_version_id),
+            SimpleNamespace(id=activity_id, prompt=None),
+        ),
+    )
+
+    detail_response = client.get(f"/v1/activities/{activity_id}")
+
+    assert detail_response.status_code == 200
+    assert detail_response.json()["prompt"] is None
+    assert detail_response.json()["allowed_actions"] == []
+
+    response = client.put(
+        f"/v1/activities/{activity_id}/draft",
+        json={"payload": {"answer": "invented"}},
+        headers=_headers(key="promptless"),
+    )
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "activity_action_unavailable"
+    assert bundle.drafts.calls == []
+
+
+def test_learning_projection_schema_is_exact_and_forbids_unknown_fields() -> None:
+    payload = {
+        "scope_type": "program",
+        "scope_id": str(uuid4()),
+        "program_version": "program-v1",
+        "projection_version": "g1-v1",
+        "denominator": 1,
+        "completed_count": 0,
+        "percentage": 0.0,
+        "predicate": "all_required_activities_completed",
+        "missing_module_ids": [],
+        "activity_reasons": [],
+    }
+
+    assert LearningProjectionResponse.model_validate(payload).scope_type == "program"
+    with pytest.raises(ValidationError):
+        LearningProjectionResponse.model_validate(payload | {"unexpected": True})

@@ -44,6 +44,7 @@ The VPS is a deployment target, not a source-code workstation.
 10. Run `AC_CLOUDFLARE_SSH_VERIFIED=YES bootstrap-host.sh lockdown` from the retained session and same archive, then prove another Access session while confirming UFW denies IPv4 and IPv6 TCP/22.
 11. Run `AC_PUBLIC_HEALTH_URL=https://infra.dipakvishwakarma.com/healthz /usr/local/sbin/ac-validate-foundation` as root.
 12. After the Infisical bootstrap, R2 repository, first backup, and restore evidence exist, run `bootstrap-host.sh activate r2-jobs` from the same archive. Activation fails closed unless current usage and restore checks pass.
+13. After a healthy current staging application release exists, run `bootstrap-host.sh activate postgres-backup` from the same archive. This separate gate verifies exact units, current usage plus the logical storage projection, a no-write dry-run, and capture/`pg_restore --list` evidence before enabling the five-minute timer.
 
 CI proves that working-tree mutations cannot enter an exact-commit release, rejects a mutated controller verifier and unsafe archive path, failure-injects host installation both before and after symlink activation to prove automatic rollback, smoke-tests the installer against a clean synthetic filesystem root, and requires every `ac-*` operational script and systemd unit to appear in the explicit install manifest. Provider-dependent activation remains a separate, named gate so a clean host cannot silently start an unconfigured external writer.
 

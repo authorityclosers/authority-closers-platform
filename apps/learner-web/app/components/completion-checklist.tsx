@@ -1,7 +1,4 @@
 import { Check, CircleDashed, LockKeyhole } from "lucide-react";
-import Link from "next/link";
-
-import { ROUTES } from "../lib/routes";
 
 const checklist = [
   {
@@ -73,12 +70,13 @@ export function CompletionChecklist() {
         <p>
           Pick up the next activity when the connected learner session is ready.
         </p>
-        <Link
-          className="button button--ink button--full"
-          href={ROUTES.programLearning("free-course")}
+        <span
+          className="button button--ink button--full is-disabled"
+          aria-disabled="true"
         >
-          Back to course <span aria-hidden="true">↗</span>
-        </Link>
+          Return when an enrollment is available{" "}
+          <span aria-hidden="true">↗</span>
+        </span>
       </aside>
     </div>
   );

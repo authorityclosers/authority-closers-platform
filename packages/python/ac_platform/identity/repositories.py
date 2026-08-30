@@ -46,7 +46,7 @@ from ac_platform.identity.services import (
     SessionRevisionConflictError,
     StoredSession,
 )
-from ac_platform.tenancy.models import Membership, MembershipStatus
+from ac_platform.tenancy.models import Membership, MembershipStatus, Tenant, TenantStatus
 
 
 def _as_utc(value: datetime) -> datetime:
@@ -568,6 +568,75 @@ class AsyncSqlAlchemyIdentityRepository:
             ),
         )
         return None if row is None else _person_snapshot(row)
+
+    async def find_people_by_exact_email_for_update(self, email: str) -> Sequence[PersonSnapshot]:
+        """Lock every canonical person with this already-normalized email."""
+
+        rows = await self._session.scalars(
+            select(Person)
+            .where(Person.email == email)
+            .order_by(Person.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        return tuple(_person_snapshot(row) for row in rows)
+
+    async def has_provider_identity(self, person_id: UUID) -> bool:
+        """Return whether the canonical person has an OAuth provider link."""
+
+        identity_id = await self._session.scalar(
+            select(ProviderIdentity.id).where(ProviderIdentity.person_id == person_id).limit(1)
+        )
+        return identity_id is not None
+
+    async def get_sole_active_tenant_id(self, person_id: UUID) -> UUID | None:
+        """Return a tenant only when exactly one active scope currently exists."""
+
+        tenant_ids = tuple(
+            await self._session.scalars(
+                select(Membership.tenant_id)
+                .join(Tenant, Tenant.id == Membership.tenant_id)
+                .where(
+                    Membership.person_id == person_id,
+                    Membership.status == MembershipStatus.ACTIVE.value,
+                    Membership.ended_at.is_(None),
+                    Tenant.status == TenantStatus.ACTIVE.value,
+                )
+                .order_by(Membership.tenant_id)
+            )
+        )
+        return tenant_ids[0] if len(tenant_ids) == 1 else None
+
+    async def select_tenant_for_active_sessions(
+        self,
+        person_id: UUID,
+        tenant_id: UUID,
+        *,
+        now: datetime,
+    ) -> int:
+        """Set the tenant on all currently active sessions under row locks."""
+
+        current_time = _as_utc(now)
+        rows = await self._session.scalars(
+            select(SessionRow)
+            .where(
+                SessionRow.person_id == person_id,
+                SessionRow.revoked_at.is_(None),
+                SessionRow.expires_at > current_time,
+            )
+            .order_by(SessionRow.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        changed = 0
+        for row in rows:
+            if row.selected_tenant_id == tenant_id:
+                continue
+            row.selected_tenant_id = tenant_id
+            row.revision += 1
+            changed += 1
+        await self._session.flush()
+        return changed
 
     async def save_person(self, person: PersonSnapshot) -> None:
         row = cast(

@@ -197,6 +197,7 @@ def _client(
     monkeypatch: pytest.MonkeyPatch,
     *,
     actor: ActorContext,
+    membership_role: str = "admin",
     job_repository: _JobRepository | None = None,
     recovery_repository: _RecoveryStateRepository | None = None,
     webhook_adapter: TrustedWebhookAdapter | None = None,
@@ -204,14 +205,16 @@ def _client(
     marker: Any | None = None,
 ) -> TestClient:
     database = _Database()
+    actor_calls: list[str] = []
 
     async def require_actor(_request: Request) -> AsyncIterator[AuthenticatedTransaction]:
+        actor_calls.append(membership_role)
         yield AuthenticatedTransaction(
             database=cast(Any, database),
             identity=cast(Any, object()),
             resolved=ResolvedActorContext(
                 actor=actor,
-                membership_role="admin" if actor.tenant_id is not None else None,
+                membership_role=membership_role if actor.tenant_id is not None else None,
                 person_revision=0,
                 session_revision=0,
                 tenant_revision=0 if actor.tenant_id is not None else None,
@@ -245,6 +248,7 @@ def _client(
     )
 
     application = FastAPI()
+    application.state.actor_calls = actor_calls
     register_problem_handlers(application)
     install_operations_http(
         application,
@@ -270,7 +274,66 @@ def _admin_headers(
     key: str = "retry-1",
     origin: str = "https://admin.authorityclosers.test",
 ) -> dict[str, str]:
-    return {"Origin": origin, "Idempotency-Key": key}
+    return {
+        "Host": "admin.authorityclosers.test",
+        "Origin": origin,
+        "Idempotency-Key": key,
+    }
+
+
+@pytest.mark.parametrize("membership_role", ["owner", "admin"])
+@pytest.mark.parametrize(
+    "host",
+    ["app.authorityclosers.test", "api.authorityclosers.test"],
+)
+@pytest.mark.parametrize(
+    ("path", "body", "key"),
+    [
+        (
+            f"/v1/admin/jobs/{uuid4()}/retry",
+            {"reason": "reviewed retry"},
+            "wrong-host-retry",
+        ),
+        (
+            "/v1/admin/recovery/reconcile",
+            {"job_ids": [str(uuid4())], "reason": "reviewed reconciliation"},
+            "wrong-host-reconcile",
+        ),
+    ],
+    ids=["retry", "reconcile"],
+)
+def test_operations_routes_require_admin_host_before_actor_resolution(
+    monkeypatch: pytest.MonkeyPatch,
+    membership_role: str,
+    host: str,
+    path: str,
+    body: dict[str, object],
+    key: str,
+) -> None:
+    client = _client(
+        monkeypatch,
+        actor=ActorContext(
+            person_id=uuid4(),
+            session_id=uuid4(),
+            tenant_id=uuid4(),
+            permissions=frozenset({"admin_surface", "job_retry", "recovery_reconcile"}),
+        ),
+        membership_role=membership_role,
+    )
+
+    response = client.post(
+        path,
+        json=body,
+        headers={
+            "Host": host,
+            "Origin": f"https://{host}",
+            "Idempotency-Key": key,
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "admin_surface_required"
+    assert cast(Any, client.app).state.actor_calls == []
 
 
 def test_retry_requires_trusted_tenant_permission_origin_and_idempotency(
@@ -286,7 +349,7 @@ def test_retry_requires_trusted_tenant_permission_origin_and_idempotency(
             person_id=uuid4(),
             session_id=uuid4(),
             tenant_id=None,
-            permissions=frozenset({"job_retry"}),
+            permissions=frozenset({"admin_surface", "job_retry"}),
         ),
         job_repository=repository,
     )
@@ -300,7 +363,12 @@ def test_retry_requires_trusted_tenant_permission_origin_and_idempotency(
 
     no_permission = _client(
         monkeypatch,
-        actor=ActorContext(person_id=uuid4(), session_id=uuid4(), tenant_id=tenant_id),
+        actor=ActorContext(
+            person_id=uuid4(),
+            session_id=uuid4(),
+            tenant_id=tenant_id,
+            permissions=frozenset({"admin_surface"}),
+        ),
         job_repository=repository,
     )
     response = no_permission.post(
@@ -317,14 +385,17 @@ def test_retry_requires_trusted_tenant_permission_origin_and_idempotency(
             person_id=uuid4(),
             session_id=uuid4(),
             tenant_id=tenant_id,
-            permissions=frozenset({"job_retry"}),
+            permissions=frozenset({"admin_surface", "job_retry"}),
         ),
         job_repository=repository,
     )
     response = authorized.post(
         f"/v1/admin/jobs/{job_id}/retry",
         json={"reason": "operator review"},
-        headers={"Origin": "https://admin.authorityclosers.test"},
+        headers={
+            "Host": "admin.authorityclosers.test",
+            "Origin": "https://admin.authorityclosers.test",
+        },
     )
     assert response.status_code == 428
     assert response.json()["code"] == "idempotency_key_required"
@@ -339,6 +410,34 @@ def test_retry_requires_trusted_tenant_permission_origin_and_idempotency(
     assert repository.calls == []
 
 
+def test_retry_requires_admin_surface_with_job_retry_permission(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    job_id = uuid4()
+    tenant_id = uuid4()
+    repository = _JobRepository(_job(job_id=job_id, tenant_id=tenant_id))
+    client = _client(
+        monkeypatch,
+        actor=ActorContext(
+            person_id=uuid4(),
+            session_id=uuid4(),
+            tenant_id=tenant_id,
+            permissions=frozenset({"job_retry"}),
+        ),
+        job_repository=repository,
+    )
+
+    response = client.post(
+        f"/v1/admin/jobs/{job_id}/retry",
+        json={"reason": "operator review"},
+        headers=_admin_headers("missing-admin-surface-retry"),
+    )
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "authorization_denied"
+    assert repository.calls == []
+
+
 def test_retry_uses_server_owned_actor_and_returns_no_store(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -348,7 +447,7 @@ def test_retry_uses_server_owned_actor_and_returns_no_store(
         person_id=uuid4(),
         session_id=uuid4(),
         tenant_id=tenant_id,
-        permissions=frozenset({"job_retry"}),
+        permissions=frozenset({"admin_surface", "job_retry"}),
     )
     repository = _JobRepository(_job(job_id=job_id, tenant_id=tenant_id, status="dead_letter"))
     client = _client(monkeypatch, actor=actor, job_repository=repository)
@@ -383,7 +482,7 @@ def test_retry_replay_returns_canonical_result_and_conflicting_key_is_denied(
         person_id=uuid4(),
         session_id=uuid4(),
         tenant_id=tenant_id,
-        permissions=frozenset({"job_retry"}),
+        permissions=frozenset({"admin_surface", "job_retry"}),
     )
     repository = _JobRepository()
     marker = SimpleNamespace(
@@ -434,7 +533,7 @@ def test_retry_maps_invalid_state_to_safe_problem(monkeypatch: pytest.MonkeyPatc
             person_id=uuid4(),
             session_id=uuid4(),
             tenant_id=tenant_id,
-            permissions=frozenset({"job_retry"}),
+            permissions=frozenset({"admin_surface", "job_retry"}),
         ),
         job_repository=repository,
     )
@@ -457,7 +556,7 @@ def test_reconcile_requires_explicit_set_and_honors_held_gate(
         person_id=uuid4(),
         session_id=uuid4(),
         tenant_id=tenant_id,
-        permissions=frozenset({"recovery_reconcile"}),
+        permissions=frozenset({"admin_surface", "recovery_reconcile"}),
     )
     recovery = _RecoveryStateRepository(_state())
     client = _client(monkeypatch, actor=actor, recovery_repository=recovery)
@@ -480,6 +579,60 @@ def test_reconcile_requires_explicit_set_and_honors_held_gate(
     assert "recovery state detail" not in blocked.text
 
 
+def test_reconcile_requires_admin_surface_with_reconcile_permission(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tenant_id = uuid4()
+    recovery = _RecoveryStateRepository(_state())
+    client = _client(
+        monkeypatch,
+        actor=ActorContext(
+            person_id=uuid4(),
+            session_id=uuid4(),
+            tenant_id=tenant_id,
+            permissions=frozenset({"recovery_reconcile"}),
+        ),
+        recovery_repository=recovery,
+    )
+
+    response = client.post(
+        "/v1/admin/recovery/reconcile",
+        json={"job_ids": [str(uuid4())], "reason": "operator review"},
+        headers=_admin_headers("missing-admin-surface-reconcile"),
+    )
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "authorization_denied"
+    assert recovery.require_held_calls == 0
+
+
+def test_reconcile_requires_reconcile_permission_with_admin_surface(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tenant_id = uuid4()
+    recovery = _RecoveryStateRepository(_state())
+    client = _client(
+        monkeypatch,
+        actor=ActorContext(
+            person_id=uuid4(),
+            session_id=uuid4(),
+            tenant_id=tenant_id,
+            permissions=frozenset({"admin_surface"}),
+        ),
+        recovery_repository=recovery,
+    )
+
+    response = client.post(
+        "/v1/admin/recovery/reconcile",
+        json={"job_ids": [str(uuid4())], "reason": "operator review"},
+        headers=_admin_headers("missing-reconcile-permission"),
+    )
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "authorization_denied"
+    assert recovery.require_held_calls == 0
+
+
 def test_reconcile_replay_is_returned_without_releasing_again(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -488,7 +641,7 @@ def test_reconcile_replay_is_returned_without_releasing_again(
         person_id=uuid4(),
         session_id=uuid4(),
         tenant_id=tenant_id,
-        permissions=frozenset({"recovery_reconcile"}),
+        permissions=frozenset({"admin_surface", "recovery_reconcile"}),
     )
     job_id = uuid4()
     marker = SimpleNamespace(
@@ -530,7 +683,7 @@ def test_reconcile_releases_only_the_named_set_and_returns_recovery_state(
         person_id=uuid4(),
         session_id=uuid4(),
         tenant_id=tenant_id,
-        permissions=frozenset({"recovery_reconcile"}),
+        permissions=frozenset({"admin_surface", "recovery_reconcile"}),
     )
     job_id = uuid4()
     outbox_event_id = uuid4()

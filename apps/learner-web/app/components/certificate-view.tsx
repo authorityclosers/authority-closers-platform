@@ -1,8 +1,6 @@
 import { ArrowLeft, Download, ShieldCheck } from "lucide-react";
-import Link from "next/link";
 
 import type { CertificateViewModel } from "../lib/view-models";
-import { ROUTES } from "../lib/routes";
 
 export function CertificateView({
   certificate,
@@ -62,12 +60,10 @@ export function CertificateView({
           >
             <Download size={16} aria-hidden="true" /> Download when issued
           </button>
-          <Link
-            className="text-link"
-            href={ROUTES.programLearning("free-course")}
-          >
-            <ArrowLeft size={15} aria-hidden="true" /> Return to course
-          </Link>
+          <span className="text-link" aria-disabled="true">
+            <ArrowLeft size={15} aria-hidden="true" /> Return when an enrollment
+            is available
+          </span>
         </div>
       </aside>
     </div>

@@ -38,7 +38,9 @@ from ac_platform.catalog.services import (
     CATALOG_PUBLISH_PERMISSION,
     AsyncCatalogApplication,
     CatalogAccessDeniedError,
+    CatalogService,
     CatalogTransactionRequiredError,
+    SqlAlchemyCatalogStore,
     SupersessionRequiredError,
 )
 from ac_platform.certificates.models import (
@@ -258,9 +260,18 @@ def _published_catalog(
     database.flush()
     database.add(activity)
     database.flush()
-    version.status = ProgramVersionStatus.PUBLISHED.value
-    version.published_at = NOW
+    store = SqlAlchemyCatalogStore(database)
+    service = CatalogService(store, clock=lambda: NOW)
+    snapshot = store.get_version(version.id)
+    assert snapshot is not None
+    version.content_digest = service._canonical_content_digest(snapshot)  # noqa: SLF001
+    version.content_source_ref = __file__
+    version.content_reviewed_by = "database-test-reviewer@example.test"
+    version.content_reviewed_at = NOW
+    version.release_id = "e" * 40
+    version.content_seed_kind = "reviewed"
     database.flush()
+    service.publish_version(version.id, tenant_id=tenant_id, now=NOW)
     return program, version, module, activity
 
 
@@ -557,6 +568,18 @@ def _seed_publication_race(engine: Engine) -> tuple[UUID, UUID, UUID, UUID, UUID
         database.add_all([first, second])
         database.flush()
         database.add_all([first_module, second_module])
+        database.flush()
+        store = SqlAlchemyCatalogStore(database)
+        service = CatalogService(store, clock=lambda: NOW)
+        for version in (first, second):
+            snapshot = store.get_version(version.id)
+            assert snapshot is not None
+            version.content_digest = service._canonical_content_digest(snapshot)  # noqa: SLF001
+            version.content_source_ref = __file__
+            version.content_reviewed_by = "publication-race-reviewer@example.test"
+            version.content_reviewed_at = NOW
+            version.release_id = "e" * 40
+            version.content_seed_kind = "reviewed"
         database.commit()
     return tenant_id, admin_id, first_version_id, second_version_id, program_id
 

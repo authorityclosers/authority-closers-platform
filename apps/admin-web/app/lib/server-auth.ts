@@ -14,19 +14,41 @@ const contextSchema = z
   })
   .strict();
 
+const meSchema = z
+  .object({
+    person_id: z.uuid(),
+    email: z.string().email(),
+    display_name: z.string().nullable(),
+    email_verified_at: z.string().min(1),
+    selected_tenant_id: z.uuid().nullable(),
+    membership_role: z
+      .enum(["owner", "admin", "support", "learner"])
+      .nullable(),
+    permissions: z.array(z.string().min(1).max(64)).max(32),
+  })
+  .strict();
+
 type Fetcher = typeof fetch;
 
-function internalContextUrl(rawBaseUrl: string | undefined): URL | null {
-  if (!rawBaseUrl) return null;
+function internalContextUrl(
+  rawBaseUrl: string | undefined,
+  apiHost: string | null,
+): URL | null {
+  if (!rawBaseUrl || !apiHost) return null;
+  const approvedOrigin = `http://${apiHost}:8000`;
+  if (rawBaseUrl !== approvedOrigin) return null;
   try {
     const baseUrl = new URL(rawBaseUrl);
     if (
-      !["http:", "https:"].includes(baseUrl.protocol) ||
+      baseUrl.protocol !== "http:" ||
+      baseUrl.hostname !== apiHost ||
+      baseUrl.port !== "8000" ||
       baseUrl.username ||
       baseUrl.password ||
       baseUrl.search ||
       baseUrl.hash ||
-      (baseUrl.pathname !== "/" && baseUrl.pathname !== "")
+      baseUrl.pathname !== "/" ||
+      baseUrl.origin !== approvedOrigin
     ) {
       return null;
     }
@@ -37,13 +59,33 @@ function internalContextUrl(rawBaseUrl: string | undefined): URL | null {
 }
 
 const TRUSTED_INTERNAL_API_HOSTS = new Set([
-  "api.authorityclosers.com",
-  "api-staging.authorityclosers.com",
+  "api.production.ac.internal.invalid",
+  "api.staging.ac.internal.invalid",
 ]);
 
 function trustedInternalApiHost(rawHost: string | undefined): string | null {
-  const host = rawHost?.trim().toLowerCase() ?? "";
+  const host = rawHost ?? "";
   return TRUSTED_INTERNAL_API_HOSTS.has(host) ? host : null;
+}
+
+const SESSION_COOKIE_NAME = "__Host-ac_session";
+const OPAQUE_SESSION_PATTERN = /^[A-Za-z0-9_-]{43,512}$/;
+
+function trustedSessionCookie(rawCookieHeader: string | null): string | null {
+  if (!rawCookieHeader) return null;
+
+  const values: string[] = [];
+  for (const segment of rawCookieHeader.split(";")) {
+    const separator = segment.indexOf("=");
+    if (separator < 1) continue;
+    const name = segment.slice(0, separator).trim();
+    if (name !== SESSION_COOKIE_NAME) continue;
+    values.push(segment.slice(separator + 1).trim());
+  }
+  if (values.length !== 1) return null;
+  const value = values[0];
+  if (value === undefined || !OPAQUE_SESSION_PATTERN.test(value)) return null;
+  return `${SESSION_COOKIE_NAME}=${value}`;
 }
 
 export async function resolveAdminServerContext({
@@ -57,40 +99,55 @@ export async function resolveAdminServerContext({
   internalApiHost: string | undefined;
   fetcher?: Fetcher;
 }): Promise<ServerOwnedAdminContext | null> {
-  const contextUrl = internalContextUrl(internalApiUrl);
   const apiHost = trustedInternalApiHost(internalApiHost);
-  if (!contextUrl || !apiHost || !cookieHeader) return null;
+  const contextUrl = internalContextUrl(internalApiUrl, apiHost);
+  const forwardedCookie = trustedSessionCookie(cookieHeader);
+  if (!contextUrl || !apiHost || !forwardedCookie) return null;
+  const trustedCookie: string = forwardedCookie;
 
-  let response: Response;
-  try {
-    response = await fetcher(contextUrl, {
-      method: "GET",
-      cache: "no-store",
-      redirect: "manual",
-      signal: AbortSignal.timeout(3_000),
-      headers: {
-        accept: "application/json",
-        cookie: cookieHeader,
-        host: apiHost,
-      },
-    });
-  } catch {
-    return null;
+  async function read<T>(url: URL, schema: z.ZodType<T>): Promise<T | null> {
+    let response: Response;
+    try {
+      response = await fetcher(url, {
+        method: "GET",
+        cache: "no-store",
+        redirect: "manual",
+        signal: AbortSignal.timeout(3_000),
+        headers: {
+          accept: "application/json",
+          cookie: trustedCookie,
+        },
+      });
+    } catch {
+      return null;
+    }
+    if (!response || response.status !== 200) return null;
+    try {
+      return schema.parse(await response.json());
+    } catch {
+      return null;
+    }
   }
-  if (response.status !== 200) return null;
 
-  let parsed: z.infer<typeof contextSchema>;
-  try {
-    parsed = contextSchema.parse(await response.json());
-  } catch {
-    return null;
-  }
+  const meUrl = new URL("/v1/me", contextUrl);
+  const me = await read(meUrl, meSchema);
+  const parsed = await read(contextUrl, contextSchema);
+  if (!me || !parsed) return null;
   const permissions = new Set(parsed.permissions);
+  const mePermissions = new Set(me.permissions);
   const adminRole =
     parsed.membership_role === "owner" ||
     parsed.membership_role === "admin" ||
     parsed.membership_role === "support";
-  if (!parsed.tenant_id || !adminRole || !permissions.has("admin_surface")) {
+  if (
+    !parsed.tenant_id ||
+    !adminRole ||
+    !permissions.has("admin_surface") ||
+    !mePermissions.has("admin_surface") ||
+    me.person_id !== parsed.person_id ||
+    me.selected_tenant_id !== parsed.tenant_id ||
+    me.membership_role !== parsed.membership_role
+  ) {
     return null;
   }
 
