@@ -89,10 +89,10 @@ def postgres_engine() -> Generator[Engine, None, None]:
         engine.dispose()
 
 
-def _person(person_id: UUID) -> PersonSnapshot:
+def _person(person_id: UUID, *, email: str = EMAIL) -> PersonSnapshot:
     return PersonSnapshot(
         id=person_id,
-        email=EMAIL,
+        email=email,
         email_verified_at=NOW,
     )
 
@@ -246,12 +246,16 @@ def test_postgresql_provider_link_race_has_one_canonical_owner(
     first_person_id = uuid4()
     second_person_id = uuid4()
     subject = f"provider-race-{uuid4()}"
+    emails = {
+        first_person_id: f"provider-race-{first_person_id}@authorityclosers.test",
+        second_person_id: f"provider-race-{second_person_id}@authorityclosers.test",
+    }
     tokens: dict[UUID, str] = {}
     transactions: dict[UUID, IssuedProviderAuthorization] = {}
     with DbSession(postgres_engine) as database:
         store = SqlAlchemyIdentityStore(database)
         for person_id in (first_person_id, second_person_id):
-            store.save_person(_person(person_id))
+            store.save_person(_person(person_id, email=emails[person_id]))
             tokens[person_id] = (
                 SessionService(store, token_pepper=PEPPER)
                 .issue(
@@ -295,7 +299,7 @@ def test_postgresql_provider_link_race_has_one_canonical_owner(
                             state=transaction.state,
                             nonce=transaction.nonce,
                             authorization_type=ProviderAuthorizationType.LINK,
-                            email=EMAIL,
+                            email=emails[person_id],
                             email_verified=True,
                         ),
                         pkce_verifier=transaction.pkce_verifier,
