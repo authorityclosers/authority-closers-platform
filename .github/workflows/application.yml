@@ -74,14 +74,17 @@ jobs:
       - name: Prove the backup role can dump the migrated schema
         env:
           PGPASSWORD: local-backup-only
+          POSTGRES_SERVICE_ID: ${{ job.services.postgres.id }}
         run: |
           set -euo pipefail
           backup_file="$(mktemp "${RUNNER_TEMP}/ac-backup-role-proof.XXXXXX.dump")"
           trap 'rm -f -- "$backup_file"' EXIT
           umask 077
-          pg_dump --host localhost --username ac_backup --dbname ac_platform \
-            --format=custom --create --file="$backup_file"
-          pg_restore --list "$backup_file" > /dev/null
+          docker exec --env PGPASSWORD="$PGPASSWORD" "$POSTGRES_SERVICE_ID" \
+            pg_dump --username ac_backup --dbname ac_platform --format=custom --create \
+            > "$backup_file"
+          docker exec --interactive "$POSTGRES_SERVICE_ID" pg_restore --list \
+            < "$backup_file" > /dev/null
       - name: Verify database privilege split
         env:
           PGPASSWORD: local-owner-only
