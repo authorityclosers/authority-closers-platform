@@ -289,24 +289,39 @@ backup_file="$backup_root/$(date -u +%Y%m%dT%H%M%SZ)-pre-${release_id}.dump"
 mutation_started=0
 backup_ready=0
 release_committed=0
-current_advanced=0
+current_switch_armed=0
 current_tmp=''
 evidence_tmp=''
 
 restore_current_link() {
-  local rollback_tmp
-  [[ "$current_advanced" == 1 ]] || return 0
+  local rollback_tmp current_target
+  [[ "$current_switch_armed" == 1 ]] || return 0
   if [[ -n "$previous_release" ]]; then
     rollback_tmp="$application_root/.rollback-${target_environment}-${release_id}.$$"
-    ln -s "$previous_release" "$rollback_tmp"
-    mv --no-target-directory --force "$rollback_tmp" "$current_link"
-    [[ "$(readlink -f "$current_link")" == "$previous_release" ]]
+    [[ ! -e "$rollback_tmp" && ! -L "$rollback_tmp" ]] || return 1
+    if ! ln -s "$previous_release" "$rollback_tmp"; then
+      return 1
+    fi
+    if ! mv --no-target-directory --force "$rollback_tmp" "$current_link"; then
+      rm -f -- "$rollback_tmp"
+      return 1
+    fi
+    if [[ "$(readlink -f "$current_link")" != "$previous_release" ]]; then
+      return 1
+    fi
   else
-    [[ -L "$current_link" && "$(readlink -f "$current_link")" == "$release_dir" ]]
-    rm -- "$current_link"
-    [[ ! -e "$current_link" && ! -L "$current_link" ]]
+    if [[ -L "$current_link" ]]; then
+      if ! current_target="$(readlink -f "$current_link")"; then
+        return 1
+      fi
+      [[ "$current_target" == "$release_dir" ]] || return 1
+      rm -- "$current_link" || return 1
+    elif [[ -e "$current_link" ]]; then
+      return 1
+    fi
+    [[ ! -e "$current_link" && ! -L "$current_link" ]] || return 1
   fi
-  current_advanced=0
+  current_switch_armed=0
 }
 
 rollback_release() {
@@ -401,10 +416,10 @@ check_route "$api_host" /health/ready 200 "api-$target_environment"
 
 current_tmp="$application_root/.current-${target_environment}-${release_id}.$$"
 ln -s "$release_dir" "$current_tmp"
+current_switch_armed=1
 mv --no-target-directory --force "$current_tmp" "$current_link"
-[[ "$(readlink -f "$current_link")" == "$release_dir" ]]
 current_tmp=''
-current_advanced=1
+[[ "$(readlink -f "$current_link")" == "$release_dir" ]]
 
 evidence_root="$application_root/deployments/$target_environment"
 install -d -m 0750 -o root -g acops "$evidence_root"

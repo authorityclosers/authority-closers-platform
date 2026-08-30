@@ -170,7 +170,7 @@ def test_release_is_built_off_host_and_installed_with_backup_and_rollback() -> N
     assert "pg_restore" in INSTALLER and "--clean" in INSTALLER
     assert "ROLLBACK" in INSTALLER
     assert "restore_current_link" in INSTALLER
-    assert "current_advanced=1" in INSTALLER
+    assert "current_switch_armed=1" in INSTALLER
     assert 'readlink -f "$current_link"' in INSTALLER
     assert 'rm -- "$current_link"' in INSTALLER
     assert 'mktemp "$evidence_root/.deployment-${release_id}.XXXXXX"' in INSTALLER
