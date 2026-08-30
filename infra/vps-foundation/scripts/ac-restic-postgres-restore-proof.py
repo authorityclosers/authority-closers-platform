@@ -544,9 +544,11 @@ def copy_stable_pair(dump_path: Path, metadata_path: Path, root: Path) -> tuple[
         dump_data = _read_stable_source(dump_path, max_bytes=MAX_DUMP_BYTES)
         metadata_data = _read_stable_source(metadata_path, max_bytes=64 * 1024)
         _write_private_file(stable_dir / "backup.dump", dump_data)
-        _write_private_file(stable_dir / "metadata.json", metadata_data)
+        # The application restore drill requires the metadata sidecar to be
+        # the dump's exact `.with_suffix(".json")` pair.
+        _write_private_file(stable_dir / "backup.json", metadata_data)
         stable_dump = stable_dir / "backup.dump"
-        stable_metadata = stable_dir / "metadata.json"
+        stable_metadata = stable_dir / "backup.json"
         if _sha256(stable_dump) != hashlib.sha256(dump_data).hexdigest():
             raise RestoreProofError("stable logical backup dump digest changed during staging")
         if _sha256(stable_metadata) != hashlib.sha256(metadata_data).hexdigest():

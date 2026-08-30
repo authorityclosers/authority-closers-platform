@@ -12,6 +12,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "infra" / "vps-foundation" / "scripts" / "ac-restic-postgres-restore-proof.py"
+RESTORE_DRILL_SCRIPT = ROOT / "infra" / "application" / "scripts" / "restore-drill.py"
 FOUNDATION = ROOT / "infra" / "vps-foundation"
 MIGRATION_HEAD_FIXTURE = "20000101_0001"
 
@@ -20,6 +21,14 @@ assert spec and spec.loader
 proof = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = proof
 spec.loader.exec_module(proof)
+
+drill_spec = importlib.util.spec_from_file_location(
+    "ac_application_restore_drill_contract", RESTORE_DRILL_SCRIPT
+)
+assert drill_spec and drill_spec.loader
+restore_drill_contract = importlib.util.module_from_spec(drill_spec)
+sys.modules[drill_spec.name] = restore_drill_contract
+drill_spec.loader.exec_module(restore_drill_contract)
 
 
 def _snapshot(
@@ -307,6 +316,33 @@ def test_restore_tree_requires_exact_root_owned_pair_and_cleanup_is_bounded(tmp_
         proof.remove_restore_directory(unsafe, restore_root)
 
 
+def test_stable_pair_satisfies_the_real_restore_drill_metadata_contract(tmp_path: Path) -> None:
+    restore_root = tmp_path / "restore-root"
+    restored_dir = proof.create_restore_directory(restore_root)
+    restored_dump, restored_metadata = _write_pair(restored_dir)
+    stable_dir, stable_dump, stable_metadata = proof.copy_stable_pair(
+        restored_dump, restored_metadata, restore_root
+    )
+    try:
+        validated_metadata, _captured_at, release_id, dump_sha256, metadata_sha256 = (
+            restore_drill_contract._validate_backup_metadata(
+                str(stable_metadata),
+                backup=stable_dump,
+                environment="staging",
+                workspace_root=ROOT,
+            )
+        )
+        assert stable_dump.name == "backup.dump"
+        assert stable_metadata.name == "backup.json"
+        assert validated_metadata == stable_metadata
+        assert release_id == "a" * 40
+        assert dump_sha256 == hashlib.sha256(stable_dump.read_bytes()).hexdigest()
+        assert metadata_sha256 == hashlib.sha256(stable_metadata.read_bytes()).hexdigest()
+    finally:
+        proof.remove_restore_directory(stable_dir, restore_root)
+        proof.remove_restore_directory(restored_dir, restore_root)
+
+
 def test_restore_drill_invocation_is_execute_only_and_uses_immutable_image(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -331,7 +367,7 @@ def test_restore_drill_invocation_is_execute_only_and_uses_immutable_image(
         release,
         "staging",
         tmp_path / "backup.dump",
-        tmp_path / "metadata.json",
+        tmp_path / "backup.json",
         evidence_dir,
     )
     assert returned == evidence_path

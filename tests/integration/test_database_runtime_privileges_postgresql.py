@@ -168,6 +168,54 @@ def test_runtime_cannot_create_or_truncate_database_objects(
         transaction.rollback()
 
 
+def test_backup_role_can_read_all_migrator_tables_and_sequences(
+    database_engines: tuple[Engine, Engine],
+) -> None:
+    owner, _runtime = database_engines
+    with owner.connect() as connection:
+        assert (
+            connection.scalar(
+                text(
+                    """
+                    SELECT count(*)
+                      FROM pg_tables
+                     WHERE schemaname = 'public'
+                       AND NOT has_table_privilege(
+                         'ac_backup', format('%I.%I', schemaname, tablename), 'SELECT'
+                       )
+                    """
+                )
+            )
+            == 0
+        )
+        assert (
+            connection.scalar(
+                text(
+                    """
+                    SELECT count(*)
+                      FROM pg_class relation
+                      JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+                     WHERE namespace.nspname = 'public'
+                       AND relation.relkind = 'S'
+                       AND (
+                         NOT has_sequence_privilege(
+                           'ac_backup',
+                           format('%I.%I', namespace.nspname, relation.relname),
+                           'USAGE'
+                         )
+                         OR NOT has_sequence_privilege(
+                           'ac_backup',
+                           format('%I.%I', namespace.nspname, relation.relname),
+                           'SELECT'
+                         )
+                       )
+                    """
+                )
+            )
+            == 0
+        )
+
+
 def test_runtime_direct_publication_without_provenance_is_blocked(
     database_engines: tuple[Engine, Engine],
 ) -> None:

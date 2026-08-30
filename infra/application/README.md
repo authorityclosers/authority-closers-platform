@@ -108,11 +108,13 @@ digest in `AC_*_REGISTRY_DIGEST`, plus one `AC_RELEASE_ID` and one
 `AC_MIGRATION_HEAD`. Local config IDs are the only values used to start services;
 the two digest families are retained as independently named provenance.
 Release packaging is globally serialized. After the candidate bundle is fully
-verified, the workflow deletes only artifacts whose names exactly match the AC
-release-artifact contract and refuses upload when the retained repository
-artifacts plus the candidate would exceed the conservative 450,000,000-byte
-pool ceiling. The new transport artifact expires after one day; the
-checksum-identical copy retained on the VPS is the rollback transport source.
+verified, the workflow refuses upload when all retained repository artifacts
+plus the candidate would exceed the conservative 450,000,000-byte pool ceiling.
+It uploads and proves the artifact belonging to the current workflow run before
+deleting only superseded artifacts whose names exactly match the AC release
+contract. An admission, upload, or proof failure therefore leaves the previous
+transport artifact intact. The new transport artifact expires after one day;
+the checksum-identical copy retained on the VPS is the rollback transport source.
 GitHub currently does not bill
 Container registry image storage or bandwidth, but this assumption must be
 rechecked if GitHub announces a policy change.

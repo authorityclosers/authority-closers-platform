@@ -12,7 +12,8 @@ newest, fresh snapshot carrying `authority-closers-postgres-logical` and
 accepts exactly one capture directory containing only `backup.dump` and
 `metadata.json`. The pair is restored with two exact `--include` paths into a
 root-owned bounded temporary tree, then copied through a private no-follow
-stable staging path before Docker receives it. Metadata capture time must be
+stable staging path as the restore drill's exact `backup.dump` + `backup.json`
+sidecar contract before Docker receives it. Metadata capture time must be
 within the same 15-minute RPO as the proof clock; the Restic snapshot cannot
 predate capture beyond clock skew or arrive implausibly late. Symlinks,
 unexpected files, duplicate paths, unsafe metadata, digest mismatches, stale

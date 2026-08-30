@@ -71,6 +71,17 @@ jobs:
           --file infra/local/postgres/init/001-roles.sql
       - name: Apply and verify PostgreSQL migration chain
         run: uv run alembic upgrade head && uv run alembic check
+      - name: Prove the backup role can dump the migrated schema
+        env:
+          PGPASSWORD: local-backup-only
+        run: |
+          set -euo pipefail
+          backup_file="$(mktemp "${RUNNER_TEMP}/ac-backup-role-proof.XXXXXX.dump")"
+          trap 'rm -f -- "$backup_file"' EXIT
+          umask 077
+          pg_dump --host localhost --username ac_backup --dbname ac_platform \
+            --format=custom --create --file="$backup_file"
+          pg_restore --list "$backup_file" > /dev/null
       - name: Verify database privilege split
         env:
           PGPASSWORD: local-owner-only
@@ -331,7 +342,7 @@ jobs:
           )
           python infra/application/scripts/prepare-release-inputs.py \
             verify-bundle "$artifact_dir" "$GITHUB_SHA" > /dev/null
-      - name: Reclaim superseded release artifacts and enforce pooled ceiling
+      - name: Admit release artifact under the pooled ceiling
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -356,25 +367,7 @@ jobs:
 
           artifacts_before="$RUNNER_TEMP/repository-artifacts-before.json"
           list_repository_artifacts > "$artifacts_before"
-          mapfile -t release_artifact_ids < <(
-            jq --raw-output \
-              '.[] | select((.name // "") | test("^ac-application-[0-9a-f]{40}$")) | .id' \
-              "$artifacts_before"
-          )
-          for artifact_id in "${release_artifact_ids[@]}"; do
-            [[ "$artifact_id" =~ ^[0-9]+$ ]] || {
-              printf 'Refusing malformed release artifact identity.\n' >&2
-              exit 1
-            }
-            gh api --method DELETE \
-              --header 'Accept: application/vnd.github+json' \
-              --header 'X-GitHub-Api-Version: 2026-03-10' \
-              "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}"
-          done
-
-          artifacts_after="$RUNNER_TEMP/repository-artifacts-after.json"
-          list_repository_artifacts > "$artifacts_after"
-          retained_bytes="$(jq '[.[].size_in_bytes] | add // 0' "$artifacts_after")"
+          retained_bytes="$(jq '[.[].size_in_bytes] | add // 0' "$artifacts_before")"
           [[ "$retained_bytes" =~ ^[0-9]+$ ]] || {
             printf 'Repository artifact usage could not be proven.\n' >&2
             exit 1
@@ -388,6 +381,7 @@ jobs:
           printf 'Release artifact is %s bytes; projected repository pool is %s bytes (ceiling %s).\n' \
             "$candidate_bytes" "$projected_artifact_pool_bytes" "$max_artifact_pool_bytes"
       - name: Upload reviewed release bundle
+        id: upload_release
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: ac-application-${{ github.sha }}
@@ -396,3 +390,92 @@ jobs:
           # The transport bundle is copied into the immutable VPS artifact
           # store. Keep GitHub Actions storage below the Free-plan allowance.
           retention-days: 1
+      - name: Reclaim superseded release artifacts after verified upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+          UPLOADED_ARTIFACT_ID: ${{ steps.upload_release.outputs.artifact-id }}
+        run: |
+          set -euo pipefail
+          max_artifact_pool_bytes=450000000
+          current_name="ac-application-${GITHUB_SHA}"
+          current_artifact_id="$UPLOADED_ARTIFACT_ID"
+          [[ "$current_artifact_id" =~ ^[0-9]+$ ]] || {
+            printf 'Uploaded release artifact identity is malformed.\n' >&2
+            exit 1
+          }
+
+          list_repository_artifacts() {
+            gh api --paginate \
+              --header 'Accept: application/vnd.github+json' \
+              --header 'X-GitHub-Api-Version: 2026-03-10' \
+              "/repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" \
+              | jq --slurp '[.[].artifacts[]]'
+          }
+
+          uploaded_artifact="$RUNNER_TEMP/uploaded-release-artifact.json"
+          uploaded_artifact_proven=0
+          for _attempt in 1 2 3 4 5; do
+            if gh api \
+              --header 'Accept: application/vnd.github+json' \
+              --header 'X-GitHub-Api-Version: 2026-03-10' \
+              "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${current_artifact_id}" \
+              > "$uploaded_artifact" \
+              && jq --exit-status \
+                --arg current "$current_name" \
+                --argjson artifact_id "$current_artifact_id" \
+                --argjson run_id "$GITHUB_RUN_ID" \
+                '.id == $artifact_id
+                 and .name == $current
+                 and .workflow_run.id == $run_id
+                 and .expired == false
+                 and .size_in_bytes > 0' \
+                "$uploaded_artifact" > /dev/null; then
+              uploaded_artifact_proven=1
+              break
+            fi
+            sleep 2
+          done
+          [[ "$uploaded_artifact_proven" == 1 ]] || {
+            printf 'Uploaded release artifact could not be proven for this workflow run.\n' >&2
+            exit 1
+          }
+
+          artifacts_after_upload="$RUNNER_TEMP/repository-artifacts-after-upload.json"
+          list_repository_artifacts > "$artifacts_after_upload"
+          mapfile -t superseded_artifact_ids < <(
+            jq --raw-output --argjson current_id "$current_artifact_id" \
+              '.[]
+               | select((.name // "") | test("^ac-application-[0-9a-f]{40}$"))
+               | select(.id != $current_id)
+               | .id' \
+              "$artifacts_after_upload"
+          )
+          for artifact_id in "${superseded_artifact_ids[@]}"; do
+            [[ "$artifact_id" =~ ^[0-9]+$ ]] || {
+              printf 'Refusing malformed superseded release artifact identity.\n' >&2
+              exit 1
+            }
+            gh api --method DELETE \
+              --header 'Accept: application/vnd.github+json' \
+              --header 'X-GitHub-Api-Version: 2026-03-10' \
+              "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}"
+          done
+
+          artifacts_final="$RUNNER_TEMP/repository-artifacts-final.json"
+          list_repository_artifacts > "$artifacts_final"
+          final_bytes="$(jq '[.[].size_in_bytes] | add // 0' "$artifacts_final")"
+          final_current_count="$(
+            jq --argjson current_id "$current_artifact_id" \
+              '[.[] | select(.id == $current_id)] | length' "$artifacts_final"
+          )"
+          [[ "$final_bytes" =~ ^[0-9]+$ && "$final_current_count" == 1 ]] || {
+            printf 'Final release artifact pool could not be proven.\n' >&2
+            exit 1
+          }
+          if [ "$final_bytes" -gt "$max_artifact_pool_bytes" ]; then
+            printf 'Final repository artifact pool is %s bytes; ceiling is %s bytes.\n' \
+              "$final_bytes" "$max_artifact_pool_bytes" >&2
+            exit 1
+          fi
+          printf 'Verified artifact %s; final repository pool is %s bytes.\n' \
+            "$current_artifact_id" "$final_bytes"

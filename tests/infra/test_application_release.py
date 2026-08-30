@@ -320,8 +320,15 @@ def test_release_is_built_off_host_and_installed_with_backup_and_rollback() -> N
     assert "gh api --method DELETE" in WORKFLOW
     assert "projected_artifact_pool_bytes" in WORKFLOW
     assert WORKFLOW.index('verify-bundle "$artifact_dir" "$GITHUB_SHA"') < WORKFLOW.index(
-        "Reclaim superseded release artifacts and enforce pooled ceiling"
+        "Admit release artifact under the pooled ceiling"
     )
+    upload_index = WORKFLOW.index("Upload reviewed release bundle")
+    reclaim_index = WORKFLOW.index("Reclaim superseded release artifacts after verified upload")
+    assert WORKFLOW.index("projected_artifact_pool_bytes") < upload_index
+    assert upload_index < reclaim_index
+    assert upload_index < WORKFLOW.index("gh api --method DELETE")
+    assert "Uploaded release artifact could not be proven for this workflow run" in WORKFLOW
+    assert "Final release artifact pool could not be proven" in WORKFLOW
     assert "retention-days: 1" in WORKFLOW
     assert "Prove staging seed PostgreSQL serialization" in WORKFLOW
     assert 'AC_REQUIRE_STAGING_SEED_POSTGRES_TEST: "1"' in WORKFLOW

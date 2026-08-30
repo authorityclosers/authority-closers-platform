@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import os
+import runpy
 import subprocess
 import sys
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import cast
 from uuid import UUID, uuid4
 
 import pytest
@@ -32,6 +34,13 @@ from ac_platform.catalog.services import CatalogService, SqlAlchemyCatalogStore
 
 NOW = datetime(2026, 8, 30, 12, tzinfo=UTC)
 ROOT = Path(__file__).parents[2]
+_MIGRATION_0010 = runpy.run_path(
+    str(ROOT / "db" / "migrations" / "versions" / "20260830_0010_catalog_publication_integrity.py")
+)
+_technical_validation_allowed_sql = cast(
+    Callable[[], str],
+    _MIGRATION_0010["_technical_validation_allowed_sql"],
+)
 
 
 def _postgres_url() -> URL:
@@ -210,7 +219,7 @@ def _seed_legacy_version(
     [ProgramVersionStatus.PUBLISHED.value, ProgramVersionStatus.SUPERSEDED.value],
 )
 def test_upgrade_refuses_unprovenanced_legacy_immutable_rows(legacy_status: str) -> None:
-    with _schema_at_0009("production") as (engine, environment):
+    with _schema_at_0009("development") as (engine, environment):
         version_id = _seed_legacy_version(
             engine,
             seed_kind="reviewed",
@@ -233,7 +242,7 @@ def test_upgrade_refuses_unprovenanced_legacy_immutable_rows(legacy_status: str)
     [ProgramVersionStatus.PUBLISHED.value, ProgramVersionStatus.SUPERSEDED.value],
 )
 def test_upgrade_accepts_valid_populated_legacy_immutable_rows(legacy_status: str) -> None:
-    with _schema_at_0009("production") as (engine, environment):
+    with _schema_at_0009("development") as (engine, environment):
         version_id = _seed_legacy_version(
             engine,
             seed_kind="reviewed",
@@ -260,8 +269,8 @@ def test_upgrade_accepts_valid_populated_legacy_immutable_rows(legacy_status: st
 @pytest.mark.parametrize(
     ("deployment_environment", "publication_allowed"),
     [
-        pytest.param("production", False, id="production-rejects"),
-        pytest.param("staging", True, id="staging-allows"),
+        pytest.param("development", False, id="false-policy-rejects"),
+        pytest.param("test", True, id="true-policy-allows"),
     ],
 )
 def test_database_environment_policy_controls_technical_validation_publication(
@@ -296,3 +305,26 @@ def test_database_environment_policy_controls_technical_validation_publication(
                 published = database.get(ProgramVersion, version_id)
                 assert published is not None
                 assert published.status == ProgramVersionStatus.PUBLISHED.value
+
+
+@pytest.mark.parametrize(
+    ("deployment_environment", "expected_sql"),
+    [
+        pytest.param("production", "FALSE", id="production-fails-closed"),
+        pytest.param("staging", "TRUE", id="staging-allows"),
+        pytest.param("test", "TRUE", id="test-allows"),
+        pytest.param("development", "FALSE", id="development-fails-closed"),
+        pytest.param(None, "FALSE", id="missing-fails-closed"),
+    ],
+)
+def test_technical_validation_policy_environment_mapping(
+    monkeypatch: pytest.MonkeyPatch,
+    deployment_environment: str | None,
+    expected_sql: str,
+) -> None:
+    if deployment_environment is None:
+        monkeypatch.delenv("AC_ENVIRONMENT", raising=False)
+    else:
+        monkeypatch.setenv("AC_ENVIRONMENT", deployment_environment)
+
+    assert _technical_validation_allowed_sql() == expected_sql
