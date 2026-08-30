@@ -238,7 +238,7 @@ def _surface_callback_uri(settings: Settings, surface: str) -> str:
 
 
 def _require_surface_host(request: Request, settings: Settings, surface: str) -> None:
-    if settings.environment != "production":
+    if settings.environment not in {"staging", "production"}:
         return
     expected_host = (
         settings.admin_app_url.host if surface == "admin" else settings.public_app_url.host

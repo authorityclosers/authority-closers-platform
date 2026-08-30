@@ -15,12 +15,12 @@ Production-shaped Free Course walking skeleton: identity -> explicit free enroll
 | API kernel                           | live/ready split, sanitized request ID, release identity, RFC 7807 domain errors, complete OpenAPI generation                      | PASS                             |
 | Authorization kernel                 | self, selected tenant, named permission allow/deny tests                                                                           | PASS                             |
 | Event boundary                       | domain/audit/analytics/operational/cost categories; tenant-bound audit invariant                                                   | PASS                             |
-| Identity/OAuth                       | durable pre-redirect transaction, PKCE/nonce/state, host-only same-surface cookies; 32 HTTP checks plus domain/PostgreSQL evidence | INDEPENDENT REVIEW               |
+| Identity/OAuth                       | durable pre-redirect transaction, PKCE/nonce/state, host-only same-surface cookies, and staging/production surface-host denial tests; domain/PostgreSQL evidence | INDEPENDENT REVIEW               |
 | Public course + free enrollment HTTP | published-global-only query; server-owned actor/tenant; CSRF and idempotency gates; fresh PostgreSQL journey                       | PASS (1 PostgreSQL E2E)          |
 | Catalog/enrollment/certificates      | independent review found actor-trust and direct-SQL integrity gaps                                                                 | REMEDIATION                      |
 | Learning                             | 31 focused checks, fresh PostgreSQL 18 suite, eight repeated concurrency runs, independent rereview                                | PASS (domain)                    |
 | Operations                           | independent review found an audit-head GUC bypass and Alembic registry drift                                                       | REMEDIATION                      |
-| Edge/application release             | same-origin `/v1` routing and pinned Caddy validation; hardened Compose/PostgreSQL 18 smoke                                        | PASS (local only)                |
+| Edge/application release             | same-origin `/v1` routing, pinned Caddy validation, immutable release `d8980d839a8f30e9ccde83ccdb380dd440b1fb1b`, and public staging learner/API/Admin Access smoke | PASS (staging)                   |
 | Security/accessibility/recovery/load | not yet executed against integrated slice                                                                                          | PENDING                          |
 
 No production application mutation has occurred. These rows are component and

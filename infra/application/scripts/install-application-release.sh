@@ -289,10 +289,35 @@ backup_file="$backup_root/$(date -u +%Y%m%dT%H%M%SZ)-pre-${release_id}.dump"
 mutation_started=0
 backup_ready=0
 release_committed=0
+current_advanced=0
+current_tmp=''
+evidence_tmp=''
+
+restore_current_link() {
+  local rollback_tmp
+  [[ "$current_advanced" == 1 ]] || return 0
+  if [[ -n "$previous_release" ]]; then
+    rollback_tmp="$application_root/.rollback-${target_environment}-${release_id}.$$"
+    ln -s "$previous_release" "$rollback_tmp"
+    mv --no-target-directory --force "$rollback_tmp" "$current_link"
+    [[ "$(readlink -f "$current_link")" == "$previous_release" ]]
+  else
+    [[ -L "$current_link" && "$(readlink -f "$current_link")" == "$release_dir" ]]
+    rm -- "$current_link"
+    [[ ! -e "$current_link" && ! -L "$current_link" ]]
+  fi
+  current_advanced=0
+}
 
 rollback_release() {
   local rollback_failed=0
   printf 'ROLLBACK  Restoring %s after failed release %s.\n' "$target_environment" "$release_id" >&2
+  if [[ -n "$current_tmp" && -L "$current_tmp" ]]; then
+    rm -- "$current_tmp" || rollback_failed=1
+  fi
+  if [[ -n "$evidence_tmp" && -f "$evidence_tmp" ]]; then
+    rm -- "$evidence_tmp" || rollback_failed=1
+  fi
   compose_for "$release_dir" stop api worker learner-web admin-web >/dev/null 2>&1 || rollback_failed=1
   if [[ "$backup_ready" == 1 ]]; then
     # shellcheck disable=SC2016  # PostgreSQL container variables expand inside `sh -euc`.
@@ -306,6 +331,7 @@ rollback_release() {
       rollback_failed=1
     fi
   fi
+  restore_current_link || rollback_failed=1
   if [[ -n "$previous_release" ]]; then
     compose_for "$previous_release" up --detach --remove-orphans --wait --wait-timeout 180 \
       || rollback_failed=1
@@ -377,10 +403,13 @@ current_tmp="$application_root/.current-${target_environment}-${release_id}.$$"
 ln -s "$release_dir" "$current_tmp"
 mv --no-target-directory --force "$current_tmp" "$current_link"
 [[ "$(readlink -f "$current_link")" == "$release_dir" ]]
+current_tmp=''
+current_advanced=1
 
 evidence_root="$application_root/deployments/$target_environment"
 install -d -m 0750 -o root -g acops "$evidence_root"
 evidence_file="$evidence_root/$(date -u +%Y%m%dT%H%M%SZ)-${release_id}.env"
+evidence_tmp="$(mktemp "$evidence_root/.deployment-${release_id}.XXXXXX")"
 {
   printf 'AC_ENVIRONMENT=%s\n' "$target_environment"
   printf 'AC_RELEASE_ID=%s\n' "$release_id"
@@ -392,9 +421,11 @@ evidence_file="$evidence_root/$(date -u +%Y%m%dT%H%M%SZ)-${release_id}.env"
   printf 'AC_LEARNER_REGISTRY_DIGEST=%s\n' "$AC_LEARNER_REGISTRY_DIGEST"
   printf 'AC_ADMIN_IMAGE=%s\n' "$AC_ADMIN_IMAGE"
   printf 'AC_ADMIN_REGISTRY_DIGEST=%s\n' "$AC_ADMIN_REGISTRY_DIGEST"
-} > "$evidence_file"
-chmod 0640 "$evidence_file"
-chown root:acops "$evidence_file"
+} > "$evidence_tmp"
+chmod 0640 "$evidence_tmp"
+chown root:acops "$evidence_tmp"
+mv --no-target-directory "$evidence_tmp" "$evidence_file"
+evidence_tmp=''
 release_committed=1
 
 printf 'PASS  %s now runs exact release %s with held external side effects.\n' \

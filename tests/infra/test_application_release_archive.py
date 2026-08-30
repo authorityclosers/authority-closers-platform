@@ -285,3 +285,20 @@ def test_installer_arms_rollback_before_starting_candidate_postgres() -> None:
     postgres_start = 'compose_for "$release_dir" up --detach --wait --wait-timeout 180 postgres'
 
     assert installer.index(rollback_arm) < installer.index(postgres_start)
+
+
+def test_installer_restores_current_link_and_writes_evidence_atomically() -> None:
+    installer = INSTALLER.read_text(encoding="utf-8")
+    advance = 'mv --no-target-directory --force "$current_tmp" "$current_link"'
+    mark_advanced = "current_advanced=1"
+    restore_call = "restore_current_link || rollback_failed=1"
+    restart_previous = 'compose_for "$previous_release" up --detach'
+    evidence_temp = 'evidence_tmp="$(mktemp "$evidence_root/.deployment-${release_id}.XXXXXX")"'
+    evidence_commit = 'mv --no-target-directory "$evidence_tmp" "$evidence_file"'
+    mark_committed = "release_committed=1"
+
+    assert installer.index(advance) < installer.index(mark_advanced)
+    rollback_body = installer[installer.index("rollback_release() {") :]
+    assert rollback_body.index(restore_call) < rollback_body.index(restart_previous)
+    assert installer.index(evidence_temp) < installer.index(evidence_commit)
+    assert installer.index(evidence_commit) < installer.index(mark_committed)

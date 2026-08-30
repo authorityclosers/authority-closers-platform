@@ -169,6 +169,12 @@ def test_release_is_built_off_host_and_installed_with_backup_and_rollback() -> N
     assert "pg_dump" in INSTALLER and "--create" in INSTALLER
     assert "pg_restore" in INSTALLER and "--clean" in INSTALLER
     assert "ROLLBACK" in INSTALLER
+    assert "restore_current_link" in INSTALLER
+    assert "current_advanced=1" in INSTALLER
+    assert 'readlink -f "$current_link"' in INSTALLER
+    assert 'rm -- "$current_link"' in INSTALLER
+    assert 'mktemp "$evidence_root/.deployment-${release_id}.XXXXXX"' in INSTALLER
+    assert 'mv --no-target-directory "$evidence_tmp" "$evidence_file"' in INSTALLER
     assert "AC_EXTERNAL_SIDE_EFFECTS_HOLD" in COMPOSE
     assert "/usr/local/sbin/ac-infisical-run" in INSTALLER
     assert 'find "$stage_dir/postgres/init" -type d -exec chmod 0755' in INSTALLER

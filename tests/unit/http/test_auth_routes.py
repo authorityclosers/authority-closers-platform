@@ -108,12 +108,30 @@ def _settings() -> Settings:
     )
 
 
-def _client(*, configured: bool = True) -> TestClient:
+def _staging_settings() -> Settings:
+    return Settings(
+        environment="staging",
+        release_id="a" * 40,
+        database_url=(
+            "postgresql+psycopg://ac_runtime:staging-runtime-password@postgres/ac_platform"
+        ),
+        database_migrator_url=(
+            "postgresql+psycopg://ac_migrator:staging-migrator-password@postgres/ac_platform"
+        ),
+        session_token_pepper="staging-session-token-pepper-that-is-long-enough",  # noqa: S106
+        oauth_transaction_secret="staging-oauth-transaction-secret-that-is-long-enough",  # noqa: S106
+        public_app_url="https://staging.authorityclosers.com",
+        admin_app_url="https://admin-staging.authorityclosers.com",
+        api_url="https://api-staging.authorityclosers.com",
+    )
+
+
+def _client(*, configured: bool = True, settings: Settings | None = None) -> TestClient:
     application = FastAPI()
     register_problem_handlers(application)
     install_identity_http(
         application,
-        settings=_settings(),
+        settings=settings or _settings(),
         sessions=cast(Any, _sessions),
         provider=_RecordingProvider() if configured else None,
     )
@@ -147,6 +165,80 @@ def test_auth_start_binds_state_nonce_pkce_and_safe_return_in_signed_cookie() ->
     assert "samesite=lax" in set_cookie
     assert "path=/v1/auth/google/callback" in set_cookie
     assert response.headers["cache-control"] == "no-store"
+
+
+@pytest.mark.parametrize(
+    ("surface", "host"),
+    [
+        ("learner", "api-staging.authorityclosers.com"),
+        ("learner", "admin-staging.authorityclosers.com"),
+        ("admin", "staging.authorityclosers.com"),
+        ("admin", "api-staging.authorityclosers.com"),
+    ],
+)
+def test_staging_auth_start_rejects_a_host_outside_the_selected_surface(
+    surface: str,
+    host: str,
+) -> None:
+    response = _client(settings=_staging_settings()).get(
+        "/v1/auth/google/start",
+        params={"action": "authenticate", "surface": surface},
+        headers={"host": host},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "invalid_auth_transaction"
+    assert "location" not in response.headers
+
+
+@pytest.mark.parametrize(
+    ("surface", "host"),
+    [
+        ("learner", "staging.authorityclosers.com"),
+        ("admin", "admin-staging.authorityclosers.com"),
+    ],
+)
+def test_staging_auth_start_accepts_only_the_selected_surface_host(
+    surface: str,
+    host: str,
+) -> None:
+    response = _client(settings=_staging_settings()).get(
+        "/v1/auth/google/start",
+        params={"action": "authenticate", "surface": surface},
+        headers={"host": host},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert urlsplit(response.headers["location"]).hostname == "accounts.example.test"
+
+
+def test_staging_callback_rejects_cross_surface_host_before_provider_exchange() -> None:
+    client = _client(settings=_staging_settings())
+    started = client.get(
+        "/v1/auth/google/start",
+        params={"action": "authenticate", "surface": "admin"},
+        headers={"host": "admin-staging.authorityclosers.com"},
+        follow_redirects=False,
+    )
+    encoded = started.cookies["ac_oauth_transaction"]
+    transaction = AuthTransactionCodec(
+        "staging-oauth-transaction-secret-that-is-long-enough"
+    ).decode(encoded)
+
+    response = client.get(
+        "/v1/auth/google/callback",
+        params={"state": transaction.state, "code": "unused-code"},
+        headers={
+            "host": "staging.authorityclosers.com",
+            "cookie": f"ac_oauth_transaction={encoded}",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "invalid_auth_transaction"
 
 
 def test_external_return_url_is_rejected_without_contacting_provider() -> None:
