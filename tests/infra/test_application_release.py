@@ -78,6 +78,7 @@ def test_release_fails_closed_on_identity_and_database_secrets() -> None:
     assert "x-migration-environment: &migration-environment" in COMPOSE
     assert "migrate:\n" in COMPOSE
     assert "<<: *migration-environment" in COMPOSE
+    assert "-u AC_TRUSTED_PROXY_ADDRESSES" in INSTALLER
 
 
 def test_database_and_edge_networks_are_explicitly_separated() -> None:

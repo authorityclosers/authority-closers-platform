@@ -265,6 +265,7 @@ compose_for() {
         -u AC_ADMIN_APP_URL \
         -u AC_API_URL \
         -u AC_API_HOST \
+        -u AC_TRUSTED_PROXY_ADDRESSES \
         -u AC_EDGE_API_ALIAS \
         -u AC_EDGE_LEARNER_ALIAS \
         -u AC_EDGE_ADMIN_ALIAS \

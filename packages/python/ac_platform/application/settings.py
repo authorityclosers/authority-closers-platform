@@ -171,9 +171,9 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "AC_TRUSTED_PROXY_ADDRESSES must contain comma-separated exact IPs"
                 ) from exc
-            if address.is_unspecified or address.is_multicast:
+            if not (address.is_private or address.is_loopback):
                 raise ValueError(
-                    "AC_TRUSTED_PROXY_ADDRESSES cannot contain unspecified or multicast IPs"
+                    "AC_TRUSTED_PROXY_ADDRESSES must contain only private or loopback IPs"
                 )
             addresses.add(address)
         return frozenset(addresses)

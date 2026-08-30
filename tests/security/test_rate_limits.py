@@ -69,7 +69,7 @@ async def test_token_bucket_limits_and_refills_without_cross_client_leakage() ->
     assert refilled.status_code == 200
 
 
-async def test_cloudflare_address_is_trusted_only_from_a_private_proxy_peer() -> None:
+async def test_cloudflare_address_is_trusted_only_from_the_exact_proxy_peer() -> None:
     clock = [0.0]
     application = _app(
         clock=clock,
@@ -144,6 +144,27 @@ def test_client_identity_rejects_invalid_or_duplicated_forwarding_values() -> No
     )
 
 
+def test_ipv6_clients_are_normalized_to_prefix_and_mapped_ipv4_identity() -> None:
+    scope = {"type": "http", "client": ("172.20.0.2", 1000)}
+    trusted = frozenset({ipaddress.ip_address("172.20.0.2")})
+
+    first = client_identity(
+        {**scope, "headers": [(b"cf-connecting-ip", b"2001:db8:abcd:1::1")]},
+        trusted_proxy_addresses=trusted,
+    )
+    second = client_identity(
+        {**scope, "headers": [(b"cf-connecting-ip", b"2001:db8:abcd:1::ffff")]},
+        trusted_proxy_addresses=trusted,
+    )
+    mapped = client_identity(
+        {**scope, "headers": [(b"cf-connecting-ip", b"::ffff:192.0.2.9")]},
+        trusted_proxy_addresses=trusted,
+    )
+
+    assert first == second == "2001:db8:abcd:1::/64"
+    assert mapped == "192.0.2.9"
+
+
 async def test_capacity_saturation_does_not_reset_an_exhausted_client() -> None:
     clock = [0.0]
     limiter = InMemoryTokenBucketLimiter(maximum_buckets=2, clock=lambda: clock[0])
@@ -158,10 +179,12 @@ async def test_capacity_saturation_does_not_reset_an_exhausted_client() -> None:
     assert (await limiter.consume("victim", rule))[0] is True
     assert (await limiter.consume("victim", rule))[0] is False
     assert (await limiter.consume("other", rule))[0] is True
-    saturated = await limiter.consume("attacker", rule)
+    overflow_admitted = await limiter.consume("attacker", rule)
+    overflow_limited = await limiter.consume("another-attacker", rule)
     still_exhausted = await limiter.consume("victim", rule)
 
-    assert saturated == (False, 60, 0)
+    assert overflow_admitted[0] is True
+    assert overflow_limited == (False, 60, 0)
     assert still_exhausted[0] is False
 
 
@@ -175,6 +198,53 @@ async def test_expired_buckets_are_purged_before_new_identity_admission() -> Non
     clock[0] = 61.0
 
     assert (await limiter.consume("replacement", rule))[0] is True
+
+
+async def test_active_identity_cannot_slide_partition_lifetime_forever() -> None:
+    clock = [0.0]
+    limiter = InMemoryTokenBucketLimiter(maximum_buckets=1, clock=lambda: clock[0])
+    rule = _rule()
+
+    assert (await limiter.consume("rotator", rule))[0] is True
+    clock[0] = 59.0
+    assert (await limiter.consume("rotator", rule))[0] is True
+    clock[0] = 60.0
+
+    assert (await limiter.consume("new-client", rule))[0] is True
+
+
+async def test_saturation_retry_after_tracks_the_overflow_bucket() -> None:
+    clock = [0.0]
+    limiter = InMemoryTokenBucketLimiter(maximum_buckets=1, clock=lambda: clock[0])
+    rule = RateLimitRule(
+        name="overflow",
+        method="GET",
+        path=re.compile(r"^/limited$"),
+        capacity=1,
+        refill_seconds=60,
+    )
+
+    assert (await limiter.consume("resident", rule))[0] is True
+    assert (await limiter.consume("overflow-first", rule))[0] is True
+    clock[0] = 59.0
+    assert await limiter.consume("overflow-second", rule) == (False, 1, 0)
+    clock[0] = 60.0
+    assert (await limiter.consume("overflow-third", rule))[0] is True
+
+
+async def test_saturation_is_partitioned_per_operation_rule() -> None:
+    limiter = InMemoryTokenBucketLimiter(maximum_buckets=1, clock=lambda: 0.0)
+    first_rule = _rule()
+    second_rule = RateLimitRule(
+        name="other-operation",
+        method="GET",
+        path=re.compile(r"^/other$"),
+        capacity=2,
+        refill_seconds=60,
+    )
+
+    assert (await limiter.consume("first-client", first_rule))[0] is True
+    assert (await limiter.consume("second-client", second_rule))[0] is True
 
 
 async def test_concurrent_requests_cannot_oversubscribe_one_bucket() -> None:

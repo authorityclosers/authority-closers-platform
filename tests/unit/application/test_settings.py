@@ -157,6 +157,10 @@ def test_deployment_requires_exact_trusted_proxy_addresses() -> None:
     with pytest.raises(ValidationError, match="comma-separated exact IPs"):
         Settings(environment="production", **values)  # type: ignore[arg-type]
 
+    values["trusted_proxy_addresses"] = "9.9.9.9"
+    with pytest.raises(ValidationError, match="private or loopback"):
+        Settings(environment="production", **values)  # type: ignore[arg-type]
+
 
 def test_trusted_proxy_addresses_are_normalized_and_deduplicated() -> None:
     values = _production_values()

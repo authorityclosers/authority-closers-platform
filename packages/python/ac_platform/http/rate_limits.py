@@ -8,7 +8,7 @@ import re
 import time
 from asyncio import Lock
 from collections.abc import Awaitable, Callable, Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from starlette.types import Receive, Scope, Send
@@ -61,8 +61,15 @@ class _Bucket:
     expires_at: float
 
 
+@dataclass(slots=True)
+class _Partition:
+    buckets: dict[str, _Bucket] = field(default_factory=dict)
+    overflow: _Bucket | None = None
+    next_maintenance_at: float | None = None
+
+
 class InMemoryTokenBucketLimiter:
-    """Bounded single-process fallback limiter for the current one-worker API."""
+    """Bounded per-rule single-process limiter with a shared overflow bucket."""
 
     def __init__(
         self,
@@ -74,58 +81,100 @@ class InMemoryTokenBucketLimiter:
             raise ValueError("maximum_buckets must be positive")
         self._maximum_buckets = maximum_buckets
         self._clock = clock
-        self._buckets: dict[str, _Bucket] = {}
-        self._next_expiry_at: float | None = None
+        self._partitions: dict[str, _Partition] = {}
         self._lock = Lock()
 
-    def _purge_expired(self, now: float) -> None:
-        if self._next_expiry_at is None or now < self._next_expiry_at:
+    @staticmethod
+    def _refilled_tokens(bucket: _Bucket, now: float, rule: RateLimitRule) -> float:
+        elapsed = max(0.0, now - bucket.updated_at)
+        refill_rate = rule.capacity / rule.refill_seconds
+        return min(float(rule.capacity), bucket.tokens + elapsed * refill_rate)
+
+    @classmethod
+    def _reclaimable_at(cls, bucket: _Bucket, rule: RateLimitRule) -> float:
+        refill_rate = rule.capacity / rule.refill_seconds
+        seconds_to_full = max(0.0, float(rule.capacity) - bucket.tokens) / refill_rate
+        return min(bucket.expires_at, bucket.updated_at + seconds_to_full)
+
+    @classmethod
+    def _maintain_partition(
+        cls,
+        partition: _Partition,
+        now: float,
+        rule: RateLimitRule,
+        maximum_buckets: int,
+    ) -> None:
+        if partition.next_maintenance_at is not None and now < partition.next_maintenance_at:
             return
-        self._buckets = {
-            key: bucket for key, bucket in self._buckets.items() if bucket.expires_at > now
-        }
-        self._next_expiry_at = min(
-            (bucket.expires_at for bucket in self._buckets.values()),
+        expired = [key for key, bucket in partition.buckets.items() if bucket.expires_at <= now]
+        for key in expired:
+            del partition.buckets[key]
+        if len(partition.buckets) >= maximum_buckets:
+            reclaimable = [
+                (bucket.updated_at, key)
+                for key, bucket in partition.buckets.items()
+                if cls._refilled_tokens(bucket, now, rule) >= rule.capacity
+            ]
+            if reclaimable:
+                _, key = min(reclaimable)
+                del partition.buckets[key]
+        partition.next_maintenance_at = min(
+            (cls._reclaimable_at(bucket, rule) for bucket in partition.buckets.values()),
             default=None,
         )
 
-    def _track_expiry(self, expires_at: float) -> None:
-        if self._next_expiry_at is None or expires_at < self._next_expiry_at:
-            self._next_expiry_at = expires_at
+    @staticmethod
+    def _new_bucket(now: float, rule: RateLimitRule) -> _Bucket:
+        return _Bucket(
+            tokens=float(rule.capacity),
+            updated_at=now,
+            # A fixed lifetime prevents an attacker from pinning admission state
+            # forever by refreshing arbitrary identities.
+            expires_at=now + rule.refill_seconds,
+        )
+
+    @classmethod
+    def _consume_bucket(
+        cls,
+        bucket: _Bucket,
+        now: float,
+        rule: RateLimitRule,
+    ) -> tuple[bool, int, int]:
+        refill_rate = rule.capacity / rule.refill_seconds
+        bucket.tokens = cls._refilled_tokens(bucket, now, rule)
+        bucket.updated_at = max(now, bucket.updated_at)
+        allowed = bucket.tokens >= 1
+        if allowed:
+            bucket.tokens -= 1
+            retry_after = 0
+        else:
+            seconds_until_token = max(0.0, (1 - bucket.tokens) / refill_rate)
+            retry_after = max(1, math.ceil(seconds_until_token - 1e-9))
+        return allowed, retry_after, max(0, math.floor(bucket.tokens))
 
     async def consume(self, key: str, rule: RateLimitRule) -> tuple[bool, int, int]:
         now = self._clock()
-        refill_rate = rule.capacity / rule.refill_seconds
         async with self._lock:
-            self._purge_expired(now)
-            bucket = self._buckets.get(key)
+            partition = self._partitions.setdefault(rule.name, _Partition())
+            self._maintain_partition(partition, now, rule, self._maximum_buckets)
+            bucket = partition.buckets.get(key)
             if bucket is None:
-                if len(self._buckets) >= self._maximum_buckets:
-                    next_expiry = self._next_expiry_at or (now + rule.refill_seconds)
-                    retry_after = max(1, math.ceil(next_expiry - now))
-                    return False, retry_after, 0
-                bucket = _Bucket(
-                    tokens=float(rule.capacity),
-                    updated_at=now,
-                    expires_at=now + rule.refill_seconds,
-                )
-                self._buckets[key] = bucket
-                self._track_expiry(bucket.expires_at)
-            else:
-                elapsed = max(0.0, now - bucket.updated_at)
-                bucket.tokens = min(float(rule.capacity), bucket.tokens + elapsed * refill_rate)
-                bucket.updated_at = max(now, bucket.updated_at)
-                bucket.expires_at = bucket.updated_at + rule.refill_seconds
-                self._track_expiry(bucket.expires_at)
-
-            allowed = bucket.tokens >= 1
-            if allowed:
-                bucket.tokens -= 1
-                retry_after = 0
-            else:
-                retry_after = max(1, math.ceil((1 - bucket.tokens) / refill_rate))
-            remaining = max(0, math.floor(bucket.tokens))
-            return allowed, retry_after, remaining
+                if len(partition.buckets) >= self._maximum_buckets:
+                    overflow = partition.overflow
+                    if overflow is None or overflow.expires_at <= now:
+                        overflow = self._new_bucket(now, rule)
+                        partition.overflow = overflow
+                    return self._consume_bucket(overflow, now, rule)
+                bucket = self._new_bucket(now, rule)
+                partition.buckets[key] = bucket
+            outcome = self._consume_bucket(bucket, now, rule)
+            reclaimable_at = self._reclaimable_at(bucket, rule)
+            if (
+                partition.next_maintenance_at is None
+                or reclaimable_at < partition.next_maintenance_at
+            ):
+                partition.next_maintenance_at = reclaimable_at
+            return outcome
 
 
 def _header_values(scope: Scope, name: bytes) -> Iterable[bytes]:
@@ -142,6 +191,17 @@ def _peer_address(scope: Scope) -> ipaddress.IPv4Address | ipaddress.IPv6Address
         return None
 
 
+def _normalized_client_address(
+    address: ipaddress.IPv4Address | ipaddress.IPv6Address,
+) -> str:
+    if isinstance(address, ipaddress.IPv4Address):
+        return address.compressed
+    if address.ipv4_mapped is not None:
+        return address.ipv4_mapped.compressed
+    network = ipaddress.ip_network((address, 64), strict=False)
+    return f"{network.network_address.compressed}/64"
+
+
 def client_identity(
     scope: Scope,
     *,
@@ -154,10 +214,12 @@ def client_identity(
         forwarded = list(_header_values(scope, b"cf-connecting-ip"))
         if len(forwarded) == 1:
             try:
-                return ipaddress.ip_address(forwarded[0].decode("ascii").strip()).compressed
+                return _normalized_client_address(
+                    ipaddress.ip_address(forwarded[0].decode("ascii").strip())
+                )
             except (UnicodeDecodeError, ValueError):
                 pass
-    return "unknown" if peer is None else peer.compressed
+    return "unknown" if peer is None else _normalized_client_address(peer)
 
 
 def _request_id(scope: Scope) -> str:
