@@ -227,6 +227,10 @@ done
 profile_file="$release_dir/environments/$target_environment.env"
 secret_environment="$target_environment"
 [[ "$target_environment" == production ]] && secret_environment=prod
+if LC_ALL=C grep -q $'\r' "$profile_file"; then
+  printf 'Released environment profile must use canonical LF line endings.\n' >&2
+  exit 1
+fi
 state_root="$(sed -n 's/^AC_STATE_ROOT=//p' "$profile_file")"
 [[ "$state_root" == "/srv/authority-closers/state/application/$target_environment" ]] || {
   printf 'Released state root does not match the target environment.\n' >&2

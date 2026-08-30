@@ -18,6 +18,7 @@ INFISICAL_RUNNER = (ROOT / "infra" / "vps-foundation" / "scripts" / "ac-infisica
     encoding="utf-8"
 )
 WORKFLOW = (ROOT / ".github" / "workflows" / "application.yml").read_text(encoding="utf-8")
+GIT_ATTRIBUTES = (ROOT / ".gitattributes").read_text(encoding="utf-8")
 
 
 @pytest.mark.parametrize("dockerfile", [WEB_DOCKERFILE, PYTHON_DOCKERFILE])
@@ -144,6 +145,8 @@ def test_environment_profiles_isolate_state_hosts_and_edge_aliases() -> None:
     assert ".staging.authorityclosers.com" not in staging
     assert "AC_EXTERNAL_SIDE_EFFECTS_HOLD=true" in staging
     assert "AC_EXTERNAL_SIDE_EFFECTS_HOLD=true" in production
+    assert "* text=auto eol=lf" in GIT_ATTRIBUTES
+    assert "Released environment profile must use canonical LF line endings" in INSTALLER
 
 
 def test_release_is_built_off_host_and_installed_with_backup_and_rollback() -> None:
