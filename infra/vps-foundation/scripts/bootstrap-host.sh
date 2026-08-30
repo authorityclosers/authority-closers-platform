@@ -282,7 +282,18 @@ phase_runtime() {
   getent passwd cloudflared >/dev/null || useradd --system --user-group --home-dir /var/lib/cloudflared --shell /usr/sbin/nologin cloudflared
   install -d -m 0750 -o root -g cloudflared /etc/cloudflared
 
-  docker network inspect ac_edge >/dev/null 2>&1 || docker network create ac_edge
+  if docker network inspect ac_edge >/dev/null 2>&1; then
+    [[ "$(docker network inspect ac_edge --format '{{(index .IPAM.Config 0).Subnet}}')" == '172.18.0.0/16' ]] || {
+      printf 'Existing ac_edge network does not use the reviewed 172.18.0.0/16 subnet.\n' >&2
+      exit 1
+    }
+  else
+    docker network create \
+      --driver bridge \
+      --subnet 172.18.0.0/16 \
+      --gateway 172.18.0.1 \
+      ac_edge
+  fi
   docker network inspect ac_telemetry >/dev/null 2>&1 || docker network create ac_telemetry --internal
   AC_RELEASE_ID="$release_id" \
   AC_RELEASE_ARCHIVE="${AC_RELEASE_ARCHIVE:-}" \
