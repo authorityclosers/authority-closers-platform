@@ -120,8 +120,8 @@ def postgres_harness() -> Iterator[_Harness]:
             }
         )
         migration = subprocess.run(
-            # Operations migration 0006 is outside this certificate adapter's
-            # scope; 0005 is the fresh schema boundary required by this slice.
+            # This adapter uses the current catalog models, so its isolated
+            # schema must prove the full forward-only migration chain.
             [
                 sys.executable,
                 "-m",
@@ -129,7 +129,7 @@ def postgres_harness() -> Iterator[_Harness]:
                 "-c",
                 "alembic.ini",
                 "upgrade",
-                "20260830_0005",
+                "head",
             ],
             cwd=root,
             env=migration_environment,

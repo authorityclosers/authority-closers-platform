@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import os
 import subprocess
 import sys
@@ -124,7 +125,7 @@ def _seed_person(
                 SessionRow(
                     id=session_id,
                     person_id=person_id,
-                    token_hash=bytes(session_id.bytes),
+                    token_hash=hashlib.sha256(session_id.bytes).digest(),
                     created_at=NOW,
                     expires_at=expires_at,
                     revoked_at=revoked_at,

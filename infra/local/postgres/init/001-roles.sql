@@ -8,7 +8,7 @@ CREATE ROLE ac_backup LOGIN PASSWORD 'local-backup-only'
   NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
 
 REVOKE CONNECT ON DATABASE ac_platform FROM PUBLIC;
-GRANT CONNECT ON DATABASE ac_platform TO ac_migrator, ac_runtime, ac_backup;
+GRANT CONNECT ON DATABASE ac_platform TO ac_owner, ac_migrator, ac_runtime, ac_backup;
 REVOKE TEMPORARY ON DATABASE ac_platform FROM PUBLIC;
 GRANT USAGE, CREATE ON SCHEMA public TO ac_migrator;
 GRANT USAGE ON SCHEMA public TO ac_runtime, ac_backup;

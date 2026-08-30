@@ -175,6 +175,12 @@ async def test_postgresql_audit_chain_head_rejects_direct_runtime_mutation(
                     "NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT"
                 )
             )
+            database_name = connection.scalar(text("SELECT current_database()"))
+            assert isinstance(database_name, str)
+            quoted_database = connection.dialect.identifier_preparer.quote_identifier(database_name)
+            connection.execute(
+                text(f'GRANT CONNECT ON DATABASE {quoted_database} TO "{runtime_role}"')
+            )
             connection.execute(
                 text(
                     "INSERT INTO tenants (id, slug, name, status) "

@@ -64,7 +64,7 @@ def postgres_engine() -> Iterator[Engine]:
             }
         )
         migration = subprocess.run(
-            [sys.executable, "-m", "alembic", "-c", "alembic.ini", "upgrade", "20260830_0005"],
+            [sys.executable, "-m", "alembic", "-c", "alembic.ini", "upgrade", "head"],
             cwd=root,
             env=environment,
             capture_output=True,
@@ -73,7 +73,7 @@ def postgres_engine() -> Iterator[Engine]:
             check=False,
         )
         if migration.returncode != 0:
-            pytest.fail(f"fresh PostgreSQL 0005 migration failed:\n{migration.stderr}")
+            pytest.fail(f"fresh PostgreSQL head migration failed:\n{migration.stderr}")
         schema_url = base_url.set(
             query={**dict(base_url.query), "options": f"-csearch_path={schema}"}
         )

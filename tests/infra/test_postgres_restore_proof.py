@@ -4,11 +4,17 @@ import datetime as dt
 import hashlib
 import importlib.util
 import json
+import os
 import sys
 from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
+
+pytestmark = pytest.mark.skipif(
+    os.name != "nt" and os.geteuid() != 0,
+    reason="the root-owned restore boundary is exercised by the root control-plane gate",
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "infra" / "vps-foundation" / "scripts" / "ac-restic-postgres-restore-proof.py"

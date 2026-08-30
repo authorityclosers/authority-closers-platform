@@ -32,6 +32,9 @@ def _deployment_settings(environment: str) -> Settings:
         database_url=(
             "postgresql+psycopg://ac_runtime:deployment-runtime-password@postgres/ac_platform"
         ),
+        database_migrator_url=(
+            "postgresql+psycopg://ac_migrator:deployment-migrator-password@postgres/ac_platform"
+        ),
         session_token_pepper="deployment-session-token-pepper-that-is-long-enough",  # noqa: S106
         oauth_transaction_secret="deployment-oauth-secret-that-is-long-enough",  # noqa: S106
         google_oauth_client_id="123.apps.googleusercontent.com",
