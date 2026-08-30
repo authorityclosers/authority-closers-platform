@@ -219,8 +219,10 @@ restore_failed_transaction() {
         /usr/local/sbin/ac-docker-firewall || rollback_failed=1
         systemctl enable --now \
           ac-docker-firewall.service \
-          ac-docker-firewall.timer \
           ac-foundation-health.timer || rollback_failed=1
+        if [[ -r /etc/systemd/system/ac-docker-firewall.timer ]]; then
+          systemctl enable --now ac-docker-firewall.timer || rollback_failed=1
+        fi
       else
         docker compose \
           --env-file "$release_dir/config/release/foundation-images.env" \
@@ -380,6 +382,9 @@ else
   )
   find "$stage_dir" -type d -exec chmod 0750 {} +
   find "$stage_dir" -type f -exec chmod 0640 {} +
+  chmod 0644 \
+    "$stage_dir/compose/foundation/Caddyfile" \
+    "$stage_dir/compose/foundation/otel-collector.yaml"
   find "$stage_dir/scripts" -type f -exec chmod 0750 {} +
   if [[ "$test_mode" == 0 ]]; then
     chown -R root:acops "$stage_dir"

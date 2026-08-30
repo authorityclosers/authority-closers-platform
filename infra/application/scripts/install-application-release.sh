@@ -205,6 +205,11 @@ else
   )
   find "$stage_dir" -type d -exec chmod 0750 {} +
   find "$stage_dir" -type f -exec chmod 0640 {} +
+  # The non-root PostgreSQL process consumes this bind-mounted bootstrap tree.
+  # It contains no credentials; passwords arrive only through Infisical-backed
+  # environment variables at container start.
+  find "$stage_dir/postgres/init" -type d -exec chmod 0755 {} +
+  find "$stage_dir/postgres/init" -type f -exec chmod 0644 {} +
   find "$stage_dir/scripts" -type f -exec chmod 0750 {} +
   chown -R root:acops "$stage_dir"
   mv -- "$stage_dir" "$release_dir"

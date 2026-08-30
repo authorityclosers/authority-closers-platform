@@ -162,6 +162,8 @@ def test_release_is_built_off_host_and_installed_with_backup_and_rollback() -> N
     assert "ROLLBACK" in INSTALLER
     assert "AC_EXTERNAL_SIDE_EFFECTS_HOLD" in COMPOSE
     assert "/usr/local/sbin/ac-infisical-run" in INSTALLER
+    assert 'find "$stage_dir/postgres/init" -type d -exec chmod 0755' in INSTALLER
+    assert 'find "$stage_dir/postgres/init" -type f -exec chmod 0644' in INSTALLER
     postgres_bootstrap = (APPLICATION / "postgres" / "init" / "001-roles.sh").read_text(
         encoding="utf-8"
     )

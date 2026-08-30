@@ -121,6 +121,8 @@ current="$tmp_dir/root/srv/authority-closers/current"
 [[ "$(readlink -f "$current")" == "$release" ]]
 (cd "$release" && sha256sum --check --strict RELEASE-FILES.sha256 >/dev/null)
 [[ "$(<"$release/RELEASE-COMMIT")" == "$release_sha" ]]
+[[ "$(stat -c '%a' "$release/compose/foundation/Caddyfile")" == 644 ]]
+[[ "$(stat -c '%a' "$release/compose/foundation/otel-collector.yaml")" == 644 ]]
 if grep -q 'UNTRACKED-WORKTREE-MUTATION' "$release/compose/foundation/Caddyfile"; then
   printf 'Release included content outside the exact Git commit.\n' >&2
   exit 1
