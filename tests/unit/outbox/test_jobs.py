@@ -584,6 +584,37 @@ async def test_manual_job_retry_writes_actor_audit_in_the_same_uow() -> None:
     audit.append_for_actor.assert_awaited_once()  # type: ignore[attr-defined]
 
 
+async def test_job_reconciliation_clears_hold_metadata_before_queueing() -> None:
+    session = _session()
+    tenant_id = uuid4()
+    row = _job(status=JobStatus.HELD.value)
+    row.tenant_id = tenant_id
+    session.scalar.return_value = _state(RecoveryStatus.HELD.value)
+    session.scalars.return_value = _Rows([row])
+    audit = AuditRepository(session)
+    audit.append_for_actor = AsyncMock()  # type: ignore[method-assign]
+    actor = ActorContext(
+        person_id=uuid4(),
+        session_id=uuid4(),
+        tenant_id=tenant_id,
+        permissions=frozenset({"recovery_reconcile"}),
+    )
+
+    reconciled = await JobRepository(session).reconcile_held(
+        [row.id],
+        actor=actor,
+        reason="provider state verified",
+        audit=audit,
+        now=datetime(2026, 8, 30, 12, 1, tzinfo=UTC),
+    )
+
+    assert reconciled == [row]
+    assert row.status == JobStatus.QUEUED.value
+    assert row.held_at is None
+    assert row.hold_reason is None
+    audit.append_for_actor.assert_awaited_once()  # type: ignore[attr-defined]
+
+
 async def test_shared_recovery_lock_compiles_to_postgresql_for_share() -> None:
     session = _session()
     session.scalar.return_value = _state()

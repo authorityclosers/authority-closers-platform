@@ -1780,6 +1780,7 @@ class JobRepository:
             hold_reason = row.hold_reason
             row.status = JobStatus.QUEUED.value
             row.held_at = None
+            row.hold_reason = None
             row.leased_until = None
             row.lease_token = None
             row.reconciled_at = current_time
