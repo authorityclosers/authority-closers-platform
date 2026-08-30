@@ -4,6 +4,7 @@ Evidence date: 2026-08-31 (Asia/Kolkata)
 Branch: `codex/g1-free-course-foundation`
 Base commit inspected: `491677803bce05f2eeb224bd8c13e11898756ad0`
 Repository: `authorityclosers/authority-closers-platform` (private)
+Hosted candidate: `39e2c819973038171fac4eb57bab457b9b2bf70b`
 
 ## Outcome
 
@@ -26,6 +27,8 @@ deployment, a healthy PostgreSQL journey, or real email delivery.
 | Admin web tests | 67 passed |
 | Learner web tests | 46 passed after final identity hardening |
 | Python suite | 773 passed, 74 skipped, one dependency deprecation warning on the final worktree |
+| Hosted application CI | PASS — 826 Python tests passed, 21 policy/restore/runtime-role tests skipped; PostgreSQL 18 migration, identity, password journey, tenancy/learning, concurrency, seed, and builds ran on [workflow 33338847056](https://github.com/authorityclosers/authority-closers-platform/actions/runs/33338847056) |
+| Hosted control-plane CI | PASS on [workflow 33338847134](https://github.com/authorityclosers/authority-closers-platform/actions/runs/33338847134) |
 | Production Next builds | PASS — 15 learner routes and 8 admin routes generated |
 | Alembic graph | one head; fresh password-identity migration added with duplicate-email preflight and forward-only downgrade |
 | Desktop browser smoke | PASS at 1280x720 for login; registration, verification, recovery/reset shell, and onboarding exercised against deterministic mocked API responses |
@@ -52,9 +55,8 @@ or opt-in restore tests. They are not counted as runtime proof.
 
 1. Local Docker Desktop cannot start because its stale `dockerInference`
    reparse point crashes the backend; WSL Ubuntu also lacks its `ext4.vhdx`.
-   No PostgreSQL service was available, so the fresh end-to-end identity,
-   migrations, tenant isolation, concurrency, backup, and restore gates were
-   skipped here.
+   Hosted CI supplied PostgreSQL evidence, but this workstation still cannot
+   run the local database journey or Docker restore proof.
 2. `resend` is deliberately rejected by the checked-in provider factory;
    `fake` delivery does not send mail. Verification/recovery is implemented and
    tested at service/API/worker boundaries but has no real delivery evidence.
@@ -67,9 +69,10 @@ or opt-in restore tests. They are not counted as runtime proof.
    production legal approval.
 6. Edge and iOS Safari engine runs were unavailable. Chromium desktop/mobile
    viewport evidence is not cross-browser certification.
-7. CI, authorized non-production security probing, database load/stress,
+7. Authorized non-production security probing, database load/stress,
    deployment, rollback, and runtime observability evidence remain to be run
-   against the exact committed candidate.
+   against the exact committed candidate. Release image packaging was skipped
+   because the pull request remains deliberately draft.
 8. Repository documentation was updated; no authoritative Drive/Notion target
    ID was supplied or inferred, so external publication remains pending.
 
@@ -82,12 +85,12 @@ authorization, or production deployment is claimed.
 
 ## Release sequence
 
-1. Repair or provide a healthy non-production PostgreSQL/Docker environment.
-2. Run all currently skipped PostgreSQL, concurrency, backup/restore, and
-   password-journey tests; fix and rerun.
-3. Resolve controlled seed and learner tenant-provisioning decisions.
-4. Complete the approved email-provider governance gate and runtime proof.
-5. Run Edge and iOS Safari, accessibility automation/manual checks, security
+1. Repair the workstation Docker/WSL state or use an approved isolated
+   non-production host for local operational drills.
+2. Resolve controlled seed and learner tenant-provisioning decisions.
+3. Complete the approved email-provider governance gate and runtime proof.
+4. Run Edge and iOS Safari, accessibility automation/manual checks, security
    probes, database load/stress, failure recovery, and observability checks.
-6. Commit, review, push, let CI pass, deploy the exact immutable artifact to
+5. Complete independent review, take the PR out of draft only when the open
+   gates close, package images, and deploy the exact immutable artifact to
    staging, verify critical journeys and rollback, then update this evidence.
