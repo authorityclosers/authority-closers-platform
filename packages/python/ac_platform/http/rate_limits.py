@@ -31,6 +31,48 @@ class RateLimitRule:
 
 DEFAULT_RATE_LIMIT_RULES = (
     RateLimitRule(
+        name="password-register",
+        method="POST",
+        path=re.compile(r"^/v1/auth/password/register$"),
+        capacity=5,
+        refill_seconds=900,
+    ),
+    RateLimitRule(
+        name="password-login",
+        method="POST",
+        path=re.compile(r"^/v1/auth/password/login$"),
+        capacity=10,
+        refill_seconds=600,
+    ),
+    RateLimitRule(
+        name="password-recovery",
+        method="POST",
+        path=re.compile(r"^/v1/auth/password/recovery$"),
+        capacity=5,
+        refill_seconds=900,
+    ),
+    RateLimitRule(
+        name="password-resend-verification",
+        method="POST",
+        path=re.compile(r"^/v1/auth/password/resend-verification$"),
+        capacity=5,
+        refill_seconds=900,
+    ),
+    RateLimitRule(
+        name="password-verify",
+        method="POST",
+        path=re.compile(r"^/v1/auth/password/verify$"),
+        capacity=20,
+        refill_seconds=600,
+    ),
+    RateLimitRule(
+        name="password-reset",
+        method="POST",
+        path=re.compile(r"^/v1/auth/password/reset$"),
+        capacity=5,
+        refill_seconds=900,
+    ),
+    RateLimitRule(
         name="oauth-start",
         method="GET",
         path=re.compile(r"^/v1/auth/google/start$"),

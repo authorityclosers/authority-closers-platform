@@ -10,7 +10,13 @@ import pytest
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ac_platform.identity.models import Person, PersonStatus
+from ac_platform.identity.models import (
+    EmailChallenge,
+    EmailChallengeKind,
+    Person,
+    PersonStatus,
+)
+from ac_platform.identity.password_auth import encrypt_challenge_token
 from ac_platform.outbox.models import (
     Job,
     JobStatus,
@@ -29,6 +35,10 @@ from ac_platform.worker import (
     ENROLLMENT_WELCOME_EVENT,
     ENROLLMENT_WELCOME_JOB,
     OUTBOX_JOB_ROUTES,
+    PASSWORD_EMAIL_RESET_EVENT,
+    PASSWORD_EMAIL_RESET_JOB,
+    PASSWORD_EMAIL_VERIFICATION_EVENT,
+    PASSWORD_EMAIL_VERIFICATION_JOB,
     AllowlistedDispatcher,
     AmbiguousProviderReceiptError,
     DurableWorker,
@@ -136,11 +146,16 @@ def _receipt(prepared: PreparedDispatch) -> DeliveryReceipt:
 
 
 def _settings(*, hold: bool = False, provider: str = "fake") -> SimpleNamespace:
+    challenge_secret = "worker-password-challenge-secret-that-is-long-enough"  # noqa: S105
     return SimpleNamespace(
         external_side_effects_hold=hold,
         email_provider=provider,
         release_id="test-release",
         environment="test",
+        public_app_url="https://learner.example.test",
+        email_challenge_secret=SimpleNamespace(
+            get_secret_value=lambda: challenge_secret,
+        ),
     )
 
 
@@ -157,13 +172,71 @@ async def test_dispatcher_rejects_job_kinds_outside_the_exact_allowlist() -> Non
 
 
 def test_outbox_route_is_exact_and_contains_no_unsafe_default_email_kind() -> None:
-    assert set(OUTBOX_JOB_ROUTES) == {ENROLLMENT_WELCOME_EVENT}
+    assert set(OUTBOX_JOB_ROUTES) == {
+        ENROLLMENT_WELCOME_EVENT,
+        PASSWORD_EMAIL_VERIFICATION_EVENT,
+        PASSWORD_EMAIL_RESET_EVENT,
+    }
     assert OUTBOX_JOB_ROUTES[ENROLLMENT_WELCOME_EVENT].job_kind == ENROLLMENT_WELCOME_JOB
     assert ENROLLMENT_WELCOME_JOB != "email.send"
     assert OUTBOX_JOB_ROUTES[ENROLLMENT_WELCOME_EVENT].allowed_payload_values["source"] == {
         "free_self",
         "manual_grant",
     }
+    assert OUTBOX_JOB_ROUTES[PASSWORD_EMAIL_VERIFICATION_EVENT].job_kind == (
+        PASSWORD_EMAIL_VERIFICATION_JOB
+    )
+    assert OUTBOX_JOB_ROUTES[PASSWORD_EMAIL_RESET_EVENT].job_kind == PASSWORD_EMAIL_RESET_JOB
+    assert all(route.job_kind != "email.send" for route in OUTBOX_JOB_ROUTES.values())
+
+
+async def test_password_email_link_uses_fragment_and_never_exposes_token_in_request_target() -> (
+    None
+):
+    settings = _settings()
+    person = Person(
+        id=uuid4(),
+        email="learner@example.test",
+        first_name="Learner",
+        display_name="Learner",
+        status=PersonStatus.ACTIVE.value,
+    )
+    token = "v" * 43
+    challenge = EmailChallenge(
+        id=uuid4(),
+        person_id=person.id,
+        kind=EmailChallengeKind.VERIFICATION.value,
+        token_hash=b"x" * 32,
+        encrypted_token=encrypt_challenge_token(
+            settings.email_challenge_secret.get_secret_value(),
+            token,
+            kind=EmailChallengeKind.VERIFICATION,
+            person_id=person.id,
+        ),
+        issued_at=datetime(2026, 8, 30, 12, tzinfo=UTC),
+        expires_at=datetime(2026, 8, 31, 12, tzinfo=UTC),
+    )
+    job = _job(PASSWORD_EMAIL_VERIFICATION_JOB)
+    job.payload = {
+        "challenge_id": str(challenge.id),
+        "kind": EmailChallengeKind.VERIFICATION.value,
+    }
+    session = AsyncMock(spec=AsyncSession)
+    session.scalar.side_effect = [challenge, person]
+    worker = DurableWorker(_factory(session), settings=settings)
+
+    message = await worker._resolve_message(
+        session,
+        job,
+        provider_key="identity-email:test",
+    )
+
+    assert message.variables["action_link"] == (
+        f"https://learner.example.test/verify-email#token={token}"
+    )
+    assert "?token=" not in str(message.variables["action_link"])
+    challenge_query = session.scalar.await_args_list[0].args[0]
+    assert "email_challenges.expires_at > now()" in str(challenge_query)
 
 
 @pytest.mark.parametrize(
@@ -442,7 +515,13 @@ async def test_lost_post_provider_ack_keeps_the_durable_receipt_and_continues() 
 
 def test_default_worker_provider_is_fake_and_resend_is_rejected() -> None:
     worker = DurableWorker(lambda: _AsyncContext(Mock()), settings=_settings())
-    assert worker.allowed_job_kinds == frozenset({ENROLLMENT_WELCOME_JOB})
+    assert worker.allowed_job_kinds == frozenset(
+        {
+            ENROLLMENT_WELCOME_JOB,
+            PASSWORD_EMAIL_VERIFICATION_JOB,
+            PASSWORD_EMAIL_RESET_JOB,
+        }
+    )
     with pytest.raises(PermanentProviderError, match="not implemented"):
         DurableWorker(lambda: _AsyncContext(Mock()), settings=_settings(provider="resend"))
 

@@ -8,6 +8,9 @@ Production configuration is injected from Infisical at process start. Git contai
 | `AC_RELEASE_ID`                  | release           |                    yes | immutable Git-derived release identity                  |
 | `AC_DATABASE_URL`                | runtime identity  |                    yes | least-privilege application connection                  |
 | `AC_DATABASE_MIGRATOR_URL`       | deploy identity   |            deploy only | schema migration connection                             |
+| `AC_SESSION_TOKEN_PEPPER`        | identity security |                    yes | opaque session lookup hashing                           |
+| `AC_OAUTH_TRANSACTION_SECRET`    | identity security |                    yes | browser OAuth transaction authentication                |
+| `AC_EMAIL_CHALLENGE_SECRET`      | identity security |                    yes | email challenge lookup/encryption key material          |
 | `AC_GOOGLE_OAUTH_CLIENT_ID`      | identity provider |                    yes | Google web OAuth client identifier                      |
 | `AC_GOOGLE_OAUTH_CLIENT_SECRET`  | identity provider |                    yes | Google web OAuth client secret                          |
 | `AC_EXTERNAL_SIDE_EFFECTS_HOLD`  | recovery operator |                    yes | blocks provider effects after restore                   |
@@ -49,7 +52,10 @@ with `Secure`, `HttpOnly`, `SameSite=Lax`, `Path=/`, and no `Domain`, and reject
 missing, malformed, or duplicate raw security-cookie fields before identity or
 OAuth callback resolution.
 
-Secrets such as database passwords, OAuth credentials, signing keys, provider tokens, and R2 credentials are intentionally absent. No client-exposed variable may contain a secret.
+The three identity secrets must be mutually independent, non-default values of
+at least 32 bytes. Secrets such as database passwords, OAuth credentials,
+signing keys, provider tokens, and R2 credentials are intentionally absent. No
+client-exposed variable may contain a secret.
 
 The Google OAuth client ID and secret are mandatory for activated staging and
 production. Test and development may omit the pair, but supplying either value

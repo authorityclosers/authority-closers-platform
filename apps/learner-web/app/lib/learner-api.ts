@@ -1,5 +1,61 @@
 export type JsonRecord = Record<string, unknown>;
 
+export interface PasswordRegistrationInput {
+  firstName: string;
+  email: string;
+  whatsappNumber: string;
+  password: string;
+  consent: true;
+}
+
+export interface PasswordRegistrationResponse {
+  status: "verification_required";
+}
+
+export interface PasswordSessionResponse {
+  authenticated: true;
+  person_id: string;
+  email: string;
+  display_name: string | null;
+}
+
+export interface PasswordRecoveryResponse {
+  accepted: true;
+}
+
+export interface PasswordResetResponse {
+  reset: true;
+}
+
+export type OnboardingStatus =
+  | "not_started"
+  | "in_progress"
+  | "completed"
+  | "skipped";
+
+export interface OnboardingResponse {
+  person_id: string;
+  experience_context: string | null;
+  learning_goal: string | null;
+  practice_situation: string | null;
+  weekly_minutes: number | null;
+  status: OnboardingStatus;
+  current_step: number;
+  revision: number;
+  updated_at: string;
+  next_action_href: string;
+  next_action_reason: string;
+}
+
+export interface OnboardingSaveInput {
+  experienceContext: string | null;
+  learningGoal: string | null;
+  practiceSituation: string | null;
+  weeklyMinutes: number | null;
+  status: Exclude<OnboardingStatus, "not_started">;
+  currentStep: number;
+}
+
 export interface MeResponse {
   person_id: string;
   email: string;
@@ -274,6 +330,55 @@ export function createLearnerApi(
 
   return {
     request,
+    registerPassword: (input: PasswordRegistrationInput) =>
+      jsonMutation<PasswordRegistrationResponse>("/v1/auth/password/register", {
+        first_name: input.firstName,
+        email: input.email,
+        whatsapp_number: input.whatsappNumber,
+        password: input.password,
+        consent: input.consent,
+      }),
+    loginPassword: (email: string, password: string) =>
+      jsonMutation<PasswordSessionResponse>("/v1/auth/password/login", {
+        email,
+        password,
+      }),
+    requestPasswordRecovery: (email: string) =>
+      jsonMutation<PasswordRecoveryResponse>("/v1/auth/password/recovery", {
+        email,
+      }),
+    resendPasswordVerification: (email: string) =>
+      jsonMutation<PasswordRecoveryResponse>(
+        "/v1/auth/password/resend-verification",
+        { email },
+      ),
+    verifyPasswordEmail: (token: string) =>
+      jsonMutation<PasswordSessionResponse>("/v1/auth/password/verify", {
+        token,
+      }),
+    resetPassword: (token: string, newPassword: string) =>
+      jsonMutation<PasswordResetResponse>("/v1/auth/password/reset", {
+        token,
+        new_password: newPassword,
+      }),
+    onboarding: () =>
+      request<OnboardingResponse>("/v1/onboarding", { cache: "no-store" }),
+    saveOnboarding: (input: OnboardingSaveInput, expectedRevision: number) =>
+      jsonMutation<OnboardingResponse>(
+        "/v1/onboarding",
+        {
+          experience_context: input.experienceContext,
+          learning_goal: input.learningGoal,
+          practice_situation: input.practiceSituation,
+          weekly_minutes: input.weeklyMinutes,
+          status: input.status,
+          current_step: input.currentStep,
+        },
+        {
+          "If-Match": `"onboarding-revision-${expectedRevision}"`,
+        },
+        "PUT",
+      ),
     me: () => request<MeResponse>("/v1/me", { cache: "no-store" }),
     context: () =>
       request<ContextResponse>("/v1/context", { cache: "no-store" }),

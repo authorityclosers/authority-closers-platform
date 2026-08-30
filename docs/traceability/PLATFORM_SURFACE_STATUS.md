@@ -1,8 +1,8 @@
 # Authority Closers platform surface status register
 
-Status date: 2026-08-30 (Asia/Kolkata)
+Status date: 2026-08-31 (Asia/Kolkata)
 Repository branch: `codex/g1-free-course-foundation`
-Current recorded application release: `d8980d839a8f30e9ccde83ccdb380dd440b1fb1b`
+Current observed staging application release: `89be92d510d181574743200476731b7cc333d68c`
 
 This is the canonical code-facing register of platform hostnames and major
 routes. It is an implementation/status register, not a replacement for the
@@ -11,6 +11,11 @@ defined in [`CONTROLLED_SOURCE_REGISTER.md`](CONTROLLED_SOURCE_REGISTER.md).
 Only repository documentation, current checked-in code, and current checked-in
 route/configuration definitions are used here. No secret, token, or credential
 is recorded.
+
+The newer uncommitted v0.1 candidate is summarized in
+[`V0_1_ALPHA_HANDOFF.md`](../evidence/V0_1_ALPHA_HANDOFF.md). The live rows below
+describe the observed older staging release unless a row explicitly says
+candidate. Passing local tests does not change a deployed status.
 
 ## Status vocabulary
 
@@ -58,6 +63,16 @@ staging `LIVE_PREVIEW`; production has the same route shape only as
 `CONFIGURED_NOT_DEPLOYED`. The UI currently renders static/demo data and
 explicitly avoids account, enrollment, progress, evidence, email, and
 certificate mutations.
+
+### Uncommitted v0.1 candidate delta
+
+The candidate adds connected email/password registration, login, verification
+and resend, recovery/reset, optimistic onboarding, API-backed catalog,
+enrollment, learner projection, draft/evidence, and certificate adapters plus
+an offline-safe PWA shell. These remain `CONFIGURED_NOT_DEPLOYED`; real email,
+approved seed data, learner tenant provisioning, PostgreSQL runtime evidence,
+and exact-release staging deployment are still required. See the route/screen
+contract and handoff for the precise boundary.
 
 | Route | Status on staging | Owner | Backing implementation | Data source | Auth boundary | Current evidence | Next activation gate |
 |---|---|---|---|---|---|---|---|

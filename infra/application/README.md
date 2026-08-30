@@ -42,9 +42,11 @@ only valid release ID is the full reviewed Git commit from a verified archive.
   `TRIGGER` privilege. Splitting module-specific credentials is deferred until
   module processes and transaction ownership are split; claiming row-level
   actor isolation from the shared runtime credential would be false.
-- Session tokens are stored only as peppered digests; the token pepper and the
-  independent OAuth-transaction signing secret are required Infisical values
-  and never enter an image, repository, URL, log, or browser-readable cookie.
+- Session tokens are stored only as peppered digests. The token pepper, OAuth
+  transaction secret, and email-challenge secret are three independent
+  required Infisical values and never enter an image, repository, URL, log, or
+  browser-readable cookie. Email challenge lookup uses a keyed hash; the
+  delivery token is encrypted only for the durable post-commit worker.
 - Activated staging and production use exactly `__Host-ac_session` and
   `__Host-ac_oauth_transaction`. Both are `Secure`, `HttpOnly`, `SameSite=Lax`,
   scoped to `Path=/`, and carry no `Domain` attribute. The API reads raw Cookie

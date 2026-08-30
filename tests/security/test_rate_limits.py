@@ -9,11 +9,29 @@ from fastapi.responses import PlainTextResponse
 from httpx import ASGITransport, AsyncClient
 
 from ac_platform.http.rate_limits import (
+    DEFAULT_RATE_LIMIT_RULES,
     InMemoryTokenBucketLimiter,
     RateLimitMiddleware,
     RateLimitRule,
     client_identity,
 )
+
+
+def test_default_identity_rate_limits_cover_every_public_password_command() -> None:
+    covered = {
+        (rule.method, rule.path.pattern)
+        for rule in DEFAULT_RATE_LIMIT_RULES
+        if rule.name.startswith("password-")
+    }
+
+    assert covered == {
+        ("POST", r"^/v1/auth/password/register$"),
+        ("POST", r"^/v1/auth/password/login$"),
+        ("POST", r"^/v1/auth/password/recovery$"),
+        ("POST", r"^/v1/auth/password/resend-verification$"),
+        ("POST", r"^/v1/auth/password/verify$"),
+        ("POST", r"^/v1/auth/password/reset$"),
+    }
 
 
 def _rule() -> RateLimitRule:

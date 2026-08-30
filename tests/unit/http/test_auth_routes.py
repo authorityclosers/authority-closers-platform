@@ -172,6 +172,7 @@ def _staging_settings() -> Settings:
         ),
         session_token_pepper="staging-session-token-pepper-that-is-long-enough",  # noqa: S106
         oauth_transaction_secret="staging-oauth-transaction-secret-that-is-long-enough",  # noqa: S106
+        email_challenge_secret="staging-email-challenge-secret-that-is-long-enough",  # noqa: S106
         google_oauth_client_id="123.apps.googleusercontent.com",
         google_oauth_client_secret="test-google-client-secret",  # noqa: S106
         public_app_url="https://staging.authorityclosers.com",
@@ -218,6 +219,43 @@ def _request_with_raw_cookie_headers(*cookie_headers: str) -> Request:
             "server": ("api.staging.ac.internal.invalid", 8000),
             "client": ("127.0.0.1", 1),
         }
+    )
+
+
+def test_password_registration_is_fail_closed_without_reviewed_consent_version() -> None:
+    response = _client().post(
+        "/v1/auth/password/register",
+        headers={"Origin": "https://app.authorityclosers.test"},
+        json={
+            "first_name": "Learner",
+            "email": "learner@example.com",
+            "whatsapp_number": "+12025550123",
+            "password": "a sufficiently long password",
+            "consent": True,
+        },
+    )
+
+    assert response.status_code == 503
+    assert response.json()["code"] == "password_registration_unavailable"
+
+
+def test_password_auth_contract_uses_json_body_for_one_time_tokens() -> None:
+    schema = _client().get("/openapi.json").json()
+    paths = schema["paths"]
+
+    assert {
+        "/v1/auth/password/register",
+        "/v1/auth/password/login",
+        "/v1/auth/password/recovery",
+        "/v1/auth/password/resend-verification",
+        "/v1/auth/password/verify",
+        "/v1/auth/password/reset",
+    } <= set(paths)
+    assert {"/v1/onboarding"} <= set(paths)
+    verification = paths["/v1/auth/password/verify"]["post"]
+    assert "requestBody" in verification
+    assert not any(
+        parameter.get("name") == "token" for parameter in verification.get("parameters", [])
     )
 
 

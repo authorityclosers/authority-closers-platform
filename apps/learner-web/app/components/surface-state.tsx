@@ -121,7 +121,7 @@ export function SurfaceStatePanel({
       >
         <span className="state-line__dot" aria-hidden="true" />
         <span>Default view</span>
-        <span className="state-line__detail">Preview surface ready</span>
+        <span className="state-line__detail">Surface ready</span>
       </div>
     );
   }

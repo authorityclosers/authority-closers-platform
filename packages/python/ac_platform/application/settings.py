@@ -64,10 +64,14 @@ class Settings(BaseSettings):
     oauth_transaction_secret: SecretStr = SecretStr(
         "local-oauth-transaction-secret-change-before-production"
     )
+    email_challenge_secret: SecretStr = SecretStr(
+        "local-email-challenge-secret-change-before-production"
+    )
     session_cookie_name: str = "ac_session"
     oauth_transaction_cookie_name: str = "ac_oauth_transaction"
     google_oauth_client_id: str | None = None
     google_oauth_client_secret: SecretStr | None = None
+    learner_consent_version: str | None = None
     trusted_proxy_addresses: str = ""
 
     @model_validator(mode="before")
@@ -98,6 +102,7 @@ class Settings(BaseSettings):
             return self
         session_pepper = self.session_token_pepper.get_secret_value()
         transaction_secret = self.oauth_transaction_secret.get_secret_value()
+        challenge_secret = self.email_challenge_secret.get_secret_value()
         if len(session_pepper.encode("utf-8")) < 32 or session_pepper.startswith("local-"):
             raise ValueError(
                 "AC_SESSION_TOKEN_PEPPER must be a non-default value of at least 32 bytes"
@@ -106,7 +111,11 @@ class Settings(BaseSettings):
             raise ValueError(
                 "AC_OAUTH_TRANSACTION_SECRET must be a non-default value of at least 32 bytes"
             )
-        if session_pepper == transaction_secret:
+        if len(challenge_secret.encode("utf-8")) < 32 or challenge_secret.startswith("local-"):
+            raise ValueError(
+                "AC_EMAIL_CHALLENGE_SECRET must be a non-default value of at least 32 bytes"
+            )
+        if len({session_pepper, transaction_secret, challenge_secret}) != 3:
             raise ValueError("deployment identity secrets must be independent")
         if re.fullmatch(r"[0-9a-f]{40}", self.release_id) is None:
             raise ValueError("AC_RELEASE_ID must be the full lowercase Git commit SHA")

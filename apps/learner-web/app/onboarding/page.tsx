@@ -2,7 +2,6 @@ import { ArrowLeft, Compass } from "lucide-react";
 import Link from "next/link";
 
 import { OnboardingForm } from "../components/onboarding-form";
-import { PreviewNotice } from "../components/preview-notice";
 import { PublicShell } from "../components/site-shell";
 import { SurfaceStatePanel } from "../components/surface-state";
 import { ROUTES } from "../lib/routes";
@@ -43,9 +42,9 @@ export default async function OnboardingPage({
               <em>rep yours.</em>
             </h1>
             <p>
-              This route shows the intended profile fields without collecting or
-              applying personal data. The controls remain disabled until
-              authenticated profile persistence is connected.
+              Save a small amount of context, leave optional details blank, or
+              skip and resume later. Your answers never become an automated
+              score.
             </p>
             <div className="onboarding-signal">
               <Compass size={20} aria-hidden="true" />
@@ -56,7 +55,7 @@ export default async function OnboardingPage({
           </section>
           <section
             className="onboarding-panel"
-            aria-label="Preview onboarding form"
+            aria-label="Learner onboarding form"
           >
             <SurfaceStatePanel
               state={state}
@@ -64,12 +63,7 @@ export default async function OnboardingPage({
               backHref={ROUTES.home}
               pageHeadingPresent
             />
-            {isContentVisible(state) ? (
-              <>
-                <PreviewNotice />
-                <OnboardingForm />
-              </>
-            ) : null}
+            {isContentVisible(state) ? <OnboardingForm /> : null}
           </section>
         </div>
       </main>

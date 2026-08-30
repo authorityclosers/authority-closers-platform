@@ -37,6 +37,7 @@ def _deployment_settings(environment: str) -> Settings:
         ),
         session_token_pepper="deployment-session-token-pepper-that-is-long-enough",  # noqa: S106
         oauth_transaction_secret="deployment-oauth-secret-that-is-long-enough",  # noqa: S106
+        email_challenge_secret="deployment-email-challenge-secret-that-is-long-enough",  # noqa: S106
         google_oauth_client_id="123.apps.googleusercontent.com",
         google_oauth_client_secret="test-google-client-secret",  # noqa: S106
         trusted_proxy_addresses="172.18.0.2",

@@ -10,7 +10,7 @@ from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, FastAPI, Query, Request, Response, status
+from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request, Response, status
 from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -26,6 +26,23 @@ from ac_platform.http.auth_transactions import (
 from ac_platform.http.identity_provider import DisabledIdentityProvider, OAuthIdentityProvider
 from ac_platform.http.problem import problem_response
 from ac_platform.identity.application import AsyncIdentityApplication, ResolvedActorContext
+from ac_platform.identity.onboarding import (
+    LearnerOnboardingService,
+    OnboardingConcurrencyError,
+    OnboardingNotFound,
+    OnboardingSnapshot,
+    OnboardingValidationError,
+)
+from ac_platform.identity.password_auth import (
+    PASSWORD_EMAIL_RESET_EVENT,
+    PASSWORD_EMAIL_VERIFICATION_EVENT,
+    EmailVerificationRequired,
+    InvalidEmailChallenge,
+    InvalidPasswordCredentials,
+    PasswordAuthError,
+    PasswordIdentityService,
+    PasswordPolicyError,
+)
 from ac_platform.identity.services import AuthorizationDenied as IdentityAuthorizationDenied
 from ac_platform.identity.services import (
     IdentityConcurrencyError,
@@ -38,6 +55,8 @@ from ac_platform.identity.services import (
 )
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.kernel.errors import DomainError, ResourceNotFound
+from ac_platform.kernel.events import EventCategory, EventEnvelope
+from ac_platform.outbox.repository import OutboxRepository
 
 SESSION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60
 SESSION_COOKIE_VALUE_PATTERN = re.compile(r"[A-Za-z0-9_-]{43,512}\Z")
@@ -163,6 +182,174 @@ class SessionResponse(BaseModel):
     revocation_reason: str | None
     selected_tenant_id: UUID | None
     revision: int
+
+
+class PasswordRegistrationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    first_name: str = Field(min_length=1, max_length=120)
+    email: str = Field(min_length=3, max_length=320)
+    whatsapp_number: str = Field(min_length=7, max_length=32)
+    password: str = Field(min_length=12, max_length=256)
+    consent: Literal[True]
+
+
+class PasswordLoginRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: str = Field(min_length=3, max_length=320)
+    password: str = Field(min_length=1, max_length=256)
+
+
+class PasswordRecoveryRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: str = Field(min_length=3, max_length=320)
+
+
+class PasswordResetRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    token: str = Field(min_length=40, max_length=512)
+    new_password: str = Field(min_length=12, max_length=256)
+
+
+class PasswordVerifyRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    token: str = Field(min_length=40, max_length=512)
+
+
+class PasswordRegistrationResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["verification_required"]
+
+
+class PasswordSessionResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    authenticated: Literal[True]
+    person_id: UUID
+    email: str
+    display_name: str | None
+
+
+class PasswordRecoveryResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    accepted: Literal[True]
+
+
+class PasswordResetResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reset: Literal[True]
+
+
+class OnboardingSaveRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    experience_context: str | None = Field(default=None, max_length=64)
+    learning_goal: str | None = Field(default=None, max_length=240)
+    practice_situation: str | None = Field(default=None, max_length=500)
+    weekly_minutes: int | None = Field(default=None, ge=15, le=1200)
+    status: Literal["in_progress", "completed", "skipped"]
+    current_step: int = Field(ge=1, le=3)
+
+
+class OnboardingResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    person_id: UUID
+    experience_context: str | None
+    learning_goal: str | None
+    practice_situation: str | None
+    weekly_minutes: int | None
+    status: str
+    current_step: int
+    revision: int
+    updated_at: datetime
+    next_action_href: str
+    next_action_reason: str
+
+
+class PasswordRequestInvalid(DomainError):
+    code = "password_request_invalid"
+    title = "The password request is invalid"
+    status = 422
+
+
+class PasswordRegistrationUnavailable(DomainError):
+    code = "password_registration_unavailable"
+    title = "Password registration is not available"
+    status = 503
+
+
+class PasswordCredentialsRejected(DomainError):
+    code = "password_credentials_rejected"
+    title = "The email or password is not valid"
+    status = 401
+
+
+class PasswordEmailVerificationRequired(DomainError):
+    code = "email_verification_required"
+    title = "Email verification is required"
+    status = 403
+
+
+class PasswordChallengeRejected(DomainError):
+    code = "email_challenge_rejected"
+    title = "The email link is no longer valid"
+    status = 400
+
+
+class OnboardingRequestInvalid(DomainError):
+    code = "onboarding_request_invalid"
+    title = "The onboarding profile is invalid"
+    status = 422
+
+
+class OnboardingChanged(DomainError):
+    code = "onboarding_changed"
+    title = "The onboarding profile changed"
+    status = 409
+
+
+class OnboardingProfileUnavailable(DomainError):
+    code = "onboarding_profile_unavailable"
+    title = "The onboarding profile is unavailable"
+    status = 404
+
+
+_ONBOARDING_ETAG_PATTERN = re.compile(r'^"onboarding-revision-(?P<revision>0|[1-9][0-9]*)"$')
+
+
+def _onboarding_revision(if_match: str | None) -> int:
+    if if_match is None:
+        raise OnboardingRequestInvalid("Onboarding updates require If-Match.")
+    match = _ONBOARDING_ETAG_PATTERN.fullmatch(if_match.strip())
+    if match is None:
+        raise OnboardingRequestInvalid(
+            'If-Match must use the canonical "onboarding-revision-N" format.'
+        )
+    return int(match.group("revision"))
+
+
+def _onboarding_response(snapshot: OnboardingSnapshot) -> OnboardingResponse:
+    return OnboardingResponse(
+        person_id=snapshot.person_id,
+        experience_context=snapshot.experience_context,
+        learning_goal=snapshot.learning_goal,
+        practice_situation=snapshot.practice_situation,
+        weekly_minutes=snapshot.weekly_minutes,
+        status=snapshot.status,
+        current_step=snapshot.current_step,
+        revision=snapshot.revision,
+        updated_at=snapshot.updated_at,
+        next_action_href=snapshot.next_action_href,
+        next_action_reason=snapshot.next_action_reason,
+    )
 
 
 def _with_role_permissions(resolved: ResolvedActorContext) -> ResolvedActorContext:
@@ -415,6 +602,7 @@ def install_identity_http(
     identity_provider = provider or DisabledIdentityProvider()
     codec = AuthTransactionCodec(settings.oauth_transaction_secret.get_secret_value())
     token_pepper = settings.session_token_pepper.get_secret_value()
+    challenge_secret = settings.email_challenge_secret.get_secret_value()
     router = APIRouter(prefix="/v1", tags=["identity"])
     application.add_exception_handler(IdentityServiceError, identity_error_handler)  # type: ignore[arg-type]
 
@@ -433,6 +621,249 @@ def install_identity_http(
             )
 
     actor_dependency = Depends(require_actor)
+
+    async def enqueue_password_email(
+        database: AsyncSession,
+        *,
+        challenge_id: UUID,
+        person_id: UUID,
+        kind: str,
+    ) -> None:
+        event_name = {
+            "email_verification": PASSWORD_EMAIL_VERIFICATION_EVENT,
+            "password_reset": PASSWORD_EMAIL_RESET_EVENT,
+        }.get(kind)
+        if event_name is None:
+            raise PasswordRequestInvalid("unsupported email challenge kind")
+        await OutboxRepository(database).enqueue(
+            EventEnvelope(
+                name=event_name,
+                category=EventCategory.OPERATIONAL,
+                aggregate_type="person",
+                aggregate_id=person_id,
+                tenant_id=None,
+                payload={"challenge_id": str(challenge_id), "kind": kind},
+            ),
+            dedupe_key=f"identity-email:{kind}:{challenge_id}",
+        )
+
+    @router.post(
+        "/auth/password/register",
+        response_model=PasswordRegistrationResponse,
+        status_code=status.HTTP_202_ACCEPTED,
+    )
+    async def register_password(
+        request: Request,
+        response: Response,
+        body: PasswordRegistrationRequest,
+    ) -> PasswordRegistrationResponse:
+        require_safe_origin(request, settings)
+        consent_version = (settings.learner_consent_version or "").strip()
+        if not consent_version:
+            raise PasswordRegistrationUnavailable(
+                "A reviewed learner consent version is not configured for this environment."
+            )
+        try:
+            async with sessions() as database, database.begin():
+                registration = await PasswordIdentityService(
+                    database, token_secret=challenge_secret
+                ).register(
+                    email=body.email,
+                    first_name=body.first_name,
+                    whatsapp_number=body.whatsapp_number,
+                    password=body.password,
+                    consent_version=consent_version,
+                )
+                if registration.created and registration.challenge is not None:
+                    await enqueue_password_email(
+                        database,
+                        challenge_id=registration.challenge.challenge_id,
+                        person_id=registration.challenge.person_id,
+                        kind=registration.challenge.kind.value,
+                    )
+        except (PasswordAuthError, ValueError) as error:
+            raise PasswordRequestInvalid(str(error)) from error
+        # Deliberately identical for new and existing addresses.
+        response.headers["cache-control"] = "no-store"
+        return PasswordRegistrationResponse(status="verification_required")
+
+    @router.post("/auth/password/login", response_model=PasswordSessionResponse)
+    async def login_password(
+        request: Request,
+        response: Response,
+        body: PasswordLoginRequest,
+    ) -> PasswordSessionResponse:
+        require_safe_origin(request, settings)
+        try:
+            async with sessions() as database, database.begin():
+                person = await PasswordIdentityService(
+                    database, token_secret=challenge_secret
+                ).authenticate(email=body.email, password=body.password)
+                issued = await AsyncIdentityApplication(
+                    database, token_pepper=token_pepper
+                ).issue_authenticated_session(
+                    person.id,
+                    user_agent=request.headers.get("user-agent"),
+                    ip_address=request.client.host if request.client else None,
+                )
+        except EmailVerificationRequired as error:
+            raise PasswordEmailVerificationRequired(str(error)) from error
+        except (InvalidPasswordCredentials, ValueError) as error:
+            raise PasswordCredentialsRejected("email or password is not valid") from error
+        _set_session_cookie(response, issued.token, settings)
+        response.headers["cache-control"] = "no-store"
+        return PasswordSessionResponse(
+            authenticated=True,
+            person_id=person.id,
+            email=person.email or "",
+            display_name=person.display_name,
+        )
+
+    @router.post("/auth/password/recovery", response_model=PasswordRecoveryResponse)
+    async def recover_password(
+        request: Request,
+        response: Response,
+        body: PasswordRecoveryRequest,
+    ) -> PasswordRecoveryResponse:
+        require_safe_origin(request, settings)
+        try:
+            async with sessions() as database, database.begin():
+                challenge = await PasswordIdentityService(
+                    database, token_secret=challenge_secret
+                ).begin_reset(email=body.email)
+                if challenge is not None:
+                    await enqueue_password_email(
+                        database,
+                        challenge_id=challenge.challenge_id,
+                        person_id=challenge.person_id,
+                        kind=challenge.kind.value,
+                    )
+        except (PasswordAuthError, ValueError):
+            pass
+        response.headers["cache-control"] = "no-store"
+        return PasswordRecoveryResponse(accepted=True)
+
+    @router.post(
+        "/auth/password/resend-verification",
+        response_model=PasswordRecoveryResponse,
+    )
+    async def resend_password_verification(
+        request: Request,
+        response: Response,
+        body: PasswordRecoveryRequest,
+    ) -> PasswordRecoveryResponse:
+        require_safe_origin(request, settings)
+        try:
+            async with sessions() as database, database.begin():
+                challenge = await PasswordIdentityService(
+                    database, token_secret=challenge_secret
+                ).begin_verification(email=body.email)
+                if challenge is not None:
+                    await enqueue_password_email(
+                        database,
+                        challenge_id=challenge.challenge_id,
+                        person_id=challenge.person_id,
+                        kind=challenge.kind.value,
+                    )
+        except (PasswordAuthError, ValueError):
+            pass
+        response.headers["cache-control"] = "no-store"
+        return PasswordRecoveryResponse(accepted=True)
+
+    @router.post("/auth/password/verify", response_model=PasswordSessionResponse)
+    async def verify_password_email(
+        request: Request,
+        response: Response,
+        body: PasswordVerifyRequest,
+    ) -> PasswordSessionResponse:
+        require_safe_origin(request, settings)
+        try:
+            async with sessions() as database, database.begin():
+                person = await PasswordIdentityService(
+                    database, token_secret=challenge_secret
+                ).consume_verification(body.token)
+                issued = await AsyncIdentityApplication(
+                    database, token_pepper=token_pepper
+                ).issue_authenticated_session(
+                    person.id,
+                    user_agent=request.headers.get("user-agent"),
+                    ip_address=request.client.host if request.client else None,
+                )
+        except (InvalidEmailChallenge, ValueError) as error:
+            raise PasswordChallengeRejected(str(error)) from error
+        _set_session_cookie(response, issued.token, settings)
+        response.headers["cache-control"] = "no-store"
+        return PasswordSessionResponse(
+            authenticated=True,
+            person_id=person.id,
+            email=person.email or "",
+            display_name=person.display_name,
+        )
+
+    @router.post("/auth/password/reset", response_model=PasswordResetResponse)
+    async def reset_password(
+        request: Request,
+        response: Response,
+        body: PasswordResetRequest,
+    ) -> PasswordResetResponse:
+        require_safe_origin(request, settings)
+        try:
+            async with sessions() as database, database.begin():
+                await PasswordIdentityService(
+                    database, token_secret=challenge_secret
+                ).consume_reset(body.token, body.new_password)
+        except PasswordPolicyError as error:
+            raise PasswordRequestInvalid(str(error)) from error
+        except (InvalidEmailChallenge, ValueError) as error:
+            raise PasswordChallengeRejected(str(error)) from error
+        response.headers["cache-control"] = "no-store"
+        return PasswordResetResponse(reset=True)
+
+    @router.get("/onboarding", response_model=OnboardingResponse)
+    async def get_onboarding(
+        response: Response,
+        auth: AuthenticatedTransaction = actor_dependency,
+    ) -> OnboardingResponse:
+        try:
+            snapshot = await LearnerOnboardingService(auth.database).get(
+                auth.resolved.actor.person_id
+            )
+        except OnboardingNotFound as error:
+            raise OnboardingProfileUnavailable(str(error)) from error
+        response.headers["etag"] = f'"onboarding-revision-{snapshot.revision}"'
+        response.headers["cache-control"] = "private, no-store"
+        return _onboarding_response(snapshot)
+
+    @router.put("/onboarding", response_model=OnboardingResponse)
+    async def save_onboarding(
+        request: Request,
+        response: Response,
+        body: OnboardingSaveRequest,
+        if_match: Annotated[str | None, Header(alias="If-Match", max_length=96)] = None,
+        auth: AuthenticatedTransaction = actor_dependency,
+    ) -> OnboardingResponse:
+        require_safe_origin(request, settings)
+        expected_revision = _onboarding_revision(if_match)
+        try:
+            snapshot = await LearnerOnboardingService(auth.database).save(
+                auth.resolved.actor.person_id,
+                expected_revision=expected_revision,
+                experience_context=body.experience_context,
+                learning_goal=body.learning_goal,
+                practice_situation=body.practice_situation,
+                weekly_minutes=body.weekly_minutes,
+                status=body.status,
+                current_step=body.current_step,
+            )
+        except OnboardingConcurrencyError as error:
+            raise OnboardingChanged(str(error)) from error
+        except OnboardingValidationError as error:
+            raise OnboardingRequestInvalid(str(error)) from error
+        except OnboardingNotFound as error:
+            raise OnboardingProfileUnavailable(str(error)) from error
+        response.headers["etag"] = f'"onboarding-revision-{snapshot.revision}"'
+        response.headers["cache-control"] = "private, no-store"
+        return _onboarding_response(snapshot)
 
     @router.get("/auth/google/start", name="google_auth_start")
     async def google_auth_start(
@@ -620,6 +1051,14 @@ __all__ = [
     "AuthenticationRequired",
     "ContextResponse",
     "MeResponse",
+    "PasswordChallengeRejected",
+    "PasswordCredentialsRejected",
+    "PasswordEmailVerificationRequired",
+    "PasswordRecoveryResponse",
+    "PasswordRegistrationResponse",
+    "PasswordRequestInvalid",
+    "PasswordResetResponse",
+    "PasswordSessionResponse",
     "RequestOriginDenied",
     "RequireActor",
     "install_identity_http",

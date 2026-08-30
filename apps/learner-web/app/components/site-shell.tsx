@@ -54,7 +54,7 @@ export function PublicShell({
       <footer className="site-footer">
         <div className="site-footer__inner">
           <BrandLink />
-          <p>Preview surface · learning primitives for deliberate practice.</p>
+          <p>v0.1 alpha · browser-first learning foundation.</p>
           <nav className="site-footer__links" aria-label="Legal and access">
             <Link href={ROUTES.privacy}>Privacy</Link>
             <Link href={ROUTES.terms}>Terms</Link>

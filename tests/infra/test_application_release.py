@@ -78,6 +78,7 @@ def test_release_fails_closed_on_identity_and_database_secrets() -> None:
         "AC_DATABASE_MIGRATOR_URL:?",
         "AC_SESSION_TOKEN_PEPPER:?",
         "AC_OAUTH_TRANSACTION_SECRET:?",
+        "AC_EMAIL_CHALLENGE_SECRET:?",
         "AC_GOOGLE_OAUTH_CLIENT_ID:?",
         "AC_GOOGLE_OAUTH_CLIENT_SECRET:?",
         "AC_POSTGRES_OWNER_PASSWORD:?",
@@ -99,6 +100,7 @@ def test_release_fails_closed_on_identity_and_database_secrets() -> None:
     assert "migrate:\n" in COMPOSE
     assert "<<: *migration-environment" in COMPOSE
     assert "-u AC_TRUSTED_PROXY_ADDRESSES" in INSTALLER
+    assert "-u AC_EMAIL_CHALLENGE_SECRET" in INSTALLER
 
 
 def test_deployment_oauth_documentation_matches_mandatory_compose_contract() -> None:

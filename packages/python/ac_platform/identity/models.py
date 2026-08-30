@@ -49,6 +49,15 @@ class PersonStatus(StrEnum):
     DELETED = "deleted"
 
 
+class OnboardingStatus(StrEnum):
+    """Progressive self-profile states without implying course entitlement."""
+
+    NOT_STARTED = "not_started"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    SKIPPED = "skipped"
+
+
 class DeletionRequestStatus(StrEnum):
     """Account deletion workflow states represented by the identity module."""
 
@@ -83,13 +92,91 @@ class Person(Base):
             name="display_name_nonblank",
         ),
         CheckConstraint(
+            "first_name IS NULL OR length(trim(first_name)) > 0",
+            name="first_name_nonblank",
+        ),
+        CheckConstraint(
+            "whatsapp_number IS NULL OR length(trim(whatsapp_number)) >= 7",
+            name="whatsapp_number_min_length",
+        ),
+        CheckConstraint(
+            "consent_version IS NULL OR length(trim(consent_version)) > 0",
+            name="consent_version_nonblank",
+        ),
+        CheckConstraint(
+            "experience_context IS NULL OR length(trim(experience_context)) > 0",
+            name="experience_context_nonblank",
+        ),
+        CheckConstraint(
+            "learning_goal IS NULL OR length(trim(learning_goal)) > 0",
+            name="learning_goal_nonblank",
+        ),
+        CheckConstraint(
+            "practice_situation IS NULL OR length(trim(practice_situation)) > 0",
+            name="practice_situation_nonblank",
+        ),
+        CheckConstraint(
+            "weekly_minutes IS NULL OR weekly_minutes BETWEEN 15 AND 1200",
+            name="weekly_minutes_bounds",
+        ),
+        CheckConstraint(
+            "onboarding_status IN ('not_started', 'in_progress', 'completed', 'skipped')",
+            name="onboarding_status",
+        ),
+        CheckConstraint(
+            "onboarding_step BETWEEN 1 AND 3",
+            name="onboarding_step_bounds",
+        ),
+        CheckConstraint(
+            "onboarding_revision >= 0",
+            name="onboarding_revision_nonnegative",
+        ),
+        CheckConstraint(
+            "onboarding_status <> 'completed' OR "
+            "(experience_context IS NOT NULL AND learning_goal IS NOT NULL)",
+            name="onboarding_completed_fields",
+        ),
+        CheckConstraint(
             "revision >= 0",
             name="revision_nonnegative",
+        ),
+        Index(
+            "uq_persons_email_ci",
+            text("lower(email)"),
+            unique=True,
+            postgresql_where=text("email IS NOT NULL"),
+            sqlite_where=text("email IS NOT NULL"),
         ),
     )
 
     id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
     email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    first_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    whatsapp_number: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    consent_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    consented_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    experience_context: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    learning_goal: Mapped[str | None] = mapped_column(String(240), nullable=True)
+    practice_situation: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    weekly_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    onboarding_status: Mapped[str] = mapped_column(
+        String(24),
+        nullable=False,
+        default=OnboardingStatus.NOT_STARTED.value,
+        server_default=OnboardingStatus.NOT_STARTED.value,
+    )
+    onboarding_step: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=1,
+        server_default="1",
+    )
+    onboarding_revision: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+    )
     display_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     status: Mapped[str] = mapped_column(
         String(32),
@@ -123,6 +210,18 @@ class Person(Base):
         passive_deletes=True,
     )
     deletion_requests: Mapped[list[DeletionRequest]] = relationship(
+        back_populates="person",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+    password_credential: Mapped[PasswordCredential | None] = relationship(
+        back_populates="person",
+        uselist=False,
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    email_challenges: Mapped[list[EmailChallenge]] = relationship(
         back_populates="person",
         cascade="all, delete-orphan",
         passive_deletes=True,
@@ -177,6 +276,83 @@ class ProviderIdentity(Base):
     revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
 
     person: Mapped[Person] = relationship(back_populates="provider_identities")
+
+
+class PasswordCredential(Base):
+    """One server-owned password verifier for a canonical person."""
+
+    __tablename__ = "password_credentials"
+    __table_args__ = (
+        UniqueConstraint("person_id", name="uq_password_credentials_person_id"),
+        CheckConstraint("length(trim(password_hash)) > 0", name="password_hash_nonblank"),
+        CheckConstraint("revision >= 0", name="revision_nonnegative"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    person_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("persons.id", name="fk_password_credentials_person_id_persons"),
+        nullable=False,
+    )
+    password_hash: Mapped[str] = mapped_column(String(512), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=utc_now,
+        onupdate=utc_now,
+        server_default=func.now(),
+    )
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+
+    person: Mapped[Person] = relationship(back_populates="password_credential")
+
+
+class EmailChallengeKind(StrEnum):
+    """Bounded, single-purpose email challenge types."""
+
+    VERIFICATION = "email_verification"
+    PASSWORD_RESET = "password_reset"  # noqa: S105
+
+
+class EmailChallenge(Base):
+    """A single-use challenge with only a hash and encrypted delivery token at rest."""
+
+    __tablename__ = "email_challenges"
+    __table_args__ = (
+        CheckConstraint(
+            "kind IN ('email_verification', 'password_reset')",
+            name="kind_supported",
+        ),
+        CheckConstraint("length(token_hash) = 32", name="token_hash_length"),
+        CheckConstraint("length(trim(encrypted_token)) > 0", name="encrypted_token_nonblank"),
+        CheckConstraint("expires_at > issued_at", name="expiry_after_issue"),
+        CheckConstraint(
+            "consumed_at IS NULL OR consumed_at >= issued_at",
+            name="consumed_after_issue",
+        ),
+        Index("ix_email_challenges_person_kind", "person_id", "kind", "issued_at"),
+        Index("ix_email_challenges_expiry", "expires_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    person_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("persons.id", name="fk_email_challenges_person_id_persons"),
+        nullable=False,
+    )
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    token_hash: Mapped[bytes] = mapped_column(LargeBinary(length=32), nullable=False, unique=True)
+    encrypted_token: Mapped[str] = mapped_column(String(768), nullable=False)
+    issued_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, server_default=func.now()
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    person: Mapped[Person] = relationship(back_populates="email_challenges")
 
 
 class Session(Base):
@@ -394,11 +570,15 @@ __all__ = [
     "AuthenticationReplay",
     "DeletionRequest",
     "DeletionRequestStatus",
+    "EmailChallenge",
+    "EmailChallengeKind",
+    "OnboardingStatus",
     "Person",
     "PersonStatus",
     "ProviderAuthorizationTransaction",
     "ProviderAuthorizationTransactionStatus",
     "ProviderIdentity",
+    "PasswordCredential",
     "Session",
     "utc_now",
 ]

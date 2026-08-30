@@ -23,6 +23,7 @@ def _production_values() -> dict[str, str]:
         "oauth_transaction_cookie_name": "__Host-ac_oauth_transaction",
         "session_token_pepper": "production-session-pepper-that-is-long-enough",
         "oauth_transaction_secret": "production-oauth-secret-that-is-also-long-enough",
+        "email_challenge_secret": "production-email-challenge-secret-that-is-long-enough",
         "google_oauth_client_id": "123.apps.googleusercontent.com",
         "google_oauth_client_secret": "production-google-client-secret",
         "trusted_proxy_addresses": "172.18.0.2",
@@ -92,6 +93,13 @@ def _invalid_origin_values(origin: str) -> list[tuple[str, str]]:
             {"session_token_pepper": "production-session-pepper-that-is-long-enough"},
             "AC_OAUTH_TRANSACTION_SECRET",
         ),
+        (
+            {
+                "session_token_pepper": "production-session-pepper-that-is-long-enough",
+                "oauth_transaction_secret": "production-oauth-secret-that-is-also-long-enough",
+            },
+            "AC_EMAIL_CHALLENGE_SECRET",
+        ),
     ],
 )
 def test_production_rejects_local_identity_material(
@@ -101,6 +109,7 @@ def test_production_rejects_local_identity_material(
         **_production_values(),
         "session_token_pepper": "local-session-token-pepper-change-before-production",
         "oauth_transaction_secret": "local-oauth-transaction-secret-change-before-production",
+        "email_challenge_secret": "local-email-challenge-secret-change-before-production",
         **overrides,
     }
     with pytest.raises(ValidationError, match=expected_field):
@@ -116,6 +125,16 @@ def test_production_accepts_independent_non_default_identity_material() -> None:
     assert settings.internal_api_host == "api.production.ac.internal.invalid"
     assert settings.session_token_pepper.get_secret_value() != (
         settings.oauth_transaction_secret.get_secret_value()
+    )
+    assert (
+        len(
+            {
+                settings.session_token_pepper.get_secret_value(),
+                settings.oauth_transaction_secret.get_secret_value(),
+                settings.email_challenge_secret.get_secret_value(),
+            }
+        )
+        == 3
     )
 
 
@@ -328,6 +347,14 @@ def test_production_rejects_local_release_database_and_origins(
 def test_production_rejects_reused_identity_secret() -> None:
     values = _production_values()
     values["oauth_transaction_secret"] = values["session_token_pepper"]
+
+    with pytest.raises(ValidationError, match="must be independent"):
+        Settings(environment="production", **values)  # type: ignore[arg-type]
+
+
+def test_production_rejects_email_challenge_secret_reused_as_session_pepper() -> None:
+    values = _production_values()
+    values["email_challenge_secret"] = values["session_token_pepper"]
 
     with pytest.raises(ValidationError, match="must be independent"):
         Settings(environment="production", **values)  # type: ignore[arg-type]

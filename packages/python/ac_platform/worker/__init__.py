@@ -13,11 +13,19 @@ from typing import Any, Protocol
 from uuid import UUID
 
 import structlog
-from sqlalchemy import and_, column, select, table
+from cryptography.exceptions import InvalidTag
+from sqlalchemy import and_, column, func, select, table
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.application.settings import get_settings
-from ac_platform.identity.models import Person, PersonStatus
+from ac_platform.identity.models import EmailChallenge, EmailChallengeKind, Person, PersonStatus
+from ac_platform.identity.password_auth import (
+    PASSWORD_EMAIL_RESET_EVENT,
+    PASSWORD_EMAIL_RESET_JOB,
+    PASSWORD_EMAIL_VERIFICATION_EVENT,
+    PASSWORD_EMAIL_VERIFICATION_JOB,
+    decrypt_challenge_token,
+)
 from ac_platform.outbox.models import Job, JobStatus, RecoveryStatus
 from ac_platform.outbox.policy import ReconciliationRequiredError
 from ac_platform.outbox.repository import (
@@ -65,7 +73,21 @@ ENROLLMENT_WELCOME_ROUTE = OutboxJobRoute(
     allowed_payload_values={"source": frozenset({"free_self", "manual_grant"})},
 )
 OUTBOX_JOB_ROUTES: Mapping[str, OutboxJobRoute] = MappingProxyType(
-    {ENROLLMENT_WELCOME_EVENT: ENROLLMENT_WELCOME_ROUTE}
+    {
+        ENROLLMENT_WELCOME_EVENT: ENROLLMENT_WELCOME_ROUTE,
+        PASSWORD_EMAIL_VERIFICATION_EVENT: OutboxJobRoute(
+            job_kind=PASSWORD_EMAIL_VERIFICATION_JOB,
+            required_payload_keys=frozenset({"challenge_id", "kind"}),
+            uuid_payload_keys=frozenset({"challenge_id"}),
+            allowed_payload_values={"kind": frozenset({EmailChallengeKind.VERIFICATION.value})},
+        ),
+        PASSWORD_EMAIL_RESET_EVENT: OutboxJobRoute(
+            job_kind=PASSWORD_EMAIL_RESET_JOB,
+            required_payload_keys=frozenset({"challenge_id", "kind"}),
+            uuid_payload_keys=frozenset({"challenge_id"}),
+            allowed_payload_values={"kind": frozenset({EmailChallengeKind.PASSWORD_RESET.value})},
+        ),
+    }
 )
 
 # Explicit v1 read shape for the server-side recipient resolver. Lightweight
@@ -186,12 +208,19 @@ def build_default_dispatcher(
     *,
     provider: EmailProvider | None = None,
 ) -> AllowlistedDispatcher:
-    """Build the one exact G1 email route with the fake/no-network default."""
+    """Build the exact G1 email routes with the fake/no-network default."""
 
     if settings is None:
         settings = get_settings()
     email_provider = provider or create_email_provider_from_settings(settings)
-    return AllowlistedDispatcher({ENROLLMENT_WELCOME_JOB: _email_handler(email_provider)})
+    handler = _email_handler(email_provider)
+    return AllowlistedDispatcher(
+        {
+            ENROLLMENT_WELCOME_JOB: handler,
+            PASSWORD_EMAIL_VERIFICATION_JOB: handler,
+            PASSWORD_EMAIL_RESET_JOB: handler,
+        }
+    )
 
 
 class DurableWorker:
@@ -334,7 +363,11 @@ class DurableWorker:
             job = await session.get(Job, job_id)
             if job is None:
                 raise LeaseLostError("job no longer exists")
-            if job.kind != ENROLLMENT_WELCOME_JOB:
+            if job.kind not in {
+                ENROLLMENT_WELCOME_JOB,
+                PASSWORD_EMAIL_VERIFICATION_JOB,
+                PASSWORD_EMAIL_RESET_JOB,
+            }:
                 raise UnknownJobKindError(f"job kind is not allowlisted: {job.kind}")
             state = await RecoveryStateRepository(session).require_ready(
                 expected_generation=job.recovery_generation,
@@ -407,13 +440,19 @@ class DurableWorker:
                 raise PermanentProviderError("provider did not accept the durable dispatch")
             return receipt
 
-    @staticmethod
     async def _resolve_message(
+        self,
         session: AsyncSession,
         job: Job,
         *,
         provider_key: str,
     ) -> EmailMessage:
+        if job.kind in {PASSWORD_EMAIL_VERIFICATION_JOB, PASSWORD_EMAIL_RESET_JOB}:
+            return await self._resolve_password_message(
+                session,
+                job,
+                provider_key=provider_key,
+            )
         payload = ENROLLMENT_WELCOME_ROUTE.normalize_payload(job.payload)
         if job.tenant_id is None:
             raise PermanentProviderError("enrollment welcome job requires a canonical tenant")
@@ -485,6 +524,78 @@ class DurableWorker:
                 "source": payload["source"],
             },
             communication_class="enrollment_welcome_next_action",
+        )
+
+    async def _resolve_password_message(
+        self,
+        session: AsyncSession,
+        job: Job,
+        *,
+        provider_key: str,
+    ) -> EmailMessage:
+        route = next(
+            (
+                candidate
+                for candidate in OUTBOX_JOB_ROUTES.values()
+                if candidate.job_kind == job.kind
+            ),
+            None,
+        )
+        if route is None:
+            raise UnknownJobKindError(f"email route is not allowlisted: {job.kind}")
+        payload = route.normalize_payload(job.payload)
+        kind = EmailChallengeKind(payload["kind"])
+        challenge = await session.scalar(
+            select(EmailChallenge)
+            .where(
+                EmailChallenge.id == UUID(payload["challenge_id"]),
+                EmailChallenge.expires_at > func.now(),
+            )
+            .with_for_update(read=True)
+        )
+        if challenge is None or challenge.kind != kind.value or challenge.consumed_at is not None:
+            raise PermanentProviderError("email challenge is unavailable")
+        person = await session.scalar(
+            select(Person)
+            .where(
+                Person.id == challenge.person_id,
+                Person.status == PersonStatus.ACTIVE.value,
+                Person.email.is_not(None),
+            )
+            .with_for_update(read=True)
+        )
+        if person is None or person.email is None:
+            raise PermanentProviderError("email challenge recipient is unavailable")
+        try:
+            token = decrypt_challenge_token(
+                self._settings.email_challenge_secret.get_secret_value(),
+                challenge.encrypted_token,
+                kind=kind,
+                person_id=person.id,
+            )
+        except (InvalidTag, ValueError, TypeError) as error:
+            raise PermanentProviderError("email challenge payload is unavailable") from error
+        path = "/verify-email" if kind is EmailChallengeKind.VERIFICATION else "/reset-password"
+        # Keep one-time credentials out of HTTP request targets and edge access
+        # logs. The browser reads the fragment and submits the token in a JSON
+        # body to the same-origin API.
+        action_link = f"{str(self._settings.public_app_url).rstrip('/')}{path}#token={token}"
+        template = (
+            "identity-email-verification"
+            if kind is EmailChallengeKind.VERIFICATION
+            else "identity-password-reset"
+        )
+        return EmailMessage(
+            to=person.email,
+            template=template,
+            template_version=1,
+            idempotency_key=provider_key,
+            variables={
+                "first_name": person.first_name or person.display_name or "there",
+                "action_link": action_link,
+                "expires_at": challenge.expires_at.isoformat(),
+            },
+            communication_class="verification_security",
         )
 
     async def _execute_one(self, job: Job) -> dict[str, int]:
@@ -722,6 +833,10 @@ __all__ = [
     "ENROLLMENT_WELCOME_EVENT",
     "ENROLLMENT_WELCOME_JOB",
     "ENROLLMENT_WELCOME_ROUTE",
+    "PASSWORD_EMAIL_RESET_EVENT",
+    "PASSWORD_EMAIL_RESET_JOB",
+    "PASSWORD_EMAIL_VERIFICATION_EVENT",
+    "PASSWORD_EMAIL_VERIFICATION_JOB",
     "OUTBOX_JOB_ROUTES",
     "PreparedDispatch",
     "SessionFactory",

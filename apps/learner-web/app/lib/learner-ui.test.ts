@@ -21,11 +21,17 @@ import ProgramLearningPage from "../learn/[programSlug]/page";
 import CompletionPage from "../learn/[programSlug]/complete/page";
 import ModulePage from "../learn/[programSlug]/module/[moduleId]/page";
 import LoginPage from "../login/page";
+import ForgotPasswordPage from "../forgot-password/page";
+import manifest from "../manifest";
+import OfflinePage from "../offline/page";
 import OnboardingPage from "../onboarding/page";
 import PublicHomePage from "../page";
 import PrivacyPage from "../privacy/page";
 import ProgramDetailPage from "../programs/[slug]/page";
+import RegisterPage from "../register/page";
+import ResetPasswordPage from "../reset-password/page";
 import TermsPage from "../terms/page";
+import VerifyEmailPage from "../verify-email/page";
 import {
   freeCourse,
   getActivityById,
@@ -71,6 +77,11 @@ const routeRenderers: Array<[string, (state?: string) => Promise<ReactNode>]> =
       "login",
       (state) => LoginPage({ searchParams: Promise.resolve({ state }) }),
     ],
+    ["register", async () => RegisterPage()],
+    ["forgot password", async () => ForgotPasswordPage()],
+    ["verify email", async () => VerifyEmailPage()],
+    ["reset password", async () => ResetPasswordPage()],
+    ["offline fallback", async () => OfflinePage()],
     [
       "callback",
       (state) => CallbackPage({ searchParams: Promise.resolve({ state }) }),
@@ -172,6 +183,10 @@ describe("learner route and state primitives", () => {
   it("keeps the canonical learner journey route shapes stable", () => {
     expect(ROUTES.privacy).toBe("/privacy");
     expect(ROUTES.terms).toBe("/terms");
+    expect(ROUTES.register).toBe("/register");
+    expect(ROUTES.forgotPassword).toBe("/forgot-password");
+    expect(ROUTES.verifyEmail).toBe("/verify-email");
+    expect(ROUTES.resetPassword).toBe("/reset-password");
     expect(ROUTES.programDetail("free-course")).toBe("/programs/free-course");
     expect(ROUTES.programLearning("free-course")).toBe("/learn/free-course");
     expect(ROUTES.module("free-course", "module-01")).toBe(
@@ -183,6 +198,39 @@ describe("learner route and state primitives", () => {
     );
     expect(ROUTES.certificate("preview-certificate")).toBe(
       "/certificates/preview-certificate",
+    );
+  });
+});
+
+describe("installable browser shell", () => {
+  it("publishes a standalone learner manifest without native-app claims", () => {
+    const metadata = manifest();
+
+    expect(metadata.display).toBe("standalone");
+    expect(metadata.start_url).toBe("/");
+    expect(metadata.scope).toBe("/");
+    expect(metadata.name).toBe("Authority Closers Learning");
+    expect(metadata.icons).toEqual([
+      expect.objectContaining({
+        src: "/icon-192.png",
+        sizes: "192x192",
+        purpose: "any",
+      }),
+      expect.objectContaining({
+        src: "/icon-512.png",
+        sizes: "512x512",
+        purpose: "maskable",
+      }),
+    ]);
+  });
+
+  it("keeps the offline fallback honest about canonical progress", () => {
+    const html = renderToStaticMarkup(createElement(OfflinePage));
+
+    expect(h1Count(html)).toBe(1);
+    expect(html).toContain("You are offline");
+    expect(html).toContain(
+      "No local response is treated as canonical progress",
     );
   });
 });
@@ -342,18 +390,18 @@ describe("honest preview controls", () => {
     );
   });
 
-  it("keeps login and onboarding mutations visibly unavailable", () => {
+  it("exposes connected password sign-in and waits for canonical onboarding state", () => {
     const login = renderToStaticMarkup(createElement(LoginForm));
     const onboarding = renderToStaticMarkup(createElement(OnboardingForm));
 
-    expect(login).toContain("Email sign-in unavailable in preview");
-    expect(login).toContain('disabled=""');
-    expect(login).not.toContain("Continue with email");
-    expect(onboarding).toContain("Profile setup unavailable in preview");
-    expect(onboarding).toContain('disabled=""');
-    expect(onboarding).not.toMatch(
-      /Set up the preview|Continue to the preview home|context selected/,
-    );
+    expect(login).toContain("Continue with email");
+    expect(login).toContain('autoComplete="current-password"');
+    expect(login).toContain('href="/forgot-password"');
+    expect(login).toContain('href="/register"');
+    expect(login).not.toContain("Email sign-in unavailable in preview");
+    expect(onboarding).toContain("Loading your saved profile");
+    expect(onboarding).not.toContain("Profile setup unavailable in preview");
+    expect(onboarding).not.toContain("Choose the context");
   });
 });
 

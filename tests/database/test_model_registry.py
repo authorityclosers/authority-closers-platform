@@ -6,6 +6,8 @@ from ac_platform.db.models import model_metadata
 def test_g1_model_registry_contains_every_migrated_table() -> None:
     expected = {
         "persons",
+        "password_credentials",
+        "email_challenges",
         "provider_identities",
         "sessions",
         "deletion_requests",

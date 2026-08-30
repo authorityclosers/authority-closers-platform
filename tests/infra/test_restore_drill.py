@@ -691,10 +691,10 @@ def test_postgres_container_user_can_read_the_stable_dump(
             text=True,
             timeout=30,
         )
-    except OSError as error:
+    except (OSError, subprocess.TimeoutExpired) as error:
         if required:
             pytest.fail(f"Docker could not start for the stable input proof: {error}")
-        pytest.skip("Docker executable is unavailable")
+        pytest.skip("Docker executable or daemon is unavailable")
     if daemon.returncode != 0:
         if required:
             pytest.fail("Docker daemon is required for the stable restore-input proof")

@@ -443,6 +443,26 @@ class AsyncIdentityApplication:
         await self._repository.save_session(stored)
         return IssuedSession(token=token, metadata=self._metadata(stored))
 
+    async def issue_authenticated_session(
+        self,
+        person_id: UUID,
+        *,
+        user_agent: str | None = None,
+        ip_address: str | None = None,
+        now: datetime | None = None,
+    ) -> IssuedSession:
+        """Issue a session only after the canonical person is reloaded and verified."""
+
+        self._require_transaction()
+        current_time = _now(now)
+        person = await self._lock_person(person_id, require_active=True, require_email=True)
+        return await self._issue_session(
+            person,
+            current_time=current_time,
+            user_agent=user_agent,
+            ip_address=ip_address,
+        )
+
     async def _validate_authorization_transaction(
         self,
         transaction_id: UUID,

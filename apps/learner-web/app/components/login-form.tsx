@@ -1,12 +1,45 @@
-import { ArrowRight, LockKeyhole, ShieldCheck } from "lucide-react";
-import Link from "next/link";
+"use client";
 
-import { ROUTES } from "../lib/routes";
+import { ArrowRight, ShieldCheck } from "lucide-react";
+import Link from "next/link";
+import { type FormEvent, useState } from "react";
+
 import { googleAuthStartUrl } from "../lib/auth-links";
+import { ApiError, createLearnerApi } from "../lib/learner-api";
+import { ROUTES } from "../lib/routes";
+
+function errorMessage(error: unknown): string {
+  if (error instanceof ApiError) return error.message;
+  return "The request did not finish. Check your connection and try again.";
+}
 
 export function LoginForm() {
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [verificationRequired, setVerificationRequired] = useState(false);
   const authenticateUrl = googleAuthStartUrl("authenticate");
-  const registerUrl = googleAuthStartUrl("register");
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPending(true);
+    setError(null);
+    setVerificationRequired(false);
+    const values = new FormData(event.currentTarget);
+    try {
+      await createLearnerApi().loginPassword(
+        String(values.get("email") ?? ""),
+        String(values.get("password") ?? ""),
+      );
+      window.location.assign(ROUTES.learnerHome);
+    } catch (requestError) {
+      setError(errorMessage(requestError));
+      setVerificationRequired(
+        requestError instanceof ApiError &&
+          requestError.code === "email_verification_required",
+      );
+      setPending(false);
+    }
+  }
 
   return (
     <div className="auth-card">
@@ -18,23 +51,10 @@ export function LoginForm() {
       </div>
       <h2>Come back to the work.</h2>
       <p className="auth-card__intro">
-        Google sign-in starts a one-time server transaction. Provider tokens
-        stay behind the API; this browser receives only an opaque session
-        cookie.
+        Use your verified email and password. The browser receives only an
+        opaque, secure session cookie.
       </p>
-      <div className="stack-form" aria-label="Google learner access">
-        <a className="button button--ink button--full" href={authenticateUrl}>
-          Continue with Google <ArrowRight size={17} aria-hidden="true" />
-        </a>
-        <a className="button button--outline button--full" href={registerUrl}>
-          Create a free learner account
-        </a>
-        <p className="field-help">
-          Google must return a verified email. A successful-looking callback
-          cannot create enrollment or progress by itself.
-        </p>
-      </div>
-      <form className="stack-form" aria-label="Disabled email sign-in preview">
+      <form className="stack-form" onSubmit={submit}>
         <div className="field-group">
           <label htmlFor="login-email">Email address</label>
           <input
@@ -42,27 +62,49 @@ export function LoginForm() {
             name="email"
             type="email"
             autoComplete="email"
-            placeholder="you@example.com"
-            disabled
-            aria-describedby="login-email-help"
+            inputMode="email"
+            required
+            disabled={pending}
           />
-          <p id="login-email-help" className="field-help">
-            No address is collected or sent. Authentication is not connected in
-            this preview.
-          </p>
         </div>
-        <button
-          className="button button--ink button--full"
-          type="button"
-          disabled
-        >
-          <LockKeyhole size={17} aria-hidden="true" /> Email sign-in unavailable
-          in preview
+        <div className="field-group">
+          <label htmlFor="login-password">Password</label>
+          <input
+            id="login-password"
+            name="password"
+            type="password"
+            autoComplete="current-password"
+            required
+            disabled={pending}
+          />
+        </div>
+        {error ? (
+          <div className="form-message form-message--error" role="alert">
+            <p>{error}</p>
+            {verificationRequired ? (
+              <Link className="text-link" href={ROUTES.verifyEmail}>
+                Request a fresh verification link
+              </Link>
+            ) : null}
+          </div>
+        ) : null}
+        <button className="button button--ink button--full" disabled={pending}>
+          {pending ? "Signing in…" : "Continue with email"}
+          <ArrowRight size={17} aria-hidden="true" />
         </button>
+        <Link className="text-link" href={ROUTES.forgotPassword}>
+          Forgot your password?
+        </Link>
       </form>
+      <div className="auth-divider" aria-hidden="true">
+        <span>or</span>
+      </div>
+      <a className="button button--outline button--full" href={authenticateUrl}>
+        Continue with Google
+      </a>
       <div className="auth-card__footer">
-        <span>Need the callback state?</span>
-        <Link href={ROUTES.callback}>Open callback status</Link>
+        <span>New to Authority Closers?</span>
+        <Link href={ROUTES.register}>Create a free account</Link>
       </div>
     </div>
   );

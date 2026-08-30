@@ -129,8 +129,27 @@ def test_migration_columns_match_identity_tenancy_models() -> None:
                 column["name"]: column for column in inspector.get_columns(model.__tablename__)
             }
             expected = set(model.__table__.columns.keys())
+            if model is Person:
+                # Revision 0001 owns only the original identity columns. Later
+                # identity migrations are verified against the current model by
+                # the registry and fresh-PostgreSQL migration suites.
+                expected -= {
+                    "first_name",
+                    "whatsapp_number",
+                    "consent_version",
+                    "consented_at",
+                    "experience_context",
+                    "learning_goal",
+                    "practice_situation",
+                    "weekly_minutes",
+                    "onboarding_status",
+                    "onboarding_step",
+                    "onboarding_revision",
+                }
             assert set(actual) == expected, model.__tablename__
             for column in model.__table__.columns:
+                if column.name not in expected:
+                    continue
                 assert actual[column.name]["nullable"] is column.nullable, (
                     model.__tablename__,
                     column.name,
@@ -140,6 +159,20 @@ def test_migration_columns_match_identity_tenancy_models() -> None:
                 for constraint in model.__table__.constraints
                 if isinstance(constraint, CheckConstraint)
             }
+            if model is Person:
+                expected_checks -= {
+                    "ck_persons_first_name_nonblank",
+                    "ck_persons_whatsapp_number_min_length",
+                    "ck_persons_consent_version_nonblank",
+                    "ck_persons_experience_context_nonblank",
+                    "ck_persons_learning_goal_nonblank",
+                    "ck_persons_practice_situation_nonblank",
+                    "ck_persons_weekly_minutes_bounds",
+                    "ck_persons_onboarding_status",
+                    "ck_persons_onboarding_step_bounds",
+                    "ck_persons_onboarding_revision_nonnegative",
+                    "ck_persons_onboarding_completed_fields",
+                }
             actual_checks = {
                 constraint["name"]
                 for constraint in inspector.get_check_constraints(model.__tablename__)

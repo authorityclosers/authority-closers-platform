@@ -19,7 +19,7 @@ def test_staging_controller_is_exact_sha_and_idempotent() -> None:
     assert "Fresh exact-commit Git archive creation" in CONTROLLER
     assert "gh run download" not in CONTROLLER
     assert '$process.StandardInput.NewLine = "`n"' in CONTROLLER
-    assert "$normalized = $Script -replace \"`r\", \"\"" in CONTROLLER
+    assert '$normalized = $Script -replace "`r", ""' in CONTROLLER
     assert "| & ssh $SshHost bash -s" not in CONTROLLER
 
 

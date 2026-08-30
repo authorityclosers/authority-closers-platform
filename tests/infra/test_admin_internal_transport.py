@@ -54,6 +54,7 @@ def _compose_environment() -> dict[str, str]:
             ),
             "AC_SESSION_TOKEN_PEPPER": "fixture-session-pepper-value-at-least-32-bytes",
             "AC_OAUTH_TRANSACTION_SECRET": ("fixture-oauth-transaction-value-at-least-32-bytes"),
+            "AC_EMAIL_CHALLENGE_SECRET": ("fixture-email-challenge-value-at-least-32-bytes"),
             "AC_GOOGLE_OAUTH_CLIENT_ID": "fixture.apps.googleusercontent.com",
             "AC_GOOGLE_OAUTH_CLIENT_SECRET": "fixture-google-secret",
             "AC_POSTGRES_OWNER_PASSWORD": "fixture-owner-password",
@@ -140,14 +141,22 @@ def test_compose_requires_internal_host_and_profiles_fix_exact_environment_mappi
 def _run_docker(*arguments: str, timeout: int = 20) -> subprocess.CompletedProcess[str]:
     if DOCKER is None:  # pragma: no cover - caller skips before invoking the helper
         raise RuntimeError("Docker CLI is unavailable")
-    return subprocess.run(  # noqa: S603 - arguments are fixed or validated unique identifiers
-        [DOCKER, *arguments],
-        cwd=ROOT,
-        capture_output=True,
-        check=False,
-        text=True,
-        timeout=timeout,
-    )
+    try:
+        return subprocess.run(  # noqa: S603 - fixed or validated arguments
+            [DOCKER, *arguments],
+            cwd=ROOT,
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as error:
+        return subprocess.CompletedProcess(
+            args=error.cmd,
+            returncode=124,
+            stdout=error.stdout or "",
+            stderr=error.stderr or "Docker probe timed out.",
+        )
 
 
 def test_reserved_alias_resolves_only_while_assigned_on_real_internal_docker_network() -> None:

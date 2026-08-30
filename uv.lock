@@ -106,6 +106,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "alembic" },
+    { name = "cryptography" },
     { name = "fastapi" },
     { name = "google-auth", extra = ["requests"] },
     { name = "httpx" },
@@ -131,6 +132,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "alembic", specifier = "==1.19.1" },
+    { name = "cryptography", specifier = "==50.0.1" },
     { name = "fastapi", specifier = "==0.141.1" },
     { name = "google-auth", extras = ["requests"], specifier = "==2.57.0" },
     { name = "httpx", specifier = "==0.28.1" },

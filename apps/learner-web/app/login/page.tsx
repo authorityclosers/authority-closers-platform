@@ -41,7 +41,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             </p>
             <div className="auth-principle">
               <KeyRound size={18} aria-hidden="true" />
-              <span>Secure session lifecycle · preview boundary</span>
+              <span>Secure session lifecycle · bounded alpha</span>
             </div>
           </div>
           <div className="auth-panel">

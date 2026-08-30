@@ -17,10 +17,12 @@ to disk.
 | `AC_DATABASE_MIGRATOR_URL`    | `postgresql+psycopg://ac_migrator:<migrator-password>@postgres/ac_platform` |
 | `AC_SESSION_TOKEN_PEPPER`     | independent random value of at least 32 bytes                               |
 | `AC_OAUTH_TRANSACTION_SECRET` | independent random value of at least 32 bytes                               |
+| `AC_EMAIL_CHALLENGE_SECRET`   | independent random value of at least 32 bytes                               |
 | `AC_GOOGLE_OAUTH_CLIENT_ID`   | Google web client ID ending in `.apps.googleusercontent.com`                |
 | `AC_GOOGLE_OAUTH_CLIENT_SECRET` | non-empty secret for that exact Google web client                         |
 
-The four database passwords must be distinct. The two SQLAlchemy URLs must be
+The four database passwords must be distinct. The three identity secrets must
+also be mutually distinct. The two SQLAlchemy URLs must be
 constructed from the matching role passwords and must never use the owner or
 backup role.
 
