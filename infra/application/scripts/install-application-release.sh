@@ -132,6 +132,18 @@ stage_dir=''
 artifact_stage=''
 install -d -m 2750 -o root -g acops "$application_root" "$releases_root"
 
+# One installer at a time protects the shared immutable artifact/release stores
+# as well as each environment's current link and rollback baseline. The lock is
+# held by this file descriptor until the process exits.
+deployment_lock="$application_root/.deployment.lock"
+exec 9>>"$deployment_lock"
+if ! flock --exclusive --nonblock 9; then
+  printf 'Another application deployment is already active.\n' >&2
+  exit 1
+fi
+chmod 0640 "$deployment_lock"
+chown root:acops "$deployment_lock"
+
 artifacts_root="$application_root/artifacts"
 artifact_dir="$artifacts_root/$release_id"
 install -d -m 2750 -o root -g acops "$artifacts_root"
@@ -362,11 +374,18 @@ rollback_release() {
 
 finish() {
   local status=$?
+  trap - EXIT
+  # Once finalization starts, allow the rollback to finish unless the host or
+  # process is forcibly killed. A second catchable signal must not recurse.
+  trap '' HUP INT TERM
   if [[ "$status" -ne 0 && "$mutation_started" == 1 && "$release_committed" == 0 ]]; then
     rollback_release || status=1
   fi
   exit "$status"
 }
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 trap finish EXIT
 
 mutation_started=1

@@ -287,6 +287,26 @@ def test_installer_arms_rollback_before_starting_candidate_postgres() -> None:
     assert installer.index(rollback_arm) < installer.index(postgres_start)
 
 
+def test_installer_serializes_deployments_and_routes_signals_through_finish() -> None:
+    installer = INSTALLER.read_text(encoding="utf-8")
+    lock = "flock --exclusive --nonblock 9"
+    artifact_mutation = 'artifacts_root="$application_root/artifacts"'
+    term_trap = "trap 'exit 143' TERM"
+    exit_trap = "trap finish EXIT"
+    mutation_arm = "mutation_started=1"
+
+    assert installer.index(lock) < installer.index(artifact_mutation)
+    assert installer.index(term_trap) < installer.index(exit_trap)
+    assert installer.index(exit_trap) < installer.index(mutation_arm)
+
+    finish_body = installer[installer.index("finish() {") : installer.index("trap 'exit 129' HUP")]
+    assert "trap - EXIT" in finish_body
+    assert "trap '' HUP INT TERM" in finish_body
+    assert finish_body.index("trap '' HUP INT TERM") < finish_body.index(
+        "rollback_release || status=1"
+    )
+
+
 def test_installer_restores_current_link_and_writes_evidence_atomically() -> None:
     installer = INSTALLER.read_text(encoding="utf-8")
     advance = 'mv --no-target-directory --force "$current_tmp" "$current_link"'
