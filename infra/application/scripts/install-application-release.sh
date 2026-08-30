@@ -108,7 +108,11 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 input_stage="$(mktemp -d "$application_root/.inputs-${release_id}.XXXXXX")"
-chmod 0700 "$input_stage"
+# GNU chmod preserves an inherited setgid bit on directories unless the
+# numeric mode explicitly includes the special-bit digit. The application
+# root is intentionally setgid, so use 00700 to make this private boundary
+# exactly 0700 before the Python verifier inspects it.
+chmod 00700 "$input_stage"
 chown root:root "$input_stage"
 python3 "$script_dir/prepare-release-inputs.py" stage \
   "$release_archive" "$image_bundle_dir" "$input_stage"

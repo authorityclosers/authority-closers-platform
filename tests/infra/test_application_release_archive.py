@@ -704,7 +704,10 @@ def test_installer_cleans_private_inputs_on_preflight_failure_and_final_exit() -
     final_finish = installer[finish_start : installer.index("trap finish EXIT", finish_start)]
 
     assert 'mktemp -d "$application_root/.inputs-${release_id}.XXXXXX"' in installer
-    assert 'chmod 0700 "$input_stage"' in installer
+    # The leading special-bit digit is required on GNU chmod: a plain 0700
+    # preserves setgid inherited from the application root and produces 2700.
+    assert 'chmod 00700 "$input_stage"' in installer
+    assert 'chmod 0700 "$input_stage"' not in installer
     assert 'chown root:root "$input_stage"' in installer
     assert "cleanup_stages" in early_finish
     assert "cleanup_stages" in final_finish
