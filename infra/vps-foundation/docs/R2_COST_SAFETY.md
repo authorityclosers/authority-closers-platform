@@ -4,12 +4,12 @@
 
 Authority Closers treats Cloudflare's published free allowance as an outer boundary, not a target. The local deployment ceiling is:
 
-| Dimension | Local ceiling | Published free allowance |
-|---|---:|---:|
-| Standard storage | 8 GiB | 10 GB-month/month |
-| Class A operations | 700,000/month | 1,000,000/month |
-| Class B operations | 7,000,000/month | 10,000,000/month |
-| Infrequent Access | 0 bytes | No free tier |
+| Dimension          |   Local ceiling | Published free allowance |
+| ------------------ | --------------: | -----------------------: |
+| Standard storage   |           8 GiB |        10 GB-month/month |
+| Class A operations |   700,000/month |          1,000,000/month |
+| Class B operations | 7,000,000/month |         10,000,000/month |
+| Infrequent Access  |         0 bytes |             No free tier |
 
 The 30% operation headroom and storage headroom absorb metric delay, unit differences, retries, probes, and administrative operations. R2 usage above Cloudflare's included amounts is billed; Cloudflare does not expose a hard free-tier usage stop.
 
@@ -21,6 +21,7 @@ The 30% operation headroom and storage headroom absorb metric delay, unit differ
 - No R2 provider credentials are stored on the VPS outside short-lived process environments; the Infisical bootstrap contains only machine-auth values.
 - Daily Restic backup, a 30-minute R2 usage guard, and a weekly isolated repository restore drill are enabled. Application uploads, public bucket domains, R2 Data Catalog, R2 SQL, Sippy, Super Slurper, and migration jobs are disabled.
 - The backup credential is restricted to the two AC buckets and the VPS IPv4 address. Infisical injects it only into the bounded operational processes.
+- Application database state, verified logical dumps, deployment evidence, and configuration remain in the encrypted backup source. Reproducible application release directories and compressed Docker transport bundles are excluded: those large artifacts remain in private GHCR and the local VPS rollback store, and can be reconstructed from the exact Git SHA plus registry digest. This prevents routine releases from consuming the R2 storage envelope with duplicate image data.
 
 This is a bounded active-writer state, not a zero-writer state. Every scheduled backup fails closed unless the usage guard can prove the local envelope remains safe. Retention is 7 daily, 4 weekly, and 6 monthly snapshots.
 

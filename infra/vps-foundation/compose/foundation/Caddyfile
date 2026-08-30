@@ -1,28 +1,136 @@
 {
-  admin off
-  auto_https off
-  persist_config off
+	admin off
+	auto_https off
+	persist_config off
+}
+
+(base_security_headers) {
+	header {
+		-Server
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+	}
 }
 
 :8080 {
-  encode zstd gzip
+	encode zstd gzip
 
-  header {
-    -Server
-    X-Content-Type-Options "nosniff"
-    X-Frame-Options "DENY"
-    Referrer-Policy "no-referrer"
-    Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
-    Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
-    Cache-Control "no-store"
-  }
+	@health path /healthz
+	handle @health {
+		import base_security_headers
+		header Cache-Control "no-store"
+		header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+		respond `{"status":"ok","service":"authority-closers-foundation"}` 200
+	}
 
-  @health path /healthz
-  respond @health `{\"status\":\"ok\",\"service\":\"authority-closers-foundation\"}` 200
-  respond "Authority Closers infrastructure foundation is online.\n" 200
+	@learner host app.authorityclosers.com
+	@learner_api {
+		host app.authorityclosers.com
+		path /v1/*
+	}
+	handle @learner_api {
+		import base_security_headers
+		header X-Authority-Closers-Route "api-production"
+		header Cache-Control "no-store"
+		header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+		reverse_proxy ac-production-api:8000
+	}
+	handle @learner {
+		import base_security_headers
+		header X-Authority-Closers-Route "learner-production"
+		header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; media-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests"
+		reverse_proxy ac-production-learner:3000
+	}
 
-  log {
-    output stdout
-    format json
-  }
+	@admin host admin.authorityclosers.com
+	@admin_api {
+		host admin.authorityclosers.com
+		path /v1/*
+	}
+	handle @admin_api {
+		import base_security_headers
+		header X-Authority-Closers-Route "api-production"
+		header Cache-Control "no-store"
+		header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+		reverse_proxy ac-production-api:8000
+	}
+	handle @admin {
+		import base_security_headers
+		header X-Authority-Closers-Route "admin-production"
+		header Cache-Control "no-store"
+		header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests"
+		reverse_proxy ac-production-admin:3001
+	}
+
+	@api host api.authorityclosers.com
+	handle @api {
+		import base_security_headers
+		header X-Authority-Closers-Route "api-production"
+		header Cache-Control "no-store"
+		header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+		reverse_proxy ac-production-api:8000
+	}
+
+	@staging_learner host staging.authorityclosers.com
+	@staging_learner_api {
+		host staging.authorityclosers.com
+		path /v1/*
+	}
+	handle @staging_learner_api {
+		import base_security_headers
+		header X-Authority-Closers-Route "api-staging"
+		header Cache-Control "no-store"
+		header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+		reverse_proxy ac-staging-api:8000
+	}
+	handle @staging_learner {
+		import base_security_headers
+		header X-Authority-Closers-Route "learner-staging"
+		header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; media-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests"
+		reverse_proxy ac-staging-learner:3000
+	}
+
+	@staging_admin host admin-staging.authorityclosers.com
+	@staging_admin_api {
+		host admin-staging.authorityclosers.com
+		path /v1/*
+	}
+	handle @staging_admin_api {
+		import base_security_headers
+		header X-Authority-Closers-Route "api-staging"
+		header Cache-Control "no-store"
+		header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+		reverse_proxy ac-staging-api:8000
+	}
+	handle @staging_admin {
+		import base_security_headers
+		header X-Authority-Closers-Route "admin-staging"
+		header Cache-Control "no-store"
+		header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests"
+		reverse_proxy ac-staging-admin:3001
+	}
+
+	@staging_api host api-staging.authorityclosers.com
+	handle @staging_api {
+		import base_security_headers
+		header X-Authority-Closers-Route "api-staging"
+		header Cache-Control "no-store"
+		header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+		reverse_proxy ac-staging-api:8000
+	}
+
+	handle {
+		import base_security_headers
+		header Cache-Control "no-store"
+		header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+		respond "Authority Closers infrastructure foundation is online.\n" 200
+	}
+
+	log {
+		output stdout
+		format json
+	}
 }

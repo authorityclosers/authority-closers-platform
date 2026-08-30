@@ -1,0 +1,41 @@
+# syntax=docker/dockerfile:1.7
+
+ARG PYTHON_IMAGE=python@sha256:519591d6871b7bc437060736b9f7456b8731f1499a57e22e6c285135ae657bf7
+ARG UV_IMAGE=ghcr.io/astral-sh/uv@sha256:95f2aa1fe59274951cfe9b0cbc7972e879ff1004bc8945d130a32eb0dbd85945
+
+FROM ${UV_IMAGE} AS uv
+
+FROM ${PYTHON_IMAGE} AS build
+
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_NO_PROGRESS=1 \
+    UV_PYTHON_DOWNLOADS=never
+
+WORKDIR /app
+
+COPY --from=uv /uv /uvx /bin/
+COPY pyproject.toml uv.lock README.md ./
+COPY packages/python packages/python
+
+RUN --mount=type=cache,id=ac-uv-cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev --no-editable --compile-bytecode
+
+FROM ${PYTHON_IMAGE} AS runtime
+
+ENV PATH="/app/.venv/bin:${PATH}" \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+RUN groupadd --gid 10001 ac && \
+    useradd --uid 10001 --gid ac --no-create-home --shell /usr/sbin/nologin ac
+
+WORKDIR /app
+
+COPY --from=build --chown=ac:ac /app/.venv /app/.venv
+COPY --chown=ac:ac alembic.ini ./
+COPY --chown=ac:ac db db
+
+USER ac
+EXPOSE 8000
+CMD ["uvicorn", "ac_platform.http.app:app", "--host", "0.0.0.0", "--port", "8000", "--no-proxy-headers"]

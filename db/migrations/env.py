@@ -6,15 +6,18 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from ac_platform.application.settings import get_settings
-from ac_platform.db.base import Base
+from ac_platform.db.models import model_metadata
 
 config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 settings = get_settings()
-config.set_main_option("sqlalchemy.url", settings.database_migrator_url)
-target_metadata = Base.metadata
+migrator_url = settings.database_migrator_url
+if migrator_url is None:
+    raise RuntimeError("AC_DATABASE_MIGRATOR_URL is required for schema migrations")
+config.set_main_option("sqlalchemy.url", migrator_url)
+target_metadata = model_metadata()
 
 
 def run_migrations_offline() -> None:

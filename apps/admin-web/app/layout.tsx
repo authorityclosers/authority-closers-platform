@@ -17,7 +17,12 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={`${sans.variable} ${mono.variable}`}>
-      <body>{children}</body>
+      <body>
+        <a className="skip-link" href="#admin-content">
+          Skip to admin content
+        </a>
+        {children}
+      </body>
     </html>
   );
 }

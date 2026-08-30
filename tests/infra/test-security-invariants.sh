@@ -56,6 +56,10 @@ grep -Eq '^RCLONE_LINUX_AMD64_SHA256=[0-9a-f]{64}$' "$foundation/config/release/
 grep -Eq '^RCLONE_LINUX_AMD64_BINARY_SHA256=[0-9a-f]{64}$' "$foundation/config/release/toolchain.env"
 grep -q 'expected_infisical_binary_sha' "$foundation/scripts/ac-restic-restore-check-inner"
 grep -q 'expected_rclone_binary_sha' "$foundation/scripts/ac-restic-restore-check-inner"
+grep -Fq -- "--exclude='/srv/authority-closers/application/artifacts/**'" \
+  "$foundation/scripts/ac-restic-backup-inner"
+grep -Fq -- "--exclude='/srv/authority-closers/application/releases/**'" \
+  "$foundation/scripts/ac-restic-backup-inner"
 # shellcheck disable=SC2016  # This static assertion intentionally matches a literal variable reference.
 grep -q 'trusted_release_dir="/srv/authority-closers/releases/$release_id"' \
   "$foundation/scripts/ac-restic-restore-check-inner"

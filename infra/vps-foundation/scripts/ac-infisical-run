@@ -12,6 +12,16 @@ set +a
 : "${INFISICAL_VPS_CLIENT_ID:?INFISICAL_VPS_CLIENT_ID is required}"
 : "${INFISICAL_VPS_CLIENT_SECRET:?INFISICAL_VPS_CLIENT_SECRET is required}"
 project_id="${INFISICAL_PROJECT_ID:-b421c44e-4599-4394-8df6-758ed8aedfed}"
+secret_environment="${AC_INFISICAL_ENVIRONMENT:-prod}"
+secret_path="${AC_INFISICAL_PATH:-/}"
+case "$secret_environment" in
+  dev|staging|prod) ;;
+  *) printf 'Unsupported Infisical environment: %s\n' "$secret_environment" >&2; exit 2 ;;
+esac
+[[ "$secret_path" == /* && "$secret_path" != *'..'* ]] || {
+  printf 'Infisical secret path must be absolute and traversal-free.\n' >&2
+  exit 2
+}
 
 # Credentials and the resulting short-lived token travel only through a
 # root-owned environment/stdin pipe, never through process arguments.
@@ -46,6 +56,6 @@ unset INFISICAL_BACKUP_CLIENT_ID INFISICAL_BACKUP_CLIENT_SECRET
 
 exec infisical run \
   --projectId="$project_id" \
-  --env='prod' \
-  --path='/' \
+  --env="$secret_environment" \
+  --path="$secret_path" \
   "$@"

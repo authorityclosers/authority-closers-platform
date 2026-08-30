@@ -22,6 +22,10 @@ restic backup \
   --exclude-caches \
   --exclude='/etc/authority-closers/secrets' \
   --exclude='/etc/authority-closers/secrets/**' \
+  --exclude='/srv/authority-closers/application/artifacts' \
+  --exclude='/srv/authority-closers/application/artifacts/**' \
+  --exclude='/srv/authority-closers/application/releases' \
+  --exclude='/srv/authority-closers/application/releases/**' \
   /srv/authority-closers \
   /etc/authority-closers \
   /etc/ssh \
