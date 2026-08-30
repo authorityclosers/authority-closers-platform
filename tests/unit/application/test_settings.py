@@ -20,6 +20,7 @@ def _production_values() -> dict[str, str]:
         "api_url": "https://api.authorityclosers.com",
         "session_token_pepper": "production-session-pepper-that-is-long-enough",
         "oauth_transaction_secret": "production-oauth-secret-that-is-also-long-enough",
+        "trusted_proxy_addresses": "172.18.0.2",
     }
 
 
@@ -144,3 +145,26 @@ def test_google_oauth_web_client_pair_enables_provider_composition() -> None:
     )
 
     assert settings.google_oauth_configured is True
+
+
+def test_deployment_requires_exact_trusted_proxy_addresses() -> None:
+    values = _production_values()
+    values["trusted_proxy_addresses"] = ""
+    with pytest.raises(ValidationError, match="AC_TRUSTED_PROXY_ADDRESSES"):
+        Settings(environment="production", **values)  # type: ignore[arg-type]
+
+    values["trusted_proxy_addresses"] = "172.18.0.0/16"
+    with pytest.raises(ValidationError, match="comma-separated exact IPs"):
+        Settings(environment="production", **values)  # type: ignore[arg-type]
+
+
+def test_trusted_proxy_addresses_are_normalized_and_deduplicated() -> None:
+    values = _production_values()
+    values["trusted_proxy_addresses"] = "172.18.0.2, 2001:db8::2,172.18.0.2"
+
+    settings = Settings(environment="production", **values)  # type: ignore[arg-type]
+
+    assert {str(value) for value in settings.rate_limit_trusted_proxy_addresses} == {
+        "172.18.0.2",
+        "2001:db8::2",
+    }

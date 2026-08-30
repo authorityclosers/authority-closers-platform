@@ -32,6 +32,7 @@ x-application-environment: &application-environment
   AC_ADMIN_APP_URL: ${AC_ADMIN_APP_URL:?AC_ADMIN_APP_URL is required}
   AC_API_URL: ${AC_API_URL:?AC_API_URL is required}
   AC_API_HOST: ${AC_API_HOST:?AC_API_HOST is required}
+  AC_TRUSTED_PROXY_ADDRESSES: ${AC_TRUSTED_PROXY_ADDRESSES:?AC_TRUSTED_PROXY_ADDRESSES must contain the exact edge-router IP}
 
 x-migration-environment: &migration-environment
   <<: *application-environment

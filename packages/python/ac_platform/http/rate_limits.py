@@ -7,7 +7,6 @@ import math
 import re
 import time
 from asyncio import Lock
-from collections import OrderedDict
 from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
 from typing import Any
@@ -59,6 +58,7 @@ DEFAULT_RATE_LIMIT_RULES = (
 class _Bucket:
     tokens: float
     updated_at: float
+    expires_at: float
 
 
 class InMemoryTokenBucketLimiter:
@@ -74,22 +74,49 @@ class InMemoryTokenBucketLimiter:
             raise ValueError("maximum_buckets must be positive")
         self._maximum_buckets = maximum_buckets
         self._clock = clock
-        self._buckets: OrderedDict[str, _Bucket] = OrderedDict()
+        self._buckets: dict[str, _Bucket] = {}
+        self._next_expiry_at: float | None = None
         self._lock = Lock()
+
+    def _purge_expired(self, now: float) -> None:
+        if self._next_expiry_at is None or now < self._next_expiry_at:
+            return
+        self._buckets = {
+            key: bucket for key, bucket in self._buckets.items() if bucket.expires_at > now
+        }
+        self._next_expiry_at = min(
+            (bucket.expires_at for bucket in self._buckets.values()),
+            default=None,
+        )
+
+    def _track_expiry(self, expires_at: float) -> None:
+        if self._next_expiry_at is None or expires_at < self._next_expiry_at:
+            self._next_expiry_at = expires_at
 
     async def consume(self, key: str, rule: RateLimitRule) -> tuple[bool, int, int]:
         now = self._clock()
         refill_rate = rule.capacity / rule.refill_seconds
         async with self._lock:
+            self._purge_expired(now)
             bucket = self._buckets.get(key)
             if bucket is None:
-                bucket = _Bucket(tokens=float(rule.capacity), updated_at=now)
+                if len(self._buckets) >= self._maximum_buckets:
+                    next_expiry = self._next_expiry_at or (now + rule.refill_seconds)
+                    retry_after = max(1, math.ceil(next_expiry - now))
+                    return False, retry_after, 0
+                bucket = _Bucket(
+                    tokens=float(rule.capacity),
+                    updated_at=now,
+                    expires_at=now + rule.refill_seconds,
+                )
                 self._buckets[key] = bucket
+                self._track_expiry(bucket.expires_at)
             else:
                 elapsed = max(0.0, now - bucket.updated_at)
                 bucket.tokens = min(float(rule.capacity), bucket.tokens + elapsed * refill_rate)
-                bucket.updated_at = now
-                self._buckets.move_to_end(key)
+                bucket.updated_at = max(now, bucket.updated_at)
+                bucket.expires_at = bucket.updated_at + rule.refill_seconds
+                self._track_expiry(bucket.expires_at)
 
             allowed = bucket.tokens >= 1
             if allowed:
@@ -98,9 +125,6 @@ class InMemoryTokenBucketLimiter:
             else:
                 retry_after = max(1, math.ceil((1 - bucket.tokens) / refill_rate))
             remaining = max(0, math.floor(bucket.tokens))
-
-            while len(self._buckets) > self._maximum_buckets:
-                self._buckets.popitem(last=False)
             return allowed, retry_after, remaining
 
 
@@ -118,11 +142,15 @@ def _peer_address(scope: Scope) -> ipaddress.IPv4Address | ipaddress.IPv6Address
         return None
 
 
-def client_identity(scope: Scope) -> str:
-    """Use Cloudflare's address only when a private/loopback proxy delivered it."""
+def client_identity(
+    scope: Scope,
+    *,
+    trusted_proxy_addresses: frozenset[ipaddress.IPv4Address | ipaddress.IPv6Address] = frozenset(),
+) -> str:
+    """Use Cloudflare's address only when an explicitly trusted proxy delivered it."""
 
     peer = _peer_address(scope)
-    if peer is not None and (peer.is_private or peer.is_loopback):
+    if peer is not None and peer in trusted_proxy_addresses:
         forwarded = list(_header_values(scope, b"cf-connecting-ip"))
         if len(forwarded) == 1:
             try:
@@ -187,10 +215,14 @@ class RateLimitMiddleware:
         *,
         rules: tuple[RateLimitRule, ...] = DEFAULT_RATE_LIMIT_RULES,
         limiter: InMemoryTokenBucketLimiter | None = None,
+        trusted_proxy_addresses: frozenset[
+            ipaddress.IPv4Address | ipaddress.IPv6Address
+        ] = frozenset(),
     ) -> None:
         self.app = app
         self.rules = rules
         self.limiter = limiter or InMemoryTokenBucketLimiter()
+        self.trusted_proxy_addresses = trusted_proxy_addresses
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope.get("type") != "http":
@@ -200,7 +232,10 @@ class RateLimitMiddleware:
         if rule is None:
             await self.app(scope, receive, send)
             return
-        identity = client_identity(scope)
+        identity = client_identity(
+            scope,
+            trusted_proxy_addresses=self.trusted_proxy_addresses,
+        )
         digest = hashlib.sha256(f"{rule.name}:{identity}".encode()).hexdigest()
         allowed, retry_after, _remaining = await self.limiter.consume(digest, rule)
         if not allowed:

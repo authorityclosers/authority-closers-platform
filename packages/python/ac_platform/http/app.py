@@ -93,7 +93,10 @@ def create_app(*, identity_provider: OAuthIdentityProvider | None = None) -> Fas
         require_actor=require_actor,
     )
     application.add_middleware(RequestBodyLimitMiddleware)
-    application.add_middleware(RateLimitMiddleware)
+    application.add_middleware(
+        RateLimitMiddleware,
+        trusted_proxy_addresses=settings.rate_limit_trusted_proxy_addresses,
+    )
     application.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts)
     application.add_middleware(
         CORSMiddleware,

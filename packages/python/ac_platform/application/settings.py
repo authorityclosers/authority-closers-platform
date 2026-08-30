@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ipaddress
 import re
 from functools import lru_cache
 from typing import Literal
@@ -38,6 +39,7 @@ class Settings(BaseSettings):
     oauth_transaction_cookie_name: str = "ac_oauth_transaction"
     google_oauth_client_id: str | None = None
     google_oauth_client_secret: SecretStr | None = None
+    trusted_proxy_addresses: str = ""
 
     @model_validator(mode="after")
     def require_deployment_identity_secrets(self) -> Settings:
@@ -97,6 +99,8 @@ class Settings(BaseSettings):
                 field="AC_DATABASE_MIGRATOR_URL",
                 expected_user="ac_migrator",
             )
+        if not self.rate_limit_trusted_proxy_addresses:
+            raise ValueError("AC_TRUSTED_PROXY_ADDRESSES must contain at least one exact proxy IP")
         self._validate_google_oauth_pair()
         return self
 
@@ -151,6 +155,28 @@ class Settings(BaseSettings):
     @property
     def google_oauth_configured(self) -> bool:
         return bool(self.google_oauth_client_id and self.google_oauth_client_secret)
+
+    @property
+    def rate_limit_trusted_proxy_addresses(
+        self,
+    ) -> frozenset[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+        addresses: set[ipaddress.IPv4Address | ipaddress.IPv6Address] = set()
+        for raw_value in self.trusted_proxy_addresses.split(","):
+            value = raw_value.strip()
+            if not value:
+                continue
+            try:
+                address = ipaddress.ip_address(value)
+            except ValueError as exc:
+                raise ValueError(
+                    "AC_TRUSTED_PROXY_ADDRESSES must contain comma-separated exact IPs"
+                ) from exc
+            if address.is_unspecified or address.is_multicast:
+                raise ValueError(
+                    "AC_TRUSTED_PROXY_ADDRESSES cannot contain unspecified or multicast IPs"
+                )
+            addresses.add(address)
+        return frozenset(addresses)
 
     @property
     def allowed_hosts(self) -> list[str]:

@@ -34,6 +34,11 @@ only valid release ID is the full reviewed Git commit from a verified archive.
 - Uvicorn does not accept forwarded proxy headers. Application authorization
   never derives a person, tenant, role, permission, or resource owner from
   caller-controlled proxy or request fields.
+- The in-process anonymous-operation limiter trusts `CF-Connecting-IP` only
+  from the exact versioned `AC_TRUSTED_PROXY_ADDRESSES` peer. It is a bounded,
+  fail-closed defense for the single Uvicorn worker shipped here, not a
+  distributed limit across multiple API replicas. Keep Cloudflare edge limits
+  as the fleet-wide control before adding workers or replicas.
 - Runtime containers are non-root, read-only, capability-free, PID/memory/CPU
   bounded, and write only to bounded tmpfs mounts.
 - External side effects remain held by default. A migration does not start or
