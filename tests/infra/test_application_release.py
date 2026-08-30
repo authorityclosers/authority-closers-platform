@@ -376,8 +376,7 @@ def test_release_bundle_uses_verified_transport_manifests_as_runtime_ids() -> No
     assert 'verify_transport_config "$api_transport_digest" "$api_id"' in WORKFLOW
     for component in ("api", "learner", "admin"):
         assert (
-            f"printf 'AC_{component.upper()}_IMAGE=%s\\n' "
-            f'"${component}_transport_digest"'
+            f"printf 'AC_{component.upper()}_IMAGE=%s\\n' \"${component}_transport_digest\""
         ) in WORKFLOW
         assert (
             f"printf 'AC_{component.upper()}_TRANSPORT_DIGEST=%s\\n' "
