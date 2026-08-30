@@ -10,6 +10,7 @@ test_mode="${AC_TEST_MODE:-0}"
 install_root="${AC_INSTALL_ROOT:-}"
 test_fail_after_install="${AC_TEST_FAIL_AFTER_INSTALL:-0}"
 test_fail_after_activate="${AC_TEST_FAIL_AFTER_ACTIVATE:-0}"
+approved_legacy_release_id="${AC_APPROVED_LEGACY_RELEASE_ID:-}"
 
 [[ "$test_mode" == 0 || "$test_mode" == 1 ]] || {
   printf 'AC_TEST_MODE must be 0 or 1.\n' >&2
@@ -27,6 +28,10 @@ test_fail_after_activate="${AC_TEST_FAIL_AFTER_ACTIVATE:-0}"
   printf 'Failure injection is accepted only in test mode.\n' >&2
   exit 2
 }
+if [[ -n "$approved_legacy_release_id" && ! "$approved_legacy_release_id" =~ ^infra-[0-9a-f]{7,40}$ ]]; then
+  printf 'AC_APPROVED_LEGACY_RELEASE_ID must be an explicit historical infra release ID.\n' >&2
+  exit 2
+fi
 
 if [[ "$test_mode" == 1 ]]; then
   [[ -n "$install_root" && "$install_root" == /* ]] || {
@@ -80,6 +85,10 @@ transaction_committed=0
 compose_mutated=0
 previous_link_target=''
 previous_release_dir=''
+previous_release_mode=''
+legacy_compose_root="$srv_root/compose/foundation"
+legacy_compose_file="$legacy_compose_root/compose.yaml"
+legacy_env_file="$srv_root/env/foundation.env"
 declare -a transaction_targets=()
 
 reconcile_compose_release() {
@@ -97,6 +106,73 @@ reconcile_compose_release() {
     up --detach --remove-orphans --wait --wait-timeout 120
   mapfile -t running_services < <(
     docker compose --env-file "$image_env_file" -f "$compose_file" \
+      ps --status running --services
+  )
+  [[ "${#running_services[@]}" -eq "${#expected_services[@]}" ]]
+  curl --fail --silent --show-error --max-time 5 http://127.0.0.1:8080/healthz >/dev/null
+}
+
+validate_legacy_foundation() {
+  local previous_id=$1
+  local -a actual_files expected_files legacy_files
+
+  [[ -n "$approved_legacy_release_id" && "$previous_id" == "$approved_legacy_release_id" ]] || {
+    printf 'Legacy foundation rollback requires an exact AC_APPROVED_LEGACY_RELEASE_ID.\n' >&2
+    exit 1
+  }
+  expected_files=(Caddyfile compose.yaml otel-collector.yaml)
+  mapfile -t actual_files < <(
+    find "$legacy_compose_root" -mindepth 1 -maxdepth 1 -type f -printf '%f\n' | LC_ALL=C sort
+  )
+  [[ "${actual_files[*]}" == "${expected_files[*]}" ]] || {
+    printf 'Legacy foundation Compose directory has an unexpected file set.\n' >&2
+    exit 1
+  }
+  if find "$legacy_compose_root" -mindepth 1 -maxdepth 1 ! -type f -print -quit | grep -q .; then
+    printf 'Legacy foundation Compose directory contains a non-regular entry.\n' >&2
+    exit 1
+  fi
+  [[ -f "$legacy_env_file" && ! -L "$legacy_env_file" ]] || {
+    printf 'Legacy foundation image environment is not a regular file.\n' >&2
+    exit 1
+  }
+  [[ "$(stat -c '%U:%G %a' "$legacy_compose_root")" == 'root:acops 2750' ]]
+  [[ "$(stat -c '%U:%G %a' "$legacy_compose_file")" == 'root:acops 640' ]]
+  [[ "$(stat -c '%U:%G %a' "$legacy_compose_root/Caddyfile")" == 'root:acops 644' ]]
+  [[ "$(stat -c '%U:%G %a' "$legacy_compose_root/otel-collector.yaml")" == 'root:acops 644' ]]
+  [[ "$(stat -c '%U:%G %a' "$legacy_env_file")" == 'root:acops 640' ]]
+  if grep -Ev \
+    '^(CADDY_IMAGE=caddy@sha256:[0-9a-f]{64}|OTEL_IMAGE=otel/opentelemetry-collector-contrib@sha256:[0-9a-f]{64})$' \
+    "$legacy_env_file" | grep -q .; then
+    printf 'Legacy foundation image environment is not exact and digest-pinned.\n' >&2
+    exit 1
+  fi
+  [[ "$(wc -l < "$legacy_env_file")" -eq 2 ]]
+  docker compose --env-file "$legacy_env_file" -f "$legacy_compose_file" config --quiet
+
+  legacy_files=(
+    "$legacy_compose_file"
+    "$legacy_compose_root/Caddyfile"
+    "$legacy_compose_root/otel-collector.yaml"
+    "$legacy_env_file"
+  )
+  sha256sum "${legacy_files[@]}" > "$rollback_dir/legacy-foundation.sha256"
+  sha256sum --check --strict "$rollback_dir/legacy-foundation.sha256" >/dev/null
+}
+
+reconcile_legacy_foundation() {
+  local -a expected_services running_services
+
+  sha256sum --check --strict "$rollback_dir/legacy-foundation.sha256" >/dev/null
+  docker compose --env-file "$legacy_env_file" -f "$legacy_compose_file" config --quiet
+  mapfile -t expected_services < <(
+    docker compose --env-file "$legacy_env_file" -f "$legacy_compose_file" config --services
+  )
+  ((${#expected_services[@]} > 0))
+  docker compose --env-file "$legacy_env_file" -f "$legacy_compose_file" \
+    up --detach --remove-orphans --wait --wait-timeout 120
+  mapfile -t running_services < <(
+    docker compose --env-file "$legacy_env_file" -f "$legacy_compose_file" \
       ps --status running --services
   )
   [[ "${#running_services[@]}" -eq "${#expected_services[@]}" ]]
@@ -131,8 +207,15 @@ restore_failed_transaction() {
   if [[ "$test_mode" == 0 ]]; then
     systemctl daemon-reload || rollback_failed=1
     if [[ "$compose_mutated" == 1 ]]; then
-      if [[ -n "$previous_release_dir" ]]; then
+      if [[ "$previous_release_mode" == immutable ]]; then
         reconcile_compose_release "$previous_release_dir" || rollback_failed=1
+        /usr/local/sbin/ac-docker-firewall || rollback_failed=1
+        systemctl enable --now \
+          ac-docker-firewall.service \
+          ac-docker-firewall.timer \
+          ac-foundation-health.timer || rollback_failed=1
+      elif [[ "$previous_release_mode" == legacy ]]; then
+        reconcile_legacy_foundation || rollback_failed=1
         /usr/local/sbin/ac-docker-firewall || rollback_failed=1
         systemctl enable --now \
           ac-docker-firewall.service \
@@ -192,12 +275,24 @@ begin_transaction() {
     }
     previous_id="${previous_release_dir##*/}"
     if [[ "$test_mode" == 1 ]]; then
-      [[ "$previous_id" =~ ^foundation-test-[a-z0-9-]+$ ]]
+      [[ "$previous_id" =~ ^foundation-test-[a-z0-9-]+$ ]] || {
+        printf 'Existing test release has an invalid identity: %s\n' "$previous_id" >&2
+        exit 1
+      }
+      previous_release_mode=immutable
+      [[ -r "$previous_release_dir/RELEASE-FILES.sha256" ]]
+      (cd "$previous_release_dir" && sha256sum --check --strict RELEASE-FILES.sha256 >/dev/null)
+    elif [[ "$previous_id" =~ ^foundation-[0-9a-f]{40}$ ]]; then
+      previous_release_mode=immutable
+      [[ -r "$previous_release_dir/RELEASE-FILES.sha256" ]] || {
+        printf 'Existing immutable foundation release lacks checksum evidence.\n' >&2
+        exit 1
+      }
+      (cd "$previous_release_dir" && sha256sum --check --strict RELEASE-FILES.sha256 >/dev/null)
     else
-      [[ "$previous_id" =~ ^foundation-[0-9a-f]{40}$ ]]
+      previous_release_mode=legacy
+      validate_legacy_foundation "$previous_id"
     fi
-    [[ -r "$previous_release_dir/RELEASE-FILES.sha256" ]]
-    (cd "$previous_release_dir" && sha256sum --check --strict RELEASE-FILES.sha256 >/dev/null)
   elif [[ -e "$current_link" ]]; then
     printf 'Current release path exists but is not a symbolic link: %s\n' "$current_link" >&2
     exit 1

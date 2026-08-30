@@ -5,6 +5,10 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 foundation="$repo_root/infra/vps-foundation"
 manifest="$foundation/config/release/install-manifest.tsv"
 
+grep -q 'AC_APPROVED_LEGACY_RELEASE_ID' "$foundation/scripts/install-foundation-release.sh"
+grep -q 'legacy-foundation.sha256' "$foundation/scripts/install-foundation-release.sh"
+grep -q 'reconcile_legacy_foundation' "$foundation/scripts/install-foundation-release.sh"
+
 [[ -r "$manifest" ]]
 
 while IFS= read -r source; do
