@@ -21,7 +21,7 @@ if git grep -Il $'\r' -- '*.sh' '*.service' '*.timer' '*.yml' '*.yaml'; then
 fi
 
 if git grep -nEI \
-  '(BEGIN (RSA|OPENSSH|EC|DSA) PRIVATE KEY|cfat_[A-Za-z0-9_-]{20,}|re_[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16})' \
+  '(BEGIN (RSA|OPENSSH|EC|DSA) PRIVATE KEY|(^|[^A-Za-z0-9_])(cfat_[A-Za-z0-9_-]{20,}|re_[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16})([^A-Za-z0-9_-]|$))' \
   -- . ':!.github/workflows/control-plane.yml' ':!scripts/validate-control-plane.sh'; then
   printf 'Possible committed credential detected.\n' >&2
   exit 1
