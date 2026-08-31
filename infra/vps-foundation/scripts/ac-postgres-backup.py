@@ -92,11 +92,15 @@ EXPECTED_PROFILE_VALUES = {
         "AC_COMPOSE_PROJECT": "ac-application-staging",
         "AC_ENVIRONMENT": "staging",
         "AC_STATE_ROOT": "/srv/authority-closers/state/application/staging",
+        "AC_EXTERNAL_SIDE_EFFECTS_HOLD": "false",
+        "AC_EMAIL_PROVIDER": "resend",
     },
     "production": {
         "AC_COMPOSE_PROJECT": "ac-application-production",
         "AC_ENVIRONMENT": "production",
         "AC_STATE_ROOT": "/srv/authority-closers/state/application/production",
+        "AC_EXTERNAL_SIDE_EFFECTS_HOLD": "true",
+        "AC_EMAIL_PROVIDER": "fake",
     },
 }
 POLICY_KEYS = {
@@ -430,13 +434,6 @@ def resolve_application_release(
     for key, expected in EXPECTED_PROFILE_VALUES[environment].items():
         if profile.get(key) != expected:
             raise BackupError(f"The current {environment} application profile is not exact.")
-    if (
-        profile.get("AC_EMAIL_PROVIDER") != "fake"
-        or profile.get("AC_EXTERNAL_SIDE_EFFECTS_HOLD") != "true"
-    ):
-        raise BackupError(
-            f"The current {environment} application profile is not the reviewed profile."
-        )
     state_root = host_path(host_root, profile["AC_STATE_ROOT"])
     if not state_root.is_dir() or state_root.is_symlink():
         raise BackupError(f"The current {environment} application state root is absent or unsafe.")

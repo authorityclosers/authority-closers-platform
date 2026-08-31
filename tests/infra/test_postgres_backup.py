@@ -23,36 +23,10 @@ sys.modules[spec.name] = backup
 spec.loader.exec_module(backup)
 
 
-def _write_release(root: Path, environment: str = "staging") -> Path:
-    release = root / "srv" / "authority-closers" / "application" / "releases" / ("a" * 40)
-    (release / "environments").mkdir(parents=True)
-    (release / "compose.yaml").write_text("name: ${AC_COMPOSE_PROJECT}\n", encoding="utf-8")
-    (release / "release-images.env").write_text(
-        "AC_RELEASE_ID=" + "a" * 40 + "\n", encoding="utf-8"
-    )
-    (release / "environments" / f"{environment}.env").write_text(
-        "\n".join(
-            (
-                "AC_COMPOSE_PROJECT=ac-application-staging",
-                "AC_ENVIRONMENT=staging",
-                "AC_STATE_ROOT=/srv/authority-closers/state/application/staging",
-                "AC_PUBLIC_APP_URL=https://staging.authorityclosers.com",
-                "AC_ADMIN_APP_URL=https://admin-staging.authorityclosers.com",
-                "AC_API_URL=https://api-staging.authorityclosers.com",
-                "AC_API_HOST=api-staging.authorityclosers.com",
-                "AC_TRUSTED_PROXY_ADDRESSES=172.18.0.2",
-                "AC_EDGE_API_ALIAS=ac-staging-api",
-                "AC_EDGE_LEARNER_ALIAS=ac-staging-learner",
-                "AC_EDGE_ADMIN_ALIAS=ac-staging-admin",
-                "AC_EXTERNAL_SIDE_EFFECTS_HOLD=true",
-                "AC_EMAIL_PROVIDER=fake",
-            )
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-    files = sorted(path for path in release.rglob("*") if path.is_file())
-    (release / "RELEASE-FILES.sha256").write_text(
+def _write_manifest(release: Path) -> None:
+    manifest = release / "RELEASE-FILES.sha256"
+    files = sorted(path for path in release.rglob("*") if path.is_file() and path != manifest)
+    manifest.write_text(
         "".join(
             f"{hashlib.sha256(path.read_bytes()).hexdigest()}  "
             f"./{path.relative_to(release).as_posix()}\n"
@@ -60,6 +34,23 @@ def _write_release(root: Path, environment: str = "staging") -> Path:
         ),
         encoding="utf-8",
     )
+
+
+def _write_release(root: Path, environment: str = "staging") -> Path:
+    if environment not in backup.ENVIRONMENTS:
+        raise ValueError(f"Unsupported fixture environment: {environment}")
+
+    release = root / "srv" / "authority-closers" / "application" / "releases" / ("a" * 40)
+    (release / "environments").mkdir(parents=True)
+    (release / "compose.yaml").write_text("name: ${AC_COMPOSE_PROJECT}\n", encoding="utf-8")
+    (release / "release-images.env").write_text(
+        "AC_RELEASE_ID=" + "a" * 40 + "\n", encoding="utf-8"
+    )
+    source_profile = ROOT / "infra" / "application" / "environments" / f"{environment}.env"
+    (release / "environments" / f"{environment}.env").write_text(
+        source_profile.read_text(encoding="utf-8"), encoding="utf-8"
+    )
+    _write_manifest(release)
     state = root / "srv" / "authority-closers" / "state" / "application" / environment
     state.mkdir(parents=True)
     current = root / "srv" / "authority-closers" / "application" / f"current-{environment}"
@@ -83,6 +74,37 @@ def test_path_resolution_uses_exact_current_release_profile_and_skips_absent_pro
         backup.resolve_application_release("production", host_root=tmp_path, allow_missing=True)
         is None
     )
+
+
+def test_path_resolution_accepts_the_held_fake_production_profile(tmp_path: Path) -> None:
+    release = _write_release(tmp_path, environment="production")
+
+    target = backup.resolve_application_release("production", host_root=tmp_path)
+
+    assert target is not None
+    assert target.release_dir == release
+    assert target.compose_project == "ac-application-production"
+
+
+@pytest.mark.parametrize(
+    ("reviewed", "stale"),
+    (
+        ("AC_EXTERNAL_SIDE_EFFECTS_HOLD=false", "AC_EXTERNAL_SIDE_EFFECTS_HOLD=true"),
+        ("AC_EMAIL_PROVIDER=resend", "AC_EMAIL_PROVIDER=fake"),
+    ),
+)
+def test_path_resolution_rejects_a_stale_staging_provider_profile(
+    tmp_path: Path, reviewed: str, stale: str
+) -> None:
+    release = _write_release(tmp_path)
+    profile = release / "environments" / "staging.env"
+    profile.write_text(
+        profile.read_text(encoding="utf-8").replace(reviewed, stale), encoding="utf-8"
+    )
+    _write_manifest(release)
+
+    with pytest.raises(backup.BackupError, match="profile is not exact"):
+        backup.resolve_application_release("staging", host_root=tmp_path)
 
 
 def test_projection_rejects_a_boundary_that_would_exceed_the_envelope() -> None:
