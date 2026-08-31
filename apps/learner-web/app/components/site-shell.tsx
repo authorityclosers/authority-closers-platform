@@ -1,4 +1,16 @@
-import { ArrowLeft, ArrowUpRight, BookOpen, Home, Medal } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowUpRight,
+  Bell,
+  BookOpen,
+  ChevronDown,
+  CircleHelp,
+  Home,
+  Library,
+  Menu,
+  Medal,
+  Search,
+} from "lucide-react";
 import Link from "next/link";
 
 import { BrandMark } from "@ac/ui";
@@ -6,7 +18,7 @@ import { BrandMark } from "@ac/ui";
 import { ROUTES } from "../lib/routes";
 
 type PublicCurrent = "home" | "program";
-type LearnerCurrent = "home" | "course" | "certificate";
+type LearnerCurrent = "home" | "course" | "certificate" | "none";
 
 function BrandLink({ href = ROUTES.home }: { href?: string }) {
   return (
@@ -91,15 +103,21 @@ function LearnerNavLink({
   );
 }
 
-function LearnerNavDisabled({
+function LearnerSideItem({
   label,
   icon,
+  current = false,
 }: {
   label: string;
   icon: React.ReactNode;
+  current?: boolean;
 }) {
   return (
-    <span className="learner-nav__link is-disabled" aria-disabled="true">
+    <span
+      className={`learner-sidebar__item${current ? " is-current" : ""}`}
+      aria-disabled="true"
+      aria-current={current ? "page" : undefined}
+    >
       {icon}
       <span>{label}</span>
     </span>
@@ -118,27 +136,128 @@ export function LearnerShell({
       <a className="skip-link" href="#main-content">
         Skip to content
       </a>
+      <aside
+        className="learner-sidebar"
+        aria-label="Learner workspace navigation"
+      >
+        <div className="learner-sidebar__brand">
+          <BrandLink href={ROUTES.learnerHome} />
+          <span className="learner-sidebar__version">v0.1</span>
+        </div>
+        <nav className="learner-sidebar__nav" aria-label="Learner sections">
+          <LearnerNavLink
+            href={ROUTES.learnerHome}
+            label="Home"
+            current={current === "home"}
+            icon={<Home size={18} aria-hidden="true" />}
+          />
+          <LearnerSideItem
+            label="My learning"
+            icon={<BookOpen size={18} aria-hidden="true" />}
+            current={current === "course"}
+          />
+          <LearnerSideItem
+            label="Library"
+            icon={<Library size={18} aria-hidden="true" />}
+          />
+          <LearnerSideItem
+            label="Progress"
+            icon={<Medal size={18} aria-hidden="true" />}
+          />
+        </nav>
+        <div className="learner-sidebar__footer">
+          <LearnerSideItem
+            label="More"
+            icon={<CircleHelp size={18} aria-hidden="true" />}
+          />
+          <span className="learner-sidebar__collapse">Collapse</span>
+        </div>
+      </aside>
       <header className="learner-header">
         <div className="learner-header__inner">
-          <BrandLink href={ROUTES.learnerHome} />
-          <nav className="learner-nav" aria-label="Learner navigation">
-            <LearnerNavLink
-              href={ROUTES.learnerHome}
-              label="Home"
-              current={current === "home"}
-              icon={<Home size={17} aria-hidden="true" />}
+          <div className="learner-header__mobile-brand">
+            <BrandLink href={ROUTES.learnerHome} />
+            <span className="learner-sidebar__version">v0.1</span>
+          </div>
+          <button
+            className="learner-header__menu"
+            type="button"
+            aria-label="Learner navigation menu is unavailable in this alpha"
+            disabled
+          >
+            <Menu size={20} aria-hidden="true" />
+          </button>
+          <label className="learner-search" htmlFor="learner-search">
+            <Search size={18} aria-hidden="true" />
+            <span className="sr-only">Search courses and lessons</span>
+            <input
+              id="learner-search"
+              type="search"
+              placeholder="Search courses, lessons, topics"
+              aria-label="Search is unavailable in this alpha"
+              disabled
             />
-            <LearnerNavDisabled
-              label="Course"
-              icon={<BookOpen size={17} aria-hidden="true" />}
-            />
-            <LearnerNavDisabled
-              label="Certificate"
-              icon={<Medal size={17} aria-hidden="true" />}
-            />
-          </nav>
+          </label>
+          <div className="learner-header__actions">
+            <button
+              type="button"
+              className="icon-button"
+              aria-label="Help is unavailable in this alpha"
+              disabled
+            >
+              <CircleHelp size={19} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className="icon-button learner-notifications"
+              aria-label="Notifications are unavailable in this alpha"
+              disabled
+            >
+              <Bell size={19} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className="learner-profile"
+              aria-label="Profile menu is unavailable in this alpha"
+              disabled
+            >
+              <span className="learner-profile__avatar" aria-hidden="true">
+                AC
+              </span>
+              <span className="learner-profile__label">Profile</span>
+              <ChevronDown size={15} aria-hidden="true" />
+            </button>
+          </div>
         </div>
       </header>
+      <nav
+        className="learner-bottom-nav"
+        aria-label="Learner mobile navigation"
+      >
+        <LearnerNavLink
+          href={ROUTES.learnerHome}
+          label="Home"
+          current={current === "home"}
+          icon={<Home size={21} aria-hidden="true" />}
+        />
+        <LearnerSideItem
+          label="Library"
+          icon={<Library size={21} aria-hidden="true" />}
+        />
+        <LearnerSideItem
+          label="Practice"
+          icon={<BookOpen size={21} aria-hidden="true" />}
+          current={current === "course"}
+        />
+        <LearnerSideItem
+          label="Progress"
+          icon={<Medal size={21} aria-hidden="true" />}
+        />
+        <LearnerSideItem
+          label="More"
+          icon={<Menu size={21} aria-hidden="true" />}
+        />
+      </nav>
       {children}
     </div>
   );

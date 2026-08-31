@@ -61,7 +61,10 @@ history.
 
 ## First-slice learner journey
 
-1. Register with email/password or begin same-origin Google authentication.
+1. Register with consent-gated email/password, or use same-origin Google
+   authentication for an existing eligible identity. Learner Google
+   registration stays disabled until consent is bound to the signed OAuth
+   transaction.
 2. Verify email; the one-time token stays in the URL fragment until the page
    submits it in a JSON body and removes it from browser history.
 3. Save, resume, complete, or explicitly skip progressive onboarding.
@@ -71,6 +74,12 @@ history.
 6. Open the pinned program/module/activity path, save a reflection/workbook
    draft, submit implementation evidence, receive an authorized review, and
    read authoritative progress/completion.
+
+An expired or revoked session routes the browser to `/session-expired` for an
+explicit reauthentication attempt. The page never restores authority from
+browser state and reassures the learner only that already-committed server
+work remains durable. Learner-shell destinations that are outside v0.1 remain
+visibly unavailable rather than becoming implied routes.
 
 Steps 4-6 are implemented as API and learner adapters. The controlled
 four-shift/Module 1 seed and exact-tenant learner provisioning are now present

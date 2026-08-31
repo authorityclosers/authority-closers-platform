@@ -2,8 +2,16 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import {
+  FileText,
+  Flag,
+  LockKeyhole,
+  PenLine,
+  Play,
+  Trophy,
+  Wrench,
+} from "lucide-react";
 
-import { googleAuthStartUrl } from "../lib/auth-links";
 import {
   ApiError,
   createLearnerApi,
@@ -79,12 +87,12 @@ function StateMessage({
       </Heading>
       <p>{errorText(state.error)}</p>
       {needsSignIn ? (
-        <a
+        <Link
           className="button button--small button--ink"
-          href={googleAuthStartUrl("authenticate")}
+          href={ROUTES.sessionExpired}
         >
-          Continue with Google
-        </a>
+          Sign in again
+        </Link>
       ) : retry ? (
         <button
           className="button button--small button--ink"
@@ -338,6 +346,18 @@ function projectionLabel(projection: LearningResponse["projection"]): string {
   return `${Math.round(projection.percentage * 100)}% · ${projection.completed_count} / ${projection.denominator}`;
 }
 
+function projectionStateLabel(
+  projection: LearningResponse["projection"],
+): string {
+  if (projection.percentage >= 1) return "Completed";
+  if (projection.completed_count > 0) return "In progress";
+  return "Ready to start";
+}
+
+export function isSessionExpiredError(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 401;
+}
+
 export function LearnerHomeEnrollmentCard({
   learning,
 }: {
@@ -348,14 +368,24 @@ export function LearnerHomeEnrollmentCard({
       className="current-course-card"
       aria-labelledby="current-course-title"
     >
+      <div className="current-course-card__topline">
+        <p className="kicker">Continue learning</p>
+        <span className="status-pill status-pill--neutral">
+          {learning
+            ? projectionStateLabel(learning.projection)
+            : "Enrollment summary unavailable"}
+        </span>
+      </div>
       <div className="current-course-card__body">
-        <p className="kicker">Current enrollment</p>
         <h2 id="current-course-title">
           {learning?.program_title ?? "No current course selected."}
         </h2>
-        <p>
-          Learning state is read from the authenticated API and is never
-          inferred in the browser.
+        <p className="current-course-card__description">
+          {learning
+            ? learning.projection.percentage >= 1
+              ? "Review the completed, server-authorized course path."
+              : "Pick up the next server-authorized activity from your course path."
+            : "This v0.1 home route does not yet expose a complete enrollment collection."}
         </p>
         {learning ? (
           <p role="status">
@@ -363,8 +393,8 @@ export function LearnerHomeEnrollmentCard({
           </p>
         ) : (
           <p role="status">
-            This account has no server-selected enrollment yet. No catalog item
-            is substituted as a current course.
+            No catalog item is substituted as a current course, and absence of a
+            projection is not treated as proof that no enrollment exists.
           </p>
         )}
         {learning ? (
@@ -372,11 +402,13 @@ export function LearnerHomeEnrollmentCard({
             className="button button--ink"
             href={ROUTES.programLearning(learning.program_slug)}
           >
-            Open learner path →
+            {learning.projection.percentage >= 1
+              ? "Review course"
+              : "Continue course"}
           </Link>
         ) : (
           <Link className="button button--outline" href={ROUTES.home}>
-            Browse published programs →
+            View published programs
           </Link>
         )}
       </div>
@@ -403,26 +435,39 @@ export function LearnerHomeRuntime({ api = defaultApi }: { api?: LearnerApi }) {
             aria-labelledby="dashboard-title"
           >
             <div>
-              <p className="eyebrow">
-                <span aria-hidden="true" /> Learner workspace
+              <p className="dashboard-intro__eyebrow">
+                Your learning workspace
               </p>
               <h1 id="dashboard-title">
-                Welcome back,
-                <br />
-                <em>{state.value.me.display_name || state.value.me.email}.</em>
+                Welcome back,{" "}
+                {state.value.me.display_name || state.value.me.email}
               </h1>
+              <p className="dashboard-intro__subhead">
+                Here&apos;s what&apos;s happening in your learning journey.
+              </p>
             </div>
-            <div className="dashboard-intro__note">
-              Tenant context:{" "}
-              {state.value.context.tenant_id ? "selected" : "not selected"}
-            </div>
+            <span className="dashboard-intro__tenant">
+              {state.value.context.tenant_id
+                ? "Workspace selected"
+                : "Workspace not selected"}
+            </span>
           </section>
-          <div className="dashboard-grid">
+          <div className="dashboard-grid dashboard-grid--clarity">
             <LearnerHomeEnrollmentCard learning={state.value.learning} />
-            <aside className="first-win-card">
-              <p className="kicker">Identity</p>
-              <h2>{state.value.me.email}</h2>
-              <p>{state.value.me.membership_role ?? "Learner access"}</p>
+            <aside className="first-win-card learner-account-card">
+              <p className="kicker">Account</p>
+              <h2>{state.value.me.display_name || "Learner profile"}</h2>
+              <p>{state.value.me.email}</p>
+              <dl className="learner-account-card__facts">
+                <div>
+                  <dt>Access</dt>
+                  <dd>{state.value.me.membership_role ?? "Learner"}</dd>
+                </div>
+                <div>
+                  <dt>Progress source</dt>
+                  <dd>Server projection</dd>
+                </div>
+              </dl>
               <button
                 className="button button--outline"
                 type="button"
@@ -434,6 +479,28 @@ export function LearnerHomeRuntime({ api = defaultApi }: { api?: LearnerApi }) {
               </button>
             </aside>
           </div>
+          <section
+            className="dashboard-lower dashboard-lower--clarity"
+            aria-labelledby="my-learning-title"
+          >
+            <div className="dashboard-lower__heading">
+              <div>
+                <p className="kicker">Your courses</p>
+                <h2 id="my-learning-title">My learning</h2>
+              </div>
+              <span className="dashboard-lower__caption">
+                A complete assignment collection is not available in v0.1.
+              </span>
+            </div>
+            <div className="workspace-card workspace-card--empty">
+              <p className="kicker">Assignment boundary</p>
+              <h3>Additional assignments are not listed in this alpha.</h3>
+              <p>
+                The current API contract exposes a selected program projection,
+                not a complete assignment collection.
+              </p>
+            </div>
+          </section>
         </>
       ) : null}
     </>
@@ -446,6 +513,23 @@ function activityStateLabel(state: string): string {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+function activityIcon(kind: string) {
+  switch (kind.toUpperCase()) {
+    case "VIDEO":
+      return <Play size={13} />;
+    case "REFLECTION":
+      return <PenLine size={14} />;
+    case "IMPLEMENTATION_CHALLENGE":
+      return <Wrench size={14} />;
+    case "REVIEW":
+      return <Flag size={14} />;
+    case "IMPROVE":
+      return <Trophy size={14} />;
+    default:
+      return <FileText size={14} />;
+  }
+}
+
 export function LearningActivityNavigation({
   activity,
 }: {
@@ -453,13 +537,30 @@ export function LearningActivityNavigation({
 }) {
   const content = (
     <>
-      <span>{activity.title}</span>
-      <span>{activityStateLabel(activity.state)}</span>
+      <span className="activity-row__order">
+        {String(activity.position).padStart(2, "0")}
+      </span>
+      <span className="activity-row__icon" aria-hidden="true">
+        {activity.state.toLowerCase() === "locked" ? (
+          <LockKeyhole size={14} />
+        ) : (
+          activityIcon(activity.kind)
+        )}
+      </span>
+      <span className="activity-row__copy">
+        <strong>{activity.title}</strong>
+        <span className="activity-row__objective">
+          {activity.kind.replaceAll("_", " ")}
+        </span>
+      </span>
+      <span className="activity-row__status">
+        {activityStateLabel(activity.state)}
+      </span>
     </>
   );
   if (activity.state.toLowerCase() === "locked") {
     return (
-      <div className="activity-row" aria-disabled="true">
+      <div className="activity-row activity-row--locked" aria-disabled="true">
         {content}
       </div>
     );
@@ -494,6 +595,7 @@ export function ConnectedActivityWorkspace({
     "idle" | "saving" | "saved" | "submitted" | "error"
   >("idle");
   const [message, setMessage] = useState("");
+  const [reauthRequired, setReauthRequired] = useState(false);
   const prompt = learnerPrompt(activity);
   const writableState =
     prompt !== null &&
@@ -521,6 +623,7 @@ export function ConnectedActivityWorkspace({
     if (!canSaveDraft) return;
     setMutation("saving");
     setMessage("");
+    setReauthRequired(false);
     try {
       const saved = await api.saveDraft(
         activity.id,
@@ -534,12 +637,14 @@ export function ConnectedActivityWorkspace({
     } catch (error) {
       setMutation("error");
       setMessage(errorText(error));
+      setReauthRequired(isSessionExpiredError(error));
     }
   }
   async function submit() {
     if (!canSubmitEvidence || !evidenceType) return;
     setMutation("saving");
     setMessage("");
+    setReauthRequired(false);
     try {
       const submitted = await api.submitEvidence(
         activity.id,
@@ -553,13 +658,19 @@ export function ConnectedActivityWorkspace({
     } catch (error) {
       setMutation("error");
       setMessage(errorText(error));
+      setReauthRequired(isSessionExpiredError(error));
     }
   }
   return (
     <div className="activity-shell" aria-label="Connected learner activity">
+      <div className="activity-shell__breadcrumb">
+        Course path <span aria-hidden="true">/</span> Module activity
+      </div>
       <div className="activity-shell__header">
         <div>
-          <p className="kicker">{activity.kind}</p>
+          <p className="activity-shell__type">
+            {activity.kind.replaceAll("_", " ")}
+          </p>
           <h1>{activity.title}</h1>
         </div>
         <span className="status-pill">
@@ -578,19 +689,31 @@ export function ConnectedActivityWorkspace({
         </div>
       )}
       {activity.kind.toLowerCase() === "video" ? (
-        <p className="field-help">
-          {canCompleteVideo
-            ? "The server has enabled its versioned playback workflow."
-            : "Playback completion is unavailable because the server has not exposed that action."}
-        </p>
+        <div className="activity-media-state" role="status">
+          <div className="activity-media-state__icon" aria-hidden="true">
+            <Play size={17} />
+          </div>
+          <div>
+            <strong>Lesson media is pending approval.</strong>
+            <p className="field-help">
+              {canCompleteVideo
+                ? "The server has enabled its versioned playback workflow."
+                : "Playback completion is unavailable because the server has not exposed that action."}
+            </p>
+          </div>
+        </div>
       ) : (
         <form
+          className="activity-response-form"
           onSubmit={(event) => {
             event.preventDefault();
             void save();
           }}
         >
-          <label className="field-group" htmlFor="activity-response">
+          <label
+            className="field-group activity-response-form__label"
+            htmlFor="activity-response"
+          >
             Your response
           </label>
           <textarea
@@ -605,7 +728,7 @@ export function ConnectedActivityWorkspace({
                 : "Unavailable until the server enables an activity action."
             }
           />
-          <div className="hero-actions">
+          <div className="hero-actions activity-response-form__actions">
             <button
               className="button button--outline"
               type="submit"
@@ -628,6 +751,11 @@ export function ConnectedActivityWorkspace({
       )}
       {message ? (
         <p role={mutation === "error" ? "alert" : "status"}>{message}</p>
+      ) : null}
+      {reauthRequired ? (
+        <Link className="button button--ink" href={ROUTES.sessionExpired}>
+          Sign in again
+        </Link>
       ) : null}
     </div>
   );
@@ -658,22 +786,30 @@ export function LiveLearningPath({
       {state.status === "ready" ? (
         <section className="learning-hero" aria-labelledby="learning-title">
           <div className="learning-hero__copy">
-            <p className="eyebrow">
-              <span aria-hidden="true" /> Authenticated learner path
-            </p>
+            <div
+              className="breadcrumbs breadcrumbs--clarity"
+              aria-label="Course location"
+            >
+              Home <span aria-hidden="true">/</span> My learning
+            </div>
+            <p className="eyebrow">Published course</p>
             <h1 id="learning-title">
               {state.value.learning?.program_title ?? state.value.program.title}
             </h1>
             <p>
-              Enrollment and progression are read from the server-authoritative
-              learning response.
+              Your course outline and activity access are read from the
+              server-authoritative learning response.
             </p>
             {state.value.learning ? (
               <LearningModules learning={state.value.learning} />
             ) : (
-              <p role="status">
-                This account has no enrolled learning resource for this program.
-              </p>
+              <div className="enrollment-required" role="status">
+                <strong>No active enrollment for this course.</strong>
+                <span>
+                  This account cannot open Module 1 until the server returns an
+                  enrollment.
+                </span>
+              </div>
             )}
           </div>
         </section>
@@ -687,8 +823,20 @@ function LearningModules({ learning }: { learning: LearningResponse }) {
     <div className="course-path">
       {learning.modules.map((module) => (
         <article className="module-card" key={module.id}>
-          <p className="module-card__number">Module {module.position}</p>
-          <h2>{module.title}</h2>
+          <div className="module-card__header">
+            <div>
+              <p className="module-card__number">Module {module.position}</p>
+              <h2>{module.title}</h2>
+            </div>
+            <span className="module-card__count">
+              {
+                module.activities.filter(
+                  (activity) => activity.state.toLowerCase() === "completed",
+                ).length
+              }
+              /{module.activities.length}
+            </span>
+          </div>
           {module.activities.map((activity) => (
             <LearningActivityNavigation activity={activity} key={activity.id} />
           ))}
@@ -736,13 +884,18 @@ export function LiveModule({
     <>
       <section className="module-hero" aria-labelledby="module-title">
         <div>
-          <p className="eyebrow">
-            <span aria-hidden="true" /> Module {courseModule.position}
-          </p>
+          <div
+            className="breadcrumbs breadcrumbs--clarity"
+            aria-label="Module location"
+          >
+            Course <span aria-hidden="true">/</span> Module{" "}
+            {courseModule.position}
+          </div>
+          <p className="eyebrow">Course module</p>
           <h1 id="module-title">{courseModule.title}</h1>
           <p>
-            Only activity state returned by the authenticated learning API is
-            shown.
+            Complete each server-authorized activity in sequence. The status
+            beside every item comes from the learning API.
           </p>
         </div>
       </section>

@@ -55,17 +55,23 @@ function failureMessage(error: unknown): string {
     : "You are offline. Reconnect before saving this profile.";
 }
 
+export function isOnboardingSessionExpired(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 401;
+}
+
 export function OnboardingForm() {
   const [profile, setProfile] = useState<OnboardingResponse | null>(null);
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [step, setStep] = useState(1);
   const [pending, setPending] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const [finished, setFinished] = useState(false);
 
   function load() {
     setPending(true);
     setError(null);
+    setSessionExpired(false);
     void createLearnerApi()
       .onboarding()
       .then(
@@ -80,6 +86,7 @@ export function OnboardingForm() {
         },
         (requestError: unknown) => {
           setError(failureMessage(requestError));
+          setSessionExpired(isOnboardingSessionExpired(requestError));
           setPending(false);
         },
       );
@@ -96,6 +103,7 @@ export function OnboardingForm() {
     if (!profile) return;
     setPending(true);
     setError(null);
+    setSessionExpired(false);
     try {
       const weeklyMinutes =
         draft.weeklyMinutes.trim() === ""
@@ -117,6 +125,7 @@ export function OnboardingForm() {
       setFinished(status === "completed" || status === "skipped");
     } catch (requestError) {
       setError(failureMessage(requestError));
+      setSessionExpired(isOnboardingSessionExpired(requestError));
     } finally {
       setPending(false);
     }
@@ -124,7 +133,11 @@ export function OnboardingForm() {
 
   if (pending && !profile) {
     return (
-      <div className="onboarding-form" role="status" aria-live="polite">
+      <div
+        className="onboarding-form clarity-onboarding-form"
+        role="status"
+        aria-live="polite"
+      >
         <div className="skeleton-block" />
         <p>Loading your saved profile…</p>
       </div>
@@ -133,14 +146,16 @@ export function OnboardingForm() {
 
   if (error && !profile) {
     return (
-      <div className="onboarding-form" role="alert">
+      <div className="onboarding-form clarity-onboarding-form" role="alert">
         <p className="form-message form-message--error">{error}</p>
         <button className="button button--outline button--full" onClick={load}>
           Retry profile
         </button>
-        <Link className="text-link" href={ROUTES.login}>
-          Sign in again
-        </Link>
+        {sessionExpired ? (
+          <Link className="text-link" href={ROUTES.sessionExpired}>
+            Sign in again
+          </Link>
+        ) : null}
       </div>
     );
   }
@@ -149,7 +164,10 @@ export function OnboardingForm() {
 
   if (finished) {
     return (
-      <div className="onboarding-form onboarding-complete" role="status">
+      <div
+        className="onboarding-form clarity-onboarding-form onboarding-complete"
+        role="status"
+      >
         <CheckCircle2 size={34} aria-hidden="true" />
         <div>
           <p className="eyebrow">
@@ -184,7 +202,7 @@ export function OnboardingForm() {
 
   return (
     <form
-      className="onboarding-form"
+      className="onboarding-form clarity-onboarding-form"
       onSubmit={(event) => {
         event.preventDefault();
         if (step < 3) {
@@ -194,7 +212,10 @@ export function OnboardingForm() {
         }
       }}
     >
-      <div className="onboarding-progress" aria-label={`Step ${step} of 3`}>
+      <div
+        className="onboarding-progress clarity-onboarding-progress"
+        aria-label={`Step ${step} of 3`}
+      >
         <span>0{step}</span>
         <div>
           <i style={{ width: `${(step / 3) * 100}%` }} />
@@ -204,7 +225,7 @@ export function OnboardingForm() {
 
       {step === 1 ? (
         <>
-          <div className="form-step">
+          <div className="form-step clarity-form-step">
             <span className="form-step__number">01</span>
             <div>
               <h2>Where are you practicing?</h2>
@@ -242,7 +263,7 @@ export function OnboardingForm() {
 
       {step === 2 ? (
         <>
-          <div className="form-step">
+          <div className="form-step clarity-form-step">
             <span className="form-step__number">02</span>
             <div>
               <h2>Name the change you want.</h2>
@@ -276,7 +297,7 @@ export function OnboardingForm() {
 
       {step === 3 ? (
         <>
-          <div className="form-step">
+          <div className="form-step clarity-form-step">
             <span className="form-step__number">03</span>
             <div>
               <h2>Make the plan realistic.</h2>
@@ -323,12 +344,17 @@ export function OnboardingForm() {
       ) : null}
 
       {error ? (
-        <p className="form-message form-message--error" role="alert">
-          {error}
-        </p>
+        <div role="alert">
+          <p className="form-message form-message--error">{error}</p>
+          {sessionExpired ? (
+            <Link className="text-link" href={ROUTES.sessionExpired}>
+              Sign in again
+            </Link>
+          ) : null}
+        </div>
       ) : null}
 
-      <div className="onboarding-actions">
+      <div className="onboarding-actions clarity-onboarding-actions">
         {step > 1 ? (
           <button
             className="button button--quiet"

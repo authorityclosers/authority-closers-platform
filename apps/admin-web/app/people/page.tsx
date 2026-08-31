@@ -1,4 +1,10 @@
-import { ArrowUpRight, UserRoundSearch } from "lucide-react";
+import {
+  ArrowUpRight,
+  Filter,
+  Search,
+  ShieldCheck,
+  UserRoundSearch,
+} from "lucide-react";
 import Link from "next/link";
 
 import { AdminShell } from "../components/admin-shell";
@@ -15,14 +21,93 @@ export default function PeoplePage() {
   return (
     <AdminShell
       active="people"
-      eyebrow="UXS-0231–UXS-0240 / people / learner diagnosis"
-      title="Find the signal, keep the boundary."
-      description="Diagnose a learner’s version-aware progress with redaction, purpose, tenant scope, and an auditable read path."
+      surface="people"
+      eyebrow="People / tenant-scoped learner workspace"
+      title="People"
+      description="Manage learner visibility and future assignment workflows without guessing at people, groups, progress, or permissions."
     >
       <PreviewNotice
-        title="Diagnosis is waiting for a named support or admin actor."
-        body="No learner lookup is issued from this preview. The API must verify learner_diagnose, active tenant context, redaction, purpose, and audit provenance before returning state."
+        title="People data is not connected in this foundation."
+        body="The shell is ready for the tenant-scoped people read path. No learner lookup is issued until the API verifies learner_diagnose, active tenant context, redaction, purpose, and audit provenance."
       />
+
+      <section
+        className="panel people-table-panel"
+        aria-labelledby="people-table-title"
+      >
+        <div className="people-toolbar">
+          <div>
+            <span className="section-eyebrow">Directory / learner records</span>
+            <h2 id="people-table-title">Learners</h2>
+          </div>
+          <div className="people-actions">
+            <button className="button button-secondary" type="button" disabled>
+              Invite people (unavailable)
+            </button>
+            <button className="button" type="button" disabled>
+              Create assignment (unavailable)
+            </button>
+          </div>
+        </div>
+        <div
+          className="people-filters"
+          aria-label="Learner filters unavailable"
+        >
+          <label className="people-search">
+            <Search size={17} aria-hidden="true" />
+            <span className="sr-only">Search learners</span>
+            <input
+              type="search"
+              placeholder="Search by name or email"
+              disabled
+            />
+          </label>
+          <button className="filter-button" type="button" disabled>
+            <Filter size={16} aria-hidden="true" /> Group
+          </button>
+          <button className="filter-button" type="button" disabled>
+            <Filter size={16} aria-hidden="true" /> Status
+          </button>
+          <button className="filter-button" type="button" disabled>
+            <Filter size={16} aria-hidden="true" /> Progress
+          </button>
+        </div>
+        <div
+          className="people-table-wrap"
+          role="region"
+          aria-label="Learner directory empty state"
+        >
+          <table className="people-table">
+            <thead>
+              <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Group</th>
+                <th scope="col">Assigned path</th>
+                <th scope="col">Progress</th>
+                <th scope="col">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td colSpan={5}>
+                  <div className="empty-directory">
+                    <ShieldCheck size={22} aria-hidden="true" />
+                    <strong>No learner records available</strong>
+                    <span>
+                      The authorized people API has not returned a tenant-scoped
+                      directory.
+                    </span>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p className="surface-footnote">
+          <ShieldCheck size={14} aria-hidden="true" /> No names, assignments, or
+          progress values are fabricated in this preview.
+        </p>
+      </section>
 
       <div className="workbench-grid">
         <section className="panel" aria-labelledby="diagnosis-panel-title">

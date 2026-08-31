@@ -1,0 +1,558 @@
+/*
+ * Authority Closers Clarity Grid / auth slice
+ *
+ * Reference: AUTH-01-desktop-registration.png and AUTH-02-desktop-verification.png.
+ * This file is intentionally imported by the app shell after styles.css.
+ * The visual panel uses the approved auth-workspace-lake-v1.png asset; no
+ * screenshot crop or placeholder artwork is used here.
+ */
+
+:root {
+  --ac-clarity-ink: #081220;
+  --ac-clarity-navy: #0f1b33;
+  --ac-clarity-blue: #4f46e5;
+  --ac-clarity-blue-dark: #3730a3;
+  --ac-clarity-surface: #f7f8fa;
+  --ac-clarity-border: #e5e7eb;
+  --ac-clarity-muted: #5e6878;
+}
+
+.site-frame:has(.clarity-auth-main) .site-header {
+  border-bottom-color: var(--ac-clarity-border);
+  background: #ffffff;
+}
+
+.site-frame:has(.clarity-auth-main) .site-footer {
+  border-top-color: var(--ac-clarity-border);
+  background: #ffffff;
+}
+
+.clarity-auth-main {
+  min-height: calc(100svh - 86px);
+  padding: clamp(28px, 5vw, 64px) 0 clamp(48px, 7vw, 88px);
+  background: #ffffff;
+}
+
+.clarity-auth-layout {
+  width: min(1240px, calc(100% - 48px));
+  grid-template-columns: minmax(320px, 0.88fr) minmax(440px, 1.12fr);
+  gap: clamp(48px, 8vw, 112px);
+  align-items: center;
+}
+
+.clarity-auth-back {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 24px;
+  color: var(--ac-clarity-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.clarity-auth-brand-panel {
+  min-height: 560px;
+  padding: clamp(34px, 5vw, 64px) clamp(28px, 5vw, 56px);
+  border: 1px solid #d8e4f7;
+  border-radius: 10px;
+  background: #edf4ff;
+  color: var(--ac-clarity-ink);
+}
+
+.clarity-auth-brand-media {
+  display: block;
+  width: 100%;
+  height: 205px;
+  border-radius: 7px;
+  object-fit: cover;
+  object-position: center 48%;
+}
+
+.clarity-auth-brand-kicker {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ac-clarity-navy);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.clarity-auth-brand-mark {
+  display: inline-grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 7px;
+  background: var(--ac-clarity-navy);
+  color: #ffffff;
+  font-size: 0.68rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+}
+
+.clarity-auth-brand-panel .eyebrow {
+  margin-top: clamp(38px, 5vw, 58px);
+  color: var(--ac-clarity-blue-dark);
+}
+
+.clarity-auth-brand-panel h1 {
+  max-width: 560px;
+  margin: 18px 0 24px;
+  color: var(--ac-clarity-navy);
+  font-family: var(--font-sans), sans-serif;
+  font-size: clamp(2.7rem, 5.3vw, 5.35rem);
+  font-weight: 800;
+  letter-spacing: -0.065em;
+  line-height: 0.98;
+}
+
+.clarity-auth-brand-panel h1 em {
+  color: var(--ac-clarity-blue);
+  font-style: normal;
+}
+
+.clarity-auth-brand-panel .auth-context__copy {
+  max-width: 410px;
+  color: var(--ac-clarity-muted);
+  font-size: 0.98rem;
+  line-height: 1.65;
+}
+
+.clarity-auth-proof {
+  display: grid;
+  gap: 12px;
+  max-width: 430px;
+  margin: 34px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.clarity-auth-proof li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: var(--ac-clarity-navy);
+  font-size: 0.79rem;
+  line-height: 1.4;
+}
+
+.clarity-auth-proof svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--ac-clarity-blue);
+}
+
+.clarity-auth-principle {
+  max-width: 430px;
+  margin-top: 38px;
+  padding-top: 16px;
+  border-top-color: #ccdaf0;
+  color: var(--ac-clarity-muted);
+}
+
+.clarity-auth-panel {
+  min-width: 0;
+}
+
+.clarity-auth-card {
+  width: min(100%, 540px);
+  margin-left: auto;
+  padding: clamp(28px, 4vw, 46px);
+  border: 1px solid var(--ac-clarity-border);
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 18px 42px rgba(15, 27, 51, 0.08);
+}
+
+.clarity-auth-card .auth-card__topline {
+  color: var(--ac-clarity-muted);
+  font-size: 0.75rem;
+  font-weight: 750;
+}
+
+.clarity-auth-card .auth-card__icon {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 7px;
+  background: #e9edff;
+  color: var(--ac-clarity-blue);
+}
+
+.clarity-auth-card h2 {
+  margin-top: 28px;
+  color: var(--ac-clarity-navy);
+  font-family: var(--font-sans), sans-serif;
+  font-size: clamp(1.7rem, 3vw, 2.25rem);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.08;
+}
+
+.clarity-auth-card .auth-card__intro {
+  max-width: 440px;
+  color: var(--ac-clarity-muted);
+  font-size: 0.84rem;
+  line-height: 1.55;
+}
+
+.clarity-auth-card .stack-form {
+  gap: 17px;
+  margin-top: 26px;
+}
+
+.clarity-auth-card .field-group {
+  gap: 7px;
+}
+
+.clarity-auth-card .field-group label {
+  color: var(--ac-clarity-navy);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.clarity-auth-card .field-group input,
+.clarity-auth-card .field-group textarea {
+  min-height: 48px;
+  border: 1px solid #ccd3df;
+  border-radius: 6px;
+  background: #ffffff;
+  color: var(--ac-clarity-ink);
+  font-size: 0.87rem;
+}
+
+.clarity-auth-card .field-group input {
+  padding: 11px 13px;
+}
+
+.clarity-auth-card .field-group input:focus,
+.clarity-auth-card .field-group textarea:focus {
+  border-color: var(--ac-clarity-blue);
+  outline: 3px solid rgba(79, 70, 229, 0.16);
+}
+
+.clarity-auth-card .field-help {
+  color: var(--ac-clarity-muted);
+  font-size: 0.69rem;
+  line-height: 1.35;
+}
+
+.clarity-auth-card .button--ink,
+.clarity-auth-card .button--outline {
+  min-height: 48px;
+  border-radius: 6px;
+  font-size: 0.79rem;
+  font-weight: 800;
+}
+
+.clarity-auth-card .button--ink {
+  border-color: var(--ac-clarity-blue);
+  background: var(--ac-clarity-blue);
+  color: #ffffff;
+}
+
+.clarity-auth-card .button--ink:hover:not(:disabled) {
+  border-color: var(--ac-clarity-blue-dark);
+  background: var(--ac-clarity-blue-dark);
+}
+
+.clarity-auth-card .button--outline {
+  border-color: #c9d1df;
+  background: #ffffff;
+  color: var(--ac-clarity-navy);
+}
+
+.clarity-auth-card .button--outline:hover:not(:disabled) {
+  border-color: var(--ac-clarity-blue);
+  background: #f4f5ff;
+}
+
+.clarity-auth-card .consent-check {
+  color: var(--ac-clarity-muted);
+  font-size: 0.7rem;
+  line-height: 1.5;
+}
+
+.clarity-auth-card .consent-check input {
+  accent-color: var(--ac-clarity-blue);
+}
+
+.clarity-auth-card .auth-divider {
+  margin: 20px 0;
+  color: var(--ac-clarity-muted);
+}
+
+.clarity-auth-card .auth-card__footer {
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top-color: var(--ac-clarity-border);
+  color: var(--ac-clarity-muted);
+  font-size: 0.7rem;
+}
+
+.clarity-auth-card .auth-card__footer a,
+.clarity-auth-card .text-link {
+  color: var(--ac-clarity-blue-dark);
+}
+
+.clarity-auth-card .form-message--error {
+  border-left-color: #c53030;
+  background: #fff4f4;
+  color: #a12626;
+}
+
+.clarity-auth-card.auth-result {
+  align-content: start;
+}
+
+@media (max-width: 960px) {
+  .clarity-auth-main {
+    padding-top: 20px;
+  }
+
+  .clarity-auth-layout {
+    width: min(100% - 32px, 560px);
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+
+  .clarity-auth-brand-panel {
+    min-height: 0;
+    padding: 26px 24px 30px;
+  }
+
+  .clarity-auth-brand-media {
+    height: 160px;
+    object-position: center 48%;
+  }
+
+  .clarity-auth-brand-panel .eyebrow {
+    margin-top: 42px;
+  }
+
+  .clarity-auth-brand-panel h1 {
+    font-size: clamp(2.35rem, 11vw, 3.6rem);
+  }
+
+  .clarity-auth-proof {
+    margin-top: 24px;
+  }
+
+  .clarity-auth-principle {
+    margin-top: 25px;
+  }
+
+  .clarity-auth-card {
+    width: 100%;
+    padding: 26px 22px;
+    box-shadow: 0 10px 26px rgba(15, 27, 51, 0.07);
+  }
+}
+
+@media (max-width: 480px) {
+  .clarity-auth-layout {
+    width: min(100% - 24px, 560px);
+  }
+
+  .clarity-auth-back {
+    margin-bottom: 15px;
+  }
+
+  .clarity-auth-brand-panel {
+    border-radius: 8px;
+  }
+
+  .clarity-auth-card {
+    border-radius: 8px;
+  }
+}
+
+/* Full-height split composition selected in AUTH-01. */
+.site-frame--auth {
+  min-height: 100vh;
+  overflow: visible;
+  background: #ffffff;
+}
+
+.site-frame--auth .clarity-auth-main {
+  min-height: 100vh;
+  padding: 0;
+}
+
+.site-frame--auth .clarity-auth-layout {
+  width: 100%;
+  min-height: 100vh;
+  grid-template-columns: minmax(400px, 42%) minmax(0, 58%);
+  gap: 0;
+  align-items: stretch;
+}
+
+.site-frame--auth .clarity-auth-context {
+  position: relative;
+  min-width: 0;
+  background: #edf4ff;
+}
+
+.site-frame--auth .clarity-auth-back {
+  position: absolute;
+  z-index: 2;
+  top: 28px;
+  right: 34px;
+  margin: 0;
+}
+
+.site-frame--auth .clarity-auth-brand-panel {
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column;
+  padding: 42px 64px 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: #edf4ff;
+}
+
+.site-frame--auth .clarity-auth-brand-kicker {
+  order: 1;
+  font-size: 1.02rem;
+}
+
+.site-frame--auth .clarity-auth-brand-mark {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ac-clarity-navy);
+}
+
+.site-frame--auth .clarity-auth-brand-mark svg {
+  width: 32px;
+  height: 32px;
+}
+
+.site-frame--auth .clarity-auth-brand-panel .eyebrow {
+  order: 2;
+  width: fit-content;
+  margin-top: clamp(64px, 9vh, 104px);
+  padding: 7px 10px;
+  border-radius: 4px;
+  background: #dceaff;
+  color: #175fc7;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.site-frame--auth .clarity-auth-brand-panel .eyebrow > span {
+  display: none;
+}
+
+.site-frame--auth .clarity-auth-brand-panel h1 {
+  order: 3;
+  max-width: 520px;
+  margin: 24px 0 16px;
+  font-size: clamp(2.55rem, 4vw, 4.25rem);
+  letter-spacing: -0.055em;
+  line-height: 1.04;
+}
+
+.site-frame--auth .clarity-auth-brand-panel h1 em {
+  color: var(--ac-clarity-navy);
+  font-family: var(--font-sans), sans-serif;
+  font-weight: inherit;
+}
+
+.site-frame--auth .clarity-auth-brand-panel .auth-context__copy {
+  order: 4;
+  max-width: 470px;
+  font-size: 1rem;
+}
+
+.site-frame--auth .clarity-auth-proof {
+  order: 5;
+  gap: 18px;
+  margin-top: 34px;
+}
+
+.site-frame--auth .clarity-auth-proof li {
+  font-size: 0.86rem;
+}
+
+.site-frame--auth .clarity-auth-principle {
+  display: none;
+}
+
+.site-frame--auth .clarity-auth-brand-media {
+  order: 10;
+  width: calc(100% + 128px);
+  height: clamp(240px, 34vh, 390px);
+  margin-top: auto;
+  margin-left: -64px;
+  border-radius: 0;
+  object-position: center 48%;
+}
+
+.site-frame--auth .clarity-auth-panel {
+  display: grid;
+  min-height: 100vh;
+  place-content: center;
+  gap: 16px;
+  padding: 24px clamp(42px, 6vw, 92px);
+  background: #ffffff;
+}
+
+.site-frame--auth .clarity-auth-panel > .surface-state,
+.site-frame--auth .clarity-auth-card {
+  width: min(100%, 720px);
+  margin: 0 auto;
+}
+
+.site-frame--auth .clarity-auth-card {
+  padding: clamp(32px, 4vw, 48px);
+  box-shadow: 0 8px 28px rgba(15, 27, 51, 0.06);
+}
+
+@media (max-width: 960px) {
+  .site-frame--auth .clarity-auth-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .site-frame--auth .clarity-auth-context,
+  .site-frame--auth .clarity-auth-brand-panel {
+    min-height: auto;
+  }
+
+  .site-frame--auth .clarity-auth-brand-panel {
+    padding: 26px 24px 0;
+  }
+
+  .site-frame--auth .clarity-auth-back {
+    top: 72px;
+    right: 20px;
+  }
+
+  .site-frame--auth .clarity-auth-brand-panel .eyebrow {
+    margin-top: 76px;
+  }
+
+  .site-frame--auth .clarity-auth-brand-panel h1 {
+    max-width: 420px;
+    font-size: clamp(2.35rem, 11vw, 3.6rem);
+  }
+
+  .site-frame--auth .clarity-auth-proof {
+    margin-bottom: 28px;
+  }
+
+  .site-frame--auth .clarity-auth-brand-media {
+    width: calc(100% + 48px);
+    height: 190px;
+    margin-left: -24px;
+  }
+
+  .site-frame--auth .clarity-auth-panel {
+    min-height: auto;
+    padding: 28px 16px 48px;
+  }
+}

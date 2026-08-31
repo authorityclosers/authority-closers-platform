@@ -30,6 +30,7 @@ import PrivacyPage from "../privacy/page";
 import ProgramDetailPage from "../programs/[slug]/page";
 import RegisterPage from "../register/page";
 import ResetPasswordPage from "../reset-password/page";
+import SessionExpiredPage from "../session-expired/page";
 import TermsPage from "../terms/page";
 import VerifyEmailPage from "../verify-email/page";
 import {
@@ -81,6 +82,7 @@ const routeRenderers: Array<[string, (state?: string) => Promise<ReactNode>]> =
     ["forgot password", async () => ForgotPasswordPage()],
     ["verify email", async () => VerifyEmailPage()],
     ["reset password", async () => ResetPasswordPage()],
+    ["session expired", async () => SessionExpiredPage()],
     ["offline fallback", async () => OfflinePage()],
     [
       "callback",
@@ -187,6 +189,7 @@ describe("learner route and state primitives", () => {
     expect(ROUTES.forgotPassword).toBe("/forgot-password");
     expect(ROUTES.verifyEmail).toBe("/verify-email");
     expect(ROUTES.resetPassword).toBe("/reset-password");
+    expect(ROUTES.sessionExpired).toBe("/session-expired");
     expect(ROUTES.programDetail("free-course")).toBe("/programs/free-course");
     expect(ROUTES.programLearning("free-course")).toBe("/learn/free-course");
     expect(ROUTES.module("free-course", "module-01")).toBe(
@@ -402,6 +405,27 @@ describe("honest preview controls", () => {
     expect(onboarding).toContain("Loading your saved profile");
     expect(onboarding).not.toContain("Profile setup unavailable in preview");
     expect(onboarding).not.toContain("Choose the context");
+  });
+
+  it("applies the Clarity Grid auth and onboarding compositions without changing capability", async () => {
+    const registration = renderToStaticMarkup(createElement(RegisterPage));
+    const verification = renderToStaticMarkup(createElement(VerifyEmailPage));
+    const onboarding = renderToStaticMarkup(
+      await OnboardingPage({ searchParams: Promise.resolve({}) }),
+    );
+
+    expect(registration).toContain('class="auth-main clarity-auth-main"');
+    expect(registration).toContain("auth-workspace-lake-v1.png");
+    expect(registration).toContain("Create free account");
+    expect(registration).not.toContain("action=register");
+    expect(registration).not.toContain("Continue with Google");
+    expect(registration).not.toContain("Apple");
+    expect(verification).toContain("one-time link");
+    expect(verification).toContain("clarity-auth-brand-media");
+    expect(onboarding).toContain(
+      'class="learner-main auth-main clarity-onboarding-main"',
+    );
+    expect(onboarding).toContain("clarity-onboarding-steps");
   });
 });
 
@@ -638,9 +662,7 @@ describe("connected learner ready states", () => {
     );
 
     expect(html).toContain("No current course selected.");
-    expect(html).toContain(
-      "No catalog item is substituted as a current course.",
-    );
+    expect(html).toContain("absence of a projection is not treated as proof");
     expect(html).toContain('href="/"');
     expect(html).not.toContain("/learn/free-course");
   });
@@ -653,6 +675,6 @@ describe("connected learner ready states", () => {
     expect(html).not.toContain("free-course");
     expect(html).not.toContain("preview-certificate");
     expect(html).not.toContain("Preview identity");
-    expect(html.match(/aria-disabled="true"/g)).toHaveLength(2);
+    expect(html.match(/aria-disabled="true"/g)).toHaveLength(8);
   });
 });

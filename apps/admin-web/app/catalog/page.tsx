@@ -1,4 +1,15 @@
-import { BookOpenCheck, GitBranch } from "lucide-react";
+import {
+  BookOpenCheck,
+  AlertTriangle,
+  ChevronDown,
+  CheckCircle2,
+  GitBranch,
+  MessageSquare,
+  PenLine,
+  Play,
+  RefreshCcw,
+  X,
+} from "lucide-react";
 
 import { AdminShell } from "../components/admin-shell";
 import { PublishVersionForm } from "../components/admin-forms";
@@ -39,14 +50,183 @@ export default function CatalogPage() {
   return (
     <AdminShell
       active="catalog"
-      eyebrow="UXS-0241–UXS-0250 / catalog / version publish preview"
-      title="Publish only what can be explained."
-      description="A version gate for the permanent learning hierarchy. Draft content stays out of learner reads until a named admin can authorize an immutable transition."
+      surface="studio"
+      eyebrow="Course studio / outline preview"
+      title="Course outline"
+      description="A three-pane studio foundation for the versioned learning hierarchy. Content editing and publishing remain unavailable until a trusted catalog API is connected."
     >
       <PreviewNotice
-        title="No draft version is being presented as publishable."
-        body="The catalog API is not connected, so this route shows the publish contract and permanent activity sequence without inventing a program, version, status, or count."
+        title="Studio is in preview mode."
+        body="The outline below is a contract preview of the approved learning loop. It does not assert saved content, a draft version, publishing status, activity media, or learner visibility."
       />
+
+      <section className="studio-workspace" aria-label="Course studio preview">
+        <aside
+          className="studio-outline panel"
+          aria-labelledby="studio-outline-title"
+        >
+          <div className="studio-panel-heading">
+            <div>
+              <span className="section-eyebrow">Content / outline</span>
+              <h2 id="studio-outline-title">Free course</h2>
+            </div>
+            <span className="status-badge status-badge-muted">Preview</span>
+          </div>
+          <div className="studio-outline-meta">
+            Module 1 <span>•</span> foundation loop
+          </div>
+          <ol className="outline-list">
+            <li className="outline-item outline-item-active">
+              <span className="outline-icon outline-icon-video">
+                <Play size={15} aria-hidden="true" />
+              </span>
+              <span>
+                <strong>1.1 Video</strong>
+                <small>Watch / pending media</small>
+              </span>
+            </li>
+            <li className="outline-item">
+              <span className="outline-icon outline-icon-reflection">
+                <PenLine size={15} aria-hidden="true" />
+              </span>
+              <span>
+                <strong>1.2 Reflection</strong>
+                <small>Reflect / evidence</small>
+              </span>
+            </li>
+            <li className="outline-item">
+              <span className="outline-icon outline-icon-implement">
+                <CheckCircle2 size={15} aria-hidden="true" />
+              </span>
+              <span>
+                <strong>1.3 Implementation</strong>
+                <small>Implement / evidence</small>
+              </span>
+            </li>
+            <li className="outline-item">
+              <span className="outline-icon outline-icon-review">
+                <MessageSquare size={15} aria-hidden="true" />
+              </span>
+              <span>
+                <strong>1.4 Review</strong>
+                <small>Review / pending reviewer</small>
+              </span>
+            </li>
+            <li className="outline-item">
+              <span className="outline-icon outline-icon-improve">
+                <RefreshCcw size={15} aria-hidden="true" />
+              </span>
+              <span>
+                <strong>1.5 Improve</strong>
+                <small>Improve / next attempt</small>
+              </span>
+            </li>
+          </ol>
+          <p className="studio-disabled-note">
+            Adding sections and activities will be enabled only after the
+            catalog read/write contract is wired.
+          </p>
+        </aside>
+        <section
+          className="studio-activity panel"
+          aria-labelledby="studio-activity-title"
+        >
+          <div className="studio-panel-heading">
+            <div>
+              <span className="section-eyebrow">
+                Activity / selected contract
+              </span>
+              <h2 id="studio-activity-title">Video</h2>
+            </div>
+            <button
+              className="icon-button"
+              type="button"
+              aria-label="Delete activity (unavailable)"
+              disabled
+            >
+              <X size={18} aria-hidden="true" />
+            </button>
+          </div>
+          <div className="activity-preview-card">
+            <span className="outline-icon outline-icon-video">
+              <Play size={18} aria-hidden="true" />
+            </span>
+            <div>
+              <span className="activity-kind">Video activity</span>
+              <strong>Approved lesson asset pending</strong>
+              <p>
+                Playback, transcript, duration, and resource metadata will
+                appear here only after an authorized media configuration is
+                returned.
+              </p>
+            </div>
+          </div>
+          <div className="studio-form-grid">
+            <div className="studio-field">
+              <span>Activity type</span>
+              <div>
+                Video <ChevronDown size={15} aria-hidden="true" />
+              </div>
+            </div>
+            <div className="studio-field">
+              <span>Availability</span>
+              <div>Unavailable in preview</div>
+            </div>
+          </div>
+          <div className="studio-warning">
+            <AlertTriangle size={19} aria-hidden="true" />
+            <div>
+              <strong>Media configuration is not connected</strong>
+              <p>
+                No transcript or playable media is asserted. Learner-facing
+                delivery remains subject to the content/provider gates.
+              </p>
+            </div>
+            <button className="button button-secondary" type="button" disabled>
+              Resolve (unavailable)
+            </button>
+          </div>
+          <div className="studio-section-divider">
+            <span>Completion rules</span>
+            <small>Read-only contract</small>
+          </div>
+          <label className="studio-radio">
+            <input type="radio" checked disabled />{" "}
+            <span>
+              <strong>Require full completion</strong>
+              <small>Final rule is owned by the published version.</small>
+            </span>
+          </label>
+        </section>
+        <aside
+          className="studio-settings panel"
+          aria-label="Studio settings preview"
+        >
+          <div className="studio-tabs" aria-label="Studio settings sections">
+            <span className="studio-tab studio-tab-active">Settings</span>
+            <span className="studio-tab">Resources (0)</span>
+          </div>
+          <div className="studio-setting-group">
+            <span className="section-eyebrow">Availability</span>
+            <strong>Not set</strong>
+            <p>
+              Scheduling is unavailable until the catalog API returns a version.
+            </p>
+          </div>
+          <div className="studio-setting-group">
+            <span className="section-eyebrow">Prerequisites</span>
+            <strong>Not configured</strong>
+            <p>No activity prerequisites are asserted by this preview.</p>
+          </div>
+          <div className="studio-setting-group">
+            <span className="section-eyebrow">Visibility</span>
+            <strong>Not set</strong>
+            <p>
+              Learner visibility is determined by publication, not this shell.
+            </p>
+          </div>
+        </aside>
+      </section>
 
       <div className="workbench-grid">
         <section

@@ -15,10 +15,30 @@ import {
 } from "./components/ops-primitives";
 
 const metrics = [
-  { label: "Learners requiring attention", value: "—", icon: CircleAlert },
-  { label: "Active enrollments", value: "—", icon: UsersRound },
-  { label: "Published programs", value: "—", icon: BookOpenCheck },
-  { label: "Held jobs", value: "—", icon: Activity },
+  {
+    label: "Active learners",
+    value: "Not connected",
+    detail: "No learner records asserted",
+    icon: UsersRound,
+  },
+  {
+    label: "Assigned learning",
+    value: "Not connected",
+    detail: "No assignment records asserted",
+    icon: BookOpenCheck,
+  },
+  {
+    label: "Completion rate",
+    value: "Not connected",
+    detail: "No progress projection asserted",
+    icon: Activity,
+  },
+  {
+    label: "Evidence awaiting review",
+    value: "Not connected",
+    detail: "No review queue asserted",
+    icon: CircleAlert,
+  },
 ];
 
 const surfaces = [
@@ -56,22 +76,23 @@ export default function AdminHome() {
   return (
     <AdminShell
       active="overview"
-      eyebrow="G1 / operational readiness"
-      title="Learning operations"
-      description="A narrow support surface for the Free Course walking skeleton: diagnose, publish, correct, grant, retry, reconcile."
+      surface="organization"
+      eyebrow="Organization overview / read-only foundation"
+      title="Organization overview"
+      description="A clear starting point for tenant-scoped learning operations. Session and role status remain visible in the header; operational records stay unavailable until their authorized APIs exist."
     >
       <PreviewNotice />
 
       <section className="metrics-grid" aria-label="Operational snapshot">
-        {metrics.map(({ label, value, icon: Icon }, index) => (
+        {metrics.map(({ label, value, detail, icon: Icon }, index) => (
           <article className="metric-card" key={label}>
             <div className="metric-topline">
               <span className="metric-index">0{index + 1}</span>
               <Icon size={17} strokeWidth={1.7} aria-hidden="true" />
             </div>
             <span className="metric-label">{label}</span>
-            <strong>{value}</strong>
-            <small>awaiting authorized API</small>
+            <strong className="metric-value-text">{value}</strong>
+            <small>{detail}</small>
           </article>
         ))}
       </section>
@@ -82,10 +103,10 @@ export default function AdminHome() {
           aria-labelledby="surface-panel-title"
         >
           <SectionHeading
-            eyebrow="G1 boundary / operator moves"
+            eyebrow="Admin foundation / available routes"
             id="surface-panel-title"
-            title="Four surfaces. One source of truth."
-            body="Each route exposes the smallest operator action needed to support the permanent learning hierarchy without opening a hidden database edit."
+            title="A focused workspace for the first release."
+            body="Navigate the available foundation surfaces below. Every privileged action remains server-authorized and visibly locked when its target or API is not connected."
           />
           <div className="surface-card-grid">
             {surfaces.map((surface) => (

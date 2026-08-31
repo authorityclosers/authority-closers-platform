@@ -27,7 +27,6 @@ export function RegistrationForm() {
   const [pending, setPending] = useState(false);
   const [complete, setComplete] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPending(true);
@@ -51,7 +50,7 @@ export function RegistrationForm() {
 
   if (complete) {
     return (
-      <div className="auth-card auth-result" role="status">
+      <div className="auth-card clarity-auth-card auth-result" role="status">
         <MailCheck size={34} aria-hidden="true" />
         <h2>Check your inbox.</h2>
         <p>
@@ -72,7 +71,7 @@ export function RegistrationForm() {
   }
 
   return (
-    <div className="auth-card">
+    <div className="auth-card clarity-auth-card">
       <div className="auth-card__topline">
         <span className="auth-card__icon">
           <KeyRound size={18} aria-hidden="true" />
@@ -91,6 +90,7 @@ export function RegistrationForm() {
             id="register-first-name"
             name="firstName"
             autoComplete="given-name"
+            placeholder="First name"
             required
             maxLength={120}
             disabled={pending}
@@ -104,6 +104,7 @@ export function RegistrationForm() {
             type="email"
             inputMode="email"
             autoComplete="email"
+            placeholder="you@example.com"
             required
             maxLength={320}
             disabled={pending}
@@ -117,6 +118,7 @@ export function RegistrationForm() {
             type="tel"
             inputMode="tel"
             autoComplete="tel"
+            placeholder="Country code and number"
             required
             minLength={7}
             maxLength={32}
@@ -135,6 +137,7 @@ export function RegistrationForm() {
             name="password"
             type="password"
             autoComplete="new-password"
+            placeholder="At least 12 characters"
             required
             minLength={12}
             maxLength={256}
@@ -196,7 +199,7 @@ export function RecoveryRequestForm() {
   }
 
   return (
-    <div className="auth-card">
+    <div className="auth-card clarity-auth-card">
       <div className="auth-card__topline">
         <span className="auth-card__icon">
           <KeyRound size={18} aria-hidden="true" />
@@ -308,7 +311,7 @@ export function VerifyEmailFlow() {
 
   return (
     <div
-      className="auth-card auth-result"
+      className="auth-card clarity-auth-card auth-result"
       role={state === "error" ? "alert" : "status"}
     >
       {state === "success" ? (
@@ -413,14 +416,14 @@ export function PasswordResetForm() {
 
   if (token === undefined) {
     return (
-      <div className="auth-card auth-result" role="status">
+      <div className="auth-card clarity-auth-card auth-result" role="status">
         <p>Reading the secure reset link…</p>
       </div>
     );
   }
   if (!token) {
     return (
-      <div className="auth-card auth-result" role="alert">
+      <div className="auth-card clarity-auth-card auth-result" role="alert">
         <h2>Link unavailable.</h2>
         <p>This reset link is missing its one-time token.</p>
         <Link
@@ -434,7 +437,7 @@ export function PasswordResetForm() {
   }
   if (complete) {
     return (
-      <div className="auth-card auth-result" role="status">
+      <div className="auth-card clarity-auth-card auth-result" role="status">
         <CheckCircle2 size={34} aria-hidden="true" />
         <h2>Password updated.</h2>
         <p>
@@ -449,7 +452,7 @@ export function PasswordResetForm() {
   }
 
   return (
-    <div className="auth-card">
+    <div className="auth-card clarity-auth-card">
       <div className="auth-card__topline">
         <span className="auth-card__icon">
           <KeyRound size={18} aria-hidden="true" />

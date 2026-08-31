@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import CatalogPage from "./catalog/page";
+import AdminHome from "./page";
 import ErrorBoundary from "./error";
 import LearningOperationsPage from "./learning-operations/page";
 import Loading from "./loading";
@@ -209,6 +210,44 @@ describe("G1 admin inert form seams", () => {
 });
 
 describe("G1 admin permissions and semantic boundaries", () => {
+  it("renders the Clarity Grid organization shell without asserting metrics", () => {
+    const markup = renderToStaticMarkup(createElement(AdminHome));
+
+    expect(markup).toContain("clarity-shell surface-organization");
+    expect(markup).toContain("Organization overview");
+    expect(markup).toContain("Tenant pending");
+    expect(markup).toContain("Waiting for session verification");
+    expect(markup).toContain("Active learners");
+    expect(markup).toContain("Not connected");
+    expect(markup).toContain(
+      "No learner, catalog, job, or audit record is seeded here",
+    );
+    expect(markup).not.toContain(">248<");
+    expect(markup).not.toContain(">68%<");
+  });
+
+  it("renders people as an empty, fail-closed directory with locked actions", () => {
+    const markup = renderToStaticMarkup(createElement(PeoplePage));
+
+    expect(markup).toContain("clarity-shell surface-people");
+    expect(markup).toContain("No learner records available");
+    expect(markup).toContain(
+      "No names, assignments, or progress values are fabricated",
+    );
+    expect(markup).toContain("Create assignment (unavailable)");
+    expect(markup).toMatch(/<button[^>]*disabled[^>]*>Create assignment/);
+  });
+
+  it("renders the studio outline as a truthful contract preview", () => {
+    const markup = renderToStaticMarkup(createElement(CatalogPage));
+
+    expect(markup).toContain("clarity-shell surface-studio");
+    expect(markup).toContain('aria-label="Course studio preview"');
+    expect(markup).toContain("Approved lesson asset pending");
+    expect(markup).toContain("Media configuration is not connected");
+    expect(markup).toContain("Learner visibility is determined by publication");
+  });
+
   it("locks effectful controls and names permission, reason, and audit behavior", () => {
     const markup = renderToStaticMarkup(
       createElement(CapabilityBoundary, {
@@ -277,7 +316,7 @@ describe("G1 admin permissions and semantic boundaries", () => {
       "utf8",
     );
 
-    expect(people).toContain('<div class="admin-shell">');
+    expect(people).toMatch(/<div class="admin-shell(?: [^"]+)?">/);
     expect(people).toMatch(
       /<main[^>]*class="admin-content"[^>]*id="admin-content"/,
     );
@@ -355,5 +394,24 @@ describe("G1 admin permissions and semantic boundaries", () => {
     expect(styles).toContain("--quiet: " + quiet);
     expect(contrastRatio(quiet, "#10130f")).toBeGreaterThanOrEqual(4.5);
     expect(contrastRatio(quiet, "#171b16")).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("keeps Clarity Grid navigation touch targets at least 44px high", () => {
+    const styles = readFileSync(
+      new URL("./styles.css", import.meta.url),
+      "utf8",
+    );
+
+    expect(styles).toMatch(
+      /\.clarity-shell \.sidebar-nav a \{[^}]*min-height: 44px;/s,
+    );
+    expect(styles).toMatch(
+      /\.clarity-shell \.sidebar-subnav a \{[^}]*min-height: 44px;/s,
+    );
+    expect(styles).toMatch(/\.brand \{[^}]*min-height: 44px;/s);
+    expect(styles).toMatch(/\.back-link \{[^}]*min-height: 44px;/s);
+    expect(styles).toMatch(
+      /\.field input,\s*\.field select \{[^}]*min-height: 44px;/s,
+    );
   });
 });

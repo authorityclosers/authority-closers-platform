@@ -42,7 +42,7 @@ export function LoginForm() {
   }
 
   return (
-    <div className="auth-card">
+    <div className="auth-card clarity-auth-card">
       <div className="auth-card__topline">
         <span className="auth-card__icon">
           <ShieldCheck size={18} aria-hidden="true" />

@@ -221,7 +221,10 @@ def _seed(engine: Engine) -> _Seed:
             person_id=person_id,
             token_hash=_token_hash(token),
             created_at=NOW,
-            expires_at=NOW + timedelta(days=1),
+            # Keep this fixture independent of the wall clock. The route resolves
+            # sessions against real UTC time; a one-day lifetime made the otherwise
+            # deterministic PostgreSQL contract expire after its authored date.
+            expires_at=NOW + timedelta(days=3650),
             selected_tenant_id=selected_tenant_id,
         )
 

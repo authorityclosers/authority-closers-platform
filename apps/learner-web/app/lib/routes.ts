@@ -8,6 +8,7 @@ export const ROUTES = {
   verifyEmail: "/verify-email",
   resetPassword: "/reset-password",
   callback: "/auth/callback",
+  sessionExpired: "/session-expired",
   onboarding: "/onboarding",
   learnerHome: "/home",
   programDetail: (slug: string) => `/programs/${slug}`,

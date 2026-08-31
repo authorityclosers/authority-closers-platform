@@ -1,10 +1,13 @@
 import type { Metadata, Viewport } from "next";
-import { Manrope, Newsreader } from "next/font/google";
+import { Inter, Newsreader } from "next/font/google";
 
 import "./styles.css";
+import "./auth-clarity.css";
+import "./onboarding-clarity.css";
+import "./learner-clarity.css";
 import { PwaRegister } from "./components/pwa-register";
 
-const sans = Manrope({ subsets: ["latin"], variable: "--font-sans" });
+const sans = Inter({ subsets: ["latin"], variable: "--font-sans" });
 const serif = Newsreader({ subsets: ["latin"], variable: "--font-serif" });
 
 export const metadata: Metadata = {

@@ -79,8 +79,12 @@ curl.exe --fail http://localhost:3000/offline
 ```
 
 Verify registration, verification, login, onboarding resume, recovery, reset,
-session revocation, enrollment, draft/evidence, progress, and tenant-negative
-paths through browser/API tests. Do not recover users with direct SQL.
+session revocation, `/session-expired` reauthentication, enrollment,
+draft/evidence, progress, and tenant-negative paths through browser/API tests.
+For the session-expiry browser smoke, verify exactly one login form, no
+protected payload, an eligible existing-person Google action, and that a new
+valid session returns to a server-authorized route. Do not recover users with
+direct SQL.
 
 ## Known local stop conditions
 
