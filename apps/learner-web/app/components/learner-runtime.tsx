@@ -3,11 +3,13 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
+  CheckCircle2,
   FileText,
   Flag,
   LockKeyhole,
   PenLine,
   Play,
+  ShieldCheck,
   Trophy,
   Wrench,
 } from "lucide-react";
@@ -577,6 +579,36 @@ function learnerPrompt(activity: ActivityResponse): string | null {
   return prompt || null;
 }
 
+const ACTIVITY_LOOP = [
+  { kind: "VIDEO", label: "Watch" },
+  { kind: "REFLECTION", label: "Reflect" },
+  { kind: "IMPLEMENTATION_CHALLENGE", label: "Implement" },
+  { kind: "REVIEW", label: "Review" },
+  { kind: "IMPROVE", label: "Improve" },
+] as const;
+
+function ActivityLoop({ currentKind }: { currentKind: string }) {
+  return (
+    <ol className="activity-loop" aria-label="Module 1 learning loop">
+      {ACTIVITY_LOOP.map((step) => {
+        const current = step.kind === currentKind.toUpperCase();
+        return (
+          <li
+            className={`activity-loop__step${current ? " is-current" : ""}`}
+            aria-current={current ? "step" : undefined}
+            key={step.kind}
+          >
+            <span className="activity-loop__icon" aria-hidden="true">
+              {activityIcon(step.kind)}
+            </span>
+            <span>{step.label}</span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
 export function ConnectedActivityWorkspace({
   activity,
   api = defaultApi,
@@ -619,6 +651,16 @@ export function ConnectedActivityWorkspace({
       "reflection" | "implementation" | "review" | "improvement"
     >
   )[activity.kind.toLowerCase()];
+  const draftStatus =
+    mutation === "saving"
+      ? "Saving to the server…"
+      : mutation === "saved"
+        ? "Saved to the server"
+        : mutation === "error"
+          ? "Save needs attention"
+          : initialResponse
+            ? "Server draft restored"
+            : "Draft is not submitted";
   async function save() {
     if (!canSaveDraft) return;
     setMutation("saving");
@@ -662,13 +704,20 @@ export function ConnectedActivityWorkspace({
     }
   }
   return (
-    <div className="activity-shell" aria-label="Connected learner activity">
+    <div
+      className={`activity-shell activity-shell--${activity.kind.toLowerCase().replaceAll("_", "-")}`}
+      aria-label="Connected learner activity"
+    >
       <div className="activity-shell__breadcrumb">
-        Course path <span aria-hidden="true">/</span> Module activity
+        <Link href={ROUTES.learnerHome}>Course path</Link>
+        <span aria-hidden="true">/</span> Module 1 activity
       </div>
       <div className="activity-shell__header">
         <div>
           <p className="activity-shell__type">
+            <span className="activity-shell__type-icon" aria-hidden="true">
+              {activityIcon(activity.kind)}
+            </span>
             {activity.kind.replaceAll("_", " ")}
           </p>
           <h1>{activity.title}</h1>
@@ -691,7 +740,7 @@ export function ConnectedActivityWorkspace({
       {activity.kind.toLowerCase() === "video" ? (
         <div className="activity-media-state" role="status">
           <div className="activity-media-state__icon" aria-hidden="true">
-            <Play size={17} />
+            <Play size={24} />
           </div>
           <div>
             <strong>Lesson media is pending approval.</strong>
@@ -728,6 +777,30 @@ export function ConnectedActivityWorkspace({
                 : "Unavailable until the server enables an activity action."
             }
           />
+          <div className="activity-response-form__meta" aria-live="polite">
+            <span
+              className={
+                mutation === "saved"
+                  ? "activity-response-form__save-state is-saved"
+                  : "activity-response-form__save-state"
+              }
+            >
+              {mutation === "saved" ? (
+                <CheckCircle2 size={16} aria-hidden="true" />
+              ) : null}
+              {draftStatus}
+            </span>
+            <span>{response.length.toLocaleString()} characters</span>
+          </div>
+          <aside className="activity-draft-boundary">
+            <ShieldCheck size={20} aria-hidden="true" />
+            <span>
+              <strong>Controlled learner draft</strong>
+              Your response stays unsubmitted until the server authorizes the
+              next workflow action.
+            </span>
+          </aside>
+          <ActivityLoop currentKind={activity.kind} />
           <div className="hero-actions activity-response-form__actions">
             <button
               className="button button--outline"
@@ -740,6 +813,11 @@ export function ConnectedActivityWorkspace({
               className="button button--ink"
               type="button"
               onClick={() => void submit()}
+              aria-describedby={
+                !canSubmitEvidence && prompt
+                  ? "activity-submit-boundary"
+                  : undefined
+              }
               disabled={
                 !canSubmitEvidence || !evidenceType || mutation === "saving"
               }
@@ -747,6 +825,15 @@ export function ConnectedActivityWorkspace({
               Submit evidence
             </button>
           </div>
+          {!canSubmitEvidence && prompt ? (
+            <p
+              className="activity-submit-boundary"
+              id="activity-submit-boundary"
+              role="status"
+            >
+              Submission is locked until the server authorizes this step.
+            </p>
+          ) : null}
         </form>
       )}
       {message ? (

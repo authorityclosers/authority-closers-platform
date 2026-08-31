@@ -611,10 +611,13 @@ describe("connected learner ready states", () => {
 
     expect(html).toContain("Describe the next deliberate move.");
     expect(html).toContain("Restored server draft");
+    expect(html).toContain("Module 1 learning loop");
+    expect(html).toContain("Server draft restored");
+    expect(html).toContain("Controlled learner draft");
     expect(html).not.toContain("No learner-facing prompt is published.");
     expect(html).not.toContain('id="activity-response" disabled=""');
     expect(html).not.toContain('type="submit" disabled=""');
-    expect(html).toContain('type="button" disabled=""');
+    expect(html).toMatch(/type="button"[^>]*disabled=""/);
   });
 
   it("keeps all mutations disabled when the server exposes no allowed action", () => {
