@@ -45,6 +45,7 @@ def test_staging_controller_preserves_environment_and_provider_gates() -> None:
 def test_staging_controller_has_compact_security_smoke() -> None:
     required_urls = (
         "https://staging.authorityclosers.com/",
+        "https://staging.authorityclosers.com/$asset",
         "https://api-staging.authorityclosers.com/health/live",
         "https://api-staging.authorityclosers.com/health/ready",
         "https://api-staging.authorityclosers.com/v1/programs",
@@ -60,6 +61,15 @@ def test_staging_controller_has_compact_security_smoke() -> None:
     assert '"api-staging"' in CONTROLLER
     assert "ac-application-staging-worker-1" in CONTROLLER
     assert 'test "`$(readlink -f "`$current")" = "`$release_dir"' in CONTROLLER
+    for asset in (
+        "apple-touch-icon.png",
+        "auth-workspace-lake-v1.png",
+        "icon-192.png",
+        "icon-512.png",
+        "icon.svg",
+        "sw.js",
+    ):
+        assert f'"{asset}"' in CONTROLLER
     assert "RELEASE-FILES.sha256" in CONTROLLER
     assert "{{.Image}}" in CONTROLLER
     assert "restless-cherry-c46f.cloudflareaccess.com" in CONTROLLER

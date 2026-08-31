@@ -47,6 +47,9 @@ COPY --from=build --chown=node:node /workspace/apps/learner-web/.next/standalone
 COPY --from=build --chown=node:node \
     /workspace/apps/learner-web/.next/static \
     ./apps/learner-web/.next/static
+COPY --from=build --chown=node:node \
+    /workspace/apps/learner-web/public \
+    ./apps/learner-web/public
 
 USER node
 EXPOSE 3000

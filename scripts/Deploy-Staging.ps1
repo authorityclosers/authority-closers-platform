@@ -250,6 +250,19 @@ printf 'PASS  Staging release files and running images match exact release %s.\n
     Invoke-SshScript -Script $remoteProof
     Assert-HttpRoute -Url "https://staging.authorityclosers.com/" -Status 200 -Route "learner-staging"
     Assert-HttpRoute -Url "https://staging.authorityclosers.com/healthz" -Status 200
+    foreach ($asset in @(
+            "apple-touch-icon.png",
+            "auth-workspace-lake-v1.png",
+            "icon-192.png",
+            "icon-512.png",
+            "icon.svg",
+            "sw.js"
+        )) {
+        Assert-HttpRoute `
+            -Url "https://staging.authorityclosers.com/$asset" `
+            -Status 200 `
+            -Route "learner-staging"
+    }
     Assert-HttpRoute -Url "https://api-staging.authorityclosers.com/health/live" -Status 200 -Route "api-staging"
     Assert-HttpRoute -Url "https://api-staging.authorityclosers.com/health/ready" -Status 200 -Route "api-staging"
     Assert-HttpRoute -Url "https://api-staging.authorityclosers.com/v1/programs" -Status 200 -Route "api-staging"

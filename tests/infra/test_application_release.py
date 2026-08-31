@@ -61,6 +61,14 @@ def test_application_base_images_are_content_addressed(dockerfile: str) -> None:
     assert all(re.search(r"@sha256:[0-9a-f]{64}$", image) for image in image_arguments)
 
 
+def test_learner_release_image_contains_reviewed_public_assets() -> None:
+    assert "/workspace/apps/learner-web/public" in WEB_DOCKERFILE
+    assert "./apps/learner-web/public" in WEB_DOCKERFILE
+    assert WEB_DOCKERFILE.index("/workspace/apps/learner-web/public") < WEB_DOCKERFILE.index(
+        "USER node"
+    )
+
+
 def test_runtime_containers_are_not_privileged_or_host_published() -> None:
     assert "privileged:" not in COMPOSE
     assert "network_mode: host" not in COMPOSE
