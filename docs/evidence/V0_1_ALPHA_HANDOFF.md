@@ -1,118 +1,136 @@
-# v0.1 alpha candidate handoff
+# Authority Closers v0.1 alpha handoff
 
-Evidence date: 2026-08-31 (Asia/Kolkata)
-Branch: `codex/g1-free-course-foundation`
-Base commit inspected: `dd1757c880da4c2e6f966f6edbb05baea0e1d98d`
-Repository: `authorityclosers/authority-closers-platform` (private)
-Hosted baseline: `dd1757c880da4c2e6f966f6edbb05baea0e1d98d`
-Current delta: uncommitted; exact candidate SHA and hosted CI are pending
+- Evidence date: 2026-09-01 (Asia/Kolkata)
+- Repository: `authorityclosers/authority-closers-platform` (private)
+- Branch: `codex/g1-free-course-foundation`
+- Deployed application release:
+  `27fafaea1e5de41ae6a830746b1d832b42c7d444`
+- Evidence commit: `5f0cfc8`
 
 ## Outcome
 
-The worktree contains a coherent v0.1 implementation candidate for the
-browser-first learner foundation: email/password identity, verification and
-resend, recovery/reset, progressive onboarding, API-backed learner shell and
-learning loop adapters, draft/evidence/progress states, PWA shell, separate
-admin surface, modular API, migrations, tenancy/permission primitives,
-deployment contracts, and tests. The current delta adds the controlled
-four-shift topology with the complete Module 1 loop, exact-tenant learner
-provisioning, a bounded Resend transactional adapter, and explicit
-18+/service-email staging consent.
+The bounded v0.1 staging alpha is live and runtime-proven for the browser-first
+learner foundation, separate protected admin foundation, modular API,
+PostgreSQL state, password authentication, recovery, Google authentication,
+transactional email, published free-course catalog, learner home, complete
+Module 1 VIDEO → REFLECTION → IMPLEMENTATION_CHALLENGE → REVIEW → IMPROVE
+route family, and server-restored reflection draft.
 
-This is **not** a launch declaration. Passing local gates does not prove fresh
-hosted CI, deployment, staging seeding, or real email delivery.
+This is not a production launch declaration. Production learner, admin, and
+API hostnames do not resolve and the required production bootstrap,
+backup/restore, Access, secrets, rollback, observability, legal, and
+exact-release gates have not been proved.
 
-## Verification performed
+## Working staging URLs
 
-| Gate                                      | Result                                                                                                                                                                            |
-| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Repository ownership                      | PASS — `origin` and GitHub metadata resolve to private `authorityclosers/authority-closers-platform`                                                                              |
-| Full formatting/lint/type/test/build gate | PASS on the current uncommitted worktree via `pnpm run validate`; rerun on the exact commit in hosted CI                                                                          |
-| Admin web tests                           | 67 passed                                                                                                                                                                         |
-| Learner web tests                         | 46 passed after final identity hardening                                                                                                                                          |
-| Fresh PostgreSQL runtime                  | PASS — disposable pinned PostgreSQL 18 container, migrations through `20260830_0011`, `alembic check` clean, runtime/migrator/owner role separation exercised                     |
-| Python suite                              | 896 passed, 7 skipped, one dependency deprecation warning on the current uncommitted worktree                                                                                     |
-| Candidate wheel                           | PASS locally — the built wheel contains `ac_platform/seed/data/free_course_foundation_v1.json`; exact-commit packaging remains pending                                            |
-| Hosted application CI                     | PASS for baseline `dd1757c` on [workflow 33339057014](https://github.com/authorityclosers/authority-closers-platform/actions/runs/33339057014); fresh candidate CI is pending     |
-| Hosted control-plane CI                   | PASS for baseline `dd1757c` on [workflow 33339057010](https://github.com/authorityclosers/authority-closers-platform/actions/runs/33339057010); fresh candidate CI is pending     |
-| Production Next builds                    | PASS — 15 learner routes and 8 admin routes generated                                                                                                                             |
-| Alembic graph                             | one head; fresh password-identity migration added with duplicate-email preflight and forward-only downgrade                                                                       |
-| Docker-backed composed services           | PASS — PostgreSQL, Mailpit, and Jaeger healthy; API liveness/readiness, learner manifest/offline/auth routes, separate admin preview routes, and Windows worker startup exercised |
-| Desktop browser smoke                     | PASS at 1440x900 for learner public/auth/policy/protected boundaries, universal states, and six separate admin/studio surfaces                                                    |
-| Mobile responsive smoke                   | PASS at 390x844 for key learner/admin routes; no horizontal overflow on checked mobile or desktop routes                                                                          |
-| Screenshot evidence                       | PASS — 32 indexed captures in [`screenshots/v0.1-local/`](screenshots/v0.1-local/README.md), each labeled by route and evidence boundary                                          |
-| PWA assets                                | manifest/service worker/offline shell present; PNG icons verified at 180, 192, and 512 square pixels                                                                              |
-| Token transport                           | PASS — email tokens use URL fragments, are removed from history, and are submitted only in JSON bodies                                                                            |
-| Production JavaScript dependency audit    | PASS — patched workspace overrides for `sharp` 0.35.0 and `postcss` 8.5.23; `pnpm audit --prod` reports no known vulnerabilities                                                  |
-| Local Python dependency audit             | PASS — `uvx pip-audit --local` reports no known vulnerabilities; `uv pip check` reports compatible installed packages                                                             |
-| Local frontend load probe                 | 800 requests, concurrency 25, 0 errors; 88.9 req/s; mean 270.06ms; p50 208.97ms; p95 719.76ms; p99 951.91ms; max 1550.53ms                                                        |
+| Surface      | URL                                                                           | Runtime result                                                 |
+| ------------ | ----------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Learner      | `https://staging.authorityclosers.com`                                        | HTTP 200; exact release `27fafae`                              |
+| Login        | `https://staging.authorityclosers.com/login`                                  | Password and Google entry points live                          |
+| Free course  | `https://staging.authorityclosers.com/programs/authority-closers-free-course` | Published course and module topology live                      |
+| Learner path | `https://staging.authorityclosers.com/learn/authority-closers-free-course`    | Enrolled learner sees all five Module 1 activities             |
+| Admin        | `https://admin-staging.authorityclosers.com`                                  | Cloudflare Access plus verified AC owner session               |
+| API          | `https://api-staging.authorityclosers.com`                                    | live/ready/program routes pass; public docs/OpenAPI remain 404 |
 
-The seven Python skips are explicit: four Bash-syntax proofs run on POSIX CI,
-two POSIX file-lock proofs are unavailable on Windows, and one live restore
-drill requires an approved dump and explicit opt-in. PostgreSQL, strict
-staging-seed, catalog-concurrency, learning HTTP, identity/session,
-exact-tenant provisioning, operations, and runtime-privilege tests ran.
+The legacy `authorityclosers.com` and `www` WordPress boundary is unchanged.
 
-## Current published URLs (direct probe on evidence date)
+## Test identities and access
 
-| URL                                                     | Observed result                                              | Meaning                                                                         |
-| ------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------- |
-| `https://staging.authorityclosers.com/`                 | HTTP 200; page still displays “Preview surface”              | old learner preview, not this candidate                                         |
-| `https://admin-staging.authorityclosers.com/`           | HTTP 302                                                     | Cloudflare Access boundary responds; no authenticated admin action was executed |
-| `https://api-staging.authorityclosers.com/health/live`  | HTTP 200, release `89be92d510d181574743200476731b7cc333d68c` | old API process is alive                                                        |
-| `https://api-staging.authorityclosers.com/health/ready` | HTTP 200, same release                                       | old API can reach its configured readiness dependency                           |
+- Dedicated learner: `admin+alpha-learner@authorityclosers.com`
+- Infrastructure and Google admin: `admin@authorityclosers.com`
 
-## Unresolved activation blockers
+No password is stored in Git or this handoff. The dedicated learner password
+is established with the newest `Reset your password — Authority Closers`
+message delivered to the Authority Closers admin mailbox.
 
-1. The exact candidate SHA and fresh hosted Node 24/Linux CI do not exist yet.
-   Local Node 22 emits the expected engine warning; it is not the release
-   authority even though the complete gate passes locally.
-2. The bounded Resend adapter is implemented and the reviewed staging profile
-   selects it while production remains `fake` and held. Exact-release runtime,
-   monitoring, and a real verification plus recovery delivery proof remain
-   pending until this candidate is deployed and exercised.
-3. The controlled four-shift/Module 1 foundation is implemented and present in
-   a locally inspected wheel. Fresh PostgreSQL seed application and
-   idempotency pass, but approved staging execution requires an exact release
-   artifact and canonical existing admin/owner actor. Catalog/API reads and
-   exact-release staging verification remain pending. Final course copy/media
-   and later-module content remain unclaimed.
-4. Exact-tenant learner provisioning is implemented without tenant creation,
-   role change, or membership reactivation. Fresh PostgreSQL and password
-   session integration tests pass; exact staging tenant configuration and a
-   deployed browser cohort journey remain pending. No staging cohort or
-   end-to-end enrollment is claimed yet.
-5. The configured learner consent version is staging test material, not final
-   production legal approval.
-6. Edge and iOS Safari engine runs were unavailable. Chromium desktop/mobile
-   viewport evidence is not cross-browser certification.
-7. Authorized non-production security probing, database load/stress,
-   deployment, rollback, and runtime observability evidence remain to be run
-   against the exact committed candidate. Release image packaging and
-   transport-digest proof remain pending while the pull request is draft.
-8. Repository documentation was updated. The exact existing Drive handoff
-   folder (`13EZMwDgjK4SrE5PwD5PPHPohZ7AQv6Oo`) and Notion implementation page
-   (`3ccf0c5d-822d-8160-94f6-d4875e9043f4`) are identified; publication waits
-   for an exact commit and hosted-CI evidence so those systems do not record an
-   unverified candidate as a release.
+## Runtime proof
+
+- Exact release archive path-safety and commit binding: passed.
+- Exact running-image/release match: passed.
+- PostgreSQL migration and privilege chain: passed.
+- API, worker, learner, admin, and PostgreSQL health: passed with zero restart
+  evidence at deployment verification.
+- Learner root, health, Apple/PWA icons, service worker, API live/ready/catalog,
+  admin Access boundary, Google callback binding, and legacy WordPress smoke:
+  passed.
+- Worker runtime: `AC_EMAIL_PROVIDER=resend`,
+  `AC_EXTERNAL_SIDE_EFFECTS_HOLD=false`, AC sender configured.
+- Fresh recovery request: Resend status `delivered` to the dedicated learner.
+- Password login: dedicated learner landed on `/home`; home showed
+  `Authority Closers Free Course`, `Continue course`, and authoritative
+  `0 / 5` projection.
+- Google login: exact `admin@authorityclosers.com` account selected at Google;
+  callback landed on `/home` with `owner` context. The former consent/error
+  response did not recur.
+- Reflection: server-restored draft rendered with in-progress state and
+  character count.
+
+## Verification gates
+
+| Gate                                                      | Result                               |
+| --------------------------------------------------------- | ------------------------------------ |
+| Learner tests                                             | PASS — 54                            |
+| Learner lint/typecheck/Prettier/build                     | PASS                                 |
+| Pull-request control-plane workflow                       | PASS — run `33447263943`             |
+| Pull-request application workflow                         | PASS — run `33447263944`             |
+| Exact-release validation and packaging                    | PASS — run `33447522610`             |
+| Immutable image publication and reviewed transport bundle | PASS                                 |
+| Staging migrations and deployment smoke                   | PASS                                 |
+| Password login and recovery delivery                      | PASS                                 |
+| Google login/callback                                     | PASS                                 |
+| Drive/live desktop shell comparison                       | PASS with explicit viewport mismatch |
+| Current-release authenticated mobile capture              | OPEN                                 |
+| Production promotion                                      | NO-GO                                |
+
+## Evidence
+
+- [Exact staging journey index](screenshots/v0.1-staging-exact-27fafae/README.md)
+- [Complete journey contact sheet](screenshots/v0.1-staging-exact-27fafae/journey-contact-sheet.png)
+- [Drive reference/live home comparison](screenshots/v0.1-staging-exact-27fafae/comparison-shell-home.png)
+- [Design QA](../../design-qa.md)
+- [Drive UI implementation matrix](../traceability/DRIVE_UI_IMPLEMENTATION_MATRIX.md)
+
+The pack contains learner home, module path, all five activities, recovery,
+Google owner home, public catalog, login, registration, program detail,
+protected admin, and the real-mail proof. It records no password, token,
+OAuth code, cookie, or secret.
+
+## Reproduction commands
+
+```powershell
+pnpm install --frozen-lockfile
+pnpm run validate
+pwsh -NoProfile -NonInteractive -File scripts/Deploy-Staging.ps1 `
+  -ReleaseSha 27fafaea1e5de41ae6a830746b1d832b42c7d444
+```
+
+Deployment must consume the reviewed immutable release bundle and environment
+contracts; production database or VPS state must never be manually edited into
+authority.
+
+## Open boundaries
+
+1. A current-release authenticated 390 × 844 mobile journey capture is still
+   missing because the selected Chrome connection did not apply a temporary
+   viewport override. Responsive unit/CSS checks are not substituted for
+   cross-device visual evidence.
+2. Media playback remains provider/policy-gated. No fake video completion is
+   asserted.
+3. Implementation evidence submission remains independent-reviewer-gated.
+4. Fresh self-enrollment remains blocked by controlled gap
+   `PROV-G1-AGE-ELIGIBILITY-POLICY`; learner consent is not inferred to satisfy
+   eligibility.
+5. Edge and iOS Safari/PWA runtime evidence, a live restore drill, and the
+   remaining authorized non-production performance/security evidence must be
+   current for the promoted artifact before broader release claims.
+6. Production requires its own secrets, database/bootstrap, backup/restore,
+   DNS, Cloudflare Access, rollback, observability, legal content, and
+   action-time approval evidence. Current DNS checks return NXDOMAIN for
+   `app.authorityclosers.com`, `admin.authorityclosers.com`, and
+   `api.authorityclosers.com`.
 
 ## Explicit non-claims
 
-No future SaaS breadth, simulator/call-review engine, native Windows/iOS app,
-billing, SSO/SCIM, broad enterprise functionality, autonomous official
-scoring, real-call processing, production authentication, production backend
-authorization, or production deployment is claimed.
-
-## Release sequence
-
-1. Commit the reviewed worktree and run fresh hosted Node 24/Linux PostgreSQL
-   CI for the implemented seed and exact-tenant
-   provisioning contracts.
-2. Build and attest immutable release images, then configure the exact staging
-   tenant, apply the controlled seed, and complete
-   the email-provider governance and runtime proof.
-3. Run Edge and iOS Safari, accessibility automation/manual checks, security
-   probes, database load/stress, failure recovery, and observability checks.
-4. Complete independent review, take the PR out of draft only when the open
-   gates close, package images, and deploy the exact immutable artifact to
-   staging, verify critical journeys and rollback, then update this evidence.
+No future SaaS breadth, simulator/call-review engine, native Windows or iOS
+app, billing, SSO/SCIM, broad enterprise functionality, autonomous official
+scoring, real-call processing, or production deployment is claimed.
