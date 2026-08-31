@@ -1,97 +1,105 @@
-# Learner core Clarity Grid design QA
+# Learner and admin Clarity Grid design QA
 
 ## Source visual truth
 
-Approved Drive exports are materialized at:
+The approved Drive exports were fetched by exact controlled Drive ID and are
+indexed in
+`docs/evidence/screenshots/v0.1-staging-exact-5b55a05/README.md`. The primary
+comparison family is:
 
-`C:\Users\Suyash\.codex\visualizations\2026\08\31\ac-v01-design-references`
+- desktop and mobile learner shell;
+- auth registration;
+- desktop and mobile course overview;
+- mobile reflection;
+- desktop implementation evidence;
+- admin overview.
 
-Compared reference family:
+The approved direction remains Clarity Grid: white surfaces, navy/ink
+structure, indigo actions, restrained borders, compact learning UI, desktop
+rail/top bar, and responsive mobile navigation. Controlled route and state
+contracts override mockup-only claims for media, reviewers, certificates,
+metrics, and future navigation.
 
-- `SHELL-01-desktop-home.png` — 1487 × 1058 px
-- `SHELL-02-mobile-home.png` — 941 × 1672 px
-- `HOME-01-mobile-dashboard.png`
-- `COURSE-01-desktop-detail.png`
-- `COURSE-02-mobile-detail.png`
-- `PLAYER-01-desktop-player.png`
-- `ACT-02-desktop-reflection.png`
-- `ACT-03-desktop-implementation.png`
-- `REVIEW-01-mobile.png`
+## Exact implementation evidence
 
-The approved direction is Clarity Grid: white surfaces, navy/ink structure, indigo actions, restrained borders, compact learning UI, desktop rail/top bar, and mobile bottom navigation. Controlled route/state contracts remain authoritative over mockup-only media, reviewer, certificate, metrics, and navigation claims.
+- Release: `27fafaea1e5de41ae6a830746b1d832b42c7d444`
+- Learner: `https://staging.authorityclosers.com`
+- Admin: `https://admin-staging.authorityclosers.com`
+- API: `https://api-staging.authorityclosers.com`
+- Browser: the user-selected authenticated Chrome session
+- Browser capture viewport: 1521 × 667 CSS pixels
+- Evidence index:
+  `docs/evidence/screenshots/v0.1-staging-exact-27fafae/README.md`
+- Combined source/implementation review:
+  `docs/evidence/screenshots/v0.1-staging-exact-27fafae/comparison-shell-home.png`
 
-The Drive-aligned auth, session-recovery, onboarding, learner-state, and admin
-captures are indexed in
-`docs/evidence/screenshots/v0.1-drive-aligned/README.md`. They use 1440 × 900
-desktop and 390 × 844 mobile viewports and replace stitched full-page capture
-as the current visual evidence method.
+The exact-release evidence includes an authenticated learner home with the
+server-authorized free course, the full five-step Module 1 loop, a restored
+server draft, public catalog and program detail, login, registration,
+recovery confirmation, Google-authenticated owner home, and the protected
+admin foundation.
 
-## Implementation evidence
+## Source plus implementation comparison
 
-- Desktop browser capture: `C:\Users\Suyash\.codex\visualizations\2026\08\31\ac-v01-design-references\implementation-learner-home-desktop.png`
-  - CSS viewport: 1280 × 720 px
-  - Browser screenshot: viewport/full-page capture at the same 1280 × 720 CSS viewport; no density normalization applied.
-- Mobile browser capture: `C:\Users\Suyash\.codex\visualizations\2026\08\31\ac-v01-design-references\implementation-learner-home-mobile-offline.png`
-  - CSS viewport: 390 × 844 px
-  - Browser screenshot: full-page capture; no density normalization applied.
-- Browser: Codex in-app browser, local Next learner runtime at `http://127.0.0.1:3100`
-- States captured: desktop loading shell and mobile offline state
-- Console errors checked: none
-- Responsive check: `document.documentElement.scrollWidth === window.innerWidth` at 390 px; no horizontal overflow.
-- Auth/session recovery: login, registration, and `/session-expired` were
-  captured at desktop/mobile sizes with one form and no horizontal overflow.
-- Onboarding: the API-backed loading state was captured at desktop/mobile
-  sizes; no local fixture was used to manufacture a profile.
+The desktop learner shell preserves the approved information hierarchy:
+fixed learner rail, top search/action bar, selected Home state, prominent
+welcome block, current-course card, and account context. The live home now
+surfaces `Authority Closers Free Course` with a working `Continue course`
+action and server-authoritative `0 / 5` projection.
 
-## Full-view comparison evidence
+The comparison is qualitative rather than pixel-perfect because the approved
+desktop export is 1487 × 1058 while the connected Chrome capture is 1521 × 667. No density normalization or crop is presented as a same-viewport pixel
+match.
 
-The desktop and mobile captures were opened after the corresponding reference images. The implementation now follows the reference composition for the shell: fixed desktop learner rail, top search/actions, compact bordered content surfaces, and mobile header/search/bottom navigation. The offline state is deliberately rendered as a clear state panel and does not invent course data.
-
-The ready authenticated state could not be captured locally because the local browser has no learner session. The implementation therefore does not substitute a local fixture or claim that seeded Module 1 data rendered in-browser.
-
-## Focused region comparison evidence
-
-- Desktop shell/header: rail width, selected Home treatment, search field, action cluster, and content offset were checked against `SHELL-01-desktop-home.png`.
-- Mobile shell/navigation: header, search field, content width, and fixed bottom navigation were checked against `SHELL-02-mobile-home.png` and `HOME-01-mobile-dashboard.png`.
-- Course/activity ready-state regions were validated by static component tests and implementation review, but not browser-captured with a real authenticated API response.
+The activity family follows the approved loop language and compact workspace
+treatment for VIDEO → REFLECTION → IMPLEMENTATION_CHALLENGE → REVIEW →
+IMPROVE. The reflection screen restores the server draft and character count.
+Submission and media remain visibly disabled where the controlled server
+contracts do not authorize them.
 
 ## Findings
 
-- [P1] Authenticated ready-state browser evidence is missing.
-  Location: local browser verification for `/home`, `/learn/[programSlug]`, `/learn/[programSlug]/module/[moduleId]`, and `/activity/[activityId]`.
-  Evidence: the local learner browser has no authenticated learner session; only loading/offline surfaces were rendered.
-  Impact: a real session is required to verify server-authoritative enrollment, the seeded VIDEO → REFLECTION → IMPLEMENTATION_CHALLENGE → REVIEW → IMPROVE sequence, locked states, and mutation feedback in the rendered browser.
-  Fix: run the same screenshots in an authenticated staging learner session after the learner OAuth callback/session issue is resolved. Do not replace this with client fixtures.
-
-- [P2] Mockup content is intentionally not reproduced where controlled capability contracts do not support it.
-  Location: learner home/course/player/review surfaces.
-  Evidence: no fake course metrics, media, captions, reviewer feedback, certificates, or unsupported navigation were added; video uses a media-pending state.
-  Impact: pixel content differs from sample mockups, but this prevents false production claims.
-  Fix: only replace pending/unavailable states when approved media/provider/reviewer contracts and server responses exist.
+- [Resolved] Authenticated desktop ready-state evidence now exists for learner
+  home, course path, five activities, Google login landing, and protected
+  admin.
+- [Resolved] The learner home now discovers the first server-authorized
+  published program and shows its real projection; it does not synthesize an
+  entitlement or progress record.
+- [P1] A current-release authenticated mobile visual pass is still missing.
+  The connected Chrome surface did not apply a temporary viewport override,
+  so responsive tests and CSS checks are not substituted for a real 390 × 844
+  browser capture.
+- [P2] Media playback remains provider/policy-gated, and implementation
+  evidence submission remains reviewer-gated. The UI states are intentional
+  and must not be replaced with fabricated completion or review data.
+- [P2] The live v0.1 home is intentionally smaller than the future-rich Drive
+  example: weekly goals, calendars, certificates, broad library analytics,
+  and enterprise navigation remain extension contracts.
 
 ## Verification gates
 
-- Focused learner Clarity tests: passed — 4 tests.
-- Learner API tests: passed — 9 tests.
+- Learner tests: 54 passed.
 - Learner lint: passed.
 - Learner typecheck: passed.
 - Prettier check: passed.
 - Learner production build: passed.
-- Full repository validation: passed locally; Docker-backed PostgreSQL rerun
-  is recorded separately because the default local gate intentionally skips
-  database integration tests when URLs are absent.
-- Local responsive browser check: passed for shell/loading/offline states.
-- Console error check: passed for captured states.
-
-## Comparison history
-
-1. Initial learner surface used the prior sparse editorial shell and did not match the approved Clarity Grid navigation or density.
-2. Fixed by adding the scoped learner Clarity Grid layer, responsive desktop/mobile shell composition, server-truthful enrollment/account cards, server-driven activity rows, locked activity icon treatment, and media-pending activity state.
-3. Post-fix browser capture confirmed no mobile overflow and no console errors.
-4. Ready-state comparison remains blocked until an authenticated learner browser session is available.
+- Pull-request control-plane workflow `33447263943`: passed.
+- Pull-request application workflow `33447263944`: passed.
+- Exact-release validation and packaging workflow `33447522610`: passed.
+- Staging migrations, five-container health, learner/API/PWA route smoke,
+  Cloudflare Access boundary, Google callback binding, and legacy WordPress
+  boundary: passed.
+- Password login for the dedicated learner: passed.
+- Google login for `admin@authorityclosers.com`: passed and landed on `/home`
+  with owner context.
+- Fresh staging password-recovery mail: delivered through Resend.
 
 ## Final result
 
-final result: blocked
+final result: blocked for complete cross-device visual acceptance
 
-Blocker: authenticated ready-state browser evidence is not available in the local environment. The code and focused gates pass; full learner journey visual acceptance is intentionally not claimed.
+The desktop staging alpha visual slice is accepted for the implemented v0.1
+boundary. Complete design acceptance remains blocked only on a current-release
+authenticated mobile capture and the intentionally gated media/reviewer
+capabilities; it is not blocked on desktop staging authentication or the
+Module 1 learner journey.
