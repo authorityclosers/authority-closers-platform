@@ -159,12 +159,23 @@ def test_production_runtime_does_not_require_migration_credential(
     assert settings.database_migrator_url is None
 
 
-def test_deployment_requires_an_exact_operations_control_tenant() -> None:
+def test_deployment_requires_an_exact_operations_control_tenant_before_release() -> None:
     values = _production_values()
     del values["operations_tenant_id"]
+    values["external_side_effects_hold"] = False
 
     with pytest.raises(ValidationError, match="AC_OPERATIONS_TENANT_ID"):
         Settings(environment="production", _env_file=None, **values)  # type: ignore[arg-type]
+
+
+def test_deployment_allows_empty_control_tenant_only_while_side_effects_are_held() -> None:
+    values = _production_values()
+    del values["operations_tenant_id"]
+
+    settings = Settings(environment="production", _env_file=None, **values)  # type: ignore[arg-type]
+
+    assert settings.external_side_effects_hold is True
+    assert settings.operations_tenant_id is None
 
 
 def test_staging_is_production_shaped_but_uses_isolated_origins() -> None:

@@ -21,7 +21,7 @@ to disk.
 | `AC_GOOGLE_OAUTH_CLIENT_ID`   | Google web client ID ending in `.apps.googleusercontent.com`                |
 | `AC_GOOGLE_OAUTH_CLIENT_SECRET` | non-empty secret for that exact Google web client                         |
 | `AC_PUBLIC_LEARNER_TENANT_ID`   | exact active tenant UUID selected for public/self-directed learner access |
-| `AC_OPERATIONS_TENANT_ID`       | exact existing control-tenant UUID for global job reconciliation          |
+| `AC_OPERATIONS_TENANT_ID`       | exact existing control-tenant UUID required before side effects release   |
 
 The four database passwords must be distinct. The three identity secrets must
 also be mutually distinct. The two SQLAlchemy URLs must be
@@ -58,11 +58,14 @@ canonical active tenant whose persisted membership rows remain the authorization
 source of truth. Keep it in the environment-scoped secret/config store so a
 staging identifier cannot be reused accidentally in production.
 
-`AC_OPERATIONS_TENANT_ID` is also a reference, not authority. The selected
-actor must be an owner of that exact existing tenant and hold the separate
-global retry/recovery permissions before a tenantless identity-email job can
-be reconciled. Actions and idempotency markers remain attributable in the
-control tenant's append-only audit chain.
+`AC_OPERATIONS_TENANT_ID` is also a reference, not authority. A first, empty
+environment may omit it only while `AC_EXTERNAL_SIDE_EFFECTS_HOLD=true`. That
+held bootstrap phase keeps the worker unavailable and makes every tenantless
+retry/recovery operation fail closed. Before the hold is released, select an
+exact existing active control tenant in Infisical; deployment validation then
+requires it. The selected actor must be an owner of that exact tenant and hold
+the separate global retry/recovery permissions. Actions and idempotency markers
+remain attributable in the control tenant's append-only audit chain.
 
 Release SHA, image IDs, registry digests, URLs, Compose project names, state
 paths, and edge aliases are non-secret reviewed release metadata. They belong

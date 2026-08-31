@@ -28,7 +28,10 @@ x-application-environment: &application-environment
   AC_GOOGLE_OAUTH_CLIENT_SECRET: ${AC_GOOGLE_OAUTH_CLIENT_SECRET:?AC_GOOGLE_OAUTH_CLIENT_SECRET is required for staging or production}
   AC_LEARNER_CONSENT_VERSION: ${AC_LEARNER_CONSENT_VERSION:-}
   AC_PUBLIC_LEARNER_TENANT_ID: ${AC_PUBLIC_LEARNER_TENANT_ID:-}
-  AC_OPERATIONS_TENANT_ID: ${AC_OPERATIONS_TENANT_ID:?AC_OPERATIONS_TENANT_ID must identify the exact operations control tenant}
+  # An empty value is admitted only while AC_EXTERNAL_SIDE_EFFECTS_HOLD remains
+  # true. Application settings reject releasing the hold without an exact
+  # existing control tenant, and tenantless operations fail closed meanwhile.
+  AC_OPERATIONS_TENANT_ID: ${AC_OPERATIONS_TENANT_ID:-}
   AC_EXTERNAL_SIDE_EFFECTS_HOLD: ${AC_EXTERNAL_SIDE_EFFECTS_HOLD:-true}
   AC_OTEL_EXPORTER_OTLP_ENDPOINT: ${AC_OTEL_EXPORTER_OTLP_ENDPOINT:-http://ac-telemetry-collector:4318}
   AC_PUBLIC_APP_URL: ${AC_PUBLIC_APP_URL:?AC_PUBLIC_APP_URL is required}

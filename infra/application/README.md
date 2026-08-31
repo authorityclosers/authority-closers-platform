@@ -243,7 +243,11 @@ person; it never creates a tenant, changes a role, reactivates an inactive
 membership, or provisions an admin-surface login.
 
 Global verification/reset delivery recovery additionally requires
-`AC_OPERATIONS_TENANT_ID`, pointing at an existing operations-control tenant.
+`AC_OPERATIONS_TENANT_ID`, pointing at an existing operations-control tenant,
+is mandatory before `AC_EXTERNAL_SIDE_EFFECTS_HOLD` can be released. A first
+empty environment may omit the reference only while that hold remains true;
+the worker stays unavailable and tenantless retry/recovery operations fail
+closed during this bootstrap phase.
 Only an owner who has selected that exact tenant receives the global
 job-retry/recovery permissions. This keeps tenantless identity email out of
 ordinary tenant administration while retaining an attributable, idempotent

@@ -15,7 +15,7 @@ Production configuration is injected from Infisical at process start. Git contai
 | `AC_GOOGLE_OAUTH_CLIENT_SECRET`  | identity provider |                    yes | Google web OAuth client secret                          |
 | `AC_LEARNER_CONSENT_VERSION`     | legal/product     | learner registration only | exact accepted invitation/consent document version  |
 | `AC_PUBLIC_LEARNER_TENANT_ID`    | tenancy operator  | learner registration only | exact active tenant receiving self-directed learners |
-| `AC_OPERATIONS_TENANT_ID`        | security/operator |                    yes | exact control tenant for audited global job recovery   |
+| `AC_OPERATIONS_TENANT_ID`        | security/operator | before effects release | exact control tenant for audited global job recovery   |
 | `AC_EXTERNAL_SIDE_EFFECTS_HOLD`  | recovery operator |                    yes | blocks provider effects after restore                   |
 | `AC_EMAIL_PROVIDER`              | provider policy   |            worker only | `fake` until Resend is explicitly enabled               |
 | `AC_RESEND_API_KEY`              | email provider    | worker when Resend | worker-only Resend credential                              |
@@ -77,12 +77,15 @@ an inactive membership. Admin-surface Google login never auto-provisions a
 learner membership.
 
 `AC_OPERATIONS_TENANT_ID` names an existing active control tenant; the
-application never creates it. A global identity-email job can be retried or
-reconciled only while an owner has selected this exact tenant and holds the
-separate global operations permissions. The immutable idempotency marker and
-the privileged action are written into that tenant's audit chain. Ordinary
-tenant operators remain unable to act on tenantless jobs, and a deployment
-without the exact control tenant fails closed.
+application never creates it. An empty environment may omit this reference
+only while `AC_EXTERNAL_SIDE_EFFECTS_HOLD=true`. The worker then remains
+unavailable and tenantless retry/recovery fails closed. Before releasing the
+hold, deployment settings require the exact control tenant. A global
+identity-email job can be retried or reconciled only while an owner has
+selected this exact tenant and holds the separate global operations
+permissions. The immutable idempotency marker and the privileged action are
+written into that tenant's audit chain. Ordinary tenant operators remain
+unable to act on tenantless jobs.
 
 `AC_EMAIL_PROVIDER=resend` additionally requires both `AC_RESEND_API_KEY` and
 `AC_RESEND_FROM`. Compose binds all three variables only to the worker. The API

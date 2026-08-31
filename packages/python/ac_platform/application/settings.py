@@ -172,9 +172,10 @@ class Settings(BaseSettings):
             )
         if not self.rate_limit_trusted_proxy_addresses:
             raise ValueError("AC_TRUSTED_PROXY_ADDRESSES must contain at least one exact proxy IP")
-        if self.operations_tenant_id is None:
+        if self.operations_tenant_id is None and not self.external_side_effects_hold:
             raise ValueError(
-                "AC_OPERATIONS_TENANT_ID must identify the exact operations control tenant"
+                "AC_OPERATIONS_TENANT_ID must identify the exact operations control tenant "
+                "before external side effects are released"
             )
         self._validate_google_oauth_pair(require_configured=True)
         self._validate_email_provider()

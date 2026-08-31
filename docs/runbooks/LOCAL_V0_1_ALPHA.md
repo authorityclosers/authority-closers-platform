@@ -36,12 +36,16 @@ must inject independent values from the approved secret manager for:
 - database role credentials and URLs
 - Google OAuth pair
 - `AC_PUBLIC_LEARNER_TENANT_ID` for the exact active self-directed learner tenant
-- `AC_OPERATIONS_TENANT_ID` for an existing local operations-control tenant
+- `AC_OPERATIONS_TENANT_ID` for an existing operations-control tenant before
+  external side effects are released
 - `AC_RESEND_API_KEY` when and only when the reviewed profile enables Resend
 
 Never copy secret values into Git, commands, logs, screenshots, evidence, or
-this runbook. The release Compose contract rejects missing values; application
-settings reject default, short, or reused identity secrets.
+this runbook. The release Compose contract rejects missing identity/database
+values; application settings reject default, short, or reused identity
+secrets. An empty environment may leave `AC_OPERATIONS_TENANT_ID` blank only
+while `AC_EXTERNAL_SIDE_EFFECTS_HOLD=true`; settings reject releasing the hold
+without the exact existing control tenant.
 
 Keep the local database host as `127.0.0.1`. The Compose port is deliberately
 published on IPv4 loopback only; using `localhost` can make Windows async

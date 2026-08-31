@@ -9,8 +9,13 @@ CONTROLLER = (ROOT / "scripts" / "Deploy-Staging.ps1").read_text(encoding="utf-8
 def test_staging_controller_is_exact_sha_and_idempotent() -> None:
     assert CONTROLLER.startswith("#requires -Version 7.4")
     assert 'ValidatePattern("^[0-9a-f]{40}$")' in CONTROLLER
-    assert "if ($currentRelease -eq $expectedReleasePath)" in CONTROLLER
+    assert "[switch]$ReapplyConfiguration" in CONTROLLER
+    assert (
+        "if ($currentRelease -eq $expectedReleasePath -and -not $ReapplyConfiguration)"
+        in CONTROLLER
+    )
     assert "running read-only proof only" in CONTROLLER
+    assert "Re-running the exact release to load reviewed secret references" in CONTROLLER
     assert "workflow_run.head_sha -eq $ReleaseSha" in CONTROLLER
     assert '"sha256:$artifactDigest" -ne $artifact.digest' in CONTROLLER
     assert '$run.conclusion -ne "success"' in CONTROLLER
@@ -87,8 +92,9 @@ def test_staging_controller_uses_private_bounded_stages_and_read_only_noop() -> 
     assert "Expand-ExactArtifact -ZipStream $artifactStream" in CONTROLLER
     assert "assert_container ac-application-staging-postgres-1" in CONTROLLER
     assert "([string](& ssh $SshHost $currentReleaseCommand)).Trim()" in CONTROLLER
-    noop = CONTROLLER.split("if ($currentRelease -eq $expectedReleasePath)", maxsplit=1)[1].split(
-        "$artifactName", maxsplit=1
-    )[0]
+    noop = CONTROLLER.split(
+        "if ($currentRelease -eq $expectedReleasePath -and -not $ReapplyConfiguration)",
+        maxsplit=1,
+    )[1].split("$artifactName", maxsplit=1)[0]
     assert "Test-Staging" in noop
     assert "ProbeOAuth" not in noop

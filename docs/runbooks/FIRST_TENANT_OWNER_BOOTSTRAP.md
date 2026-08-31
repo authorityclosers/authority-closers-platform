@@ -9,6 +9,38 @@ already be migrated. `AC_DATABASE_URL` and `AC_ENVIRONMENT` are supplied to the
 container by the deployment environment; the identity email, tenant slug, and
 tenant name are command inputs, not application defaults.
 
+## Empty-environment sequence
+
+An empty database has no legitimate operations or public-learner tenant UUID.
+Bootstrap it without inventing one or editing SQL:
+
+1. Configure the database, session, OAuth, email-challenge, and Google secrets.
+   Keep `AC_EXTERNAL_SIDE_EFFECTS_HOLD=true`; omit both tenant references.
+2. Deploy the reviewed artifact. The held worker remains unavailable and all
+   tenantless operations fail closed while the control tenant is absent.
+3. Use the admin-surface Google `register` flow to create the first verified
+   canonical person. Learner registration remains unavailable until the public
+   tenant and reviewed consent context exist.
+4. Run the owner bootstrap below for that exact verified email. Record the
+   returned tenant UUID without recording any session token or secret.
+5. Store that exact active tenant UUID as `AC_OPERATIONS_TENANT_ID` and, for
+   the v0.1 self-directed tenant, `AC_PUBLIC_LEARNER_TENANT_ID` in the target
+   Infisical environment.
+6. Reapply the same reviewed staging artifact so containers receive the new
+   references, then run the controlled catalog seed and runtime acceptance:
+
+   ```powershell
+   pwsh -File scripts/Deploy-Staging.ps1 `
+     -ReleaseSha <exact-40-character-sha> `
+     -ReapplyConfiguration
+   ```
+
+Reapplying is an explicit mutation: it verifies and downloads the same
+digest-bound artifact, takes a pre-migration backup, runs the idempotent
+migration path, restarts the exact images, and reruns release/route/OAuth proof.
+Without `-ReapplyConfiguration`, an already-current SHA remains a read-only
+verification no-op.
+
 Example staging invocation (replace the values for the intended verified
 person and tenant):
 

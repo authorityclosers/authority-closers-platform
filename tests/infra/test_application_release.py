@@ -92,7 +92,6 @@ def test_release_fails_closed_on_identity_and_database_secrets() -> None:
         "AC_SESSION_TOKEN_PEPPER:?",
         "AC_OAUTH_TRANSACTION_SECRET:?",
         "AC_EMAIL_CHALLENGE_SECRET:?",
-        "AC_OPERATIONS_TENANT_ID:?",
         "AC_GOOGLE_OAUTH_CLIENT_ID:?",
         "AC_GOOGLE_OAUTH_CLIENT_SECRET:?",
         "AC_POSTGRES_OWNER_PASSWORD:?",
@@ -109,7 +108,10 @@ def test_release_fails_closed_on_identity_and_database_secrets() -> None:
 
     assert "AC_EXTERNAL_SIDE_EFFECTS_HOLD:-true" in COMPOSE
     assert "AC_PUBLIC_LEARNER_TENANT_ID:-" in COMPOSE
-    assert "AC_OPERATIONS_TENANT_ID:?" in COMPOSE
+    assert "AC_OPERATIONS_TENANT_ID:-" in COMPOSE
+    assert "before external side effects are released" in (
+        ROOT / "packages" / "python" / "ac_platform" / "application" / "settings.py"
+    ).read_text(encoding="utf-8")
     assert COMPOSE.count("AC_EMAIL_PROVIDER: ${AC_EMAIL_PROVIDER:-fake}") == 1
     assert COMPOSE.count("AC_RESEND_API_KEY: ${AC_RESEND_API_KEY:-}") == 1
     assert COMPOSE.count("AC_RESEND_FROM: ${AC_RESEND_FROM:-}") == 1

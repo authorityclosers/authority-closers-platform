@@ -10,7 +10,9 @@ param(
     [string]$SshHost = "ac",
 
     [ValidatePattern("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")]
-    [string]$GitHubRepository = "authorityclosers/authority-closers-platform"
+    [string]$GitHubRepository = "authorityclosers/authority-closers-platform",
+
+    [switch]$ReapplyConfiguration
 )
 
 $ErrorActionPreference = "Stop"
@@ -383,10 +385,13 @@ $expectedReleasePath = "/srv/authority-closers/application/releases/$ReleaseSha"
 $currentReleaseCommand = 'readlink -f /srv/authority-closers/application/current-staging 2>/dev/null || true'
 $currentRelease = ([string](& ssh $SshHost $currentReleaseCommand)).Trim()
 Assert-NativeSuccess "Current staging release lookup"
-if ($currentRelease -eq $expectedReleasePath) {
+if ($currentRelease -eq $expectedReleasePath -and -not $ReapplyConfiguration) {
     Write-Output "SKIP  Staging already targets $ReleaseSha; running read-only proof only."
     Test-Staging
     exit 0
+}
+if ($currentRelease -eq $expectedReleasePath) {
+    Write-Output "REAPPLY  Re-running the exact release to load reviewed secret references."
 }
 
 $artifactName = "ac-application-$ReleaseSha"
