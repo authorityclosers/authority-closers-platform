@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.audit.service import AuditRepository
 from ac_platform.kernel.authz import ActorContext
+from ac_platform.kernel.errors import AuthorizationDenied
 from ac_platform.kernel.events import EventCategory, EventEnvelope
 from ac_platform.outbox.models import (
     Job,
@@ -22,6 +23,7 @@ from ac_platform.outbox.models import (
 )
 from ac_platform.outbox.policy import ReconciliationRequiredError
 from ac_platform.outbox.repository import (
+    EXPIRED_DISPATCH_AMBIGUITY_REASON,
     DuplicateIntentError,
     JobRepository,
     LeaseLostError,
@@ -33,6 +35,7 @@ from ac_platform.outbox.repository import (
     build_job_ambiguity_statement,
     build_job_claim_statement,
     build_job_dispatch_statement,
+    build_job_expired_dispatch_quarantine_statement,
     build_job_failure_statement,
     build_job_receipt_statement,
     build_job_renew_statement,
@@ -385,6 +388,61 @@ def test_job_claim_and_dispatch_fences_compile_for_postgresql() -> None:
     assert "lease_token" in sql[5]
 
 
+def test_expired_external_dispatch_is_excluded_and_quarantined_by_sql_contract() -> None:
+    job_id = uuid4()
+    claim_sql = str(
+        build_job_claim_statement(
+            now=datetime(2026, 8, 30, 12, tzinfo=UTC),
+            recovery_generation=3,
+            limit=1,
+        ).compile(dialect=postgresql.dialect())
+    )
+    take_sql = str(
+        build_job_take_statement(
+            job_id=job_id,
+            lease_token=uuid4(),
+            lease_for=timedelta(seconds=30),
+            recovery_generation=3,
+        ).compile(dialect=postgresql.dialect())
+    )
+    quarantine_sql = str(
+        build_job_expired_dispatch_quarantine_statement().compile(
+            dialect=postgresql.dialect(),
+            compile_kwargs={"literal_binds": True},
+        )
+    )
+
+    safe_reclaim_predicate = (
+        "jobs.external_side_effect IS false OR jobs.dispatch_started_at IS NULL "
+        "OR jobs.provider_receipt IS NOT NULL"
+    )
+    assert safe_reclaim_predicate in claim_sql
+    assert safe_reclaim_predicate in take_sql
+    assert "jobs.external_side_effect IS true" in quarantine_sql
+    assert "jobs.dispatch_started_at IS NOT NULL" in quarantine_sql
+    assert "jobs.provider_receipt IS NULL" in quarantine_sql
+    assert "jobs.leased_until <= now()" in quarantine_sql
+    assert "delivery_ambiguous_at=coalesce(jobs.delivery_ambiguous_at, now())" in quarantine_sql
+    assert EXPIRED_DISPATCH_AMBIGUITY_REASON in quarantine_sql
+    assert len(EXPIRED_DISPATCH_AMBIGUITY_REASON) <= 500
+
+    safe_retry_sql = str(
+        build_job_failure_statement(
+            job_id=job_id,
+            lease_token=uuid4(),
+            dead_letter=False,
+            retry_delay=timedelta(seconds=5),
+            last_error="explicit retryable response",
+            ambiguous=False,
+        ).compile(
+            dialect=postgresql.dialect(),
+            compile_kwargs={"literal_binds": True},
+        )
+    )
+    assert "provider_idempotency_key=NULL" in safe_retry_sql
+    assert "dispatch_started_at=NULL" in safe_retry_sql
+
+
 async def test_external_job_enqueue_cannot_bypass_durable_hold() -> None:
     session = _session()
     session.scalar.side_effect = [None]
@@ -491,11 +549,12 @@ async def test_recovery_generation_release_requires_empty_holds_and_same_uow_aud
     session.scalar.side_effect = [state, 0, 0]
     audit = AuditRepository(session)
     audit.append_for_actor = AsyncMock()  # type: ignore[method-assign]
+    operations_tenant_id = uuid4()
     actor = ActorContext(
         person_id=uuid4(),
         session_id=uuid4(),
-        tenant_id=uuid4(),
-        permissions=frozenset({"recovery_reconcile"}),
+        tenant_id=operations_tenant_id,
+        permissions=frozenset({"recovery_reconcile", "global_recovery_reconcile"}),
     )
 
     released = await RecoveryStateRepository(session).reconcile(
@@ -503,6 +562,7 @@ async def test_recovery_generation_release_requires_empty_holds_and_same_uow_aud
         reason="all provider state verified",
         audit=audit,
         now=datetime(2026, 8, 30, 12, 1, tzinfo=UTC),
+        operations_tenant_id=operations_tenant_id,
     )
 
     assert released.status == RecoveryStatus.READY.value
@@ -513,11 +573,12 @@ async def test_recovery_generation_release_requires_empty_holds_and_same_uow_aud
 async def test_recovery_reconciliation_rejects_audit_from_another_transaction() -> None:
     session = _session()
     other_session = _session()
+    operations_tenant_id = uuid4()
     actor = ActorContext(
         person_id=uuid4(),
         session_id=uuid4(),
-        tenant_id=uuid4(),
-        permissions=frozenset({"recovery_reconcile"}),
+        tenant_id=operations_tenant_id,
+        permissions=frozenset({"recovery_reconcile", "global_recovery_reconcile"}),
     )
 
     with pytest.raises(ValueError, match="same transaction"):
@@ -525,6 +586,7 @@ async def test_recovery_reconciliation_rejects_audit_from_another_transaction() 
             actor=actor,
             reason="reviewed",
             audit=AuditRepository(other_session),
+            operations_tenant_id=operations_tenant_id,
         )
 
 
@@ -562,6 +624,10 @@ async def test_manual_job_retry_writes_actor_audit_in_the_same_uow() -> None:
     tenant_id = uuid4()
     row = _job(status=JobStatus.DEAD_LETTER.value)
     row.tenant_id = tenant_id
+    row.provider_idempotency_key = row.dedupe_key
+    row.dispatch_started_at = datetime(2026, 8, 30, 11, 58, tzinfo=UTC)
+    row.delivery_ambiguous_at = datetime(2026, 8, 30, 12, tzinfo=UTC)
+    row.last_error = EXPIRED_DISPATCH_AMBIGUITY_REASON
     session.scalar.side_effect = [row, _state()]
     audit = AuditRepository(session)
     audit.append_for_actor = AsyncMock()  # type: ignore[method-assign]
@@ -581,7 +647,85 @@ async def test_manual_job_retry_writes_actor_audit_in_the_same_uow() -> None:
 
     assert retried.status == JobStatus.QUEUED.value
     assert retried.attempt_count == 0
+    assert retried.reconciled_by == actor.person_id
+    assert retried.reconciliation_reason == "provider state reviewed"
+    assert retried.provider_idempotency_key is None
+    assert retried.dispatch_started_at is None
+    assert retried.delivery_ambiguous_at is None
     audit.append_for_actor.assert_awaited_once()  # type: ignore[attr-defined]
+    prior_evidence = audit.append_for_actor.await_args.kwargs["payload"]["prior_effect_evidence"]
+    assert prior_evidence == {
+        "dispatch_started_at": "2026-08-30T11:58:00+00:00",
+        "delivery_ambiguous_at": "2026-08-30T12:00:00+00:00",
+        "provider_idempotency_key": row.dedupe_key,
+    }
+
+
+async def test_global_job_retry_requires_configured_control_tenant_and_global_permission() -> None:
+    control_tenant_id = uuid4()
+    row = _job(status=JobStatus.DEAD_LETTER.value)
+    row.tenant_id = None
+    session = _session()
+    session.scalar.side_effect = [row, _state()]
+    audit = AuditRepository(session)
+    audit.append_for_actor = AsyncMock()  # type: ignore[method-assign]
+    actor = ActorContext(
+        person_id=uuid4(),
+        session_id=uuid4(),
+        tenant_id=control_tenant_id,
+        permissions=frozenset({"job_retry", "global_job_retry"}),
+    )
+
+    retried = await JobRepository(session).retry(
+        row,
+        actor=actor,
+        reason="provider delivery reviewed",
+        audit=audit,
+        operations_tenant_id=control_tenant_id,
+    )
+
+    assert retried.status == JobStatus.QUEUED.value
+    audit.append_for_actor.assert_awaited_once()  # type: ignore[attr-defined]
+
+    row.status = JobStatus.DEAD_LETTER.value
+    actor_without_global_permission = ActorContext(
+        person_id=actor.person_id,
+        session_id=actor.session_id,
+        tenant_id=control_tenant_id,
+        permissions=frozenset({"job_retry"}),
+    )
+    session.scalar.side_effect = [row]
+    with pytest.raises(AuthorizationDenied):
+        await JobRepository(session).retry(
+            row,
+            actor=actor_without_global_permission,
+            reason="provider delivery reviewed",
+            audit=audit,
+            operations_tenant_id=control_tenant_id,
+        )
+
+
+async def test_global_job_retry_rejects_an_ordinary_tenant_even_with_global_permission() -> None:
+    row = _job(status=JobStatus.DEAD_LETTER.value)
+    row.tenant_id = None
+    session = _session()
+    session.scalar.return_value = row
+    audit = AuditRepository(session)
+    actor = ActorContext(
+        person_id=uuid4(),
+        session_id=uuid4(),
+        tenant_id=uuid4(),
+        permissions=frozenset({"job_retry", "global_job_retry"}),
+    )
+
+    with pytest.raises(AuthorizationDenied):
+        await JobRepository(session).retry(
+            row,
+            actor=actor,
+            reason="provider delivery reviewed",
+            audit=audit,
+            operations_tenant_id=uuid4(),
+        )
 
 
 async def test_job_reconciliation_clears_hold_metadata_before_queueing() -> None:

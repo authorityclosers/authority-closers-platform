@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import asyncio
 import json
 import os
 import sys
@@ -11,6 +10,7 @@ from dataclasses import asdict
 
 from sqlalchemy.exc import SQLAlchemyError
 
+from ac_platform.application.asyncio_runtime import run_async
 from ac_platform.application.release_identity import (
     ReleaseIdentityError,
     require_baked_release_id,
@@ -79,7 +79,7 @@ async def _run(args: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
-        return asyncio.run(_run(args))
+        return run_async(_run(args))
     except (BootstrapError, OSError, ReleaseIdentityError, ValueError) as exc:
         print(f"bootstrap refused: {exc}", file=sys.stderr)
         return 2

@@ -25,6 +25,7 @@ from ac_platform.outbox.models import (
 )
 from ac_platform.outbox.repository import LeaseLostError
 from ac_platform.providers import (
+    AmbiguousDeliveryProviderError,
     DeliveryReceipt,
     EmailMessage,
     PermanentProviderError,
@@ -273,6 +274,22 @@ async def test_worker_can_recheck_readiness_after_audited_reconciliation() -> No
     assert worker.ready
 
 
+async def test_worker_reports_an_unchanged_recovery_blocker_only_once() -> None:
+    session = AsyncMock(spec=AsyncSession)
+    session.begin = Mock(return_value=_AsyncContext(None))
+    session.scalar.return_value = _state(RecoveryStatus.HELD.value)
+    worker = DurableWorker(_factory(session), settings=_settings())
+    worker._logger = Mock()
+
+    assert not await worker.prepare()
+    assert not await worker.prepare()
+
+    worker._logger.warning.assert_called_once_with(  # type: ignore[attr-defined]
+        "worker_recovery_reconciliation_required",
+        recovery_generation=3,
+    )
+
+
 async def test_worker_loop_stays_fail_closed_then_runs_after_reconciliation() -> None:
     session = AsyncMock(spec=AsyncSession)
     session.begin = Mock(return_value=_AsyncContext(None))
@@ -428,36 +445,98 @@ async def test_lease_loss_on_failure_does_not_abort_remaining_work() -> None:
 
 
 @pytest.mark.parametrize(
-    ("error", "dead_lettered", "ambiguous"),
+    ("error", "expected", "stored_dead_letter", "permanent", "ambiguous"),
     [
-        (TransientProviderError("temporary"), 0, False),
-        (PermanentProviderError("permanent"), 1, False),
-        (AmbiguousProviderReceiptError("mismatch"), 1, True),
+        (
+            TransientProviderError("temporary"),
+            {"claimed": 1, "retried": 1, "dead_lettered": 0},
+            False,
+            False,
+            False,
+        ),
+        (
+            PermanentProviderError("permanent"),
+            {"claimed": 1, "retried": 0, "dead_lettered": 1},
+            True,
+            True,
+            False,
+        ),
+        (
+            AmbiguousProviderReceiptError("mismatch"),
+            {"claimed": 1, "reconciliation_required": 1},
+            True,
+            True,
+            True,
+        ),
+        (
+            AmbiguousDeliveryProviderError("unknown delivery"),
+            {"claimed": 1, "reconciliation_required": 1},
+            True,
+            True,
+            True,
+        ),
     ],
 )
-async def test_worker_failure_boundary_retries_or_dead_letters(
+async def test_worker_failure_boundary_retries_dead_letters_or_requires_reconciliation(
     error: BaseException,
-    dead_lettered: int,
+    expected: dict[str, int],
+    stored_dead_letter: bool,
+    permanent: bool,
     ambiguous: bool,
 ) -> None:
-    worker = DurableWorker(lambda: _AsyncContext(Mock()), settings=_settings())
+    sink = InMemoryTelemetrySink()
+    worker = DurableWorker(
+        lambda: _AsyncContext(Mock()),
+        settings=_settings(),
+        telemetry=TelemetryRecorder(sink),
+    )
     job = _job()
     prepared = _prepared(job)
     failed = _job()
-    failed.status = JobStatus.DEAD_LETTER.value if dead_lettered else JobStatus.RETRY_WAIT.value
+    failed.status = (
+        JobStatus.DEAD_LETTER.value if stored_dead_letter else JobStatus.RETRY_WAIT.value
+    )
     failed.lease_token = None
     failed.leased_until = None
-    failed.dead_lettered_at = datetime(2026, 8, 30, 12, tzinfo=UTC) if dead_lettered else None
+    failed.dead_lettered_at = datetime(2026, 8, 30, 12, tzinfo=UTC) if stored_dead_letter else None
     worker._prepare_dispatch = AsyncMock(return_value=prepared)
     worker._dispatch_under_recovery_fence = AsyncMock(side_effect=error)
     worker._fail = AsyncMock(return_value=failed)
 
     outcome = await worker._execute_one(job)
 
-    assert outcome["dead_lettered"] == dead_lettered
-    assert outcome["retried"] == 1 - dead_lettered
-    assert worker._fail.await_args.kwargs["permanent"] is bool(dead_lettered)
+    assert outcome == expected
+    assert worker._fail.await_args.kwargs["permanent"] is permanent
     assert worker._fail.await_args.kwargs["ambiguous"] is ambiguous
+    event_names = [event.name for event in sink.events]
+    if ambiguous:
+        assert "worker.job.failed" in event_names
+        assert "worker.job.dead_lettered" not in event_names
+        assert "worker.job.retry_wait" not in event_names
+
+
+async def test_ambiguous_delivery_is_not_silently_retried_after_resend_window() -> None:
+    worker = DurableWorker(lambda: _AsyncContext(Mock()), settings=_settings())
+    job = _job()
+    job.dispatch_started_at = datetime(2026, 8, 29, 10, tzinfo=UTC)
+    prepared = _prepared(job)
+    failed = _job()
+    failed.status = JobStatus.DEAD_LETTER.value
+    failed.lease_token = None
+    failed.leased_until = None
+    failed.delivery_ambiguous_at = datetime(2026, 8, 30, 12, tzinfo=UTC)
+    failed.dead_lettered_at = datetime(2026, 8, 30, 12, tzinfo=UTC)
+    worker._prepare_dispatch = AsyncMock(return_value=prepared)
+    worker._dispatch_under_recovery_fence = AsyncMock(
+        side_effect=AmbiguousDeliveryProviderError("unknown delivery")
+    )
+    worker._fail = AsyncMock(return_value=failed)
+
+    outcome = await worker._execute_one(job)
+
+    assert outcome == {"claimed": 1, "reconciliation_required": 1}
+    worker._dispatch_under_recovery_fence.assert_awaited_once()
+    assert worker._fail.await_args.kwargs == {"permanent": True, "ambiguous": True}
 
 
 async def test_recovery_fence_before_provider_call_does_not_mark_delivery_ambiguous() -> None:
@@ -513,7 +592,7 @@ async def test_lost_post_provider_ack_keeps_the_durable_receipt_and_continues() 
     worker._record_ambiguous.assert_not_awaited()
 
 
-def test_default_worker_provider_is_fake_and_resend_is_rejected() -> None:
+def test_default_worker_provider_is_fake_and_unconfigured_resend_is_rejected() -> None:
     worker = DurableWorker(lambda: _AsyncContext(Mock()), settings=_settings())
     assert worker.allowed_job_kinds == frozenset(
         {
@@ -522,7 +601,7 @@ def test_default_worker_provider_is_fake_and_resend_is_rejected() -> None:
             PASSWORD_EMAIL_RESET_JOB,
         }
     )
-    with pytest.raises(PermanentProviderError, match="not implemented"):
+    with pytest.raises(PermanentProviderError, match="injected API key"):
         DurableWorker(lambda: _AsyncContext(Mock()), settings=_settings(provider="resend"))
 
 

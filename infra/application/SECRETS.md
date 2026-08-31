@@ -20,6 +20,8 @@ to disk.
 | `AC_EMAIL_CHALLENGE_SECRET`   | independent random value of at least 32 bytes                               |
 | `AC_GOOGLE_OAUTH_CLIENT_ID`   | Google web client ID ending in `.apps.googleusercontent.com`                |
 | `AC_GOOGLE_OAUTH_CLIENT_SECRET` | non-empty secret for that exact Google web client                         |
+| `AC_PUBLIC_LEARNER_TENANT_ID`   | exact active tenant UUID selected for public/self-directed learner access |
+| `AC_OPERATIONS_TENANT_ID`       | exact existing control-tenant UUID for global job reconciliation          |
 
 The four database passwords must be distinct. The three identity secrets must
 also be mutually distinct. The two SQLAlchemy URLs must be
@@ -38,9 +40,29 @@ real Google login/callback remain deployment-time operational evidence.
 
 ## Held integrations
 
-`RESEND_API_KEY` may be present, but the checked-in environment profile keeps
-`AC_EMAIL_PROVIDER=fake` and external effects held until a separate provider
-activation gate.
+`AC_RESEND_API_KEY` and the non-secret reviewed `AC_RESEND_FROM` may be present,
+but the checked-in environment profile keeps `AC_EMAIL_PROVIDER=fake` and
+external effects held until a separate provider activation gate. Enabling
+Resend requires both names; the legacy unprefixed `RESEND_API_KEY` is not read.
+Compose injects the selector, key, and sender into the worker only. The API and
+migrator do not receive these variables or the mail credential; their provider
+configuration remains at the application default `fake`. This process-level
+least-privilege boundary applies even though Infisical supplies the values to
+the short-lived Compose invocation.
+The activation record must prove the sender domain, consent version, bounded
+invitation volume, delivery/complaint monitoring, and a live verification plus
+recovery journey without printing the key or recipient address.
+
+`AC_PUBLIC_LEARNER_TENANT_ID` is not authority by itself. It points to the
+canonical active tenant whose persisted membership rows remain the authorization
+source of truth. Keep it in the environment-scoped secret/config store so a
+staging identifier cannot be reused accidentally in production.
+
+`AC_OPERATIONS_TENANT_ID` is also a reference, not authority. The selected
+actor must be an owner of that exact existing tenant and hold the separate
+global retry/recovery permissions before a tenantless identity-email job can
+be reconciled. Actions and idempotency markers remain attributable in the
+control tenant's append-only audit chain.
 
 Release SHA, image IDs, registry digests, URLs, Compose project names, state
 paths, and edge aliases are non-secret reviewed release metadata. They belong

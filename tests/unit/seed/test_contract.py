@@ -15,6 +15,58 @@ from ac_platform.seed.technical_validation_fixture import (
     technical_validation_seed,
 )
 
+FOUNDATION_SEED = (
+    Path(__file__).parents[3]
+    / "packages"
+    / "python"
+    / "ac_platform"
+    / "seed"
+    / "data"
+    / "free_course_foundation_v1.json"
+)
+
+
+def test_controlled_foundation_seed_has_four_shifts_and_module_one_learning_loop() -> None:
+    release_id = "a" * 40
+    seed = load_seed(
+        FOUNDATION_SEED,
+        environment="staging",
+        expected_release_id=release_id,
+    )
+
+    assert seed.release_id == release_id
+    assert [module.position for module in seed.modules] == [1, 2, 3, 4]
+    assert [activity.kind for activity in seed.modules[0].activities] == [
+        "VIDEO",
+        "REFLECTION",
+        "IMPLEMENTATION_CHALLENGE",
+        "REVIEW",
+        "IMPROVE",
+    ]
+    assert all(not module.activities for module in seed.modules[1:])
+    assert [module.prerequisite_positions for module in seed.modules] == [
+        (),
+        (1,),
+        (2,),
+        (3,),
+    ]
+
+
+def test_external_reviewed_seed_cannot_borrow_package_release_placeholder(
+    tmp_path: Path,
+) -> None:
+    payload = json.loads(FOUNDATION_SEED.read_text(encoding="utf-8"))
+    external_seed = tmp_path / "reviewed.json"
+    external_seed.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(SeedContractError, match="package-owned"):
+        load_seed(
+            external_seed,
+            environment="staging",
+            expected_release_id="a" * 40,
+        )
+
+
 FIXTURE = Path(__file__).parents[2] / "fixtures" / "free_course_staging_test_fixture.json"
 TEST_RELEASE = "0000000000000000000000000000000000000000"
 

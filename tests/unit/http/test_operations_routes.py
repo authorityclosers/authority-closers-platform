@@ -71,8 +71,17 @@ class _JobRepository:
         actor: ActorContext,
         reason: str,
         audit: object,
+        operations_tenant_id: UUID | None = None,
     ) -> Job:
-        self.calls.append({"job_id": job_id, "actor": actor, "reason": reason, "audit": audit})
+        self.calls.append(
+            {
+                "job_id": job_id,
+                "actor": actor,
+                "reason": reason,
+                "audit": audit,
+                "operations_tenant_id": operations_tenant_id,
+            }
+        )
         if self.error is not None:
             raise self.error
         assert self.job is not None
@@ -146,7 +155,7 @@ class _ProviderInboxRepository:
         return type(self).row, type(self).created
 
 
-def _settings() -> Settings:
+def _settings(*, operations_tenant_id: UUID | None = None) -> Settings:
     return Settings(
         environment="test",
         database_url="postgresql+psycopg://unused:unused@localhost/unused",
@@ -156,10 +165,11 @@ def _settings() -> Settings:
         public_app_url="https://app.authorityclosers.test",
         admin_app_url="https://admin.authorityclosers.test",
         api_url="https://api.authorityclosers.test",
+        operations_tenant_id=operations_tenant_id,
     )
 
 
-def _job(*, job_id: UUID, tenant_id: UUID, status: str = JobStatus.QUEUED.value) -> Job:
+def _job(*, job_id: UUID, tenant_id: UUID | None, status: str = JobStatus.QUEUED.value) -> Job:
     now = datetime(2026, 8, 30, 12, tzinfo=UTC)
     held = status == JobStatus.HELD.value
     return Job(
@@ -203,6 +213,7 @@ def _client(
     webhook_adapter: TrustedWebhookAdapter | None = None,
     webhook_sessions: Any | None = None,
     marker: Any | None = None,
+    operations_tenant_id: UUID | None = None,
 ) -> TestClient:
     database = _Database()
     actor_calls: list[str] = []
@@ -252,7 +263,7 @@ def _client(
     register_problem_handlers(application)
     install_operations_http(
         application,
-        settings=_settings(),
+        settings=_settings(operations_tenant_id=operations_tenant_id),
         sessions=cast(Any, webhook_sessions or (lambda: _SessionContext(_WebhookDatabase()))),
         require_actor=require_actor,
         webhook_adapters=(
@@ -471,6 +482,36 @@ def test_retry_uses_server_owned_actor_and_returns_no_store(
     }
     assert repository.calls[0]["actor"] is actor
     assert repository.calls[0]["reason"] == "operator review"
+    assert repository.calls[0]["operations_tenant_id"] is None
+
+
+def test_retry_forwards_configured_control_tenant_for_global_job_policy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    job_id = uuid4()
+    control_tenant_id = uuid4()
+    actor = ActorContext(
+        person_id=uuid4(),
+        session_id=uuid4(),
+        tenant_id=control_tenant_id,
+        permissions=frozenset({"admin_surface", "job_retry", "global_job_retry"}),
+    )
+    repository = _JobRepository(_job(job_id=job_id, tenant_id=None, status="dead_letter"))
+    client = _client(
+        monkeypatch,
+        actor=actor,
+        job_repository=repository,
+        operations_tenant_id=control_tenant_id,
+    )
+
+    response = client.post(
+        f"/v1/admin/jobs/{job_id}/retry",
+        json={"reason": "provider delivery reviewed"},
+        headers=_admin_headers("retry-global"),
+    )
+
+    assert response.status_code == 200
+    assert repository.calls[0]["operations_tenant_id"] == control_tenant_id
 
 
 def test_retry_replay_returns_canonical_result_and_conflicting_key_is_denied(
@@ -548,7 +589,7 @@ def test_retry_maps_invalid_state_to_safe_problem(monkeypatch: pytest.MonkeyPatc
     assert "internal state detail" not in response.text
 
 
-def test_reconcile_requires_explicit_set_and_honors_held_gate(
+def test_reconcile_empty_request_fails_closed_outside_control_scope_and_honors_held_gate(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     tenant_id = uuid4()
@@ -566,7 +607,8 @@ def test_reconcile_requires_explicit_set_and_honors_held_gate(
         json={"reason": "review"},
         headers=_admin_headers("reconcile-empty"),
     )
-    assert empty.status_code == 422
+    assert empty.status_code == 409
+    assert empty.json()["code"] == "recovery_reconciliation_unavailable"
 
     recovery.error = ReconciliationRequiredError("recovery state detail")
     blocked = client.post(
@@ -577,6 +619,51 @@ def test_reconcile_requires_explicit_set_and_honors_held_gate(
     assert blocked.status_code == 409
     assert blocked.json()["code"] == "recovery_reconciliation_unavailable"
     assert "recovery state detail" not in blocked.text
+
+
+def test_reconcile_empty_request_finalizes_only_through_control_scope(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    control_tenant_id = uuid4()
+    actor = ActorContext(
+        person_id=uuid4(),
+        session_id=uuid4(),
+        tenant_id=control_tenant_id,
+        permissions=frozenset(
+            {
+                "admin_surface",
+                "recovery_reconcile",
+                "global_recovery_reconcile",
+            }
+        ),
+    )
+    recovery = _RecoveryStateRepository(_state())
+    calls: list[dict[str, Any]] = []
+
+    async def reconcile(_database: object, **kwargs: Any) -> tuple[list[Any], list[Any]]:
+        calls.append(kwargs)
+        recovery.state.status = "ready"
+        return [], []
+
+    monkeypatch.setattr(operations_module, "reconcile_operations", reconcile)
+    client = _client(
+        monkeypatch,
+        actor=actor,
+        recovery_repository=recovery,
+        operations_tenant_id=control_tenant_id,
+    )
+
+    response = client.post(
+        "/v1/admin/recovery/reconcile",
+        json={"reason": "all global delivery evidence reviewed"},
+        headers=_admin_headers("reconcile-global-finalize"),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["recovery_status"] == "ready"
+    assert calls[0]["job_ids"] == ()
+    assert calls[0]["outbox_event_ids"] == ()
+    assert calls[0]["operations_tenant_id"] == control_tenant_id
 
 
 def test_reconcile_requires_admin_surface_with_reconcile_permission(
@@ -720,6 +807,7 @@ def test_reconcile_releases_only_the_named_set_and_returns_recovery_state(
     assert calls[0]["outbox_event_ids"] == (outbox_event_id,)
     assert calls[0]["actor"] is actor
     assert calls[0]["reason"] == "restore review"
+    assert calls[0]["operations_tenant_id"] is None
     assert recovery.require_held_calls == 1
 
 

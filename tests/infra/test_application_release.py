@@ -37,6 +37,19 @@ INFISICAL_RUNNER = (ROOT / "infra" / "vps-foundation" / "scripts" / "ac-infisica
 )
 WORKFLOW = (ROOT / ".github" / "workflows" / "application.yml").read_text(encoding="utf-8")
 GIT_ATTRIBUTES = (ROOT / ".gitattributes").read_text(encoding="utf-8")
+ENV_EXAMPLE = (ROOT / ".env.example").read_text(encoding="utf-8")
+
+
+def test_local_database_urls_match_the_ipv4_only_compose_publish_contract() -> None:
+    database_lines = tuple(
+        line
+        for line in ENV_EXAMPLE.splitlines()
+        if line.startswith(("AC_DATABASE_URL=", "AC_DATABASE_MIGRATOR_URL="))
+    )
+
+    assert len(database_lines) == 2
+    assert all("@127.0.0.1:5432/ac_platform" in line for line in database_lines)
+    assert all("@localhost:5432/" not in line for line in database_lines)
 
 
 @pytest.mark.parametrize("dockerfile", [WEB_DOCKERFILE, PYTHON_DOCKERFILE])
@@ -79,6 +92,7 @@ def test_release_fails_closed_on_identity_and_database_secrets() -> None:
         "AC_SESSION_TOKEN_PEPPER:?",
         "AC_OAUTH_TRANSACTION_SECRET:?",
         "AC_EMAIL_CHALLENGE_SECRET:?",
+        "AC_OPERATIONS_TENANT_ID:?",
         "AC_GOOGLE_OAUTH_CLIENT_ID:?",
         "AC_GOOGLE_OAUTH_CLIENT_SECRET:?",
         "AC_POSTGRES_OWNER_PASSWORD:?",
@@ -94,13 +108,24 @@ def test_release_fails_closed_on_identity_and_database_secrets() -> None:
         assert marker in COMPOSE
 
     assert "AC_EXTERNAL_SIDE_EFFECTS_HOLD:-true" in COMPOSE
-    assert "AC_EMAIL_PROVIDER:-fake" in COMPOSE
+    assert "AC_PUBLIC_LEARNER_TENANT_ID:-" in COMPOSE
+    assert "AC_OPERATIONS_TENANT_ID:?" in COMPOSE
+    assert COMPOSE.count("AC_EMAIL_PROVIDER: ${AC_EMAIL_PROVIDER:-fake}") == 1
+    assert COMPOSE.count("AC_RESEND_API_KEY: ${AC_RESEND_API_KEY:-}") == 1
+    assert COMPOSE.count("AC_RESEND_FROM: ${AC_RESEND_FROM:-}") == 1
+    assert "RESEND_API_KEY:" not in COMPOSE.replace("AC_RESEND_API_KEY:", "")
+    shared_environment = COMPOSE.split(
+        "x-application-environment: &application-environment", maxsplit=1
+    )[1].split("x-migration-environment: &migration-environment", maxsplit=1)[0]
+    for worker_only_name in ("AC_EMAIL_PROVIDER", "AC_RESEND_API_KEY", "AC_RESEND_FROM"):
+        assert worker_only_name not in shared_environment
     assert len(re.findall(r"^\s+AC_DATABASE_MIGRATOR_URL:", COMPOSE, re.MULTILINE)) == 1
     assert "x-migration-environment: &migration-environment" in COMPOSE
     assert "migrate:\n" in COMPOSE
     assert "<<: *migration-environment" in COMPOSE
     assert "-u AC_TRUSTED_PROXY_ADDRESSES" in INSTALLER
     assert "-u AC_EMAIL_CHALLENGE_SECRET" in INSTALLER
+    assert "-u AC_OPERATIONS_TENANT_ID" in INSTALLER
 
 
 def test_deployment_oauth_documentation_matches_mandatory_compose_contract() -> None:
@@ -195,6 +220,8 @@ def test_oauth_secret_preflight_runs_before_image_loading_and_compose_mutation()
     assert INSTALLER.index(preflight) < INSTALLER.index(mutation_start)
     assert "-u AC_GOOGLE_OAUTH_CLIENT_ID" in secret_wrapper
     assert "-u AC_GOOGLE_OAUTH_CLIENT_SECRET" in secret_wrapper
+    assert "-u AC_PUBLIC_LEARNER_TENANT_ID" in secret_wrapper
+    assert "-u AC_OPERATIONS_TENANT_ID" in secret_wrapper
 
 
 def test_database_and_edge_networks_are_explicitly_separated() -> None:

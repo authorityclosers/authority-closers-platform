@@ -15,6 +15,18 @@ from ac_platform.tenancy.models import (
 )
 
 _LAZY_PUBLIC_IMPORTS = {
+    "AsyncLearnerProvisioningApplication": (
+        "ac_platform.tenancy.learner_provisioning",
+        "AsyncLearnerProvisioningApplication",
+    ),
+    "LearnerProvisioningError": (
+        "ac_platform.tenancy.learner_provisioning",
+        "LearnerProvisioningError",
+    ),
+    "LearnerProvisioningResult": (
+        "ac_platform.tenancy.learner_provisioning",
+        "LearnerProvisioningResult",
+    ),
     "create_production_tenant_context_service": (
         "ac_platform.tenancy.factories",
         "create_production_tenant_context_service",
@@ -79,6 +91,7 @@ def __getattr__(name: str) -> object:
 
 
 __all__ = [
+    "AsyncLearnerProvisioningApplication",
     "InMemoryTenantStore",
     "AsyncSqlAlchemyTenantRepository",
     "SqlAlchemyTenantRepository",
@@ -90,6 +103,8 @@ __all__ = [
     "MembershipService",
     "MembershipSnapshot",
     "MembershipStatus",
+    "LearnerProvisioningError",
+    "LearnerProvisioningResult",
     "Tenant",
     "TenantAccessDeniedError",
     "TenantContext",

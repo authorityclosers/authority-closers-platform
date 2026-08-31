@@ -9,6 +9,7 @@ from ac_platform.providers.email import (
 from ac_platform.providers.fake_email import FakeEmailAdapter, FakeEmailProvider
 from ac_platform.providers.models import ProviderInbox, ProviderInboxStatus
 from ac_platform.providers.ports import (
+    AmbiguousDeliveryProviderError,
     ApprovedTemplateRegistry,
     DeliveryReceipt,
     EmailCommunication,
@@ -20,6 +21,7 @@ from ac_platform.providers.ports import (
     SentEmail,
     TransientProviderError,
 )
+from ac_platform.providers.resend_email import ResendEmailAdapter
 from ac_platform.providers.service import (
     ConfiguredWebhookAdapter,
     DuplicateProviderEvent,
@@ -40,6 +42,7 @@ from ac_platform.providers.service import (
 )
 
 __all__ = [
+    "AmbiguousDeliveryProviderError",
     "ApprovedTemplateRegistry",
     "DeliveryReceipt",
     "DuplicateProviderEvent",
@@ -58,6 +61,7 @@ __all__ = [
     "ProviderPayloadConflict",
     "ProviderInboxStatus",
     "ProviderWebhookRejected",
+    "ResendEmailAdapter",
     "TrustedWebhookAdapter",
     "WebhookAttribution",
     "SentEmail",

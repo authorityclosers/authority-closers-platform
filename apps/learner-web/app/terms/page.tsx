@@ -21,10 +21,21 @@ export default function TermsPage() {
           body: (
             <p>
               Only invited test users may access this environment. Use your own
-              authorized identity, keep your session private, and do not attempt
-              to access another person&apos;s or organisation&apos;s data.
-              Access may be suspended to protect the test or investigate an
-              incident.
+              authorized identity, confirm that you are 18 or older, keep your
+              session private, and do not attempt to access another
+              person&apos;s or organisation&apos;s data. Access may be suspended
+              to protect the test or investigate an incident.
+            </p>
+          ),
+        },
+        {
+          heading: "Necessary service email",
+          body: (
+            <p>
+              Registration authorizes the transactional messages required to
+              verify your account, protect or recover access, confirm free
+              course access, and provide the next learning action. It does not
+              authorize promotional campaigns or WhatsApp messaging.
             </p>
           ),
         },

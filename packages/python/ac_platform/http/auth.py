@@ -57,6 +57,10 @@ from ac_platform.kernel.authz import ActorContext
 from ac_platform.kernel.errors import DomainError, ResourceNotFound
 from ac_platform.kernel.events import EventCategory, EventEnvelope
 from ac_platform.outbox.repository import OutboxRepository
+from ac_platform.tenancy.learner_provisioning import (
+    AsyncLearnerProvisioningApplication,
+    LearnerProvisioningError,
+)
 
 SESSION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60
 SESSION_COOKIE_VALUE_PATTERN = re.compile(r"[A-Za-z0-9_-]{43,512}\Z")
@@ -74,6 +78,8 @@ ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
             "enrollment_grant",
             "job_retry",
             "recovery_reconcile",
+            "global_job_retry",
+            "global_recovery_reconcile",
             "certificate_correct",
             "certificate_revoke",
         }
@@ -561,7 +567,7 @@ async def identity_error_handler(
         code = "tenant_context_denied"
         title = "Tenant context is not allowed"
         detail = "The selected tenant context is unavailable."
-    elif isinstance(error, (IdentityAuthorizationDenied, IdentityResolutionError)):
+    elif isinstance(error, IdentityAuthorizationDenied | IdentityResolutionError):
         error_status = status.HTTP_401_UNAUTHORIZED
         code = "authentication_rejected"
         title = "Authentication was rejected"
@@ -647,6 +653,23 @@ def install_identity_http(
             dedupe_key=f"identity-email:{kind}:{challenge_id}",
         )
 
+    async def ensure_public_learner(database: AsyncSession, person_id: UUID) -> UUID:
+        tenant_id = settings.public_learner_tenant_id
+        consent_version = (settings.learner_consent_version or "").strip()
+        if tenant_id is None or not consent_version:
+            raise PasswordRegistrationUnavailable(
+                "Reviewed learner consent and the public learner context must be configured."
+            )
+        try:
+            await AsyncLearnerProvisioningApplication(database).ensure(
+                person_id=person_id,
+                tenant_id=tenant_id,
+                required_consent_version=consent_version,
+            )
+        except LearnerProvisioningError as error:
+            raise PasswordRegistrationUnavailable(str(error)) from error
+        return tenant_id
+
     @router.post(
         "/auth/password/register",
         response_model=PasswordRegistrationResponse,
@@ -659,9 +682,9 @@ def install_identity_http(
     ) -> PasswordRegistrationResponse:
         require_safe_origin(request, settings)
         consent_version = (settings.learner_consent_version or "").strip()
-        if not consent_version:
+        if not consent_version or settings.public_learner_tenant_id is None:
             raise PasswordRegistrationUnavailable(
-                "A reviewed learner consent version is not configured for this environment."
+                "Reviewed learner consent and the public learner context must be configured."
             )
         try:
             async with sessions() as database, database.begin():
@@ -699,13 +722,14 @@ def install_identity_http(
                 person = await PasswordIdentityService(
                     database, token_secret=challenge_secret
                 ).authenticate(email=body.email, password=body.password)
-                issued = await AsyncIdentityApplication(
-                    database, token_pepper=token_pepper
-                ).issue_authenticated_session(
+                tenant_id = await ensure_public_learner(database, person.id)
+                identity = AsyncIdentityApplication(database, token_pepper=token_pepper)
+                issued = await identity.issue_authenticated_session(
                     person.id,
                     user_agent=request.headers.get("user-agent"),
                     ip_address=request.client.host if request.client else None,
                 )
+                await identity.select_tenant(issued.token, tenant_id)
         except EmailVerificationRequired as error:
             raise PasswordEmailVerificationRequired(str(error)) from error
         except (InvalidPasswordCredentials, ValueError) as error:
@@ -782,13 +806,14 @@ def install_identity_http(
                 person = await PasswordIdentityService(
                     database, token_secret=challenge_secret
                 ).consume_verification(body.token)
-                issued = await AsyncIdentityApplication(
-                    database, token_pepper=token_pepper
-                ).issue_authenticated_session(
+                tenant_id = await ensure_public_learner(database, person.id)
+                identity = AsyncIdentityApplication(database, token_pepper=token_pepper)
+                issued = await identity.issue_authenticated_session(
                     person.id,
                     user_agent=request.headers.get("user-agent"),
                     ip_address=request.client.host if request.client else None,
                 )
+                await identity.select_tenant(issued.token, tenant_id)
         except (InvalidEmailChallenge, ValueError) as error:
             raise PasswordChallengeRejected(str(error)) from error
         _set_session_cookie(response, issued.token, settings)
@@ -874,6 +899,22 @@ def install_identity_http(
     ) -> Response:
         _require_surface_host(request, settings, surface)
         safe_return_path = normalize_return_path(return_path)
+        if surface == "learner" and authorization_type is ProviderAuthorizationType.REGISTER:
+            raise PasswordRegistrationUnavailable(
+                "Learner Google registration is disabled until consent can be bound "
+                "to the signed authorization transaction."
+            )
+        if (
+            surface == "learner"
+            and authorization_type is ProviderAuthorizationType.AUTHENTICATE
+            and (
+                settings.public_learner_tenant_id is None
+                or not (settings.learner_consent_version or "").strip()
+            )
+        ):
+            raise PasswordRegistrationUnavailable(
+                "Reviewed learner consent and the public learner context must be configured."
+            )
         audience = identity_provider.audience
         person_id: UUID | None = None
         async with sessions() as database, database.begin():
@@ -917,6 +958,14 @@ def install_identity_http(
         _require_surface_host(request, settings, transaction.surface)
         if not hmac.compare_digest(transaction.state, state_value):
             raise InvalidAuthTransaction("The callback state does not match the transaction.")
+        if (
+            transaction.surface == "learner"
+            and transaction.authorization_type is ProviderAuthorizationType.REGISTER
+        ):
+            raise PasswordRegistrationUnavailable(
+                "Learner Google registration is disabled until consent can be bound "
+                "to the signed authorization transaction."
+            )
         link_session_token = presented_session_token
         if (
             transaction.authorization_type is ProviderAuthorizationType.LINK
@@ -950,6 +999,15 @@ def install_identity_http(
                     user_agent=request.headers.get("user-agent"),
                 )
                 session_token = issued.token
+                if transaction.surface == "learner":
+                    tenant_id = await ensure_public_learner(
+                        database,
+                        issued.metadata.person_id,
+                    )
+                    await identity.select_tenant(
+                        session_token,
+                        tenant_id,
+                    )
             else:
                 if link_session_token is None:  # pragma: no cover - narrowed above
                     raise AuthenticationRequired("A valid Authority Closers session is required.")

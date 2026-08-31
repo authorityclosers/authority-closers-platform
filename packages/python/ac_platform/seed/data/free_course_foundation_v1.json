@@ -1,0 +1,77 @@
+{
+  "contract_version": "free-course-staging-seed.v1",
+  "seed_key": "free-course",
+  "program": {
+    "slug": "authority-closers-free-course",
+    "title": "Authority Closers Free Course"
+  },
+  "content": {
+    "source_ref": "https://docs.google.com/document/d/1gQnsY1JjphpmOmfyCRZkfI-p0TWZjF1PkY1xF744Gnc/edit",
+    "review_status": "reviewed",
+    "reviewed_by": "AC-IMP-04 controlled implementation baseline",
+    "reviewed_at": "2026-08-29T00:00:00+05:30",
+    "release_id": "$AC_RELEASE_ID"
+  },
+  "modules": [
+    {
+      "position": 1,
+      "title": "SHIFT 1 — Why High-Ticket Sales Is A Completely Different Game.",
+      "activities": [
+        {
+          "position": 1,
+          "kind": "VIDEO",
+          "title": "Watch the Module 1 shift",
+          "prompt": "Watch the approved Module 1 content: Why High-Ticket Sales Is A Completely Different Game.",
+          "is_required": true
+        },
+        {
+          "position": 2,
+          "kind": "REFLECTION",
+          "title": "Reflect on the shift",
+          "prompt": "Record your reflection after watching the Module 1 content. Your draft is saved so you can leave and resume.",
+          "is_required": true
+        },
+        {
+          "position": 3,
+          "kind": "IMPLEMENTATION_CHALLENGE",
+          "title": "Implement in a real situation",
+          "prompt": "Complete the configured offline or real-world task, then record the evidence or reflection you can support.",
+          "is_required": true
+        },
+        {
+          "position": 4,
+          "kind": "REVIEW",
+          "title": "Review the observed pattern",
+          "prompt": "Capture the observed pattern after the challenge without claiming certainty beyond the evidence you recorded.",
+          "is_required": true
+        },
+        {
+          "position": 5,
+          "kind": "IMPROVE",
+          "title": "Choose the next improvement",
+          "prompt": "Capture one explicit behavior, correction, or next action to carry into your next attempt.",
+          "is_required": true
+        }
+      ],
+      "prerequisite_positions": []
+    },
+    {
+      "position": 2,
+      "title": "SHIFT 2 — “I’ll Think About It” — What Your Prospect Is Really Telling You.",
+      "activities": [],
+      "prerequisite_positions": [1]
+    },
+    {
+      "position": 3,
+      "title": "SHIFT 3 — The Call Felt Great. So Why Didn’t They Buy?",
+      "activities": [],
+      "prerequisite_positions": [2]
+    },
+    {
+      "position": 4,
+      "title": "SHIFT 4 — The Story That’s Stopping You From Becoming A High-Ticket Closer.",
+      "activities": [],
+      "prerequisite_positions": [3]
+    }
+  ]
+}

@@ -241,6 +241,8 @@ with_release_secrets() {
     -u AC_GOOGLE_OAUTH_CLIENT_ID \
     -u AC_GOOGLE_OAUTH_CLIENT_SECRET \
     -u AC_EMAIL_CHALLENGE_SECRET \
+    -u AC_PUBLIC_LEARNER_TENANT_ID \
+    -u AC_OPERATIONS_TENANT_ID \
     AC_INFISICAL_ENVIRONMENT="$secret_environment" \
     AC_INFISICAL_PATH="$secret_path" \
     /usr/local/sbin/ac-infisical-run -- "$@"

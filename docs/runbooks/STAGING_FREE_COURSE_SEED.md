@@ -1,82 +1,76 @@
 # Staging Free Course seed
 
-The learner preview currently contains static two-module/five-activity demo
-content. The controlled direction is four modules, but the repository does not
-contain authoritative four-module copy. The staging seed therefore has no
-default payload and refuses to infer or promote the preview content.
+The release wheel contains the controlled v0.1 topology foundation selected by
+`--controlled-foundation-v1`. Its source is the controlled AC-IMP-04 decision
+baseline. It contains the exact four approved shift titles and only the first
+production slice of the learning workflow:
 
-Provide an explicit `free-course-staging-seed.v1` JSON document whose content
-status is `reviewed`, whose topology contains exactly four modules and the five
-approved activity kinds, and whose reviewed release ID matches the release
-being seeded. The test-only fixture at
-`tests/fixtures/free_course_staging_test_fixture.json` is not product content
-and is accepted only by test application code.
+1. Module 1 has the complete `VIDEO -> REFLECTION ->
+   IMPLEMENTATION_CHALLENGE -> REVIEW -> IMPROVE` loop.
+2. Modules 2–4 preserve the approved four-shift topology and sequential
+   prerequisites but intentionally contain no activities. They are extension
+   contracts, not claims that the future course has been delivered.
 
-The command is staging-only. `AC_RELEASE_ID` must be present in the release
-environment and the reviewed document must carry the same 40-character
-lowercase release SHA:
+The short activity prompts are bounded workflow scaffolding for the implemented
+loop. They are not a claim that final teaching copy, video, transcript,
+resources, or later-module content has been approved.
 
-```powershell
-uv run python scripts/seed_staging.py `
-  --environment staging `
-  --seed-data .\reviewed-free-course.json `
-  --actor-person-id <existing-global-admin-person-id> `
-  --release-id <40-character-lowercase-release-sha>
-```
+The packaged JSON carries the literal `$AC_RELEASE_ID` placeholder. The loader
+resolves it only for staging/test and only to the exact baked 40-character
+release SHA. Production seed invocation remains unsupported.
 
-The `--actor-person-id` value must identify an existing active person with an
-active `admin` or `owner` membership in an active tenant. The CLI does not
-self-assert catalog permissions: the seed application verifies this persisted
-authority in the same transaction and derives only the two narrowly required
-catalog capabilities. The seed application is not registered as an HTTP route,
-so a public learner/admin request cannot invoke this bootstrap path. This
-prevents an arbitrary person ID or forged in-memory permission set from
-granting global catalog write/publish authority; an authorized staging
-operator remains responsible for supplying reviewed content.
+## Apply the controlled foundation
 
-It creates a deterministic stable program identity and deterministic IDs for
-each content digest, publishes through the catalog application/domain paths,
-and stores release ID, source reference, reviewer, review time, and SHA-256
-content provenance on the immutable program version. An identical digest is a
-no-op. Changed reviewed content creates and explicitly supersedes a new
-version; an already-published version is never rewritten or republished.
-
-The command prints only a non-sensitive seed receipt. The final staging smoke
-must assert that anonymous `GET /v1/programs` returns a non-empty `items`
-array, and that the returned version is the seeded immutable version. No
-production invocation is supported.
-
-## Temporary staging technical validation
-
-Until the reviewed four-module source is supplied, the API release image can
-exercise the catalog/enrollment/application seam with a separate synthetic
-catalog. It is not Free Course content and is never accepted by `load_seed`.
-Run this only from the API release image, with the staging environment already
-bound to the canonical database:
+Run from the exact API release image after migrations and before learner smoke
+testing:
 
 ```sh
 test "${AC_ENVIRONMENT:-}" = staging
 python -m ac_platform.seed \
-  --technical-validation \
-  --acknowledge-staging-technical-validation \
+  --controlled-foundation-v1 \
   --actor-person-id "$AC_SEED_ACTOR_PERSON_ID" \
   --release-id "$AC_RELEASE_ID"
 ```
 
-The wheel includes `ac_platform.seed`, so this package-native command does not
-depend on repository scripts or test files. It refuses unless
-`AC_ENVIRONMENT=staging`, `AC_RELEASE_ID`, the acknowledgement flag, and a
-real authorized actor are present; production is rejected unconditionally. The
-actor ID must be the canonical `persons.id` of the first authenticated staging
-admin/operator. Do not create a fixture person: if the ID is absent, inactive,
-or lacks an active admin/owner membership, the command fails before catalog
-writes. Obtain the ID from the authenticated admin's canonical session/context
-or an approved staging database lookup.
+`AC_SEED_ACTOR_PERSON_ID` must be the canonical `persons.id` for an existing,
+active staging person with an active `admin` or `owner` membership in an active
+tenant. Obtain it from the authenticated operator's canonical session/context
+or an approved read-only staging lookup. Never create a fixture person and
+never use direct SQL to create or repair course state.
 
-The technical fixture uses the explicit slug
-`staging-technical-validation` and title `STAGING-ONLY Technical Validation
-Catalog`. It is deterministic and idempotent, stores release/content
-provenance, and creates a new superseding version for changed content without
-rewriting a published version. The resulting anonymous `GET /v1/programs`
-response should contain this technical catalog, which is a staging plumbing
-check only and must not be represented as an approved course release.
+The CLI verifies persisted authority in the same transaction and derives only
+the two narrowly required catalog capabilities. It is not an HTTP route, so a
+learner/admin browser request cannot invoke the bootstrap path. The command
+fails closed when its environment, baked release, supplied release, actor, or
+controlled payload does not match.
+
+The application creates a deterministic stable program identity and
+deterministic IDs for each content digest. It publishes through the catalog
+application/domain path and stores release ID, exact Drive source reference,
+review authority/time, and SHA-256 content provenance on the immutable program
+version. An identical digest is a no-op. A changed reviewed digest creates and
+supersedes a new version; a published version is never rewritten.
+
+The command prints only a non-sensitive receipt. After application, prove:
+
+- a second identical application is an idempotent no-op;
+- anonymous `GET /v1/programs` returns the controlled program/version;
+- Module 1 exposes exactly the five ordered activity kinds;
+- Modules 2–4 expose no activities and remain sequentially locked;
+- an authenticated learner is enrolled through the application API, not by
+  direct database edits.
+
+## Explicit external reviewed payload
+
+`--seed-data <path>` remains available for a future reviewed
+`free-course-staging-seed.v1` document. It cannot be combined with
+`--controlled-foundation-v1`; the same source, review, topology, activity-kind,
+environment, release, and immutable-history checks apply.
+
+## Synthetic technical validation
+
+`--technical-validation --acknowledge-staging-technical-validation` remains a
+separate staging-only plumbing fixture. It is not Free Course content and must
+not be represented as an approved course release. Prefer the controlled
+foundation for v0.1 acceptance; use the synthetic fixture only when diagnosing
+the catalog/enrollment seam independently of product content.

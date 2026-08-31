@@ -282,7 +282,7 @@ class AsyncIdentityApplication:
         tenant_id: UUID,
     ) -> tuple[Tenant, Membership]:
         tenant = await self._session.scalar(
-            select(Tenant).where(Tenant.id == tenant_id).with_for_update()
+            select(Tenant).where(Tenant.id == tenant_id).with_for_update(read=True)
         )
         if tenant is None or tenant.status != TenantStatus.ACTIVE.value:
             raise TenantScopeDeniedError("tenant is unavailable")
@@ -292,7 +292,7 @@ class AsyncIdentityApplication:
                 Membership.tenant_id == tenant_id,
                 Membership.person_id == person_id,
             )
-            .with_for_update()
+            .with_for_update(read=True)
         )
         if (
             membership is None
@@ -369,7 +369,7 @@ class AsyncIdentityApplication:
         *,
         now: datetime | None = None,
     ) -> ResolvedActorContext:
-        """Select a tenant while holding membership and tenant revocation locks."""
+        """Select a tenant while shared locks fence lifecycle mutation."""
 
         self._require_transaction()
         current_time = _now(now)

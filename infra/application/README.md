@@ -226,3 +226,25 @@ presence only; credential rotation and a real Google login/callback remain
 deployment-time operational evidence. Keep `AC_EMAIL_PROVIDER=fake` and
 `AC_EXTERNAL_SIDE_EFFECTS_HOLD=true` until a separately reviewed provider
 activation gate is approved.
+
+The provider port reads only the prefixed `AC_RESEND_API_KEY` and reviewed
+`AC_RESEND_FROM`; both are required when the profile selects `resend`. Compose
+binds the provider selector, credential, and sender only to the worker. The API
+and one-shot migrator receive none of those variables and therefore retain the
+application's fail-safe fake-provider default without access to the Resend
+credential. The worker renders only the versioned verification, recovery, and
+enrollment service templates and forwards its durable idempotency key.
+Arbitrary campaign content is outside this release.
+
+Learner registration also requires an exact `AC_PUBLIC_LEARNER_TENANT_ID` and
+`AC_LEARNER_CONSENT_VERSION`. The tenant must already exist and be active.
+Registration can create only an active learner membership for a verified
+person; it never creates a tenant, changes a role, reactivates an inactive
+membership, or provisions an admin-surface login.
+
+Global verification/reset delivery recovery additionally requires
+`AC_OPERATIONS_TENANT_ID`, pointing at an existing operations-control tenant.
+Only an owner who has selected that exact tenant receives the global
+job-retry/recovery permissions. This keeps tenantless identity email out of
+ordinary tenant administration while retaining an attributable, idempotent
+audit path.

@@ -23,6 +23,16 @@ class PermanentProviderError(ProviderError):
     """A provider failure that should not be retried indefinitely."""
 
 
+class AmbiguousDeliveryProviderError(ProviderError):
+    """A provider call may have caused an effect but returned no durable receipt.
+
+    This error must be quarantined behind explicit operations reconciliation. It
+    is intentionally neither transient nor permanent: automatic retry could
+    duplicate an effect after a provider's idempotency window expires, while an
+    ordinary permanent dead letter would hide the unresolved delivery state.
+    """
+
+
 class EmailMessageConflictError(PermanentProviderError):
     """An idempotency key was reused for different canonical email content."""
 
@@ -210,6 +220,7 @@ class EmailProvider(Protocol):
 
 
 __all__ = [
+    "AmbiguousDeliveryProviderError",
     "ApprovedTemplateRegistry",
     "DeliveryReceipt",
     "EmailCommunication",

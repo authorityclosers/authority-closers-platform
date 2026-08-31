@@ -48,6 +48,7 @@ def _deployment_settings(environment: str) -> Settings:
         ),
         session_cookie_name="__Host-ac_session",
         oauth_transaction_cookie_name="__Host-ac_oauth_transaction",
+        operations_tenant_id="33333333-3333-4333-8333-333333333333",
         **origins,  # type: ignore[arg-type]
     )
 

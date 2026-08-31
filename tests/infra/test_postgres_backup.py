@@ -184,6 +184,7 @@ def test_lock_context_rejects_a_precreated_private_directory_symlink(tmp_path: P
 
 def test_dump_command_is_custom_format_ac_backup_and_does_not_contain_a_password(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     target = backup.ApplicationTarget(
         environment="staging",
@@ -204,17 +205,18 @@ def test_dump_command_is_custom_format_ac_backup_and_does_not_contain_a_password
     assert 'PGPASSWORD="$AC_DB_BACKUP_PASSWORD"' in command
     assert "staging-runtime-password" not in command
 
-    os.environ["AC_DB_BACKUP_PASSWORD"] = "fixture-secret-that-must-not-cross-the-wrapper"  # noqa: S105
-    os.environ["AC_DATABASE_URL"] = "postgresql://arbitrary-dsn-must-not-cross-the-wrapper"  # noqa: S105
-    os.environ["AC_TRUSTED_PROXY_ADDRESSES"] = "9.9.9.9"
-    try:
-        assert "AC_DB_BACKUP_PASSWORD" not in backup.compose_environment(target)
-        assert "AC_DATABASE_URL" not in backup.compose_environment(target)
-        assert "AC_TRUSTED_PROXY_ADDRESSES" not in backup.compose_environment(target)
-    finally:
-        os.environ.pop("AC_DB_BACKUP_PASSWORD", None)
-        os.environ.pop("AC_DATABASE_URL", None)
-        os.environ.pop("AC_TRUSTED_PROXY_ADDRESSES", None)
+    monkeypatch.setenv(
+        "AC_DB_BACKUP_PASSWORD",
+        "fixture-secret-that-must-not-cross-the-wrapper",  # noqa: S106
+    )
+    monkeypatch.setenv(
+        "AC_DATABASE_URL",
+        "postgresql://arbitrary-dsn-must-not-cross-the-wrapper",  # noqa: S106
+    )
+    monkeypatch.setenv("AC_TRUSTED_PROXY_ADDRESSES", "9.9.9.9")
+    assert "AC_DB_BACKUP_PASSWORD" not in backup.compose_environment(target)
+    assert "AC_DATABASE_URL" not in backup.compose_environment(target)
+    assert "AC_TRUSTED_PROXY_ADDRESSES" not in backup.compose_environment(target)
 
 
 def test_source_parity_query_is_fixed_to_the_canonical_table_set(

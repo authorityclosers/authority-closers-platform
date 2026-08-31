@@ -17,6 +17,7 @@ from cryptography.exceptions import InvalidTag
 from sqlalchemy import and_, column, func, select, table
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ac_platform.application.asyncio_runtime import run_async
 from ac_platform.application.settings import get_settings
 from ac_platform.identity.models import EmailChallenge, EmailChallengeKind, Person, PersonStatus
 from ac_platform.identity.password_auth import (
@@ -29,7 +30,6 @@ from ac_platform.identity.password_auth import (
 from ac_platform.outbox.models import Job, JobStatus, RecoveryStatus
 from ac_platform.outbox.policy import ReconciliationRequiredError
 from ac_platform.outbox.repository import (
-    DuplicateIntentError,
     JobRepository,
     JobStateError,
     LeaseLostError,
@@ -38,6 +38,7 @@ from ac_platform.outbox.repository import (
     RecoveryStateRepository,
 )
 from ac_platform.providers import (
+    AmbiguousDeliveryProviderError,
     DeliveryReceipt,
     EmailMessage,
     EmailProvider,
@@ -131,7 +132,7 @@ class UnknownJobKindError(PermanentProviderError):
     """A durable job did not match the worker's explicit dispatcher allowlist."""
 
 
-class AmbiguousProviderReceiptError(PermanentProviderError):
+class AmbiguousProviderReceiptError(AmbiguousDeliveryProviderError):
     """A provider responded with evidence that cannot be bound to this job."""
 
 
@@ -185,6 +186,7 @@ class WorkerRunResult:
     succeeded: int = 0
     retried: int = 0
     dead_lettered: int = 0
+    reconciliation_required: int = 0
 
     def add_outcome(self, outcome: Mapping[str, int]) -> WorkerRunResult:
         return WorkerRunResult(
@@ -193,6 +195,9 @@ class WorkerRunResult:
             succeeded=self.succeeded + outcome.get("succeeded", 0),
             retried=self.retried + outcome.get("retried", 0),
             dead_lettered=self.dead_lettered + outcome.get("dead_lettered", 0),
+            reconciliation_required=(
+                self.reconciliation_required + outcome.get("reconciliation_required", 0)
+            ),
         )
 
 
@@ -264,6 +269,7 @@ class DurableWorker:
         self._telemetry = telemetry or TelemetryRecorder(InMemoryTelemetrySink())
         self._ready = False
         self._started = False
+        self._reported_blocker: tuple[str, int] | None = None
 
     @property
     def ready(self) -> bool:
@@ -283,15 +289,23 @@ class DurableWorker:
             state = await RecoveryStateRepository(session).get()
         self._started = True
         if local_hold:
-            self._logger.warning("worker_local_side_effect_hold_active")
+            blocker = ("local_hold", 0)
+            if self._reported_blocker != blocker:
+                self._logger.warning("worker_local_side_effect_hold_active")
+                self._reported_blocker = blocker
             return False
         if state is None or state.status != RecoveryStatus.READY.value:
-            self._logger.warning(
-                "worker_recovery_reconciliation_required",
-                recovery_generation=(state.generation if state is not None else 0),
-            )
+            generation = state.generation if state is not None else 0
+            blocker = ("recovery", generation)
+            if self._reported_blocker != blocker:
+                self._logger.warning(
+                    "worker_recovery_reconciliation_required",
+                    recovery_generation=generation,
+                )
+                self._reported_blocker = blocker
             return False
         self._ready = True
+        self._reported_blocker = None
         self._logger.info(
             "worker_ready",
             allowed_job_kinds=sorted(self.allowed_job_kinds),
@@ -519,6 +533,8 @@ class DurableWorker:
             template_version=1,
             idempotency_key=provider_key,
             variables={
+                "first_name": person.first_name or person.display_name or "there",
+                "action_link": f"{str(self._settings.public_app_url).rstrip('/')}/home",
                 "enrollment_id": payload["enrollment_id"],
                 "program_version_id": payload["program_version_id"],
                 "source": payload["source"],
@@ -628,21 +644,17 @@ class DurableWorker:
             self._logger.warning("worker_dispatch_fenced", error_code=type(error).__name__)
             return {"claimed": 1}
         except TimeoutError as error:
-            return await self._safe_fail(
+            return await self._quarantine_ambiguous_delivery(
                 job,
                 lease_token,
                 error,
-                permanent=False,
-                ambiguous=True,
                 provider_idempotency_key=prepared.provider_idempotency_key,
             )
-        except AmbiguousProviderReceiptError as error:
-            return await self._safe_fail(
+        except AmbiguousDeliveryProviderError as error:
+            return await self._quarantine_ambiguous_delivery(
                 job,
                 lease_token,
                 error,
-                permanent=True,
-                ambiguous=True,
                 provider_idempotency_key=prepared.provider_idempotency_key,
             )
         except PermanentProviderError as error:
@@ -650,12 +662,10 @@ class DurableWorker:
         except TransientProviderError as error:
             return await self._safe_fail(job, lease_token, error, permanent=False)
         except Exception as error:  # adapter bugs/network uncertainty must not stop the batch
-            return await self._safe_fail(
+            return await self._quarantine_ambiguous_delivery(
                 job,
                 lease_token,
                 error,
-                permanent=False,
-                ambiguous=True,
                 provider_idempotency_key=prepared.provider_idempotency_key,
             )
 
@@ -674,12 +684,10 @@ class DurableWorker:
             self._logger.warning("worker_job_ack_fenced", error_code=type(error).__name__)
             return {"claimed": 1}
         except Exception as error:
-            return await self._safe_fail(
+            return await self._quarantine_ambiguous_delivery(
                 job,
                 lease_token,
                 error,
-                permanent=isinstance(error, DuplicateIntentError),
-                ambiguous=True,
                 provider_idempotency_key=prepared.provider_idempotency_key,
             )
         try:
@@ -692,6 +700,32 @@ class DurableWorker:
             return {"claimed": 1}
         self._emit("worker.job.succeeded", job, outcome="succeeded")
         return {"claimed": 1, "succeeded": 1}
+
+    async def _quarantine_ambiguous_delivery(
+        self,
+        job: Job,
+        lease_token: UUID,
+        error: BaseException,
+        *,
+        provider_idempotency_key: str,
+    ) -> dict[str, int]:
+        """Persist an unresolved provider effect for explicit reconciliation.
+
+        The current durable schema uses a terminal job status plus the
+        ``delivery_ambiguous_at`` marker as its quarantine representation. The
+        distinct outcome prevents this from being counted or operated as an
+        ordinary permanent dead letter, and the only redispatch path remains
+        the audited manual job-retry operation.
+        """
+
+        return await self._safe_fail(
+            job,
+            lease_token,
+            error,
+            permanent=True,
+            ambiguous=True,
+            provider_idempotency_key=provider_idempotency_key,
+        )
 
     async def _safe_fail(
         self,
@@ -724,6 +758,20 @@ class DurableWorker:
             self._logger.warning("worker_job_failure_fenced", error_code=type(error).__name__)
             return {"claimed": 1}
         dead_lettered = failed.status == JobStatus.DEAD_LETTER.value
+        if ambiguous:
+            # The bounded telemetry schema has no reconciliation outcome yet.
+            # Emit its existing generic failure vocabulary while the worker
+            # result and durable ambiguity marker retain the stronger meaning.
+            self._emit(
+                "worker.job.failed",
+                job,
+                outcome="failed",
+            )
+            self._logger.warning(
+                "worker_delivery_reconciliation_required",
+                error_code=type(error).__name__,
+            )
+            return {"claimed": 1, "reconciliation_required": 1}
         outcome = "dead_lettered" if dead_lettered else "retry_wait"
         self._emit(f"worker.job.{outcome}", job, outcome=outcome, error=error)
         return {
@@ -823,7 +871,7 @@ async def run() -> None:
 
 
 def main() -> None:
-    asyncio.run(run())
+    run_async(run())
 
 
 __all__ = [

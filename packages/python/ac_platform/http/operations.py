@@ -126,7 +126,7 @@ class RetryJobRequest(BaseModel):
 
 
 class ReconcileRecoveryRequest(BaseModel):
-    """An explicit, bounded set of held records to release."""
+    """A bounded held-record release or control-tenant finalization request."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -138,9 +138,7 @@ class ReconcileRecoveryRequest(BaseModel):
     reason: str = Field(min_length=1, max_length=500)
 
     @model_validator(mode="after")
-    def require_explicit_release_set(self) -> ReconcileRecoveryRequest:
-        if not self.job_ids and not self.outbox_event_ids:
-            raise ValueError("at least one held job or outbox event must be named")
+    def require_unique_release_set(self) -> ReconcileRecoveryRequest:
         if len(set(self.job_ids)) != len(self.job_ids):
             raise ValueError("job_ids must not contain duplicates")
         if len(set(self.outbox_event_ids)) != len(self.outbox_event_ids):
@@ -479,6 +477,7 @@ def install_operations_http(
                 actor=actor,
                 reason=reason,
                 audit=audit,
+                operations_tenant_id=settings.operations_tenant_id,
             )
             await _append_marker(
                 audit,
@@ -577,6 +576,7 @@ def install_operations_http(
                 job_ids=job_ids,
                 actor=actor,
                 reason=reason,
+                operations_tenant_id=settings.operations_tenant_id,
             )
             recovery_state = await RecoveryStateRepository(auth.database).get()
             if recovery_state is None:
@@ -619,7 +619,8 @@ def install_operations_http(
             ) from error
         except JobStateError as error:
             raise RecoveryReconciliationUnavailable(
-                "Every named record must be held and owned by the selected tenant."
+                "Every named record must be held and authorized for the selected tenant or "
+                "configured control scope."
             ) from error
         except ValueError as error:
             raise InvalidOperationsRequest(

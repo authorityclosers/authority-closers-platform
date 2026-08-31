@@ -16,15 +16,17 @@ from uuid import uuid4
 import pytest
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
-from sqlalchemy import create_engine, insert, text
+from sqlalchemy import create_engine, delete, insert, select, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import Session
 
-from ac_platform.audit.models import AuditChainHead
+from ac_platform.audit.models import AuditChainHead, AuditEvent
 from ac_platform.audit.service import AuditRepository
 from ac_platform.db.models import model_metadata
+from ac_platform.identity.models import Session as IdentitySession
+from ac_platform.kernel.authz import ActorContext
 from ac_platform.outbox.models import (
     Job,
     JobStatus,
@@ -32,6 +34,8 @@ from ac_platform.outbox.models import (
     RecoveryStatus,
 )
 from ac_platform.outbox.repository import (
+    EXPIRED_DISPATCH_AMBIGUITY_REASON,
+    JobRepository,
     build_job_acknowledge_statement,
     build_job_ambiguity_statement,
     build_job_receipt_statement,
@@ -141,6 +145,148 @@ def test_stale_worker_cannot_mark_a_successful_job_ambiguous(database: Engine) -
         assert row.status == JobStatus.SUCCEEDED.value
         assert row.delivery_ambiguous_at is None
         assert row.last_error is None
+
+
+async def test_expired_dispatch_requires_audited_retry_before_postgresql_reclaim(
+    database: Engine,
+) -> None:
+    # A fixed early timestamp keeps this repeatable in the shared disposable
+    # database even when prior runs intentionally left terminal evidence.
+    now = datetime(1970, 1, 2, tzinfo=UTC)
+    job_kind = "test.operations.expired_dispatch.v1"
+    tenant_id = uuid4()
+    operator_id = uuid4()
+    operator_session_id = uuid4()
+    unresolved_id = uuid4()
+    safe_id = uuid4()
+    provider_key = f"operations-pg:{uuid4()}"
+
+    with Session(database) as session:
+        session.execute(delete(Job).where(Job.kind == job_kind))
+        state = session.get(OperationsRecoveryState, 1)
+        assert state is not None
+        session.execute(
+            text(
+                "INSERT INTO tenants (id, slug, name, status) VALUES (:id, :slug, :name, 'active')"
+            ),
+            {
+                "id": tenant_id,
+                "slug": f"expired-effect-{uuid4()}",
+                "name": "Expired Effect Test",
+            },
+        )
+        session.execute(
+            text("INSERT INTO persons (id, email, status) VALUES (:id, :email, 'active')"),
+            {"id": operator_id, "email": f"expired-effect-{uuid4()}@example.test"},
+        )
+        session.add(
+            IdentitySession(
+                id=operator_session_id,
+                person_id=operator_id,
+                token_hash=uuid4().bytes + uuid4().bytes,
+                created_at=now,
+                expires_at=now + timedelta(hours=1),
+            )
+        )
+        state.status = RecoveryStatus.READY.value
+        state.reconciled_at = now
+        state.reconciled_by = operator_id
+        state.reconciliation_reason = "expired effect test ready"
+        generation = state.generation
+        session.execute(
+            insert(Job.__table__),
+            [
+                {
+                    "id": unresolved_id,
+                    "tenant_id": tenant_id,
+                    "kind": job_kind,
+                    "dedupe_key": f"job:{unresolved_id}",
+                    "payload": {},
+                    "external_side_effect": True,
+                    "recovery_generation": generation,
+                    "status": JobStatus.LEASED.value,
+                    "attempt_count": 1,
+                    "max_attempts": 5,
+                    "available_at": now - timedelta(minutes=10),
+                    "lease_token": uuid4(),
+                    "leased_until": now - timedelta(minutes=1),
+                    "provider_idempotency_key": provider_key,
+                    "dispatch_started_at": now - timedelta(minutes=2),
+                },
+                {
+                    "id": safe_id,
+                    "tenant_id": tenant_id,
+                    "kind": job_kind,
+                    "dedupe_key": f"job:{safe_id}",
+                    "payload": {},
+                    "external_side_effect": True,
+                    "recovery_generation": generation,
+                    "status": JobStatus.LEASED.value,
+                    "attempt_count": 1,
+                    "max_attempts": 5,
+                    "available_at": now - timedelta(minutes=5),
+                    "lease_token": uuid4(),
+                    "leased_until": now - timedelta(minutes=1),
+                    "provider_idempotency_key": None,
+                    "dispatch_started_at": None,
+                },
+            ],
+        )
+        session.commit()
+
+    async_engine = create_async_engine(database.url)
+    try:
+        async with AsyncSession(async_engine) as session, session.begin():
+            claimed = await JobRepository(session).claim(
+                lease_for=timedelta(seconds=30),
+                limit=1,
+            )
+            assert [row.id for row in claimed] == [safe_id]
+
+        async with AsyncSession(async_engine) as session, session.begin():
+            unresolved = await session.get(Job, unresolved_id)
+            assert unresolved is not None
+            assert unresolved.status == JobStatus.DEAD_LETTER.value
+            assert unresolved.delivery_ambiguous_at is not None
+            assert unresolved.last_error == EXPIRED_DISPATCH_AMBIGUITY_REASON
+            actor = ActorContext(
+                person_id=operator_id,
+                session_id=operator_session_id,
+                tenant_id=tenant_id,
+                permissions=frozenset({"job_retry"}),
+            )
+            retried = await JobRepository(session).retry(
+                unresolved,
+                actor=actor,
+                reason="provider state reviewed; redispatch approved",
+                audit=AuditRepository(session),
+                now=now,
+            )
+            assert retried.status == JobStatus.QUEUED.value
+            assert retried.dispatch_started_at is None
+            assert retried.provider_idempotency_key is None
+            assert retried.delivery_ambiguous_at is None
+            assert retried.reconciled_by == operator_id
+            audit_event = await session.scalar(
+                select(AuditEvent).where(
+                    AuditEvent.tenant_id == tenant_id,
+                    AuditEvent.action == "job.retry",
+                    AuditEvent.resource_id == str(unresolved_id),
+                )
+            )
+            assert audit_event is not None
+            assert audit_event.payload["prior_effect_evidence"]["provider_idempotency_key"] == (
+                provider_key
+            )
+
+        async with AsyncSession(async_engine) as session, session.begin():
+            claimed = await JobRepository(session).claim(
+                lease_for=timedelta(seconds=30),
+                limit=1,
+            )
+            assert [row.id for row in claimed] == [unresolved_id]
+    finally:
+        await async_engine.dispose()
 
 
 def test_operations_scope_has_no_alembic_model_drift(database: Engine) -> None:

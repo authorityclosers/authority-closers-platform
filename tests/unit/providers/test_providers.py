@@ -3,23 +3,28 @@ from __future__ import annotations
 import hashlib
 import hmac
 import inspect
+import json
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, Mock
 from uuid import UUID, uuid4
 
+import httpx
 import pytest
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.providers import (
+    AmbiguousDeliveryProviderError,
     ConfiguredWebhookAdapter,
     EmailCommunication,
     EmailMessage,
+    EmailMessageConflictError,
     FakeEmailAdapter,
     HmacWebhookVerifier,
     PermanentProviderError,
     ProviderWebhookRejected,
+    ResendEmailAdapter,
     TransientProviderError,
     WebhookAttribution,
     create_email_provider,
@@ -71,6 +76,19 @@ def _message(key: str = "welcome:1") -> EmailMessage:
         communication=EmailCommunication.ENROLLMENT_WELCOME,
         context={"next_action": "start"},
         idempotency_key=key,
+    )
+
+
+def _resend_message(key: str = "reset/person-1") -> EmailMessage:
+    return EmailMessage(
+        to="learner@example.test",
+        template="identity-password-reset",
+        idempotency_key=key,
+        variables={
+            "first_name": "Learner",
+            "action_link": "https://app.authorityclosers.test/reset#token=safe",
+        },
+        communication_class="verification_security",
     )
 
 
@@ -201,8 +219,140 @@ def test_email_canonical_digest_changes_with_each_effectful_message_field() -> N
 
 def test_provider_factory_fails_closed_for_unimplemented_resend() -> None:
     assert isinstance(create_email_provider(), FakeEmailAdapter)
-    with pytest.raises(PermanentProviderError, match="not implemented"):
+    with pytest.raises(PermanentProviderError, match="injected API key"):
         create_email_provider("resend")
+
+
+async def test_resend_adapter_sends_bounded_template_with_provider_idempotency() -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url == "https://api.resend.com/emails"
+        assert request.headers["authorization"] == "Bearer re_test_only_key"
+        assert request.headers["idempotency-key"] == "verify/person-1"
+        payload = json.loads(request.content)
+        assert payload["from"] == "Authority Closers <learn@authorityclosers.test>"
+        assert payload["to"] == ["learner@example.test"]
+        assert payload["subject"] == "Verify your Authority Closers email"
+        assert "<script>" not in payload["html"]
+        assert "&lt;script&gt;" in payload["html"]
+        return httpx.Response(200, json={"id": "provider-message-1"})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        provider = ResendEmailAdapter(
+            api_key="re_test_only_key",
+            from_address="Authority Closers <learn@authorityclosers.test>",
+            http_client=client,
+        )
+        receipt = await provider.send(
+            EmailMessage(
+                to="learner@example.test",
+                template="identity-email-verification",
+                idempotency_key="verify/person-1",
+                variables={
+                    "first_name": "<script>",
+                    "action_link": "https://app.authorityclosers.test/verify#token=safe",
+                },
+                communication_class="verification_security",
+            )
+        )
+
+    assert receipt.provider_message_id == "provider-message-1"
+    assert receipt.idempotency_key == "verify/person-1"
+
+
+@pytest.mark.parametrize(
+    ("status_code", "body", "error_type"),
+    [
+        (425, {"name": "too_early"}, TransientProviderError),
+        (429, {"name": "rate_limit_exceeded"}, TransientProviderError),
+        (408, {"name": "request_timeout"}, AmbiguousDeliveryProviderError),
+        (503, {"name": "application_error"}, AmbiguousDeliveryProviderError),
+        (409, {"name": "concurrent_idempotent_requests"}, AmbiguousDeliveryProviderError),
+        (409, {"name": "invalid_idempotent_request"}, EmailMessageConflictError),
+        (422, {"name": "validation_error"}, PermanentProviderError),
+    ],
+)
+async def test_resend_adapter_classifies_provider_failures_without_response_body_leak(
+    status_code: int,
+    body: dict[str, str],
+    error_type: type[Exception],
+) -> None:
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(status_code, json=body)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        provider = ResendEmailAdapter(
+            api_key="re_test_only_key",
+            from_address="learn@authorityclosers.test",
+            http_client=client,
+        )
+        with pytest.raises(error_type) as caught:
+            await provider.send(
+                EmailMessage(
+                    to="learner@example.test",
+                    template="identity-password-reset",
+                    idempotency_key="reset/person-1",
+                    variables={
+                        "first_name": "Learner",
+                        "action_link": "https://app.authorityclosers.test/reset#token=safe",
+                    },
+                    communication_class="verification_security",
+                )
+            )
+
+    assert str(body) not in str(caught.value)
+
+
+@pytest.mark.parametrize("error_type", [httpx.ReadTimeout, httpx.ReadError])
+async def test_resend_adapter_quarantines_timeout_or_disconnect_without_leaking_details(
+    error_type: type[httpx.RequestError],
+) -> None:
+    request_seen = False
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal request_seen
+        request_seen = True
+        assert request.headers["idempotency-key"] == "reset/ambiguous-transport"
+        raise error_type("sensitive transport detail", request=request)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        provider = ResendEmailAdapter(
+            api_key="re_test_only_key",
+            from_address="learn@authorityclosers.test",
+            http_client=client,
+        )
+        with pytest.raises(AmbiguousDeliveryProviderError) as caught:
+            await provider.send(_resend_message("reset/ambiguous-transport"))
+
+    assert request_seen
+    assert "sensitive transport detail" not in str(caught.value)
+    assert "re_test_only_key" not in str(caught.value)
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        httpx.Response(200, content=b"sensitive malformed provider body"),
+        httpx.Response(200, json={}),
+        httpx.Response(200, json={"id": "x" * 129}),
+    ],
+)
+async def test_resend_adapter_quarantines_malformed_success_receipt(
+    response: httpx.Response,
+) -> None:
+    async def handler(_request: httpx.Request) -> httpx.Response:
+        return response
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        provider = ResendEmailAdapter(
+            api_key="re_test_only_key",
+            from_address="learn@authorityclosers.test",
+            http_client=client,
+        )
+        with pytest.raises(AmbiguousDeliveryProviderError) as caught:
+            await provider.send(_resend_message("reset/ambiguous-success"))
+
+    assert "sensitive malformed provider body" not in str(caught.value)
+    assert "re_test_only_key" not in str(caught.value)
 
 
 async def test_fake_email_rejects_unapproved_communication_class() -> None:

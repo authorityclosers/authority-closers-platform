@@ -32,11 +32,15 @@ from ac_platform.outbox.models import (
     operations_control_metadata,
 )
 from ac_platform.outbox.repository import (
+    EXPIRED_DISPATCH_AMBIGUITY_REASON,
     build_job_acknowledge_statement,
     build_job_ambiguity_statement,
+    build_job_claim_statement,
     build_job_dispatch_statement,
+    build_job_expired_dispatch_quarantine_statement,
     build_job_receipt_statement,
     build_job_renew_statement,
+    build_job_take_statement,
     canonical_receipt_digest,
 )
 from ac_platform.providers.models import ProviderInbox, ProviderInboxStatus
@@ -709,3 +713,131 @@ def test_sqlite_executes_db_timed_job_fences_and_global_generation_guard(
         ).execution_options(synchronize_session=False)
     )
     assert stale_ambiguity.rowcount == 0
+
+
+def test_expired_effect_claim_quarantines_unknown_delivery_and_reclaims_only_safe_jobs(
+    database: tuple[Engine, DbSession],
+) -> None:
+    _, session = database
+    now = datetime.now(UTC)
+    operator_id = uuid4()
+    session.add(Person(id=operator_id, email=f"claim-operator-{uuid4()}@example.test"))
+    state = session.get(OperationsRecoveryState, 1)
+    assert state is not None
+    state.status = RecoveryStatus.READY.value
+    state.reconciled_at = now
+    state.reconciled_by = operator_id
+    state.reconciliation_reason = "claim recovery reviewed"
+
+    def expired_job(
+        *,
+        external: bool,
+        dispatch_started: bool,
+        receipt_present: bool = False,
+    ) -> Job:
+        job_id = uuid4()
+        provider_key = f"claim:{job_id}" if dispatch_started else None
+        receipt = {"idempotency_key": provider_key, "accepted": True} if receipt_present else None
+        job = Job(
+            id=job_id,
+            kind="email.enrollment_welcome.v1" if external else "internal.test.v1",
+            dedupe_key=f"job:{job_id}",
+            payload={},
+            external_side_effect=external,
+            recovery_generation=state.generation if external else 0,
+            status=JobStatus.LEASED.value,
+            attempt_count=1,
+            max_attempts=5,
+            available_at=now - timedelta(minutes=10),
+            lease_token=uuid4(),
+            leased_until=now - timedelta(minutes=1),
+            provider_idempotency_key=provider_key,
+            dispatch_started_at=now - timedelta(minutes=2) if dispatch_started else None,
+            created_at=now - timedelta(minutes=10),
+            updated_at=now - timedelta(minutes=1),
+        )
+        if receipt is not None:
+            job.provider_receipt = receipt
+            job.provider_receipt_digest = canonical_receipt_digest(receipt)
+            job.receipt_recorded_at = now - timedelta(minutes=2)
+        return job
+
+    unresolved = expired_job(external=True, dispatch_started=True)
+    before_dispatch = expired_job(external=True, dispatch_started=False)
+    internal = expired_job(external=False, dispatch_started=True)
+    with_receipt = expired_job(
+        external=True,
+        dispatch_started=True,
+        receipt_present=True,
+    )
+    classified_retry_id = uuid4()
+    classified_retry = Job(
+        id=classified_retry_id,
+        kind="email.enrollment_welcome.v1",
+        dedupe_key=f"job:{classified_retry_id}",
+        payload={},
+        external_side_effect=True,
+        recovery_generation=state.generation,
+        status=JobStatus.RETRY_WAIT.value,
+        attempt_count=1,
+        max_attempts=5,
+        available_at=now - timedelta(minutes=1),
+        provider_idempotency_key=f"claim:{classified_retry_id}",
+        dispatch_started_at=now - timedelta(minutes=2),
+        created_at=now - timedelta(minutes=5),
+        updated_at=now - timedelta(minutes=1),
+    )
+    session.add_all([unresolved, before_dispatch, internal, with_receipt, classified_retry])
+    session.commit()
+
+    quarantined = session.execute(
+        build_job_expired_dispatch_quarantine_statement().execution_options(
+            synchronize_session=False
+        )
+    )
+    assert quarantined.rowcount == 1
+    session.commit()
+    session.refresh(unresolved)
+    assert unresolved.status == JobStatus.DEAD_LETTER.value
+    assert unresolved.delivery_ambiguous_at is not None
+    assert unresolved.dead_lettered_at is not None
+    assert unresolved.last_error == EXPIRED_DISPATCH_AMBIGUITY_REASON
+    assert unresolved.lease_token is None
+    assert unresolved.leased_until is None
+
+    claimable = list(
+        session.scalars(
+            build_job_claim_statement(
+                now=now,
+                recovery_generation=state.generation,
+                limit=10,
+            )
+        ).all()
+    )
+    assert {row.id for row in claimable} == {
+        before_dispatch.id,
+        internal.id,
+        with_receipt.id,
+        classified_retry.id,
+    }
+    fenced_take = session.execute(
+        build_job_take_statement(
+            job_id=unresolved.id,
+            lease_token=uuid4(),
+            lease_for=timedelta(seconds=30),
+            recovery_generation=state.generation,
+            dialect="sqlite",
+        ).execution_options(synchronize_session=False)
+    )
+    assert fenced_take.rowcount == 0
+    for row in claimable:
+        taken = session.execute(
+            build_job_take_statement(
+                job_id=row.id,
+                lease_token=uuid4(),
+                lease_for=timedelta(seconds=30),
+                recovery_generation=state.generation,
+                dialect="sqlite",
+            ).execution_options(synchronize_session=False)
+        )
+        assert taken.rowcount == 1

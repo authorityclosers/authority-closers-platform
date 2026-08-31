@@ -85,6 +85,7 @@ def technical_validation_seed(release_id: str) -> TechnicalValidationSeed:
         environment="staging",
         expected_release_id=release_id,
         _technical_validation=True,
+        _allow_release_marker=True,
     )
 
 

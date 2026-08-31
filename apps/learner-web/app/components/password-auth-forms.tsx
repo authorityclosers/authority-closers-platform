@@ -148,8 +148,11 @@ export function RegistrationForm() {
         <label className="consent-check">
           <input name="consent" type="checkbox" required disabled={pending} />
           <span>
-            I agree to the staging <Link href={ROUTES.terms}>Terms</Link> and
-            acknowledge the <Link href={ROUTES.privacy}>Privacy notice</Link>.
+            I confirm I am 18 or older, agree to the staging{" "}
+            <Link href={ROUTES.terms}>Terms</Link>, acknowledge the{" "}
+            <Link href={ROUTES.privacy}>Privacy notice</Link>, and authorize the
+            account-verification, security, and course-access emails needed to
+            operate this test.
           </span>
         </label>
         {error ? (

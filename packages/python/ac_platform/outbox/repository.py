@@ -44,6 +44,10 @@ from ac_platform.outbox.policy import (
 from ac_platform.telemetry.redaction import sanitize_error
 
 MAX_JOB_LEASE = timedelta(minutes=15)
+EXPIRED_DISPATCH_AMBIGUITY_REASON = (
+    "provider delivery outcome unresolved after worker lease expired; "
+    "operations reconciliation required"
+)
 
 
 def _as_utc(value: datetime) -> datetime:
@@ -71,6 +75,37 @@ def _require_same_transaction_audit(
 ) -> None:
     if audit.session is not session:
         raise ValueError("audit evidence must use the same transaction as the operation")
+
+
+def _require_tenant_or_global_scope(
+    resource_tenant_id: UUID | None,
+    actor: ActorContext,
+    *,
+    operations_tenant_id: UUID | None,
+    global_permission: str,
+) -> None:
+    """Authorize tenantless work only through the configured control tenant."""
+
+    if resource_tenant_id is not None:
+        actor.require_tenant(resource_tenant_id)
+        return
+    if operations_tenant_id is None:
+        raise JobStateError("global operations require a configured control tenant")
+    actor.require_tenant(operations_tenant_id)
+    actor.require_permission(global_permission)
+
+
+def _is_operations_control_actor(
+    actor: ActorContext,
+    *,
+    operations_tenant_id: UUID | None,
+    permission: str,
+) -> bool:
+    return (
+        operations_tenant_id is not None
+        and actor.tenant_id == operations_tenant_id
+        and permission in actor.permissions
+    )
 
 
 def _dialect_name(session: AsyncSession) -> str | None:
@@ -242,6 +277,11 @@ def build_job_claim_statement(
         Job.leased_until.is_not(None),
         Job.leased_until <= func.now(),
     )
+    reclaim_is_safe = or_(
+        Job.external_side_effect.is_(False),
+        Job.dispatch_started_at.is_(None),
+        Job.provider_receipt.is_not(None),
+    )
     generation_is_current = or_(
         Job.external_side_effect.is_(False),
         Job.recovery_generation == recovery_generation,
@@ -256,7 +296,7 @@ def build_job_claim_statement(
     return (
         select(Job)
         .where(
-            or_(eligible_queued, expired_lease),
+            or_(eligible_queued, and_(expired_lease, reclaim_is_safe)),
             generation_is_current,
             recovery_is_ready,
             Job.attempt_count < Job.max_attempts,
@@ -286,11 +326,16 @@ def build_job_take_statement(
         Job.status == JobStatus.LEASED.value,
         Job.leased_until <= func.now(),
     )
+    reclaim_is_safe = or_(
+        Job.external_side_effect.is_(False),
+        Job.dispatch_started_at.is_(None),
+        Job.provider_receipt.is_not(None),
+    )
     return (
         update(Job)
         .where(
             Job.id == job_id,
-            or_(queued, expired),
+            or_(queued, and_(expired, reclaim_is_safe)),
             Job.attempt_count < Job.max_attempts,
             or_(
                 Job.external_side_effect.is_(False),
@@ -320,16 +365,54 @@ def build_job_take_statement(
     )
 
 
+def build_job_expired_dispatch_quarantine_statement() -> Any:
+    """Quarantine expired effects that crossed dispatch without a receipt.
+
+    A worker crash can occur after a provider accepted an effect but before the
+    receipt transaction committed. Such rows must never return to the automatic
+    claim path, even if a provider idempotency window later expires.
+    """
+
+    return (
+        update(Job)
+        .where(
+            Job.status == JobStatus.LEASED.value,
+            Job.leased_until.is_not(None),
+            Job.leased_until <= func.now(),
+            Job.external_side_effect.is_(True),
+            Job.dispatch_started_at.is_not(None),
+            Job.provider_receipt.is_(None),
+        )
+        .values(
+            status=JobStatus.DEAD_LETTER.value,
+            leased_until=None,
+            lease_token=None,
+            last_error=EXPIRED_DISPATCH_AMBIGUITY_REASON,
+            delivery_ambiguous_at=func.coalesce(Job.delivery_ambiguous_at, func.now()),
+            dead_lettered_at=func.now(),
+            available_at=func.now(),
+            updated_at=func.now(),
+        )
+    )
+
+
 def build_job_exhausted_statement(*, recovery_generation: int) -> Any:
     """Dead-letter available jobs whose bounded attempt budget is exhausted."""
 
-    available = or_(
-        and_(
-            Job.status.in_((JobStatus.QUEUED.value, JobStatus.RETRY_WAIT.value)),
-            Job.available_at <= func.now(),
-        ),
-        and_(Job.status == JobStatus.LEASED.value, Job.leased_until <= func.now()),
+    queued = and_(
+        Job.status.in_((JobStatus.QUEUED.value, JobStatus.RETRY_WAIT.value)),
+        Job.available_at <= func.now(),
     )
+    expired_lease = and_(
+        Job.status == JobStatus.LEASED.value,
+        Job.leased_until <= func.now(),
+    )
+    reclaim_is_safe = or_(
+        Job.external_side_effect.is_(False),
+        Job.dispatch_started_at.is_(None),
+        Job.provider_receipt.is_not(None),
+    )
+    available = or_(queued, and_(expired_lease, reclaim_is_safe))
     return (
         update(Job)
         .where(
@@ -444,6 +527,9 @@ def build_job_dispatch_statement(
         .values(
             provider_idempotency_key=provider_idempotency_key,
             dispatch_started_at=func.now(),
+            reconciled_at=None,
+            reconciled_by=None,
+            reconciliation_reason=None,
             updated_at=func.now(),
         )
     )
@@ -539,6 +625,12 @@ def build_job_failure_statement(
         values["last_error"] = last_error
     if ambiguous:
         values["delivery_ambiguous_at"] = func.now()
+    if not dead_letter and not ambiguous:
+        # A provider returned an explicit retryable failure, so no external
+        # effect is unresolved. Reset this attempt's pre-effect marker before
+        # scheduling the automatic retry; crash-ambiguous paths never do this.
+        values["provider_idempotency_key"] = None
+        values["dispatch_started_at"] = None
     if dead_letter:
         values.update(
             dead_lettered_at=func.now(),
@@ -656,12 +748,17 @@ class RecoveryStateRepository:
         actor: ActorContext,
         reason: str,
         audit: AuditRepository,
+        operations_tenant_id: UUID | None = None,
         now: datetime | None = None,
     ) -> OperationsRecoveryState:
         actor.require_permission("recovery_reconcile")
+        _require_tenant_or_global_scope(
+            None,
+            actor,
+            operations_tenant_id=operations_tenant_id,
+            global_permission="global_recovery_reconcile",
+        )
         _require_same_transaction_audit(self._session, audit)
-        if actor.tenant_id is None:
-            raise JobStateError("recovery reconciliation requires an attributable tenant")
         state = await self.get(lock=True)
         if state is None:
             raise ReconciliationRequiredError("durable recovery state is missing")
@@ -986,6 +1083,7 @@ class OutboxRepository:
         actor: ActorContext,
         reason: str,
         audit: AuditRepository | None = None,
+        operations_tenant_id: UUID | None = None,
         now: datetime | None = None,
     ) -> list[OutboxEvent]:
         """Release an explicit held set with mandatory same-UoW audit evidence."""
@@ -1012,10 +1110,14 @@ class OutboxRepository:
         for row in ordered:
             if row.status != OutboxEventStatus.HELD.value:
                 raise JobStateError("only held outbox events may be reconciled")
-            self._require_tenant_scope(row.tenant_id, actor)
+            _require_tenant_or_global_scope(
+                row.tenant_id,
+                actor,
+                operations_tenant_id=operations_tenant_id,
+                global_permission="global_recovery_reconcile",
+            )
         normalized_reason = SideEffectHoldPolicy.normalize_reconciliation_reason(reason)
         for row in ordered:
-            self._audit_tenant(row.tenant_id)
             await audit.append_for_actor(
                 actor,
                 action="outbox.recovery_reconciled",
@@ -1033,20 +1135,6 @@ class OutboxRepository:
             row.reconciliation_reason = normalized_reason
         await self._session.flush()
         return ordered
-
-    @staticmethod
-    def _require_tenant_scope(tenant_id: UUID | None, actor: ActorContext) -> None:
-        if tenant_id is None:
-            if actor.tenant_id is not None:
-                raise JobStateError("a tenant-scoped actor cannot reconcile a global operation")
-            return
-        actor.require_tenant(tenant_id)
-
-    @staticmethod
-    def _audit_tenant(tenant_id: UUID | None) -> UUID:
-        if tenant_id is None:
-            raise JobStateError("an attributable tenant is required for an operations audit event")
-        return tenant_id
 
     @staticmethod
     def _require_recovery_permission(actor: ActorContext) -> None:
@@ -1239,6 +1327,7 @@ class JobRepository:
             lock=True,
             shared_lock=True,
         )
+        await self._session.execute(build_job_expired_dispatch_quarantine_statement())
         await self._session.execute(
             build_job_exhausted_statement(recovery_generation=recovery_state.generation)
         )
@@ -1404,6 +1493,9 @@ class JobRepository:
             await self._require_lease(row, lease_token, now=current_time)
             row.provider_idempotency_key = normalized_key
             row.dispatch_started_at = current_time
+            row.reconciled_at = None
+            row.reconciled_by = None
+            row.reconciliation_reason = None
             row.updated_at = current_time
             await self._session.flush()
         return row
@@ -1634,6 +1726,9 @@ class JobRepository:
             row.available_at = current_time + retry_delay
         if ambiguous:
             row.delivery_ambiguous_at = current_time
+        if not dead_letter and not ambiguous:
+            row.provider_idempotency_key = None
+            row.dispatch_started_at = None
         row.updated_at = current_time
         await self._session.flush()
         return row
@@ -1646,6 +1741,7 @@ class JobRepository:
         reason: str,
         now: datetime | None = None,
         audit: AuditRepository | None = None,
+        operations_tenant_id: UUID | None = None,
     ) -> Job:
         """Authorize and requeue one dead-letter job for a fresh bounded run."""
 
@@ -1655,10 +1751,26 @@ class JobRepository:
         actor.require_permission("job_retry")
         normalized_reason = self.hold_policy.normalize_reconciliation_reason(reason)
         row = await self._get_job_for_update(job)
-        self._require_tenant_scope(row, actor)
+        _require_tenant_or_global_scope(
+            row.tenant_id,
+            actor,
+            operations_tenant_id=operations_tenant_id,
+            global_permission="global_job_retry",
+        )
         if row.status != JobStatus.DEAD_LETTER.value:
             raise RetryNotAllowedError("only dead-letter jobs may be manually retried")
         previous_status = row.status
+        prior_effect_evidence = {
+            "dispatch_started_at": (
+                row.dispatch_started_at.isoformat() if row.dispatch_started_at is not None else None
+            ),
+            "delivery_ambiguous_at": (
+                row.delivery_ambiguous_at.isoformat()
+                if row.delivery_ambiguous_at is not None
+                else None
+            ),
+            "provider_idempotency_key": row.provider_idempotency_key,
+        }
         current_time = _as_utc(now or utc_now())
         recovery_state = await RecoveryStateRepository(self._session).get(
             lock=True,
@@ -1674,18 +1786,27 @@ class JobRepository:
         row.lease_token = None
         row.dead_lettered_at = None
         row.last_error = None
+        row.provider_idempotency_key = None
+        row.dispatch_started_at = None
+        row.delivery_ambiguous_at = None
         row.held_at = current_time if should_hold else None
         row.hold_reason = "recovery_generation_held" if should_hold else None
+        row.reconciled_at = current_time
+        row.reconciled_by = recovery_actor_id(actor)
+        row.reconciliation_reason = normalized_reason
         if row.external_side_effect:
             row.recovery_generation = recovery_state.generation if recovery_state is not None else 1
         row.updated_at = current_time
-        self._audit_tenant(row)
         await audit.append_for_actor(
             actor,
             action="job.retry",
             resource_type="job",
             resource_id=row.id,
-            payload={"previous_status": previous_status, "dedupe_key": row.dedupe_key},
+            payload={
+                "previous_status": previous_status,
+                "dedupe_key": row.dedupe_key,
+                "prior_effect_evidence": prior_effect_evidence,
+            },
             reason=normalized_reason,
             now=current_time,
         )
@@ -1745,6 +1866,7 @@ class JobRepository:
         reason: str,
         now: datetime | None = None,
         audit: AuditRepository | None = None,
+        operations_tenant_id: UUID | None = None,
     ) -> list[Job]:
         """Release exactly the explicit held set after named-operations review."""
 
@@ -1775,7 +1897,12 @@ class JobRepository:
         for row in ordered:
             if row.status != JobStatus.HELD.value:
                 raise JobStateError("only held jobs may be reconciled")
-            self._require_tenant_scope(row, actor)
+            _require_tenant_or_global_scope(
+                row.tenant_id,
+                actor,
+                operations_tenant_id=operations_tenant_id,
+                global_permission="global_recovery_reconcile",
+            )
         for row in ordered:
             hold_reason = row.hold_reason
             row.status = JobStatus.QUEUED.value
@@ -1790,7 +1917,6 @@ class JobRepository:
                 row.recovery_generation = recovery_state.generation
             row.available_at = current_time
             row.updated_at = current_time
-            self._audit_tenant(row)
             await audit.append_for_actor(
                 actor,
                 action="job.recovery_reconciled",
@@ -1885,34 +2011,6 @@ class JobRepository:
         return SideEffectHoldPolicy.normalize_reconciliation_reason(reason)
 
     @staticmethod
-    def _require_tenant_scope(row: Job, actor: ActorContext) -> None:
-        if row.tenant_id is None:
-            if actor.tenant_id is not None:
-                raise JobStateError("a tenant-scoped actor cannot reconcile a global job")
-            return
-        actor.require_tenant(row.tenant_id)
-
-    @staticmethod
-    def _require_tenant_scope_value(tenant_id: UUID | None, actor: ActorContext) -> None:
-        if tenant_id is None:
-            if actor.tenant_id is not None:
-                raise JobStateError("a tenant-scoped actor cannot reconcile a global operation")
-            return
-        actor.require_tenant(tenant_id)
-
-    @staticmethod
-    def _audit_tenant(row: Job) -> UUID:
-        if row.tenant_id is None:
-            raise JobStateError("an attributable tenant is required for a job audit event")
-        return row.tenant_id
-
-    @staticmethod
-    def _audit_tenant_value(tenant_id: UUID | None) -> UUID:
-        if tenant_id is None:
-            raise JobStateError("an attributable tenant is required for an operations audit event")
-        return tenant_id
-
-    @staticmethod
     def _require_recovery_permission(actor: ActorContext) -> None:
         actor.require_permission("recovery_reconcile")
 
@@ -1924,6 +2022,7 @@ async def reconcile_operations(
     job_ids: Iterable[UUID] = (),
     actor: ActorContext,
     reason: str,
+    operations_tenant_id: UUID | None = None,
     now: datetime | None = None,
 ) -> tuple[list[OutboxEvent], list[Job]]:
     """Reconcile explicit outbox and job holds in one caller-owned transaction."""
@@ -1931,7 +2030,12 @@ async def reconcile_operations(
     event_ids = tuple(dict.fromkeys(outbox_event_ids))
     requested_job_ids = tuple(dict.fromkeys(job_ids))
     if not event_ids and not requested_job_ids:
-        raise ValueError("reconciliation requires an explicit non-empty operations set")
+        _require_tenant_or_global_scope(
+            None,
+            actor,
+            operations_tenant_id=operations_tenant_id,
+            global_permission="global_recovery_reconcile",
+        )
     audit = AuditRepository(session)
     events: list[OutboxEvent] = []
     jobs: list[Job] = []
@@ -1941,6 +2045,7 @@ async def reconcile_operations(
             actor=actor,
             reason=reason,
             audit=audit,
+            operations_tenant_id=operations_tenant_id,
             now=now,
         )
     if requested_job_ids:
@@ -1949,6 +2054,7 @@ async def reconcile_operations(
             actor=actor,
             reason=reason,
             audit=audit,
+            operations_tenant_id=operations_tenant_id,
             now=now,
         )
     held_outbox = cast(
@@ -1968,11 +2074,20 @@ async def reconcile_operations(
             )
         ),
     )
-    if not int(held_outbox or 0) and not int(held_jobs or 0):
+    if (
+        not int(held_outbox or 0)
+        and not int(held_jobs or 0)
+        and _is_operations_control_actor(
+            actor,
+            operations_tenant_id=operations_tenant_id,
+            permission="global_recovery_reconcile",
+        )
+    ):
         await RecoveryStateRepository(session).reconcile(
             actor=actor,
             reason=reason,
             audit=audit,
+            operations_tenant_id=operations_tenant_id,
             now=now,
         )
     return events, jobs
@@ -1997,6 +2112,7 @@ async def reconcile_recovery_state(
     *,
     actor: ActorContext,
     reason: str,
+    operations_tenant_id: UUID | None = None,
     now: datetime | None = None,
 ) -> OperationsRecoveryState:
     """Audit and release a generation only after no held external work remains."""
@@ -2005,12 +2121,14 @@ async def reconcile_recovery_state(
         actor=actor,
         reason=reason,
         audit=AuditRepository(session),
+        operations_tenant_id=operations_tenant_id,
         now=now,
     )
 
 
 __all__ = [
     "DuplicateIntentError",
+    "EXPIRED_DISPATCH_AMBIGUITY_REASON",
     "JobRepository",
     "JobStateError",
     "LeaseLostError",
@@ -2020,6 +2138,7 @@ __all__ = [
     "RecoveryStateRepository",
     "build_job_acknowledge_statement",
     "build_job_dispatch_statement",
+    "build_job_expired_dispatch_quarantine_statement",
     "build_job_exhausted_statement",
     "build_job_failure_statement",
     "build_job_receipt_statement",

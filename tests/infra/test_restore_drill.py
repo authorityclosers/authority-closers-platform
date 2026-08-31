@@ -387,6 +387,13 @@ def test_docker_run_commands_are_no_pull_bounded_and_do_not_expose_password(
         APPLICATION_IMAGE,
         ("mark-and-prove", "--reason", "safe reason"),
     )
+    control_tenant_id = UUID("33333333-3333-4333-8333-333333333333")
+    reconcile_probe = restore_drill._probe_command(
+        target,
+        APPLICATION_IMAGE,
+        ("reconcile-selected", "--reason", "safe reason"),
+        operations_tenant_id=control_tenant_id,
+    )
 
     for command in (init, postgres, probe):
         assert command[0] == "run"
@@ -413,6 +420,9 @@ def test_docker_run_commands_are_no_pull_bounded_and_do_not_expose_password(
     assert "--read-only" in probe
     assert APPLICATION_IMAGE in probe
     assert "AC_RESTORE_DRILL_DATABASE_URL" in probe
+    assert "AC_OPERATIONS_TENANT_ID" not in probe
+    assert "AC_OPERATIONS_TENANT_ID" in reconcile_probe
+    assert str(control_tenant_id) not in reconcile_probe
 
 
 def test_docker_exec_includes_target_container_and_passes_only_environment_name(

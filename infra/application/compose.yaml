@@ -27,8 +27,9 @@ x-application-environment: &application-environment
   AC_GOOGLE_OAUTH_CLIENT_ID: ${AC_GOOGLE_OAUTH_CLIENT_ID:?AC_GOOGLE_OAUTH_CLIENT_ID is required for staging or production}
   AC_GOOGLE_OAUTH_CLIENT_SECRET: ${AC_GOOGLE_OAUTH_CLIENT_SECRET:?AC_GOOGLE_OAUTH_CLIENT_SECRET is required for staging or production}
   AC_LEARNER_CONSENT_VERSION: ${AC_LEARNER_CONSENT_VERSION:-}
+  AC_PUBLIC_LEARNER_TENANT_ID: ${AC_PUBLIC_LEARNER_TENANT_ID:-}
+  AC_OPERATIONS_TENANT_ID: ${AC_OPERATIONS_TENANT_ID:?AC_OPERATIONS_TENANT_ID must identify the exact operations control tenant}
   AC_EXTERNAL_SIDE_EFFECTS_HOLD: ${AC_EXTERNAL_SIDE_EFFECTS_HOLD:-true}
-  AC_EMAIL_PROVIDER: ${AC_EMAIL_PROVIDER:-fake}
   AC_OTEL_EXPORTER_OTLP_ENDPOINT: ${AC_OTEL_EXPORTER_OTLP_ENDPOINT:-http://ac-telemetry-collector:4318}
   AC_PUBLIC_APP_URL: ${AC_PUBLIC_APP_URL:?AC_PUBLIC_APP_URL is required}
   AC_ADMIN_APP_URL: ${AC_ADMIN_APP_URL:?AC_ADMIN_APP_URL is required}
@@ -165,7 +166,9 @@ services:
     command: ["python", "-m", "ac_platform.worker"]
     environment:
       <<: *application-environment
-      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      AC_EMAIL_PROVIDER: ${AC_EMAIL_PROVIDER:-fake}
+      AC_RESEND_API_KEY: ${AC_RESEND_API_KEY:-}
+      AC_RESEND_FROM: ${AC_RESEND_FROM:-}
     depends_on:
       postgres:
         condition: service_healthy

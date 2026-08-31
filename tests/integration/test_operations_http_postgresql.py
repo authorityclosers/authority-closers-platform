@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.schema import CreateSchema, DropSchema
 
 from ac_platform.application.settings import Settings
+from ac_platform.audit.models import AuditEvent
 from ac_platform.http.auth import AuthenticatedTransaction
 from ac_platform.http.operations import install_operations_http
 from ac_platform.http.problem import register_problem_handlers
@@ -57,6 +58,7 @@ class _Seed:
     person_id: UUID
     session_id: UUID
     job_id: UUID
+    global_job_id: UUID
     outbox_event_id: UUID
 
 
@@ -153,6 +155,7 @@ def _seed(engine: Engine) -> _Seed:
     person_id = uuid4()
     session_id = uuid4()
     job_id = uuid4()
+    global_job_id = uuid4()
     outbox_event_id = uuid4()
     aggregate_id = uuid4()
     with Session(engine) as database:
@@ -167,7 +170,7 @@ def _seed(engine: Engine) -> _Seed:
             ]
         )
         database.flush()
-        database.add(Membership(tenant_id=tenant_id, person_id=person_id, role="admin"))
+        database.add(Membership(tenant_id=tenant_id, person_id=person_id, role="owner"))
         database.flush()
         database.add(
             IdentitySession(
@@ -201,6 +204,29 @@ def _seed(engine: Engine) -> _Seed:
         )
         database.flush()
         database.add(
+            Job(
+                id=global_job_id,
+                tenant_id=None,
+                kind="email.identity_verification.v1",
+                dedupe_key=f"operations-global-auth-email:{global_job_id}",
+                payload={"challenge_id": str(uuid4())},
+                external_side_effect=True,
+                recovery_generation=1,
+                status=JobStatus.DEAD_LETTER.value,
+                attempt_count=1,
+                max_attempts=3,
+                available_at=NOW,
+                provider_idempotency_key=f"operations-global-auth-email:{global_job_id}",
+                dispatch_started_at=NOW - timedelta(seconds=5),
+                delivery_ambiguous_at=NOW,
+                last_error="provider delivery effect unknown",
+                dead_lettered_at=NOW,
+                created_at=NOW,
+                updated_at=NOW,
+            )
+        )
+        database.flush()
+        database.add(
             OutboxEvent(
                 id=outbox_event_id,
                 tenant_id=tenant_id,
@@ -217,10 +243,17 @@ def _seed(engine: Engine) -> _Seed:
             )
         )
         database.commit()
-    return _Seed(tenant_id, person_id, session_id, job_id, outbox_event_id)
+    return _Seed(
+        tenant_id,
+        person_id,
+        session_id,
+        job_id,
+        global_job_id,
+        outbox_event_id,
+    )
 
 
-def _settings() -> Settings:
+def _settings(*, operations_tenant_id: UUID) -> Settings:
     return Settings(
         environment="test",
         database_url="postgresql+psycopg://unused:unused@localhost/unused",
@@ -230,6 +263,7 @@ def _settings() -> Settings:
         public_app_url="https://app.authorityclosers.test",
         admin_app_url="https://admin.authorityclosers.test",
         api_url="https://api.authorityclosers.test",
+        operations_tenant_id=operations_tenant_id,
     )
 
 
@@ -247,6 +281,8 @@ def _application(
     sessions: async_sessionmaker[AsyncSession],
     actor: ActorContext,
     webhook_adapter: ConfiguredWebhookAdapter,
+    operations_tenant_id: UUID,
+    membership_role: str = "owner",
 ) -> FastAPI:
     async def require_actor(_request: Request) -> AsyncIterator[AuthenticatedTransaction]:
         async with sessions() as database, database.begin():
@@ -255,7 +291,7 @@ def _application(
                 identity=cast(Any, object()),
                 resolved=ResolvedActorContext(
                     actor=actor,
-                    membership_role="admin",
+                    membership_role=membership_role,
                     person_revision=0,
                     session_revision=0,
                     tenant_revision=0,
@@ -268,7 +304,7 @@ def _application(
     register_problem_handlers(application)
     install_operations_http(
         application,
-        settings=_settings(),
+        settings=_settings(operations_tenant_id=operations_tenant_id),
         sessions=sessions,
         require_actor=require_actor,
         webhook_adapters={"fake-email": webhook_adapter},
@@ -301,12 +337,21 @@ def test_operations_http_postgresql_authorization_replay_and_webhook_journey(
                 person_id=seed.person_id,
                 session_id=seed.session_id,
                 tenant_id=seed.tenant_id,
-                permissions=frozenset({"admin_surface", "job_retry", "recovery_reconcile"}),
+                permissions=frozenset(
+                    {
+                        "admin_surface",
+                        "job_retry",
+                        "recovery_reconcile",
+                        "global_job_retry",
+                        "global_recovery_reconcile",
+                    }
+                ),
             )
             application = _application(
                 sessions=sessions,
                 actor=authorized_actor,
                 webhook_adapter=adapter,
+                operations_tenant_id=seed.tenant_id,
             )
             transport = httpx.ASGITransport(app=application)
             async with httpx.AsyncClient(
@@ -341,10 +386,30 @@ def test_operations_http_postgresql_authorization_replay_and_webhook_journey(
                 assert retry_replay.status_code == 200
                 assert retry_replay.json()["replayed"] is True
 
+                global_retry_headers = {
+                    "Origin": "https://admin.authorityclosers.test",
+                    "Idempotency-Key": "global-auth-email-retry-1",
+                }
+                global_retry = await client.post(
+                    f"/v1/admin/jobs/{seed.global_job_id}/retry",
+                    json={"reason": "provider delivery evidence reviewed"},
+                    headers=global_retry_headers,
+                )
+                assert global_retry.status_code == 200
+                assert global_retry.json()["job_id"] == str(seed.global_job_id)
+                assert global_retry.json()["status"] == "held"
+                global_retry_replay = await client.post(
+                    f"/v1/admin/jobs/{seed.global_job_id}/retry",
+                    json={"reason": "provider delivery evidence reviewed"},
+                    headers=global_retry_headers,
+                )
+                assert global_retry_replay.status_code == 200
+                assert global_retry_replay.json()["replayed"] is True
+
                 reconcile = await client.post(
                     "/v1/admin/recovery/reconcile",
                     json={
-                        "job_ids": [str(seed.job_id)],
+                        "job_ids": [str(seed.job_id), str(seed.global_job_id)],
                         "outbox_event_ids": [str(seed.outbox_event_id)],
                         "reason": "restore review approved",
                     },
@@ -355,7 +420,7 @@ def test_operations_http_postgresql_authorization_replay_and_webhook_journey(
                 )
                 assert reconcile.status_code == 200
                 assert reconcile.json() == {
-                    "job_ids": [str(seed.job_id)],
+                    "job_ids": sorted([str(seed.job_id), str(seed.global_job_id)]),
                     "outbox_event_ids": [str(seed.outbox_event_id)],
                     "recovery_generation": 1,
                     "recovery_status": RecoveryStatus.READY.value,
@@ -365,7 +430,7 @@ def test_operations_http_postgresql_authorization_replay_and_webhook_journey(
                 reconcile_replay = await client.post(
                     "/v1/admin/recovery/reconcile",
                     json={
-                        "job_ids": [str(seed.job_id)],
+                        "job_ids": [str(seed.job_id), str(seed.global_job_id)],
                         "outbox_event_ids": [str(seed.outbox_event_id)],
                         "reason": "restore review approved",
                     },
@@ -439,6 +504,7 @@ def test_operations_http_postgresql_authorization_replay_and_webhook_journey(
 
             with Session(postgres_harness.engine) as database:
                 job = database.get(Job, seed.job_id)
+                global_job = database.get(Job, seed.global_job_id)
                 event = database.get(OutboxEvent, seed.outbox_event_id)
                 inbox = database.scalar(
                     select(ProviderInboxModel).where(
@@ -447,6 +513,15 @@ def test_operations_http_postgresql_authorization_replay_and_webhook_journey(
                     )
                 )
                 assert job is not None and job.status == JobStatus.QUEUED.value
+                assert global_job is not None and global_job.status == JobStatus.QUEUED.value
+                global_retry_audit = database.scalar(
+                    select(AuditEvent).where(
+                        AuditEvent.tenant_id == seed.tenant_id,
+                        AuditEvent.action == "job.retry",
+                        AuditEvent.resource_id == str(seed.global_job_id),
+                    )
+                )
+                assert global_retry_audit is not None
                 assert event is not None and event.status == "pending"
                 assert inbox is not None and inbox.tenant_id == seed.tenant_id
                 assert (
@@ -508,6 +583,8 @@ def test_operations_http_postgresql_denies_unprivileged_and_cross_tenant_actors(
                     sessions=sessions,
                     actor=actor,
                     webhook_adapter=adapter,
+                    operations_tenant_id=seed.tenant_id,
+                    membership_role="admin",
                 )
                 async with httpx.AsyncClient(
                     transport=httpx.ASGITransport(app=application),
@@ -524,9 +601,39 @@ def test_operations_http_postgresql_denies_unprivileged_and_cross_tenant_actors(
                     assert response.status_code == 403
                     assert response.json()["code"] == "authorization_denied"
 
+            ordinary_admin = ActorContext(
+                person_id=seed.person_id,
+                session_id=uuid4(),
+                tenant_id=seed.tenant_id,
+                permissions=frozenset({"admin_surface", "job_retry"}),
+            )
+            application = _application(
+                sessions=sessions,
+                actor=ordinary_admin,
+                webhook_adapter=adapter,
+                operations_tenant_id=seed.tenant_id,
+                membership_role="admin",
+            )
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=application),
+                base_url="https://admin.authorityclosers.test",
+            ) as client:
+                global_response = await client.post(
+                    f"/v1/admin/jobs/{seed.global_job_id}/retry",
+                    json={"reason": "not globally authorized"},
+                    headers={
+                        "Origin": "https://admin.authorityclosers.test",
+                        "Idempotency-Key": "denial-global-auth-email",
+                    },
+                )
+                assert global_response.status_code == 403
+                assert global_response.json()["code"] == "authorization_denied"
+
             with Session(postgres_harness.engine) as database:
                 job = database.get(Job, seed.job_id)
+                global_job = database.get(Job, seed.global_job_id)
                 assert job is not None and job.status == JobStatus.DEAD_LETTER.value
+                assert global_job is not None and global_job.status == JobStatus.DEAD_LETTER.value
         finally:
             await async_engine.dispose()
 

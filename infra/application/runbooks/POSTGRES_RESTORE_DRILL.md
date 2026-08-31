@@ -113,9 +113,14 @@ The run performs these checks in order:
 
 Reconciliation is disabled unless at least one job or outbox ID is named,
 actor and tenant UUIDs are supplied, and the explicit acknowledgement is
-present. The repository's `reconcile_operations()` boundary performs the
-same-transaction audit and tenant checks. Example shape (use only IDs from
-this drill's restored evidence and review each one):
+present. The selected tenant must be the configured operations-control tenant,
+and the restored database must contain a non-revoked, unexpired session for the
+selected person with that tenant selected, plus an active owner membership and
+active tenant/person records. Permissions are derived from the persisted owner
+role; CLI identifiers never grant authority. The repository's
+`reconcile_operations()` boundary then performs the same-transaction audit and
+resource-scope checks. Example shape (use only IDs from this drill's restored
+evidence and review each one):
 
 ```bash
 python3 infra/application/scripts/restore-drill.py \

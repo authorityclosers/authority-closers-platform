@@ -13,18 +13,21 @@ export default function PrivacyPage() {
     <PolicyPage
       eyebrow="Privacy / controlled staging"
       title="A small data footprint, made visible."
-      summary="This notice describes the data needed to operate Google sign-in and the first invitation-only learning test. It deliberately does not authorize the broader data uses preserved in future architecture plans."
-      effectiveDate="30 August 2026"
+      summary="This notice describes the data needed to operate email/password or Google sign-in and the first invitation-only learning test. It deliberately does not authorize the broader data uses preserved in future architecture plans."
+      effectiveDate="31 August 2026"
       sections={[
         {
           heading: "What this environment may receive",
           body: (
             <>
               <p>
-                When Google sign-in is enabled, the platform may receive your
-                verified email address, display name, Google account subject,
-                and the security facts needed to establish a short-lived
-                session. The platform does not receive your Google password.
+                With email/password registration, the platform receives your
+                first name, email address, WhatsApp number, password-derived
+                credential, consent version, and the security facts needed to
+                establish a session. It never stores the plain-text password.
+                When Google sign-in is enabled, it may instead receive your
+                verified email address, display name, and Google account
+                subject; it does not receive your Google password.
               </p>
               <p>
                 During an enabled learning test, it may also store your selected
@@ -32,6 +35,18 @@ export default function PrivacyPage() {
                 evidence, authoritative progress, and certificate state.
               </p>
             </>
+          ),
+        },
+        {
+          heading: "Account and course-access email",
+          body: (
+            <p>
+              The registration consent covers only the service messages needed
+              for verification, password recovery, account security, free-course
+              access, and the next learning action. Promotional email remains a
+              separate future permission, and WhatsApp messaging is not
+              activated in this alpha.
+            </p>
           ),
         },
         {

@@ -1,8 +1,8 @@
 """Fail-closed contract for the reviewed Free Course staging seed.
 
-There is intentionally no default course payload in application code.  The
-static learner preview is not an authoritative source and cannot be promoted
-by this loader.
+The package contains one controlled v0.1 foundation payload sourced from
+AC-IMP-04. The static learner preview remains non-authoritative and cannot be
+promoted by this loader.
 """
 
 from __future__ import annotations
@@ -28,6 +28,7 @@ TECHNICAL_VALIDATION_CONTRACT_VERSION = "staging-technical-validation-seed.v1"
 TECHNICAL_VALIDATION_SEED_KEY = "staging-technical-validation"
 TECHNICAL_VALIDATION_SLUG = "staging-technical-validation"
 TECHNICAL_VALIDATION_TITLE = "STAGING-ONLY Technical Validation Catalog"
+CONTROLLED_FOUNDATION_SEED_PATH = Path(__file__).parent / "data" / "free_course_foundation_v1.json"
 EXPECTED_MODULE_COUNT = 4
 TECHNICAL_VALIDATION_MODULE_COUNT = 2
 EXPECTED_ACTIVITY_COUNT = 5
@@ -138,6 +139,7 @@ class FreeCourseSeed:
         environment: str,
         expected_release_id: str,
         _technical_validation: bool = False,
+        _allow_release_marker: bool = False,
     ) -> Self:
         raw = _exact_mapping(
             raw,
@@ -183,11 +185,13 @@ class FreeCourseSeed:
         reviewed_by = _text(content.get("reviewed_by"), "content.reviewed_by", 200)
         reviewed_at = _reviewed_at(content.get("reviewed_at"))
         release_id = _text(content.get("release_id"), "content.release_id", 128)
-        if (
-            environment in {"staging", "production"}
-            and not _RELEASE_ID.fullmatch(release_id)
-            and not (_technical_validation and release_id == "$AC_RELEASE_ID")
-        ):
+        if release_id == "$AC_RELEASE_ID":
+            if not _allow_release_marker or environment not in {"staging", "test"}:
+                raise SeedContractError(
+                    "the release marker is accepted only from a package-owned staging/test seed"
+                )
+            release_id = _text(expected_release_id, "expected_release_id", 128)
+        if environment in {"staging", "production"} and not _RELEASE_ID.fullmatch(release_id):
             raise SeedContractError("content.release_id must be a full lowercase Git SHA")
         if _technical_validation:
             if environment != "staging":
@@ -196,8 +200,6 @@ class FreeCourseSeed:
                 raise SeedContractError(
                     "technical validation seed must use its STAGING-ONLY catalog identity"
                 )
-            if release_id == "$AC_RELEASE_ID":
-                release_id = _text(expected_release_id, "expected_release_id", 128)
             if not _RELEASE_ID.fullmatch(release_id):
                 raise SeedContractError("expected_release_id must be a full lowercase Git SHA")
         if release_id != expected_release_id:
@@ -364,6 +366,7 @@ def load_seed(
         environment=environment,
         expected_release_id=expected_release_id,
         technical_validation=False,
+        allow_release_marker=(path.resolve() == CONTROLLED_FOUNDATION_SEED_PATH.resolve()),
     )
 
 
@@ -380,6 +383,7 @@ def load_technical_validation_seed(
         environment=environment,
         expected_release_id=expected_release_id,
         technical_validation=True,
+        allow_release_marker=True,
     )
     if not isinstance(loaded, TechnicalValidationSeed):
         raise SeedContractError("technical validation fixture did not use its separate seed type")
@@ -392,6 +396,7 @@ def _load_seed_file(
     environment: str,
     expected_release_id: str,
     technical_validation: bool,
+    allow_release_marker: bool,
 ) -> FreeCourseSeed:
     try:
         raw_value = json.loads(
@@ -413,10 +418,12 @@ def _load_seed_file(
         environment=environment,
         expected_release_id=expected_release_id,
         _technical_validation=technical_validation,
+        _allow_release_marker=allow_release_marker,
     )
 
 
 __all__ = [
+    "CONTROLLED_FOUNDATION_SEED_PATH",
     "EXPECTED_ACTIVITY_COUNT",
     "EXPECTED_MODULE_COUNT",
     "FreeCourseSeed",

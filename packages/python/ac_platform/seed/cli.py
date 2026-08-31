@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import asyncio
 import json
 import os
 import sys
@@ -13,6 +12,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy.exc import SQLAlchemyError
 
+from ac_platform.application.asyncio_runtime import run_async
 from ac_platform.application.release_identity import (
     ReleaseIdentityError,
     read_baked_release_id,
@@ -21,6 +21,7 @@ from ac_platform.application.settings import Settings
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.seed.application import SeedApplicationError, StagingSeedApplication
 from ac_platform.seed.contract import (
+    CONTROLLED_FOUNDATION_SEED_PATH,
     FreeCourseSeed,
     SeedContractError,
     TechnicalValidationSeed,
@@ -32,6 +33,11 @@ from ac_platform.seed.technical_validation_fixture import technical_validation_s
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--seed-data", type=Path)
+    parser.add_argument(
+        "--controlled-foundation-v1",
+        action="store_true",
+        help="select the packaged AC-IMP-04 four-shift/Module-1 foundation seed",
+    )
     parser.add_argument("--actor-person-id", required=True, type=UUID)
     parser.add_argument("--release-id", default=os.getenv("AC_RELEASE_ID"))
     parser.add_argument("--environment", default=os.getenv("AC_ENVIRONMENT"))
@@ -83,16 +89,29 @@ async def _run(args: argparse.Namespace) -> int:
             raise SeedApplicationError(
                 "technical validation uses its package fixture, not --seed-data"
             )
+        if args.controlled_foundation_v1:
+            raise SeedApplicationError(
+                "--controlled-foundation-v1 cannot be combined with technical validation"
+            )
         seed = technical_validation_seed(release_id)
     else:
         if args.acknowledge_staging_technical_validation:
             raise SeedApplicationError(
                 "--acknowledge-staging-technical-validation requires --technical-validation"
             )
-        if args.seed_data is None:
-            raise SeedContractError("--seed-data is required for reviewed Free Course content")
+        if args.seed_data is not None and args.controlled_foundation_v1:
+            raise SeedContractError(
+                "choose either --seed-data or --controlled-foundation-v1, not both"
+            )
+        seed_path = (
+            CONTROLLED_FOUNDATION_SEED_PATH if args.controlled_foundation_v1 else args.seed_data
+        )
+        if seed_path is None:
+            raise SeedContractError(
+                "--seed-data or --controlled-foundation-v1 is required for reviewed content"
+            )
         seed = load_seed(
-            args.seed_data,
+            seed_path,
             environment=environment,
             expected_release_id=release_id,
         )
@@ -137,7 +156,7 @@ async def _run(args: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
-        return asyncio.run(_run(args))
+        return run_async(_run(args))
     except (SeedApplicationError, SeedContractError, OSError, ValueError) as exc:
         print(f"seed refused: {exc}", file=sys.stderr)
         return 2

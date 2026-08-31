@@ -1215,8 +1215,10 @@ def _probe_command(
     target: DisposableTarget,
     application_image: str,
     action_args: Sequence[str],
+    *,
+    operations_tenant_id: UUID | None = None,
 ) -> tuple[str, ...]:
-    return (
+    command = [
         "run",
         "--rm",
         "--pull",
@@ -1254,13 +1256,20 @@ def _probe_command(
         "AC_RESTORE_DRILL_DATABASE_URL",
         "--env",
         "AC_RESTORE_DRILL_ACKNOWLEDGE",
-        "--entrypoint",
-        "python",
-        application_image,
-        "-m",
-        "ac_platform.recovery.restore_drill_probe",
-        *action_args,
+    ]
+    if operations_tenant_id is not None:
+        command.extend(("--env", "AC_OPERATIONS_TENANT_ID"))
+    command.extend(
+        (
+            "--entrypoint",
+            "python",
+            application_image,
+            "-m",
+            "ac_platform.recovery.restore_drill_probe",
+            *action_args,
+        )
     )
+    return tuple(command)
 
 
 def _create_target(target: DisposableTarget, config: DrillConfig) -> None:
@@ -1531,15 +1540,25 @@ def _run_probe(
     application_image: str,
     action_args: Sequence[str],
     step: str,
+    *,
+    operations_tenant_id: UUID | None = None,
 ) -> dict[str, Any]:
+    environment = {
+        "AC_RESTORE_DRILL_DATABASE_URL": _helper_database_url(target),
+        "AC_RESTORE_DRILL_ACKNOWLEDGE": PROBE_ACKNOWLEDGEMENT,
+    }
+    if operations_tenant_id is not None:
+        environment["AC_OPERATIONS_TENANT_ID"] = str(operations_tenant_id)
     output = _run_docker(
-        _probe_command(target, application_image, action_args),
+        _probe_command(
+            target,
+            application_image,
+            action_args,
+            operations_tenant_id=operations_tenant_id,
+        ),
         step,
         timeout_seconds=HELPER_TIMEOUT_SECONDS,
-        env_updates={
-            "AC_RESTORE_DRILL_DATABASE_URL": _helper_database_url(target),
-            "AC_RESTORE_DRILL_ACKNOWLEDGE": PROBE_ACKNOWLEDGEMENT,
-        },
+        env_updates=environment,
     )
     lines = [line for line in output.splitlines() if line.strip()]
     if len(lines) != 1:
@@ -2071,6 +2090,7 @@ def _execute(config: DrillConfig) -> tuple[dict[str, Any], Path]:
                     config.application_image,
                     _reconciliation_action_args(config),
                     "reconcile exact selected held records",
+                    operations_tenant_id=config.reconcile_tenant_id,
                 )
                 reconciliation = _validate_reconcile_probe(
                     reconcile_payload,

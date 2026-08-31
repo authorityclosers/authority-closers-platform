@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import AsyncMock
 from uuid import UUID
 
 import pytest
@@ -116,6 +117,78 @@ def test_selected_reconciliation_is_bounded_unique_and_acknowledged() -> None:
     args.acknowledge_selected_reconciliation = False
     with pytest.raises(restore_drill_probe.ProbeError, match="acknowledgement"):
         restore_drill_probe._selection_from_args(args)
+
+
+@pytest.mark.asyncio
+async def test_selected_reconciliation_resolves_persisted_owner_session_and_role_permissions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    person_id = UUID("00000000-0000-4000-8000-000000000002")
+    tenant_id = UUID("00000000-0000-4000-8000-000000000003")
+    session_id = UUID("00000000-0000-4000-8000-000000000004")
+    monkeypatch.setenv(restore_drill_probe.OPERATIONS_TENANT_ID_ENV, str(tenant_id))
+    database = SimpleNamespace(
+        scalar=AsyncMock(return_value=SimpleNamespace(id=session_id, person_id=person_id))
+    )
+    selection = restore_drill_probe.ReconciliationSelection(
+        job_ids=(UUID("00000000-0000-4000-8000-000000000001"),),
+        outbox_event_ids=(),
+        actor_person_id=person_id,
+        tenant_id=tenant_id,
+        reason="reviewed exact row",
+    )
+
+    actor = await restore_drill_probe._resolve_control_actor(database, selection)
+
+    assert actor.person_id == person_id
+    assert actor.session_id == session_id
+    assert actor.tenant_id == tenant_id
+    assert {"recovery_reconcile", "global_recovery_reconcile"}.issubset(actor.permissions)
+    database.scalar.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_selected_reconciliation_rejects_mismatched_or_unresolved_control_authority(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    configured_tenant_id = UUID("00000000-0000-4000-8000-000000000003")
+    selection = restore_drill_probe.ReconciliationSelection(
+        job_ids=(UUID("00000000-0000-4000-8000-000000000001"),),
+        outbox_event_ids=(),
+        actor_person_id=UUID("00000000-0000-4000-8000-000000000002"),
+        tenant_id=UUID("00000000-0000-4000-8000-000000000005"),
+        reason="reviewed exact row",
+    )
+    database = SimpleNamespace(scalar=AsyncMock(return_value=None))
+    monkeypatch.setenv(
+        restore_drill_probe.OPERATIONS_TENANT_ID_ENV,
+        str(configured_tenant_id),
+    )
+
+    with pytest.raises(restore_drill_probe.ProbeError, match="configured operations"):
+        await restore_drill_probe._resolve_control_actor(database, selection)
+    database.scalar.assert_not_awaited()
+
+    matching = restore_drill_probe.ReconciliationSelection(
+        job_ids=selection.job_ids,
+        outbox_event_ids=(),
+        actor_person_id=selection.actor_person_id,
+        tenant_id=configured_tenant_id,
+        reason=selection.reason,
+    )
+    with pytest.raises(restore_drill_probe.ProbeError, match="active persisted owner session"):
+        await restore_drill_probe._resolve_control_actor(database, matching)
+
+
+def test_selected_reconciliation_requires_valid_configured_control_tenant(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv(restore_drill_probe.OPERATIONS_TENANT_ID_ENV, raising=False)
+    with pytest.raises(restore_drill_probe.ProbeError, match="not configured"):
+        restore_drill_probe._configured_operations_tenant_id()
+    monkeypatch.setenv(restore_drill_probe.OPERATIONS_TENANT_ID_ENV, "not-a-uuid")
+    with pytest.raises(restore_drill_probe.ProbeError, match="invalid"):
+        restore_drill_probe._configured_operations_tenant_id()
 
 
 @pytest.mark.asyncio

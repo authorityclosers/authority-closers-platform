@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any, cast
 from urllib.parse import urlencode, urlsplit
+from uuid import UUID
 
 import pytest
 from fastapi import FastAPI, Request, Response
@@ -63,10 +64,34 @@ class _IdentityApplication:
         )
         return issued
 
+    async def select_tenant(self, token: str, tenant_id: UUID) -> object:
+        del token, tenant_id
+        return object()
+
+
+class _LearnerProvisioningApplication:
+    def __init__(self, _database: object) -> None:
+        pass
+
+    async def ensure(
+        self,
+        *,
+        person_id: UUID,
+        tenant_id: UUID,
+        required_consent_version: str,
+    ) -> object:
+        del person_id, tenant_id, required_consent_version
+        return object()
+
 
 @pytest.fixture(autouse=True)
 def _replace_identity_application(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(auth_module, "AsyncIdentityApplication", _IdentityApplication)
+    monkeypatch.setattr(
+        auth_module,
+        "AsyncLearnerProvisioningApplication",
+        _LearnerProvisioningApplication,
+    )
 
 
 class _RecordingProvider:
@@ -136,7 +161,10 @@ class _CallbackIdentityApplication(_IdentityApplication):
         user_agent: str | None = None,
     ) -> SimpleNamespace:
         del transaction_id, assertion, pkce_verifier, user_agent
-        return SimpleNamespace(token=VALID_SESSION_TOKEN)
+        return SimpleNamespace(
+            token=VALID_SESSION_TOKEN,
+            metadata=SimpleNamespace(person_id=UUID("11111111-1111-4111-8111-111111111111")),
+        )
 
 
 class _ForbiddenActorResolutionApplication(_IdentityApplication):
@@ -157,6 +185,9 @@ def _settings() -> Settings:
         public_app_url="https://app.authorityclosers.test",
         admin_app_url="https://admin.authorityclosers.test",
         api_url="https://api.authorityclosers.test",
+        learner_consent_version="staging-test-document-v1",
+        public_learner_tenant_id="22222222-2222-4222-8222-222222222222",
+        operations_tenant_id="33333333-3333-4333-8333-333333333333",
     )
 
 
@@ -182,6 +213,9 @@ def _staging_settings() -> Settings:
         session_cookie_name=DEPLOYMENT_SESSION_COOKIE,
         oauth_transaction_cookie_name=DEPLOYMENT_OAUTH_COOKIE,
         trusted_proxy_addresses="172.18.0.2",
+        learner_consent_version="staging-test-document-v1",
+        public_learner_tenant_id="22222222-2222-4222-8222-222222222222",
+        operations_tenant_id="33333333-3333-4333-8333-333333333333",
     )
 
 
@@ -223,7 +257,8 @@ def _request_with_raw_cookie_headers(*cookie_headers: str) -> Request:
 
 
 def test_password_registration_is_fail_closed_without_reviewed_consent_version() -> None:
-    response = _client().post(
+    settings = _settings().model_copy(update={"learner_consent_version": None})
+    response = _client(settings=settings).post(
         "/v1/auth/password/register",
         headers={"Origin": "https://app.authorityclosers.test"},
         json={
@@ -594,6 +629,40 @@ def test_external_return_url_is_rejected_without_contacting_provider() -> None:
     assert response.status_code == 400
     assert response.json()["code"] == "invalid_auth_transaction"
     assert "location" not in response.headers
+
+
+def test_learner_google_registration_is_disabled_until_signed_consent_exists() -> None:
+    response = _client().get(
+        "/v1/auth/google/start",
+        params={"action": "register", "surface": "learner"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 503
+    assert response.json()["code"] == "password_registration_unavailable"
+    assert "location" not in response.headers
+
+
+def test_stale_learner_google_registration_callback_is_rejected_before_exchange() -> None:
+    client = _client()
+    transaction = AuthTransaction.issue(
+        ProviderAuthorizationType.REGISTER,
+        surface="learner",
+        return_path="/home",
+    )
+    client.cookies.set(
+        "ac_oauth_transaction",
+        AuthTransactionCodec(TEST_TRANSACTION_KEY).encode(transaction),
+    )
+
+    response = client.get(
+        "/v1/auth/google/callback",
+        params={"state": transaction.state, "code": "must-not-be-exchanged"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 503
+    assert response.json()["code"] == "password_registration_unavailable"
 
 
 def test_link_start_requires_an_existing_authority_closers_session() -> None:

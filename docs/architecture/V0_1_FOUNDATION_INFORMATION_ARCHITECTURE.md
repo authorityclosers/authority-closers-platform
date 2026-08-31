@@ -72,9 +72,10 @@ history.
    draft, submit implementation evidence, receive an authorized review, and
    read authoritative progress/completion.
 
-Steps 4-6 are implemented as API and learner adapters, but the new-account
-journey cannot be activated until controlled seed topology and learner tenant
-provisioning semantics are approved and proven in PostgreSQL.
+Steps 4-6 are implemented as API and learner adapters. The controlled
+four-shift/Module 1 seed and exact-tenant learner provisioning are now present
+in the candidate, but activation still requires fresh PostgreSQL CI, exact
+staging configuration, seed application, and an end-to-end runtime proof.
 
 ## Universal state contract
 

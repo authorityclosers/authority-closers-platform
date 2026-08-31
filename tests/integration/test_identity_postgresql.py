@@ -531,8 +531,10 @@ def test_postgresql_async_provider_authorization_is_issued_then_consumed_once(
         )
 
 
-def test_postgresql_tenant_selection_serializes_membership_revocation(
+@pytest.mark.parametrize("lifecycle_target", ["membership", "tenant"])
+def test_postgresql_tenant_selection_serializes_scope_lifecycle_mutation(
     postgres_engine: Engine,
+    lifecycle_target: str,
 ) -> None:
     person_id = uuid4()
     tenant_id = uuid4()
@@ -567,7 +569,7 @@ def test_postgresql_tenant_selection_serializes_membership_revocation(
             sessions = async_sessionmaker(async_engine, expire_on_commit=False)
             selected = asyncio.Event()
             release_selection = asyncio.Event()
-            revocation_started = asyncio.Event()
+            mutation_started = asyncio.Event()
 
             async def select_context() -> None:
                 async with sessions() as database, database.begin():
@@ -577,33 +579,46 @@ def test_postgresql_tenant_selection_serializes_membership_revocation(
                     selected.set()
                     await release_selection.wait()
 
-            async def revoke_membership() -> None:
+            async def mutate_scope_lifecycle() -> None:
                 async with sessions() as database, database.begin():
-                    revocation_started.set()
-                    await database.execute(
-                        update(Membership)
-                        .where(
-                            Membership.tenant_id == tenant_id,
-                            Membership.person_id == person_id,
+                    mutation_started.set()
+                    if lifecycle_target == "membership":
+                        statement = (
+                            update(Membership)
+                            .where(
+                                Membership.tenant_id == tenant_id,
+                                Membership.person_id == person_id,
+                            )
+                            .values(
+                                status="inactive",
+                                ended_at=NOW + timedelta(seconds=1),
+                                revision=Membership.revision + 1,
+                            )
                         )
-                        .values(
-                            status="inactive",
-                            ended_at=NOW + timedelta(seconds=1),
-                            revision=Membership.revision + 1,
+                    else:
+                        statement = (
+                            update(Tenant)
+                            .where(Tenant.id == tenant_id)
+                            .values(
+                                status="suspended",
+                                revision=Tenant.revision + 1,
+                            )
                         )
-                    )
+                    await database.execute(statement)
 
             selection_task = asyncio.create_task(select_context())
-            revocation_task: asyncio.Task[None] | None = None
+            mutation_task: asyncio.Task[None] | None = None
             try:
                 await asyncio.wait_for(selected.wait(), timeout=10)
-                revocation_task = asyncio.create_task(revoke_membership())
-                await asyncio.wait_for(revocation_started.wait(), timeout=10)
+                mutation_task = asyncio.create_task(mutate_scope_lifecycle())
+                await asyncio.wait_for(mutation_started.wait(), timeout=10)
                 await asyncio.sleep(0.25)
-                assert not revocation_task.done(), "membership update bypassed the selection lock"
+                assert not mutation_task.done(), (
+                    f"{lifecycle_target} update bypassed the selection lock"
+                )
                 release_selection.set()
                 await asyncio.wait_for(selection_task, timeout=10)
-                await asyncio.wait_for(revocation_task, timeout=10)
+                await asyncio.wait_for(mutation_task, timeout=10)
 
                 async with sessions() as database, database.begin():
                     application = AsyncIdentityApplication(database, token_pepper=PEPPER)
@@ -612,8 +627,8 @@ def test_postgresql_tenant_selection_serializes_membership_revocation(
             finally:
                 release_selection.set()
                 tasks = [selection_task]
-                if revocation_task is not None:
-                    tasks.append(revocation_task)
+                if mutation_task is not None:
+                    tasks.append(mutation_task)
                 for task in tasks:
                     if not task.done():
                         task.cancel()

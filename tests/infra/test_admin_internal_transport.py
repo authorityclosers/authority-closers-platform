@@ -35,6 +35,9 @@ PROFILE_VARIABLES = {
     "AC_EDGE_ADMIN_ALIAS",
     "AC_EXTERNAL_SIDE_EFFECTS_HOLD",
     "AC_EMAIL_PROVIDER",
+    "AC_RESEND_API_KEY",
+    "AC_RESEND_FROM",
+    "AC_OPERATIONS_TENANT_ID",
 }
 
 
@@ -61,18 +64,28 @@ def _compose_environment() -> dict[str, str]:
             "AC_DB_MIGRATOR_PASSWORD": "fixture-migrator-password",
             "AC_DB_RUNTIME_PASSWORD": "fixture-runtime-password",
             "AC_DB_BACKUP_PASSWORD": "fixture-backup-password",
+            "AC_OPERATIONS_TENANT_ID": "33333333-3333-4333-8333-333333333333",
         }
     )
     return environment
 
 
-def _render_compose(profile: str) -> dict[str, object]:
+def _render_compose(
+    profile: str,
+    *,
+    environment_overrides: dict[str, str] | None = None,
+    enabled_profiles: tuple[str, ...] = (),
+) -> dict[str, object]:
     if DOCKER is None:
         pytest.fail("Docker CLI is required to render the application Compose contract")
-    result = subprocess.run(  # noqa: S603 - fixed Docker CLI and repository inputs
-        [
-            DOCKER,
-            "compose",
+    environment = _compose_environment()
+    if environment_overrides is not None:
+        environment.update(environment_overrides)
+    command = [DOCKER, "compose"]
+    for enabled_profile in enabled_profiles:
+        command.extend(("--profile", enabled_profile))
+    command.extend(
+        (
             "--env-file",
             str(APPLICATION / "environments" / f"{profile}.env"),
             "--file",
@@ -80,9 +93,12 @@ def _render_compose(profile: str) -> dict[str, object]:
             "config",
             "--format",
             "json",
-        ],
+        )
+    )
+    result = subprocess.run(  # noqa: S603 - fixed Docker CLI and repository inputs
+        command,
         cwd=ROOT,
-        env=_compose_environment(),
+        env=environment,
         capture_output=True,
         check=False,
         text=True,
@@ -92,6 +108,59 @@ def _render_compose(profile: str) -> dict[str, object]:
     rendered = json.loads(result.stdout)
     assert isinstance(rendered, dict)
     return rendered
+
+
+@pytest.mark.parametrize("profile", ["staging", "production"])
+def test_compose_binds_resend_configuration_only_to_worker(profile: str) -> None:
+    held_render = _render_compose(profile, enabled_profiles=("release",))
+    held_services = held_render["services"]
+    assert isinstance(held_services, dict)
+    held_worker = held_services["worker"]
+    assert isinstance(held_worker, dict)
+    assert held_worker["environment"]["AC_EMAIL_PROVIDER"] == "fake"  # type: ignore[index]
+    assert held_worker["environment"]["AC_RESEND_API_KEY"] == ""  # type: ignore[index]
+    assert held_worker["environment"]["AC_RESEND_FROM"] == ""  # type: ignore[index]
+
+    rendered = _render_compose(
+        profile,
+        environment_overrides={
+            "AC_EMAIL_PROVIDER": "resend",
+            "AC_RESEND_API_KEY": "fixture-resend-credential",
+            "AC_RESEND_FROM": "Authority Closers <transactional@example.invalid>",
+        },
+        enabled_profiles=("release",),
+    )
+    services = rendered["services"]
+    assert isinstance(services, dict)
+
+    worker = services["worker"]
+    api = services["api"]
+    migrator = services["migrate"]
+    assert isinstance(worker, dict)
+    assert isinstance(api, dict)
+    assert isinstance(migrator, dict)
+
+    assert worker["environment"]["AC_EMAIL_PROVIDER"] == "resend"  # type: ignore[index]
+    assert (  # type: ignore[index]
+        worker["environment"]["AC_RESEND_API_KEY"] == "fixture-resend-credential"
+    )
+    assert (  # type: ignore[index]
+        worker["environment"]["AC_RESEND_FROM"]
+        == "Authority Closers <transactional@example.invalid>"
+    )
+    for service in (api, migrator):
+        service_environment = service["environment"]
+        assert isinstance(service_environment, dict)
+        assert "AC_EMAIL_PROVIDER" not in service_environment
+        assert "AC_RESEND_API_KEY" not in service_environment
+        assert "AC_RESEND_FROM" not in service_environment
+        assert "AC_PUBLIC_LEARNER_TENANT_ID" in service_environment
+
+    for service_name in ("api", "migrate"):
+        held_environment = held_services[service_name]["environment"]  # type: ignore[index]
+        assert "AC_EMAIL_PROVIDER" not in held_environment
+        assert "AC_RESEND_API_KEY" not in held_environment
+        assert "AC_RESEND_FROM" not in held_environment
 
 
 @pytest.mark.parametrize("profile", ["staging", "production"])

@@ -1,7 +1,8 @@
 # Local v0.1 alpha runbook
 
 This runbook starts the implementation candidate. It does not activate a real
-email provider, approve course content, or make local state authoritative.
+email provider, approve content beyond the controlled v0.1 Module 1 slice, or
+make local state authoritative.
 
 ## Prerequisites
 
@@ -34,10 +35,23 @@ must inject independent values from the approved secret manager for:
 - `AC_EMAIL_CHALLENGE_SECRET`
 - database role credentials and URLs
 - Google OAuth pair
+- `AC_PUBLIC_LEARNER_TENANT_ID` for the exact active self-directed learner tenant
+- `AC_OPERATIONS_TENANT_ID` for an existing local operations-control tenant
+- `AC_RESEND_API_KEY` when and only when the reviewed profile enables Resend
 
 Never copy secret values into Git, commands, logs, screenshots, evidence, or
 this runbook. The release Compose contract rejects missing values; application
 settings reject default, short, or reused identity secrets.
+
+Keep the local database host as `127.0.0.1`. The Compose port is deliberately
+published on IPv4 loopback only; using `localhost` can make Windows async
+clients wait for an IPv6 connection timeout before falling back to IPv4.
+
+The checked-in defaults leave both tenant IDs blank and therefore fail closed:
+public learner registration/login provisioning and tenantless authentication-
+email retry or recovery are unavailable until an authorized bootstrap has
+created or selected the existing tenant records and the secret manager injects
+their exact IDs. Do not invent a tenant ID or create one with direct SQL.
 
 ## Validation
 
@@ -72,5 +86,8 @@ paths through browser/API tests. Do not recover users with direct SQL.
   concurrency, and the fresh password journey remain unproven.
 - The staging consent identifier is a test document marker, not production
   legal approval.
-- Course seed and automatic learner tenant membership remain controlled-source
-  decisions; do not infer either.
+- The controlled seed and learner provisioning path are implemented, but they
+  become runtime evidence only after PostgreSQL tests, exact-tenant
+  configuration, seed application, and browser/API smoke pass.
+- Modules 2–4 are topology-only extension contracts. Only Module 1 carries the
+  v0.1 learning loop.

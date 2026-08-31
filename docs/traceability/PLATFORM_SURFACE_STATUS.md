@@ -34,7 +34,7 @@ candidate. Passing local tests does not change a deployed status.
 | `authorityclosers.com` | `LIVE_FUNCTIONAL` | Web/operations owner | Public legacy | Existing WordPress site on the pre-platform host; not served by this repository | WordPress host/content | WordPress boundary; outside the platform session-cookie boundary | Foundation status records that the apex still returns HTTP 200 and no WordPress DNS cutover occurred ([implementation status](../../infra/vps-foundation/docs/IMPLEMENTATION_STATUS.md)) | Approve a separately rehearsed WordPress-to-platform cutover, preserve rollback, and verify DNS/edge/origin behavior before changing records |
 | `www.authorityclosers.com` | `LIVE_FUNCTIONAL` | Web/operations owner | Public legacy | Existing WordPress site; current behavior is a live page rather than the intended canonical redirect | WordPress host/content | WordPress boundary; outside platform sessions | The legacy apex/`www` remain on the existing host; the current evidence identifies the `www` 200-vs-redirect mismatch | Decide and test the canonical host policy, then install and verify an explicit 301/308 redirect without changing the apex application origin |
 | `dipakvishwakarma.com` | `LIVE_FUNCTIONAL` | Infrastructure owner | Public legacy/test | Existing WordPress site and legacy host, retained for testing/rollback | Legacy WordPress host | Separate legacy boundary | Foundation docs explicitly keep the `dipakvishwakarma.com` apex on the old VPS ([foundation README](../../infra/vps-foundation/README.md)) | Retire or migrate only through a separately approved DNS/origin gate |
-| `staging.authorityclosers.com` | `LIVE_PREVIEW` | Product/platform | Staging | `apps/learner-web`; Caddy routes this host's `/v1/*` to `ac-staging-api` and other paths to `ac-staging-learner` | Static `freeCourse`/demo view models in `apps/learner-web/app/lib/course-data.ts`; API is separate and currently has no seeded catalog fact | Anonymous preview shell; future browser session is host-only and same-origin | Public staging learner smoke is recorded in [`G1_IMPLEMENTATION_EVIDENCE.md`](../evidence/G1_IMPLEMENTATION_EVIDENCE.md); UI labels itself preview-only and is not connected to account state | Seed one approved versioned course, wire learner reads/mutations, enable Google provider, and pass the G1 critical-journey, auth, accessibility, recovery, and side-effect gates |
+| `staging.authorityclosers.com` | `LIVE_PREVIEW` | Product/platform | Staging | `apps/learner-web`; Caddy routes this host's `/v1/*` to `ac-staging-api` and other paths to `ac-staging-learner` | Static `freeCourse`/demo view models in the recorded release; the candidate uses API adapters and a controlled seed | Anonymous preview shell; future browser session is host-only and same-origin | Public staging learner smoke is recorded in [`G1_IMPLEMENTATION_EVIDENCE.md`](../evidence/G1_IMPLEMENTATION_EVIDENCE.md); the exact candidate is not deployed | Deploy the exact candidate, apply its controlled seed, configure the learner tenant/provider, and pass the critical-journey, auth, accessibility, recovery, and side-effect gates |
 | `admin-staging.authorityclosers.com` | `LIVE_PREVIEW` | Platform/operations | Staging | `apps/admin-web`; Caddy routes `/v1/*` to the staging API and other paths to `ac-staging-admin` | No live admin query source; pages render explicit contract/empty states | Cloudflare Access protects ingress; product authorization still requires a named AC session, tenant, role, permission, purpose, and audit | Admin staging access and fail-closed behavior are documented; every current admin page says the API is not connected ([G1 evidence](../evidence/G1_IMPLEMENTATION_EVIDENCE.md)) | Enable product identity, connect server-owned admin context and API actions, protect the hostname with the reviewed Access policy, and pass admin negative-path/audit tests |
 | `api-staging.authorityclosers.com` | `LIVE_PREVIEW` | Platform/API | Staging | FastAPI application in `packages/python/ac_platform/http`; Caddy reverse-proxies this host to `ac-staging-api` | PostgreSQL when a route is connected; current public catalog is empty and UI data is not read from this API | Public routes are anonymous; mutations/read-private routes require the API's actor, tenant, entitlement, resource, and Origin checks | The staging API readiness/health path and public staging API smoke are recorded; the implementation evidence calls out that UI action wiring and integrated recovery/security tests remain pending | Deploy the reviewed exact release, seed approved catalog data, configure Google OAuth, connect browser same-origin calls, and pass integrated route/auth/recovery evidence |
 | `app.authorityclosers.com` | `CONFIGURED_NOT_DEPLOYED` | Product/platform | Production | Production learner profile in `infra/application/environments/production.env`; Caddy has a production learner/API route | Intended source is production PostgreSQL plus connected providers; no application state is deployed | Host-only product session cookie; same-origin `/v1`; apex WordPress is excluded | Production origins and Caddy handlers are defined, while the infrastructure handoff explicitly says no AC application/database/product source has been deployed ([final handoff](../../infra/vps-foundation/docs/FINAL_HANDOFF.md)) | Promote the exact reviewed staging release after G1/G2 approval, production database/recovery proof, provider approval, and separate production action-time approval |
@@ -58,19 +58,21 @@ candidate. Passing local tests does not change a deployed status.
 ## Learner web route register
 
 These routes are implemented by `apps/learner-web` and use the shared shell and
-surface-state model. Unless noted otherwise, the current implementation is a
-staging `LIVE_PREVIEW`; production has the same route shape only as
-`CONFIGURED_NOT_DEPLOYED`. The UI currently renders static/demo data and
-explicitly avoids account, enrollment, progress, evidence, email, and
-certificate mutations.
+surface-state model. The recorded staging release is still the old
+`LIVE_PREVIEW`; production remains `CONFIGURED_NOT_DEPLOYED`. The current
+candidate replaces static learner mutations with API adapters, but that
+candidate is not a live staging claim until the exact artifact is deployed and
+smoked.
 
 ### Uncommitted v0.1 candidate delta
 
 The candidate adds connected email/password registration, login, verification
 and resend, recovery/reset, optimistic onboarding, API-backed catalog,
 enrollment, learner projection, draft/evidence, and certificate adapters plus
-an offline-safe PWA shell. These remain `CONFIGURED_NOT_DEPLOYED`; real email,
-approved seed data, learner tenant provisioning, PostgreSQL runtime evidence,
+an offline-safe PWA shell. It also adds the controlled four-shift seed with the
+complete Module 1 loop, exact-tenant learner provisioning, and a bounded Resend
+adapter. These remain `CONFIGURED_NOT_DEPLOYED`; fresh PostgreSQL CI, provider
+activation/runtime delivery, exact staging configuration, seed application,
 and exact-release staging deployment are still required. See the route/screen
 contract and handoff for the precise boundary.
 
@@ -81,6 +83,7 @@ contract and handoff for the precise boundary.
 | `/terms` | `CONFIGURED_NOT_DEPLOYED` | Legal/product | `app/terms/page.tsx` and `components/policy-page.tsx` in the current working tree | Staging-scoped static policy copy | Public | Present in current code, absent from recorded deployed release; explicitly not final production terms | Same as `/privacy`: legal approval plus reviewed staging deployment, then production-specific terms |
 | `/programs/{slug}` | `LIVE_PREVIEW` | Product/catalog | `app/programs/[slug]/page.tsx` | Static `getProgramBySlug`; canonical API counterpart is `GET /v1/programs/{slug}` | Anonymous/member published visibility in the API; current UI does not authenticate | `course-data.ts` supplies `free-course`; UI labels the version seam as not connected | Seed/publish one immutable program version and bind the page to the API response/ETag |
 | `/login` | `LIVE_PREVIEW` | Identity/web | `app/login/page.tsx`, `components/login-form.tsx` | No account data; generated same-origin auth link | Anonymous | Login UI says authentication is not connected; staging API currently fails closed when no Google provider is configured | Configure and test Google web client, Infisical pair, callback allowlist, transaction replay/CSRF/PKCE, and session issuance |
+| `/register`, `/verify-email`, `/forgot-password`, `/reset-password` | `CONFIGURED_NOT_DEPLOYED` | Identity/web | password auth pages, `components/password-auth-forms.tsx`, and learner API adapter | Candidate identity/challenge/session API; no state in the recorded staging release | Same-origin safe Origin, existence-neutral requests, fragment token transport, configured consent and tenant | Candidate UI/API/unit tests pass locally; real email and fresh PostgreSQL/browser evidence are pending | Deploy the exact candidate, configure tenant/consent/provider, and prove registration, verification, recovery, reset, retry, expiry, and revocation |
 | `/auth/callback` | `LIVE_PREVIEW` | Identity/web | `app/auth/callback/page.tsx` | No callback payload is trusted by the page | Anonymous shell; API callback owns assertion verification | Page is a callback-state display shell; it does not replace the server callback | Wire success/error result from the server callback and verify return-path/surface binding |
 | `/onboarding` | `LIVE_PREVIEW` | Identity/product | `app/onboarding/page.tsx`, `components/onboarding-form.tsx` | Static form state; no profile write | Anonymous preview | Form is disabled and says profile creation is not connected | Define profile fields/consent and connect an authenticated, idempotent server command |
 | `/home` | `LIVE_PREVIEW` | Learning/product | `app/home/page.tsx` | Static `demoLearner` and `freeCourse` | Intended learner session; current UI has no live session | Static progress `0 / 5` and preview-only notices | Resolve `/v1/me`, context, enrollment, and authoritative progress; verify another-device resume |
@@ -101,7 +104,7 @@ surface, but current pages do not perform API calls or privileged writes.
 | `/people` | `LIVE_PREVIEW` | Support/admin | `app/people/page.tsx` | No learner lookup; empty state | `learner_diagnose`, tenant, purpose, redaction, audit | Page explicitly says no diagnosis request ran | Implement/install diagnosis route, then prove authorization, redaction, audit, and no view-as escalation |
 | `/people/corrections` | `LIVE_PREVIEW` | Support/admin | `app/people/corrections/page.tsx` and admin forms | No correction command | Named `learning_correct` permission, tenant, reason, supersession, audit | Preview form never mutates evidence | Connect `POST /v1/admin/corrections` and verify append-only correction chain |
 | `/people/grants` | `LIVE_PREVIEW` | Support/admin | `app/people/grants/page.tsx` and admin forms | No entitlement state | Named `enrollment_grant` permission, tenant, published version, reason, audit | Preview form never creates access | Connect `POST /v1/admin/enrollment-grants` and prove provenance/idempotency |
-| `/catalog` | `LIVE_PREVIEW` | Catalog/admin | `app/catalog/page.tsx` | No catalog query; no version selected | Named `catalog_publish` permission, tenant, immutable transition, audit | Page explicitly says catalog API is not connected | Connect catalog lookup and `POST /v1/admin/program-versions/{id}/publish`; reconcile content/module count first |
+| `/catalog` | `LIVE_PREVIEW` | Catalog/admin | `app/catalog/page.tsx` | No catalog query; no version selected | Named `catalog_publish` permission, tenant, immutable transition, audit | Page explicitly says catalog API is not connected | Deploy and apply the candidate's controlled seed, then connect catalog lookup and `POST /v1/admin/program-versions/{id}/publish` |
 | `/learning-operations` | `LIVE_PREVIEW` | Operations/admin | `app/learning-operations/page.tsx` | No queue/recovery state | Named `job_retry`/`recovery_reconcile` permissions, held-state and audit boundary | Page says no queue or live job state is connected | Connect operations API, restore-hold state, reconciliation set, and audit evidence |
 
 ## API route register
@@ -117,8 +120,9 @@ promoted.
 | `GET /health/live`, `GET /health/ready` | `LIVE_FUNCTIONAL` | Platform/SRE | `packages/python/ac_platform/http/app.py` | Process identity; readiness performs authenticated PostgreSQL `SELECT 1` | No product auth; operational response only | Health routes are part of the API composition and are used by the application health checks | Keep no-store/minimal output and include release identity in deployment smoke evidence |
 | `GET /v1/auth/google/start` | `LIVE_PREVIEW` | Identity/security | `http/auth.py` plus OAuth transaction codec/provider port | PostgreSQL transaction record; Google provider when configured | Anonymous/authenticated link actor, safe return path, surface-host check, state/nonce/PKCE | Route exists, but the recorded staging behavior is fail-closed with `identity_provider_unavailable` when provider config is absent | Configure the Google client and both staging callbacks, then run positive, denial, replay, expiry, and wrong-surface tests |
 | `GET /v1/auth/google/callback` | `LIVE_PREVIEW` | Identity/security | `http/auth.py`, `auth_transactions.py`, `identity_provider.py` | Google assertion plus locked one-time PostgreSQL transaction | Verified assertion, issuer/signature/audience/expiry/email, state/nonce/PKCE, host-only callback cookie | Server-side callback route and security tests exist; no live provider transaction is claimed | Enable provider, prove session issuance/linking/revocation, and verify exact learner/admin same-surface redirects |
+| `POST /v1/auth/password/register`, `/login`, `/verify`, `/resend-verification`, `/recovery`, `/reset`; `GET/PUT /v1/onboarding` | `CONFIGURED_NOT_DEPLOYED` | Identity/product | `http/auth.py`, password identity service, onboarding service, exact-tenant learner provisioner, durable outbox worker | Canonical person/challenge/session/onboarding/membership rows in PostgreSQL | Safe Origin, verified identity, opaque host-only session, exact active tenant, consent version, optimistic onboarding revision | Candidate unit/UI gates and a fresh-PostgreSQL test are present; hosted PostgreSQL and runtime delivery are pending | Pass exact-commit CI, configure staging tenant/consent/Resend, deploy, and prove the complete journey plus negative/retry/recovery paths |
 | `GET /v1/me`, `GET /v1/context`, `POST /v1/context`, `POST /v1/sessions/{session_id}/revoke`, `POST /v1/auth/logout` | `LIVE_PREVIEW` | Identity/security | `http/auth.py` | Canonical identity, memberships, sessions in PostgreSQL | Opaque host-only session cookie; active person/membership/tenant; safe Origin for mutations | Route implementations and negative tests exist; no authenticated staging cohort is claimed | Configure Google/session secrets, wire browser calls, and pass session lifecycle, tenancy, CSRF, revocation, and deletion/recovery tests |
-| `GET /v1/programs`, `GET /v1/programs/{slug}` | `LIVE_PREVIEW` | Catalog/product | `http/course.py` | Published global `Program`/`ProgramVersion`/`Module`/`Activity` rows in PostgreSQL | Anonymous published visibility; member access cannot reveal drafts/protected payloads | Current audit identified the deployed API collection as empty while the learner preview is populated from static code | Seed and publish one source-approved immutable program; make learner page/API use one response contract and verify empty/non-empty cases |
+| `GET /v1/programs`, `GET /v1/programs/{slug}` | `LIVE_PREVIEW` | Catalog/product | `http/course.py` | Published global `Program`/`ProgramVersion`/`Module`/`Activity` rows in PostgreSQL | Anonymous published visibility; member access cannot reveal drafts/protected payloads | The deployed API collection is empty; the candidate includes the controlled four-shift/Module 1 seed and API adapter | Deploy and apply the candidate's controlled immutable version, then verify empty/non-empty, provenance, lock, and learner read behavior |
 | `POST /v1/enrollments/free` | `LIVE_PREVIEW` | Enrollment/product | `http/course.py` plus enrollment application | PostgreSQL enrollment, entitlement, provenance, idempotency, audit, outbox | Authenticated eligible learner self; active tenant; explicit `Idempotency-Key`; safe Origin | Route and domain tests exist, but no live UI mutation is connected | Connect onboarding/enrollment UI, seed a published version, enable email only through the provider gate, and prove duplicate/replay behavior |
 | `GET /v1/learning/{programId}`, `GET /v1/activities/{activityId}` | `LIVE_PREVIEW` | Learning/product | `http/learning.py` | PostgreSQL pinned enrollment/version, activities, progress, drafts/evidence | Enrolled learner self, entitlement, prerequisite, tenant/resource ownership | Route code and domain tests exist; UI currently uses slug/static data and does not call them | Reconcile UUID API identifiers with web slug/module paths, then connect authoritative reads and locked states |
 | `PUT /v1/activities/{activityId}/draft` | `LIVE_PREVIEW` | Learning/product | `http/learning.py` | PostgreSQL durable draft with revision/idempotency | Enrolled learner self, tenant, optimistic `If-Match`, safe Origin | Implemented/tested server contract; browser action remains preview-disabled | Connect form/save/resume UI and run reconnect, expiry, conflict, another-device, and body-limit tests |
@@ -147,20 +151,19 @@ current API contract:    GET /v1/programs and GET /v1/programs/{slug}
 ```
 
 This is classified as `LIVE_PREVIEW`, not as a working product. The next
-activation gate is one approved, versioned PostgreSQL course seed and one
-learner API adapter. Static demo data must then be removed from the live data
-path or retained only as an explicitly labeled test fixture.
+activation gate is exact-artifact deployment, application of the candidate's
+controlled seed to PostgreSQL, and runtime proof of the learner API adapter.
+Static demo data must then be removed from the live data path or retained only
+as an explicitly labeled test fixture.
 
-### 2. Two modules versus the controlled four-module direction
+### 2. Static preview versus the controlled four-shift seed
 
-The current static implementation declares two modules and five activities in
-`course-data.ts`. The controlled first-slice direction records a four-module
-course shape, while the local requirement matrix fixes the five activity kinds
-and the permanent `Program -> Module -> Activity` hierarchy. The repository
-therefore cannot silently choose either count. This is an unresolved content /
-controlled-source reconciliation, and the catalog publish gate must remain
-closed until the authoritative course topology is explicitly approved and
-seeded.
+The recorded staging release still displays the old static two-module preview.
+The current candidate does not promote that fixture. Its packaged controlled
+seed uses the exact four shift titles from AC-IMP-04, puts the five permanent
+activity kinds in Module 1, and leaves Modules 2–4 activity-empty as explicit
+extension topology. The content decision is reconciled in code; the live gate
+remains closed until the immutable version is seeded and verified on staging.
 
 ### 3. `www` redirect
 
@@ -214,10 +217,11 @@ media/file service, broad ERP, MCP, or event platform.
 
 ## Canonical activation order
 
-1. Reconcile controlled content topology and route/component/API source gaps.
+1. Prove the controlled seed and exact-tenant learner provisioning in fresh
+   PostgreSQL CI.
 2. Correct the exact-release staging drift: docs exposure, deployed release
    identity, and any stale Caddy/application wiring.
-3. Seed one approved catalog version and connect learner/API reads.
+3. Seed the controlled catalog version and prove learner/API reads.
 4. Configure/test Google OAuth and host-only sessions; connect admin context.
 5. Connect enrollment, learning, evidence, completion, certificate, and the
    fake email outbox in staging while external side effects remain held.

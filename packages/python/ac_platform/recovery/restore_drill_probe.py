@@ -9,7 +9,6 @@ acknowledgement before opening the connection.
 from __future__ import annotations
 
 import argparse
-import asyncio
 import contextlib
 import io
 import json
@@ -19,12 +18,17 @@ import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 from types import SimpleNamespace
-from uuid import UUID, uuid4
+from uuid import UUID
 
+from sqlalchemy import and_, func, select
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.exc import ArgumentError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from ac_platform.application.asyncio_runtime import run_async
+from ac_platform.http.auth import ROLE_PERMISSIONS
+from ac_platform.identity.models import Person, PersonStatus
+from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.outbox import (
     RecoveryStateRepository,
@@ -32,6 +36,13 @@ from ac_platform.outbox import (
     reconcile_operations,
 )
 from ac_platform.providers import DeliveryReceipt
+from ac_platform.tenancy.models import (
+    Membership,
+    MembershipRole,
+    MembershipStatus,
+    Tenant,
+    TenantStatus,
+)
 from ac_platform.worker import (
     ENROLLMENT_WELCOME_JOB,
     AllowlistedDispatcher,
@@ -43,6 +54,7 @@ from ac_platform.worker import (
 DATABASE_URL_ENV = "AC_RESTORE_DRILL_DATABASE_URL"
 ACKNOWLEDGEMENT_ENV = "AC_RESTORE_DRILL_ACKNOWLEDGE"
 ACKNOWLEDGEMENT_VALUE = "isolated-disposable-restore-drill-v1"
+OPERATIONS_TENANT_ID_ENV = "AC_OPERATIONS_TENANT_ID"
 MAX_RELEASE_SET_SIZE = 100
 TOKEN_PATTERN = r"(?P<token>[0-9a-f]{12})"  # noqa: S105 - identity regex, not a secret
 HOST_PATTERN = re.compile(rf"^ac-restore-drill-{TOKEN_PATTERN}$")
@@ -193,19 +205,15 @@ async def reconcile_selected(
         expire_on_commit=False,
     )
     try:
-        actor = ActorContext(
-            person_id=selection.actor_person_id,
-            session_id=uuid4(),
-            tenant_id=selection.tenant_id,
-            permissions=frozenset({"recovery_reconcile"}),
-        )
         async with sessions() as session, session.begin():
+            actor = await _resolve_control_actor(session, selection)
             events, jobs = await reconcile_operations(
                 session,
                 outbox_event_ids=selection.outbox_event_ids,
                 job_ids=selection.job_ids,
                 actor=actor,
                 reason=selection.reason,
+                operations_tenant_id=selection.tenant_id,
             )
             state = await RecoveryStateRepository(session).get()
             if state is None:
@@ -219,6 +227,67 @@ async def reconcile_selected(
         }
     finally:
         await engine.dispose()
+
+
+def _configured_operations_tenant_id() -> UUID:
+    raw_value = os.getenv(OPERATIONS_TENANT_ID_ENV)
+    if raw_value is None or not raw_value.strip():
+        raise ProbeError("restore-drill operations control tenant is not configured")
+    try:
+        return UUID(raw_value.strip())
+    except ValueError as error:
+        raise ProbeError("restore-drill operations control tenant is invalid") from error
+
+
+async def _resolve_control_actor(
+    session: AsyncSession,
+    selection: ReconciliationSelection,
+) -> ActorContext:
+    """Resolve one active persisted owner session for the exact control tenant."""
+
+    operations_tenant_id = _configured_operations_tenant_id()
+    if selection.tenant_id != operations_tenant_id:
+        raise ProbeError("selected tenant is not the configured operations control tenant")
+    persisted_session = await session.scalar(
+        select(IdentitySession)
+        .join(Person, Person.id == IdentitySession.person_id)
+        .join(
+            Membership,
+            and_(
+                Membership.person_id == IdentitySession.person_id,
+                Membership.tenant_id == IdentitySession.selected_tenant_id,
+            ),
+        )
+        .join(Tenant, Tenant.id == Membership.tenant_id)
+        .where(
+            IdentitySession.person_id == selection.actor_person_id,
+            IdentitySession.selected_tenant_id == operations_tenant_id,
+            IdentitySession.revoked_at.is_(None),
+            IdentitySession.expires_at > func.now(),
+            Person.status == PersonStatus.ACTIVE.value,
+            Membership.status == MembershipStatus.ACTIVE.value,
+            Membership.role == MembershipRole.OWNER.value,
+            Tenant.status == TenantStatus.ACTIVE.value,
+        )
+        .order_by(IdentitySession.created_at.desc(), IdentitySession.id.desc())
+        .limit(1)
+        .with_for_update()
+    )
+    if persisted_session is None:
+        raise ProbeError(
+            "selected reconciliation actor is not an active persisted owner session "
+            "for the operations control tenant"
+        )
+    permissions = ROLE_PERMISSIONS.get(MembershipRole.OWNER.value, frozenset())
+    required_permissions = {"recovery_reconcile", "global_recovery_reconcile"}
+    if not required_permissions.issubset(permissions):  # pragma: no cover - policy drift guard
+        raise ProbeError("owner role no longer carries global recovery authority")
+    return ActorContext(
+        person_id=persisted_session.person_id,
+        session_id=persisted_session.id,
+        tenant_id=operations_tenant_id,
+        permissions=permissions,
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -248,10 +317,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         # streams so the container emits exactly one fixed-shape safe JSON line.
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
             if args.action == "mark-and-prove":
-                result = asyncio.run(mark_and_prove(target, reason=args.reason))
+                result = run_async(mark_and_prove(target, reason=args.reason))
             else:
                 selection = _selection_from_args(args)
-                result = asyncio.run(reconcile_selected(target, selection))
+                result = run_async(reconcile_selected(target, selection))
         print(json.dumps(result, separators=(",", ":"), sort_keys=True))
         return 0
     except ProbeError as error:

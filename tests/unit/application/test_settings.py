@@ -6,6 +6,13 @@ from pydantic import AnyHttpUrl, ValidationError
 from ac_platform.application.settings import Settings
 
 
+def test_blank_optional_public_learner_tenant_is_unconfigured() -> None:
+    settings = Settings(public_learner_tenant_id="", operations_tenant_id="")
+
+    assert settings.public_learner_tenant_id is None
+    assert settings.operations_tenant_id is None
+
+
 def _production_values() -> dict[str, str]:
     return {
         "release_id": "1" * 40,
@@ -27,6 +34,7 @@ def _production_values() -> dict[str, str]:
         "google_oauth_client_id": "123.apps.googleusercontent.com",
         "google_oauth_client_secret": "production-google-client-secret",
         "trusted_proxy_addresses": "172.18.0.2",
+        "operations_tenant_id": "10000000-0000-4000-8000-000000000001",
     }
 
 
@@ -123,6 +131,7 @@ def test_production_accepts_independent_non_default_identity_material() -> None:
     assert settings.session_cookie_name == "__Host-ac_session"
     assert settings.oauth_transaction_cookie_name == "__Host-ac_oauth_transaction"
     assert settings.internal_api_host == "api.production.ac.internal.invalid"
+    assert settings.operations_tenant_id is not None
     assert settings.session_token_pepper.get_secret_value() != (
         settings.oauth_transaction_secret.get_secret_value()
     )
@@ -148,6 +157,14 @@ def test_production_runtime_does_not_require_migration_credential(
     settings = Settings(environment="production", _env_file=None, **values)  # type: ignore[arg-type]
 
     assert settings.database_migrator_url is None
+
+
+def test_deployment_requires_an_exact_operations_control_tenant() -> None:
+    values = _production_values()
+    del values["operations_tenant_id"]
+
+    with pytest.raises(ValidationError, match="AC_OPERATIONS_TENANT_ID"):
+        Settings(environment="production", _env_file=None, **values)  # type: ignore[arg-type]
 
 
 def test_staging_is_production_shaped_but_uses_isolated_origins() -> None:
@@ -376,6 +393,27 @@ def test_google_oauth_web_client_pair_enables_provider_composition() -> None:
     )
 
     assert settings.google_oauth_configured is True
+
+
+def test_resend_provider_requires_secret_and_sender_as_one_fail_closed_pair() -> None:
+    with pytest.raises(ValidationError, match="AC_RESEND_API_KEY"):
+        Settings(environment="test", email_provider="resend")
+    with pytest.raises(ValidationError, match="AC_RESEND_FROM"):
+        Settings(
+            environment="test",
+            email_provider="resend",
+            resend_api_key="re_test_only_key",  # noqa: S106
+        )
+
+    settings = Settings(
+        environment="test",
+        email_provider="resend",
+        resend_api_key="re_test_only_key",  # noqa: S106
+        resend_from="Authority Closers <learn@authorityclosers.test>",
+    )
+
+    assert settings.resend_api_key is not None
+    assert settings.resend_api_key.get_secret_value() == "re_test_only_key"
 
 
 @pytest.mark.parametrize("environment", ["test", "development"])

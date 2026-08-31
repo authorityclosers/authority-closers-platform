@@ -4,8 +4,9 @@ import ipaddress
 import re
 from functools import lru_cache
 from typing import Any, Literal
+from uuid import UUID
 
-from pydantic import AnyHttpUrl, SecretStr, model_validator
+from pydantic import AnyHttpUrl, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import make_url
 
@@ -49,10 +50,12 @@ class Settings(BaseSettings):
     environment: Literal["local", "test", "development", "staging", "production"] = "local"
     release_id: str = "local-unreleased"
     log_level: str = "INFO"
-    database_url: str = "postgresql+psycopg://ac_runtime:local-runtime-only@localhost/ac_platform"
+    database_url: str = "postgresql+psycopg://ac_runtime:local-runtime-only@127.0.0.1/ac_platform"
     database_migrator_url: str | None = None
     external_side_effects_hold: bool = True
     email_provider: Literal["fake", "resend"] = "fake"
+    resend_api_key: SecretStr | None = None
+    resend_from: str | None = None
     otel_exporter_otlp_endpoint: AnyHttpUrl | None = None
     public_app_url: AnyHttpUrl = AnyHttpUrl("http://localhost:3000")
     admin_app_url: AnyHttpUrl = AnyHttpUrl("http://localhost:3001")
@@ -72,7 +75,16 @@ class Settings(BaseSettings):
     google_oauth_client_id: str | None = None
     google_oauth_client_secret: SecretStr | None = None
     learner_consent_version: str | None = None
+    public_learner_tenant_id: UUID | None = None
+    operations_tenant_id: UUID | None = None
     trusted_proxy_addresses: str = ""
+
+    @field_validator("public_learner_tenant_id", "operations_tenant_id", mode="before")
+    @classmethod
+    def blank_optional_tenant_is_unconfigured(cls, value: Any) -> Any:
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
 
     @model_validator(mode="before")
     @classmethod
@@ -99,6 +111,7 @@ class Settings(BaseSettings):
     def require_deployment_identity_secrets(self) -> Settings:
         if self.environment not in {"staging", "production"}:
             self._validate_google_oauth_pair()
+            self._validate_email_provider()
             return self
         session_pepper = self.session_token_pepper.get_secret_value()
         transaction_secret = self.oauth_transaction_secret.get_secret_value()
@@ -159,8 +172,25 @@ class Settings(BaseSettings):
             )
         if not self.rate_limit_trusted_proxy_addresses:
             raise ValueError("AC_TRUSTED_PROXY_ADDRESSES must contain at least one exact proxy IP")
+        if self.operations_tenant_id is None:
+            raise ValueError(
+                "AC_OPERATIONS_TENANT_ID must identify the exact operations control tenant"
+            )
         self._validate_google_oauth_pair(require_configured=True)
+        self._validate_email_provider()
         return self
+
+    def _validate_email_provider(self) -> None:
+        if self.email_provider != "resend":
+            return
+        api_key = (
+            "" if self.resend_api_key is None else self.resend_api_key.get_secret_value().strip()
+        )
+        sender = (self.resend_from or "").strip()
+        if len(api_key) < 12:
+            raise ValueError("AC_RESEND_API_KEY is required when AC_EMAIL_PROVIDER=resend")
+        if not sender or "@" not in sender or "\r" in sender or "\n" in sender:
+            raise ValueError("AC_RESEND_FROM is required when AC_EMAIL_PROVIDER=resend")
 
     @staticmethod
     def _validate_deployment_url(
