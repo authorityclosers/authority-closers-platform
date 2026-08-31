@@ -558,9 +558,17 @@ async def test_recovery_fence_before_provider_call_does_not_mark_delivery_ambigu
     worker._record_ambiguous.assert_not_awaited()
 
 
-async def test_durable_receipt_skips_provider_redispatch() -> None:
+@pytest.mark.parametrize(
+    "job_kind",
+    [
+        ENROLLMENT_WELCOME_JOB,
+        PASSWORD_EMAIL_VERIFICATION_JOB,
+        PASSWORD_EMAIL_RESET_JOB,
+    ],
+)
+async def test_durable_receipt_skips_provider_redispatch(job_kind: str) -> None:
     worker = DurableWorker(lambda: _AsyncContext(Mock()), settings=_settings())
-    job = _job()
+    job = _job(job_kind)
     job.provider_idempotency_key = job.dedupe_key
     job.dispatch_started_at = datetime(2026, 8, 30, 12, tzinfo=UTC)
     job.provider_receipt = {"idempotency_key": job.dedupe_key, "accepted": True}
