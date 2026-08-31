@@ -24,28 +24,28 @@ hosted CI, deployment, staging seeding, or real email delivery.
 
 ## Verification performed
 
-| Gate | Result |
-|---|---|
-| Repository ownership | PASS — `origin` and GitHub metadata resolve to private `authorityclosers/authority-closers-platform` |
-| Full formatting/lint/type/test/build gate | PASS on the current uncommitted worktree via `pnpm run validate`; rerun on the exact commit in hosted CI |
-| Admin web tests | 67 passed |
-| Learner web tests | 46 passed after final identity hardening |
-| Fresh PostgreSQL runtime | PASS — disposable pinned PostgreSQL 18 container, migrations through `20260830_0011`, `alembic check` clean, runtime/migrator/owner role separation exercised |
-| Python suite | 896 passed, 7 skipped, one dependency deprecation warning on the current uncommitted worktree |
-| Candidate wheel | PASS locally — the built wheel contains `ac_platform/seed/data/free_course_foundation_v1.json`; exact-commit packaging remains pending |
-| Hosted application CI | PASS for baseline `dd1757c` on [workflow 33339057014](https://github.com/authorityclosers/authority-closers-platform/actions/runs/33339057014); fresh candidate CI is pending |
-| Hosted control-plane CI | PASS for baseline `dd1757c` on [workflow 33339057010](https://github.com/authorityclosers/authority-closers-platform/actions/runs/33339057010); fresh candidate CI is pending |
-| Production Next builds | PASS — 15 learner routes and 8 admin routes generated |
-| Alembic graph | one head; fresh password-identity migration added with duplicate-email preflight and forward-only downgrade |
-| Docker-backed composed services | PASS — PostgreSQL, Mailpit, and Jaeger healthy; API liveness/readiness, learner manifest/offline/auth routes, separate admin preview routes, and Windows worker startup exercised |
-| Desktop browser smoke | PASS at 1440x900 for learner public/auth/policy/protected boundaries, universal states, and six separate admin/studio surfaces |
-| Mobile responsive smoke | PASS at 390x844 for key learner/admin routes; no horizontal overflow on checked mobile or desktop routes |
-| Screenshot evidence | PASS — 32 indexed captures in [`screenshots/v0.1-local/`](screenshots/v0.1-local/README.md), each labeled by route and evidence boundary |
-| PWA assets | manifest/service worker/offline shell present; PNG icons verified at 180, 192, and 512 square pixels |
-| Token transport | PASS — email tokens use URL fragments, are removed from history, and are submitted only in JSON bodies |
-| Production JavaScript dependency audit | PASS — patched workspace overrides for `sharp` 0.35.0 and `postcss` 8.5.23; `pnpm audit --prod` reports no known vulnerabilities |
-| Local Python dependency audit | PASS — `uvx pip-audit --local` reports no known vulnerabilities; `uv pip check` reports compatible installed packages |
-| Local frontend load probe | 800 requests, concurrency 25, 0 errors; 88.9 req/s; mean 270.06ms; p50 208.97ms; p95 719.76ms; p99 951.91ms; max 1550.53ms |
+| Gate                                      | Result                                                                                                                                                                            |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Repository ownership                      | PASS — `origin` and GitHub metadata resolve to private `authorityclosers/authority-closers-platform`                                                                              |
+| Full formatting/lint/type/test/build gate | PASS on the current uncommitted worktree via `pnpm run validate`; rerun on the exact commit in hosted CI                                                                          |
+| Admin web tests                           | 67 passed                                                                                                                                                                         |
+| Learner web tests                         | 46 passed after final identity hardening                                                                                                                                          |
+| Fresh PostgreSQL runtime                  | PASS — disposable pinned PostgreSQL 18 container, migrations through `20260830_0011`, `alembic check` clean, runtime/migrator/owner role separation exercised                     |
+| Python suite                              | 896 passed, 7 skipped, one dependency deprecation warning on the current uncommitted worktree                                                                                     |
+| Candidate wheel                           | PASS locally — the built wheel contains `ac_platform/seed/data/free_course_foundation_v1.json`; exact-commit packaging remains pending                                            |
+| Hosted application CI                     | PASS for baseline `dd1757c` on [workflow 33339057014](https://github.com/authorityclosers/authority-closers-platform/actions/runs/33339057014); fresh candidate CI is pending     |
+| Hosted control-plane CI                   | PASS for baseline `dd1757c` on [workflow 33339057010](https://github.com/authorityclosers/authority-closers-platform/actions/runs/33339057010); fresh candidate CI is pending     |
+| Production Next builds                    | PASS — 15 learner routes and 8 admin routes generated                                                                                                                             |
+| Alembic graph                             | one head; fresh password-identity migration added with duplicate-email preflight and forward-only downgrade                                                                       |
+| Docker-backed composed services           | PASS — PostgreSQL, Mailpit, and Jaeger healthy; API liveness/readiness, learner manifest/offline/auth routes, separate admin preview routes, and Windows worker startup exercised |
+| Desktop browser smoke                     | PASS at 1440x900 for learner public/auth/policy/protected boundaries, universal states, and six separate admin/studio surfaces                                                    |
+| Mobile responsive smoke                   | PASS at 390x844 for key learner/admin routes; no horizontal overflow on checked mobile or desktop routes                                                                          |
+| Screenshot evidence                       | PASS — 32 indexed captures in [`screenshots/v0.1-local/`](screenshots/v0.1-local/README.md), each labeled by route and evidence boundary                                          |
+| PWA assets                                | manifest/service worker/offline shell present; PNG icons verified at 180, 192, and 512 square pixels                                                                              |
+| Token transport                           | PASS — email tokens use URL fragments, are removed from history, and are submitted only in JSON bodies                                                                            |
+| Production JavaScript dependency audit    | PASS — patched workspace overrides for `sharp` 0.35.0 and `postcss` 8.5.23; `pnpm audit --prod` reports no known vulnerabilities                                                  |
+| Local Python dependency audit             | PASS — `uvx pip-audit --local` reports no known vulnerabilities; `uv pip check` reports compatible installed packages                                                             |
+| Local frontend load probe                 | 800 requests, concurrency 25, 0 errors; 88.9 req/s; mean 270.06ms; p50 208.97ms; p95 719.76ms; p99 951.91ms; max 1550.53ms                                                        |
 
 The seven Python skips are explicit: four Bash-syntax proofs run on POSIX CI,
 two POSIX file-lock proofs are unavailable on Windows, and one live restore
@@ -55,21 +55,22 @@ exact-tenant provisioning, operations, and runtime-privilege tests ran.
 
 ## Current published URLs (direct probe on evidence date)
 
-| URL | Observed result | Meaning |
-|---|---|---|
-| `https://staging.authorityclosers.com/` | HTTP 200; page still displays “Preview surface” | old learner preview, not this candidate |
-| `https://admin-staging.authorityclosers.com/` | HTTP 302 | Cloudflare Access boundary responds; no authenticated admin action was executed |
-| `https://api-staging.authorityclosers.com/health/live` | HTTP 200, release `89be92d510d181574743200476731b7cc333d68c` | old API process is alive |
-| `https://api-staging.authorityclosers.com/health/ready` | HTTP 200, same release | old API can reach its configured readiness dependency |
+| URL                                                     | Observed result                                              | Meaning                                                                         |
+| ------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| `https://staging.authorityclosers.com/`                 | HTTP 200; page still displays “Preview surface”              | old learner preview, not this candidate                                         |
+| `https://admin-staging.authorityclosers.com/`           | HTTP 302                                                     | Cloudflare Access boundary responds; no authenticated admin action was executed |
+| `https://api-staging.authorityclosers.com/health/live`  | HTTP 200, release `89be92d510d181574743200476731b7cc333d68c` | old API process is alive                                                        |
+| `https://api-staging.authorityclosers.com/health/ready` | HTTP 200, same release                                       | old API can reach its configured readiness dependency                           |
 
 ## Unresolved activation blockers
 
 1. The exact candidate SHA and fresh hosted Node 24/Linux CI do not exist yet.
    Local Node 22 emits the expected engine warning; it is not the release
    authority even though the complete gate passes locally.
-2. The bounded Resend adapter is implemented, but checked-in profiles remain
-   `fake`. Provider credentials/sender activation, monitoring, and a real
-   verification plus recovery delivery proof remain pending.
+2. The bounded Resend adapter is implemented and the reviewed staging profile
+   selects it while production remains `fake` and held. Exact-release runtime,
+   monitoring, and a real verification plus recovery delivery proof remain
+   pending until this candidate is deployed and exercised.
 3. The controlled four-shift/Module 1 foundation is implemented and present in
    a locally inspected wheel. Fresh PostgreSQL seed application and
    idempotency pass, but approved staging execution requires an exact release

@@ -325,8 +325,10 @@ def test_environment_profiles_isolate_state_hosts_and_edge_aliases() -> None:
     assert "AC_EDGE_API_ALIAS=ac-staging-api" in staging
     assert "AC_EDGE_API_ALIAS=ac-production-api" in production
     assert ".staging.authorityclosers.com" not in staging
-    assert "AC_EXTERNAL_SIDE_EFFECTS_HOLD=true" in staging
+    assert "AC_EXTERNAL_SIDE_EFFECTS_HOLD=false" in staging
+    assert "AC_EMAIL_PROVIDER=resend" in staging
     assert "AC_EXTERNAL_SIDE_EFFECTS_HOLD=true" in production
+    assert "AC_EMAIL_PROVIDER=fake" in production
     assert "* text=auto eol=lf" in GIT_ATTRIBUTES
     assert "Released environment profile must use canonical LF line endings" in INSTALLER
 

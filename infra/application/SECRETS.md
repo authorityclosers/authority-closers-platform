@@ -7,21 +7,21 @@ to disk.
 
 ## Required per environment
 
-| Secret                        | Constraint                                                                  |
-| ----------------------------- | --------------------------------------------------------------------------- |
-| `AC_POSTGRES_OWNER_PASSWORD`  | independent random database bootstrap credential                            |
-| `AC_DB_MIGRATOR_PASSWORD`     | independent random migration-role credential                                |
-| `AC_DB_RUNTIME_PASSWORD`      | independent random runtime-role credential                                  |
-| `AC_DB_BACKUP_PASSWORD`       | independent random read-only backup credential                              |
-| `AC_DATABASE_URL`             | `postgresql+psycopg://ac_runtime:<runtime-password>@postgres/ac_platform`   |
-| `AC_DATABASE_MIGRATOR_URL`    | `postgresql+psycopg://ac_migrator:<migrator-password>@postgres/ac_platform` |
-| `AC_SESSION_TOKEN_PEPPER`     | independent random value of at least 32 bytes                               |
-| `AC_OAUTH_TRANSACTION_SECRET` | independent random value of at least 32 bytes                               |
-| `AC_EMAIL_CHALLENGE_SECRET`   | independent random value of at least 32 bytes                               |
-| `AC_GOOGLE_OAUTH_CLIENT_ID`   | Google web client ID ending in `.apps.googleusercontent.com`                |
-| `AC_GOOGLE_OAUTH_CLIENT_SECRET` | non-empty secret for that exact Google web client                         |
-| `AC_PUBLIC_LEARNER_TENANT_ID`   | exact active tenant UUID selected for public/self-directed learner access |
-| `AC_OPERATIONS_TENANT_ID`       | exact existing control-tenant UUID required before side effects release   |
+| Secret                          | Constraint                                                                  |
+| ------------------------------- | --------------------------------------------------------------------------- |
+| `AC_POSTGRES_OWNER_PASSWORD`    | independent random database bootstrap credential                            |
+| `AC_DB_MIGRATOR_PASSWORD`       | independent random migration-role credential                                |
+| `AC_DB_RUNTIME_PASSWORD`        | independent random runtime-role credential                                  |
+| `AC_DB_BACKUP_PASSWORD`         | independent random read-only backup credential                              |
+| `AC_DATABASE_URL`               | `postgresql+psycopg://ac_runtime:<runtime-password>@postgres/ac_platform`   |
+| `AC_DATABASE_MIGRATOR_URL`      | `postgresql+psycopg://ac_migrator:<migrator-password>@postgres/ac_platform` |
+| `AC_SESSION_TOKEN_PEPPER`       | independent random value of at least 32 bytes                               |
+| `AC_OAUTH_TRANSACTION_SECRET`   | independent random value of at least 32 bytes                               |
+| `AC_EMAIL_CHALLENGE_SECRET`     | independent random value of at least 32 bytes                               |
+| `AC_GOOGLE_OAUTH_CLIENT_ID`     | Google web client ID ending in `.apps.googleusercontent.com`                |
+| `AC_GOOGLE_OAUTH_CLIENT_SECRET` | non-empty secret for that exact Google web client                           |
+| `AC_PUBLIC_LEARNER_TENANT_ID`   | exact active tenant UUID selected for public/self-directed learner access   |
+| `AC_OPERATIONS_TENANT_ID`       | exact existing control-tenant UUID required before side effects release     |
 
 The four database passwords must be distinct. The three identity secrets must
 also be mutually distinct. The two SQLAlchemy URLs must be
@@ -38,12 +38,14 @@ same-surface callback URLs listed in the application release contract.
 This preflight proves configuration presence only; credential rotation and a
 real Google login/callback remain deployment-time operational evidence.
 
-## Held integrations
+## Provider activation profiles
 
-`AC_RESEND_API_KEY` and the non-secret reviewed `AC_RESEND_FROM` may be present,
-but the checked-in environment profile keeps `AC_EMAIL_PROVIDER=fake` and
-external effects held until a separate provider activation gate. Enabling
-Resend requires both names; the legacy unprefixed `RESEND_API_KEY` is not read.
+The staging profile selects `AC_EMAIL_PROVIDER=resend` and deliberately releases
+the external-effects hold only after the staging-scoped `AC_RESEND_API_KEY`, the
+reviewed `AC_RESEND_FROM`, and the operations tenant reference are present in
+Infisical. Production remains `AC_EMAIL_PROVIDER=fake` with external effects
+held; staging activation is not a production activation. Enabling Resend
+requires both provider names; the legacy unprefixed `RESEND_API_KEY` is not read.
 Compose injects the selector, key, and sender into the worker only. The API and
 migrator do not receive these variables or the mail credential; their provider
 configuration remains at the application default `fake`. This process-level

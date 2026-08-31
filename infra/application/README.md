@@ -223,9 +223,10 @@ register both same-surface callbacks:
 Staging uses the equivalent callbacks on `staging.authorityclosers.com` and
 `admin-staging.authorityclosers.com`. The preflight proves configuration
 presence only; credential rotation and a real Google login/callback remain
-deployment-time operational evidence. Keep `AC_EMAIL_PROVIDER=fake` and
-`AC_EXTERNAL_SIDE_EFFECTS_HOLD=true` until a separately reviewed provider
-activation gate is approved.
+deployment-time operational evidence. The reviewed staging profile selects
+`AC_EMAIL_PROVIDER=resend` and releases `AC_EXTERNAL_SIDE_EFFECTS_HOLD` only
+after its Infisical provider and operations references are present. Production
+remains `fake` and held until a separately reviewed production activation gate.
 
 The provider port reads only the prefixed `AC_RESEND_API_KEY` and reviewed
 `AC_RESEND_FROM`; both are required when the profile selects `resend`. Compose

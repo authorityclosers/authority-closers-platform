@@ -112,14 +112,17 @@ def _render_compose(
 
 @pytest.mark.parametrize("profile", ["staging", "production"])
 def test_compose_binds_resend_configuration_only_to_worker(profile: str) -> None:
-    held_render = _render_compose(profile, enabled_profiles=("release",))
-    held_services = held_render["services"]
-    assert isinstance(held_services, dict)
-    held_worker = held_services["worker"]
-    assert isinstance(held_worker, dict)
-    assert held_worker["environment"]["AC_EMAIL_PROVIDER"] == "fake"  # type: ignore[index]
-    assert held_worker["environment"]["AC_RESEND_API_KEY"] == ""  # type: ignore[index]
-    assert held_worker["environment"]["AC_RESEND_FROM"] == ""  # type: ignore[index]
+    default_render = _render_compose(profile, enabled_profiles=("release",))
+    default_services = default_render["services"]
+    assert isinstance(default_services, dict)
+    default_worker = default_services["worker"]
+    assert isinstance(default_worker, dict)
+    expected_default_provider = "resend" if profile == "staging" else "fake"
+    assert (  # type: ignore[index]
+        default_worker["environment"]["AC_EMAIL_PROVIDER"] == expected_default_provider
+    )
+    assert default_worker["environment"]["AC_RESEND_API_KEY"] == ""  # type: ignore[index]
+    assert default_worker["environment"]["AC_RESEND_FROM"] == ""  # type: ignore[index]
 
     rendered = _render_compose(
         profile,
@@ -157,10 +160,10 @@ def test_compose_binds_resend_configuration_only_to_worker(profile: str) -> None
         assert "AC_PUBLIC_LEARNER_TENANT_ID" in service_environment
 
     for service_name in ("api", "migrate"):
-        held_environment = held_services[service_name]["environment"]  # type: ignore[index]
-        assert "AC_EMAIL_PROVIDER" not in held_environment
-        assert "AC_RESEND_API_KEY" not in held_environment
-        assert "AC_RESEND_FROM" not in held_environment
+        default_environment = default_services[service_name]["environment"]  # type: ignore[index]
+        assert "AC_EMAIL_PROVIDER" not in default_environment
+        assert "AC_RESEND_API_KEY" not in default_environment
+        assert "AC_RESEND_FROM" not in default_environment
 
 
 @pytest.mark.parametrize("profile", ["staging", "production"])

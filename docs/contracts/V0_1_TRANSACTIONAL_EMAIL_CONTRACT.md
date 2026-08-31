@@ -1,7 +1,7 @@
 # v0.1 transactional email contract
 
-Status: implemented renderer and fake-provider evidence; external delivery is
-not yet activated or claimed.
+Status: implemented renderer and staging activation candidate; external
+delivery is claimed only after the runtime evidence below is recorded.
 
 This contract is bounded by `WF-AUTH-01`, the approved communication classes,
 and the durable outbox. It does not create a general marketing or notification
@@ -9,11 +9,11 @@ system.
 
 ## Approved message family
 
-| Stable message ID | Template | Trigger | Primary action | Expiry / safety |
-| --- | --- | --- | --- | --- |
-| `EMAIL-AUTH-VERIFY-V1` | `identity-email-verification` v1 | eligible password registration or existence-neutral resend | Verify my email | one-time challenge; exact UTC expiry shown |
-| `EMAIL-AUTH-RESET-V1` | `identity-password-reset` v1 | eligible existence-neutral recovery request | Choose a new password | one-time challenge; exact UTC expiry shown; current password remains unchanged until consume |
-| `EMAIL-ENROLL-WELCOME-V1` | `enrollment-welcome` v1 | canonical active enrollment and entitlement for an active verified person | Continue learning | no fabricated enrollment or client-only progress |
+| Stable message ID         | Template                         | Trigger                                                                   | Primary action        | Expiry / safety                                                                              |
+| ------------------------- | -------------------------------- | ------------------------------------------------------------------------- | --------------------- | -------------------------------------------------------------------------------------------- |
+| `EMAIL-AUTH-VERIFY-V1`    | `identity-email-verification` v1 | eligible password registration or existence-neutral resend                | Verify my email       | one-time challenge; exact UTC expiry shown                                                   |
+| `EMAIL-AUTH-RESET-V1`     | `identity-password-reset` v1     | eligible existence-neutral recovery request                               | Choose a new password | one-time challenge; exact UTC expiry shown; current password remains unchanged until consume |
+| `EMAIL-ENROLL-WELCOME-V1` | `enrollment-welcome` v1          | canonical active enrollment and entitlement for an active verified person | Continue learning     | no fabricated enrollment or client-only progress                                             |
 
 The auth templates use the `verification_security` communication class. The
 welcome template uses `enrollment_welcome_next_action`. Template names and
@@ -48,9 +48,9 @@ versions are allowlisted and arbitrary subject/HTML input is rejected.
 
 ## Runtime activation gate
 
-The default and current staging posture is `AC_EMAIL_PROVIDER=fake` with
-external side effects held. External delivery may be claimed only after all of
-the following are evidenced:
+The reviewed staging profile selects `AC_EMAIL_PROVIDER=resend` with the
+external-effects hold released; production remains `fake` and held. External
+delivery may be claimed only after all of the following are evidenced:
 
 1. reviewed sender domain and sender address;
 2. API credential injected by secret reference, never committed or logged;
