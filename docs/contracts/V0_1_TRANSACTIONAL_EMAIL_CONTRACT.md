@@ -12,7 +12,7 @@ system.
 | Stable message ID         | Template                         | Trigger                                                                   | Primary action        | Expiry / safety                                                                              |
 | ------------------------- | -------------------------------- | ------------------------------------------------------------------------- | --------------------- | -------------------------------------------------------------------------------------------- |
 | `EMAIL-AUTH-VERIFY-V1`    | `identity-email-verification` v1 | eligible password registration or existence-neutral resend                | Verify my email       | one-time challenge; exact UTC expiry shown                                                   |
-| `EMAIL-AUTH-RESET-V1`     | `identity-password-reset` v1     | eligible existence-neutral recovery request                               | Choose a new password | one-time challenge; exact UTC expiry shown; current password remains unchanged until consume |
+| `EMAIL-AUTH-RESET-V1`     | `identity-password-reset` v1     | eligible existence-neutral recovery request, including first-password setup for a verified provider-only identity | Choose a new password | one-time challenge; exact UTC expiry shown; any current password remains unchanged until consume |
 | `EMAIL-ENROLL-WELCOME-V1` | `enrollment-welcome` v1          | canonical active enrollment and entitlement for an active verified person | Continue learning     | no fabricated enrollment or client-only progress                                             |
 
 The auth templates use the `verification_security` communication class. The

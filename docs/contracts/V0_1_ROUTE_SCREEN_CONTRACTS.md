@@ -32,6 +32,11 @@ account existence or internal provider/database details.
 Learner Google registration is exposed only after explicit learner consent is
 recorded in the start request, bound into the signed OAuth transaction, and
 revalidated against the exact active consent version before provider exchange.
+When the verified Google provider key already belongs to an active person with
+no recorded consent, that same transaction records the first consent and
+continues with the canonical person; it never creates a duplicate identity.
+An older, different consent version remains fail-closed until an append-safe
+re-consent contract is approved.
 Google authentication remains existing-identity-only; it cannot silently turn
 an unknown provider identity into a learner registration.
 
@@ -42,9 +47,9 @@ an unknown provider identity into a learner registration.
 | `POST /v1/auth/password/register`            | anonymous, safe origin                      | creates active unverified person, credential, consent record, challenge, and outbox intent; returns the same acknowledgement for an existing address |
 | `POST /v1/auth/password/resend-verification` | anonymous, safe origin                      | supersedes outstanding verification links and enqueues a fresh one only for an eligible unverified password account; response is existence-neutral   |
 | `POST /v1/auth/password/login`               | anonymous, safe origin                      | verifies scrypt credential and verified active person, then issues an opaque host-only session                                                       |
-| `POST /v1/auth/password/recovery`            | anonymous, safe origin                      | supersedes prior reset links and enqueues one only for an eligible password account; response is existence-neutral                                   |
+| `POST /v1/auth/password/recovery`            | anonymous, safe origin                      | supersedes prior reset links and enqueues one for an eligible active verified account, including a Google-only account setting its first password; response is existence-neutral |
 | `POST /v1/auth/password/verify`              | anonymous, safe origin                      | consumes one verification token, invalidates siblings, verifies the email, and issues a session                                                      |
-| `POST /v1/auth/password/reset`               | anonymous, safe origin                      | consumes reset token, invalidates siblings, replaces the verifier, and revokes every active session                                                  |
+| `POST /v1/auth/password/reset`               | anonymous, safe origin                      | consumes reset token, invalidates siblings, creates or replaces the verifier, and revokes every active session                                       |
 | `GET /v1/onboarding`                         | authenticated self                          | reads the canonical profile and ETag revision                                                                                                        |
 | `PUT /v1/onboarding`                         | authenticated self, safe origin, `If-Match` | saves bounded profile fields and explicit status; no inferred recommendation or score                                                                |
 

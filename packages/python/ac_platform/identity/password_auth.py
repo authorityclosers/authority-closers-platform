@@ -309,12 +309,13 @@ class PasswordIdentityService:
         normalized_email = normalize_email(email)
         current = (now or utc_now()).astimezone(UTC)
         person = await self.session.scalar(
-            select(Person)
-            .join(PasswordCredential, PasswordCredential.person_id == Person.id)
-            .where(func.lower(Person.email) == normalized_email)
-            .with_for_update()
+            select(Person).where(func.lower(Person.email) == normalized_email).with_for_update()
         )
-        if person is None or person.status != PersonStatus.ACTIVE.value:
+        if (
+            person is None
+            or person.status != PersonStatus.ACTIVE.value
+            or person.email_verified_at is None
+        ):
             return None
         await self._consume_outstanding_challenges(
             person.id,
@@ -401,9 +402,15 @@ class PasswordIdentityService:
             .with_for_update()
         )
         if credential is None:
-            raise InvalidEmailChallenge("the password reset is unavailable")
-        credential.password_hash = hash_password(new_password)
-        credential.revision += 1
+            self.session.add(
+                PasswordCredential(
+                    person_id=person.id,
+                    password_hash=hash_password(new_password),
+                )
+            )
+        else:
+            credential.password_hash = hash_password(new_password)
+            credential.revision += 1
         await self._consume_outstanding_challenges(
             person.id,
             EmailChallengeKind.PASSWORD_RESET,

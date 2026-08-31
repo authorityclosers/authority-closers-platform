@@ -29,6 +29,7 @@ from ac_platform.http.problem import register_problem_handlers
 from ac_platform.identity.models import (
     EmailChallenge,
     EmailChallengeKind,
+    PasswordCredential,
     Person,
     ProviderAuthorizationTransaction,
     ProviderIdentity,
@@ -611,6 +612,152 @@ def test_existing_google_learner_requires_exact_consent_and_selects_public_tenan
                     )
                     assert support_membership is not None
                     assert support_membership.role == "support"
+        finally:
+            await async_engine.dispose()
+
+    _run_async(scenario())
+
+
+def test_existing_google_registration_records_first_consent_and_enables_password_setup(
+    postgres_harness: _Harness,
+) -> None:
+    async def scenario() -> None:
+        consent_version = "staging-test-document-v1"
+        now = datetime(2026, 8, 31, 12, tzinfo=UTC)
+        person_id = uuid4()
+        public_tenant_id = uuid4()
+        provider_subject = f"google-consent-upgrade-{person_id.hex}"
+        provider_email = f"google-consent-upgrade-{person_id.hex}@example.com"
+        challenge_secret = "postgres-consent-upgrade-email-secret-long-enough"  # noqa: S105
+        with Session(postgres_harness.engine) as database, database.begin():
+            database.add_all(
+                [
+                    Person(
+                        id=person_id,
+                        email=provider_email,
+                        first_name="Existing learner",
+                        email_verified_at=now,
+                        consent_version=None,
+                        consented_at=None,
+                    ),
+                    ProviderIdentity(
+                        person_id=person_id,
+                        issuer="https://accounts.google.com",
+                        subject=provider_subject,
+                    ),
+                    Tenant(
+                        id=public_tenant_id,
+                        slug=f"google-upgrade-{person_id.hex}",
+                        name="Google consent-upgrade learner tenant",
+                    ),
+                ]
+            )
+
+        async_engine = create_async_engine(postgres_harness.schema_url, pool_pre_ping=True)
+        sessions = async_sessionmaker(async_engine, expire_on_commit=False)
+        provider = _ExistingGoogleProvider(email=provider_email, subject=provider_subject)
+        settings = Settings(
+            environment="test",
+            database_url=postgres_harness.schema_url.render_as_string(hide_password=False),
+            session_token_pepper="postgres-consent-upgrade-token-pepper-long-enough",  # noqa: S106
+            oauth_transaction_secret="postgres-consent-upgrade-transaction-secret-long-enough",  # noqa: S106
+            email_challenge_secret=challenge_secret,
+            learner_consent_version=consent_version,
+            public_learner_tenant_id=public_tenant_id,
+            public_app_url="https://app.authorityclosers.test",
+            admin_app_url="https://admin.authorityclosers.test",
+            api_url="https://api.authorityclosers.test",
+        )
+        application = FastAPI()
+        register_problem_handlers(application)
+        install_identity_http(
+            application,
+            settings=settings,
+            sessions=sessions,
+            provider=provider,
+        )
+        transport = httpx.ASGITransport(app=application, client=("127.0.0.1", 12345))
+        headers = {"Origin": "https://app.authorityclosers.test"}
+        try:
+            async with httpx.AsyncClient(
+                transport=transport,
+                base_url="https://app.authorityclosers.test",
+            ) as client:
+                started = await client.get(
+                    "/v1/auth/google/start",
+                    params={
+                        "action": "register",
+                        "surface": "learner",
+                        "return_path": "/home",
+                        "consent": "true",
+                    },
+                    follow_redirects=False,
+                )
+                assert started.status_code == 303
+                transaction = provider.transactions[-1]
+                callback = await client.get(
+                    "/v1/auth/google/callback",
+                    params={"state": transaction.state, "code": "controlled-google-code"},
+                    follow_redirects=False,
+                )
+                assert callback.status_code == 303
+                assert callback.headers["location"] == "https://app.authorityclosers.test/home"
+                me = await client.get("/v1/me")
+                assert me.status_code == 200
+                assert me.json()["person_id"] == str(person_id)
+                assert me.json()["selected_tenant_id"] == str(public_tenant_id)
+
+                with Session(postgres_harness.engine) as database:
+                    person = database.get(Person, person_id)
+                    assert person is not None
+                    assert person.consent_version == consent_version
+                    assert person.consented_at is not None
+                    assert database.get(Membership, (public_tenant_id, person_id)) is not None
+                    assert database.get(PasswordCredential, person_id) is None
+
+                recovery = await client.post(
+                    "/v1/auth/password/recovery",
+                    headers=headers,
+                    json={"email": provider_email},
+                )
+                assert recovery.status_code == 200
+                with Session(postgres_harness.engine) as database:
+                    challenge = database.scalar(
+                        select(EmailChallenge)
+                        .where(
+                            EmailChallenge.person_id == person_id,
+                            EmailChallenge.kind == EmailChallengeKind.PASSWORD_RESET.value,
+                            EmailChallenge.consumed_at.is_(None),
+                        )
+                        .order_by(EmailChallenge.issued_at.desc())
+                    )
+                    assert challenge is not None
+                    reset_token = decrypt_challenge_token(
+                        challenge_secret,
+                        challenge.encrypted_token,
+                        kind=EmailChallengeKind.PASSWORD_RESET,
+                        person_id=person_id,
+                    )
+
+                reset = await client.post(
+                    "/v1/auth/password/reset",
+                    headers=headers,
+                    json={
+                        "token": reset_token,
+                        "new_password": "provider learner password",
+                    },
+                )
+                assert reset.status_code == 200
+                login = await client.post(
+                    "/v1/auth/password/login",
+                    headers=headers,
+                    json={
+                        "email": provider_email,
+                        "password": "provider learner password",
+                    },
+                )
+                assert login.status_code == 200
+                assert (await client.get("/v1/me")).status_code == 200
         finally:
             await async_engine.dispose()
 

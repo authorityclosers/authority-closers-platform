@@ -573,7 +573,7 @@ class AsyncIdentityApplication:
         ip_address: str | None = None,
         now: datetime | None = None,
     ) -> RegisteredIdentity:
-        """Create a server-derived person, provider link, and session atomically."""
+        """Create or consent-upgrade a provider identity and issue a session atomically."""
 
         self._require_transaction()
         current_time = _now(now)
@@ -588,8 +588,42 @@ class AsyncIdentityApplication:
             expected_person_id=None,
             current_time=current_time,
         )
-        if await self._lock_provider_key(validated):
-            raise ConflictingProviderIdentityError("provider key already has a canonical person")
+        matches = await self._lock_provider_key(validated)
+        if matches:
+            identity = matches[0]
+            person = await self._lock_person(
+                identity.person_id,
+                provider_email=validated.email,
+            )
+            if person.consent_version not in {None, normalized_consent_version}:
+                raise ConflictingProviderIdentityError(
+                    "provider identity has a different recorded consent version"
+                )
+            await self._consume_authorization_callback(
+                transaction_id, validated, current_time=current_time
+            )
+            if person.consent_version is None or person.consented_at is None:
+                person = replace(
+                    person,
+                    consent_version=normalized_consent_version,
+                    consented_at=current_time,
+                    revision=person.revision + 1,
+                )
+                await self._repository.save_person(person)
+            await self._repository.save_provider_identity(
+                replace(
+                    identity,
+                    last_authenticated_at=current_time,
+                    revision=identity.revision + 1,
+                )
+            )
+            issued = await self._issue_session(
+                person,
+                current_time=current_time,
+                user_agent=user_agent,
+                ip_address=ip_address,
+            )
+            return RegisteredIdentity(person=person, session=issued)
         await self._consume_authorization_callback(
             transaction_id, validated, current_time=current_time
         )
