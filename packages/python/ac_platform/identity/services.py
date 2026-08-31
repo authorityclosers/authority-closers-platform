@@ -227,6 +227,8 @@ class PersonSnapshot:
     display_name: str | None = None
     status: str = PersonStatus.ACTIVE.value
     email_verified_at: datetime | None = None
+    consent_version: str | None = None
+    consented_at: datetime | None = None
     revision: int = 0
 
 

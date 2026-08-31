@@ -292,6 +292,12 @@ class PasswordRegistrationUnavailable(DomainError):
     status = 503
 
 
+class LearnerConsentRequired(DomainError):
+    code = "learner_consent_required"
+    title = "Learner consent is required"
+    status = 400
+
+
 class PasswordCredentialsRejected(DomainError):
     code = "password_credentials_rejected"
     title = "The email or password is not valid"
@@ -896,14 +902,22 @@ def install_identity_http(
         authorization_type: Annotated[ProviderAuthorizationType, Query(alias="action")],
         surface: Literal["learner", "admin"] = "learner",
         return_path: str = "/home",
+        consent: bool = False,
     ) -> Response:
         _require_surface_host(request, settings, surface)
         safe_return_path = normalize_return_path(return_path)
         if surface == "learner" and authorization_type is ProviderAuthorizationType.REGISTER:
-            raise PasswordRegistrationUnavailable(
-                "Learner Google registration is disabled until consent can be bound "
-                "to the signed authorization transaction."
-            )
+            if not consent:
+                raise LearnerConsentRequired(
+                    "Explicit learner consent is required before Google registration."
+                )
+            consent_version = (settings.learner_consent_version or "").strip()
+            if settings.public_learner_tenant_id is None or not consent_version:
+                raise PasswordRegistrationUnavailable(
+                    "Reviewed learner consent and the public learner context must be configured."
+                )
+        else:
+            consent_version = None
         if (
             surface == "learner"
             and authorization_type is ProviderAuthorizationType.AUTHENTICATE
@@ -934,6 +948,7 @@ def install_identity_http(
             issued,
             surface=surface,
             return_path=safe_return_path,
+            consent_version=consent_version,
         )
         redirect_uri = _surface_callback_uri(settings, surface)
         authorization_url = identity_provider.authorization_url(
@@ -962,10 +977,18 @@ def install_identity_http(
             transaction.surface == "learner"
             and transaction.authorization_type is ProviderAuthorizationType.REGISTER
         ):
-            raise PasswordRegistrationUnavailable(
-                "Learner Google registration is disabled until consent can be bound "
-                "to the signed authorization transaction."
-            )
+            required_consent_version = (settings.learner_consent_version or "").strip()
+            if (
+                not transaction.consent_version
+                or not required_consent_version
+                or not hmac.compare_digest(
+                    transaction.consent_version,
+                    required_consent_version,
+                )
+            ):
+                raise PasswordRegistrationUnavailable(
+                    "The learner consent version is no longer available for this registration."
+                )
         link_session_token = presented_session_token
         if (
             transaction.authorization_type is ProviderAuthorizationType.LINK
@@ -987,10 +1010,17 @@ def install_identity_http(
                     transaction.transaction_id,
                     assertion,
                     pkce_verifier=transaction.pkce_verifier,
+                    consent_version=transaction.consent_version or "",
                     display_name=None,
                     user_agent=request.headers.get("user-agent"),
                 )
                 session_token = registered.session.token
+                if transaction.surface == "learner":
+                    tenant_id = await ensure_public_learner(
+                        database,
+                        registered.person.id,
+                    )
+                    await identity.select_tenant(session_token, tenant_id)
             elif transaction.authorization_type is ProviderAuthorizationType.AUTHENTICATE:
                 issued = await identity.authenticate_provider(
                     transaction.transaction_id,
@@ -1108,6 +1138,7 @@ __all__ = [
     "AuthenticatedTransaction",
     "AuthenticationRequired",
     "ContextResponse",
+    "LearnerConsentRequired",
     "MeResponse",
     "PasswordChallengeRejected",
     "PasswordCredentialsRejected",

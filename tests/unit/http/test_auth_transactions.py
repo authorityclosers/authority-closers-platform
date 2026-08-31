@@ -15,6 +15,7 @@ from ac_platform.identity.services import ProviderAuthorizationType
 
 SECRET = "auth-transaction-test-secret-that-is-long-enough"  # noqa: S105
 NOW = 1_788_055_200
+KEY = "unit-auth-transaction-signing-key-is-long-enough"  # noqa: S105
 
 
 def _transaction() -> AuthTransaction:
@@ -95,3 +96,52 @@ def test_payload_cannot_be_relabelled_to_another_authorization_intent() -> None:
 def test_short_signing_secret_is_rejected() -> None:
     with pytest.raises(ValueError, match="at least 32 bytes"):
         AuthTransactionCodec("too-short")
+
+
+def test_signed_oauth_transaction_round_trips_exact_learner_consent_version() -> None:
+    transaction = AuthTransaction.issue(
+        ProviderAuthorizationType.REGISTER,
+        surface="learner",
+        return_path="/home",
+        consent_version="staging-test-document-v1",
+        now=1_780_000_000,
+    )
+
+    decoded = AuthTransactionCodec(KEY).decode(
+        AuthTransactionCodec(KEY).encode(transaction),
+        now=1_780_000_001,
+    )
+
+    assert decoded == transaction
+    assert decoded.consent_version == "staging-test-document-v1"
+
+
+def test_signed_oauth_transaction_cannot_change_consent_without_a_new_signature() -> None:
+    codec = AuthTransactionCodec(KEY)
+    transaction = AuthTransaction.issue(
+        ProviderAuthorizationType.REGISTER,
+        surface="learner",
+        return_path="/home",
+        consent_version="staging-test-document-v1",
+        now=1_780_000_000,
+    )
+    encoded = codec.encode(transaction)
+    forged = codec.encode(replace(transaction, consent_version="forged-v1"))
+    assert encoded != forged
+    forged_payload, forged_signature = forged.rsplit(".", maxsplit=1)
+    tampered = (
+        f"{forged_payload}.{'A' if forged_signature[0] != 'A' else 'B'}{forged_signature[1:]}"
+    )
+
+    with pytest.raises(InvalidAuthTransaction):
+        codec.decode(tampered, now=1_780_000_001)
+
+
+def test_signed_oauth_transaction_rejects_invalid_consent_version() -> None:
+    with pytest.raises(InvalidAuthTransaction):
+        AuthTransaction.issue(
+            ProviderAuthorizationType.REGISTER,
+            surface="learner",
+            return_path="/home",
+            consent_version=" ",
+        )

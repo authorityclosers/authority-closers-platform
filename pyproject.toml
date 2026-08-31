@@ -40,6 +40,7 @@ packages = ["packages/python/ac_platform"]
 addopts = "-ra --strict-config --strict-markers --import-mode=importlib"
 testpaths = ["tests"]
 asyncio_mode = "auto"
+markers = ["e2e: browser-level learner journey regressions"]
 
 [tool.ruff]
 line-length = 100

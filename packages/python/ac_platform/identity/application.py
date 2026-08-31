@@ -567,6 +567,7 @@ class AsyncIdentityApplication:
         assertion: VerifiedProviderAssertion,
         *,
         pkce_verifier: str,
+        consent_version: str,
         display_name: str | None = None,
         user_agent: str | None = None,
         ip_address: str | None = None,
@@ -576,6 +577,9 @@ class AsyncIdentityApplication:
 
         self._require_transaction()
         current_time = _now(now)
+        normalized_consent_version = consent_version.strip()
+        if not 1 <= len(normalized_consent_version) <= 64:
+            raise ValueError("consent_version must contain 1 to 64 characters")
         validated = await self._validate_authorization_transaction(
             transaction_id,
             assertion,
@@ -594,6 +598,8 @@ class AsyncIdentityApplication:
             email=validated.email,
             display_name=_optional_text(display_name, "display_name", 200),
             email_verified_at=current_time,
+            consent_version=normalized_consent_version,
+            consented_at=current_time,
         )
         await self._repository.save_person(person)
         await self._link_provider_key(person, validated, current_time=current_time)

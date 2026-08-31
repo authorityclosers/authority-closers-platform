@@ -4,6 +4,7 @@ import { ArrowRight, CheckCircle2, KeyRound, MailCheck } from "lucide-react";
 import Link from "next/link";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
+import { googleAuthStartUrl } from "../lib/auth-links";
 import { ApiError, createLearnerApi } from "../lib/learner-api";
 import { ROUTES } from "../lib/routes";
 
@@ -165,6 +166,32 @@ export function RegistrationForm() {
         ) : null}
         <button className="button button--ink button--full" disabled={pending}>
           {pending ? "Creating account…" : "Create free account"}
+          <ArrowRight size={17} aria-hidden="true" />
+        </button>
+      </form>
+      <div className="auth-divider" aria-hidden="true">
+        <span>or</span>
+      </div>
+      <form
+        className="stack-form"
+        action={googleAuthStartUrl("register")}
+        method="get"
+      >
+        <input type="hidden" name="action" value="register" />
+        <input type="hidden" name="surface" value="learner" />
+        <input type="hidden" name="return_path" value="/home" />
+        <label className="consent-check">
+          <input name="consent" type="checkbox" value="true" required />
+          <span>
+            I confirm I am 18 or older, agree to the staging{" "}
+            <Link href={ROUTES.terms}>Terms</Link>, acknowledge the{" "}
+            <Link href={ROUTES.privacy}>Privacy notice</Link>, and authorize the
+            account-verification, security, and course-access emails needed to
+            operate this test.
+          </span>
+        </label>
+        <button className="button button--outline button--full" type="submit">
+          Continue with Google
           <ArrowRight size={17} aria-hidden="true" />
         </button>
       </form>

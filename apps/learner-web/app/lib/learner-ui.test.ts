@@ -417,8 +417,10 @@ describe("honest preview controls", () => {
     expect(registration).toContain('class="auth-main clarity-auth-main"');
     expect(registration).toContain("auth-workspace-lake-v1.png");
     expect(registration).toContain("Create free account");
-    expect(registration).not.toContain("action=register");
-    expect(registration).not.toContain("Continue with Google");
+    expect(registration).toContain("action=register");
+    expect(registration).toContain("Continue with Google");
+    expect(registration).toContain('name="consent"');
+    expect(registration).toContain('value="true"');
     expect(registration).not.toContain("Apple");
     expect(verification).toContain("one-time link");
     expect(verification).toContain("clarity-auth-brand-media");

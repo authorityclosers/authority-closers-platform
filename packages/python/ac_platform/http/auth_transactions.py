@@ -25,6 +25,17 @@ class InvalidAuthTransaction(DomainError):
     status = 400
 
 
+def _normalize_consent_version(value: str | None) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise InvalidAuthTransaction("The consent version is invalid.")
+    normalized = value.strip()
+    if not 1 <= len(normalized) <= 64 or "\x00" in normalized:
+        raise InvalidAuthTransaction("The consent version is invalid.")
+    return normalized
+
+
 def _base64url_encode(value: bytes) -> str:
     return base64.urlsafe_b64encode(value).rstrip(b"=").decode("ascii")
 
@@ -65,6 +76,7 @@ class AuthTransaction:
     pkce_verifier: str
     return_path: str
     issued_at: int
+    consent_version: str | None = None
 
     @classmethod
     def issue(
@@ -73,6 +85,7 @@ class AuthTransaction:
         *,
         surface: str,
         return_path: str,
+        consent_version: str | None = None,
         now: int | None = None,
     ) -> AuthTransaction:
         if surface not in {"learner", "admin"}:
@@ -86,6 +99,7 @@ class AuthTransaction:
             pkce_verifier=secrets.token_urlsafe(64),
             return_path=normalize_return_path(return_path),
             issued_at=int(time() if now is None else now),
+            consent_version=_normalize_consent_version(consent_version),
         )
 
     @classmethod
@@ -95,6 +109,7 @@ class AuthTransaction:
         *,
         surface: str,
         return_path: str,
+        consent_version: str | None = None,
     ) -> AuthTransaction:
         if surface not in {"learner", "admin"}:
             raise InvalidAuthTransaction("The requested application surface is not allowed.")
@@ -107,6 +122,7 @@ class AuthTransaction:
             pkce_verifier=issued.pkce_verifier,
             return_path=normalize_return_path(return_path),
             issued_at=int(issued.issued_at.timestamp()),
+            consent_version=_normalize_consent_version(consent_version),
         )
 
     @property
@@ -126,7 +142,7 @@ class AuthTransactionCodec:
 
     def encode(self, transaction: AuthTransaction) -> str:
         payload = {
-            "v": 1,
+            "v": 2,
             **asdict(transaction),
             "transaction_id": str(transaction.transaction_id),
             "authorization_type": transaction.authorization_type.value,
@@ -155,7 +171,7 @@ class AuthTransactionCodec:
             raise InvalidAuthTransaction("The sign-in transaction signature is invalid.")
         try:
             payload = json.loads(_base64url_decode(encoded_payload))
-            if set(payload) != {
+            base_fields = {
                 "v",
                 "transaction_id",
                 "authorization_type",
@@ -165,9 +181,13 @@ class AuthTransactionCodec:
                 "pkce_verifier",
                 "return_path",
                 "issued_at",
-            }:
+            }
+            if set(payload) not in (
+                base_fields,
+                base_fields | {"consent_version"},
+            ):
                 raise ValueError("unexpected transaction fields")
-            if payload["v"] != 1:
+            if payload["v"] not in {1, 2}:
                 raise ValueError("unsupported transaction version")
             transaction = AuthTransaction(
                 transaction_id=UUID(str(payload["transaction_id"])),
@@ -178,6 +198,7 @@ class AuthTransactionCodec:
                 pkce_verifier=str(payload["pkce_verifier"]),
                 return_path=normalize_return_path(str(payload["return_path"])),
                 issued_at=int(payload["issued_at"]),
+                consent_version=_normalize_consent_version(payload.get("consent_version")),
             )
         except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
             raise InvalidAuthTransaction("The sign-in transaction payload is invalid.") from exc

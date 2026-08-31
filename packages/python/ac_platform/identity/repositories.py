@@ -66,6 +66,8 @@ def _person_snapshot(row: Person) -> PersonSnapshot:
         display_name=row.display_name,
         status=row.status,
         email_verified_at=row.email_verified_at,
+        consent_version=row.consent_version,
+        consented_at=(None if row.consented_at is None else _as_utc(row.consented_at)),
         revision=row.revision,
     )
 
@@ -166,6 +168,8 @@ class SqlAlchemyIdentityStore(IdentityStore):
                             display_name=person.display_name,
                             status=person.status,
                             email_verified_at=person.email_verified_at,
+                            consent_version=person.consent_version,
+                            consented_at=person.consented_at,
                             revision=person.revision,
                         )
                     )
@@ -185,6 +189,8 @@ class SqlAlchemyIdentityStore(IdentityStore):
                 display_name=person.display_name,
                 status=person.status,
                 email_verified_at=person.email_verified_at,
+                consent_version=person.consent_version,
+                consented_at=person.consented_at,
                 revision=desired_revision,
                 updated_at=_now(),
             )
@@ -659,6 +665,8 @@ class AsyncSqlAlchemyIdentityRepository:
                             display_name=person.display_name,
                             status=person.status,
                             email_verified_at=person.email_verified_at,
+                            consent_version=person.consent_version,
+                            consented_at=person.consented_at,
                             revision=person.revision,
                         )
                     )
@@ -678,6 +686,8 @@ class AsyncSqlAlchemyIdentityRepository:
                     display_name=person.display_name,
                     status=person.status,
                     email_verified_at=person.email_verified_at,
+                    consent_version=person.consent_version,
+                    consented_at=person.consented_at,
                     revision=person.revision,
                     updated_at=_now(),
                 )

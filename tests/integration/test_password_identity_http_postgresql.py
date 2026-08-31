@@ -11,12 +11,12 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import httpx
 import pytest
 from fastapi import FastAPI
-from sqlalchemy import Engine, create_engine, func, select
+from sqlalchemy import Engine, create_engine, delete, func, select
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session
@@ -613,5 +613,129 @@ def test_existing_google_learner_requires_exact_consent_and_selects_public_tenan
                     assert support_membership.role == "support"
         finally:
             await async_engine.dispose()
+
+    _run_async(scenario())
+
+
+def test_new_google_learner_registration_persists_consent_and_public_membership(
+    postgres_harness: _Harness,
+) -> None:
+    async def scenario() -> None:
+        consent_version = "staging-test-document-v1"
+        public_tenant_id = uuid4()
+        provider_email = f"google-new-{uuid4().hex}@example.com"
+        provider_subject = f"google-new-{uuid4().hex}"
+        with Session(postgres_harness.engine) as database, database.begin():
+            database.add(
+                Tenant(
+                    id=public_tenant_id,
+                    slug=f"google-new-{public_tenant_id.hex}",
+                    name="Google public learner tenant",
+                )
+            )
+
+        async_engine = create_async_engine(postgres_harness.schema_url, pool_pre_ping=True)
+        sessions = async_sessionmaker(async_engine, expire_on_commit=False)
+        provider = _ExistingGoogleProvider(email=provider_email, subject=provider_subject)
+        settings = Settings(
+            environment="test",
+            database_url=postgres_harness.schema_url.render_as_string(hide_password=False),
+            session_token_pepper="postgres-new-google-token-pepper-long-enough",  # noqa: S106
+            oauth_transaction_secret="postgres-new-google-transaction-secret-long-enough",  # noqa: S106
+            email_challenge_secret="postgres-new-google-email-secret-long-enough",  # noqa: S106
+            learner_consent_version=consent_version,
+            public_learner_tenant_id=public_tenant_id,
+            public_app_url="https://app.authorityclosers.test",
+            admin_app_url="https://admin.authorityclosers.test",
+            api_url="https://api.authorityclosers.test",
+        )
+        application = FastAPI()
+        register_problem_handlers(application)
+        install_identity_http(
+            application,
+            settings=settings,
+            sessions=sessions,
+            provider=provider,
+        )
+        transport = httpx.ASGITransport(app=application, client=("127.0.0.1", 12345))
+        person_id = None
+        transaction_id = None
+        try:
+            async with httpx.AsyncClient(
+                transport=transport,
+                base_url="https://app.authorityclosers.test",
+            ) as client:
+                started = await client.get(
+                    "/v1/auth/google/start",
+                    params={
+                        "action": "register",
+                        "surface": "learner",
+                        "consent": "true",
+                    },
+                    follow_redirects=False,
+                )
+                assert started.status_code == 303
+                transaction = provider.transactions[-1]
+                transaction_id = transaction.transaction_id
+                assert transaction.consent_version == consent_version
+
+                callback = await client.get(
+                    "/v1/auth/google/callback",
+                    params={"state": transaction.state, "code": "controlled-google-code"},
+                    follow_redirects=False,
+                )
+                assert callback.status_code == 303
+                assert callback.headers["location"] == "https://app.authorityclosers.test/home"
+
+                me = await client.get("/v1/me")
+                assert me.status_code == 200
+                person_id = UUID(me.json()["person_id"])
+                assert me.json()["selected_tenant_id"] == str(public_tenant_id)
+                assert me.json()["membership_role"] == "learner"
+
+            with Session(postgres_harness.engine) as database:
+                person = database.get(Person, person_id)
+                assert person is not None
+                assert person.consent_version == consent_version
+                assert person.consented_at is not None
+                assert person.email_verified_at is not None
+                membership = database.get(Membership, (public_tenant_id, person_id))
+                assert membership is not None
+                assert membership.role == "learner"
+                assert membership.status == "active"
+                transaction_row = database.get(
+                    ProviderAuthorizationTransaction,
+                    transaction_id,
+                )
+                assert transaction_row is not None
+                assert transaction_row.status == "consumed"
+                assert transaction_row.consumed_at is not None
+                assert (
+                    database.scalar(
+                        select(func.count())
+                        .select_from(IdentitySession)
+                        .where(IdentitySession.person_id == person_id)
+                    )
+                    == 1
+                )
+        finally:
+            await async_engine.dispose()
+            with Session(postgres_harness.engine) as database, database.begin():
+                if person_id is not None:
+                    database.execute(
+                        delete(IdentitySession).where(IdentitySession.person_id == person_id)
+                    )
+                    database.execute(delete(Membership).where(Membership.person_id == person_id))
+                    database.execute(
+                        delete(ProviderIdentity).where(ProviderIdentity.person_id == person_id)
+                    )
+                    database.execute(delete(Person).where(Person.id == person_id))
+                if transaction_id is not None:
+                    database.execute(
+                        delete(ProviderAuthorizationTransaction).where(
+                            ProviderAuthorizationTransaction.id == transaction_id
+                        )
+                    )
+                database.execute(delete(Tenant).where(Tenant.id == public_tenant_id))
 
     _run_async(scenario())

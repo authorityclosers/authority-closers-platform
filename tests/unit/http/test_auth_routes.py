@@ -45,6 +45,12 @@ def _sessions() -> _AsyncContext:
 
 
 class _IdentityApplication:
+    registered_provider_calls: list[dict[str, object]] = []
+
+    @classmethod
+    def reset_registered_provider_calls(cls) -> None:
+        cls.registered_provider_calls = []
+
     def __init__(self, _database: object, *, token_pepper: str) -> None:
         del token_pepper
 
@@ -67,6 +73,33 @@ class _IdentityApplication:
     async def select_tenant(self, token: str, tenant_id: UUID) -> object:
         del token, tenant_id
         return object()
+
+    async def register_verified_provider(
+        self,
+        transaction_id: UUID,
+        assertion: VerifiedProviderAssertion,
+        *,
+        pkce_verifier: str,
+        consent_version: str,
+        display_name: str | None = None,
+        user_agent: str | None = None,
+    ) -> SimpleNamespace:
+        type(self).registered_provider_calls.append(
+            {
+                "transaction_id": transaction_id,
+                "assertion": assertion,
+                "pkce_verifier": pkce_verifier,
+                "consent_version": consent_version,
+                "display_name": display_name,
+                "user_agent": user_agent,
+            }
+        )
+        return SimpleNamespace(
+            person=SimpleNamespace(
+                id=UUID("11111111-1111-4111-8111-111111111111"),
+            ),
+            session=SimpleNamespace(token=VALID_SESSION_TOKEN),
+        )
 
 
 class _LearnerProvisioningApplication:
@@ -225,6 +258,7 @@ def _client(
     settings: Settings | None = None,
     provider: object | None = None,
 ) -> TestClient:
+    _IdentityApplication.reset_registered_provider_calls()
     application = FastAPI()
     register_problem_handlers(application)
     install_identity_http(
@@ -631,16 +665,49 @@ def test_external_return_url_is_rejected_without_contacting_provider() -> None:
     assert "location" not in response.headers
 
 
-def test_learner_google_registration_is_disabled_until_signed_consent_exists() -> None:
+def test_learner_google_registration_requires_explicit_browser_consent() -> None:
     response = _client().get(
         "/v1/auth/google/start",
         params={"action": "register", "surface": "learner"},
         follow_redirects=False,
     )
 
-    assert response.status_code == 503
-    assert response.json()["code"] == "password_registration_unavailable"
+    assert response.status_code == 400
+    assert response.json()["code"] == "learner_consent_required"
     assert "location" not in response.headers
+
+
+def test_learner_google_registration_binds_consent_and_selects_public_tenant() -> None:
+    provider = _SuccessfulProvider()
+    client = _client(provider=provider)
+    started = client.get(
+        "/v1/auth/google/start",
+        params={
+            "action": "register",
+            "surface": "learner",
+            "consent": "true",
+        },
+        follow_redirects=False,
+    )
+
+    assert started.status_code == 303
+    transaction = AuthTransactionCodec(TEST_TRANSACTION_KEY).decode(
+        started.cookies["ac_oauth_transaction"]
+    )
+    assert transaction.consent_version == "staging-test-document-v1"
+
+    callback = client.get(
+        "/v1/auth/google/callback",
+        params={"state": transaction.state, "code": "google-authorization-code"},
+        follow_redirects=False,
+    )
+
+    assert callback.status_code == 303
+    assert callback.headers["location"] == "https://app.authorityclosers.test/home"
+    assert _IdentityApplication.registered_provider_calls[0]["consent_version"] == (
+        "staging-test-document-v1"
+    )
+    assert provider.redirect_uris == ["https://app.authorityclosers.test/v1/auth/google/callback"]
 
 
 def test_stale_learner_google_registration_callback_is_rejected_before_exchange() -> None:
@@ -649,6 +716,30 @@ def test_stale_learner_google_registration_callback_is_rejected_before_exchange(
         ProviderAuthorizationType.REGISTER,
         surface="learner",
         return_path="/home",
+    )
+    client.cookies.set(
+        "ac_oauth_transaction",
+        AuthTransactionCodec(TEST_TRANSACTION_KEY).encode(transaction),
+    )
+
+    response = client.get(
+        "/v1/auth/google/callback",
+        params={"state": transaction.state, "code": "must-not-be-exchanged"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 503
+    assert response.json()["code"] == "password_registration_unavailable"
+
+
+def test_learner_google_registration_rejects_a_superseded_consent_version() -> None:
+    provider = _RecordingProvider()
+    client = _client(provider=provider)
+    transaction = AuthTransaction.issue(
+        ProviderAuthorizationType.REGISTER,
+        surface="learner",
+        return_path="/home",
+        consent_version="superseded-consent-v1",
     )
     client.cookies.set(
         "ac_oauth_transaction",
