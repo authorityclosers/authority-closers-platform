@@ -19,9 +19,9 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   return (
     <AuthFlowPage
       eyebrow="Learner access"
-      heading="Return to the"
-      emphasis="practice floor."
-      copy="A named identity keeps enrollment, progress, and implementation evidence in the right hands."
+      heading="Keep moving."
+      emphasis="Your work is here."
+      copy="Return to your free course, saved reflections, and next implementation step."
       backHref={ROUTES.home}
       backLabel="Back to the public catalog"
     >

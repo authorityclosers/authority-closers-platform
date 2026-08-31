@@ -6,9 +6,9 @@ export default function RegisterPage() {
   return (
     <AuthFlowPage
       eyebrow="Create your identity"
-      heading="Start with"
-      emphasis="one honest rep."
-      copy="A verified learner identity keeps your course access, workbook evidence, and recovery attached to you."
+      heading="Learn. Practice."
+      emphasis="Prove progress."
+      copy="Build the skill, put it to work, and keep the evidence attached to your verified learner identity."
       backHref={ROUTES.home}
       backLabel="Back to published programs"
     >

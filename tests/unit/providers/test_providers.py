@@ -30,6 +30,7 @@ from ac_platform.providers import (
     create_email_provider,
 )
 from ac_platform.providers.models import ProviderInbox, ProviderInboxStatus, provider_payload_digest
+from ac_platform.providers.resend_email import render_email
 from ac_platform.providers.service import (
     MAX_PROVIDER_LEASE,
     ProviderInboxRepository,
@@ -87,6 +88,7 @@ def _resend_message(key: str = "reset/person-1") -> EmailMessage:
         variables={
             "first_name": "Learner",
             "action_link": "https://app.authorityclosers.test/reset#token=safe",
+            "expires_at": "2026-08-31T18:30:00+00:00",
         },
         communication_class="verification_security",
     )
@@ -231,7 +233,13 @@ async def test_resend_adapter_sends_bounded_template_with_provider_idempotency()
         payload = json.loads(request.content)
         assert payload["from"] == "Authority Closers <learn@authorityclosers.test>"
         assert payload["to"] == ["learner@example.test"]
-        assert payload["subject"] == "Verify your Authority Closers email"
+        assert payload["subject"] == "Verify your email — Authority Closers"
+        assert "Authority Closers" in payload["html"]
+        assert "Learning &amp; Practice OS" in payload["html"]
+        assert "Verify my email" in payload["html"]
+        assert "@media screen and (max-width:620px)" in payload["html"]
+        assert "Transactional service message" in payload["html"]
+        assert "No marketing subscription was added" in payload["html"]
         assert "<script>" not in payload["html"]
         assert "&lt;script&gt;" in payload["html"]
         return httpx.Response(200, json={"id": "provider-message-1"})
@@ -250,6 +258,7 @@ async def test_resend_adapter_sends_bounded_template_with_provider_idempotency()
                 variables={
                     "first_name": "<script>",
                     "action_link": "https://app.authorityclosers.test/verify#token=safe",
+                    "expires_at": "2026-09-01T18:30:00+00:00",
                 },
                 communication_class="verification_security",
             )
@@ -257,6 +266,84 @@ async def test_resend_adapter_sends_bounded_template_with_provider_idempotency()
 
     assert receipt.provider_message_id == "provider-message-1"
     assert receipt.idempotency_key == "verify/person-1"
+
+
+@pytest.mark.parametrize(
+    ("template", "communication_class", "expected_subject", "expected_action"),
+    [
+        (
+            "identity-email-verification",
+            "verification_security",
+            "Verify your email — Authority Closers",
+            "Verify my email",
+        ),
+        (
+            "identity-password-reset",
+            "verification_security",
+            "Reset your password — Authority Closers",
+            "Choose a new password",
+        ),
+        (
+            "enrollment-welcome",
+            "enrollment_welcome_next_action",
+            "Your Authority Closers course access is ready",
+            "Continue learning",
+        ),
+    ],
+)
+def test_transactional_email_family_renders_branded_responsive_html_and_text(
+    template: str,
+    communication_class: str,
+    expected_subject: str,
+    expected_action: str,
+) -> None:
+    variables = {
+        "first_name": "Learner & Coach",
+        "action_link": "https://staging.authorityclosers.com/action#token=preview",
+    }
+    if template != "enrollment-welcome":
+        variables["expires_at"] = "2026-08-31T18:30:00+00:00"
+    rendered = render_email(
+        EmailMessage(
+            to="learner@example.test",
+            template=template,
+            idempotency_key=f"preview/{template}",
+            variables=variables,
+            communication_class=communication_class,
+        )
+    )
+
+    assert rendered.subject == expected_subject
+    assert expected_action in rendered.html
+    assert expected_action in rendered.text or template == "enrollment-welcome"
+    assert rendered.html.startswith("<!doctype html>")
+    assert 'role="presentation"' in rendered.html
+    assert '<meta name="viewport"' in rendered.html
+    assert "Learner &amp; Coach" in rendered.html
+    assert "Learner & Coach" in rendered.text
+    assert "No marketing subscription was added" in rendered.html
+    assert "unsubscribe" not in rendered.text.lower()
+
+
+@pytest.mark.parametrize(
+    "expires_at",
+    ["not-a-date", "2026-08-31T18:30:00"],
+)
+def test_security_email_rejects_invalid_or_timezone_free_expiry(expires_at: str) -> None:
+    with pytest.raises(PermanentProviderError, match="expiry"):
+        render_email(
+            EmailMessage(
+                to="learner@example.test",
+                template="identity-password-reset",
+                idempotency_key="preview/invalid-expiry",
+                variables={
+                    "first_name": "Learner",
+                    "action_link": "https://staging.authorityclosers.com/reset#token=safe",
+                    "expires_at": expires_at,
+                },
+                communication_class="verification_security",
+            )
+        )
 
 
 @pytest.mark.parametrize(
@@ -294,6 +381,7 @@ async def test_resend_adapter_classifies_provider_failures_without_response_body
                     variables={
                         "first_name": "Learner",
                         "action_link": "https://app.authorityclosers.test/reset#token=safe",
+                        "expires_at": "2026-08-31T18:30:00+00:00",
                     },
                     communication_class="verification_security",
                 )

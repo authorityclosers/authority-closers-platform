@@ -67,10 +67,12 @@ production. Test and development may omit the pair, but supplying either value
 requires both values and whitespace-only values are treated as empty.
 
 Password registration fails closed when either `AC_LEARNER_CONSENT_VERSION` or
-`AC_PUBLIC_LEARNER_TENANT_ID` is absent. Learner Google registration remains
-disabled until consent can be bound to the signed OAuth transaction. Learner
-Google authentication is permitted only for an existing person whose exact
-consent version is checked during provisioning.
+`AC_PUBLIC_LEARNER_TENANT_ID` is absent. Learner Google registration is
+permitted only when the learner explicitly accepts the exact required consent
+before OAuth starts and that version is authenticated inside the signed,
+single-use OAuth transaction. The callback rejects absent, changed, stale, or
+replayed consent state before provisioning. Existing-person Google
+authentication remains subject to the same tenant and membership checks.
 The tenant UUID is an operator-selected reference to an existing active tenant;
 the application never invents a tenant, changes an existing role, or reactivates
 an inactive membership. Admin-surface Google login never auto-provisions a

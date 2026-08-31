@@ -34,7 +34,7 @@
 - Daily encrypted Restic backups and weekly restore drills are enabled with 7 daily, 4 weekly, and 6 monthly retention windows. Secret material is excluded from the backup source set.
 - VPS Infisical CLI bootstrap is installed and verified through a no-value-printing wrapper. `ssh ac` remains the operator entry point.
 - Runtime, R2 guard/probes, Resend checks, and Restic backup/restore jobs use dedicated Infisical machine identities with short-lived injected configuration; only identity bootstrap values remain on the VPS.
-- Resend API authentication succeeded; `authorityclosers.com` sending is enabled, its Resend DNS records are verified, and the latest scoped-key delivery test to `rsuyash123@gmail.com` was accepted by Resend with HTTP 200. Receiving remains Google Workspace's responsibility.
+- Resend API authentication succeeded; `authorityclosers.com` sending is enabled and its Resend DNS records are verified. A pre-handoff scoped-key probe was accepted with HTTP 200, but it did not target the approved AC control-plane mailbox and is not current application-delivery evidence. New tests must target only `admin@authorityclosers.com`. Receiving remains Google Workspace's responsibility.
 - `https://authorityclosers.com/` still returned HTTP 200 after the changes; no WordPress DNS cutover was performed.
 
 ## Explicit gates

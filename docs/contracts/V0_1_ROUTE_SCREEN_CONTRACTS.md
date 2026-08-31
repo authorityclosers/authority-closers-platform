@@ -29,10 +29,11 @@ Challenge tokens are JSON-body fields, never query parameters. Onboarding and
 draft writes use revision preconditions. User-visible errors do not expose
 account existence or internal provider/database details.
 
-Learner Google registration is not exposed in v0.1. Google authentication is
-only for an existing eligible person whose exact learner consent version can
-be verified server-side; a future registration flow must bind consent into the
-signed OAuth transaction before it can be enabled.
+Learner Google registration is exposed only after explicit learner consent is
+recorded in the start request, bound into the signed OAuth transaction, and
+revalidated against the exact active consent version before provider exchange.
+Google authentication remains existing-identity-only; it cannot silently turn
+an unknown provider identity into a learner registration.
 
 ## Identity and onboarding API contract
 
@@ -50,6 +51,9 @@ signed OAuth transaction before it can be enabled.
 Session, OAuth transaction, and email-challenge cryptography require three
 mutually independent deployment secrets. Challenge ciphertext exists only to
 let the durable post-commit worker create an email; lookup uses a keyed hash.
+The versioned verification, reset, and enrollment-welcome renderers and their
+external-delivery gate are defined in
+[`V0_1_TRANSACTIONAL_EMAIL_CONTRACT.md`](V0_1_TRANSACTIONAL_EMAIL_CONTRACT.md).
 
 ## Admin/studio boundary
 

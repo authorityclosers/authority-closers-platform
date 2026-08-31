@@ -124,6 +124,14 @@ describe("learner Clarity Grid slice", () => {
     );
 
     expect(authStyles.match(/@media \(max-width: 960px\)/g)).toHaveLength(2);
+    expect(authStyles).toContain(".clarity-auth-mobile-header");
+    expect(authStyles).toMatch(
+      /\.site-frame--auth \.clarity-auth-context \{[^}]*display: none;/s,
+    );
+    expect(authStyles).toContain("env(safe-area-inset-bottom)");
+    expect(authStyles).toMatch(
+      /\.site-frame--auth \.clarity-auth-card \.button--ink,[^{]+\{[^}]*min-height: 52px;/s,
+    );
     expect(onboardingStyles).toContain("@media (max-width: 960px)");
     expect(learnerStyles).toMatch(
       /\.site-frame--learner \.button \{[^}]*min-height: 44px;/s,

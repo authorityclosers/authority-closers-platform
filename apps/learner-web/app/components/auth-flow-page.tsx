@@ -33,6 +33,27 @@ export function AuthFlowPage({
       </a>
       <main id="main-content" className="auth-main clarity-auth-main">
         <div className="auth-layout clarity-auth-layout">
+          <header className="clarity-auth-mobile-header">
+            <Link
+              className="clarity-auth-mobile-back"
+              href={backHref}
+              aria-label={backLabel}
+            >
+              <ArrowLeft size={19} aria-hidden="true" />
+            </Link>
+            <div className="clarity-auth-mobile-brand">
+              <span className="clarity-auth-mobile-mark">
+                <BrandMark aria-hidden="true" />
+              </span>
+              <span>
+                <strong role="heading" aria-level={1}>
+                  Authority Closers
+                </strong>
+                <small>Learning &amp; Practice OS</small>
+              </span>
+            </div>
+            <span className="clarity-auth-mobile-status">Secure</span>
+          </header>
           <div className="auth-context clarity-auth-context">
             <Link className="text-link clarity-auth-back" href={backHref}>
               <ArrowLeft size={15} aria-hidden="true" /> {backLabel}
@@ -50,7 +71,7 @@ export function AuthFlowPage({
                 <span className="clarity-auth-brand-mark">
                   <BrandMark aria-hidden="true" />
                 </span>
-                <span>Authority LMS v0.1</span>
+                <span>Authority Closers · Learning &amp; Practice OS</span>
               </div>
               <p className="eyebrow">
                 <span aria-hidden="true" /> {eyebrow}

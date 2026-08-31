@@ -7,7 +7,7 @@ import os
 import pytest
 
 pytest.importorskip("playwright.sync_api")
-from playwright.sync_api import Route, sync_playwright  # noqa: E402
+from playwright.sync_api import Route, expect, sync_playwright  # noqa: E402
 
 
 @pytest.mark.e2e
@@ -30,12 +30,15 @@ def test_register_page_submits_explicit_google_consent() -> None:
         page.goto(f"{base_url.rstrip('/')}/register")
 
         google_form = page.locator('form[action*="action=register"]')
-        consent = google_form.get_by_role("checkbox", name="I confirm")
+        consent = page.get_by_role("checkbox", name="I confirm")
+        google_button = google_form.get_by_role("button", name="Continue with Google")
         assert consent.is_visible()
-        assert google_form.get_by_role("button", name="Continue with Google").is_visible()
+        assert google_button.is_visible()
+        assert google_button.is_disabled()
 
         consent.check()
-        google_form.get_by_role("button", name="Continue with Google").click()
+        expect(google_button).to_be_enabled()
+        google_button.click()
 
         assert submitted_url is not None
         assert "action=register" in submitted_url

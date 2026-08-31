@@ -13,6 +13,15 @@ fi
 grep -q 'export INFISICAL_TOKEN=' "$foundation/scripts/ac-infisical-run"
 grep -q 'export INFISICAL_TOKEN=' "$foundation/scripts/ac-infisical-run-backup"
 
+grep -q 'AC_RESEND_TEST_RECIPIENT is required' \
+  "$foundation/scripts/ac-resend-send-test-inner"
+grep -q 'admin@authorityclosers.com' \
+  "$foundation/scripts/ac-resend-send-test-inner"
+grep -q '\[string\]\$ZoneName = "authorityclosers.com"' \
+  "$foundation/scripts/configure-resend-domain.ps1"
+grep -q '\[string\]\$DomainName = "authorityclosers.com"' \
+  "$foundation/scripts/configure-resend-domain.ps1"
+
 # The PowerShell token is intentionally literal in this static policy check.
 # shellcheck disable=SC2016
 if grep -Eq '\[Parameter\(Mandatory = \$true\)\].*(ApiToken|ApiKey)' \

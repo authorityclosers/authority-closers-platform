@@ -1,7 +1,7 @@
 param(
     [string]$ZoneId = $env:CLOUDFLARE_ZONE_ID,
-    [string]$ZoneName = "dipakvishwakarma.com",
-    [string]$DomainName = "notify.dipakvishwakarma.com"
+    [string]$ZoneName = "authorityclosers.com",
+    [string]$DomainName = "authorityclosers.com"
 )
 
 $ErrorActionPreference = "Stop"
@@ -12,6 +12,9 @@ if ([string]::IsNullOrWhiteSpace($resendApiKey) -or [string]::IsNullOrWhiteSpace
 }
 if ([string]::IsNullOrWhiteSpace($ZoneId)) {
     throw "Set CLOUDFLARE_ZONE_ID or pass the non-secret zone ID explicitly."
+}
+if ($ZoneName -ne "authorityclosers.com" -or $DomainName -ne "authorityclosers.com") {
+    throw "This AC release may configure only the reviewed authorityclosers.com Resend sending domain."
 }
 $resendHeaders = @{ Authorization = "Bearer $resendApiKey" }
 $cloudflareHeaders = @{ Authorization = "Bearer $cloudflareApiToken" }

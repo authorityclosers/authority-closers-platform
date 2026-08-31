@@ -1,6 +1,13 @@
 "use client";
 
-import { ArrowRight, CheckCircle2, KeyRound, MailCheck } from "lucide-react";
+import {
+  ArrowRight,
+  CheckCircle2,
+  Eye,
+  EyeOff,
+  KeyRound,
+  MailCheck,
+} from "lucide-react";
 import Link from "next/link";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
@@ -27,6 +34,8 @@ function fragmentToken(): string | null {
 export function RegistrationForm() {
   const [pending, setPending] = useState(false);
   const [complete, setComplete] = useState(false);
+  const [consentGranted, setConsentGranted] = useState(false);
+  const [passwordVisible, setPasswordVisible] = useState(false);
   const [error, setError] = useState<string | null>(null);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -79,10 +88,10 @@ export function RegistrationForm() {
         </span>
         <span>Free learner account</span>
       </div>
-      <h2>Name the next rep.</h2>
+      <h2>Create your learner account.</h2>
       <p className="auth-card__intro">
-        Create one verified learner identity for progress, workbook evidence,
-        and recovery.
+        Start the free course and keep progress, reflections, and recovery tied
+        to one verified identity.
       </p>
       <form className="stack-form" onSubmit={submit}>
         <div className="field-group">
@@ -133,24 +142,47 @@ export function RegistrationForm() {
         </div>
         <div className="field-group">
           <label htmlFor="register-password">Password</label>
-          <input
-            id="register-password"
-            name="password"
-            type="password"
-            autoComplete="new-password"
-            placeholder="At least 12 characters"
-            required
-            minLength={12}
-            maxLength={256}
-            aria-describedby="register-password-help"
-            disabled={pending}
-          />
+          <div className="auth-password-field">
+            <input
+              id="register-password"
+              name="password"
+              type={passwordVisible ? "text" : "password"}
+              autoComplete="new-password"
+              placeholder="At least 12 characters"
+              required
+              minLength={12}
+              maxLength={256}
+              aria-describedby="register-password-help"
+              disabled={pending}
+            />
+            <button
+              className="auth-password-toggle"
+              type="button"
+              aria-label={passwordVisible ? "Hide password" : "Show password"}
+              aria-pressed={passwordVisible}
+              onClick={() => setPasswordVisible((visible) => !visible)}
+              disabled={pending}
+            >
+              {passwordVisible ? (
+                <EyeOff size={18} aria-hidden="true" />
+              ) : (
+                <Eye size={18} aria-hidden="true" />
+              )}
+            </button>
+          </div>
           <p id="register-password-help" className="field-help">
             Use at least 12 characters. Password managers are supported.
           </p>
         </div>
         <label className="consent-check">
-          <input name="consent" type="checkbox" required disabled={pending} />
+          <input
+            name="consent"
+            type="checkbox"
+            required
+            disabled={pending}
+            checked={consentGranted}
+            onChange={(event) => setConsentGranted(event.currentTarget.checked)}
+          />
           <span>
             I confirm I am 18 or older, agree to the staging{" "}
             <Link href={ROUTES.terms}>Terms</Link>, acknowledge the{" "}
@@ -180,17 +212,17 @@ export function RegistrationForm() {
         <input type="hidden" name="action" value="register" />
         <input type="hidden" name="surface" value="learner" />
         <input type="hidden" name="return_path" value="/home" />
-        <label className="consent-check">
-          <input name="consent" type="checkbox" value="true" required />
-          <span>
-            I confirm I am 18 or older, agree to the staging{" "}
-            <Link href={ROUTES.terms}>Terms</Link>, acknowledge the{" "}
-            <Link href={ROUTES.privacy}>Privacy notice</Link>, and authorize the
-            account-verification, security, and course-access emails needed to
-            operate this test.
-          </span>
-        </label>
-        <button className="button button--outline button--full" type="submit">
+        <input
+          type="hidden"
+          name="consent"
+          value="true"
+          disabled={!consentGranted}
+        />
+        <button
+          className="button button--outline button--full"
+          type="submit"
+          disabled={!consentGranted || pending}
+        >
           Continue with Google
           <ArrowRight size={17} aria-hidden="true" />
         </button>
@@ -413,6 +445,7 @@ export function PasswordResetForm() {
   const [pending, setPending] = useState(false);
   const [complete, setComplete] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [passwordVisible, setPasswordVisible] = useState(false);
 
   useEffect(() => {
     const value = fragmentToken();
@@ -490,29 +523,47 @@ export function PasswordResetForm() {
       <form className="stack-form" onSubmit={submit}>
         <div className="field-group">
           <label htmlFor="reset-password">New password</label>
-          <input
-            id="reset-password"
-            name="password"
-            type="password"
-            autoComplete="new-password"
-            required
-            minLength={12}
-            maxLength={256}
-            disabled={pending}
-          />
+          <div className="auth-password-field">
+            <input
+              id="reset-password"
+              name="password"
+              type={passwordVisible ? "text" : "password"}
+              autoComplete="new-password"
+              required
+              minLength={12}
+              maxLength={256}
+              disabled={pending}
+            />
+            <button
+              className="auth-password-toggle"
+              type="button"
+              aria-label={passwordVisible ? "Hide passwords" : "Show passwords"}
+              aria-pressed={passwordVisible}
+              onClick={() => setPasswordVisible((visible) => !visible)}
+              disabled={pending}
+            >
+              {passwordVisible ? (
+                <EyeOff size={18} aria-hidden="true" />
+              ) : (
+                <Eye size={18} aria-hidden="true" />
+              )}
+            </button>
+          </div>
         </div>
         <div className="field-group">
           <label htmlFor="reset-password-confirm">Confirm new password</label>
-          <input
-            id="reset-password-confirm"
-            name="passwordConfirm"
-            type="password"
-            autoComplete="new-password"
-            required
-            minLength={12}
-            maxLength={256}
-            disabled={pending}
-          />
+          <div className="auth-password-field">
+            <input
+              id="reset-password-confirm"
+              name="passwordConfirm"
+              type={passwordVisible ? "text" : "password"}
+              autoComplete="new-password"
+              required
+              minLength={12}
+              maxLength={256}
+              disabled={pending}
+            />
+          </div>
         </div>
         {error ? (
           <p className="form-message form-message--error" role="alert">

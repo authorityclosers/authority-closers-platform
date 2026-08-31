@@ -64,6 +64,101 @@ def _action_link(variables: Mapping[str, Any]) -> str:
     return link
 
 
+def _expiry_label(variables: Mapping[str, Any]) -> str:
+    value = _required_text(variables, "expires_at", maximum=64)
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as error:
+        raise PermanentProviderError("email expiry must be an ISO-8601 timestamp") from error
+    if parsed.tzinfo is None:
+        raise PermanentProviderError("email expiry must include a timezone")
+    return parsed.astimezone(UTC).strftime("%d %b %Y at %H:%M UTC")
+
+
+def _email_layout(
+    *,
+    preheader: str,
+    eyebrow: str,
+    heading: str,
+    greeting: str,
+    paragraphs: tuple[str, ...],
+    action_label: str,
+    action_link: str,
+    security_note: str,
+) -> str:
+    """Render a client-safe responsive transactional email shell.
+
+    All caller-supplied values must already be escaped. The template uses
+    tables and inline styles for broad email-client support while retaining a
+    small mobile override for narrow screens.
+    """
+
+    paragraph_html = "".join(
+        f'<p style="margin:0 0 16px;color:#435066;font-size:16px;line-height:1.65;">{item}</p>'
+        for item in paragraphs
+    )
+    return (
+        '<!doctype html><html lang="en"><head>'
+        '<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+        '<meta name="x-apple-disable-message-reformatting">'
+        "<title>Authority Closers</title>"
+        "<style>"
+        "@media screen and (max-width:620px){"
+        ".ac-shell{padding:20px 10px!important}.ac-card{border-radius:14px!important}"
+        ".ac-content{padding:30px 22px!important}.ac-title{font-size:30px!important}"
+        ".ac-button{display:block!important;text-align:center!important}"
+        "}"
+        "</style></head>"
+        '<body style="margin:0;padding:0;background:#f3f6fb;color:#0f1b33;'
+        'font-family:Inter,-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Arial,sans-serif;">'
+        '<div style="display:none;max-height:0;overflow:hidden;opacity:0;'
+        f'color:transparent;">{preheader}</div>'
+        '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" '
+        'style="width:100%;background:#f3f6fb;"><tr><td class="ac-shell" align="center" '
+        'style="padding:42px 16px;">'
+        '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" '
+        'style="width:100%;max-width:640px;">'
+        '<tr><td style="padding:0 4px 18px;">'
+        '<table role="presentation" cellspacing="0" cellpadding="0" border="0"><tr>'
+        '<td style="width:38px;height:38px;border-radius:10px;background:#18244a;color:#ffffff;'
+        'font-size:13px;font-weight:800;letter-spacing:.08em;text-align:center;vertical-align:middle;">AC</td>'
+        '<td style="padding-left:12px;color:#0f1b33;font-size:17px;'
+        'font-weight:800;line-height:1.2;">'
+        'Authority Closers<br><span style="color:#667085;font-size:12px;font-weight:600;">'
+        "Learning &amp; Practice OS</span></td></tr></table></td></tr>"
+        '<tr><td class="ac-card" style="overflow:hidden;border:1px solid #dfe5ee;'
+        "border-radius:20px;"
+        'background:#ffffff;box-shadow:0 16px 38px rgba(15,27,51,.08);">'
+        '<div style="height:7px;background:#4f46e5;line-height:7px;">&nbsp;</div>'
+        '<div class="ac-content" style="padding:44px 46px 40px;">'
+        f'<p style="margin:0 0 18px;color:#4f46e5;font-size:12px;'
+        f"font-weight:800;letter-spacing:.12em;"
+        f'text-transform:uppercase;">{eyebrow}</p>'
+        f'<h1 class="ac-title" style="margin:0 0 22px;color:#0f1b33;'
+        f"font-size:38px;line-height:1.12;"
+        f'letter-spacing:-.035em;">{heading}</h1>'
+        f'<p style="margin:0 0 16px;color:#0f1b33;font-size:17px;line-height:1.55;">{greeting}</p>'
+        f"{paragraph_html}"
+        '<table role="presentation" cellspacing="0" cellpadding="0" border="0" '
+        'style="margin:28px 0 26px;"><tr><td style="border-radius:9px;background:#4f46e5;">'
+        f'<a class="ac-button" href="{action_link}" style="display:inline-block;padding:15px 24px;'
+        f'color:#ffffff;font-size:15px;font-weight:800;text-decoration:none;">{action_label}</a>'
+        "</td></tr></table>"
+        '<div style="margin-top:8px;padding:15px 16px;border:1px solid #d9e0f5;border-radius:10px;'
+        'background:#f6f7ff;color:#3f4b63;font-size:13px;line-height:1.55;">'
+        f'<strong style="color:#18244a;">Security note</strong><br>{security_note}</div>'
+        '<p style="margin:24px 0 0;color:#7a8495;font-size:12px;line-height:1.6;">'
+        "If the button does not open, copy this secure link into your browser:<br>"
+        f'<a href="{action_link}" style="color:#3730a3;word-break:break-all;">{action_link}</a></p>'
+        "</div></td></tr>"
+        '<tr><td style="padding:20px 8px 0;color:#7a8495;font-size:11px;'
+        'line-height:1.55;text-align:center;">'
+        "Authority Closers · Transactional service message<br>"
+        "Sent only for account security or learner access. No marketing subscription was added."
+        "</td></tr></table></td></tr></table></body></html>"
+    )
+
+
 def render_email(message: EmailMessage) -> RenderedEmail:
     """Render one exact approved template without accepting arbitrary markup."""
 
@@ -77,18 +172,32 @@ def render_email(message: EmailMessage) -> RenderedEmail:
             raise PermanentProviderError("verification template has the wrong communication class")
         link = _action_link(message.variables)
         safe_link = html.escape(link, quote=True)
+        expires = _expiry_label(message.variables)
+        safe_expiry = html.escape(expires)
         return RenderedEmail(
-            subject="Verify your Authority Closers email",
+            subject="Verify your email — Authority Closers",
             text=(
-                f"Hi {first_name},\n\nVerify your email to finish creating your Authority "
-                f"Closers account:\n{link}\n\nIf you did not request this, you can ignore this "
-                "message."
+                f"Hi {first_name},\n\nConfirm your email to activate your Authority Closers "
+                f"learner account and protect your learning record.\n\nVerify my email:\n{link}"
+                f"\n\nThis one-time link expires {expires}. If you did not create this account, "
+                "ignore this message."
             ),
-            html=(
-                f"<p>Hi {safe_name},</p>"
-                "<p>Verify your email to finish creating your Authority Closers account.</p>"
-                f'<p><a href="{safe_link}">Verify email</a></p>'
-                "<p>If you did not request this, you can ignore this message.</p>"
+            html=_email_layout(
+                preheader="Confirm your email to activate your learner account.",
+                eyebrow="Account verification",
+                heading="Your learning record starts here.",
+                greeting=f"Hi {safe_name},",
+                paragraphs=(
+                    "Confirm this email address to activate your learner account and keep "
+                    "course access, progress, and workbook evidence attached to you.",
+                    f"This one-time link expires on <strong>{safe_expiry}</strong>.",
+                ),
+                action_label="Verify my email",
+                action_link=safe_link,
+                security_note=(
+                    "If you did not create an Authority Closers account, ignore this message. "
+                    "The link can be used only once."
+                ),
             ),
         )
 
@@ -99,18 +208,32 @@ def render_email(message: EmailMessage) -> RenderedEmail:
             )
         link = _action_link(message.variables)
         safe_link = html.escape(link, quote=True)
+        expires = _expiry_label(message.variables)
+        safe_expiry = html.escape(expires)
         return RenderedEmail(
-            subject="Reset your Authority Closers password",
+            subject="Reset your password — Authority Closers",
             text=(
-                f"Hi {first_name},\n\nUse this secure link to reset your Authority Closers "
-                f"password:\n{link}\n\nIf you did not request a reset, you can ignore this "
-                "message."
+                f"Hi {first_name},\n\nA password reset was requested for your Authority "
+                f"Closers learner account.\n\nChoose a new password:\n{link}\n\nThis "
+                f"one-time link expires {expires}. If you did not request a reset, ignore "
+                "this message; your current password stays unchanged."
             ),
-            html=(
-                f"<p>Hi {safe_name},</p>"
-                "<p>Use this secure link to reset your Authority Closers password.</p>"
-                f'<p><a href="{safe_link}">Reset password</a></p>'
-                "<p>If you did not request a reset, you can ignore this message.</p>"
+            html=_email_layout(
+                preheader="Use this one-time link to choose a new password.",
+                eyebrow="Password recovery",
+                heading="Reset access. Keep your work.",
+                greeting=f"Hi {safe_name},",
+                paragraphs=(
+                    "A password reset was requested for your learner account. Your course "
+                    "progress and saved evidence are not changed by this request.",
+                    f"This one-time link expires on <strong>{safe_expiry}</strong>.",
+                ),
+                action_label="Choose a new password",
+                action_link=safe_link,
+                security_note=(
+                    "If you did not request this reset, ignore this message. Your current "
+                    "password remains active and this link will expire automatically."
+                ),
             ),
         )
 
@@ -123,12 +246,25 @@ def render_email(message: EmailMessage) -> RenderedEmail:
             subject="Your Authority Closers course access is ready",
             text=(
                 f"Hi {first_name},\n\nYour free Authority Closers course access is ready. "
-                f"Continue with your next learning action:\n{link}"
+                f"Continue with your next learning action:\n{link}\n\nYour progress and workbook "
+                "evidence stay attached to your verified learner identity."
             ),
-            html=(
-                f"<p>Hi {safe_name},</p>"
-                "<p>Your free Authority Closers course access is ready.</p>"
-                f'<p><a href="{safe_link}">Continue learning</a></p>'
+            html=_email_layout(
+                preheader="Your free course access is ready. Start your next learning action.",
+                eyebrow="Course access ready",
+                heading="You’re in. Start the first honest rep.",
+                greeting=f"Hi {safe_name},",
+                paragraphs=(
+                    "Your free Authority Closers course access is ready. Begin with the next "
+                    "clear learning action, then reflect and put it to work.",
+                    "Your progress and workbook evidence stay attached to your verified identity.",
+                ),
+                action_label="Continue learning",
+                action_link=safe_link,
+                security_note=(
+                    "This link opens your learner workspace. Sign in only at the official "
+                    "Authority Closers domain."
+                ),
             ),
         )
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, ShieldCheck } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { type FormEvent, useState } from "react";
 
@@ -13,10 +13,15 @@ function errorMessage(error: unknown): string {
   return "The request did not finish. Check your connection and try again.";
 }
 
-export function LoginForm() {
+type LoginFormProps = {
+  sessionExpired?: boolean;
+};
+
+export function LoginForm({ sessionExpired = false }: LoginFormProps) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [verificationRequired, setVerificationRequired] = useState(false);
+  const [passwordVisible, setPasswordVisible] = useState(false);
   const authenticateUrl = googleAuthStartUrl("authenticate");
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -47,13 +52,21 @@ export function LoginForm() {
         <span className="auth-card__icon">
           <ShieldCheck size={18} aria-hidden="true" />
         </span>
-        <span>Secure session boundary</span>
+        <span>
+          {sessionExpired ? "Session recovery" : "Secure learner access"}
+        </span>
       </div>
-      <h2>Come back to the work.</h2>
+      <h2>{sessionExpired ? "Sign in to continue." : "Welcome back."}</h2>
       <p className="auth-card__intro">
-        Use your verified email and password. The browser receives only an
-        opaque, secure session cookie.
+        Use your verified email and password to continue from your saved
+        learning state.
       </p>
+      {sessionExpired ? (
+        <div className="auth-notice" role="status">
+          <ShieldCheck size={18} aria-hidden="true" />
+          <span>Your progress and saved workbook evidence are still safe.</span>
+        </div>
+      ) : null}
       <form className="stack-form" onSubmit={submit}>
         <div className="field-group">
           <label htmlFor="login-email">Email address</label>
@@ -69,14 +82,30 @@ export function LoginForm() {
         </div>
         <div className="field-group">
           <label htmlFor="login-password">Password</label>
-          <input
-            id="login-password"
-            name="password"
-            type="password"
-            autoComplete="current-password"
-            required
-            disabled={pending}
-          />
+          <div className="auth-password-field">
+            <input
+              id="login-password"
+              name="password"
+              type={passwordVisible ? "text" : "password"}
+              autoComplete="current-password"
+              required
+              disabled={pending}
+            />
+            <button
+              className="auth-password-toggle"
+              type="button"
+              aria-label={passwordVisible ? "Hide password" : "Show password"}
+              aria-pressed={passwordVisible}
+              onClick={() => setPasswordVisible((visible) => !visible)}
+              disabled={pending}
+            >
+              {passwordVisible ? (
+                <EyeOff size={18} aria-hidden="true" />
+              ) : (
+                <Eye size={18} aria-hidden="true" />
+              )}
+            </button>
+          </div>
         </div>
         {error ? (
           <div className="form-message form-message--error" role="alert">
@@ -89,7 +118,7 @@ export function LoginForm() {
           </div>
         ) : null}
         <button className="button button--ink button--full" disabled={pending}>
-          {pending ? "Signing in…" : "Continue with email"}
+          {pending ? "Signing in…" : "Sign in"}
           <ArrowRight size={17} aria-hidden="true" />
         </button>
         <Link className="text-link" href={ROUTES.forgotPassword}>

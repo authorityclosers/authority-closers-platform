@@ -39,7 +39,7 @@ Status meanings:
 | Drive asset | Status | v0.1 treatment |
 | --- | --- | --- |
 | `AUTH-01-desktop-registration.png` (`1K9qpP-OTsgyuhJ3mtmZYDj2-7EFv_MJb`) | candidate | Email/password registration composition with consent and validation; no invented Google registration. |
-| `AUTH-02-desktop-verification.png` (`1NLx4nRVxS_5bsu9hOMjEHW5Yb25GwNr5`) | partial | Verification/recovery visual family is implemented; real external email delivery remains provider-gated. |
+| `AUTH-02-desktop-verification.png` (`1NLx4nRVxS_5bsu9hOMjEHW5Yb25GwNr5`) | partial | Verification/recovery visual family and branded responsive verification/reset/welcome email renderers are implemented; real external email delivery remains provider-gated. |
 | `ONB-01-desktop-context.png` (`1-iZ5l-57RezRmFYyXcyY45jWiIFTF0um`) | candidate | Three-step progressive onboarding inside the learner workspace shell. |
 | `ONB-02-mobile-context.png` (`1ewm-HXQZv10tkfq3UNvly4JWHeIAFOWT`) | candidate | Mobile onboarding composition with skip/save behavior and session-expiry recovery. |
 

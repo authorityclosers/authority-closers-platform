@@ -397,7 +397,8 @@ describe("honest preview controls", () => {
     const login = renderToStaticMarkup(createElement(LoginForm));
     const onboarding = renderToStaticMarkup(createElement(OnboardingForm));
 
-    expect(login).toContain("Continue with email");
+    expect(login).toContain("Sign in");
+    expect(login).toContain('aria-label="Show password"');
     expect(login).toContain('autoComplete="current-password"');
     expect(login).toContain('href="/forgot-password"');
     expect(login).toContain('href="/register"');
@@ -421,6 +422,7 @@ describe("honest preview controls", () => {
     expect(registration).toContain("Continue with Google");
     expect(registration).toContain('name="consent"');
     expect(registration).toContain('value="true"');
+    expect(registration.match(/type="checkbox"/g)).toHaveLength(1);
     expect(registration).not.toContain("Apple");
     expect(verification).toContain("one-time link");
     expect(verification).toContain("clarity-auth-brand-media");

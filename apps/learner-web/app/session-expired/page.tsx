@@ -12,7 +12,7 @@ export default function SessionExpiredPage() {
       backHref={ROUTES.home}
       backLabel="Return to the public catalog"
     >
-      <LoginForm />
+      <LoginForm sessionExpired />
     </AuthFlowPage>
   );
 }
