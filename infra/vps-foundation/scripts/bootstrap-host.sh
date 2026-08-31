@@ -4,7 +4,7 @@ set -euo pipefail
 phase="${1:-}"
 admin_key_path="${2:-}"
 admin_user="${AC_ADMIN_USER:-suyash}"
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+repo_root="$(cd -P "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 
 require_root() {
   if [[ "$(id -u)" -ne 0 ]]; then
@@ -14,7 +14,7 @@ require_root() {
 }
 
 verify_bootstrap_source() {
-  local release_id archive archive_sha release_sha verified_root
+  local release_id archive archive_sha release_sha verified_root manifest_expected metadata_file
   release_id="${AC_RELEASE_ID:-}"
   archive="${AC_RELEASE_ARCHIVE:-}"
   archive_sha="${AC_RELEASE_ARCHIVE_SHA256:-}"
@@ -31,6 +31,58 @@ verify_bootstrap_source() {
 
   verified_root="$(mktemp -d /tmp/ac-bootstrap-source.XXXXXX)"
   tar --extract --file="$archive" --directory="$verified_root" --strip-components=2
+  if [[ "${repo_root%/*}" == */srv/authority-closers/releases \
+    || -e "$repo_root/RELEASE-COMMIT" \
+    || -e "$repo_root/RELEASE-ID" \
+    || -e "$repo_root/RELEASE-FILES.sha256" ]]; then
+    [[ -f "$repo_root/RELEASE-COMMIT" \
+      && -f "$repo_root/RELEASE-ID" \
+      && -f "$repo_root/RELEASE-FILES.sha256" ]] || {
+      case "$verified_root" in
+        /tmp/ac-bootstrap-source.*) rm -rf -- "$verified_root" ;;
+        *) printf 'Refusing to remove unexpected verification path: %s\n' "$verified_root" >&2 ;;
+      esac
+      printf 'Installed foundation release metadata is incomplete.\n' >&2
+      exit 1
+    }
+    [[ "${repo_root##*/}" == "$release_id" \
+      && "$(<"$repo_root/RELEASE-COMMIT")" == "$release_sha" \
+      && "$(<"$repo_root/RELEASE-ID")" == "$release_id" ]] || {
+      case "$verified_root" in
+        /tmp/ac-bootstrap-source.*) rm -rf -- "$verified_root" ;;
+        *) printf 'Refusing to remove unexpected verification path: %s\n' "$verified_root" >&2 ;;
+      esac
+      printf 'Installed foundation release identity does not match the reviewed archive.\n' >&2
+      exit 1
+    }
+    (cd "$repo_root" && sha256sum --check --strict RELEASE-FILES.sha256 >/dev/null) || {
+      case "$verified_root" in
+        /tmp/ac-bootstrap-source.*) rm -rf -- "$verified_root" ;;
+        *) printf 'Refusing to remove unexpected verification path: %s\n' "$verified_root" >&2 ;;
+      esac
+      printf 'Installed foundation release manifest verification failed.\n' >&2
+      exit 1
+    }
+    manifest_expected="$(mktemp "$verified_root/.installed-manifest.XXXXXX")"
+    (
+      cd "$repo_root"
+      while IFS= read -r -d '' release_file; do
+        sha256sum "$release_file"
+      done < <(find . -type f ! -path './RELEASE-FILES.sha256' -print0 | LC_ALL=C sort -z)
+    ) > "$manifest_expected"
+    cmp --silent "$manifest_expected" "$repo_root/RELEASE-FILES.sha256" || {
+      case "$verified_root" in
+        /tmp/ac-bootstrap-source.*) rm -rf -- "$verified_root" ;;
+        *) printf 'Refusing to remove unexpected verification path: %s\n' "$verified_root" >&2 ;;
+      esac
+      printf 'Installed foundation release manifest does not cover the exact release files.\n' >&2
+      exit 1
+    }
+    rm -- "$manifest_expected"
+    for metadata_file in RELEASE-COMMIT RELEASE-ID RELEASE-FILES.sha256; do
+      cp -- "$repo_root/$metadata_file" "$verified_root/$metadata_file"
+    done
+  fi
   if ! diff --brief --recursive --no-dereference "$verified_root" "$repo_root" >/dev/null; then
     case "$verified_root" in
       /tmp/ac-bootstrap-source.*) rm -rf -- "$verified_root" ;;
@@ -390,6 +442,11 @@ phase_activate() {
       ;;
   esac
 }
+
+if [[ "${AC_BOOTSTRAP_VERIFY_ONLY:-}" == 1 ]]; then
+  verify_bootstrap_source
+  exit 0
+fi
 
 require_root
 verify_bootstrap_source
