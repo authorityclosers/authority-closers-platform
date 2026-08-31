@@ -8,6 +8,7 @@ import CertificatePage from "../certificates/[certificateId]/page";
 import { ActivityRenderer } from "../components/activity-renderers";
 import {
   ConnectedActivityWorkspace,
+  identityState,
   LearningActivityNavigation,
   LearnerHomeEnrollmentCard,
 } from "../components/learner-runtime";
@@ -48,7 +49,11 @@ import {
   SURFACE_STATE_ORDER,
   type SurfaceState,
 } from "./surface-state";
-import type { ActivityResponse } from "./learner-api";
+import type {
+  ActivityResponse,
+  LearnerApi,
+  LearningResponse,
+} from "./learner-api";
 
 function h1Count(html: string): number {
   return html.match(/<h1(?:\s|>)/g)?.length ?? 0;
@@ -577,6 +582,67 @@ describe("connected learner ready states", () => {
     draft_revision: 0,
     draft_payload: null,
   };
+
+  it("discovers the first server-authorized learning path for learner home", async () => {
+    const learning = {
+      program_id: "program-1",
+      program_version_id: "version-1",
+      program_slug: "free-course",
+      program_title: "Authority Closers Free Course",
+      version_number: 1,
+      enrollment_id: "enrollment-1",
+      modules: [],
+      projection: {
+        scope_type: "program",
+        scope_id: "program-1",
+        program_version: "version-1",
+        projection_version: "v1",
+        denominator: 5,
+        completed_count: 0,
+        percentage: 0,
+        predicate: "required activities completed",
+        missing_module_ids: [],
+        activity_reasons: [],
+      },
+    } satisfies LearningResponse;
+    const api = {
+      me: async () => ({
+        person_id: "person-1",
+        email: "learner@example.com",
+        display_name: "Learner",
+        email_verified_at: "2026-08-31T00:00:00Z",
+        selected_tenant_id: "tenant-1",
+        membership_role: "learner",
+        permissions: [],
+      }),
+      context: async () => ({
+        person_id: "person-1",
+        session_id: "session-1",
+        tenant_id: "tenant-1",
+        membership_role: "learner",
+        permissions: [],
+      }),
+      listPrograms: async () => ({
+        items: [
+          {
+            id: "program-1",
+            slug: "free-course",
+            title: "Authority Closers Free Course",
+            program_version_id: "version-1",
+            version_number: 1,
+            published_at: "2026-08-31T00:00:00Z",
+          },
+        ],
+        next_cursor: null,
+      }),
+      learning: async (programId: string) => {
+        expect(programId).toBe("program-1");
+        return learning;
+      },
+    } as unknown as LearnerApi;
+
+    await expect(identityState(api)).resolves.toMatchObject({ learning });
+  });
 
   it("keeps activity controls disabled when the server has no prompt", () => {
     const html = renderToStaticMarkup(

@@ -323,7 +323,7 @@ export function PublicProgramDetail({
   );
 }
 
-function identityState(
+export async function identityState(
   api: LearnerApi,
   programId?: string,
 ): Promise<{
@@ -331,17 +331,22 @@ function identityState(
   context: ContextResponse;
   learning?: LearningResponse;
 }> {
-  return Promise.all([api.me(), api.context()]).then(async ([me, context]) => {
-    let learning: LearningResponse | undefined;
-    if (programId) {
-      try {
-        learning = await api.learning(programId);
-      } catch (error) {
-        if (!(error instanceof ApiError) || error.status !== 404) throw error;
-      }
+  const [me, context] = await Promise.all([api.me(), api.context()]);
+  const candidateProgramIds = programId
+    ? [programId]
+    : (await api.listPrograms()).items.map((program) => program.id);
+  let learning: LearningResponse | undefined;
+
+  for (const candidateProgramId of candidateProgramIds) {
+    try {
+      learning = await api.learning(candidateProgramId);
+      break;
+    } catch (error) {
+      if (!(error instanceof ApiError) || error.status !== 404) throw error;
     }
-    return { me, context, learning };
-  });
+  }
+
+  return { me, context, learning };
 }
 
 function projectionLabel(projection: LearningResponse["projection"]): string {
