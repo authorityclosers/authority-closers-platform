@@ -588,13 +588,23 @@ class AsyncIdentityApplication:
             expected_person_id=None,
             current_time=current_time,
         )
-        matches = await self._lock_provider_key(validated)
-        if matches:
-            identity = matches[0]
+        unlocked = tuple(
+            await self._repository.find_provider_identities(
+                validated.issuer,
+                validated.subject,
+            )
+        )
+        if len(unlocked) > 1:
+            raise AmbiguousProviderIdentityError("provider key resolves to multiple identities")
+        if unlocked:
             person = await self._lock_person(
-                identity.person_id,
+                unlocked[0].person_id,
                 provider_email=validated.email,
             )
+            matches = await self._lock_provider_key(validated)
+            if not matches or matches[0].person_id != person.id:
+                raise IdentityResolutionError("provider identity changed during registration")
+            identity = matches[0]
             if person.consent_version not in {None, normalized_consent_version}:
                 raise ConflictingProviderIdentityError(
                     "provider identity has a different recorded consent version"
@@ -636,7 +646,11 @@ class AsyncIdentityApplication:
             consented_at=current_time,
         )
         await self._repository.save_person(person)
-        await self._link_provider_key(person, validated, current_time=current_time)
+        linked = await self._link_provider_key(person, validated, current_time=current_time)
+        if linked.person_id != person.id:  # pragma: no cover - enforced by the linker
+            raise IdentityConcurrencyError(
+                "provider registration did not retain its canonical person"
+            )
         issued = await self._issue_session(
             person,
             current_time=current_time,

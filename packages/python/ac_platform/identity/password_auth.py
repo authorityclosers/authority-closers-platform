@@ -491,9 +491,26 @@ class PasswordIdentityService:
         ):
             raise InvalidEmailChallenge("the email challenge is not valid")
         current = (now or utc_now()).astimezone(UTC)
+        candidate = await self.session.scalar(
+            select(EmailChallenge).where(
+                EmailChallenge.kind == kind.value,
+                EmailChallenge.token_hash == hash_challenge_token(self.token_secret, token),
+                EmailChallenge.consumed_at.is_(None),
+                EmailChallenge.expires_at > current,
+            )
+        )
+        if candidate is None:
+            raise InvalidEmailChallenge("the email challenge is not valid")
+        person = await self.session.scalar(
+            select(Person).where(Person.id == candidate.person_id).with_for_update()
+        )
+        if person is None or person.status != PersonStatus.ACTIVE.value:
+            raise InvalidEmailChallenge("the email challenge is not valid")
         challenge = await self.session.scalar(
             select(EmailChallenge)
             .where(
+                EmailChallenge.id == candidate.id,
+                EmailChallenge.person_id == person.id,
                 EmailChallenge.kind == kind.value,
                 EmailChallenge.token_hash == hash_challenge_token(self.token_secret, token),
                 EmailChallenge.consumed_at.is_(None),
@@ -502,11 +519,6 @@ class PasswordIdentityService:
             .with_for_update()
         )
         if challenge is None:
-            raise InvalidEmailChallenge("the email challenge is not valid")
-        person = await self.session.scalar(
-            select(Person).where(Person.id == challenge.person_id).with_for_update()
-        )
-        if person is None or person.status != PersonStatus.ACTIVE.value:
             raise InvalidEmailChallenge("the email challenge is not valid")
         return person, challenge
 
