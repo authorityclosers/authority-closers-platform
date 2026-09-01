@@ -14,10 +14,17 @@ import ac_platform.http.auth as auth_module
 from ac_platform.application.settings import Settings
 from ac_platform.http.auth import install_identity_http, require_safe_origin
 from ac_platform.http.auth_transactions import AuthTransaction, AuthTransactionCodec
+from ac_platform.http.identity_provider import (
+    IdentityProviderRejected,
+    IdentityProviderUnavailable,
+)
 from ac_platform.http.problem import register_problem_handlers
 from ac_platform.identity.services import (
+    ConflictingProviderIdentityError,
+    IdentityResolutionError,
     IssuedProviderAuthorization,
     ProviderAuthorizationType,
+    ProviderIdentityNotLinkedError,
     VerifiedProviderAssertion,
     build_provider_authorization,
 )
@@ -184,6 +191,32 @@ class _SuccessfulProvider(_RecordingProvider):
         )
 
 
+class _RejectedProvider(_RecordingProvider):
+    async def exchange_code(
+        self,
+        code: str,
+        transaction: AuthTransaction,
+        *,
+        callback_state: str,
+        redirect_uri: str,
+    ) -> VerifiedProviderAssertion:
+        del code, transaction, callback_state, redirect_uri
+        raise IdentityProviderRejected("provider rejected the controlled callback")
+
+
+class _UnavailableProvider(_RecordingProvider):
+    async def exchange_code(
+        self,
+        code: str,
+        transaction: AuthTransaction,
+        *,
+        callback_state: str,
+        redirect_uri: str,
+    ) -> VerifiedProviderAssertion:
+        del code, transaction, callback_state, redirect_uri
+        raise IdentityProviderUnavailable("provider is unavailable")
+
+
 class _CallbackIdentityApplication(_IdentityApplication):
     async def authenticate_provider(
         self,
@@ -198,6 +231,54 @@ class _CallbackIdentityApplication(_IdentityApplication):
             token=VALID_SESSION_TOKEN,
             metadata=SimpleNamespace(person_id=UUID("11111111-1111-4111-8111-111111111111")),
         )
+
+
+class _UnknownProviderIdentityApplication(_IdentityApplication):
+    async def authenticate_provider(
+        self,
+        transaction_id: object,
+        assertion: VerifiedProviderAssertion,
+        *,
+        pkce_verifier: str,
+        user_agent: str | None = None,
+    ) -> SimpleNamespace:
+        del transaction_id, assertion, pkce_verifier, user_agent
+        raise ProviderIdentityNotLinkedError("provider identity is not linked to a person")
+
+
+class _CorruptProviderIdentityApplication(_IdentityApplication):
+    async def authenticate_provider(
+        self,
+        transaction_id: object,
+        assertion: VerifiedProviderAssertion,
+        *,
+        pkce_verifier: str,
+        user_agent: str | None = None,
+    ) -> SimpleNamespace:
+        del transaction_id, assertion, pkce_verifier, user_agent
+        raise IdentityResolutionError("provider identity points to a missing person")
+
+
+class _ProviderCollisionIdentityApplication(_IdentityApplication):
+    async def register_verified_provider(
+        self,
+        transaction_id: object,
+        assertion: VerifiedProviderAssertion,
+        *,
+        pkce_verifier: str,
+        consent_version: str,
+        display_name: str | None,
+        user_agent: str | None = None,
+    ) -> SimpleNamespace:
+        del (
+            transaction_id,
+            assertion,
+            pkce_verifier,
+            consent_version,
+            display_name,
+            user_agent,
+        )
+        raise ConflictingProviderIdentityError("provider key is already linked to another person")
 
 
 class _ForbiddenActorResolutionApplication(_IdentityApplication):
@@ -492,6 +573,134 @@ def test_staging_callback_uses_exact_surface_uri_and_issues_host_only_session(
         assert "samesite=lax" in value
         assert "path=/" in value
         assert "domain=" not in value
+
+
+@pytest.mark.parametrize(
+    ("provider", "result"),
+    [
+        (_RejectedProvider(), "provider_rejected"),
+        (_UnavailableProvider(), "provider_unavailable"),
+    ],
+)
+def test_learner_callback_turns_provider_failure_into_safe_recovery_redirect(
+    provider: object,
+    result: str,
+) -> None:
+    client = _client(provider=provider)
+    started = client.get(
+        "/v1/auth/google/start",
+        params={"action": "authenticate", "surface": "learner"},
+        follow_redirects=False,
+    )
+    transaction = AuthTransactionCodec(TEST_TRANSACTION_KEY).decode(
+        started.cookies["ac_oauth_transaction"]
+    )
+
+    response = client.get(
+        "/v1/auth/google/callback",
+        params={"state": transaction.state, "code": "google-authorization-code"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == (
+        f"https://app.authorityclosers.test/auth/callback?result={result}"
+    )
+    assert 'ac_oauth_transaction=""' in response.headers["set-cookie"]
+    assert response.headers["cache-control"] == "no-store"
+
+
+def test_unknown_learner_google_identity_is_sent_to_explicit_registration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        auth_module,
+        "AsyncIdentityApplication",
+        _UnknownProviderIdentityApplication,
+    )
+    client = _client(provider=_SuccessfulProvider())
+    started = client.get(
+        "/v1/auth/google/start",
+        params={"action": "authenticate", "surface": "learner"},
+        follow_redirects=False,
+    )
+    transaction = AuthTransactionCodec(TEST_TRANSACTION_KEY).decode(
+        started.cookies["ac_oauth_transaction"]
+    )
+
+    response = client.get(
+        "/v1/auth/google/callback",
+        params={"state": transaction.state, "code": "google-authorization-code"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 303
+    assert response.headers["location"] == (
+        "https://app.authorityclosers.test/auth/callback?result=registration_required"
+    )
+    assert 'ac_oauth_transaction=""' in response.headers["set-cookie"]
+
+
+def test_dangling_provider_identity_remains_a_fail_closed_integrity_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        auth_module,
+        "AsyncIdentityApplication",
+        _CorruptProviderIdentityApplication,
+    )
+    client = _client(provider=_SuccessfulProvider())
+    started = client.get(
+        "/v1/auth/google/start",
+        params={"action": "authenticate", "surface": "learner"},
+        follow_redirects=False,
+    )
+    transaction = AuthTransactionCodec(TEST_TRANSACTION_KEY).decode(
+        started.cookies["ac_oauth_transaction"]
+    )
+
+    response = client.get(
+        "/v1/auth/google/callback",
+        params={"state": transaction.state, "code": "google-authorization-code"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 401
+    assert response.json()["code"] == "authentication_rejected"
+    assert "location" not in response.headers
+
+
+def test_provider_key_collision_remains_fail_closed_during_registration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        auth_module,
+        "AsyncIdentityApplication",
+        _ProviderCollisionIdentityApplication,
+    )
+    client = _client(provider=_SuccessfulProvider())
+    started = client.get(
+        "/v1/auth/google/start",
+        params={
+            "action": "register",
+            "surface": "learner",
+            "consent": "true",
+        },
+        follow_redirects=False,
+    )
+    transaction = AuthTransactionCodec(TEST_TRANSACTION_KEY).decode(
+        started.cookies["ac_oauth_transaction"]
+    )
+
+    response = client.get(
+        "/v1/auth/google/callback",
+        params={"state": transaction.state, "code": "google-authorization-code"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 401
+    assert response.json()["code"] == "authentication_rejected"
+    assert "location" not in response.headers
 
 
 def test_deployment_session_cookie_rejects_raw_duplicate_fields_before_actor_resolution(

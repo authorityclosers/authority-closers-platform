@@ -8,6 +8,7 @@ from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Annotated, Literal
+from urllib.parse import urlencode
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request, Response, status
@@ -23,7 +24,12 @@ from ac_platform.http.auth_transactions import (
     InvalidAuthTransaction,
     normalize_return_path,
 )
-from ac_platform.http.identity_provider import DisabledIdentityProvider, OAuthIdentityProvider
+from ac_platform.http.identity_provider import (
+    DisabledIdentityProvider,
+    IdentityProviderRejected,
+    IdentityProviderUnavailable,
+    OAuthIdentityProvider,
+)
 from ac_platform.http.problem import problem_response
 from ac_platform.identity.application import AsyncIdentityApplication, ResolvedActorContext
 from ac_platform.identity.onboarding import (
@@ -49,6 +55,8 @@ from ac_platform.identity.services import (
     IdentityResolutionError,
     IdentityServiceError,
     ProviderAuthorizationType,
+    ProviderConsentVersionConflictError,
+    ProviderIdentityNotLinkedError,
     SessionMetadata,
     SessionNotFoundError,
     TenantScopeDeniedError,
@@ -59,6 +67,8 @@ from ac_platform.kernel.events import EventCategory, EventEnvelope
 from ac_platform.outbox.repository import OutboxRepository
 from ac_platform.tenancy.learner_provisioning import (
     AsyncLearnerProvisioningApplication,
+    LearnerConsentMissingError,
+    LearnerConsentUpdateRequiredError,
     LearnerProvisioningError,
 )
 
@@ -554,6 +564,27 @@ def _surface_callback_uri(settings: Settings, surface: str) -> str:
     return f"{_surface_origin(settings, surface)}/v1/auth/google/callback"
 
 
+def _learner_oauth_recovery_response(
+    settings: Settings,
+    *,
+    result: Literal[
+        "consent_required",
+        "consent_update_required",
+        "provider_rejected",
+        "provider_unavailable",
+        "registration_required",
+    ],
+) -> Response:
+    location = (
+        f"{_surface_origin(settings, 'learner')}/auth/callback?{urlencode({'result': result})}"
+    )
+    response = RedirectResponse(location, status_code=status.HTTP_303_SEE_OTHER)
+    _delete_oauth_transaction_cookie(response, settings)
+    response.headers["cache-control"] = "no-store"
+    response.headers["pragma"] = "no-cache"
+    return response
+
+
 def _require_surface_host(request: Request, settings: Settings, surface: str) -> None:
     if settings.environment not in {"staging", "production"}:
         return
@@ -996,57 +1027,109 @@ def install_identity_http(
         ):
             raise AuthenticationRequired("A valid Authority Closers session is required.")
         redirect_uri = _surface_callback_uri(settings, transaction.surface)
-        assertion = await identity_provider.exchange_code(
-            code,
-            transaction,
-            callback_state=state_value,
-            redirect_uri=redirect_uri,
-        )
+        try:
+            assertion = await identity_provider.exchange_code(
+                code,
+                transaction,
+                callback_state=state_value,
+                redirect_uri=redirect_uri,
+            )
+        except IdentityProviderRejected:
+            if transaction.surface == "learner":
+                return _learner_oauth_recovery_response(
+                    settings,
+                    result="provider_rejected",
+                )
+            raise
+        except IdentityProviderUnavailable:
+            if transaction.surface == "learner":
+                return _learner_oauth_recovery_response(
+                    settings,
+                    result="provider_unavailable",
+                )
+            raise
         session_token: str | None = None
-        async with sessions() as database, database.begin():
-            identity = AsyncIdentityApplication(database, token_pepper=token_pepper)
-            if transaction.authorization_type is ProviderAuthorizationType.REGISTER:
-                registered = await identity.register_verified_provider(
-                    transaction.transaction_id,
-                    assertion,
-                    pkce_verifier=transaction.pkce_verifier,
-                    consent_version=transaction.consent_version or "",
-                    display_name=None,
-                    user_agent=request.headers.get("user-agent"),
-                )
-                session_token = registered.session.token
-                if transaction.surface == "learner":
-                    tenant_id = await ensure_public_learner(
-                        database,
-                        registered.person.id,
+        try:
+            async with sessions() as database, database.begin():
+                identity = AsyncIdentityApplication(database, token_pepper=token_pepper)
+                if transaction.authorization_type is ProviderAuthorizationType.REGISTER:
+                    registered = await identity.register_verified_provider(
+                        transaction.transaction_id,
+                        assertion,
+                        pkce_verifier=transaction.pkce_verifier,
+                        consent_version=transaction.consent_version or "",
+                        display_name=None,
+                        user_agent=request.headers.get("user-agent"),
                     )
-                    await identity.select_tenant(session_token, tenant_id)
-            elif transaction.authorization_type is ProviderAuthorizationType.AUTHENTICATE:
-                issued = await identity.authenticate_provider(
-                    transaction.transaction_id,
-                    assertion,
-                    pkce_verifier=transaction.pkce_verifier,
-                    user_agent=request.headers.get("user-agent"),
-                )
-                session_token = issued.token
-                if transaction.surface == "learner":
-                    tenant_id = await ensure_public_learner(
-                        database,
-                        issued.metadata.person_id,
+                    session_token = registered.session.token
+                    if transaction.surface == "learner":
+                        tenant_id = await ensure_public_learner(
+                            database,
+                            registered.person.id,
+                        )
+                        await identity.select_tenant(session_token, tenant_id)
+                elif transaction.authorization_type is ProviderAuthorizationType.AUTHENTICATE:
+                    issued = await identity.authenticate_provider(
+                        transaction.transaction_id,
+                        assertion,
+                        pkce_verifier=transaction.pkce_verifier,
+                        user_agent=request.headers.get("user-agent"),
                     )
-                    await identity.select_tenant(
-                        session_token,
-                        tenant_id,
+                    session_token = issued.token
+                    if transaction.surface == "learner":
+                        tenant_id = await ensure_public_learner(
+                            database,
+                            issued.metadata.person_id,
+                        )
+                        await identity.select_tenant(
+                            session_token,
+                            tenant_id,
+                        )
+                else:
+                    if link_session_token is None:  # pragma: no cover - narrowed above
+                        raise AuthenticationRequired(
+                            "A valid Authority Closers session is required."
+                        )
+                    await identity.link_provider_for_session(
+                        link_session_token,
+                        transaction.transaction_id,
+                        assertion,
+                        pkce_verifier=transaction.pkce_verifier,
                     )
-            else:
-                if link_session_token is None:  # pragma: no cover - narrowed above
-                    raise AuthenticationRequired("A valid Authority Closers session is required.")
-                await identity.link_provider_for_session(
-                    link_session_token,
-                    transaction.transaction_id,
-                    assertion,
-                    pkce_verifier=transaction.pkce_verifier,
+        except PasswordRegistrationUnavailable as error:
+            if transaction.surface != "learner":
+                raise
+            if isinstance(error.__cause__, LearnerConsentMissingError):
+                return _learner_oauth_recovery_response(
+                    settings,
+                    result="consent_required",
                 )
+            if isinstance(error.__cause__, LearnerConsentUpdateRequiredError):
+                return _learner_oauth_recovery_response(
+                    settings,
+                    result="consent_update_required",
+                )
+            raise
+        except ProviderConsentVersionConflictError:
+            if (
+                transaction.surface == "learner"
+                and transaction.authorization_type is ProviderAuthorizationType.REGISTER
+            ):
+                return _learner_oauth_recovery_response(
+                    settings,
+                    result="consent_update_required",
+                )
+            raise
+        except ProviderIdentityNotLinkedError:
+            if (
+                transaction.surface == "learner"
+                and transaction.authorization_type is ProviderAuthorizationType.AUTHENTICATE
+            ):
+                return _learner_oauth_recovery_response(
+                    settings,
+                    result="registration_required",
+                )
+            raise
         base_url = (
             settings.admin_app_url if transaction.surface == "admin" else settings.public_app_url
         )

@@ -407,10 +407,38 @@ describe("honest preview controls", () => {
     expect(login).toContain('autoComplete="current-password"');
     expect(login).toContain('href="/forgot-password"');
     expect(login).toContain('href="/register"');
+    expect(login).toContain("Sign in with Google");
+    expect(login).toContain("First time here—including with Google?");
     expect(login).not.toContain("Email sign-in unavailable in preview");
     expect(onboarding).toContain("Loading your saved profile");
     expect(onboarding).not.toContain("Profile setup unavailable in preview");
     expect(onboarding).not.toContain("Choose the context");
+  });
+
+  it("turns server-issued Google recovery results into safe learner actions", async () => {
+    const consent = renderToStaticMarkup(
+      await CallbackPage({
+        searchParams: Promise.resolve({ result: "consent_required" }),
+      }),
+    );
+    const registration = renderToStaticMarkup(
+      await CallbackPage({
+        searchParams: Promise.resolve({ result: "registration_required" }),
+      }),
+    );
+    const unknown = renderToStaticMarkup(
+      await CallbackPage({
+        searchParams: Promise.resolve({ result: "not-a-result" }),
+      }),
+    );
+
+    expect(consent).toContain("Confirm your learner access.");
+    expect(consent).toContain('href="/register"');
+    expect(consent).not.toContain("callback payload");
+    expect(registration).toContain("This Google account is not linked yet.");
+    expect(registration).toContain("will not create an account silently");
+    expect(unknown).toContain("Return to sign in");
+    expect(unknown).not.toContain("not-a-result");
   });
 
   it("applies the Clarity Grid auth and onboarding compositions without changing capability", async () => {

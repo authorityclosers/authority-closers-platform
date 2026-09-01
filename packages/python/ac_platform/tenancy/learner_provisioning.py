@@ -28,6 +28,14 @@ class LearnerProvisioningError(RuntimeError):
     """The configured learner context cannot be safely assigned."""
 
 
+class LearnerConsentMissingError(LearnerProvisioningError):
+    """The person has not recorded the reviewed learner consent."""
+
+
+class LearnerConsentUpdateRequiredError(LearnerProvisioningError):
+    """The person has a consent version that cannot be silently replaced."""
+
+
 @dataclass(frozen=True, slots=True)
 class LearnerProvisioningResult:
     tenant_id: UUID
@@ -68,8 +76,15 @@ class AsyncLearnerProvisioningApplication:
             raise LearnerProvisioningError(
                 "only an active email-verified person can receive learner context"
             )
-        if person.consent_version != required_consent_version or person.consented_at is None:
-            raise LearnerProvisioningError(
+        if (
+            person.consent_version is not None
+            and person.consent_version != required_consent_version
+        ):
+            raise LearnerConsentUpdateRequiredError(
+                "the exact required learner consent has not been recorded"
+            )
+        if person.consent_version is None or person.consented_at is None:
+            raise LearnerConsentMissingError(
                 "the exact required learner consent has not been recorded"
             )
         tenant = await self._session.scalar(
@@ -129,6 +144,8 @@ class AsyncLearnerProvisioningApplication:
 
 __all__ = [
     "AsyncLearnerProvisioningApplication",
+    "LearnerConsentMissingError",
+    "LearnerConsentUpdateRequiredError",
     "LearnerProvisioningError",
     "LearnerProvisioningResult",
 ]

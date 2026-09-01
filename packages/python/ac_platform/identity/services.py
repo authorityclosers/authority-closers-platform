@@ -122,6 +122,10 @@ class ConflictingProviderIdentityError(AuthorizationDenied):
     """A provider key is already linked to a different canonical person."""
 
 
+class ProviderConsentVersionConflictError(ConflictingProviderIdentityError):
+    """An existing provider person has a different recorded consent version."""
+
+
 class AccountUnavailableError(AuthorizationDenied):
     """Authentication is denied for a suspended or deleted person."""
 
@@ -148,6 +152,10 @@ class SessionRevokedError(AuthorizationDenied):
 
 class IdentityResolutionError(IdentityServiceError):
     """A requested canonical identity does not exist."""
+
+
+class ProviderIdentityNotLinkedError(IdentityResolutionError):
+    """A verified provider key has no canonical person link."""
 
 
 class SessionNotFoundError(IdentityServiceError):
@@ -1604,6 +1612,7 @@ __all__ = [
     "PersonSelfService",
     "PersonSnapshot",
     "ProviderIdentityRaceError",
+    "ProviderConsentVersionConflictError",
     "ProviderAssertion",
     "ProviderAuthenticationService",
     "ProviderAuthorizationType",
@@ -1611,6 +1620,7 @@ __all__ = [
     "ProviderAuthorizationTransactionStatus",
     "ProviderEmailMismatchError",
     "ProviderIdentitySnapshot",
+    "ProviderIdentityNotLinkedError",
     "SessionExpiredError",
     "SessionMetadata",
     "SessionNotFoundError",

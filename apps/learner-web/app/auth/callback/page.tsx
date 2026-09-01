@@ -1,7 +1,13 @@
-import { ArrowLeft, CheckCircle2, Circle, ShieldCheck } from "lucide-react";
+import {
+  ArrowRight,
+  CircleAlert,
+  RefreshCw,
+  ShieldCheck,
+  UserPlus,
+} from "lucide-react";
 import Link from "next/link";
 
-import { PublicShell } from "../../components/site-shell";
+import { AuthFlowPage } from "../../components/auth-flow-page";
 import { SurfaceStatePanel } from "../../components/surface-state";
 import { ROUTES } from "../../lib/routes";
 import {
@@ -11,97 +17,156 @@ import {
 } from "../../lib/surface-state";
 
 type CallbackPageProps = {
-  searchParams: Promise<{ state?: QueryValue }>;
+  searchParams: Promise<{ result?: QueryValue; state?: QueryValue }>;
 };
 
-const callbackSteps = [
+type CallbackResult =
+  | "consent_required"
+  | "consent_update_required"
+  | "provider_rejected"
+  | "provider_unavailable"
+  | "registration_required";
+
+const callbackResults: Record<
+  CallbackResult,
   {
-    label: "Auth transaction",
-    detail: "State and nonce created server-side",
-    done: false,
+    eyebrow: string;
+    title: string;
+    detail: string;
+    actionHref: string;
+    actionLabel: string;
+    icon: typeof ShieldCheck;
+  }
+> = {
+  consent_required: {
+    eyebrow: "One consent step remains",
+    title: "Confirm your learner access.",
+    detail:
+      "Your Google identity is recognized. Confirm that you are 18 or older and accept the current Terms and Privacy notice before we open the course.",
+    actionHref: ROUTES.register,
+    actionLabel: "Review and continue",
+    icon: ShieldCheck,
   },
-  {
-    label: "Provider assertion",
-    detail: "Issuer and audience verified",
-    done: false,
+  consent_update_required: {
+    eyebrow: "Account review required",
+    title: "Your consent record needs an update.",
+    detail:
+      "We kept your existing identity and learning data unchanged. Contact Authority Closers support so the reviewed consent update can be completed safely.",
+    actionHref:
+      "mailto:admin@authorityclosers.com?subject=Authority%20Closers%20learner%20consent%20update",
+    actionLabel: "Contact support",
+    icon: CircleAlert,
   },
-  {
-    label: "Named session",
-    detail: "Session linked to the person record",
-    done: false,
+  provider_rejected: {
+    eyebrow: "Google sign-in stopped",
+    title: "Google could not confirm this attempt.",
+    detail:
+      "No learner session was created. Return to sign in and try again, or use your verified email and password.",
+    actionHref: ROUTES.login,
+    actionLabel: "Return to sign in",
+    icon: RefreshCw,
   },
-];
+  provider_unavailable: {
+    eyebrow: "Temporary provider issue",
+    title: "Google sign-in is unavailable right now.",
+    detail:
+      "Your account was not changed. Try again shortly, or use your verified email and password while Google recovers.",
+    actionHref: ROUTES.login,
+    actionLabel: "Return to sign in",
+    icon: RefreshCw,
+  },
+  registration_required: {
+    eyebrow: "Create your learner identity",
+    title: "This Google account is not linked yet.",
+    detail:
+      "Create your free learner account, confirm the required consent, and continue with the same Google account. We will not create an account silently from sign in.",
+    actionHref: ROUTES.register,
+    actionLabel: "Create free account",
+    icon: UserPlus,
+  },
+};
+
+function parseCallbackResult(value: QueryValue): CallbackResult | null {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  return candidate && candidate in callbackResults
+    ? (candidate as CallbackResult)
+    : null;
+}
 
 export default async function CallbackPage({
   searchParams,
 }: CallbackPageProps) {
   const query = await searchParams;
   const state = parseSurfaceState(query.state);
+  const result = parseCallbackResult(query.result);
+  const recovery = result ? callbackResults[result] : null;
+  const RecoveryIcon = recovery?.icon ?? ShieldCheck;
 
   return (
-    <PublicShell>
-      <main id="main-content" className="auth-main">
-        <div className="narrow-container">
-          <Link className="text-link" href={ROUTES.login}>
-            <ArrowLeft size={15} aria-hidden="true" /> Back to sign in
-          </Link>
-          <section className="callback-card" aria-labelledby="callback-title">
-            <div className="callback-card__icon">
-              <ShieldCheck size={22} aria-hidden="true" />
-            </div>
-            <p className="eyebrow">
-              <span aria-hidden="true" /> Secure callback boundary
-            </p>
-            <h1 id="callback-title">
-              Sign-in callback
-              <br />
-              <em>status.</em>
-            </h1>
-            <SurfaceStatePanel
-              state={state}
-              retryHref={ROUTES.callback}
-              backHref={ROUTES.login}
-              pageHeadingPresent
-            />
-            {isContentVisible(state) ? (
-              <>
-                <p className="callback-card__intro">
-                  No callback payload is present in this preview. The connected
-                  route would consume a one-time assertion and create a session
-                  only after server checks pass.
-                </p>
-                <ol className="callback-steps">
-                  {callbackSteps.map((step) => (
-                    <li key={step.label}>
-                      <span className="callback-steps__icon">
-                        {step.done ? (
-                          <CheckCircle2 size={16} aria-hidden="true" />
-                        ) : (
-                          <Circle size={16} aria-hidden="true" />
-                        )}
-                      </span>
-                      <span>
-                        <strong>{step.label}</strong>
-                        <small>{step.detail}</small>
-                      </span>
-                      <span className="callback-steps__status">
-                        Not started
-                      </span>
-                    </li>
-                  ))}
-                </ol>
-                <div className="boundary-card boundary-card--dark" role="note">
-                  <strong>Preview boundary</strong>
-                  <span>
-                    A successful-looking browser return cannot grant access.
-                    Identity, session, and entitlement remain server concerns.
-                  </span>
-                </div>
-              </>
-            ) : null}
-          </section>
+    <AuthFlowPage
+      eyebrow="Protected identity recovery"
+      heading="Secure sign-in."
+      emphasis="A clear next step."
+      copy="Google, learner consent, tenancy, and session checks stay server-side. If one gate stops access, we guide you to the safe recovery path."
+      backHref={ROUTES.login}
+      backLabel="Back to sign in"
+    >
+      <section
+        className="auth-card clarity-auth-card callback-card"
+        aria-labelledby="callback-title"
+      >
+        <div className="callback-card__icon">
+          <RecoveryIcon size={22} aria-hidden="true" />
         </div>
-      </main>
-    </PublicShell>
+        <p className="eyebrow">
+          <span aria-hidden="true" />
+          {recovery?.eyebrow ?? "Secure callback boundary"}
+        </p>
+        <h2 id="callback-title">
+          {recovery?.title ?? "Sign-in result unavailable."}
+        </h2>
+        {state !== "DEFAULT" ? (
+          <SurfaceStatePanel
+            state={state}
+            retryHref={ROUTES.callback}
+            backHref={ROUTES.login}
+            pageHeadingPresent
+          />
+        ) : null}
+        {isContentVisible(state) && recovery ? (
+          <>
+            <p className="callback-card__intro">{recovery.detail}</p>
+            <Link
+              className="button button--ink button--full"
+              href={recovery.actionHref}
+            >
+              {recovery.actionLabel}
+              <ArrowRight size={17} aria-hidden="true" />
+            </Link>
+            <div className="boundary-card boundary-card--dark" role="note">
+              <strong>Your account remains protected</strong>
+              <span>
+                A session is created only after Google, identity, consent, and
+                learner-access checks all pass.
+              </span>
+            </div>
+          </>
+        ) : isContentVisible(state) ? (
+          <>
+            <p className="callback-card__intro">
+              This page only accepts a server-issued sign-in result. Return to
+              sign in to start a fresh, protected Google transaction.
+            </p>
+            <Link
+              className="button button--ink button--full"
+              href={ROUTES.login}
+            >
+              Return to sign in
+              <ArrowRight size={17} aria-hidden="true" />
+            </Link>
+          </>
+        ) : null}
+      </section>
+    </AuthFlowPage>
   );
 }

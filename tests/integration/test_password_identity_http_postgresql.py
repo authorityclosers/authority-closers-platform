@@ -512,8 +512,11 @@ def test_existing_google_learner_requires_exact_consent_and_selects_public_tenan
                 base_url="https://app.authorityclosers.test",
             ) as client:
                 missing_consent, missing_transaction = await authenticate(client)
-                assert missing_consent.status_code == 503
-                assert missing_consent.json()["code"] == "password_registration_unavailable"
+                assert missing_consent.status_code == 303
+                assert missing_consent.headers["location"] == (
+                    "https://app.authorityclosers.test/auth/callback?result=consent_required"
+                )
+                assert 'ac_oauth_transaction=""' in missing_consent.headers["set-cookie"]
                 rejected_transaction_ids.append(missing_transaction.transaction_id)
 
                 with Session(postgres_harness.engine) as database:
@@ -550,8 +553,10 @@ def test_existing_google_learner_requires_exact_consent_and_selects_public_tenan
                     person.consented_at = now
 
                 stale_consent, stale_transaction = await authenticate(client)
-                assert stale_consent.status_code == 503
-                assert stale_consent.json()["code"] == "password_registration_unavailable"
+                assert stale_consent.status_code == 303
+                assert stale_consent.headers["location"] == (
+                    "https://app.authorityclosers.test/auth/callback?result=consent_update_required"
+                )
                 rejected_transaction_ids.append(stale_transaction.transaction_id)
 
                 with Session(postgres_harness.engine) as database:
@@ -1132,8 +1137,10 @@ def test_existing_google_registration_does_not_overwrite_different_consent(
                     params={"state": transaction.state, "code": "controlled-google-code"},
                     follow_redirects=False,
                 )
-                assert callback.status_code == 401
-                assert callback.json()["code"] == "authentication_rejected"
+                assert callback.status_code == 303
+                assert callback.headers["location"] == (
+                    "https://app.authorityclosers.test/auth/callback?result=consent_update_required"
+                )
                 assert (await client.get("/v1/me")).status_code == 401
 
             with Session(postgres_harness.engine) as database:

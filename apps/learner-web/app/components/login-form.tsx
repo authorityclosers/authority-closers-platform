@@ -129,11 +129,11 @@ export function LoginForm({ sessionExpired = false }: LoginFormProps) {
         <span>or</span>
       </div>
       <a className="button button--outline button--full" href={authenticateUrl}>
-        Continue with Google
+        Sign in with Google
       </a>
       <div className="auth-card__footer">
-        <span>New to Authority Closers?</span>
-        <Link href={ROUTES.register}>Create a free account</Link>
+        <span>First time here—including with Google?</span>
+        <Link href={ROUTES.register}>Create your free learner account</Link>
       </div>
     </div>
   );

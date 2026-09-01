@@ -39,6 +39,8 @@ from ac_platform.identity.services import (
     IssuedSession,
     PersonSnapshot,
     ProviderAuthorizationType,
+    ProviderConsentVersionConflictError,
+    ProviderIdentityNotLinkedError,
     ProviderIdentityRaceError,
     ProviderIdentitySnapshot,
     SessionExpiredError,
@@ -606,7 +608,7 @@ class AsyncIdentityApplication:
                 raise IdentityResolutionError("provider identity changed during registration")
             identity = matches[0]
             if person.consent_version not in {None, normalized_consent_version}:
-                raise ConflictingProviderIdentityError(
+                raise ProviderConsentVersionConflictError(
                     "provider identity has a different recorded consent version"
                 )
             await self._consume_authorization_callback(
@@ -688,7 +690,7 @@ class AsyncIdentityApplication:
             )
         )
         if not unlocked:
-            raise IdentityResolutionError("provider identity is not linked to a person")
+            raise ProviderIdentityNotLinkedError("provider identity is not linked to a person")
         if len(unlocked) > 1:
             raise AmbiguousProviderIdentityError("provider key resolves to multiple identities")
         person = await self._lock_person(
