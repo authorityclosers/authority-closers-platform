@@ -441,6 +441,8 @@ def test_timer_and_unit_are_persistent_bounded_and_hardened() -> None:
         encoding="utf-8"
     )
     for marker in (
+        "User=root",
+        "Group=acops",
         "NoNewPrivileges=true",
         "ProtectSystem=strict",
         "ProtectHome=true",
@@ -457,6 +459,7 @@ def test_timer_and_unit_are_persistent_bounded_and_hardened() -> None:
     ):
         assert marker in service
 
+    assert "Group=root" not in service
     assert "--environment staging" not in service
     assert (
         backup.worst_case_two_environment_backup_seconds() <= backup.BACKUP_SERVICE_TIMEOUT_SECONDS
