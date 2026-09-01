@@ -50,8 +50,8 @@ describe("learner theme preference", () => {
     expect(normalizeThemePreference("light")).toBe("light");
     expect(normalizeThemePreference("dark")).toBe("dark");
     expect(normalizeThemePreference("system")).toBe("system");
-    expect(normalizeThemePreference("unexpected")).toBe("system");
-    expect(normalizeThemePreference(null)).toBe("system");
+    expect(normalizeThemePreference("unexpected")).toBe("light");
+    expect(normalizeThemePreference(null)).toBe("light");
   });
 
   it("resolves system without changing explicit choices", () => {
@@ -93,7 +93,7 @@ describe("learner theme preference", () => {
 
     expect(root.dataset).toEqual({
       theme: "light",
-      themePreference: "system",
+      themePreference: "light",
     });
     expect(root.style).toEqual({ colorScheme: "light" });
   });

@@ -5,9 +5,12 @@ export default function ForgotPasswordPage() {
   return (
     <AuthFlowPage
       eyebrow="Account recovery"
-      heading="Get back to"
-      emphasis="the practice floor."
-      copy="Recovery links are one-time, short-lived, and never reveal whether an address belongs to an account."
+      heading="Recover your access."
+      copy="Request a one-time reset link. We never reveal whether an address belongs to an account."
+      steps={[
+        { label: "Request", state: "current" },
+        { label: "Reset", state: "upcoming" },
+      ]}
     >
       <RecoveryRequestForm />
     </AuthFlowPage>

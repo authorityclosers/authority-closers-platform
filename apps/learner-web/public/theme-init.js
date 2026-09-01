@@ -1,13 +1,13 @@
 (() => {
   const storageKey = "ac-appearance-theme";
-  let preference = "system";
+  let preference = "light";
   try {
     const stored = window.localStorage.getItem(storageKey);
     if (stored === "light" || stored === "dark" || stored === "system") {
       preference = stored;
     }
   } catch {
-    // System preference remains the safe fallback when storage is blocked.
+    // Light remains the deterministic product default when storage is blocked.
   }
 
   let systemPrefersDark = false;

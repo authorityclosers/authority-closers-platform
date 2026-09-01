@@ -78,8 +78,35 @@ export function SettingsRuntime({
 
   if (state.status === "loading") {
     return (
-      <div className="surface-state" role="status">
-        <h1>Loading profile and settings…</h1>
+      <div
+        className="settings-loading"
+        role="status"
+        aria-live="polite"
+        aria-busy="true"
+      >
+        <header className="settings-heading">
+          <p className="eyebrow">Profile &amp; settings</p>
+          <h1>Settings</h1>
+          <p>Preparing your account and learning preferences.</p>
+        </header>
+        <div className="settings-grid" aria-hidden="true">
+          <section className="settings-card settings-card--skeleton">
+            <span className="settings-skeleton-line is-short" />
+            <span className="settings-skeleton-line is-title" />
+            <span className="settings-skeleton-line" />
+          </section>
+          <section className="settings-card settings-card--skeleton">
+            <span className="settings-skeleton-line is-short" />
+            <span className="settings-skeleton-line is-title" />
+            <span className="settings-skeleton-line" />
+          </section>
+          <section className="settings-card settings-card--wide settings-card--skeleton">
+            <span className="settings-skeleton-line is-short" />
+            <span className="settings-skeleton-line is-title" />
+            <span className="settings-skeleton-line" />
+          </section>
+        </div>
+        <p className="sr-only">Profile and settings are loading.</p>
       </div>
     );
   }

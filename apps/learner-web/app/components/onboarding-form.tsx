@@ -2,7 +2,7 @@
 
 import { ArrowLeft, ArrowRight, CheckCircle2, UserRound } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   ApiError,
@@ -139,6 +139,9 @@ export function OnboardingForm({
     "idle" | "saved" | "failed"
   >("idle");
   const [recoveryMessage, setRecoveryMessage] = useState<string | null>(null);
+  const stepHeadingRef = useRef<HTMLHeadingElement>(null);
+  const previousStepRef = useRef(1);
+  const errorRef = useRef<HTMLDivElement>(null);
   const dirty = profile !== null && !draftsMatch(draft, draftFrom(profile));
 
   function online(): boolean {
@@ -185,7 +188,16 @@ export function OnboardingForm({
         setPending(false);
       },
       (requestError: unknown) => {
-        setError(failureMessage(requestError, online(), false));
+        setError(
+          requestError instanceof ApiError && requestError.status === 401
+            ? "Your session is no longer available. Sign in to continue."
+            : userFacingRequestError(
+                requestError,
+                online()
+                  ? "We could not load your learning profile. Try again."
+                  : "You are offline. Reconnect to load your learning profile.",
+              ),
+        );
         setSessionExpired(isOnboardingSessionExpired(requestError));
         setFailureKind(mutationFailureKind(requestError, online()));
         setPending(false);
@@ -226,6 +238,16 @@ export function OnboardingForm({
   }, [dirty, draft, profile, staleLocalDraft]);
 
   useEffect(() => registerBeforeUnloadGuard(window, dirty), [dirty]);
+
+  useEffect(() => {
+    if (!profile || previousStepRef.current === step) return;
+    previousStepRef.current = step;
+    stepHeadingRef.current?.focus();
+  }, [profile, step]);
+
+  useEffect(() => {
+    if (error && profile) errorRef.current?.focus();
+  }, [error, profile]);
 
   async function save(
     status: "in_progress" | "completed" | "skipped",
@@ -518,13 +540,19 @@ export function OnboardingForm({
         </div>
         <span>03</span>
       </div>
+      <p className="clarity-onboarding-optional">
+        Optional setup · Skip now and update later. These answers do not control
+        course access.
+      </p>
 
       {step === 1 ? (
         <>
           <div className="form-step clarity-form-step">
             <span className="form-step__number">01</span>
             <div>
-              <h2>Where are you practicing?</h2>
+              <h2 ref={stepHeadingRef} tabIndex={-1}>
+                Where are you practicing?
+              </h2>
               <p>Choose the context closest to your next real conversation.</p>
             </div>
           </div>
@@ -562,7 +590,9 @@ export function OnboardingForm({
           <div className="form-step clarity-form-step">
             <span className="form-step__number">02</span>
             <div>
-              <h2>Name the change you want.</h2>
+              <h2 ref={stepHeadingRef} tabIndex={-1}>
+                Name the change you want.
+              </h2>
               <p>Use your own words so you can return to this goal later.</p>
             </div>
           </div>
@@ -594,7 +624,9 @@ export function OnboardingForm({
           <div className="form-step clarity-form-step">
             <span className="form-step__number">03</span>
             <div>
-              <h2>Make the plan realistic.</h2>
+              <h2 ref={stepHeadingRef} tabIndex={-1}>
+                Make the plan realistic.
+              </h2>
               <p>These details are optional and can be changed later.</p>
             </div>
           </div>
@@ -638,8 +670,14 @@ export function OnboardingForm({
       ) : null}
 
       {error ? (
-        <div role="alert">
-          <p className="form-message form-message--error">{error}</p>
+        <div
+          className="auth-error-summary"
+          role="alert"
+          tabIndex={-1}
+          ref={errorRef}
+        >
+          <strong>Profile save could not be completed</strong>
+          <p>{error}</p>
           {sessionExpired ? (
             <Link className="text-link" href={ROUTES.sessionExpired}>
               Sign in again
@@ -720,16 +758,17 @@ export function OnboardingForm({
       {recoveryMessage ? <p role="status">{recoveryMessage}</p> : null}
 
       <div className="onboarding-actions clarity-onboarding-actions">
-        {step > 1 ? (
-          <button
-            className="button button--quiet"
-            type="button"
-            disabled={pending}
-            onClick={() => setStep((current) => current - 1)}
-          >
-            <ArrowLeft size={16} aria-hidden="true" /> Back
-          </button>
-        ) : (
+        <div className="clarity-onboarding-actions__secondary">
+          {step > 1 ? (
+            <button
+              className="button button--quiet"
+              type="button"
+              disabled={pending}
+              onClick={() => setStep((current) => current - 1)}
+            >
+              <ArrowLeft size={16} aria-hidden="true" /> Back
+            </button>
+          ) : null}
           <button
             className="button button--quiet"
             type="button"
@@ -738,7 +777,7 @@ export function OnboardingForm({
           >
             Skip for now
           </button>
-        )}
+        </div>
         <button
           className="button button--ink"
           type="submit"

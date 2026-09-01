@@ -11,7 +11,7 @@ type EffectiveTheme = Exclude<ThemePreference, "system">;
 export function normalizeThemePreference(value: unknown): ThemePreference {
   return value === "light" || value === "dark" || value === "system"
     ? value
-    : "system";
+    : "light";
 }
 
 export function resolveThemePreference(
@@ -31,7 +31,7 @@ function readPreference(): ThemePreference {
       window.localStorage.getItem(THEME_STORAGE_KEY),
     );
   } catch {
-    return "system";
+    return "light";
   }
 }
 
@@ -77,7 +77,7 @@ const options = [
 ] as const;
 
 export function ThemeControl() {
-  const [preference, setPreference] = useState<ThemePreference>("system");
+  const [preference, setPreference] = useState<ThemePreference>("light");
 
   useEffect(() => {
     const refresh = () => setPreference(readPreference());

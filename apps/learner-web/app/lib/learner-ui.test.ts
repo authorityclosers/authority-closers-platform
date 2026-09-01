@@ -349,7 +349,8 @@ describe("canonical progression access", () => {
       const html = renderToStaticMarkup(page);
 
       expect(html).toContain("Activity");
-      expect(html).toContain("Loading your learning");
+      expect(html).toContain("Preparing your workspace");
+      expect(html).toContain('aria-busy="true"');
       expect(html).not.toContain('data-state="LOCKED"');
       expect(html).not.toContain("Complete the previous step first");
       expect(html).not.toContain("Your turn.");
@@ -369,7 +370,8 @@ describe("canonical progression access", () => {
     const html = renderToStaticMarkup(page);
 
     expect(html).toContain("Module");
-    expect(html).toContain("Loading your learning");
+    expect(html).toContain("Preparing your workspace");
+    expect(html).toContain('aria-busy="true"');
     expect(html).not.toContain('data-state="LOCKED"');
     expect(html).not.toContain("Module sequence");
     expect(html).not.toContain("Open first activity");
@@ -381,7 +383,8 @@ describe("canonical progression access", () => {
       searchParams: Promise.resolve({}),
     });
     const activityHtml = renderToStaticMarkup(activityPage);
-    expect(activityHtml).toContain("Loading your learning");
+    expect(activityHtml).toContain("Preparing your workspace");
+    expect(activityHtml).toContain("surface-state__skeleton");
     expect(activityHtml).not.toContain('href="/activity/review"');
     expect(activityHtml).not.toContain('href="/activity/improve"');
   });
@@ -446,7 +449,7 @@ describe("honest preview controls", () => {
     expect(login).toContain('autoComplete="current-password"');
     expect(login).toContain('href="/forgot-password"');
     expect(login).toContain('href="/register"');
-    expect(login).toContain("Sign in with Google");
+    expect(login).toContain("Continue with Google");
     expect(login).toContain("First time here—including with Google?");
     expect(login).not.toContain("Email sign-in unavailable in preview");
     expect(onboarding).toContain("Loading your saved profile");
@@ -483,6 +486,11 @@ describe("honest preview controls", () => {
         searchParams: Promise.resolve({ result: "registration_required" }),
       }),
     );
+    const consentUpdate = renderToStaticMarkup(
+      await CallbackPage({
+        searchParams: Promise.resolve({ result: "consent_update_required" }),
+      }),
+    );
     const unknown = renderToStaticMarkup(
       await CallbackPage({
         searchParams: Promise.resolve({ result: "not-a-result" }),
@@ -494,6 +502,9 @@ describe("honest preview controls", () => {
     expect(consent).not.toContain("callback payload");
     expect(registration).toContain("This Google account is not linked yet.");
     expect(registration).toContain("will not create an account silently");
+    expect(consentUpdate).toContain("Contact support");
+    expect(consentUpdate).toContain("mailto:admin@authorityclosers.com");
+    expect(consentUpdate).not.toContain('href="/register"');
     expect(unknown).toContain("Return to sign in");
     expect(unknown).not.toContain("not-a-result");
   });
@@ -506,7 +517,10 @@ describe("honest preview controls", () => {
     );
 
     expect(registration).toContain('class="auth-main clarity-auth-main"');
-    expect(registration).toContain("auth-workspace-lake-v1.png");
+    expect(registration).toContain("clarity-auth-shell--standard");
+    expect(registration).toContain("clarity-auth-ledger");
+    expect(registration.match(/is-outline/g)).toHaveLength(3);
+    expect(registration).not.toContain('aria-current="step"');
     expect(registration).toContain("Create free account");
     expect(registration).toContain("action=register");
     expect(registration).toContain("Continue with Google");
@@ -517,11 +531,13 @@ describe("honest preview controls", () => {
     expect(registration.match(/type="checkbox"/g)).toHaveLength(1);
     expect(registration).not.toContain("Apple");
     expect(verification).toContain("one-time link");
-    expect(verification).toContain("clarity-auth-brand-media");
-    expect(onboarding).toContain(
-      'class="learner-main auth-main clarity-onboarding-main"',
-    );
-    expect(onboarding).toContain("clarity-onboarding-steps");
+    expect(verification).toContain("clarity-auth-masthead");
+    expect(onboarding).toContain("clarity-auth-shell--onboarding");
+    expect(onboarding).toContain("Make the course fit your work.");
+    expect(onboarding).toContain("Skip to learning setup");
+    expect(onboarding.match(/is-outline/g)).toHaveLength(3);
+    expect(onboarding).not.toContain('aria-current="step"');
+    expect(onboarding).not.toContain("learner-sidebar");
   });
 });
 
@@ -542,7 +558,8 @@ describe("accessibility semantics", () => {
     );
 
     expect(html).toContain("Learner workspace");
-    expect(html).toContain("Loading your learning");
+    expect(html).toContain("Preparing your workspace");
+    expect(html).toContain("surface-state__skeleton");
     expect(html).not.toContain("Open reflect preview");
     expect(html).not.toContain("preview only");
     expect(html).not.toContain('aria-valuenow="0"');
@@ -639,7 +656,8 @@ describe("accessibility semantics", () => {
 
     expect(html.match(/<h1(?:\s|>)/g)).toHaveLength(1);
     expect(html).toContain("Certificate");
-    expect(html).toContain("Loading your learning");
+    expect(html).toContain("Preparing your workspace");
+    expect(html).toContain('aria-busy="true"');
     expect(html).not.toContain("preview-certificate · issued");
   });
 });

@@ -4,10 +4,13 @@ import { PasswordResetForm } from "../components/password-auth-forms";
 export default function ResetPasswordPage() {
   return (
     <AuthFlowPage
-      eyebrow="Secure password reset"
-      heading="Reset access."
-      emphasis="Keep the evidence."
-      copy="A successful reset revokes earlier sessions while preserving your canonical learner work."
+      eyebrow="Password reset"
+      heading="Choose a new password."
+      copy="The reset link is valid for 30 minutes. A successful reset signs out earlier sessions."
+      steps={[
+        { label: "Request", state: "complete" },
+        { label: "Reset", state: "current" },
+      ]}
     >
       <PasswordResetForm />
     </AuthFlowPage>

@@ -1,86 +1,51 @@
-# Authority Closers v0.1 Alpha design QA
+# Auth, onboarding, and session recovery design QA
 
-## Controlled visual target
+Result: **PASSED** — no open P0, P1, or P2 visual defects in the implemented frontend scope.
 
-The visual target is the approved Authority Closers Drive package, fetched by
-exact Drive ID under the controlled-source manifest. The selected direction is
-the Clarity Grid system: white/ink surfaces, indigo actions, restrained borders,
-compact learning UI, responsive learner navigation, and a separate admin
-foundation. Route, state, authorization, and release contracts remain
-authoritative when a mockup depicts future or unimplemented breadth.
+## Visual target
 
-The source registration frame used for the current same-viewport comparison is
-the controlled auth export (`1K9qpP-OTsgyuhJ3mtmZYDj2-7EFv_MJb`). Additional
-ready-state comparisons are required from the controlled learner shell, course,
-reflection, progress, and admin source families after the candidate is deployed.
+- Desktop: `.artifacts/ui-workstream/auth-onboarding-desktop/03-visual-exploration/generated/AOD-DIR-B-studio-ledger-1440x1024.png`
+- Mobile: `.artifacts/ui-workstream/auth-onboarding-mobile/03-visual-exploration/generated/direction-continuity-canvas.png`
+- Contract corrections: `.artifacts/ui-workstream/auth-onboarding-paired-selection/independent-paired-selection.md`
 
-## Candidate implementation evidence
+The generated boards were treated as composition references, not literal product truth. The implementation removes generated help/marketing navigation, optional WhatsApp, last-name, remember-me, broad persistence claims, and incorrect expiry copy.
 
-- Candidate: current uncommitted `codex/g1-free-course-foundation` worktree.
-- Local learner preview: port 3000, inspected only through the selected in-app
-  Browser.
-- Registration comparison viewport: 1487 × 1058 CSS pixels.
-- Mobile inspection viewport: 390 × 844 CSS pixels.
-- Combined source/implementation comparison:
-  `docs/evidence/design-qa/v0.1-alpha-20260901/comparisons/auth-register-source-vs-implementation.png`.
-- Local implementation captures:
-  `docs/evidence/design-qa/v0.1-alpha-20260901/implementation/`.
-- Curated pre-candidate staging audit:
-  `docs/evidence/screenshots/v0.1-staging-live-audit-20260901/`.
+## Combined visual comparisons
 
-Historical staging screenshot folders are local-only and are deliberately
-excluded from release commits because some contain account-identifying data.
+- `.artifacts/ui-workstream/auth-onboarding-implementation/comparison-desktop-source-vs-implementation.png`
+- `.artifacts/ui-workstream/auth-onboarding-implementation/comparison-mobile-source-vs-implementation.png`
 
-## Source plus implementation comparison
+The shared implementation retains the selected compact masthead, task ledger, focused form column, calm surface hierarchy, bounded states, and one-task mobile continuity. It intentionally uses the active AC theme tokens instead of copying the generated board palette.
 
-The registration implementation preserves the approved split-screen hierarchy,
-single primary heading, dense but readable account form, Google alternative,
-versioned consent, and clear sign-in continuation. The same implementation
-collapses to one column at 390 × 844 without horizontal overflow and maintains
-44 px interactive targets. Login and protected-session boundary states were
-also inspected at the mobile viewport. Light/dark/system theming is global and
-the dark preference persists across route transitions.
+## Browser checks
 
-The source and implementation were captured at the same desktop viewport and
-placed in one combined image before visual judgment. This is a directional
-fidelity review, not a pixel-diff claim: copy and form contents intentionally
-follow the controlled runtime contracts.
+Checked locally in the Codex in-app browser against `http://localhost:3000`:
 
-## Current findings
+- Desktop viewport: 1440 × 1024.
+- Mobile portrait: 320 × 568, 390 × 844, and 430 × 932.
+- Mobile landscape: 844 × 390.
+- Routes: `/login`, `/register`, `/forgot-password`, `/verify-email`, `/session-expired`, `/auth/callback?result=registration_required`, and `/onboarding` recovery.
+- Every checked route had one `h1` and no horizontal overflow.
+- Interactive controls use at least a 44-pixel target in the implemented shell; the 20-pixel consent control is contained by its full clickable label.
 
-- [Resolved locally] Auth and onboarding use the Clarity Grid visual system and
-  responsive mobile composition.
-- [Resolved locally] Learner home, exact Free Course path, five-activity Module
-  1 loop, reflection/workbook, progress, settings, and global theme surfaces are
-  implemented against server-authoritative data or explicit unavailable states.
-- [Resolved locally] Session-expired, loading, error, offline, conflict, and
-  locked/unavailable states are represented without fabricating protected data.
-- [Pending staging] Authenticated ready-state source comparisons for home,
-  course, reflection, progress/settings, and admin must be captured from the
-  immutable candidate release at desktop and mobile viewports.
-- [Pending staging] Real Google registration/login, password verification and
-  recovery delivery, PWA/offline behavior, and live responsive interaction must
-  be re-proven on the candidate release.
-- [Intentional v0.1 boundary] Real course media playback remains provider and
-  content-source gated. Modules 2–4 remain topology/extension contracts; broad
-  LMS, native apps, billing, SSO/SCIM, simulator, and call-review breadth is not
-  claimed.
+## Findings corrected during QA
 
-## Verification state
+1. Mobile grid stretching created large gaps between the task heading and form. The mobile workspace now has explicit `auto / 1fr` rows and top-aligned form content.
+2. Registration and sign-in repeated their page heading inside the form. Form headings now describe the task detail instead.
+3. Brand, footer policy, and compact account links did not all expose 44-pixel targets. Their target boxes were expanded.
+4. Initial onboarding load failure incorrectly mentioned a failed recovery-copy write. It now reports only the profile-load failure and offers a retry.
+5. Verification resend fields shrank inside the result grid. Result forms now use the full content width.
 
-- Backend unit gate: 152 passed.
-- Focused PostgreSQL gate: 18 passed.
-- Full PostgreSQL-backed Python suite: 924 passed, 21 documented skips.
-- Python typecheck and Ruff: passed.
-- Learner/frontend full gates: pending final reviewer-fix integration.
-- Immutable exact-SHA CI/package/deploy: pending.
-- Current-release authenticated staging journey and design comparison: pending.
+## Accessibility and motion
 
-## Final result
+- Semantic forms, fieldsets, labels, autocomplete values, one page heading, and current-step semantics are present.
+- Error summaries receive programmatic focus after failed login, registration, recovery, reset, and onboarding saves.
+- Password reveal controls expose `aria-label` and `aria-pressed`.
+- Step-heading focus moves after onboarding transitions.
+- Focus outlines use the existing theme focus token.
+- Reduced-motion preferences collapse transitions and animations.
+- Safe-area padding is applied to mobile masthead and footer.
 
-final result: blocked pending immutable staging visual acceptance
+## Evidence limitation
 
-The local candidate is materially closer to the approved visual and interaction
-contract, but design acceptance is not complete until the exact candidate is
-packaged, deployed, exercised with canonical learner data, and compared with the
-approved source families at matched desktop and mobile states.
+The local frontend-only browser run had no authenticated API session, so the onboarding happy-path form was verified through component implementation and automated tests while the browser captured its honest load-recovery state. The original comparison capture used the dark system theme. After the integrated theme patch, a fresh in-app browser tab verified that sign-in now opens light by default; explicit dark and system preferences remain covered by tests. No authenticated onboarding success state was manufactured.

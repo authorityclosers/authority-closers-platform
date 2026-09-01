@@ -43,6 +43,12 @@ export function RegistrationForm() {
   const [consentGranted, setConsentGranted] = useState(false);
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const errorRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (error) errorRef.current?.focus();
+  }, [error]);
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPending(true);
@@ -94,92 +100,99 @@ export function RegistrationForm() {
         </span>
         <span>Free learner account</span>
       </div>
-      <h2>Create your learner account.</h2>
+      <h2>Account details.</h2>
       <p className="auth-card__intro">
         Start the free course and keep progress, reflections, and recovery tied
         to one verified identity.
       </p>
       <form className="stack-form" onSubmit={submit}>
-        <div className="field-group">
-          <label htmlFor="register-first-name">First name</label>
-          <input
-            id="register-first-name"
-            name="firstName"
-            autoComplete="given-name"
-            placeholder="First name"
-            required
-            maxLength={120}
-            disabled={pending}
-          />
-        </div>
-        <div className="field-group">
-          <label htmlFor="register-email">Email address</label>
-          <input
-            id="register-email"
-            name="email"
-            type="email"
-            inputMode="email"
-            autoComplete="email"
-            placeholder="you@example.com"
-            required
-            maxLength={320}
-            disabled={pending}
-          />
-        </div>
-        <div className="field-group">
-          <label htmlFor="register-whatsapp">WhatsApp number</label>
-          <input
-            id="register-whatsapp"
-            name="whatsappNumber"
-            type="tel"
-            inputMode="tel"
-            autoComplete="tel"
-            placeholder="Country code and number"
-            required
-            minLength={7}
-            maxLength={32}
-            aria-describedby="register-whatsapp-help"
-            disabled={pending}
-          />
-          <p id="register-whatsapp-help" className="field-help">
-            Stored with your learner profile. This number is not used for course
-            messages.
-          </p>
-        </div>
-        <div className="field-group">
-          <label htmlFor="register-password">Password</label>
-          <div className="auth-password-field">
+        <fieldset className="auth-fieldset">
+          <legend>Identity</legend>
+          <div className="field-group">
+            <label htmlFor="register-first-name">First name</label>
             <input
-              id="register-password"
-              name="password"
-              type={passwordVisible ? "text" : "password"}
-              autoComplete="new-password"
-              placeholder="At least 12 characters"
+              id="register-first-name"
+              name="firstName"
+              autoComplete="given-name"
+              placeholder="First name"
               required
-              minLength={12}
-              maxLength={256}
-              aria-describedby="register-password-help"
+              maxLength={120}
               disabled={pending}
             />
-            <button
-              className="auth-password-toggle"
-              type="button"
-              aria-label={passwordVisible ? "Hide password" : "Show password"}
-              aria-pressed={passwordVisible}
-              onClick={() => setPasswordVisible((visible) => !visible)}
-              disabled={pending}
-            >
-              {passwordVisible ? (
-                <EyeOff size={18} aria-hidden="true" />
-              ) : (
-                <Eye size={18} aria-hidden="true" />
-              )}
-            </button>
           </div>
-          <p id="register-password-help" className="field-help">
-            Use at least 12 characters. Password managers are supported.
-          </p>
-        </div>
+          <div className="field-group">
+            <label htmlFor="register-email">Email address</label>
+            <input
+              id="register-email"
+              name="email"
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              placeholder="you@example.com"
+              required
+              maxLength={320}
+              disabled={pending}
+            />
+          </div>
+          <div className="field-group">
+            <label htmlFor="register-whatsapp">WhatsApp number</label>
+            <input
+              id="register-whatsapp"
+              name="whatsappNumber"
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel"
+              placeholder="Country code and number"
+              required
+              minLength={7}
+              maxLength={32}
+              aria-describedby="register-whatsapp-help"
+              disabled={pending}
+            />
+            <p id="register-whatsapp-help" className="field-help">
+              Stored with your learner profile. This number is not used for
+              course messages.
+            </p>
+          </div>
+        </fieldset>
+        <fieldset className="auth-fieldset">
+          <legend>Security</legend>
+          <div className="field-group">
+            <label htmlFor="register-password">Password</label>
+            <div className="auth-password-field">
+              <input
+                id="register-password"
+                name="password"
+                type={passwordVisible ? "text" : "password"}
+                autoComplete="new-password"
+                placeholder="At least 12 characters"
+                required
+                minLength={12}
+                maxLength={256}
+                aria-describedby="register-password-help"
+                disabled={pending}
+              />
+              <button
+                className="auth-password-toggle"
+                type="button"
+                aria-label={passwordVisible ? "Hide password" : "Show password"}
+                aria-pressed={passwordVisible}
+                onClick={() => setPasswordVisible((visible) => !visible)}
+                disabled={pending}
+              >
+                {passwordVisible ? (
+                  <EyeOff size={18} aria-hidden="true" />
+                ) : (
+                  <Eye size={18} aria-hidden="true" />
+                )}
+              </button>
+            </div>
+            <p id="register-password-help" className="field-help">
+              Use at least 12 characters. Paste, autofill, and password managers
+              are supported.
+            </p>
+          </div>
+        </fieldset>
         <label className="consent-check">
           <input
             name="consent"
@@ -198,9 +211,15 @@ export function RegistrationForm() {
           </span>
         </label>
         {error ? (
-          <p className="form-message form-message--error" role="alert">
-            {error}
-          </p>
+          <div
+            className="auth-error-summary"
+            role="alert"
+            tabIndex={-1}
+            ref={errorRef}
+          >
+            <strong>Account creation could not be completed</strong>
+            <p>{error}</p>
+          </div>
         ) : null}
         <button className="button button--ink button--full" disabled={pending}>
           {pending ? "Creating account…" : "Create free account"}
@@ -249,6 +268,11 @@ export function RecoveryRequestForm() {
   const [pending, setPending] = useState(false);
   const [complete, setComplete] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const errorRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (error) errorRef.current?.focus();
+  }, [error]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -275,7 +299,7 @@ export function RecoveryRequestForm() {
         </span>
         <span>Account recovery</span>
       </div>
-      <h2>{complete ? "Check your inbox." : "Recover your access."}</h2>
+      <h2>{complete ? "Check your inbox." : "Request a reset link."}</h2>
       {complete ? (
         <div className="auth-result" role="status">
           <p>
@@ -308,9 +332,15 @@ export function RecoveryRequestForm() {
             />
           </div>
           {error ? (
-            <p className="form-message form-message--error" role="alert">
-              {error}
-            </p>
+            <div
+              className="auth-error-summary"
+              role="alert"
+              tabIndex={-1}
+              ref={errorRef}
+            >
+              <strong>Recovery request could not be completed</strong>
+              <p>{error}</p>
+            </div>
           ) : null}
           <button
             className="button button--ink button--full"
@@ -456,11 +486,16 @@ export function PasswordResetForm() {
   const [complete, setComplete] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [passwordVisible, setPasswordVisible] = useState(false);
+  const errorRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const value = fragmentToken();
     queueMicrotask(() => setToken(value));
   }, []);
+
+  useEffect(() => {
+    if (error) errorRef.current?.focus();
+  }, [error]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -529,7 +564,7 @@ export function PasswordResetForm() {
         </span>
         <span>Secure reset</span>
       </div>
-      <h2>Choose a new password.</h2>
+      <h2>Set your new password.</h2>
       <form className="stack-form" onSubmit={submit}>
         <div className="field-group">
           <label htmlFor="reset-password">New password</label>
@@ -576,9 +611,15 @@ export function PasswordResetForm() {
           </div>
         </div>
         {error ? (
-          <p className="form-message form-message--error" role="alert">
-            {error}
-          </p>
+          <div
+            className="auth-error-summary"
+            role="alert"
+            tabIndex={-1}
+            ref={errorRef}
+          >
+            <strong>Password reset could not be completed</strong>
+            <p>{error}</p>
+          </div>
         ) : null}
         <button className="button button--ink button--full" disabled={pending}>
           {pending ? "Updating…" : "Update password"}

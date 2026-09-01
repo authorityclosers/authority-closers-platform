@@ -496,6 +496,40 @@ html[data-theme="dark"] .site-frame--auth .clarity-auth-mobile-status {
   background: var(--theme-success-surface);
 }
 
+/* Current Studio Ledger / Continuity Canvas auth shell. */
+html[data-theme="dark"] .site-frame--auth .clarity-auth-shell,
+html[data-theme="dark"] .site-frame--auth .clarity-auth-masthead,
+html[data-theme="dark"] .site-frame--auth .clarity-auth-footer {
+  color: var(--theme-text);
+  border-color: var(--theme-border);
+  background: var(--theme-surface);
+}
+
+html[data-theme="dark"] .site-frame--auth .clarity-auth-ledger {
+  color: var(--theme-text);
+  border-color: var(--theme-border);
+  background: color-mix(
+    in srgb,
+    var(--theme-surface-subtle) 52%,
+    var(--theme-surface)
+  );
+}
+
+html[data-theme="dark"] .site-frame--auth .clarity-auth-panel {
+  background: var(--theme-surface);
+}
+
+html[data-theme="dark"] .site-frame--auth .clarity-auth-card {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+html[data-theme="dark"] .site-frame--auth .auth-error-summary {
+  color: var(--theme-danger-text);
+  background: var(--theme-danger-surface);
+}
+
 /* Authenticated learner shell and route-family cards. */
 html[data-theme="dark"] .site-frame--learner {
   --clarity-ink: var(--theme-text);

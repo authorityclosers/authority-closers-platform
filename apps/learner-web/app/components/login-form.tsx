@@ -2,7 +2,7 @@
 
 import { ArrowRight, Eye, EyeOff, ShieldCheck } from "lucide-react";
 import Link from "next/link";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 
 import { googleAuthStartUrl } from "../lib/auth-links";
 import {
@@ -35,7 +35,12 @@ export function LoginForm({ sessionExpired = false }: LoginFormProps) {
   const [error, setError] = useState<string | null>(null);
   const [verificationRequired, setVerificationRequired] = useState(false);
   const [passwordVisible, setPasswordVisible] = useState(false);
+  const errorRef = useRef<HTMLDivElement>(null);
   const authenticateUrl = googleAuthStartUrl("authenticate");
+
+  useEffect(() => {
+    if (error) errorRef.current?.focus();
+  }, [error]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -77,13 +82,15 @@ export function LoginForm({ sessionExpired = false }: LoginFormProps) {
       </div>
       <h2>{sessionExpired ? "Sign in to continue." : "Welcome back."}</h2>
       <p className="auth-card__intro">
-        Use your verified email and password to continue from your saved
-        learning state.
+        Use your verified email and password, or continue with Google.
       </p>
       {sessionExpired ? (
         <div className="auth-notice" role="status">
           <ShieldCheck size={18} aria-hidden="true" />
-          <span>Your progress and saved workbook evidence are still safe.</span>
+          <span>
+            We will re-check your access before returning to the learner
+            workspace.
+          </span>
         </div>
       ) : null}
       <form className="stack-form" onSubmit={submit}>
@@ -93,7 +100,7 @@ export function LoginForm({ sessionExpired = false }: LoginFormProps) {
             id="login-email"
             name="email"
             type="email"
-            autoComplete="email"
+            autoComplete="username"
             inputMode="email"
             required
             disabled={pending}
@@ -127,7 +134,13 @@ export function LoginForm({ sessionExpired = false }: LoginFormProps) {
           </div>
         </div>
         {error ? (
-          <div className="form-message form-message--error" role="alert">
+          <div
+            className="auth-error-summary"
+            role="alert"
+            tabIndex={-1}
+            ref={errorRef}
+          >
+            <strong>Sign-in could not be completed</strong>
             <p>{error}</p>
             {verificationRequired ? (
               <Link className="text-link" href={ROUTES.verifyEmail}>
@@ -148,7 +161,7 @@ export function LoginForm({ sessionExpired = false }: LoginFormProps) {
         <span>or</span>
       </div>
       <a className="button button--outline button--full" href={authenticateUrl}>
-        Sign in with Google
+        Continue with Google
       </a>
       <div className="auth-card__footer">
         <span>First time here—including with Google?</span>

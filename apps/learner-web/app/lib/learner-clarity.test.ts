@@ -231,7 +231,7 @@ describe("learner Clarity Grid slice", () => {
     expect(isSessionExpiredError(new TypeError("offline"))).toBe(false);
   });
 
-  it("collapses split flows before their minimum width and keeps touch targets at 44px", () => {
+  it("collapses task flows for mobile and keeps safe-area and touch-target contracts", () => {
     const authStyles = readFileSync(
       new URL("../auth-clarity.css", import.meta.url),
       "utf8",
@@ -245,16 +245,16 @@ describe("learner Clarity Grid slice", () => {
       "utf8",
     );
 
-    expect(authStyles.match(/@media \(max-width: 960px\)/g)).toHaveLength(2);
-    expect(authStyles).toContain(".clarity-auth-mobile-header");
+    expect(authStyles).toContain("@media (max-width: 760px)");
+    expect(authStyles).toContain(".clarity-auth-masthead");
     expect(authStyles).toMatch(
-      /\.site-frame--auth \.clarity-auth-context \{[^}]*display: none;/s,
+      /\.clarity-auth-workspace \{[^}]*grid-template-columns: 1fr;/s,
     );
     expect(authStyles).toContain("env(safe-area-inset-bottom)");
     expect(authStyles).toMatch(
-      /\.site-frame--auth \.clarity-auth-card \.button--ink,[^{]+\{[^}]*min-height: 52px;/s,
+      /\.clarity-auth-card \.button \{[^}]*min-height: 52px;/s,
     );
-    expect(onboardingStyles).toContain("@media (max-width: 960px)");
+    expect(onboardingStyles).toContain("@media (max-width: 760px)");
     expect(learnerStyles).toMatch(
       /\.site-frame--learner \.button \{[^}]*min-height: 44px;/s,
     );

@@ -6,11 +6,14 @@ export default function SessionExpiredPage() {
   return (
     <AuthFlowPage
       eyebrow="Session ended"
-      heading="Your work is"
-      emphasis="still safe."
-      copy="Your secure browser session ended. Sign in again to return to the server-authoritative learner workspace; this page never guesses or restores access in the browser."
+      heading="Your session ended."
+      copy="Complete sign-in again. We will re-check access before returning you to the learner workspace."
       backHref={ROUTES.home}
       backLabel="Return to the public catalog"
+      steps={[
+        { label: "Reconnect", state: "current" },
+        { label: "Resume", state: "upcoming" },
+      ]}
     >
       <LoginForm sessionExpired />
     </AuthFlowPage>

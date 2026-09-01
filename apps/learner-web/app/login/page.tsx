@@ -18,12 +18,16 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
   return (
     <AuthFlowPage
-      eyebrow="Learner access"
-      heading="Keep moving."
-      emphasis="Your work is here."
-      copy="Return to your free course, saved reflections, and next implementation step."
+      eyebrow="Account access"
+      heading="Sign in to your account."
+      copy="Sign in to continue your Authority Closers learning."
       backHref={ROUTES.home}
       backLabel="Back to the public catalog"
+      steps={[
+        { label: "Sign in", state: "current" },
+        { label: "Verify", state: "upcoming" },
+        { label: "Start learning", state: "upcoming" },
+      ]}
     >
       {state !== "DEFAULT" ? (
         <SurfaceStatePanel

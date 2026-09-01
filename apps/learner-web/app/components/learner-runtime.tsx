@@ -20,7 +20,6 @@ import {
   ApiError,
   createLearnerApi,
   type ActivityResponse,
-  type ContextResponse,
   type LearnerApi,
   type LearningActivityResponse,
   type LearningResponse,
@@ -93,9 +92,25 @@ function StateMessage({
   const Heading = pageHeadingPresent ? "h3" : "h1";
   if (state.status === "loading") {
     return (
-      <div className="surface-state" role="status">
-        <Heading>{pageTitle}</Heading>
-        <p>Loading your learning…</p>
+      <div
+        className="surface-state surface-state--loading"
+        role="status"
+        aria-live="polite"
+        aria-busy="true"
+      >
+        <div className="surface-state__loading-heading">
+          <div>
+            <p className="surface-state__eyebrow">Preparing your workspace</p>
+            <Heading>{pageTitle}</Heading>
+          </div>
+          <span className="surface-state__loading-status">Loading</span>
+        </div>
+        <div className="surface-state__skeleton" aria-hidden="true">
+          <span className="surface-state__skeleton-line is-title" />
+          <span className="surface-state__skeleton-line is-copy" />
+          <span className="surface-state__skeleton-line is-action" />
+        </div>
+        <p className="sr-only">Your learning workspace is loading.</p>
       </div>
     );
   }
@@ -315,22 +330,38 @@ export function PublicProgramDetail({
   );
 }
 
+async function settleConcurrentReads<A, B>(
+  first: Promise<A>,
+  second: Promise<B>,
+): Promise<[A, B]> {
+  const [firstResult, secondResult] = await Promise.allSettled([first, second]);
+  const failures = [firstResult, secondResult].filter(
+    (result): result is PromiseRejectedResult => result.status === "rejected",
+  );
+  const sessionFailure = failures.find((failure) =>
+    isSessionExpiredError(failure.reason),
+  );
+
+  if (sessionFailure) throw sessionFailure.reason;
+  if (firstResult.status === "rejected") throw firstResult.reason;
+  if (secondResult.status === "rejected") throw secondResult.reason;
+  return [firstResult.value, secondResult.value];
+}
+
 export async function identityState(
   api: LearnerApi,
   programId?: string,
 ): Promise<{
   me: MeResponse;
-  context: ContextResponse;
   programs: ProgramSummaryResponse[];
   learning?: LearningResponse;
 }> {
-  const [me, context, programs] = await Promise.all([
+  const [me, programs] = await settleConcurrentReads(
     api.me(),
-    api.context(),
     programId
       ? Promise.resolve<ProgramSummaryResponse[]>([])
       : api.listPrograms().then((response) => response.items),
-  ]);
+  );
   const selectedProgramId =
     programId ?? selectPublishedFreeCourse(programs)?.id;
   let learning: LearningResponse | undefined;
@@ -343,7 +374,23 @@ export async function identityState(
     }
   }
 
-  return { me, context, programs, learning };
+  return { me, programs, learning };
+}
+
+export async function loadProgramLearningState(slug: string, api: LearnerApi) {
+  const [program, me] = await settleConcurrentReads(
+    api.program(slug),
+    api.me(),
+  );
+  let learning: LearningResponse | undefined;
+  if (hasMembershipRole(me)) {
+    try {
+      learning = await api.learning(program.id);
+    } catch (error) {
+      if (!(error instanceof ApiError) || error.status !== 404) throw error;
+    }
+  }
+  return { program, me, programs: [] as ProgramSummaryResponse[], learning };
 }
 
 export function selectPublishedFreeCourse(
@@ -539,6 +586,49 @@ export function HomeLearningPath({ learning }: { learning: LearningResponse }) {
   );
 }
 
+const homeLearningLoop = [
+  { label: "Watch", copy: "Learn the concept", icon: Play },
+  { label: "Reflect", copy: "Make it your own", icon: PenLine },
+  { label: "Implement", copy: "Apply it in practice", icon: Wrench },
+  { label: "Review", copy: "Check your work", icon: Flag },
+  { label: "Improve", copy: "Refine the next move", icon: Trophy },
+] as const;
+
+export function HomeLearningLoop() {
+  return (
+    <section
+      className="home-learning-loop"
+      aria-labelledby="learning-loop-title"
+    >
+      <div className="home-learning-loop__heading">
+        <p className="kicker">How the course works</p>
+        <h2 id="learning-loop-title">Your 5-step learning loop</h2>
+      </div>
+      <ol>
+        {homeLearningLoop.map((step, index) => {
+          const Icon = step.icon;
+          return (
+            <li key={step.label}>
+              <span className="home-learning-loop__icon" aria-hidden="true">
+                <Icon size={18} />
+              </span>
+              <strong>{step.label}</strong>
+              <span>{step.copy}</span>
+              {index < homeLearningLoop.length - 1 ? (
+                <ArrowRight
+                  className="home-learning-loop__arrow"
+                  size={18}
+                  aria-hidden="true"
+                />
+              ) : null}
+            </li>
+          );
+        })}
+      </ol>
+    </section>
+  );
+}
+
 export function LearnerHomeEnrollmentCard({
   learning,
   program,
@@ -709,12 +799,17 @@ export function LearnerHomeOnboardingRedirect() {
   );
 }
 
+export async function loadLearnerHomeState(api: LearnerApi) {
+  const [identity, onboarding] = await settleConcurrentReads(
+    identityState(api),
+    api.onboarding(),
+  );
+  return { ...identity, onboarding };
+}
+
 export function LearnerHomeRuntime({ api = defaultApi }: { api?: LearnerApi }) {
   const state = useLoad(
-    async () => ({
-      ...(await identityState(api)),
-      onboarding: await api.onboarding(),
-    }),
+    () => loadLearnerHomeState(api),
     () => false,
   );
   const onboardingReady =
@@ -766,14 +861,11 @@ export function LearnerHomeRuntime({ api = defaultApi }: { api?: LearnerApi }) {
                   : "Start the free course to activate your learner workspace. Access remains server-authorized."}
               </p>
             </div>
-            {state.value.context.tenant_id ? (
+            {state.value.me.selected_tenant_id ? (
               <span className="dashboard-intro__tenant">Learner workspace</span>
             ) : null}
           </section>
-          <div
-            className="dashboard-grid dashboard-grid--clarity dashboard-grid--single"
-            id="my-learning"
-          >
+          <div className="home-workspace-grid" id="my-learning">
             <LearnerHomeEnrollmentCard
               learning={state.value.learning}
               program={publishedProgram}
@@ -782,10 +874,11 @@ export function LearnerHomeRuntime({ api = defaultApi }: { api?: LearnerApi }) {
                 onboardingReady ? undefined : ROUTES.onboarding
               }
             />
+            {state.value.learning ? (
+              <HomeLearningPath learning={state.value.learning} />
+            ) : null}
           </div>
-          {state.value.learning ? (
-            <HomeLearningPath learning={state.value.learning} />
-          ) : null}
+          {state.value.learning ? <HomeLearningLoop /> : null}
         </>
       ) : null}
     </>
@@ -1713,11 +1806,7 @@ export function LiveLearningPath({
   api?: LearnerApi;
 }) {
   const state = useLoad(
-    async () => {
-      const program = await api.program(slug);
-      const identity = await identityState(api, program.id);
-      return { program, ...identity };
-    },
+    () => loadProgramLearningState(slug, api),
     () => false,
   );
   const membershipAvailable =
@@ -1815,11 +1904,7 @@ export function LiveModule({
   api?: LearnerApi;
 }) {
   const state = useLoad(
-    async () => {
-      const program = await api.program(slug);
-      const identity = await identityState(api, program.id);
-      return { program, ...identity };
-    },
+    () => loadProgramLearningState(slug, api),
     () => false,
   );
   const membershipAvailable =
@@ -2051,11 +2136,7 @@ export function LiveCompletionGate({
   api?: LearnerApi;
 }) {
   const state = useLoad(
-    async () => {
-      const program = await api.program(slug);
-      const identity = await identityState(api, program.id);
-      return { program, ...identity };
-    },
+    () => loadProgramLearningState(slug, api),
     () => false,
   );
   const membershipAvailable =

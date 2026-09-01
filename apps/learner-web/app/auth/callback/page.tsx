@@ -104,12 +104,20 @@ export default async function CallbackPage({
 
   return (
     <AuthFlowPage
-      eyebrow="Protected identity recovery"
-      heading="Secure sign-in."
-      emphasis="A clear next step."
-      copy="Google, learner consent, tenancy, and session checks stay server-side. If one gate stops access, we guide you to the safe recovery path."
+      eyebrow="Google sign-in"
+      heading="We need one more step."
+      copy="Complete the bounded account step below, then start a fresh sign-in attempt."
       backHref={ROUTES.login}
       backLabel="Back to sign in"
+      steps={[
+        { label: "Identity", state: "outline", detail: "Account task" },
+        {
+          label: "Account check",
+          state: "outline",
+          detail: "Result shown here",
+        },
+        { label: "Start learning", state: "outline", detail: "After access" },
+      ]}
     >
       <section
         className="auth-card clarity-auth-card callback-card"

@@ -113,6 +113,18 @@ export function LearnerShell({
   current?: LearnerCurrent;
   learningHref?: string;
 }) {
+  const currentLabel =
+    current === "home"
+      ? "Home"
+      : current === "course"
+        ? "Learning"
+        : current === "progress"
+          ? "Progress"
+          : current === "settings"
+            ? "Settings"
+            : current === "certificate"
+              ? "Certificate"
+              : "Learner workspace";
   return (
     <div className="site-frame site-frame--learner">
       <a className="skip-link" href="#main-content">
@@ -125,6 +137,7 @@ export function LearnerShell({
         <div className="learner-sidebar__brand">
           <BrandLink href={ROUTES.learnerHome} />
         </div>
+        <p className="learner-sidebar__section-label">Workspace</p>
         <nav className="learner-sidebar__nav" aria-label="Learner sections">
           <LearnerNavLink
             href={ROUTES.learnerHome}
@@ -146,6 +159,7 @@ export function LearnerShell({
           />
         </nav>
         <div className="learner-sidebar__footer">
+          <p className="learner-sidebar__section-label">Account</p>
           <LearnerNavLink
             href={ROUTES.settings}
             label="Settings"
@@ -159,7 +173,10 @@ export function LearnerShell({
           <div className="learner-header__mobile-brand">
             <BrandLink href={ROUTES.learnerHome} />
           </div>
-          <p className="learner-header__context">Learning workspace</p>
+          <div className="learner-header__context">
+            <span>Learner workspace</span>
+            <strong>{currentLabel}</strong>
+          </div>
           <div className="learner-header__actions">
             <Link
               href={ROUTES.settings}
