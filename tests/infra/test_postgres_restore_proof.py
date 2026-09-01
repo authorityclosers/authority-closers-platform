@@ -52,14 +52,17 @@ def _snapshot(
 
 
 def _tree(
-    environment: str = "staging", capture: str = "20260830T120000.000000Z-123-staging"
+    environment: str = "staging",
+    capture: str = "20260830T120000.000000Z-123-staging",
+    snapshot_id: str = "a" * 64,
 ) -> str:
     prefix = f"/srv/authority-closers/backups/application/{environment}/logical/{capture}"
     return "\n".join(
         (
-            json.dumps({"type": "dir", "path": "/srv"}),
-            json.dumps({"type": "file", "path": f"{prefix}/backup.dump"}),
-            json.dumps({"type": "file", "path": f"{prefix}/metadata.json"}),
+            json.dumps({"struct_type": "snapshot", "id": snapshot_id}),
+            json.dumps({"struct_type": "node", "type": "dir", "path": "/srv"}),
+            json.dumps({"struct_type": "node", "type": "file", "path": f"{prefix}/backup.dump"}),
+            json.dumps({"struct_type": "node", "type": "file", "path": f"{prefix}/metadata.json"}),
         )
     )
 
@@ -247,21 +250,33 @@ def test_release_manifest_requires_each_local_image_to_match_its_transport_diges
 
 def test_snapshot_pair_rejects_extra_files_symlinks_and_multiple_captures() -> None:
     valid = _tree()
-    pair = proof.select_snapshot_pair(valid, "staging")
+    pair = proof.select_snapshot_pair(valid, "staging", "a" * 64)
     assert pair.dump_path.endswith("/backup.dump")
     assert pair.metadata_path.endswith("/metadata.json")
 
-    extra = valid + "\n" + json.dumps({"type": "file", "path": "/srv/unexpected.txt"})
+    extra = (
+        valid
+        + "\n"
+        + json.dumps({"struct_type": "node", "type": "file", "path": "/srv/unexpected.txt"})
+    )
     with pytest.raises(proof.RestoreProofError, match="unexpected file path"):
-        proof.select_snapshot_pair(extra, "staging")
+        proof.select_snapshot_pair(extra, "staging", "a" * 64)
     extra_directory = (
-        valid + "\n" + json.dumps({"type": "dir", "path": "/srv/authority-closers/unexpected"})
+        valid
+        + "\n"
+        + json.dumps(
+            {
+                "struct_type": "node",
+                "type": "dir",
+                "path": "/srv/authority-closers/unexpected",
+            }
+        )
     )
     with pytest.raises(proof.RestoreProofError, match="unexpected directory"):
-        proof.select_snapshot_pair(extra_directory, "staging")
+        proof.select_snapshot_pair(extra_directory, "staging", "a" * 64)
     symlink = valid.replace('"type": "dir"', '"type": "symlink"')
     with pytest.raises(proof.RestoreProofError, match="non-regular"):
-        proof.select_snapshot_pair(symlink, "staging")
+        proof.select_snapshot_pair(symlink, "staging", "a" * 64)
     other_prefix = (
         "/srv/authority-closers/backups/application/staging/logical/"
         "20260830T120001.000000Z-124-staging"
@@ -271,13 +286,30 @@ def test_snapshot_pair_rejects_extra_files_symlinks_and_multiple_captures() -> N
         + "\n"
         + "\n".join(
             (
-                json.dumps({"type": "file", "path": f"{other_prefix}/backup.dump"}),
-                json.dumps({"type": "file", "path": f"{other_prefix}/metadata.json"}),
+                json.dumps(
+                    {
+                        "struct_type": "node",
+                        "type": "file",
+                        "path": f"{other_prefix}/backup.dump",
+                    }
+                ),
+                json.dumps(
+                    {
+                        "struct_type": "node",
+                        "type": "file",
+                        "path": f"{other_prefix}/metadata.json",
+                    }
+                ),
             )
         )
     )
     with pytest.raises(proof.RestoreProofError, match="multiple captures"):
-        proof.select_snapshot_pair(multiple, "staging")
+        proof.select_snapshot_pair(multiple, "staging", "a" * 64)
+
+    with pytest.raises(proof.RestoreProofError, match="binding is inconsistent"):
+        proof.select_snapshot_pair(_tree(snapshot_id="b" * 64), "staging", "a" * 64)
+    with pytest.raises(proof.RestoreProofError, match="lacks an exact snapshot header"):
+        proof.select_snapshot_pair("\n".join(valid.splitlines()[1:]), "staging", "a" * 64)
 
 
 def test_metadata_verification_is_exact_and_digest_bound(tmp_path: Path) -> None:
@@ -331,7 +363,7 @@ def test_capture_and_restic_timestamps_are_fresh_and_ordered(tmp_path: Path) -> 
 def test_restore_tree_requires_exact_root_owned_pair_and_cleanup_is_bounded(tmp_path: Path) -> None:
     restore_root = tmp_path / "restore-root"
     restore_dir = proof.create_restore_directory(restore_root)
-    pair = proof.select_snapshot_pair(_tree(), "staging")
+    pair = proof.select_snapshot_pair(_tree(), "staging", "a" * 64)
     dump, metadata = _write_pair(restore_dir)
     assert proof._verify_restored_pair(restore_dir, pair) == (dump, metadata)
     stable_dir, stable_dump, stable_metadata = proof.copy_stable_pair(dump, metadata, restore_root)

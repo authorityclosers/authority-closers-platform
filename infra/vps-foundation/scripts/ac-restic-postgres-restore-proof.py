@@ -288,12 +288,17 @@ def _pair_candidate(path: str, environment: str) -> tuple[str, str] | None:
     return capture_dir, filename
 
 
-def select_snapshot_pair(raw_json_lines: str, environment: str) -> SnapshotPair:
+def select_snapshot_pair(
+    raw_json_lines: str, environment: str, expected_snapshot_id: str
+) -> SnapshotPair:
     """Require a snapshot tree with exactly one atomic logical pair."""
 
+    if SHA256_RE.fullmatch(expected_snapshot_id) is None:
+        raise RestoreProofError("Restic snapshot tree binding is invalid")
     entries: list[tuple[str, str]] = []
     directories: set[str] = set()
     seen_paths: set[str] = set()
+    snapshot_headers = 0
     lines = [line for line in raw_json_lines.splitlines() if line.strip()]
     if not lines:
         raise RestoreProofError("Restic snapshot tree is empty")
@@ -304,6 +309,14 @@ def select_snapshot_pair(raw_json_lines: str, environment: str) -> SnapshotPair:
             raise RestoreProofError("Restic snapshot tree is not valid JSON") from error
         if not isinstance(record, Mapping):
             raise RestoreProofError("Restic snapshot tree has an invalid node")
+        struct_type = record.get("struct_type")
+        if struct_type == "snapshot":
+            snapshot_headers += 1
+            if snapshot_headers != 1 or record.get("id") != expected_snapshot_id:
+                raise RestoreProofError("Restic snapshot tree binding is inconsistent")
+            continue
+        if struct_type != "node":
+            raise RestoreProofError("Restic snapshot tree has an invalid message type")
         node_type = record.get("type")
         if node_type == "dir":
             raw_path = record.get("path")
@@ -322,6 +335,8 @@ def select_snapshot_pair(raw_json_lines: str, environment: str) -> SnapshotPair:
         if candidate is None:
             raise RestoreProofError("Restic snapshot contains an unexpected file path")
         entries.append(candidate)
+    if snapshot_headers != 1:
+        raise RestoreProofError("Restic snapshot tree lacks an exact snapshot header")
     captures = {capture for capture, _filename in entries}
     if len(captures) > 1:
         raise RestoreProofError("Restic snapshot contains logical files from multiple captures")
@@ -1074,7 +1089,7 @@ def run(
         timeout_seconds=SNAPSHOT_TIMEOUT_SECONDS,
         capture_stdout=True,
     )
-    pair = select_snapshot_pair(tree_json, environment)
+    pair = select_snapshot_pair(tree_json, environment, snapshot.snapshot_id)
     restore_dir = create_restore_directory(restore_root)
     stable_dir: Path | None = None
     evidence_dir: Path | None = None
