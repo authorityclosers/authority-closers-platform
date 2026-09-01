@@ -49,3 +49,54 @@ Checked locally in the Codex in-app browser against `http://localhost:3000`:
 ## Evidence limitation
 
 The local frontend-only browser run had no authenticated API session, so the onboarding happy-path form was verified through component implementation and automated tests while the browser captured its honest load-recovery state. The original comparison capture used the dark system theme. After the integrated theme patch, a fresh in-app browser tab verified that sign-in now opens light by default; explicit dark and system preferences remain covered by tests. No authenticated onboarding success state was manufactured.
+
+---
+
+# Learning-loop activity design QA
+
+## Comparison target and exact captures
+
+- Selected desktop direction: `.artifacts/ui-workstream/learning-loop/selected-corrected/momentum-workshop-corrected-desktop-v2.png` (`1487 × 1058`).
+- Selected mobile direction: `.artifacts/ui-workstream/learning-loop/selected-corrected/momentum-workshop-corrected-mobile-v2.png` (`853 × 1844`, normalized to `426 × 922`).
+- Production desktop: `.artifacts/ui-workstream/learning-loop/implementation-qa/activity-desktop-1440x1024.png` (`1425 × 1013` browser content captured from a `1440 × 1024` viewport).
+- Production mobile light: `.artifacts/ui-workstream/learning-loop/implementation-qa/activity-mobile-normalized-426x922.png` (`426 × 922`).
+- Production mobile dark: `.artifacts/ui-workstream/learning-loop/implementation-qa/activity-mobile-dark-426x922.png` (`426 × 922`).
+- State: authenticated learner, Module 1, reflection 2 of 5, one completed predecessor, three server-locked successors, empty editable draft.
+
+## Combined visual evidence
+
+- Desktop: `.artifacts/ui-workstream/learning-loop/implementation-qa/comparison-desktop.png`.
+- Mobile: `.artifacts/ui-workstream/learning-loop/implementation-qa/comparison-mobile-normalized.png`.
+
+The exact production shell and activity component were rendered with a server-authoritative fixture, then placed beside the normalized selected direction. Desktop retains the wide task canvas and module rail. Mobile retains the single-task hierarchy, labelled response, visible path disclosure, and Save/Submit actions above the fixed navigation. There is no horizontal overflow or fixed-navigation overlap.
+
+## Independent review findings corrected
+
+1. Authoritative identity: activity detail now returns the enrollment-owned `program_id`; dependent learning requests are scoped by exact `program_id`, `program_version_id`, and `enrollment_id`. Ambiguous active version enrollments fail closed instead of selecting a path or raising `MultipleResultsFound`.
+2. Route identity: activity state reloads when the dynamic activity ID changes, and the activity workspace is keyed by authoritative activity identity.
+3. Mutation reconciliation: a successful save/submission remains a success even if dependent path refresh fails. Draft saves do not request the full path. Evidence reconciliation uses a latest-generation guard so an initial or older response cannot overwrite a newer server snapshot.
+4. Stale path safety: module/path UI is derived only from a `ready` learning snapshot; mismatch, access denial, unavailable, retry, and refresh failures clear or hide the previous path.
+5. Recovery safety: blocked `localStorage` access is treated as unavailable. Before-unload, internal-link, Navigation API, and browser-history guards protect dirty responses when no recovery copy exists.
+6. Error boundaries: session expiry offers sign-in, forbidden access offers learner support, 404 remains an unavailable path, and only retryable failures offer Retry.
+7. Accessibility: all skip-link targets are focusable; mobile bottom navigation follows main content in DOM order; inactive dark mobile navigation now uses a token with approximately `9.5:1` contrast; the module disclosure has a visible Lucide chevron; labels and 44-pixel targets remain present.
+8. Visual density: desktop and exact `426 × 922` mobile captures keep Back, Save reflection, and Submit evidence in the first task viewport. Light and dark captures remain readable.
+
+## Verification evidence
+
+- Learner web: 118 tests passed; ESLint passed with zero warnings; TypeScript passed; production build passed.
+- Python learning HTTP: 12 focused unit tests passed; Ruff check passed. A PostgreSQL exact-scope regression assertion is present but remains environment-gated when the local PostgreSQL test URL is absent.
+- Repository formatting and `git diff --check` passed.
+- Local host Node is `22.17.0` while the repository requires Node 24; the sequential production build passed with a bounded heap, and CI remains authoritative on Node 24.
+- Three independent Luna/`xhigh` reviews covered correctness/security, accessibility/responsive fidelity, and test/performance/release readiness. Their final verdicts contain no open P0, P1, or P2 findings.
+
+## Intentional product boundaries
+
+- Published server prompt, canonical activity order, real lock reasons, and allowed actions override generated mock copy.
+- Save and evidence submission remain separate authoritative actions.
+- Reflection is explicitly not an evaluation. No AI score, invented reward, or client-manufactured progress state is introduced.
+
+## Follow-up polish
+
+- P3: reconsider a full-width primary Save treatment at the smallest breakpoint only if task evidence supports it; the current dual-action row preserves two distinct server operations.
+
+final result: passed

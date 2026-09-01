@@ -24,7 +24,7 @@ export function PolicyPage({
 }) {
   return (
     <PublicShell>
-      <main id="main-content" className="public-main policy-page">
+      <main id="main-content" className="public-main policy-page" tabIndex={-1}>
         <div className="page-container">
           <Link className="text-link policy-page__back" href={ROUTES.home}>
             <ArrowLeft size={15} aria-hidden="true" /> Back to the public

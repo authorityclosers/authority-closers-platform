@@ -7,7 +7,7 @@ import { ROUTES } from "../lib/routes";
 export default function OfflinePage() {
   return (
     <PublicShell>
-      <main id="main-content" className="narrow-main">
+      <main id="main-content" className="narrow-main" tabIndex={-1}>
         <section className="surface-state surface-state--offline" role="status">
           <CloudOff size={28} aria-hidden="true" />
           <p className="eyebrow">

@@ -3131,3 +3131,615 @@ a.learning-list-card:hover {
     animation: none;
   }
 }
+
+/* Momentum Workshop — selected course activity direction. */
+.site-frame--learner .activity-page {
+  width: min(1240px, calc(100% - 40px));
+}
+
+.site-frame--learner .activity-workspace {
+  grid-template-columns: minmax(0, 1fr) 306px;
+  gap: 20px;
+}
+
+.site-frame--learner .activity-workspace .activity-shell {
+  padding: 30px 34px 34px;
+  border: 1px solid var(--clarity-border);
+  border-radius: 14px;
+  background: var(--clarity-surface);
+  box-shadow: 0 12px 36px rgba(15, 27, 51, 0.055);
+}
+
+.activity-shell__breadcrumb {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  color: var(--clarity-muted);
+  font-size: 0.72rem;
+  font-weight: 750;
+}
+
+.activity-shell__breadcrumb > a {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 6px;
+  color: var(--clarity-ink);
+}
+
+.site-frame--learner .activity-shell__header {
+  align-items: start;
+  margin-top: 22px;
+}
+
+.site-frame--learner .activity-shell__header h1 {
+  max-width: 820px;
+  margin-top: 10px;
+  font-family: var(--font-sans), Arial, sans-serif;
+  font-size: clamp(2rem, 3.3vw, 2.65rem);
+  font-weight: 850;
+  letter-spacing: -0.058em;
+  line-height: 1.02;
+}
+
+.activity-shell__type {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--clarity-indigo);
+  font-size: 0.72rem;
+  font-weight: 850;
+  letter-spacing: 0.075em;
+  text-transform: uppercase;
+}
+
+.activity-shell__type-icon {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 8px;
+  color: #fff;
+  background: var(--clarity-indigo);
+}
+
+.activity-prompt {
+  margin: 30px 0 20px;
+  padding-top: 24px;
+  border-top: 1px solid var(--clarity-border);
+}
+
+.activity-prompt > p:last-of-type:not(.activity-prompt__help) {
+  max-width: 790px;
+  margin-top: 10px;
+  color: var(--clarity-ink);
+  font-size: clamp(1.08rem, 2vw, 1.38rem);
+  font-weight: 760;
+  letter-spacing: -0.025em;
+  line-height: 1.45;
+}
+
+.activity-prompt > p.activity-prompt__help {
+  max-width: 720px;
+  margin-top: 10px;
+  color: var(--clarity-muted);
+  font-size: 0.82rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  line-height: 1.55;
+}
+
+.activity-stage-summary {
+  display: none;
+  gap: 10px;
+  margin: 22px 0 4px;
+  padding: 16px 18px;
+  border: 1px solid #ddd9ff;
+  border-radius: 12px;
+  background: #f7f6ff;
+}
+
+.activity-stage-summary > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.activity-stage-summary span,
+.activity-stage-summary strong {
+  color: var(--clarity-indigo);
+  font-size: 0.75rem;
+  font-weight: 850;
+}
+
+.activity-stage-summary p {
+  color: var(--clarity-muted);
+  font-size: 0.76rem;
+}
+
+.activity-stage-summary .activity-stage-summary__path-state {
+  padding-top: 8px;
+  border-top: 1px solid currentColor;
+  font-weight: 700;
+}
+
+.activity-mobile-path {
+  display: none;
+}
+
+.activity-path-recovery {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--clarity-border);
+  border-radius: 9px;
+  color: var(--clarity-muted);
+  background: var(--clarity-soft-blue);
+  font-size: 0.76rem;
+}
+
+.activity-path-recovery :is(a, button),
+.activity-module-panel__loading :is(a, button) {
+  width: fit-content;
+  min-height: 44px;
+  cursor: pointer;
+  color: var(--clarity-indigo);
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-weight: 800;
+}
+
+.site-frame--learner .activity-response-form {
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.site-frame--learner .activity-response-form__label {
+  font-size: 0.9rem;
+}
+
+.site-frame--learner .activity-response-form textarea {
+  min-height: 250px;
+  padding: 20px;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+.activity-response-form__boundary {
+  color: var(--clarity-muted);
+  font-weight: 650;
+}
+
+.activity-draft-boundary {
+  display: block;
+  margin-top: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.activity-draft-boundary > summary {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  color: var(--clarity-muted);
+  font-size: 0.72rem;
+  list-style: none;
+}
+
+.activity-draft-boundary > summary::-webkit-details-marker {
+  display: none;
+}
+
+.activity-draft-boundary > summary svg {
+  color: var(--clarity-muted);
+}
+
+.activity-draft-boundary > summary strong {
+  color: var(--clarity-muted);
+}
+
+.activity-draft-boundary > p {
+  margin: 0 0 6px 25px;
+  color: var(--clarity-muted);
+  font-size: 0.72rem;
+}
+
+.activity-response-form__actions--primary {
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+}
+
+.activity-response-form__actions--primary > div {
+  display: flex;
+  gap: 10px;
+}
+
+.activity-back-link,
+.activity-module-panel__back {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 7px;
+  color: var(--clarity-ink);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.activity-submit-boundary {
+  max-width: 440px;
+  margin-left: auto;
+}
+
+.site-frame--learner .activity-authority-panel {
+  position: sticky;
+  top: 84px;
+}
+
+.site-frame--learner .activity-authority-panel > section {
+  padding: 22px;
+  border-radius: 14px;
+  box-shadow: 0 8px 26px rgba(15, 27, 51, 0.045);
+}
+
+.activity-module-panel > h2 {
+  margin: 7px 0 6px;
+  font-size: 1.12rem;
+  line-height: 1.28;
+}
+
+.activity-module-panel__progress,
+.activity-module-panel__loading {
+  color: var(--clarity-muted);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.activity-module-panel__loading {
+  margin-top: 12px;
+}
+
+.activity-authority-panel .activity-loop,
+.activity-mobile-path .activity-loop {
+  display: grid;
+  margin-top: 18px;
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
+  grid-template-columns: 1fr;
+  background: transparent;
+}
+
+.activity-authority-panel .activity-loop__step,
+.activity-mobile-path .activity-loop__step {
+  display: block;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-top: 1px solid #edf0f4;
+  background: transparent;
+  text-align: left;
+  text-transform: none;
+}
+
+.activity-authority-panel .activity-loop__step + .activity-loop__step,
+.activity-mobile-path .activity-loop__step + .activity-loop__step {
+  border-left: 0;
+}
+
+.activity-loop__step > a,
+.activity-loop__step > div {
+  display: grid;
+  min-height: 62px;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 4px;
+}
+
+.activity-authority-panel .activity-loop__icon,
+.activity-mobile-path .activity-loop__icon {
+  width: 30px;
+  height: 30px;
+}
+
+.activity-loop__copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.activity-loop__copy strong {
+  color: var(--clarity-ink);
+  font-size: 0.75rem;
+  font-weight: 820;
+}
+
+.activity-loop__status,
+.activity-loop__reason {
+  color: var(--clarity-muted);
+  font-size: 0.64rem;
+  font-weight: 650;
+  letter-spacing: 0;
+  line-height: 1.35;
+  text-transform: none;
+}
+
+.activity-loop__reason {
+  margin-top: 2px;
+}
+
+.activity-loop__chevron {
+  color: var(--clarity-muted);
+}
+
+.activity-loop__step.is-current {
+  margin-inline: -8px;
+  padding-inline: 8px;
+  border-top-color: transparent;
+  border-radius: 9px;
+  background: #f2f0ff;
+}
+
+.activity-loop__step.is-current + .activity-loop__step {
+  border-top-color: transparent;
+}
+
+.activity-loop__step.is-current .activity-loop__icon {
+  border-color: var(--clarity-indigo);
+  color: #fff;
+  background: var(--clarity-indigo);
+  box-shadow: none;
+}
+
+.activity-loop__step.is-current .activity-loop__status {
+  color: var(--clarity-indigo);
+  font-weight: 800;
+}
+
+.activity-loop__step.is-complete .activity-loop__icon {
+  border-color: #bde7cd;
+  color: #16824c;
+  background: #ecf8f1;
+}
+
+.activity-loop__step.is-locked .activity-loop__icon {
+  border-color: #e0e4ea;
+  color: #8992a2;
+  background: #f7f8fa;
+}
+
+.activity-module-panel__back {
+  justify-content: space-between;
+  width: 100%;
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--clarity-border);
+}
+
+.activity-authority-details {
+  margin-top: 10px;
+  color: var(--clarity-muted);
+  font-size: 0.7rem;
+}
+
+.activity-authority-details summary {
+  min-height: 44px;
+  align-content: center;
+  cursor: pointer;
+  font-weight: 750;
+}
+
+.activity-authority-details dl {
+  margin-top: 4px;
+}
+
+@media (max-width: 900px) {
+  .site-frame--learner .activity-page {
+    width: calc(100% - 32px);
+  }
+
+  .site-frame--learner .activity-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .site-frame--learner .activity-authority-panel {
+    position: static;
+    grid-template-columns: 1fr;
+  }
+
+  .site-frame--learner .learner-bottom-nav {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .site-frame--learner .activity-page {
+    width: 100%;
+    padding-top: 0;
+  }
+
+  .site-frame--learner .activity-workspace {
+    gap: 0;
+  }
+
+  .site-frame--learner .activity-workspace .activity-shell {
+    margin: 0;
+    padding: 20px 18px 30px;
+    border-width: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .activity-shell__breadcrumb {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .activity-shell__breadcrumb > span {
+    display: none;
+  }
+
+  .site-frame--learner .activity-shell__header {
+    margin-top: 8px;
+  }
+
+  .site-frame--learner .activity-shell__header h1 {
+    margin-top: 8px;
+    font-size: 1.65rem;
+    line-height: 1.03;
+  }
+
+  .site-frame--learner .activity-shell__header .status-pill {
+    display: none;
+  }
+
+  .activity-prompt {
+    margin: 12px 0 10px;
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  .activity-prompt > .kicker {
+    display: none;
+  }
+
+  .activity-prompt > p:last-of-type:not(.activity-prompt__help) {
+    margin-top: 0;
+    font-size: 1rem;
+    line-height: 1.4;
+  }
+
+  .activity-prompt > p.activity-prompt__help {
+    display: none;
+  }
+
+  .activity-stage-summary {
+    display: grid;
+    margin-top: 14px;
+    padding: 12px 14px;
+  }
+
+  .activity-mobile-path {
+    display: block;
+    margin: 10px 0 14px;
+    border: 1px solid var(--clarity-border);
+    border-radius: 11px;
+    background: #fff;
+  }
+
+  .activity-mobile-path > summary {
+    display: flex;
+    min-height: 52px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 0 14px;
+    cursor: pointer;
+    color: var(--clarity-ink);
+    font-size: 0.76rem;
+    font-weight: 800;
+    list-style: none;
+  }
+
+  .activity-mobile-path > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .activity-mobile-path__summary-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .activity-mobile-path__summary-meta svg {
+    transition: transform 160ms ease;
+  }
+
+  .activity-mobile-path[open] .activity-mobile-path__summary-meta svg {
+    transform: rotate(90deg);
+  }
+
+  .activity-mobile-path > div {
+    padding: 4px 14px 14px;
+    border-top: 1px solid var(--clarity-border);
+  }
+
+  .activity-mobile-path h2 {
+    margin-top: 5px;
+    color: var(--clarity-ink);
+    font-size: 1rem;
+  }
+
+  .site-frame--learner .activity-response-form {
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .activity-response-form__heading {
+    display: flex;
+    min-height: 28px;
+  }
+
+  .activity-response-form__heading > span {
+    display: none;
+  }
+
+  .site-frame--learner .activity-response-form textarea {
+    height: 112px;
+    min-height: 112px;
+    padding: 16px;
+  }
+
+  .activity-response-form__meta {
+    min-height: 20px;
+    align-items: center;
+    flex-direction: row;
+    gap: 8px;
+    font-size: 0.68rem;
+  }
+
+  .activity-response-form__boundary {
+    display: none;
+  }
+
+  .activity-draft-boundary {
+    display: none;
+  }
+
+  .activity-response-form__actions--primary {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+
+  .activity-response-form__actions--primary > div {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .activity-response-form__actions--primary .button,
+  .activity-back-link {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .activity-submit-boundary {
+    margin-inline: auto;
+    text-align: center;
+  }
+
+  .site-frame--learner .activity-authority-panel {
+    display: none;
+  }
+}

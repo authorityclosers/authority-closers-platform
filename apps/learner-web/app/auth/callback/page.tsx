@@ -151,7 +151,7 @@ export default async function CallbackPage({
               {recovery.actionLabel}
               <ArrowRight size={17} aria-hidden="true" />
             </Link>
-            <div className="boundary-card boundary-card--dark" role="note">
+            <div className="boundary-card" role="note">
               <strong>Your account remains protected</strong>
               <span>
                 A session is created only after Google, identity, consent, and

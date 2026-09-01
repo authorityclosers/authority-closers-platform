@@ -191,6 +191,7 @@ export function LearnerShell({
           </div>
         </div>
       </header>
+      {children}
       <nav
         className="learner-bottom-nav"
         aria-label="Learner mobile navigation"
@@ -220,7 +221,6 @@ export function LearnerShell({
           current={current === "settings"}
         />
       </nav>
-      {children}
     </div>
   );
 }

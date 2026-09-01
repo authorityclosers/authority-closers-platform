@@ -44,7 +44,11 @@ export function AuthFlowPage({
           ? "Skip to learning setup"
           : "Skip to authentication"}
       </a>
-      <main id="main-content" className="auth-main clarity-auth-main">
+      <main
+        id="main-content"
+        className="auth-main clarity-auth-main"
+        tabIndex={-1}
+      >
         <div className={`clarity-auth-shell clarity-auth-shell--${variant}`}>
           <header className="clarity-auth-masthead">
             <Link

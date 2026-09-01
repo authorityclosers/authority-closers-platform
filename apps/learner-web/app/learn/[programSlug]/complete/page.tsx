@@ -18,7 +18,7 @@ export default async function CompletionPage({
 
   return (
     <LearnerShell current="course">
-      <main id="main-content" className="learner-main">
+      <main id="main-content" className="learner-main" tabIndex={-1}>
         <div className="page-container">
           <SurfaceStatePanel
             state={state}

@@ -551,6 +551,16 @@ def test_learning_http_uses_one_authenticated_postgres_transaction(
                 assert learning_body["projection"]["percentage"] == 0.0
                 assert learning_body["modules"][0]["position"] == 1
                 assert learning_body["modules"][0]["activities"][0]["position"] == 1
+                scoped_learning = await client.get(
+                    f"/v1/learning/{seed.program_id}",
+                    params={
+                        "enrollment_id": str(seed.enrollment_id),
+                        "program_version_id": str(seed.version_id),
+                    },
+                )
+                assert scoped_learning.status_code == 200
+                assert scoped_learning.json()["enrollment_id"] == str(seed.enrollment_id)
+                assert scoped_learning.json()["program_version_id"] == str(seed.version_id)
                 first_activity = learning_body["modules"][0]["activities"][0]
                 locked_activity = learning_body["modules"][1]["activities"][0]
                 assert first_activity["prompt"] == (
@@ -588,6 +598,7 @@ def test_learning_http_uses_one_authenticated_postgres_transaction(
                 assert initial.headers["etag"] == '"activity-revision-0"'
                 assert initial.headers["cache-control"] == "no-store"
                 assert initial.json()["position"] == 1
+                assert initial.json()["program_id"] == str(seed.program_id)
                 assert initial.json()["prompt"] == (
                     "Describe one test-only signal before proposing a solution."
                 )

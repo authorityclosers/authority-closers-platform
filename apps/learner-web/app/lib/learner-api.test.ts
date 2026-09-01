@@ -479,6 +479,7 @@ describe("learner API adapter", () => {
         missing_module_ids: [],
       },
       allowed_actions: [],
+      program_id: "program-1",
       enrollment_id: "enrollment-1",
       draft_revision: 0,
       draft_payload: null,
@@ -487,7 +488,11 @@ describe("learner API adapter", () => {
       const path = String(input);
       if (path === "/v1/programs/free-course") return response(detail);
       if (path === "/v1/activities/activity-1") return response(activity);
-      if (path === "/v1/learning/program-1") {
+      if (
+        path === "/v1/learning/program-1" ||
+        path ===
+          "/v1/learning/program-1?enrollment_id=enrollment-1&program_version_id=version-1"
+      ) {
         return response({
           program_id: "program-1",
           program_version_id: "version-1",
@@ -521,6 +526,19 @@ describe("learner API adapter", () => {
       program_title: "Published course",
       projection: { percentage: 0, completed_count: 0, denominator: 5 },
     });
+    await expect(
+      api.learning("program-1", {
+        enrollmentId: "enrollment-1",
+        programVersionId: "version-1",
+      }),
+    ).resolves.toMatchObject({
+      enrollment_id: "enrollment-1",
+      program_version_id: "version-1",
+    });
+    expect(fetcher).toHaveBeenCalledWith(
+      "/v1/learning/program-1?enrollment_id=enrollment-1&program_version_id=version-1",
+      expect.objectContaining({ cache: "no-store" }),
+    );
     await expect(api.certificate("certificate-1")).resolves.toEqual({
       id: "certificate-1",
       status: "issued",

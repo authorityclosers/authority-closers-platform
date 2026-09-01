@@ -7,9 +7,11 @@ import {
   ConnectedActivityWorkspace,
   FREE_COURSE_SLUG,
   HomeLearningPath,
+  isForbiddenError,
   isSessionExpiredError,
   LearnerHomeEnrollmentCard,
   LearnerHomeOnboardingRedirect,
+  learningPathStatusForError,
   LearningActivityNavigation,
 } from "../components/learner-runtime";
 import { isOnboardingSessionExpired } from "../components/onboarding-form";
@@ -46,9 +48,68 @@ const activity: LearningActivityResponse = {
 
 const response: ActivityResponse = {
   ...activity,
+  program_id: "program-1",
   enrollment_id: "enrollment-1",
   draft_revision: 0,
   draft_payload: null,
+};
+
+const learningLoop: LearningResponse = {
+  program_id: "program-1",
+  program_version_id: "version-1",
+  program_slug: FREE_COURSE_SLUG,
+  program_title: "Authority Closers Free Course",
+  version_number: 1,
+  enrollment_id: "enrollment-1",
+  modules: [
+    {
+      id: "module-1",
+      position: 1,
+      title: "Why high-ticket sales is a different game",
+      activities: [
+        {
+          ...activity,
+          id: "watch-1",
+          position: 1,
+          kind: "VIDEO",
+          title: "Watch the Module 1 shift",
+          state: "completed",
+          allowed_actions: [],
+        },
+        response,
+        ...["IMPLEMENTATION_CHALLENGE", "REVIEW", "IMPROVE"].map(
+          (kind, index) => ({
+            ...activity,
+            id: `locked-${index + 3}`,
+            position: index + 3,
+            kind,
+            title: `Locked ${kind.toLowerCase()}`,
+            state: "locked",
+            allowed_actions: [] as [],
+            explanation: {
+              ...activity.explanation,
+              activity_id: `locked-${index + 3}`,
+              state: "locked",
+              missing_activity_ids: ["reflection-1"],
+              missing_module_ids: ["module-prerequisite"],
+            },
+          }),
+        ),
+      ],
+    },
+  ],
+  projection: {
+    scope_type: "course",
+    scope_id: "program-1",
+    program_version: "1",
+    projection_version: "1",
+    denominator: 5,
+    completed_count: 1,
+    percentage: 0.2,
+    predicate: "required activities completed",
+    missing_module_ids: ["module-1"],
+    activity_reasons: [],
+  },
 };
 
 const publishedFreeCourse: ProgramSummaryResponse = {
@@ -76,6 +137,22 @@ describe("learner Clarity Grid slice", () => {
     expect(html).not.toContain("Library");
     expect(html).not.toContain("Search is coming later");
     expect(html).not.toContain("Certificate");
+  });
+
+  it("keeps fixed mobile navigation after the main content in DOM order", () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        LearnerShell,
+        { current: "home" },
+        createElement("main", { id: "shell-content" }, "content"),
+      ),
+    );
+
+    const contentIndex = html.indexOf('<main id="shell-content">');
+    const navigationIndex = html.indexOf('<nav class="learner-bottom-nav"');
+
+    expect(contentIndex).toBeGreaterThanOrEqual(0);
+    expect(navigationIndex).toBeGreaterThan(contentIndex);
   });
 
   it("keeps Learning valid while incomplete onboarding redirects", () => {
@@ -212,15 +289,59 @@ describe("learner Clarity Grid slice", () => {
 
   it("uses the Clarity response form without inventing reviewer feedback", () => {
     const html = renderToStaticMarkup(
-      createElement(ConnectedActivityWorkspace, { activity: response }),
+      createElement(ConnectedActivityWorkspace, {
+        activity: response,
+        learning: learningLoop,
+        learningPathStatus: "ready",
+      }),
     );
 
-    expect(html).toContain("My learning");
-    expect(html).toContain("REFLECTION");
+    expect(html).toContain("Authority Closers Free Course");
+    expect(html).toContain("Module 1");
+    expect(html).toContain("2 of 5");
     expect(html).toContain('class="activity-response-form"');
+    expect(html).toContain("Save reflection");
     expect(html).toContain("Submit evidence");
+    expect(html).toContain("Reflection only — not an evaluation.");
+    expect(html).toContain(
+      "Complete 1 earlier required activity and 1 prerequisite module to unlock.",
+    );
     expect(html).not.toContain("AI score");
     expect(html).not.toContain("reviewer feedback");
+  });
+
+  it("renders dependent-path session recovery without hiding the activity", () => {
+    const html = renderToStaticMarkup(
+      createElement(ConnectedActivityWorkspace, {
+        activity: response,
+        learningPathStatus: "error",
+        learningPathError: new ApiError(401, "expired"),
+      }),
+    );
+
+    expect(html).toContain(
+      "Your session expired while refreshing the module path.",
+    );
+    expect(html).toContain("Sign in again");
+    expect(html).toContain(response.title);
+  });
+
+  it("renders access recovery instead of a futile retry for a forbidden path", () => {
+    const html = renderToStaticMarkup(
+      createElement(ConnectedActivityWorkspace, {
+        activity: response,
+        learning: learningLoop,
+        learningPathStatus: "forbidden",
+        learningPathError: new ApiError(403, "denied"),
+        onRetryLearningPath: () => undefined,
+      }),
+    );
+
+    expect(html).toContain("Contact learner support");
+    expect(html).toContain("mailto:admin@authorityclosers.com");
+    expect(html).not.toContain("Retry module path");
+    expect(html).not.toContain("Watch the Module 1 shift");
+    expect(html).toContain(response.title);
   });
 
   it("recognizes only a 401 as session-expired mutation recovery", () => {
@@ -229,6 +350,52 @@ describe("learner Clarity Grid slice", () => {
     expect(isSessionExpiredError(new ApiError(403, "denied"))).toBe(false);
     expect(isOnboardingSessionExpired(new ApiError(403, "denied"))).toBe(false);
     expect(isSessionExpiredError(new TypeError("offline"))).toBe(false);
+  });
+
+  it("classifies dependent learning-path failures by recovery boundary", () => {
+    expect(isForbiddenError(new ApiError(403, "denied"))).toBe(true);
+    expect(isForbiddenError(new ApiError(401, "expired"))).toBe(false);
+    expect(learningPathStatusForError(new ApiError(404, "missing"))).toBe(
+      "unavailable",
+    );
+    expect(learningPathStatusForError(new ApiError(403, "denied"))).toBe(
+      "forbidden",
+    );
+    expect(learningPathStatusForError(new ApiError(401, "expired"))).toBe(
+      "error",
+    );
+    expect(learningPathStatusForError(new TypeError("offline"))).toBe("error");
+  });
+
+  it("reloads route identity and prevents stale path refresh overwrites", () => {
+    const source = readFileSync(
+      new URL("../components/learner-runtime.tsx", import.meta.url),
+      "utf8",
+    );
+    const liveActivity = source.slice(
+      source.indexOf("export function LiveActivity"),
+      source.indexOf("export function LiveCertificate"),
+    );
+
+    expect(liveActivity).toContain("activityId,\n  );");
+    expect(liveActivity).toContain("key={state.value.activity.id}");
+    expect(source).toContain("const refresh = onMutationCommitted?.(kind);");
+    expect(source).toContain('if (kind === "draft") return;');
+    expect(source).toContain("++learningPathGeneration.current");
+    expect(source).toContain(
+      "if (generation !== learningPathGeneration.current) return;",
+    );
+    expect(source).not.toContain("await onMutationCommitted?.();");
+  });
+
+  it("keeps skip-link targets programmatically focusable", () => {
+    const activityPage = readFileSync(
+      new URL("../activity/[activityId]/page.tsx", import.meta.url),
+      "utf8",
+    );
+
+    expect(activityPage).toContain('id="main-content"');
+    expect(activityPage).toContain("tabIndex={-1}");
   });
 
   it("collapses task flows for mobile and keeps safe-area and touch-target contracts", () => {
@@ -242,6 +409,10 @@ describe("learner Clarity Grid slice", () => {
     );
     const learnerStyles = readFileSync(
       new URL("../learner-clarity.css", import.meta.url),
+      "utf8",
+    );
+    const themeStyles = readFileSync(
+      new URL("../theme.css", import.meta.url),
       "utf8",
     );
 
@@ -258,5 +429,21 @@ describe("learner Clarity Grid slice", () => {
     expect(learnerStyles).toMatch(
       /\.site-frame--learner \.button \{[^}]*min-height: 44px;/s,
     );
+    expect(learnerStyles).toMatch(
+      /\.activity-shell__breadcrumb > a \{[^}]*min-height: 44px;/s,
+    );
+    expect(learnerStyles).toMatch(
+      /\.activity-response-form__heading \{[^}]*display: flex;/s,
+    );
+    expect(themeStyles).toContain(
+      'html[data-theme="dark"] .site-frame--learner .activity-stage-summary',
+    );
+    expect(themeStyles).toContain(
+      'html[data-theme="dark"] .site-frame--learner .activity-mobile-path',
+    );
+    expect(themeStyles).toMatch(
+      /html\[data-theme="dark"\][\s\S]*\.learner-bottom-nav[\s\S]*color: var\(--theme-text-muted\);/,
+    );
+    expect(learnerStyles).toContain(".activity-mobile-path__summary-meta svg");
   });
 });

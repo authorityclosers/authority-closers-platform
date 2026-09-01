@@ -14,7 +14,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
   return (
     <PublicShell>
-      <main id="main-content" className="public-main">
+      <main id="main-content" className="public-main" tabIndex={-1}>
         <div className="page-container">
           <SurfaceStatePanel
             state={state}

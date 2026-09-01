@@ -68,6 +68,51 @@ type BeforeUnloadTarget = {
   ) => void;
 };
 
+type ClickGuardTarget = {
+  addEventListener: (
+    type: string,
+    listener: EventListenerOrEventListenerObject,
+    options?: boolean | AddEventListenerOptions,
+  ) => void;
+  removeEventListener: (
+    type: string,
+    listener: EventListenerOrEventListenerObject,
+    options?: boolean | EventListenerOptions,
+  ) => void;
+};
+
+type HistoryNavigationGuardTarget = {
+  readonly location: { href: string };
+  readonly history: {
+    readonly state: unknown;
+    pushState: (
+      data: unknown,
+      unused: string,
+      url?: string | URL | null,
+    ) => void;
+  };
+  addEventListener: (
+    type: string,
+    listener: EventListenerOrEventListenerObject,
+    options?: boolean | AddEventListenerOptions,
+  ) => void;
+  removeEventListener: (
+    type: string,
+    listener: EventListenerOrEventListenerObject,
+    options?: boolean | EventListenerOptions,
+  ) => void;
+  readonly navigation?: {
+    addEventListener: (
+      type: string,
+      listener: EventListenerOrEventListenerObject,
+    ) => void;
+    removeEventListener: (
+      type: string,
+      listener: EventListenerOrEventListenerObject,
+    ) => void;
+  };
+};
+
 const LOCAL_DRAFT_VERSION = 2;
 const LOCAL_DRAFT_PREFIX = "ac-learner-local-draft";
 
@@ -420,6 +465,16 @@ export function activityRecoveryText(response: string): string {
 
 export type MutationFailureKind = "conflict" | "offline" | "session" | "retry";
 
+export function availableLocalStorage(owner: {
+  readonly localStorage: Storage;
+}): Storage | null {
+  try {
+    return owner.localStorage;
+  } catch {
+    return null;
+  }
+}
+
 export function mutationFailureKind(
   error: unknown,
   online: boolean,
@@ -441,4 +496,63 @@ export function registerBeforeUnloadGuard(
   };
   target.addEventListener("beforeunload", listener);
   return () => target.removeEventListener("beforeunload", listener);
+}
+
+export function registerInternalNavigationGuard(
+  target: ClickGuardTarget,
+  active: boolean,
+  confirmNavigation: () => boolean,
+): () => void {
+  if (!active) return () => undefined;
+  const listener: EventListener = (rawEvent) => {
+    const event = rawEvent as MouseEvent;
+    if (
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    ) {
+      return;
+    }
+    const eventTarget = event.target;
+    if (!(eventTarget instanceof Element)) return;
+    const anchor = eventTarget.closest("a[href]");
+    if (!(anchor instanceof HTMLAnchorElement)) return;
+    if (anchor.target && anchor.target !== "_self") return;
+    const destination = new URL(anchor.href, window.location.href);
+    if (destination.origin !== window.location.origin) return;
+    if (confirmNavigation()) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  };
+  target.addEventListener("click", listener, true);
+  return () => target.removeEventListener("click", listener, true);
+}
+
+export function registerHistoryNavigationGuard(
+  target: HistoryNavigationGuardTarget,
+  active: boolean,
+  confirmNavigation: () => boolean,
+): () => void {
+  if (!active) return () => undefined;
+  const guardedHref = target.location.href;
+  const guardedState = target.history.state;
+  const popstateListener: EventListener = (event) => {
+    if (confirmNavigation()) return;
+    event.stopImmediatePropagation();
+    target.history.pushState(guardedState, "", guardedHref);
+  };
+  const navigateListener: EventListener = (event) => {
+    if (!event.cancelable || confirmNavigation()) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  };
+  target.addEventListener("popstate", popstateListener, true);
+  target.navigation?.addEventListener("navigate", navigateListener);
+  return () => {
+    target.removeEventListener("popstate", popstateListener, true);
+    target.navigation?.removeEventListener("navigate", navigateListener);
+  };
 }

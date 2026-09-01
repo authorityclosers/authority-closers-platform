@@ -16,7 +16,7 @@ export default async function LearnerHomePage({
 
   return (
     <LearnerShell current="home">
-      <main id="main-content" className="learner-main">
+      <main id="main-content" className="learner-main" tabIndex={-1}>
         <div className="page-container home-page">
           <SurfaceStatePanel
             state={state}

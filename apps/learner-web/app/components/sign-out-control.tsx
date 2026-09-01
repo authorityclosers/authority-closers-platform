@@ -9,6 +9,7 @@ import {
   type LearnerApi,
 } from "../lib/learner-api";
 import {
+  availableLocalStorage,
   clearAllLearnerLocalDrafts,
   type LocalDraftStorageResult,
 } from "../lib/local-drafts";
@@ -43,7 +44,7 @@ export function SignOutFailure({
 
 export async function logoutAndClearLocalDrafts(
   api: Pick<LearnerApi, "logout">,
-  storage: Storage,
+  storage: Storage | null,
 ): Promise<{
   cleanup: LocalDraftStorageResult;
   serverRevocationConfirmed: boolean;
@@ -61,7 +62,9 @@ export async function logoutAndClearLocalDrafts(
     serverRevocationConfirmed = false;
   }
   return {
-    cleanup: clearAllLearnerLocalDrafts(storage),
+    cleanup: storage
+      ? clearAllLearnerLocalDrafts(storage)
+      : { ok: false, reason: "unavailable" },
     serverRevocationConfirmed,
   };
 }
@@ -84,7 +87,10 @@ export function SignOutControl({
 
   function retryCleanup() {
     setSigningOut(true);
-    const result = clearAllLearnerLocalDrafts(window.localStorage);
+    const storage = availableLocalStorage(window);
+    const result = storage
+      ? clearAllLearnerLocalDrafts(storage)
+      : { ok: false as const, reason: "unavailable" as const };
     if (result.ok) {
       finishRedirect();
       return;
@@ -101,7 +107,10 @@ export function SignOutControl({
     setCleanupOnly(false);
     setLocallySignedOut(false);
     try {
-      const outcome = await logoutAndClearLocalDrafts(api, window.localStorage);
+      const outcome = await logoutAndClearLocalDrafts(
+        api,
+        availableLocalStorage(window),
+      );
       if (!outcome.cleanup.ok) {
         setCleanupOnly(true);
         setFailure(

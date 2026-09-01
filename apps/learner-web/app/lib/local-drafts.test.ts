@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ApiError } from "./learner-api";
 import {
   activityServerFingerprint,
+  availableLocalStorage,
   clearActivityLocalDraft,
   clearAllLearnerLocalDrafts,
   clearOnboardingLocalDraft,
@@ -13,6 +14,8 @@ import {
   readActivityLocalDraft,
   readOnboardingLocalDraft,
   registerBeforeUnloadGuard,
+  registerHistoryNavigationGuard,
+  registerInternalNavigationGuard,
   writeActivityLocalDraft,
   writeOnboardingLocalDraft,
   type ActivityDraftScope,
@@ -54,6 +57,19 @@ const onboardingServerDraft = {
 };
 
 describe("scoped recoverable local learner drafts", () => {
+  it("treats a blocked localStorage getter as unavailable", () => {
+    const owner = Object.defineProperty({}, "localStorage", {
+      get() {
+        throw new DOMException("blocked", "SecurityError");
+      },
+    }) as { readonly localStorage: Storage };
+
+    expect(availableLocalStorage(owner)).toBeNull();
+    expect(
+      availableLocalStorage({ localStorage: memoryStorage() }),
+    ).not.toBeNull();
+  });
+
   it("stores onboarding recovery with its person, server base, fingerprint, and bounded timestamps", () => {
     const storage = memoryStorage();
     const now = Date.UTC(2026, 8, 1, 12);
@@ -288,5 +304,127 @@ describe("scoped recoverable local learner drafts", () => {
 
     cleanup();
     expect(removeEventListener).toHaveBeenCalledWith("beforeunload", listener);
+  });
+
+  it("guards internal soft navigation when no recovery copy exists", () => {
+    class FakeAnchor {
+      href = "https://staging.authorityclosers.com/home";
+      target = "";
+    }
+    class FakeElement {
+      constructor(private readonly anchor: FakeAnchor) {}
+      closest() {
+        return this.anchor;
+      }
+    }
+    vi.stubGlobal("Element", FakeElement);
+    vi.stubGlobal("HTMLAnchorElement", FakeAnchor);
+    vi.stubGlobal("window", {
+      location: {
+        href: "https://staging.authorityclosers.com/activity/activity-1",
+        origin: "https://staging.authorityclosers.com",
+      },
+    });
+    const addEventListener = vi.fn();
+    const removeEventListener = vi.fn();
+    const confirmNavigation = vi.fn(() => false);
+    const cleanup = registerInternalNavigationGuard(
+      { addEventListener, removeEventListener },
+      true,
+      confirmNavigation,
+    );
+    const listener = addEventListener.mock.calls[0]?.[1] as EventListener;
+    const event = {
+      target: new FakeElement(new FakeAnchor()),
+      button: 0,
+      defaultPrevented: false,
+      metaKey: false,
+      ctrlKey: false,
+      shiftKey: false,
+      altKey: false,
+      preventDefault: vi.fn(),
+      stopImmediatePropagation: vi.fn(),
+    };
+
+    listener(event as unknown as Event);
+    expect(confirmNavigation).toHaveBeenCalledOnce();
+    expect(event.preventDefault).toHaveBeenCalledOnce();
+    expect(event.stopImmediatePropagation).toHaveBeenCalledOnce();
+    cleanup();
+    expect(removeEventListener).toHaveBeenCalledWith("click", listener, true);
+    vi.unstubAllGlobals();
+  });
+
+  it("guards browser history and imperative navigation without a recovery copy", () => {
+    const listeners = new Map<string, EventListener>();
+    const navigationListeners = new Map<string, EventListener>();
+    const pushState = vi.fn();
+    const target = {
+      location: {
+        href: "https://staging.authorityclosers.com/activity/activity-1",
+      },
+      history: { state: { route: "activity-1" }, pushState },
+      addEventListener: vi.fn(
+        (type: string, listener: EventListenerOrEventListenerObject) => {
+          listeners.set(
+            type,
+            typeof listener === "function"
+              ? listener
+              : (event) => listener.handleEvent(event),
+          );
+        },
+      ),
+      removeEventListener: vi.fn(),
+      navigation: {
+        addEventListener: vi.fn(
+          (type: string, listener: EventListenerOrEventListenerObject) => {
+            navigationListeners.set(
+              type,
+              typeof listener === "function"
+                ? listener
+                : (event) => listener.handleEvent(event),
+            );
+          },
+        ),
+        removeEventListener: vi.fn(),
+      },
+    };
+    const confirmNavigation = vi.fn(() => false);
+    const cleanup = registerHistoryNavigationGuard(
+      target,
+      true,
+      confirmNavigation,
+    );
+
+    const popstate = {
+      stopImmediatePropagation: vi.fn(),
+    } as unknown as Event;
+    listeners.get("popstate")?.(popstate);
+    expect(popstate.stopImmediatePropagation).toHaveBeenCalledOnce();
+    expect(pushState).toHaveBeenCalledWith(
+      { route: "activity-1" },
+      "",
+      "https://staging.authorityclosers.com/activity/activity-1",
+    );
+
+    const navigate = {
+      cancelable: true,
+      preventDefault: vi.fn(),
+      stopImmediatePropagation: vi.fn(),
+    } as unknown as Event;
+    navigationListeners.get("navigate")?.(navigate);
+    expect(navigate.preventDefault).toHaveBeenCalledOnce();
+    expect(navigate.stopImmediatePropagation).toHaveBeenCalledOnce();
+
+    cleanup();
+    expect(target.removeEventListener).toHaveBeenCalledWith(
+      "popstate",
+      listeners.get("popstate"),
+      true,
+    );
+    expect(target.navigation.removeEventListener).toHaveBeenCalledWith(
+      "navigate",
+      navigationListeners.get("navigate"),
+    );
   });
 });

@@ -18,7 +18,7 @@ export default async function ProgramDetailPage({
 
   return (
     <PublicShell current="program">
-      <main id="main-content" className="public-main">
+      <main id="main-content" className="public-main" tabIndex={-1}>
         <div className="page-container">
           <SurfaceStatePanel
             state={state}

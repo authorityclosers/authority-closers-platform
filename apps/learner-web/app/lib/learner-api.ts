@@ -177,6 +177,7 @@ export interface LearningResponse {
 }
 
 export interface ActivityResponse extends LearningActivityResponse {
+  program_id: string;
   enrollment_id: string;
   draft_revision: number;
   draft_payload: JsonRecord | null;
@@ -453,13 +454,21 @@ export function createLearnerApi(
         "/v1/enrollments/free",
         { program_version_id: programVersionId },
       ),
-    learning: (programId: string) =>
-      request<LearningResponse>(
-        `/v1/learning/${encodeURIComponent(programId)}`,
-        {
-          cache: "no-store",
-        },
-      ),
+    learning: (
+      programId: string,
+      scope?: { enrollmentId: string; programVersionId: string },
+    ) => {
+      const query = scope
+        ? `?${new URLSearchParams({
+            enrollment_id: scope.enrollmentId,
+            program_version_id: scope.programVersionId,
+          }).toString()}`
+        : "";
+      return request<LearningResponse>(
+        `/v1/learning/${encodeURIComponent(programId)}${query}`,
+        { cache: "no-store" },
+      );
+    },
     activity: (activityId: string) =>
       request<ActivityResponse>(
         `/v1/activities/${encodeURIComponent(activityId)}`,

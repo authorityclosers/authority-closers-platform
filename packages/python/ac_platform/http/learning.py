@@ -15,7 +15,7 @@ from enum import Enum
 from typing import Annotated, Any, Literal, cast
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, FastAPI, Header, Path, Request, Response, status
+from fastapi import APIRouter, Depends, FastAPI, Header, Path, Query, Request, Response, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -175,6 +175,7 @@ class LearningResponse(BaseModel):
 class ActivityDetailResponse(ActivityRequest):
     model_config = ConfigDict(extra="forbid")
 
+    program_id: UUID
     enrollment_id: UUID
     draft_revision: int
     draft_payload: dict[str, Any] | None
@@ -450,10 +451,15 @@ def _require_playback_token(value: str | None) -> str:
 
 
 def _scope_for_program(
-    database: Session, actor: ActorContext, program_id: UUID
+    database: Session,
+    actor: ActorContext,
+    program_id: UUID,
+    *,
+    enrollment_id: UUID | None = None,
+    program_version_id: UUID | None = None,
 ) -> tuple[Enrollment, ProgramVersion, CatalogProgram]:
     tenant_id = _tenant(actor)
-    row = database.execute(
+    statement = (
         select(Enrollment, ProgramVersion, CatalogProgram)
         .join(
             ProgramVersion,
@@ -475,10 +481,15 @@ def _scope_for_program(
             Enrollment.status == "active",
             ProgramVersion.status.in_(("published", "superseded")),
         )
-    ).one_or_none()
-    if row is None:
+    )
+    if enrollment_id is not None:
+        statement = statement.where(Enrollment.id == enrollment_id)
+    if program_version_id is not None:
+        statement = statement.where(Enrollment.program_version_id == program_version_id)
+    rows = database.execute(statement).all()
+    if len(rows) != 1:
         raise LearningResourceUnavailable("The enrolled learning resource is unavailable.")
-    return cast(tuple[Enrollment, ProgramVersion, CatalogProgram], row)
+    return cast(tuple[Enrollment, ProgramVersion, CatalogProgram], rows[0])
 
 
 def _scope_for_activity(
@@ -579,12 +590,20 @@ def install_learning_http(
     async def get_learning(
         program_id: Annotated[UUID, Path()],
         response: Response,
+        enrollment_id: Annotated[UUID | None, Query()] = None,
+        program_version_id: Annotated[UUID | None, Query()] = None,
         auth: AuthenticatedTransaction = actor_dependency,
     ) -> LearningResponse:
         actor = auth.resolved.actor
 
         def read(database: Session) -> LearningResponse:
-            enrollment, version, catalog_program = _scope_for_program(database, actor, program_id)
+            enrollment, version, catalog_program = _scope_for_program(
+                database,
+                actor,
+                program_id,
+                enrollment_id=enrollment_id,
+                program_version_id=program_version_id,
+            )
             catalog_activities = tuple(
                 database.scalars(
                     select(CatalogActivity)
@@ -766,6 +785,7 @@ def install_learning_http(
                     prompt=prompt,
                     playback_enabled=playback_enabled,
                 ),
+                program_id=enrollment.program_id,
                 enrollment_id=enrollment.id,
                 draft_revision=draft.revision if draft is not None else 0,
                 draft_payload=dict(draft.payload) if draft is not None else None,

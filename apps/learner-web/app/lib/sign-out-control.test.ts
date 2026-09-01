@@ -105,4 +105,14 @@ describe("learner sign-out local recovery cleanup", () => {
       serverRevocationConfirmed: true,
     });
   });
+
+  it("still revokes the server session when localStorage is unavailable", async () => {
+    const logout = vi.fn().mockResolvedValue(undefined);
+
+    await expect(logoutAndClearLocalDrafts({ logout }, null)).resolves.toEqual({
+      cleanup: { ok: false, reason: "unavailable" },
+      serverRevocationConfirmed: true,
+    });
+    expect(logout).toHaveBeenCalledOnce();
+  });
 });

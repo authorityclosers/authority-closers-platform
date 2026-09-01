@@ -15,6 +15,9 @@ import {
   learnerHomeMode,
   LearningActivityNavigation,
   LearnerHomeEnrollmentCard,
+  learningPathMatchesActivity,
+  loadActivityEntryState,
+  refreshActivityLearningSnapshots,
   selectPublishedFreeCourse,
 } from "../components/learner-runtime";
 import {
@@ -505,6 +508,8 @@ describe("honest preview controls", () => {
     expect(consentUpdate).toContain("Contact support");
     expect(consentUpdate).toContain("mailto:admin@authorityclosers.com");
     expect(consentUpdate).not.toContain('href="/register"');
+    expect(consentUpdate).toContain('class="boundary-card"');
+    expect(consentUpdate).not.toContain("boundary-card--dark");
     expect(unknown).toContain("Return to sign in");
     expect(unknown).not.toContain("not-a-result");
   });
@@ -683,10 +688,103 @@ describe("connected learner ready states", () => {
       missing_module_ids: [],
     },
     allowed_actions: [],
+    program_id: "program-1",
     enrollment_id: "enrollment-1",
     draft_revision: 0,
     draft_payload: null,
   };
+
+  it("starts only identity and authoritative activity reads together", async () => {
+    const started: string[] = [];
+    const api = {
+      me: async () => {
+        started.push("me");
+        return {
+          person_id: "person-1",
+          email: "learner@example.com",
+          display_name: "Learner",
+          email_verified_at: "2026-08-31T00:00:00Z",
+          selected_tenant_id: "tenant-1",
+          membership_role: "learner",
+          permissions: [],
+        } satisfies MeResponse;
+      },
+      activity: async () => {
+        started.push("activity");
+        return baseActivity;
+      },
+    } as unknown as LearnerApi;
+
+    await expect(
+      loadActivityEntryState("activity-1", api),
+    ).resolves.toMatchObject({
+      activity: { id: "activity-1", program_id: "program-1" },
+    });
+    expect(started).toEqual(["me", "activity"]);
+  });
+
+  it("rejects a learning path from a different enrollment or version", () => {
+    const matching = {
+      program_id: "program-1",
+      program_version_id: "version-1",
+      enrollment_id: "enrollment-1",
+    } as LearningResponse;
+    expect(learningPathMatchesActivity(matching, baseActivity)).toBe(true);
+    expect(
+      learningPathMatchesActivity(
+        { ...matching, enrollment_id: "enrollment-2" },
+        baseActivity,
+      ),
+    ).toBe(false);
+    expect(
+      learningPathMatchesActivity(
+        { ...matching, program_version_id: "superseded-version" },
+        baseActivity,
+      ),
+    ).toBe(false);
+  });
+
+  it("refreshes authoritative activity and learning snapshots together after a mutation", async () => {
+    const nextActivity = {
+      ...baseActivity,
+      state: "awaiting_review",
+      revision: 6,
+    };
+    const nextLearning = {
+      program_id: "program-1",
+      program_version_id: "version-1",
+      program_slug: FREE_COURSE_SLUG,
+      program_title: "Authority Closers Free Course",
+      version_number: 1,
+      enrollment_id: "enrollment-1",
+      modules: [],
+      projection: {
+        scope_type: "program",
+        scope_id: "program-1",
+        program_version: "version-1",
+        projection_version: "v1",
+        denominator: 5,
+        completed_count: 1,
+        percentage: 0.2,
+        predicate: "required activities completed",
+        missing_module_ids: [],
+        activity_reasons: [],
+      },
+    } satisfies LearningResponse;
+    const api = {
+      activity: vi.fn(async () => nextActivity),
+      learning: vi.fn(async () => nextLearning),
+    } as unknown as LearnerApi;
+
+    await expect(
+      refreshActivityLearningSnapshots(baseActivity, api),
+    ).resolves.toEqual({ activity: nextActivity, learning: nextLearning });
+    expect(api.activity).toHaveBeenCalledWith("activity-1");
+    expect(api.learning).toHaveBeenCalledWith("program-1", {
+      enrollmentId: "enrollment-1",
+      programVersionId: "version-1",
+    });
+  });
 
   it("loads learner home only from the exact Free Course program identity", async () => {
     const learning = {
@@ -812,6 +910,7 @@ describe("connected learner ready states", () => {
       createElement(ConnectedActivityWorkspace, {
         activity: {
           ...baseActivity,
+          position: 2,
           prompt: "Describe the next deliberate move.",
           state: "in_progress",
           draft_revision: 3,
@@ -823,7 +922,10 @@ describe("connected learner ready states", () => {
 
     expect(html).toContain("Describe the next deliberate move.");
     expect(html).toContain("Restored server draft");
-    expect(html).toContain("Module 1 learning loop");
+    expect(html).toContain("Current activity");
+    expect(html).toContain("Step 2");
+    expect(html).not.toContain("1 of 1");
+    expect(html).toContain("Save reflection");
     expect(html).toContain("Server draft restored");
     expect(html).toContain("Versioned learner draft");
     expect(html).not.toContain("No learner-facing prompt is published.");

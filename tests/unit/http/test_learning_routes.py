@@ -32,6 +32,24 @@ class _Database:
         return operation(SimpleNamespace())
 
 
+class _ScopeResult:
+    def __init__(self, rows: list[tuple[Any, Any, Any]]) -> None:
+        self.rows = rows
+
+    def all(self) -> list[tuple[Any, Any, Any]]:
+        return self.rows
+
+
+class _ScopeDatabase:
+    def __init__(self, rows: list[tuple[Any, Any, Any]]) -> None:
+        self.rows = rows
+        self.statement: Any = None
+
+    def execute(self, statement: Any) -> _ScopeResult:
+        self.statement = statement
+        return _ScopeResult(self.rows)
+
+
 class _Store:
     def __init__(self, actor: ActorContext) -> None:
         self.actor = actor
@@ -104,6 +122,7 @@ class _Activities:
 
 class _Bundle:
     def __init__(self, actor: ActorContext) -> None:
+        self.enrollment_program_id = uuid4()
         self.store = _Store(actor)
         self.drafts = _Drafts(self.store)
         self.activities = _Activities()
@@ -133,7 +152,7 @@ def harness(monkeypatch: pytest.MonkeyPatch) -> tuple[TestClient, ActorContext, 
         assert _actor is actor
         assert activity_id == bundle.store.access.activity.id
         return (
-            SimpleNamespace(id=uuid4()),
+            SimpleNamespace(id=uuid4(), program_id=bundle.enrollment_program_id),
             SimpleNamespace(id=bundle.store.access.program_version_id),
             SimpleNamespace(id=activity_id, prompt="Answer the server-owned prompt."),
         )
@@ -172,6 +191,54 @@ def _headers(*, etag: str = '"draft-revision-0"', key: str = "draft-1") -> dict[
         "If-Match": etag,
         "Idempotency-Key": key,
     }
+
+
+def test_program_scope_uses_exact_enrollment_and_version_identity() -> None:
+    tenant_id = uuid4()
+    actor = ActorContext(person_id=uuid4(), session_id=uuid4(), tenant_id=tenant_id)
+    program_id = uuid4()
+    enrollment_id = uuid4()
+    version_id = uuid4()
+    row = (
+        SimpleNamespace(id=enrollment_id),
+        SimpleNamespace(id=version_id),
+        SimpleNamespace(id=program_id),
+    )
+    database = _ScopeDatabase([row])
+
+    assert (
+        learning_module._scope_for_program(  # noqa: SLF001
+            database,  # type: ignore[arg-type]
+            actor,
+            program_id,
+            enrollment_id=enrollment_id,
+            program_version_id=version_id,
+        )
+        == row
+    )
+    parameters = {
+        value for value in database.statement.compile().params.values() if isinstance(value, UUID)
+    }
+    assert enrollment_id in parameters
+    assert version_id in parameters
+
+
+def test_program_scope_rejects_ambiguous_active_version_enrollments() -> None:
+    actor = ActorContext(person_id=uuid4(), session_id=uuid4(), tenant_id=uuid4())
+    program_id = uuid4()
+    database = _ScopeDatabase(
+        [
+            (SimpleNamespace(), SimpleNamespace(), SimpleNamespace()),
+            (SimpleNamespace(), SimpleNamespace(), SimpleNamespace()),
+        ]
+    )
+
+    with pytest.raises(learning_module.LearningResourceUnavailable):
+        learning_module._scope_for_program(  # noqa: SLF001
+            database,  # type: ignore[arg-type]
+            actor,
+            program_id,
+        )
 
 
 def test_draft_uses_only_authenticated_actor_and_existing_transaction(
@@ -277,6 +344,7 @@ def test_activity_query_is_protected_and_returns_an_etag(harness: Any) -> None:
     assert response.headers["etag"] == '"activity-revision-0"'
     assert response.json()["state"] == "available"
     assert response.json()["position"] == 1
+    assert response.json()["program_id"] == str(bundle.enrollment_program_id)
     assert response.json()["prompt"] == "Answer the server-owned prompt."
     assert response.json()["allowed_actions"] == ["save_draft"]
     assert response.json()["draft_revision"] == 0
@@ -293,7 +361,7 @@ def test_activity_query_reads_an_explicit_catalog_prompt_only(
         learning_module,
         "_scope_for_activity",
         lambda *_args: (
-            SimpleNamespace(id=uuid4()),
+            SimpleNamespace(id=uuid4(), program_id=bundle.enrollment_program_id),
             SimpleNamespace(id=bundle.store.access.program_version_id),
             SimpleNamespace(id=activity_id, prompt="Use the published question."),
         ),
@@ -316,7 +384,7 @@ def test_locked_activity_redacts_prompt_and_discloses_no_actions(
         learning_module,
         "_scope_for_activity",
         lambda *_args: (
-            SimpleNamespace(id=uuid4()),
+            SimpleNamespace(id=uuid4(), program_id=bundle.enrollment_program_id),
             SimpleNamespace(id=bundle.store.access.program_version_id),
             SimpleNamespace(id=activity_id, prompt="Secret prerequisite-gated prompt."),
         ),
@@ -346,7 +414,7 @@ def test_promptless_activity_denies_draft_before_the_learning_service(
         learning_module,
         "_scope_for_activity",
         lambda *_args: (
-            SimpleNamespace(id=uuid4()),
+            SimpleNamespace(id=uuid4(), program_id=bundle.enrollment_program_id),
             SimpleNamespace(id=bundle.store.access.program_version_id),
             SimpleNamespace(id=activity_id, prompt=None),
         ),

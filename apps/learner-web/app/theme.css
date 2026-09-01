@@ -682,6 +682,20 @@ html[data-theme="dark"]
 
 html[data-theme="dark"]
   .site-frame--learner
+  .learner-bottom-nav
+  :is(.learner-nav__link, .learner-sidebar__item) {
+  color: var(--theme-text-muted);
+}
+
+html[data-theme="dark"]
+  .site-frame--learner
+  .learner-bottom-nav
+  :is(.learner-nav__link.is-current, .learner-sidebar__item.is-current) {
+  color: var(--theme-info-text);
+}
+
+html[data-theme="dark"]
+  .site-frame--learner
   :is(.learner-sidebar .learner-nav__link, .learner-sidebar__item):hover {
   color: var(--theme-action);
   background: var(--theme-surface-subtle);
@@ -802,6 +816,32 @@ html[data-theme="dark"] .site-frame--learner .activity-draft-boundary {
   color: var(--theme-text-muted);
   border-color: var(--theme-border);
   background: var(--theme-surface-subtle);
+}
+
+html[data-theme="dark"] .site-frame--learner .activity-stage-summary {
+  color: var(--theme-info-text);
+  border-color: var(--theme-border-strong);
+  background: var(--theme-info-surface);
+}
+
+html[data-theme="dark"]
+  .site-frame--learner
+  .activity-stage-summary
+  :is(span, strong, p) {
+  color: inherit;
+}
+
+html[data-theme="dark"] .site-frame--learner .activity-mobile-path {
+  color: var(--theme-text);
+  border-color: var(--theme-border);
+  background: var(--theme-surface-raised);
+}
+
+html[data-theme="dark"]
+  .site-frame--learner
+  .activity-mobile-path
+  :is(summary, h2) {
+  color: var(--theme-text);
 }
 
 html[data-theme="dark"]

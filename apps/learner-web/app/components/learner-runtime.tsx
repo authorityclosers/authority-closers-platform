@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
+  ArrowLeft,
   ArrowRight,
   CheckCircle2,
   ChevronRight,
@@ -29,12 +30,15 @@ import {
 import {
   activityRecoveryText,
   activityServerFingerprint,
+  availableLocalStorage,
   clearAllLearnerLocalDrafts,
   clearActivityLocalDraft,
   localDraftMatchesServer,
   mutationFailureKind,
   readActivityLocalDraft,
   registerBeforeUnloadGuard,
+  registerHistoryNavigationGuard,
+  registerInternalNavigationGuard,
   writeActivityLocalDraft,
   type ActivityDraftEnvelope,
   type ActivityDraftScope,
@@ -154,6 +158,7 @@ function StateMessage({
 function useLoad<T>(
   loader: () => Promise<T>,
   empty: (value: T) => boolean,
+  reloadKey?: string | number,
 ): LoadState<T> {
   const [state, setState] = useState<LoadState<T>>({ status: "loading" });
   const [attempt, setAttempt] = useState(0);
@@ -175,9 +180,10 @@ function useLoad<T>(
     return () => {
       active = false;
     };
-    // The loader is intentionally captured per caller; retry is the only trigger.
+    // The loader is intentionally captured per caller; retry and an explicit
+    // route/resource identity are the only triggers.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [attempt]);
+  }, [attempt, reloadKey]);
   return {
     ...state,
     retry: () => setAttempt((value) => value + 1),
@@ -415,13 +421,26 @@ export function isSessionExpiredError(error: unknown): boolean {
   return error instanceof ApiError && error.status === 401;
 }
 
+export function isForbiddenError(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 403;
+}
+
+export function learningPathStatusForError(
+  error: unknown,
+): "unavailable" | "forbidden" | "error" {
+  if (error instanceof ApiError && error.status === 404) return "unavailable";
+  if (isForbiddenError(error)) return "forbidden";
+  return "error";
+}
+
 function useInvalidateDraftsWithoutMembership(
   membershipKnown: boolean,
   membershipAvailable: boolean,
 ) {
   useEffect(() => {
     if (membershipKnown && !membershipAvailable) {
-      clearAllLearnerLocalDrafts(window.localStorage);
+      const storage = availableLocalStorage(window);
+      if (storage) clearAllLearnerLocalDrafts(storage);
     }
   }, [membershipAvailable, membershipKnown]);
 }
@@ -897,12 +916,17 @@ export function activityLockReason(
   if (activity.state.toLowerCase() !== "locked") return null;
   const missingActivities = activity.explanation.missing_activity_ids.length;
   const missingModules = activity.explanation.missing_module_ids.length;
-  if (missingActivities > 0) {
-    return `Complete ${missingActivities} earlier required ${missingActivities === 1 ? "activity" : "activities"} to unlock.`;
-  }
-  if (missingModules > 0) {
-    return `Complete ${missingModules} prerequisite ${missingModules === 1 ? "module" : "modules"} to unlock.`;
-  }
+  const blockers: string[] = [];
+  if (missingActivities > 0)
+    blockers.push(
+      `${missingActivities} earlier required ${missingActivities === 1 ? "activity" : "activities"}`,
+    );
+  if (missingModules > 0)
+    blockers.push(
+      `${missingModules} prerequisite ${missingModules === 1 ? "module" : "modules"}`,
+    );
+  if (blockers.length > 0)
+    return `Complete ${blockers.join(" and ")} to unlock.`;
   return "This step remains locked until the learning service authorizes access.";
 }
 
@@ -987,21 +1011,70 @@ const ACTIVITY_LOOP = [
   { kind: "IMPROVE", label: "Improve" },
 ] as const;
 
-function ActivityLoop({ currentKind }: { currentKind: string }) {
+function activityKindLabel(kind: string): string {
   return (
-    <ol className="activity-loop" aria-label="Module 1 learning loop">
-      {ACTIVITY_LOOP.map((step) => {
-        const current = step.kind === currentKind.toUpperCase();
+    ACTIVITY_LOOP.find((step) => step.kind === kind.toUpperCase())?.label ??
+    activityStateLabel(kind)
+  );
+}
+
+function ActivityLoop({
+  activities,
+  currentActivityId,
+  label,
+}: {
+  activities: LearningActivityResponse[];
+  currentActivityId: string;
+  label: string;
+}) {
+  return (
+    <ol className="activity-loop" aria-label={label}>
+      {activities.map((step) => {
+        const current = step.id === currentActivityId;
+        const lockedReason = activityLockReason(step);
+        const completed = step.state.toLowerCase() === "completed";
+        const content = (
+          <>
+            <span className="activity-loop__icon" aria-hidden="true">
+              {completed ? (
+                <CheckCircle2 size={16} />
+              ) : lockedReason ? (
+                <LockKeyhole size={15} />
+              ) : (
+                activityIcon(step.kind)
+              )}
+            </span>
+            <span className="activity-loop__copy">
+              <strong>{activityKindLabel(step.kind)}</strong>
+              <span className="activity-loop__status">
+                {current ? "Current" : activityStateLabel(step.state)}
+              </span>
+              {lockedReason ? (
+                <span className="activity-loop__reason">{lockedReason}</span>
+              ) : null}
+            </span>
+            {!lockedReason && !current ? (
+              <ChevronRight
+                className="activity-loop__chevron"
+                size={16}
+                aria-hidden="true"
+              />
+            ) : null}
+          </>
+        );
         return (
           <li
-            className={`activity-loop__step${current ? " is-current" : ""}`}
+            className={`activity-loop__step${current ? " is-current" : ""}${completed ? " is-complete" : ""}${lockedReason ? " is-locked" : ""}`}
             aria-current={current ? "step" : undefined}
-            key={step.kind}
+            key={step.id}
           >
-            <span className="activity-loop__icon" aria-hidden="true">
-              {activityIcon(step.kind)}
-            </span>
-            <span>{step.label}</span>
+            {!lockedReason && !current ? (
+              <Link href={ROUTES.activity(step.id)}>{content}</Link>
+            ) : (
+              <div aria-disabled={lockedReason ? "true" : undefined}>
+                {content}
+              </div>
+            )}
           </li>
         );
       })}
@@ -1011,11 +1084,27 @@ function ActivityLoop({ currentKind }: { currentKind: string }) {
 
 export function ConnectedActivityWorkspace({
   activity,
+  learning,
+  learningPathStatus = "idle",
+  learningPathError,
+  onRetryLearningPath,
+  onMutationCommitted,
   tenantId,
   personId,
   api = defaultApi,
 }: {
   activity: ActivityResponse;
+  learning?: LearningResponse;
+  learningPathStatus?:
+    | "idle"
+    | "loading"
+    | "ready"
+    | "unavailable"
+    | "forbidden"
+    | "error";
+  learningPathError?: unknown;
+  onRetryLearningPath?: () => void;
+  onMutationCommitted?: (kind: "draft" | "evidence") => void | Promise<void>;
   tenantId?: string;
   personId?: string;
   api?: LearnerApi;
@@ -1047,6 +1136,8 @@ export function ConnectedActivityWorkspace({
     "idle" | "saved" | "failed"
   >("idle");
   const [recoveryMessage, setRecoveryMessage] = useState<string | null>(null);
+  const localDraftStorage =
+    typeof window === "undefined" ? null : availableLocalStorage(window);
   const dirty = mutation !== "submitted" && response !== savedResponse;
   const prompt = learnerPrompt(activity);
   const writableState =
@@ -1114,18 +1205,21 @@ export function ConnectedActivityWorkspace({
                     : "Draft is not submitted";
 
   useEffect(() => {
-    if (!localDraftScope) {
+    let active = true;
+    if (!localDraftScope || !localDraftStorage) {
       queueMicrotask(() => {
+        if (!active) return;
         setLocalPersistence("failed");
         setLocalDraftChecked(true);
       });
-      return;
+      return () => {
+        active = false;
+      };
     }
     const localDraft = readActivityLocalDraft(
-      window.localStorage,
+      localDraftStorage,
       localDraftScope,
     );
-    let active = true;
     queueMicrotask(() => {
       if (!active) return;
       if (localDraft.status === "ready") {
@@ -1158,6 +1252,7 @@ export function ConnectedActivityWorkspace({
     activity.id,
     initialResponse,
     localDraftScope,
+    localDraftStorage,
   ]);
 
   useEffect(() => {
@@ -1175,7 +1270,15 @@ export function ConnectedActivityWorkspace({
       };
     }
     if (dirty) {
-      const result = writeActivityLocalDraft(window.localStorage, {
+      if (!localDraftStorage) {
+        queueMicrotask(() => {
+          if (active) setLocalPersistence("failed");
+        });
+        return () => {
+          active = false;
+        };
+      }
+      const result = writeActivityLocalDraft(localDraftStorage, {
         scope: localDraftScope,
         response,
         baseRevision: draftRevision,
@@ -1185,7 +1288,9 @@ export function ConnectedActivityWorkspace({
         if (active) setLocalPersistence(result.ok ? "saved" : "failed");
       });
     } else {
-      clearActivityLocalDraft(window.localStorage, localDraftScope);
+      if (localDraftStorage) {
+        clearActivityLocalDraft(localDraftStorage, localDraftScope);
+      }
       queueMicrotask(() => {
         if (active) setLocalPersistence("idle");
       });
@@ -1198,12 +1303,41 @@ export function ConnectedActivityWorkspace({
     draftRevision,
     localDraftChecked,
     localDraftScope,
+    localDraftStorage,
     response,
     savedResponse,
     staleLocalDraft,
   ]);
 
   useEffect(() => registerBeforeUnloadGuard(window, dirty), [dirty]);
+
+  useEffect(
+    () =>
+      registerInternalNavigationGuard(
+        document,
+        dirty && localPersistence === "failed",
+        () =>
+          window.confirm(
+            "This browser could not retain a recovery copy. Leave this activity and discard the unsaved response?",
+          ),
+      ),
+    [dirty, localPersistence],
+  );
+
+  useEffect(
+    () =>
+      registerHistoryNavigationGuard(
+        window as unknown as Parameters<
+          typeof registerHistoryNavigationGuard
+        >[0],
+        dirty && localPersistence === "failed",
+        () =>
+          window.confirm(
+            "This browser could not retain a recovery copy. Leave this activity and discard the unsaved response?",
+          ),
+      ),
+    [dirty, localPersistence],
+  );
 
   function online(): boolean {
     return typeof navigator === "undefined" ? true : navigator.onLine;
@@ -1227,6 +1361,16 @@ export function ConnectedActivityWorkspace({
     return errorText(error);
   }
 
+  function refreshCommittedMutationState(kind: "draft" | "evidence") {
+    try {
+      const refresh = onMutationCommitted?.(kind);
+      if (refresh) void refresh.catch(() => undefined);
+    } catch {
+      // The authoritative mutation already succeeded. Dependent path recovery
+      // is owned by the parent and must not rewrite that success as a failure.
+    }
+  }
+
   async function save() {
     if (!canSaveDraft) return;
     setLastOperation("draft");
@@ -1234,14 +1378,15 @@ export function ConnectedActivityWorkspace({
     setMessage("");
     setReauthRequired(false);
     setFailureKind(null);
-    const localResult = localDraftScope
-      ? writeActivityLocalDraft(window.localStorage, {
-          scope: localDraftScope,
-          response,
-          baseRevision: draftRevision,
-          serverFingerprint: activityServerFingerprint(savedResponse),
-        })
-      : { ok: false as const, reason: "unavailable" as const };
+    const localResult =
+      localDraftScope && localDraftStorage
+        ? writeActivityLocalDraft(localDraftStorage, {
+            scope: localDraftScope,
+            response,
+            baseRevision: draftRevision,
+            serverFingerprint: activityServerFingerprint(savedResponse),
+          })
+        : { ok: false as const, reason: "unavailable" as const };
     setLocalPersistence(localResult.ok ? "saved" : "failed");
     try {
       const saved = await api.saveDraft(
@@ -1256,10 +1401,11 @@ export function ConnectedActivityWorkspace({
       setMessage("Draft saved by the server.");
       setLastOperation(null);
       setLocalDraftRestored(false);
-      if (localDraftScope) {
-        clearActivityLocalDraft(window.localStorage, localDraftScope);
+      if (localDraftScope && localDraftStorage) {
+        clearActivityLocalDraft(localDraftStorage, localDraftScope);
       }
       setLocalPersistence("idle");
+      refreshCommittedMutationState("draft");
     } catch (error) {
       const kind = mutationFailureKind(error, online());
       setMutation("error");
@@ -1275,14 +1421,15 @@ export function ConnectedActivityWorkspace({
     setMessage("");
     setReauthRequired(false);
     setFailureKind(null);
-    const localResult = localDraftScope
-      ? writeActivityLocalDraft(window.localStorage, {
-          scope: localDraftScope,
-          response,
-          baseRevision: draftRevision,
-          serverFingerprint: activityServerFingerprint(savedResponse),
-        })
-      : { ok: false as const, reason: "unavailable" as const };
+    const localResult =
+      localDraftScope && localDraftStorage
+        ? writeActivityLocalDraft(localDraftStorage, {
+            scope: localDraftScope,
+            response,
+            baseRevision: draftRevision,
+            serverFingerprint: activityServerFingerprint(savedResponse),
+          })
+        : { ok: false as const, reason: "unavailable" as const };
     setLocalPersistence(localResult.ok ? "saved" : "failed");
     try {
       const submitted = await api.submitEvidence(
@@ -1295,14 +1442,15 @@ export function ConnectedActivityWorkspace({
       setSavedResponse(response);
       setMutation("submitted");
       setMessage(
-        "Evidence submitted. The server will determine the next activity state.",
+        "Evidence submitted. The server determined the current activity state.",
       );
       setLastOperation(null);
       setLocalDraftRestored(false);
-      if (localDraftScope) {
-        clearActivityLocalDraft(window.localStorage, localDraftScope);
+      if (localDraftScope && localDraftStorage) {
+        clearActivityLocalDraft(localDraftStorage, localDraftScope);
       }
       setLocalPersistence("idle");
+      refreshCommittedMutationState("evidence");
     } catch (error) {
       const kind = mutationFailureKind(error, online());
       setMutation("error");
@@ -1313,8 +1461,8 @@ export function ConnectedActivityWorkspace({
   }
 
   function keepServerActivityDraft() {
-    if (localDraftScope) {
-      clearActivityLocalDraft(window.localStorage, localDraftScope);
+    if (localDraftScope && localDraftStorage) {
+      clearActivityLocalDraft(localDraftStorage, localDraftScope);
     }
     setResponse(savedResponse);
     setStaleLocalDraft(null);
@@ -1336,6 +1484,46 @@ export function ConnectedActivityWorkspace({
 
   const recoveryResponse =
     staleLocalDraft?.draft.response ?? (dirty ? response : null);
+
+  const visibleLearning = learningPathStatus === "ready" ? learning : undefined;
+  const currentModule = visibleLearning?.modules.find(
+    (module) => module.id === activity.module_id,
+  );
+  const moduleActivities = currentModule
+    ? currentModule.activities.map((moduleActivity) =>
+        moduleActivity.id === activity.id
+          ? { ...moduleActivity, ...activity }
+          : moduleActivity,
+      )
+    : [activity];
+  const currentStepIndex = currentModule
+    ? moduleActivities.findIndex(
+        (moduleActivity) => moduleActivity.id === activity.id,
+      )
+    : -1;
+  const currentStep = currentModule
+    ? currentStepIndex >= 0
+      ? currentStepIndex + 1
+      : activity.position
+    : activity.position;
+  const totalSteps = currentModule?.activities.length;
+  const currentStepLabel = totalSteps
+    ? `${currentStep} of ${totalSteps}`
+    : `Step ${currentStep}`;
+  const moduleLabel = currentModule
+    ? `Module ${currentModule.position}`
+    : "Current activity";
+  const moduleTitle = currentModule?.title ?? "Learning loop";
+  const moduleHref =
+    visibleLearning && currentModule
+      ? ROUTES.module(visibleLearning.program_slug, currentModule.id)
+      : ROUTES.myLearning;
+  const kindLabel = activityKindLabel(activity.kind);
+  const isReflection = activity.kind.toLowerCase() === "reflection";
+  const saveLabel = isReflection ? "Save reflection" : "Save draft";
+  const activityBoundary = isReflection
+    ? "Reflection only — not an evaluation."
+    : "Learner evidence — not an autonomous evaluation.";
 
   async function copyActivityRecovery() {
     if (recoveryResponse === null) return;
@@ -1372,8 +1560,15 @@ export function ConnectedActivityWorkspace({
     >
       <article className="activity-shell">
         <div className="activity-shell__breadcrumb">
-          <Link href={ROUTES.myLearning}>My learning</Link>
-          <span aria-hidden="true">/</span> Module 1 activity
+          <Link href={moduleHref}>
+            <ArrowLeft size={15} aria-hidden="true" />
+            {currentModule ? moduleLabel : "My learning"}
+          </Link>
+          {visibleLearning ? (
+            <span>{visibleLearning.program_title}</span>
+          ) : learningPathStatus === "loading" ? (
+            <span>Loading course path…</span>
+          ) : null}
         </div>
         <div className="activity-shell__header">
           <div>
@@ -1381,7 +1576,7 @@ export function ConnectedActivityWorkspace({
               <span className="activity-shell__type-icon" aria-hidden="true">
                 {activityIcon(activity.kind)}
               </span>
-              {activity.kind.replaceAll("_", " ")}
+              {kindLabel} · {currentStepLabel}
             </p>
             <h1>{activity.title}</h1>
           </div>
@@ -1395,6 +1590,10 @@ export function ConnectedActivityWorkspace({
               Published prompt
             </p>
             <p>{prompt}</p>
+            <p className="activity-prompt__help">
+              Use the published prompt as the boundary. Saving keeps an editable
+              draft; submission remains a separate action.
+            </p>
           </section>
         ) : lockedReason ? (
           <div className="activity-access-boundary" role="status">
@@ -1410,6 +1609,69 @@ export function ConnectedActivityWorkspace({
             <p>Draft and evidence controls remain unavailable.</p>
           </div>
         )}
+        <aside
+          className="activity-stage-summary"
+          aria-label="Current step"
+          aria-live="polite"
+        >
+          <div>
+            <span>Current · {kindLabel}</span>
+            <strong>{currentStepLabel}</strong>
+          </div>
+          <p>{activityBoundary}</p>
+          {learningPathStatus === "loading" ? (
+            <p className="activity-stage-summary__path-state" role="status">
+              Loading the server-authorized module path…
+            </p>
+          ) : learningPathStatus === "unavailable" ? (
+            <p className="activity-stage-summary__path-state" role="status">
+              The complete module path is temporarily unavailable.
+            </p>
+          ) : learningPathStatus === "forbidden" ? (
+            <p className="activity-stage-summary__path-state" role="alert">
+              This account cannot open the complete module path.
+            </p>
+          ) : learningPathStatus === "error" ? (
+            <p className="activity-stage-summary__path-state" role="alert">
+              {isSessionExpiredError(learningPathError)
+                ? "Your session expired while refreshing the module path."
+                : "The module path could not refresh."}
+            </p>
+          ) : null}
+        </aside>
+        <details className="activity-mobile-path">
+          <summary>
+            <span>View module path</span>
+            <span className="activity-mobile-path__summary-meta">
+              {currentStepLabel}
+              <ChevronRight size={16} aria-hidden="true" />
+            </span>
+          </summary>
+          <div>
+            <p className="kicker">{moduleLabel}</p>
+            <h2>{moduleTitle}</h2>
+            <ActivityLoop
+              activities={moduleActivities}
+              currentActivityId={activity.id}
+              label={`${moduleLabel} learning path`}
+            />
+            {learningPathStatus === "error" ||
+            learningPathStatus === "forbidden" ? (
+              <div className="activity-path-recovery" role="alert">
+                <p>{errorText(learningPathError)}</p>
+                {isSessionExpiredError(learningPathError) ? (
+                  <Link href={ROUTES.sessionExpired}>Sign in again</Link>
+                ) : isForbiddenError(learningPathError) ? (
+                  <a href={LEARNER_SUPPORT_HREF}>Contact learner support</a>
+                ) : onRetryLearningPath ? (
+                  <button type="button" onClick={onRetryLearningPath}>
+                    Retry module path
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        </details>
         {staleLocalDraft ? (
           <section
             className="activity-mutation-message"
@@ -1532,39 +1794,49 @@ export function ConnectedActivityWorkspace({
                 ) : null}
                 {draftStatus}
               </span>
-              <span>{response.length.toLocaleString()} characters</span>
+              <span className="activity-response-form__boundary">
+                {activityBoundary}
+              </span>
             </div>
-            <aside className="activity-draft-boundary">
-              <ShieldCheck size={20} aria-hidden="true" />
-              <span>
+            <details className="activity-draft-boundary">
+              <summary>
+                <ShieldCheck size={18} aria-hidden="true" />
                 <strong>Versioned learner draft</strong>
+              </summary>
+              <p>
                 Saving updates draft revision {draftRevision}. Submission is a
                 separate server-authorized action.
-              </span>
-            </aside>
-            <div className="activity-response-form__actions">
-              <button
-                className="button button--outline"
-                type="submit"
-                disabled={!canSaveDraft || mutation === "saving"}
-              >
-                {mutation === "saving" ? "Saving…" : "Save draft"}
-              </button>
-              <button
-                className="button button--ink"
-                type="button"
-                onClick={() => void submit()}
-                aria-describedby={
-                  !canSubmitEvidence && prompt
-                    ? "activity-submit-boundary"
-                    : undefined
-                }
-                disabled={
-                  !canSubmitEvidence || !evidenceType || mutation === "saving"
-                }
-              >
-                Submit evidence
-              </button>
+              </p>
+            </details>
+            <div className="activity-response-form__actions activity-response-form__actions--primary">
+              <Link className="activity-back-link" href={moduleHref}>
+                <ArrowLeft size={16} aria-hidden="true" />
+                Back to module
+              </Link>
+              <div>
+                <button
+                  className="button button--ink"
+                  type="submit"
+                  disabled={!canSaveDraft || mutation === "saving"}
+                >
+                  {mutation === "saving" ? "Saving…" : saveLabel}
+                </button>
+                <button
+                  className="button button--outline"
+                  type="button"
+                  onClick={() => void submit()}
+                  aria-describedby={
+                    !canSubmitEvidence && prompt
+                      ? "activity-submit-boundary"
+                      : undefined
+                  }
+                  disabled={
+                    !canSubmitEvidence || !evidenceType || mutation === "saving"
+                  }
+                >
+                  Submit evidence
+                </button>
+              </div>
             </div>
             {!canSubmitEvidence && prompt ? (
               <p
@@ -1655,32 +1927,63 @@ export function ConnectedActivityWorkspace({
         ) : null}
       </article>
       <aside className="activity-authority-panel">
-        <section>
-          <p className="kicker">This activity</p>
-          <h2>Authorized state</h2>
-          <dl>
-            <div>
-              <dt>Status</dt>
-              <dd>{activityStateLabel(activity.state)}</dd>
+        <section className="activity-module-panel">
+          <p className="kicker">{moduleLabel}</p>
+          <h2>{moduleTitle}</h2>
+          <p className="activity-module-panel__progress">
+            {currentStepLabel} · {activityStateLabel(activity.state)}
+          </p>
+          {learningPathStatus === "loading" && !currentModule ? (
+            <p className="activity-module-panel__loading" role="status">
+              Loading the server-authorized module path…
+            </p>
+          ) : null}
+          {learningPathStatus === "unavailable" && !currentModule ? (
+            <p className="activity-module-panel__loading" role="status">
+              The full module path is temporarily unavailable. Only this
+              server-authorized activity is shown.
+            </p>
+          ) : null}
+          {learningPathStatus === "error" ||
+          learningPathStatus === "forbidden" ? (
+            <div className="activity-module-panel__loading" role="alert">
+              <p>{errorText(learningPathError)}</p>
+              {isSessionExpiredError(learningPathError) ? (
+                <Link href={ROUTES.sessionExpired}>Sign in again</Link>
+              ) : isForbiddenError(learningPathError) ? (
+                <a href={LEARNER_SUPPORT_HREF}>Contact learner support</a>
+              ) : onRetryLearningPath ? (
+                <button type="button" onClick={onRetryLearningPath}>
+                  Retry module path
+                </button>
+              ) : null}
             </div>
-            <div>
-              <dt>Activity version</dt>
-              <dd>{activityRevision}</dd>
-            </div>
-            <div>
-              <dt>Draft saving</dt>
-              <dd>{canSaveDraft ? "Enabled" : "Not authorized"}</dd>
-            </div>
-            <div>
-              <dt>Evidence submission</dt>
-              <dd>{canSubmitEvidence ? "Enabled" : "Not authorized"}</dd>
-            </div>
-          </dl>
-        </section>
-        <section>
-          <p className="kicker">Module 1</p>
-          <h2>Learning loop</h2>
-          <ActivityLoop currentKind={activity.kind} />
+          ) : null}
+          <ActivityLoop
+            activities={moduleActivities}
+            currentActivityId={activity.id}
+            label={`${moduleLabel} learning path`}
+          />
+          <Link className="activity-module-panel__back" href={moduleHref}>
+            Back to module <ArrowRight size={15} aria-hidden="true" />
+          </Link>
+          <details className="activity-authority-details">
+            <summary>Activity details</summary>
+            <dl>
+              <div>
+                <dt>Progress revision</dt>
+                <dd>{activityRevision}</dd>
+              </div>
+              <div>
+                <dt>Draft saving</dt>
+                <dd>{canSaveDraft ? "Enabled" : "Not authorized"}</dd>
+              </div>
+              <div>
+                <dt>Evidence submission</dt>
+                <dd>{canSubmitEvidence ? "Enabled" : "Not authorized"}</dd>
+              </div>
+            </dl>
+          </details>
         </section>
       </aside>
     </div>
@@ -2022,6 +2325,171 @@ export function LiveModule({
   );
 }
 
+export async function loadActivityEntryState(
+  activityId: string,
+  api: LearnerApi,
+): Promise<{
+  me: MeResponse;
+  activity?: ActivityResponse;
+}> {
+  const [meResult, activityResult] = await Promise.allSettled([
+    api.me(),
+    api.activity(activityId),
+  ]);
+
+  if (meResult.status === "rejected") throw meResult.reason;
+  const me = meResult.value;
+  if (!hasMembershipRole(me)) return { me };
+  if (activityResult.status === "rejected") throw activityResult.reason;
+  return { me, activity: activityResult.value };
+}
+
+export function learningPathMatchesActivity(
+  learning: LearningResponse,
+  activity: Pick<
+    ActivityResponse,
+    "program_id" | "program_version_id" | "enrollment_id"
+  >,
+): boolean {
+  return (
+    learning.program_id === activity.program_id &&
+    learning.program_version_id === activity.program_version_id &&
+    learning.enrollment_id === activity.enrollment_id
+  );
+}
+
+export async function refreshActivityLearningSnapshots(
+  activity: ActivityResponse,
+  api: LearnerApi,
+): Promise<{ activity: ActivityResponse; learning: LearningResponse }> {
+  const [nextActivity, nextLearning] = await Promise.all([
+    api.activity(activity.id),
+    api.learning(activity.program_id, {
+      enrollmentId: activity.enrollment_id,
+      programVersionId: activity.program_version_id,
+    }),
+  ]);
+  if (!learningPathMatchesActivity(nextLearning, nextActivity)) {
+    throw new Error(
+      "The refreshed activity and learning path did not describe the same server snapshot.",
+    );
+  }
+  return { activity: nextActivity, learning: nextLearning };
+}
+
+function ActivityWorkspaceWithLearningPath({
+  activity,
+  tenantId,
+  personId,
+  api,
+}: {
+  activity: ActivityResponse;
+  tenantId?: string;
+  personId?: string;
+  api: LearnerApi;
+}) {
+  const [activitySnapshot, setActivitySnapshot] = useState(activity);
+  const [learning, setLearning] = useState<LearningResponse>();
+  const [learningPathStatus, setLearningPathStatus] = useState<
+    "loading" | "ready" | "unavailable" | "forbidden" | "error"
+  >("loading");
+  const [learningPathError, setLearningPathError] = useState<unknown>();
+  const [learningPathAttempt, setLearningPathAttempt] = useState(0);
+  const learningPathGeneration = useRef(0);
+  const activityProgramId = activitySnapshot.program_id;
+  const activityProgramVersionId = activitySnapshot.program_version_id;
+  const activityEnrollmentId = activitySnapshot.enrollment_id;
+
+  useEffect(() => {
+    let active = true;
+    const generation = ++learningPathGeneration.current;
+    api
+      .learning(activityProgramId, {
+        enrollmentId: activityEnrollmentId,
+        programVersionId: activityProgramVersionId,
+      })
+      .then((nextLearning) => {
+        if (!active || generation !== learningPathGeneration.current) return;
+        if (
+          !learningPathMatchesActivity(nextLearning, {
+            program_id: activityProgramId,
+            program_version_id: activityProgramVersionId,
+            enrollment_id: activityEnrollmentId,
+          })
+        ) {
+          setLearning(undefined);
+          setLearningPathStatus("error");
+          setLearningPathError(
+            new Error(
+              "The learning path changed while this activity was loading. Retry to obtain one consistent server snapshot.",
+            ),
+          );
+          return;
+        }
+        setLearning(nextLearning);
+        setLearningPathStatus("ready");
+      })
+      .catch((error: unknown) => {
+        if (!active || generation !== learningPathGeneration.current) return;
+        setLearning(undefined);
+        setLearningPathError(error);
+        setLearningPathStatus(learningPathStatusForError(error));
+      });
+    return () => {
+      active = false;
+    };
+  }, [
+    activityEnrollmentId,
+    activityProgramId,
+    activityProgramVersionId,
+    api,
+    learningPathAttempt,
+  ]);
+
+  async function refreshAfterMutation(kind: "draft" | "evidence") {
+    if (kind === "draft") return;
+    const generation = ++learningPathGeneration.current;
+    setLearning(undefined);
+    setLearningPathError(undefined);
+    setLearningPathStatus("loading");
+    try {
+      const refreshed = await refreshActivityLearningSnapshots(
+        activitySnapshot,
+        api,
+      );
+      if (generation !== learningPathGeneration.current) return;
+      setActivitySnapshot(refreshed.activity);
+      setLearning(refreshed.learning);
+      setLearningPathError(undefined);
+      setLearningPathStatus("ready");
+    } catch (error) {
+      if (generation !== learningPathGeneration.current) return;
+      setLearning(undefined);
+      setLearningPathError(error);
+      setLearningPathStatus(learningPathStatusForError(error));
+    }
+  }
+
+  return (
+    <ConnectedActivityWorkspace
+      activity={activitySnapshot}
+      api={api}
+      learning={learning}
+      learningPathStatus={learningPathStatus}
+      learningPathError={learningPathError}
+      onMutationCommitted={refreshAfterMutation}
+      onRetryLearningPath={() => {
+        setLearning(undefined);
+        setLearningPathStatus("loading");
+        setLearningPathError(undefined);
+        setLearningPathAttempt((attempt) => attempt + 1);
+      }}
+      tenantId={tenantId}
+      personId={personId}
+    />
+  );
+}
+
 export function LiveActivity({
   activityId,
   api = defaultApi,
@@ -2030,16 +2498,9 @@ export function LiveActivity({
   api?: LearnerApi;
 }) {
   const state = useLoad(
-    async () => {
-      const me = await api.me();
-      return {
-        me,
-        activity: hasMembershipRole(me)
-          ? await api.activity(activityId)
-          : undefined,
-      };
-    },
+    () => loadActivityEntryState(activityId, api),
     () => false,
+    activityId,
   );
   const membershipAvailable =
     state.status === "ready" && hasMembershipRole(state.value.me);
@@ -2058,7 +2519,8 @@ export function LiveActivity({
         retry={(state as LoadState<unknown> & { retry?: () => void }).retry}
       />
       {state.status === "ready" && state.value.activity ? (
-        <ConnectedActivityWorkspace
+        <ActivityWorkspaceWithLearningPath
+          key={state.value.activity.id}
           activity={state.value.activity}
           api={api}
           tenantId={state.value.me.selected_tenant_id ?? undefined}
