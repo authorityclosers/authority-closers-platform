@@ -258,6 +258,9 @@ def test_source_parity_query_is_fixed_to_the_canonical_table_set(
     command_parts = backup.parity_command(target, snapshot_id)
     command = " ".join(command_parts)
     assert "psql --no-password" in command
+    assert "--no-psqlrc" in command
+    assert "--set=ON_ERROR_STOP=1" in command
+    assert "-qAt" in command
     assert 'PGPASSWORD="$AC_DB_BACKUP_PASSWORD"' in command
     assert all(f'FROM "{table}"' in command for table in backup.PARITY_TABLES)
     assert "fixture-secret" not in command
@@ -275,6 +278,15 @@ def test_source_parity_query_is_fixed_to_the_canonical_table_set(
     assert backup.source_row_counts(target, snapshot_id) == {
         table: 0 for table in backup.PARITY_TABLES
     }
+
+    tagged = f"BEGIN\n{output}\nCOMMIT"
+    monkeypatch.setattr(
+        backup,
+        "run_checked",
+        lambda *_args, **_kwargs: SimpleNamespace(stdout=tagged),
+    )
+    with pytest.raises(backup.BackupError, match="unsafe result"):
+        backup.source_row_counts(target, snapshot_id)
 
     incomplete = output.rsplit("\n", 1)[0]
     monkeypatch.setattr(

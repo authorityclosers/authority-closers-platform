@@ -639,7 +639,8 @@ def parity_command(target: ApplicationTarget, snapshot_id: str) -> list[str]:
         "sh",
         "-euc",
         'export PGPASSWORD="$AC_DB_BACKUP_PASSWORD"; '
-        'exec psql --no-password -h 127.0.0.1 -U ac_backup -d "$POSTGRES_DB" -At '
+        "exec psql --no-password --no-psqlrc --set=ON_ERROR_STOP=1 "
+        '-h 127.0.0.1 -U ac_backup -d "$POSTGRES_DB" -qAt '
         '-c "$1"',
         "--",
         snapshot_query,
