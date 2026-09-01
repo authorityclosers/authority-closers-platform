@@ -1,6 +1,7 @@
 # Google learner recovery implementation evidence
 
-Status: local verified; immutable staging deployment and exact-release rerun pending.
+Status: local and immutable staging runtime verified on exact release
+`81635d18569c06962af37c1fa64d0d5814d0f2bf`.
 
 ## Problem closed by this change
 
@@ -45,6 +46,13 @@ Local comparison captures:
 The mobile capture was measured at `390px` viewport width with `390px`
 document scroll width and exactly one `h1`; no horizontal overflow was present.
 
+Live exact-release captures:
+
+- [`v0.1-staging-exact-81635d1/README.md`](screenshots/v0.1-staging-exact-81635d1/README.md)
+- login, registration, Google consent recovery, forgot-password,
+  verification empty-token, and reset empty-token states at desktop and
+  mobile widths (12 images total).
+
 ## Verification executed
 
 ```text
@@ -72,8 +80,35 @@ Observed results:
   unlinked-provider recovery were narrowed to dedicated exception types; a
   dangling person link and provider-key ownership collision remain fail-closed.
 
-These results are local implementation evidence, not staging or production
-runtime evidence. The staging row remains open until this exact commit is
-deployed immutably and the live callback result, session boundary, responsive
-screen, and regression suite are captured. Production remains a separate
-release decision.
+## Exact-release CI and staging runtime evidence
+
+- reviewed commit:
+  `81635d18569c06962af37c1fa64d0d5814d0f2bf`;
+- pull-request application validation: GitHub Actions run `33460969038`,
+  passed;
+- pull-request control-plane validation: GitHub Actions run `33460969014`,
+  passed;
+- workflow-dispatch validation and immutable image packaging: GitHub Actions
+  run `33461232992`, passed;
+- immutable deployment command:
+  `pwsh -NoProfile -File .\scripts\Deploy-Staging.ps1 -ReleaseSha 81635d18569c06962af37c1fa64d0d5814d0f2bf`;
+- archive path-safety, commit binding, image/release identity, migration,
+  container health, learner/PWA assets, API live/ready/catalog, protected
+  admin route, WordPress boundary, and Google OAuth start/callback binding:
+  passed;
+- direct live callback result
+  `/auth/callback?result=consent_required`: rendered the recovery UI at desktop
+  and mobile widths with no RFC 7807 body, request ID, provider payload, token,
+  or horizontal overflow;
+- registration Google button: disabled before exact consent and enabled after
+  the checkbox is checked;
+- post-cutover recovery request: accepted, with a fresh message delivered from
+  `Authority Closers <learn@authorityclosers.com>` to
+  `admin@authorityclosers.com` at `2026-09-01T02:23:32Z`.
+
+The user-specific Google account-selection and final provider callback were not
+replayed after this deployment because selecting the signed-in Google account
+transmits provider identity data and requires action-time user confirmation.
+The start/callback boundary and recovery behavior are exact-release smoke,
+integration, and browser-proven; a final real-account re-consent completion is
+still an explicit runtime gate. Production remains a separate release decision.

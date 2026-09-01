@@ -13,6 +13,8 @@ Status meanings:
 
 - `candidate` — implemented in the current reviewed local candidate; live
   exact-SHA verification is still required.
+- `staging-proven` — implemented and captured from the named immutable staging
+  release; production remains a separate gate.
 - `partial` — the v0.1 contract/surface exists, but the named visual includes a
   provider, seeded state, or breadth that is not yet runtime-proven.
 - `extension` — intentionally not part of the approved v0.1 boundary.
@@ -36,12 +38,12 @@ Status meanings:
 
 ## D02 — auth and onboarding
 
-| Drive asset                                                              | Status                | v0.1 treatment                                                                                                                                                                                               |
-| ------------------------------------------------------------------------ | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `AUTH-01-desktop-registration.png` (`1K9qpP-OTsgyuhJ3mtmZYDj2-7EFv_MJb`) | implemented candidate | Full-height split registration composition, explicit 18+/Terms/Privacy consent, password-manager fields, and consent-gated Google registration are implemented.                                              |
-| `AUTH-02-desktop-verification.png` (`1NLx4nRVxS_5bsu9hOMjEHW5Yb25GwNr5`) | implemented candidate | Verification/recovery visual family, Google callback recovery, and branded responsive verification/reset/welcome email renderers are implemented; each environment still requires runtime delivery evidence. |
-| `ONB-01-desktop-context.png` (`1-iZ5l-57RezRmFYyXcyY45jWiIFTF0um`)       | candidate             | Three-step progressive onboarding inside the learner workspace shell.                                                                                                                                        |
-| `ONB-02-mobile-context.png` (`1ewm-HXQZv10tkfq3UNvly4JWHeIAFOWT`)        | candidate             | Mobile onboarding composition with skip/save behavior and session-expiry recovery.                                                                                                                           |
+| Drive asset                                                              | Status         | v0.1 treatment                                                                                                                                                                                                                         |
+| ------------------------------------------------------------------------ | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AUTH-01-desktop-registration.png` (`1K9qpP-OTsgyuhJ3mtmZYDj2-7EFv_MJb`) | staging-proven | Full-height split registration composition, explicit 18+/Terms/Privacy consent, password-manager fields, consent-gated Google registration, and desktop/mobile staging captures are verified on release `81635d1`.                     |
+| `AUTH-02-desktop-verification.png` (`1NLx4nRVxS_5bsu9hOMjEHW5Yb25GwNr5`) | staging-proven | Verification/recovery visual family, Google callback recovery, branded responsive verification/reset/welcome email renderers, desktop/mobile live captures, and post-cutover recovery-mail delivery are verified on release `81635d1`. |
+| `ONB-01-desktop-context.png` (`1-iZ5l-57RezRmFYyXcyY45jWiIFTF0um`)       | candidate      | Three-step progressive onboarding inside the learner workspace shell.                                                                                                                                                                  |
+| `ONB-02-mobile-context.png` (`1ewm-HXQZv10tkfq3UNvly4JWHeIAFOWT`)        | candidate      | Mobile onboarding composition with skip/save behavior and session-expiry recovery.                                                                                                                                                     |
 
 The candidate also adds login, forgot/reset password, offline, canonical
 `/session-expired`, and allowlisted Google callback recovery screens in the

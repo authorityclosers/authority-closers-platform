@@ -4,8 +4,9 @@
 - Repository: `authorityclosers/authority-closers-platform` (private)
 - Branch: `codex/g1-free-course-foundation`
 - Deployed application release:
-  `27fafaea1e5de41ae6a830746b1d832b42c7d444`
-- Evidence commit: `5f0cfc8`
+  `81635d18569c06962af37c1fa64d0d5814d0f2bf`
+- Evidence commit: reported in the final task handoff after this evidence-only
+  update is committed.
 
 ## Outcome
 
@@ -14,7 +15,9 @@ learner foundation, separate protected admin foundation, modular API,
 PostgreSQL state, password authentication, recovery, Google authentication,
 transactional email, published free-course catalog, learner home, complete
 Module 1 VIDEO → REFLECTION → IMPLEMENTATION_CHALLENGE → REVIEW → IMPROVE
-route family, and server-restored reflection draft.
+route family, and server-restored reflection draft. Release `81635d1` also
+replaces the raw missing-consent Google callback problem document with a
+same-origin, responsive recovery journey grounded in the approved auth design.
 
 This is not a production launch declaration. Production learner, admin, and
 API hostnames do not resolve and the required production bootstrap,
@@ -25,7 +28,7 @@ exact-release gates have not been proved.
 
 | Surface      | URL                                                                           | Runtime result                                                 |
 | ------------ | ----------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| Learner      | `https://staging.authorityclosers.com`                                        | HTTP 200; exact release `27fafae`                              |
+| Learner      | `https://staging.authorityclosers.com`                                        | HTTP 200; exact release `81635d1`                              |
 | Login        | `https://staging.authorityclosers.com/login`                                  | Password and Google entry points live                          |
 | Free course  | `https://staging.authorityclosers.com/programs/authority-closers-free-course` | Published course and module topology live                      |
 | Learner path | `https://staging.authorityclosers.com/learn/authority-closers-free-course`    | Enrolled learner sees all five Module 1 activities             |
@@ -36,12 +39,13 @@ The legacy `authorityclosers.com` and `www` WordPress boundary is unchanged.
 
 ## Test identities and access
 
-- Dedicated learner: `admin+alpha-learner@authorityclosers.com`
-- Infrastructure and Google admin: `admin@authorityclosers.com`
+- Existing Google/admin learner identity: `admin@authorityclosers.com`
+- Dedicated seeded learner: `admin+alpha-learner@authorityclosers.com`
 
-No password is stored in Git or this handoff. The dedicated learner password
-is established with the newest `Reset your password — Authority Closers`
-message delivered to the Authority Closers admin mailbox.
+No password, reset token, OAuth code, or cookie is stored in Git or this
+handoff. A fresh post-cutover `Reset your password — Authority Closers`
+message was delivered to `admin@authorityclosers.com`; that one-time inbox
+flow is the immediate secure way to establish a private test password.
 
 ## Runtime proof
 
@@ -53,15 +57,18 @@ message delivered to the Authority Closers admin mailbox.
 - Learner root, health, Apple/PWA icons, service worker, API live/ready/catalog,
   admin Access boundary, Google callback binding, and legacy WordPress smoke:
   passed.
-- Worker runtime: `AC_EMAIL_PROVIDER=resend`,
-  `AC_EXTERNAL_SIDE_EFFECTS_HOLD=false`, AC sender configured.
-- Fresh recovery request: Resend status `delivered` to the dedicated learner.
+- Fresh post-cutover recovery request: accepted and delivered from
+  `Authority Closers <learn@authorityclosers.com>` to
+  `admin@authorityclosers.com` at `2026-09-01T02:23:32Z`.
 - Password login: dedicated learner landed on `/home`; home showed
   `Authority Closers Free Course`, `Continue course`, and authoritative
   `0 / 5` projection.
-- Google login: exact `admin@authorityclosers.com` account selected at Google;
-  callback landed on `/home` with `owner` context. The former consent/error
-  response did not recur.
+- Google boundary: OAuth start/callback binding passed deployment smoke; the
+  exact missing-consent callback renders the branded `Review and continue`
+  recovery screen on desktop and mobile instead of raw JSON. A final
+  user-specific Google account-selection/re-consent completion was not replayed
+  after `81635d1` because account selection requires action-time user
+  confirmation.
 - Reflection: server-restored draft rendered with in-progress state and
   character count.
 
@@ -69,15 +76,19 @@ message delivered to the Authority Closers admin mailbox.
 
 | Gate                                                      | Result                               |
 | --------------------------------------------------------- | ------------------------------------ |
-| Learner tests                                             | PASS — 54                            |
+| Learner tests                                             | PASS — 55                            |
+| Admin tests                                               | PASS — 71                            |
+| Python suite                                              | PASS — 836; 97 skipped               |
 | Learner lint/typecheck/Prettier/build                     | PASS                                 |
-| Pull-request control-plane workflow                       | PASS — run `33447263943`             |
-| Pull-request application workflow                         | PASS — run `33447263944`             |
-| Exact-release validation and packaging                    | PASS — run `33447522610`             |
+| Pull-request control-plane workflow                       | PASS — run `33460969014`             |
+| Pull-request application workflow                         | PASS — run `33460969038`             |
+| Exact-release validation and packaging                    | PASS — run `33461232992`             |
 | Immutable image publication and reviewed transport bundle | PASS                                 |
 | Staging migrations and deployment smoke                   | PASS                                 |
 | Password login and recovery delivery                      | PASS                                 |
-| Google login/callback                                     | PASS                                 |
+| Google start and missing-consent callback recovery        | PASS                                 |
+| Final real-account Google re-consent completion           | OPEN — action-time user confirmation |
+| Current-release public auth mobile captures               | PASS — 6 states                      |
 | Drive/live desktop shell comparison                       | PASS with explicit viewport mismatch |
 | Current-release authenticated mobile capture              | OPEN                                 |
 | Production promotion                                      | NO-GO                                |
@@ -87,6 +98,7 @@ message delivered to the Authority Closers admin mailbox.
 - [Exact staging journey index](screenshots/v0.1-staging-exact-27fafae/README.md)
 - [Complete journey contact sheet](screenshots/v0.1-staging-exact-27fafae/journey-contact-sheet.png)
 - [Drive reference/live home comparison](screenshots/v0.1-staging-exact-27fafae/comparison-shell-home.png)
+- [Exact-release auth and recovery pack](screenshots/v0.1-staging-exact-81635d1/README.md)
 - [Design QA](../../design-qa.md)
 - [Drive UI implementation matrix](../traceability/DRIVE_UI_IMPLEMENTATION_MATRIX.md)
 
@@ -101,7 +113,7 @@ OAuth code, cookie, or secret.
 pnpm install --frozen-lockfile
 pnpm run validate
 pwsh -NoProfile -NonInteractive -File scripts/Deploy-Staging.ps1 `
-  -ReleaseSha 27fafaea1e5de41ae6a830746b1d832b42c7d444
+  -ReleaseSha 81635d18569c06962af37c1fa64d0d5814d0f2bf
 ```
 
 Deployment must consume the reviewed immutable release bundle and environment
@@ -110,10 +122,11 @@ authority.
 
 ## Open boundaries
 
-1. A current-release authenticated 390 × 844 mobile journey capture is still
-   missing because the selected Chrome connection did not apply a temporary
-   viewport override. Responsive unit/CSS checks are not substituted for
-   cross-device visual evidence.
+1. Public auth/recovery is captured at a configured 390 × 844 mobile viewport,
+   but a current-release authenticated 390 × 844 learner home/module journey
+   is still missing because the selected browser no longer has a learner
+   session. Public responsive evidence is not substituted for authenticated
+   journey evidence.
 2. Media playback remains provider/policy-gated. No fake video completion is
    asserted.
 3. Implementation evidence submission remains independent-reviewer-gated.
@@ -128,6 +141,9 @@ authority.
    action-time approval evidence. Current DNS checks return NXDOMAIN for
    `app.authorityclosers.com`, `admin.authorityclosers.com`, and
    `api.authorityclosers.com`.
+7. Final real-account Google re-consent remains an action-time user step. The
+   deployed recovery logic and provider boundary are proven without silently
+   selecting or transmitting a signed-in Google identity.
 
 ## Explicit non-claims
 
