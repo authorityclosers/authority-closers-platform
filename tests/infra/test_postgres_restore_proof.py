@@ -583,6 +583,20 @@ def test_units_manifest_and_wrapper_are_narrow_and_hardened() -> None:
         assert marker in service
     assert "ports:" not in service
 
+    working_directory_lines = [
+        line.strip()
+        for line in service.splitlines()
+        if line.strip().startswith("WorkingDirectory=") and not line.lstrip().startswith(("#", ";"))
+    ]
+    assert working_directory_lines == ["WorkingDirectory=/usr/local/libexec/authority-closers"]
+    working_directory = Path(working_directory_lines[0].partition("=")[2])
+    for mutable_root in (
+        Path("/srv/authority-closers/recovery-tmp"),
+        Path("/srv/authority-closers/recovery-evidence"),
+    ):
+        assert working_directory != mutable_root
+        assert working_directory not in mutable_root.parents
+
     bootstrap = (FOUNDATION / "scripts" / "bootstrap-host.sh").read_text(encoding="utf-8")
     assert "/srv/authority-closers/recovery-tmp" in bootstrap
     assert "/srv/authority-closers/recovery-evidence" in bootstrap

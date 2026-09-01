@@ -11,6 +11,7 @@ User=root
 Group=root
 Environment=AC_IPV4_ONLY=1
 Environment=DOCKER_CONFIG=/run/ac-docker-cli
+WorkingDirectory=/usr/local/libexec/authority-closers
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true

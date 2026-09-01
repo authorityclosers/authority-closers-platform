@@ -58,3 +58,9 @@ and a bounded 30-second cleanup grace period; the drill reconciles and removes
 only the exact Docker resources carrying that invocation's label. A hard kill,
 label mismatch, or cleanup/evidence failure fails closed and requires operator
 attention. Do not remove a broad directory or run a live database restore.
+
+The hardened systemd unit uses
+`WorkingDirectory=/usr/local/libexec/authority-closers`. Keep that directory
+outside both recovery trees: the restore drill intentionally rejects backup or
+evidence paths beneath its current working directory, and systemd's default
+root working directory would therefore fail closed for every absolute path.
