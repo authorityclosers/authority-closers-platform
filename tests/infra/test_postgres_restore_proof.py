@@ -505,6 +505,7 @@ def test_units_manifest_and_wrapper_are_narrow_and_hardened() -> None:
         encoding="utf-8"
     )
     assert "scripts/ac-restic-postgres-restore-proof\t" in manifest
+    assert "scripts/ac-restic-postgres-restore-proof-inner\t" in manifest
     assert "scripts/ac-restic-postgres-restore-proof.py\t" in manifest
     assert "config/systemd/ac-restic-postgres-restore-proof@.service\t" in manifest
     assert "config/systemd/ac-restic-postgres-restore-proof@.timer\t" in manifest
@@ -513,8 +514,21 @@ def test_units_manifest_and_wrapper_are_narrow_and_hardened() -> None:
         encoding="utf-8"
     )
     assert "ac-infisical-run-backup" in wrapper
-    assert "ac-restic-postgres-restore-proof.py" in wrapper
+    assert "ac-restic-postgres-restore-proof-inner" in wrapper
     assert "--environment {staging|production}" in wrapper
+
+    inner = (
+        FOUNDATION / "scripts" / "ac-restic-postgres-restore-proof-inner"
+    ).read_text(encoding="utf-8")
+    for marker in (
+        'export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID"',
+        'export AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"',
+        "export RESTIC_CACHE_DIR='/var/cache/authority-closers-restic'",
+        'exec 9>>"$restic_lock_file"',
+        "flock --exclusive --nonblock 9",
+        "ac-restic-postgres-restore-proof.py",
+    ):
+        assert marker in inner
 
     service = (
         FOUNDATION / "config" / "systemd" / "ac-restic-postgres-restore-proof@.service"

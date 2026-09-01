@@ -27,6 +27,7 @@ executable	scripts/ac-postgres-backup	/usr/local/sbin/ac-postgres-backup	0755	ro
 executable	scripts/ac-postgres-backup.py	/usr/local/libexec/authority-closers/ac-postgres-backup.py	0755	root	root
 executable	scripts/ac-restic-postgres-backup-inner	/usr/local/libexec/authority-closers/ac-restic-postgres-backup-inner	0755	root	root
 executable	scripts/ac-restic-postgres-restore-proof	/usr/local/sbin/ac-restic-postgres-restore-proof	0755	root	root
+executable	scripts/ac-restic-postgres-restore-proof-inner	/usr/local/libexec/authority-closers/ac-restic-postgres-restore-proof-inner	0755	root	root
 executable	scripts/ac-restic-postgres-restore-proof.py	/usr/local/libexec/authority-closers/ac-restic-postgres-restore-proof.py	0755	root	root
 executable	scripts/ac-restic-init	/usr/local/sbin/ac-restic-init	0755	root	root
 executable	scripts/ac-restic-init-inner	/usr/local/sbin/ac-restic-init-inner	0755	root	root

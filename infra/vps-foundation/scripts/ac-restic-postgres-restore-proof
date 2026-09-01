@@ -20,4 +20,4 @@ fi
 # The backup Infisical identity supplies only the Restic/R2 environment.  The
 # Python helper never emits that environment or child command output.
 exec /usr/local/sbin/ac-infisical-run-backup \
-  -- /usr/local/libexec/authority-closers/ac-restic-postgres-restore-proof.py "$@"
+  -- /usr/local/libexec/authority-closers/ac-restic-postgres-restore-proof-inner "$@"
