@@ -450,6 +450,7 @@ def test_timer_and_unit_are_persistent_bounded_and_hardened() -> None:
         "TimeoutStartSec=60min",
         "TimeoutStopSec=30s",
         "Environment=AC_IPV4_ONLY=1",
+        "Environment=DOCKER_CONFIG=/run/ac-docker-cli",
         "ExecStart=/usr/local/sbin/ac-postgres-backup",
         "Nice=10",
         "IOSchedulingPriority=7",

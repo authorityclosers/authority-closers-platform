@@ -14,6 +14,7 @@ Nice=10
 IOSchedulingClass=best-effort
 IOSchedulingPriority=7
 Environment=AC_IPV4_ONLY=1
+Environment=DOCKER_CONFIG=/run/ac-docker-cli
 TimeoutStartSec=60min
 TimeoutStopSec=30s
 KillMode=mixed
