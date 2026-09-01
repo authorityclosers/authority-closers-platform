@@ -1,7 +1,8 @@
 [Unit]
 Description=Authority Closers off-site logical PostgreSQL restore proof (%i)
-After=network-online.target
+After=network-online.target docker.service
 Wants=network-online.target
+Requires=docker.service
 
 [Service]
 Type=oneshot
@@ -9,6 +10,7 @@ ExecStart=/usr/local/sbin/ac-restic-postgres-restore-proof --environment %i
 User=root
 Group=root
 Environment=AC_IPV4_ONLY=1
+Environment=DOCKER_CONFIG=/run/ac-docker-cli
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true

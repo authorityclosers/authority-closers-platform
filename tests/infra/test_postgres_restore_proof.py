@@ -495,7 +495,10 @@ def test_units_manifest_and_wrapper_are_narrow_and_hardened() -> None:
         FOUNDATION / "config" / "systemd" / "ac-restic-postgres-restore-proof@.service"
     ).read_text(encoding="utf-8")
     for marker in (
+        "After=network-online.target docker.service",
+        "Requires=docker.service",
         "User=root",
+        "Environment=DOCKER_CONFIG=/run/ac-docker-cli",
         "NoNewPrivileges=true",
         "ProtectSystem=strict",
         "PrivateTmp=true",
@@ -508,3 +511,7 @@ def test_units_manifest_and_wrapper_are_narrow_and_hardened() -> None:
     ):
         assert marker in service
     assert "ports:" not in service
+
+    bootstrap = (FOUNDATION / "scripts" / "bootstrap-host.sh").read_text(encoding="utf-8")
+    assert "/srv/authority-closers/recovery-tmp" in bootstrap
+    assert "/srv/authority-closers/recovery-evidence" in bootstrap

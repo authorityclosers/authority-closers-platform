@@ -323,6 +323,8 @@ phase_runtime() {
   install -d -m 2750 -o root -g acops \
     /srv/authority-closers/releases \
     /srv/authority-closers/backups \
+    /srv/authority-closers/recovery-tmp \
+    /srv/authority-closers/recovery-evidence \
     /srv/authority-closers/volumes/postgres \
     /srv/authority-closers/volumes/blob \
     /srv/authority-closers/volumes/media \
