@@ -112,14 +112,17 @@ def _write_release(root: Path, environment: str = "staging") -> Path:
         "AC_ADMIN_REGISTRY_DIGEST": (
             "ghcr.io/authorityclosers/authority-closers-admin-web@sha256:" + "b" * 64
         ),
+        "AC_ADMIN_TRANSPORT_DIGEST": "sha256:" + "b" * 64,
         "AC_API_IMAGE": "sha256:" + "c" * 64,
         "AC_API_REGISTRY_DIGEST": (
             "ghcr.io/authorityclosers/authority-closers-api@sha256:" + "c" * 64
         ),
+        "AC_API_TRANSPORT_DIGEST": "sha256:" + "c" * 64,
         "AC_LEARNER_IMAGE": "sha256:" + "d" * 64,
         "AC_LEARNER_REGISTRY_DIGEST": (
             "ghcr.io/authorityclosers/authority-closers-learner-web@sha256:" + "d" * 64
         ),
+        "AC_LEARNER_TRANSPORT_DIGEST": "sha256:" + "d" * 64,
         "AC_MIGRATION_HEAD": MIGRATION_HEAD_FIXTURE,
         "AC_RELEASE_ID": "a" * 40,
     }
@@ -198,6 +201,7 @@ def test_current_release_requires_root_owned_manifest_and_exact_local_images(
             "ghcr.io/authorityclosers/authority-closers-api@sha256:" + "c" * 64 + "?tag=x",
             "registry provenance",
         ),
+        ("AC_API_TRANSPORT_DIGEST", "sha256:" + "c" * 64 + ":tag", "transport identity"),
         ("AC_MIGRATION_HEAD", f"{MIGRATION_HEAD_FIXTURE};echo", "migration identity"),
         ("AC_RELEASE_ID", "a" * 40 + "../", "release identity"),
     ),
@@ -217,6 +221,27 @@ def test_release_manifest_values_use_key_specific_fail_closed_grammars(
     manifest.write_text("\n".join(replacements) + "\n", encoding="utf-8")
 
     with pytest.raises(proof.RestoreProofError, match=message):
+        proof._parse_release_env(manifest)
+
+
+def test_release_manifest_requires_each_local_image_to_match_its_transport_digest(
+    tmp_path: Path,
+) -> None:
+    release = _write_release(tmp_path)
+    manifest = release / "release-images.env"
+    lines = manifest.read_text(encoding="utf-8").splitlines()
+    manifest.write_text(
+        "\n".join(
+            "AC_API_TRANSPORT_DIGEST=sha256:" + "e" * 64
+            if line.startswith("AC_API_TRANSPORT_DIGEST=")
+            else line
+            for line in lines
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(proof.RestoreProofError, match="transport identity is inconsistent"):
         proof._parse_release_env(manifest)
 
 

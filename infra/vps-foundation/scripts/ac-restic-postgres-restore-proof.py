@@ -52,10 +52,13 @@ EVIDENCE_FILE_RE = re.compile(r"^restore-drill-[0-9a-f]{12}\.json$")
 RELEASE_IMAGE_KEYS = {
     "AC_ADMIN_IMAGE",
     "AC_ADMIN_REGISTRY_DIGEST",
+    "AC_ADMIN_TRANSPORT_DIGEST",
     "AC_API_IMAGE",
     "AC_API_REGISTRY_DIGEST",
+    "AC_API_TRANSPORT_DIGEST",
     "AC_LEARNER_IMAGE",
     "AC_LEARNER_REGISTRY_DIGEST",
+    "AC_LEARNER_TRANSPORT_DIGEST",
     "AC_MIGRATION_HEAD",
     "AC_RELEASE_ID",
 }
@@ -766,6 +769,16 @@ def _parse_release_env(path: Path) -> dict[str, str]:
     for key in ("AC_ADMIN_IMAGE", "AC_API_IMAGE", "AC_LEARNER_IMAGE"):
         if re.fullmatch(r"sha256:[0-9a-f]{64}", values[key]) is None:
             raise RestoreProofError("current application release image identity is unsafe")
+    for key in (
+        "AC_ADMIN_TRANSPORT_DIGEST",
+        "AC_API_TRANSPORT_DIGEST",
+        "AC_LEARNER_TRANSPORT_DIGEST",
+    ):
+        if re.fullmatch(r"sha256:[0-9a-f]{64}", values[key]) is None:
+            raise RestoreProofError("current application transport identity is unsafe")
+    for component in ("ADMIN", "API", "LEARNER"):
+        if values[f"AC_{component}_IMAGE"] != values[f"AC_{component}_TRANSPORT_DIGEST"]:
+            raise RestoreProofError("current application transport identity is inconsistent")
     for key in (
         "AC_ADMIN_REGISTRY_DIGEST",
         "AC_API_REGISTRY_DIGEST",
