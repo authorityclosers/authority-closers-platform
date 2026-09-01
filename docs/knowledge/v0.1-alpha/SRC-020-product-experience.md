@@ -23,4 +23,5 @@ tags:
 
 - controls: [[RT-001-public-auth]], [[RT-002-onboarding-home]], [[RT-003-learning]], [[RT-004-progress-settings-system]].
 - informs: [[JRN-01-account-to-first-value]], [[JRN-03-module-1-learning-loop]], [[JRN-04-profile-settings-appearance]].
+- supplemented-by: [[SRC-021-evidence-based-learner-experience]], which separates standards/research evidence from product case studies and visual references.
 - interpreted by: [route/screen contract](../../contracts/V0_1_ROUTE_SCREEN_CONTRACTS.md).

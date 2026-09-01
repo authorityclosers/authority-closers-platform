@@ -5,8 +5,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   ConnectedActivityWorkspace,
+  FREE_COURSE_SLUG,
+  HomeLearningPath,
   isSessionExpiredError,
   LearnerHomeEnrollmentCard,
+  LearnerHomeOnboardingRedirect,
   LearningActivityNavigation,
 } from "../components/learner-runtime";
 import { isOnboardingSessionExpired } from "../components/onboarding-form";
@@ -15,6 +18,7 @@ import {
   ApiError,
   type ActivityResponse,
   type LearningActivityResponse,
+  type LearningResponse,
   type ProgramSummaryResponse,
 } from "./learner-api";
 
@@ -57,16 +61,39 @@ const publishedFreeCourse: ProgramSummaryResponse = {
 };
 
 describe("learner Clarity Grid slice", () => {
-  it("renders the supported shell with honest disabled extension navigation", () => {
+  it("renders only working learner navigation", () => {
     const html = renderToStaticMarkup(
       createElement(LearnerShell, { current: "home" }, "content"),
     );
 
     expect(html).toContain('aria-label="Learner workspace navigation"');
-    expect(html).toContain('placeholder="Search is coming later"');
     expect(html).toContain('aria-label="Learner mobile navigation"');
-    expect(html).toContain('aria-disabled="true"');
+    expect(html).toContain('href="/home#my-learning"');
+    expect(html).toContain('href="/progress"');
+    expect(html).toContain('href="/settings"');
+    expect(html).not.toContain('aria-disabled="true"');
+    expect(html).not.toContain("Practice");
+    expect(html).not.toContain("Library");
+    expect(html).not.toContain("Search is coming later");
     expect(html).not.toContain("Certificate");
+  });
+
+  it("keeps Learning valid while incomplete onboarding redirects", () => {
+    const redirect = renderToStaticMarkup(
+      createElement(LearnerHomeOnboardingRedirect),
+    );
+    const onboardingShell = renderToStaticMarkup(
+      createElement(
+        LearnerShell,
+        { current: "none", learningHref: "/onboarding" },
+        "content",
+      ),
+    );
+
+    expect(redirect).toContain('id="my-learning"');
+    expect(redirect).toContain('role="status"');
+    expect(onboardingShell).toContain('href="/onboarding"');
+    expect(onboardingShell).not.toContain('href="/home#my-learning"');
   });
 
   it("offers the real published Free Course when there is no enrollment", () => {
@@ -83,6 +110,87 @@ describe("learner Clarity Grid slice", () => {
     expect(html).toContain("Start free course");
     expect(html).toContain('href="/programs/authority-closers-free-course"');
     expect(html).not.toMatch(/projection unavailable|assignment collection/i);
+  });
+
+  it("keeps public program details preview-only and enrollment inside Home", () => {
+    const source = readFileSync(
+      new URL("../components/learner-runtime.tsx", import.meta.url),
+      "utf8",
+    );
+    const publicDetail = source.slice(
+      source.indexOf("export function PublicProgramDetail"),
+      source.indexOf("export async function identityState"),
+    );
+
+    expect(publicDetail).toContain("Sign in to start free");
+    expect(publicDetail).toContain("Create learner account");
+    expect(publicDetail).not.toContain("api.enrollFree");
+    expect(publicDetail).not.toContain("Enroll free");
+  });
+
+  it("keeps locked modules non-navigable and review-pending modules available", () => {
+    const learning: LearningResponse = {
+      program_id: "program-1",
+      program_version_id: "version-1",
+      program_slug: FREE_COURSE_SLUG,
+      program_title: "Authority Closers Free Course",
+      version_number: 1,
+      enrollment_id: "enrollment-1",
+      modules: [
+        {
+          id: "module-locked",
+          position: 1,
+          title: "Locked module",
+          activities: [
+            {
+              ...activity,
+              id: "locked-activity",
+              module_id: "module-locked",
+              state: "locked",
+              allowed_actions: [],
+            },
+          ],
+        },
+        {
+          id: "module-review",
+          position: 2,
+          title: "Review module",
+          activities: [
+            {
+              ...activity,
+              id: "review-activity",
+              module_id: "module-review",
+              state: "awaiting_review",
+              allowed_actions: [],
+            },
+          ],
+        },
+      ],
+      projection: {
+        scope_type: "course",
+        scope_id: "program-1",
+        program_version: "1",
+        projection_version: "1",
+        denominator: 2,
+        completed_count: 0,
+        percentage: 0,
+        predicate: "required activities completed",
+        missing_module_ids: ["module-locked", "module-review"],
+        activity_reasons: [],
+      },
+    };
+    const html = renderToStaticMarkup(
+      createElement(HomeLearningPath, { learning }),
+    );
+
+    expect(html).toContain('aria-disabled="true"');
+    expect(html).not.toContain(
+      'href="/learn/authority-closers-free-course/module/module-locked"',
+    );
+    expect(html).toContain(
+      'href="/learn/authority-closers-free-course/module/module-review"',
+    );
+    expect(html).toContain("Awaiting review");
   });
 
   it("renders server activity metadata and leaves locked activity non-navigable", () => {

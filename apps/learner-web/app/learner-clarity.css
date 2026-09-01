@@ -4,17 +4,17 @@
  * screens can evolve without changing the shared app stylesheet.
  */
 .site-frame--learner {
-  --clarity-ink: #0f1b33;
+  --clarity-ink: var(--theme-text);
   --clarity-navy: #081b3a;
-  --clarity-blue: #3157d8;
+  --clarity-blue: var(--theme-action);
   --clarity-indigo: #4f46e5;
   --clarity-green: #16a34a;
   --clarity-amber: #c87a00;
-  --clarity-surface: #ffffff;
-  --clarity-canvas: #f7f8fa;
-  --clarity-muted: #697386;
-  --clarity-border: #dfe4ec;
-  --clarity-soft-blue: #eef3ff;
+  --clarity-surface: var(--theme-surface);
+  --clarity-canvas: var(--theme-canvas);
+  --clarity-muted: var(--theme-text-muted);
+  --clarity-border: var(--theme-border);
+  --clarity-soft-blue: var(--theme-info-surface);
   color: var(--clarity-ink);
   background: var(--clarity-canvas);
   font-family: var(--font-sans), Arial, sans-serif;
@@ -2677,5 +2677,173 @@ a.learning-list-card:hover {
   .site-frame--learner .activity-row__status {
     grid-column: 3;
     justify-self: start;
+  }
+}
+
+/* Selected learner-home direction: one action, real routes, server-owned path. */
+.site-frame--learner .learner-header__context {
+  margin: 0;
+  color: var(--clarity-muted);
+  font-size: 0.76rem;
+  font-weight: 750;
+  letter-spacing: 0.01em;
+}
+
+.site-frame--learner .dashboard-grid--single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.site-frame--learner .dashboard-grid--single .current-course-card {
+  min-height: 0;
+}
+
+.home-learning-path {
+  margin-top: 32px;
+}
+
+.home-learning-path__heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 12px;
+}
+
+.home-learning-path__heading h2 {
+  margin: 5px 0 0;
+  color: var(--clarity-ink);
+  font-size: clamp(1.25rem, 2vw, 1.65rem);
+  letter-spacing: -0.035em;
+}
+
+.home-learning-path__heading > span {
+  color: var(--clarity-muted);
+  font-size: 0.74rem;
+  font-weight: 750;
+}
+
+.home-module-list {
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--clarity-border);
+  border-radius: 12px;
+  background: var(--clarity-surface);
+  box-shadow: 0 8px 24px rgba(15, 27, 51, 0.045);
+  list-style: none;
+}
+
+.home-module-list li + li {
+  border-top: 1px solid var(--clarity-border);
+}
+
+.home-module-list__row {
+  display: grid;
+  min-height: 76px;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  grid-template-columns: 34px minmax(0, 1fr) auto 20px;
+  color: var(--clarity-ink);
+  transition:
+    background-color 160ms ease,
+    transform 160ms ease;
+}
+
+.home-module-list div.home-module-list__row {
+  color: var(--theme-disabled-text);
+  background: var(--theme-disabled-surface);
+}
+
+.home-module-list a.home-module-list__row:hover {
+  background: var(--theme-surface-subtle);
+}
+
+.home-module-list a.home-module-list__row:active {
+  transform: translateY(1px);
+}
+
+.home-module-list__number {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid var(--clarity-border);
+  border-radius: 10px;
+  color: var(--clarity-muted);
+  background: var(--theme-surface-raised);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.home-module-list__copy {
+  display: grid;
+  gap: 4px;
+}
+
+.home-module-list__copy strong {
+  font-size: 0.9rem;
+}
+
+.home-module-list__copy > span {
+  color: var(--clarity-muted);
+  font-size: 0.72rem;
+}
+
+.home-module-list__state {
+  padding: 5px 8px;
+  border-radius: 999px;
+  color: var(--clarity-muted);
+  background: var(--theme-disabled-surface);
+  font-size: 0.63rem;
+  font-weight: 800;
+}
+
+.home-module-list__state.is-current {
+  color: var(--clarity-blue);
+  background: var(--clarity-soft-blue);
+}
+
+.home-module-list__state.is-complete {
+  color: var(--theme-success-text);
+  background: var(--theme-success-surface);
+}
+
+.home-module-list__state.is-review {
+  color: var(--theme-warning-text);
+  background: var(--theme-warning-surface);
+}
+
+@media (max-width: 900px) {
+  .site-frame--learner .learner-header__context {
+    display: none;
+  }
+
+  .site-frame--learner .learner-bottom-nav {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .home-learning-path__heading {
+    display: grid;
+    gap: 8px;
+  }
+
+  .home-module-list__row {
+    min-height: 84px;
+    gap: 10px;
+    padding: 14px;
+    grid-template-columns: 32px minmax(0, 1fr) 18px;
+  }
+
+  .home-module-list__number {
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+  }
+
+  .home-module-list__state {
+    display: none;
   }
 }

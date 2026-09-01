@@ -17,12 +17,16 @@ tags:
 
 Program title: `Authority Closers Free Course`. Stable slug: `authority-closers-free-course`.
 
-| ID          | Route                  | Boundary                                                                                                      |
-| ----------- | ---------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `COURSE-01` | `/programs/{slug}`     | public published detail, processing start action, eligibility/consent lock; current candidate runtime pending |
-| `COURSE-02` | `/learn/{programSlug}` | enrolled learner path, projection, module locks and reasons; specification ready                              |
+| ID          | Route                  | Boundary                                                                             |
+| ----------- | ---------------------- | ------------------------------------------------------------------------------------ |
+| `COURSE-01` | `/programs/{slug}`     | read-only public preview; signs in or opens authenticated learner app; never enrolls |
+| `COURSE-02` | `/learn/{programSlug}` | enrolled learner path, projection, module locks and reasons; specification ready     |
 
-The public screen never substitutes the retained two-module fixture. `Start free course` is explicit and idempotent; the server resolves person, tenant, learner membership, current consent, exact published program, eligibility fact, and enrollment.
+The public screen never substitutes the retained two-module fixture and never
+mutates access. [[HOME-01-learner-home]] owns the explicit, idempotent
+`Start free course` action. The server resolves person, exact configured public
+learner tenant, current consent, exact published program, eligibility fact and
+enrollment; the client supplies no person or tenant identifier.
 
 - controlled-by: [[SRC-010-implementation-controls]] and [[SRC-040-engineering-contracts]].
 - appears-in: [[JRN-01-account-to-first-value]] and [[JRN-03-module-1-learning-loop]].
@@ -30,3 +34,6 @@ The public screen never substitutes the retained two-module fixture. `Start free
 - calls: [[API-002-catalog-enrollment]] and [[API-003-learning-evidence]].
 - exact content: [versioned seed](../../../packages/python/ac_platform/seed/data/free_course_foundation_v1.json).
 - constraint: [[DEC-001-public-learner-tenancy-consent]].
+- enrollment surface: [[DEC-006-authenticated-in-app-free-course-enrollment]].
+- supersedes: prior same-file wording that assigned enrollment processing to
+  `COURSE-01`.

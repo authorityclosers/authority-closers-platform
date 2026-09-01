@@ -7,6 +7,7 @@ import os
 import subprocess
 import sys
 from collections.abc import AsyncIterator, Coroutine, Iterator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -48,8 +49,9 @@ from ac_platform.enrollment.self_attestation import (
 from ac_platform.http.auth import AuthenticatedTransaction
 from ac_platform.http.course import install_course_http
 from ac_platform.http.problem import register_problem_handlers
-from ac_platform.identity.application import ResolvedActorContext
+from ac_platform.identity.application import AsyncIdentityApplication, ResolvedActorContext
 from ac_platform.identity.models import Person
+from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.tenancy.models import Membership, Tenant
 
@@ -115,6 +117,8 @@ def postgres_harness() -> Iterator[_Harness]:
                 "AC_DATABASE_URL": base_url.render_as_string(hide_password=False),
                 "AC_DATABASE_MIGRATOR_URL": base_url.render_as_string(hide_password=False),
                 "AC_ENVIRONMENT": "test",
+                "AC_PUBLIC_LEARNER_TENANT_ID": "11111111-1111-4111-8111-111111111111",
+                "AC_OPERATIONS_TENANT_ID": "22222222-2222-4222-8222-222222222222",
                 "PGOPTIONS": f"-csearch_path={schema}",
                 "PYTHONPATH": os.pathsep.join(
                     part
@@ -159,6 +163,7 @@ def _seed(
     with_consent: bool = False,
     exact_free_course_slug: bool = False,
     membership_role: str = "learner",
+    with_membership: bool = True,
 ) -> _Seed:
     tenant_id = uuid4()
     learner_id = uuid4()
@@ -185,13 +190,14 @@ def _seed(
             ]
         )
         database.flush()
-        database.add(
-            Membership(
-                tenant_id=tenant_id,
-                person_id=learner_id,
-                role=membership_role,
+        if with_membership:
+            database.add(
+                Membership(
+                    tenant_id=tenant_id,
+                    person_id=learner_id,
+                    role=membership_role,
+                )
             )
-        )
         database.flush()
         existing_program = database.scalar(
             select(Program).where(
@@ -319,6 +325,63 @@ def _settings(
         public_learner_tenant_id=public_learner_tenant_id,
         operations_tenant_id=uuid4(),
     )
+
+
+@asynccontextmanager
+async def _session_course_client(
+    postgres_harness: _Harness,
+    seed: _Seed,
+    *,
+    selected_tenant_id: UUID | None = None,
+    consent_version: str = CONSENT_VERSION,
+) -> AsyncIterator[tuple[httpx.AsyncClient, Any]]:
+    async_engine = create_async_engine(postgres_harness.schema_url, pool_pre_ping=True)
+    sessions = async_sessionmaker(async_engine, expire_on_commit=False)
+    token_pepper = "course-http-session-pepper-long-enough"  # noqa: S105
+    try:
+        async with sessions() as database, database.begin():
+            identity = AsyncIdentityApplication(database, token_pepper=token_pepper)
+            issued = await identity.issue_authenticated_session(seed.learner_id, now=NOW)
+            if selected_tenant_id is not None:
+                selected = await identity.select_tenant(
+                    issued.token,
+                    selected_tenant_id,
+                    now=NOW,
+                )
+                assert selected.actor.tenant_id == selected_tenant_id
+
+        async def require_actor(
+            _request: Request,
+        ) -> AsyncIterator[AuthenticatedTransaction]:
+            async with sessions() as database, database.begin():
+                identity = AsyncIdentityApplication(database, token_pepper=token_pepper)
+                resolved = await identity.resolve_actor(issued.token, now=NOW)
+                yield AuthenticatedTransaction(
+                    database=database,
+                    identity=identity,
+                    resolved=resolved,
+                    token=issued.token,
+                )
+
+        application = FastAPI()
+        register_problem_handlers(application)
+        install_course_http(
+            application,
+            settings=_settings(
+                public_learner_tenant_id=seed.tenant_id,
+                consent_version=consent_version,
+            ),
+            sessions=sessions,
+            require_actor=require_actor,
+        )
+        transport = httpx.ASGITransport(app=application)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="https://api.authorityclosers.test",
+        ) as client:
+            yield client, issued
+    finally:
+        await async_engine.dispose()
 
 
 def _add_self_attested_eligibility_fact(
@@ -541,6 +604,307 @@ def test_consent_backed_free_course_enrollment_creates_canonical_eligibility(
         assert fact.policy_version == "AC-FREE-SELF-ATTESTATION-v1"
         assert fact.evidence["consent_version"] == CONSENT_VERSION
         assert fact.evidence["explicit_action"] == "start_free_course"
+        assert (
+            database.scalar(
+                select(func.count())
+                .select_from(Enrollment)
+                .where(
+                    Enrollment.tenant_id == seed.tenant_id,
+                    Enrollment.person_id == seed.learner_id,
+                )
+            )
+            == 1
+        )
+
+
+def test_free_enrollment_recovers_a_session_selected_to_another_tenant(
+    postgres_harness: _Harness,
+) -> None:
+    seed = _seed(
+        postgres_harness.engine,
+        with_eligibility=False,
+        with_consent=True,
+        exact_free_course_slug=True,
+    )
+    other_tenant_id = uuid4()
+    with Session(postgres_harness.engine) as database, database.begin():
+        database.add(
+            Tenant(
+                id=other_tenant_id,
+                slug=f"previous-context-{uuid4().hex[:10]}",
+                name="Previous learner context",
+            )
+        )
+        database.flush()
+        database.add(
+            Membership(
+                tenant_id=other_tenant_id,
+                person_id=seed.learner_id,
+                role="learner",
+            )
+        )
+
+    async def scenario() -> UUID:
+        async with _session_course_client(
+            postgres_harness,
+            seed,
+            selected_tenant_id=other_tenant_id,
+        ) as (client, issued):
+            response = await asyncio.wait_for(
+                client.post(
+                    "/v1/enrollments/free",
+                    json={"program_version_id": str(seed.program_version_id)},
+                    headers={
+                        "Origin": "https://app.authorityclosers.test",
+                        "Idempotency-Key": "recover-previous-tenant-context",
+                    },
+                ),
+                timeout=15,
+            )
+            assert response.status_code == 201
+            assert response.json()["created"] is True
+            return issued.metadata.id
+
+    session_id = _run_async(scenario())
+
+    with Session(postgres_harness.engine) as database:
+        stored_session = database.get(IdentitySession, session_id)
+        assert stored_session is not None
+        assert stored_session.selected_tenant_id == seed.tenant_id
+        assert (
+            database.scalar(
+                select(func.count())
+                .select_from(Enrollment)
+                .where(
+                    Enrollment.tenant_id == seed.tenant_id,
+                    Enrollment.person_id == seed.learner_id,
+                )
+            )
+            == 1
+        )
+
+
+def test_free_enrollment_provisions_no_selected_tenant_and_replays(
+    postgres_harness: _Harness,
+) -> None:
+    seed = _seed(
+        postgres_harness.engine,
+        with_eligibility=False,
+        with_consent=True,
+        exact_free_course_slug=True,
+        with_membership=False,
+    )
+
+    async def scenario() -> UUID:
+        async with _session_course_client(postgres_harness, seed) as (client, issued):
+            headers = {
+                "Origin": "https://app.authorityclosers.test",
+                "Idempotency-Key": "recover-no-selected-context",
+            }
+            first = await asyncio.wait_for(
+                client.post(
+                    "/v1/enrollments/free",
+                    json={"program_version_id": str(seed.program_version_id)},
+                    headers=headers,
+                ),
+                timeout=15,
+            )
+            replay = await asyncio.wait_for(
+                client.post(
+                    "/v1/enrollments/free",
+                    json={"program_version_id": str(seed.program_version_id)},
+                    headers=headers,
+                ),
+                timeout=15,
+            )
+            assert first.status_code == 201
+            assert first.json()["created"] is True
+            assert replay.status_code == 200
+            assert replay.json()["replayed"] is True
+            assert replay.json()["enrollment_id"] == first.json()["enrollment_id"]
+            return issued.metadata.id
+
+    session_id = _run_async(scenario())
+
+    with Session(postgres_harness.engine) as database:
+        stored_session = database.get(IdentitySession, session_id)
+        membership = database.get(Membership, (seed.tenant_id, seed.learner_id))
+        assert stored_session is not None
+        assert stored_session.selected_tenant_id == seed.tenant_id
+        assert membership is not None
+        assert membership.role == "learner"
+        assert (
+            database.scalar(
+                select(func.count())
+                .select_from(Enrollment)
+                .where(
+                    Enrollment.tenant_id == seed.tenant_id,
+                    Enrollment.person_id == seed.learner_id,
+                )
+            )
+            == 1
+        )
+
+
+def test_free_enrollment_recovery_rolls_back_without_reviewed_consent(
+    postgres_harness: _Harness,
+) -> None:
+    seed = _seed(
+        postgres_harness.engine,
+        with_eligibility=False,
+        exact_free_course_slug=True,
+        with_membership=False,
+    )
+
+    async def scenario() -> UUID:
+        async with _session_course_client(postgres_harness, seed) as (client, issued):
+            response = await asyncio.wait_for(
+                client.post(
+                    "/v1/enrollments/free",
+                    json={"program_version_id": str(seed.program_version_id)},
+                    headers={
+                        "Origin": "https://app.authorityclosers.test",
+                        "Idempotency-Key": "reject-no-consent-recovery",
+                    },
+                ),
+                timeout=15,
+            )
+            assert response.status_code == 403
+            assert response.json()["code"] == "tenant_context_required"
+            return issued.metadata.id
+
+    session_id = _run_async(scenario())
+
+    with Session(postgres_harness.engine) as database:
+        stored_session = database.get(IdentitySession, session_id)
+        assert stored_session is not None
+        assert stored_session.selected_tenant_id is None
+        assert database.get(Membership, (seed.tenant_id, seed.learner_id)) is None
+        assert (
+            database.scalar(
+                select(func.count())
+                .select_from(EnrollmentEligibilityFact)
+                .where(EnrollmentEligibilityFact.person_id == seed.learner_id)
+            )
+            == 0
+        )
+        assert (
+            database.scalar(
+                select(func.count())
+                .select_from(Enrollment)
+                .where(Enrollment.person_id == seed.learner_id)
+            )
+            == 0
+        )
+
+
+def test_free_enrollment_recovery_rolls_back_after_provisioning_when_eligibility_rejects(
+    postgres_harness: _Harness,
+) -> None:
+    seed = _seed(
+        postgres_harness.engine,
+        with_eligibility=False,
+        with_consent=True,
+        exact_free_course_slug=True,
+        with_membership=False,
+    )
+    rejected_program_version_id = uuid4()
+
+    async def scenario() -> UUID:
+        async with _session_course_client(postgres_harness, seed) as (client, issued):
+            response = await asyncio.wait_for(
+                client.post(
+                    "/v1/enrollments/free",
+                    json={"program_version_id": str(rejected_program_version_id)},
+                    headers={
+                        "Origin": "https://app.authorityclosers.test",
+                        "Idempotency-Key": "reject-after-provisioning-recovery",
+                    },
+                ),
+                timeout=15,
+            )
+            assert response.status_code == 403
+            assert response.json()["code"] == "self_attested_eligibility_denied"
+            return issued.metadata.id
+
+    session_id = _run_async(scenario())
+
+    with Session(postgres_harness.engine) as database:
+        stored_session = database.get(IdentitySession, session_id)
+        assert stored_session is not None
+        assert stored_session.selected_tenant_id is None
+        assert database.get(Membership, (seed.tenant_id, seed.learner_id)) is None
+        assert (
+            database.scalar(
+                select(func.count())
+                .select_from(EnrollmentEligibilityFact)
+                .where(EnrollmentEligibilityFact.person_id == seed.learner_id)
+            )
+            == 0
+        )
+        assert (
+            database.scalar(
+                select(func.count())
+                .select_from(Enrollment)
+                .where(Enrollment.person_id == seed.learner_id)
+            )
+            == 0
+        )
+
+
+def test_concurrent_no_selected_tenant_recovery_keeps_one_canonical_enrollment(
+    postgres_harness: _Harness,
+) -> None:
+    seed = _seed(
+        postgres_harness.engine,
+        with_eligibility=False,
+        with_consent=True,
+        exact_free_course_slug=True,
+        with_membership=False,
+    )
+
+    async def scenario() -> UUID:
+        async with _session_course_client(postgres_harness, seed) as (client, issued):
+
+            async def enroll() -> httpx.Response:
+                return await client.post(
+                    "/v1/enrollments/free",
+                    json={"program_version_id": str(seed.program_version_id)},
+                    headers={
+                        "Origin": "https://app.authorityclosers.test",
+                        "Idempotency-Key": "concurrent-context-recovery",
+                    },
+                )
+
+            responses = await asyncio.wait_for(
+                asyncio.gather(enroll(), enroll()),
+                timeout=20,
+            )
+            statuses = [response.status_code for response in responses]
+            assert 201 in statuses
+            assert set(statuses) <= {200, 201, 409}
+            for response in responses:
+                if response.status_code == 409:
+                    assert response.json()["code"] == "command_in_progress"
+            return issued.metadata.id
+
+    session_id = _run_async(scenario())
+
+    with Session(postgres_harness.engine) as database:
+        stored_session = database.get(IdentitySession, session_id)
+        assert stored_session is not None
+        assert stored_session.selected_tenant_id == seed.tenant_id
+        assert (
+            database.scalar(
+                select(func.count())
+                .select_from(Membership)
+                .where(
+                    Membership.tenant_id == seed.tenant_id,
+                    Membership.person_id == seed.learner_id,
+                )
+            )
+            == 1
+        )
         assert (
             database.scalar(
                 select(func.count())

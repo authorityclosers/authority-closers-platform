@@ -22,7 +22,7 @@ export default async function OnboardingPage({
   const state = parseSurfaceState(query.state);
 
   return (
-    <LearnerShell current="none">
+    <LearnerShell current="none" learningHref={ROUTES.onboarding}>
       <main
         id="main-content"
         className="learner-main auth-main clarity-onboarding-main"

@@ -37,6 +37,10 @@ from ac_platform.http.auth import (
     require_safe_origin,
 )
 from ac_platform.kernel.errors import DomainError
+from ac_platform.tenancy.learner_provisioning import (
+    AsyncLearnerProvisioningApplication,
+    LearnerProvisioningError,
+)
 
 MAX_PUBLIC_PROGRAM_PAGE = 50
 
@@ -309,35 +313,47 @@ def install_course_http(
         auth: AuthenticatedTransaction = actor_dependency,
     ) -> FreeEnrollmentResponse:
         require_safe_origin(request, settings)
-        tenant_id = auth.resolved.actor.tenant_id
-        if tenant_id is None:
-            raise TenantContextRequired(
-                "Select an active learner tenant before requesting enrollment."
-            )
         public_learner_tenant_id = settings.public_learner_tenant_id
         if public_learner_tenant_id is None:
             raise TenantContextRequired(
                 "The public learner context is not configured for free enrollment."
             )
+        actor = auth.resolved.actor
+        tenant_id = actor.tenant_id
         if tenant_id != public_learner_tenant_id:
+            try:
+                await AsyncLearnerProvisioningApplication(auth.database).ensure(
+                    person_id=actor.person_id,
+                    tenant_id=public_learner_tenant_id,
+                    required_consent_version=settings.learner_consent_version or "",
+                )
+                selected = await auth.identity.select_tenant(
+                    auth.token,
+                    public_learner_tenant_id,
+                )
+            except LearnerProvisioningError as error:
+                raise TenantContextRequired(str(error)) from error
+            actor = selected.actor
+            tenant_id = actor.tenant_id
+        if tenant_id != public_learner_tenant_id:  # pragma: no cover - fail-closed guard
             raise TenantContextRequired(
-                "Select the configured public learner context before requesting enrollment."
+                "The configured public learner context could not be selected."
             )
         await AsyncSelfAttestedEligibilityApplication(auth.database).ensure(
-            person_id=auth.resolved.actor.person_id,
+            person_id=actor.person_id,
             tenant_id=tenant_id,
             program_version_id=body.program_version_id,
             required_consent_version=settings.learner_consent_version or "",
         )
         result = await AsyncEnrollmentApplication(auth.database).enroll_free(
             FreeEnrollmentCommand(
-                actor_person_id=auth.resolved.actor.person_id,
-                subject_person_id=auth.resolved.actor.person_id,
+                actor_person_id=actor.person_id,
+                subject_person_id=actor.person_id,
                 tenant_id=tenant_id,
                 program_version_id=body.program_version_id,
                 idempotency_key=idempotency_key,
             ),
-            actor=auth.resolved.actor,
+            actor=actor,
         )
         response.status_code = status.HTTP_201_CREATED if result.created else status.HTTP_200_OK
         response.headers["cache-control"] = "no-store"

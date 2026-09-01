@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from dataclasses import replace
 from typing import Any, cast
 from uuid import UUID, uuid4
 
@@ -16,6 +17,7 @@ from ac_platform.http.course import install_course_http
 from ac_platform.http.problem import register_problem_handlers
 from ac_platform.identity.application import ResolvedActorContext
 from ac_platform.kernel.authz import ActorContext
+from ac_platform.tenancy.learner_provisioning import LearnerProvisioningError
 
 
 class _EnrollmentApplication:
@@ -51,6 +53,37 @@ class _EligibilityApplication:
         type(self).call = values
 
 
+class _LearnerProvisioningApplication:
+    call: dict[str, Any] | None = None
+    error: LearnerProvisioningError | None = None
+
+    def __init__(self, _database: object) -> None:
+        pass
+
+    async def ensure(self, **values: Any) -> None:
+        type(self).call = values
+        if type(self).error is not None:
+            raise type(self).error
+
+
+class _IdentityApplication:
+    actor: ActorContext | None = None
+    selection: tuple[str, UUID] | None = None
+
+    async def select_tenant(self, token: str, tenant_id: UUID) -> ResolvedActorContext:
+        type(self).selection = (token, tenant_id)
+        actor = type(self).actor
+        assert actor is not None
+        return ResolvedActorContext(
+            actor=replace(actor, tenant_id=tenant_id),
+            membership_role="learner",
+            person_revision=0,
+            session_revision=1,
+            tenant_revision=0,
+            membership_revision=0,
+        )
+
+
 @pytest.fixture(autouse=True)
 def _reset_enrollment_application() -> None:
     _EnrollmentApplication.command = None
@@ -64,6 +97,10 @@ def _reset_enrollment_application() -> None:
         replayed=False,
     )
     _EligibilityApplication.call = None
+    _LearnerProvisioningApplication.call = None
+    _LearnerProvisioningApplication.error = None
+    _IdentityApplication.actor = None
+    _IdentityApplication.selection = None
 
 
 def _settings(*, public_learner_tenant_id: UUID | None) -> Settings:
@@ -95,16 +132,23 @@ def _client(
         "AsyncSelfAttestedEligibilityApplication",
         _EligibilityApplication,
     )
+    monkeypatch.setattr(
+        course_module,
+        "AsyncLearnerProvisioningApplication",
+        _LearnerProvisioningApplication,
+    )
     actor = ActorContext(
         person_id=uuid4(),
         session_id=uuid4(),
         tenant_id=tenant_id,
     )
+    _IdentityApplication.actor = actor
+    identity = _IdentityApplication()
 
     async def require_actor(_request: Request) -> AsyncIterator[AuthenticatedTransaction]:
         yield AuthenticatedTransaction(
             database=cast(Any, object()),
-            identity=cast(Any, object()),
+            identity=cast(Any, identity),
             resolved=ResolvedActorContext(
                 actor=actor,
                 membership_role="learner" if tenant_id is not None else None,
@@ -209,32 +253,46 @@ def test_free_enrollment_requires_an_allowed_origin(
     assert response.json()["code"] == "request_origin_denied"
 
 
-def test_free_enrollment_requires_selected_tenant(
+def test_free_enrollment_provisions_and_selects_public_tenant_when_none_is_selected(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    client, _ = _client(monkeypatch)
+    public_tenant_id = uuid4()
+    client, actor = _client(monkeypatch, configured_tenant_id=public_tenant_id)
+    program_version_id = uuid4()
 
     response = client.post(
         "/v1/enrollments/free",
-        json={"program_version_id": str(uuid4())},
+        json={"program_version_id": str(program_version_id)},
         headers={
             "Origin": "https://app.authorityclosers.test",
             "Idempotency-Key": "no-tenant",
         },
     )
 
-    assert response.status_code == 403
-    assert response.json()["code"] == "tenant_context_required"
+    assert response.status_code == 201
+    assert _LearnerProvisioningApplication.call == {
+        "person_id": actor.person_id,
+        "tenant_id": public_tenant_id,
+        "required_consent_version": "learner-consent-v1",
+    }
+    assert _IdentityApplication.selection == (
+        "opaque-test-session-token-that-is-long-enough",
+        public_tenant_id,
+    )
+    assert _EnrollmentApplication.command is not None
+    assert _EnrollmentApplication.command.tenant_id == public_tenant_id
+    assert _EnrollmentApplication.command.program_version_id == program_version_id
 
 
-def test_free_enrollment_requires_exact_configured_public_tenant(
+def test_free_enrollment_switches_from_another_context_to_configured_public_tenant(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     selected_tenant_id = uuid4()
+    public_tenant_id = uuid4()
     client, _ = _client(
         monkeypatch,
         tenant_id=selected_tenant_id,
-        configured_tenant_id=uuid4(),
+        configured_tenant_id=public_tenant_id,
     )
 
     response = client.post(
@@ -246,8 +304,39 @@ def test_free_enrollment_requires_exact_configured_public_tenant(
         },
     )
 
+    assert response.status_code == 201
+    assert _IdentityApplication.selection == (
+        "opaque-test-session-token-that-is-long-enough",
+        public_tenant_id,
+    )
+    assert _EnrollmentApplication.command is not None
+    assert _EnrollmentApplication.command.tenant_id == public_tenant_id
+
+
+def test_free_enrollment_does_not_switch_context_without_reviewed_consent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _LearnerProvisioningApplication.error = LearnerProvisioningError(
+        "the exact required learner consent has not been recorded"
+    )
+    client, _ = _client(
+        monkeypatch,
+        tenant_id=uuid4(),
+        configured_tenant_id=uuid4(),
+    )
+
+    response = client.post(
+        "/v1/enrollments/free",
+        json={"program_version_id": str(uuid4())},
+        headers={
+            "Origin": "https://app.authorityclosers.test",
+            "Idempotency-Key": "missing-reviewed-consent",
+        },
+    )
+
     assert response.status_code == 403
     assert response.json()["code"] == "tenant_context_required"
+    assert _IdentityApplication.selection is None
     assert _EligibilityApplication.call is None
     assert _EnrollmentApplication.command is None
 

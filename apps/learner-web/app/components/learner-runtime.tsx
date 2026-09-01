@@ -4,8 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
-  BarChart3,
-  BookOpenCheck,
   CheckCircle2,
   ChevronRight,
   FileText,
@@ -49,10 +47,11 @@ import {
   hasMembershipRole,
   MembershipUnavailable,
 } from "./membership-availability";
-import { SignOutControl } from "./sign-out-control";
 
 const defaultApi = createLearnerApi();
 export const FREE_COURSE_SLUG = "authority-closers-free-course";
+const LEARNER_SUPPORT_HREF =
+  "mailto:admin@authorityclosers.com?subject=Authority%20Closers%20learner%20access";
 
 export function isFreeEnrollmentProgram(program: { slug: string }): boolean {
   return program.slug === FREE_COURSE_SLUG;
@@ -247,36 +246,9 @@ export function PublicProgramDetail({
     () => api.program(slug),
     () => false,
   );
-  const [enrollment, setEnrollment] = useState<
-    "idle" | "saving" | "done" | "error"
-  >("idle");
-  const [enrollmentMessage, setEnrollmentMessage] = useState("");
-  const [enrollmentRecovery, setEnrollmentRecovery] = useState<ReturnType<
-    typeof enrollmentFailureMessage
-  > | null>(null);
   const program = state.status === "ready" ? state.value : null;
   const freeEnrollmentAvailable =
     program !== null && isFreeEnrollmentProgram(program);
-  async function enroll() {
-    if (!program || !freeEnrollmentAvailable) return;
-    setEnrollment("saving");
-    setEnrollmentMessage("");
-    setEnrollmentRecovery(null);
-    try {
-      const result = await api.enrollFree(program.program_version_id);
-      setEnrollment("done");
-      setEnrollmentMessage(
-        result.replayed
-          ? "Enrollment already exists for this account."
-          : "Enrollment created. Open the learner path to continue.",
-      );
-    } catch (error) {
-      setEnrollment("error");
-      const recovery = enrollmentFailureMessage(error);
-      setEnrollmentRecovery(recovery);
-      setEnrollmentMessage(recovery.message);
-    }
-  }
   return (
     <>
       <StateMessage
@@ -299,23 +271,11 @@ export function PublicProgramDetail({
               </p>
               {freeEnrollmentAvailable ? (
                 <div className="hero-actions">
-                  <button
-                    className="button button--ink"
-                    type="button"
-                    onClick={enroll}
-                    disabled={enrollment === "saving"}
-                  >
-                    {enrollment === "saving"
-                      ? "Enrolling…"
-                      : enrollment === "done"
-                        ? "Enrolled"
-                        : "Enroll free"}
-                  </button>
-                  <Link
-                    className="text-link"
-                    href={ROUTES.programLearning(program.slug)}
-                  >
-                    Open learner path →
+                  <Link className="button button--ink" href={ROUTES.login}>
+                    Sign in to start free
+                  </Link>
+                  <Link className="text-link" href={ROUTES.register}>
+                    Create learner account →
                   </Link>
                 </div>
               ) : (
@@ -323,19 +283,6 @@ export function PublicProgramDetail({
                   Free enrollment is unavailable for this program.
                 </p>
               )}
-              {enrollmentMessage ? (
-                <p role={enrollment === "error" ? "alert" : "status"}>
-                  {enrollmentMessage}
-                </p>
-              ) : null}
-              {enrollmentRecovery?.recoveryHref ? (
-                <Link
-                  className="text-link"
-                  href={enrollmentRecovery.recoveryHref}
-                >
-                  {enrollmentRecovery.recoveryLabel} →
-                </Link>
-              ) : null}
             </div>
             <aside className="program-hero__aside">
               <p>Published modules and activities</p>
@@ -445,9 +392,27 @@ export function enrollmentFailureMessage(error: unknown): {
     };
   }
   if (error instanceof ApiError && error.status === 403) {
+    if (error.code === "tenant_context_required") {
+      return {
+        message:
+          "Learner access could not be activated automatically. Your account and existing progress were not changed.",
+        recoveryHref: LEARNER_SUPPORT_HREF,
+        recoveryLabel: "Contact learner support",
+      };
+    }
+    if (error.code === "self_attested_eligibility_denied") {
+      return {
+        message:
+          "Free-course access could not be confirmed for this account. Your account and existing progress were not changed.",
+        recoveryHref: LEARNER_SUPPORT_HREF,
+        recoveryLabel: "Contact learner support",
+      };
+    }
     return {
       message:
-        "Your account is signed in, but the enrollment service has not authorized Free Course access. Try again after learner eligibility is approved.",
+        "This account is not currently authorized to start the free course. Your existing account data was not changed.",
+      recoveryHref: LEARNER_SUPPORT_HREF,
+      recoveryLabel: "Contact learner support",
     };
   }
   return {
@@ -472,14 +437,118 @@ function learnerDisplayName(me: MeResponse): string {
   return displayName ? displayName.split(/\s+/)[0] : "Learner";
 }
 
+export function learnerHomeMode(
+  membershipAvailable: boolean,
+  onboardingReady: boolean,
+): "activation" | "onboarding" | "workspace" {
+  if (!membershipAvailable) return "activation";
+  return onboardingReady ? "workspace" : "onboarding";
+}
+
+export function HomeLearningPath({ learning }: { learning: LearningResponse }) {
+  return (
+    <section
+      className="home-learning-path"
+      aria-labelledby="learning-path-title"
+    >
+      <div className="home-learning-path__heading">
+        <div>
+          <p className="kicker">Your course path</p>
+          <h2 id="learning-path-title">Move through one module at a time</h2>
+        </div>
+        <span>{projectionLabel(learning.projection)}</span>
+      </div>
+      <ol className="home-module-list">
+        {learning.modules.map((module) => {
+          const completed = module.activities.filter(
+            (activity) => activity.state.toLowerCase() === "completed",
+          ).length;
+          const current = module.activities.some((activity) =>
+            ["available", "in_progress"].includes(activity.state.toLowerCase()),
+          );
+          const awaitingReview = module.activities.some(
+            (activity) => activity.state.toLowerCase() === "awaiting_review",
+          );
+          const complete =
+            module.activities.length > 0 &&
+            completed === module.activities.length;
+          const locked = !complete && !current && !awaitingReview;
+          const statusLabel = complete
+            ? "Complete"
+            : awaitingReview
+              ? "Awaiting review"
+              : current
+                ? "Current"
+                : module.activities.length === 0
+                  ? "Unavailable"
+                  : "Locked";
+          const row = (
+            <>
+              <span className="home-module-list__number" aria-hidden="true">
+                {complete ? <CheckCircle2 size={18} /> : module.position}
+              </span>
+              <span className="home-module-list__copy">
+                <strong>{module.title}</strong>
+                <span>
+                  {module.activities.length === 0
+                    ? "No published activities"
+                    : awaitingReview
+                      ? `${completed} complete · feedback pending`
+                      : `${completed} of ${module.activities.length} activities complete`}
+                </span>
+              </span>
+              <span
+                className={`home-module-list__state${
+                  complete
+                    ? " is-complete"
+                    : awaitingReview
+                      ? " is-review"
+                      : current
+                        ? " is-current"
+                        : ""
+                }`}
+              >
+                {statusLabel}
+              </span>
+              {locked ? (
+                <LockKeyhole size={17} aria-hidden="true" />
+              ) : (
+                <ChevronRight size={18} aria-hidden="true" />
+              )}
+            </>
+          );
+          return (
+            <li key={module.id}>
+              {locked ? (
+                <div className="home-module-list__row" aria-disabled="true">
+                  {row}
+                </div>
+              ) : (
+                <Link
+                  className="home-module-list__row"
+                  href={ROUTES.module(learning.program_slug, module.id)}
+                >
+                  {row}
+                </Link>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </section>
+  );
+}
+
 export function LearnerHomeEnrollmentCard({
   learning,
   program,
   api = defaultApi,
+  afterEnrollmentHref,
 }: {
   learning?: LearningResponse;
   program?: ProgramSummaryResponse;
   api?: LearnerApi;
+  afterEnrollmentHref?: string;
 }) {
   const [enrollment, setEnrollment] = useState<"idle" | "saving" | "error">(
     "idle",
@@ -495,7 +564,9 @@ export function LearnerHomeEnrollmentCard({
     setFailure(null);
     try {
       await api.enrollFree(program.program_version_id);
-      window.location.assign(ROUTES.programLearning(program.slug));
+      window.location.assign(
+        afterEnrollmentHref ?? ROUTES.programLearning(program.slug),
+      );
     } catch (error) {
       setEnrollment("error");
       setFailure(enrollmentFailureMessage(error));
@@ -630,6 +701,14 @@ export function LearnerHomeEnrollmentCard({
   );
 }
 
+export function LearnerHomeOnboardingRedirect() {
+  return (
+    <div className="surface-state" role="status" id="my-learning">
+      <h1>Opening your learner profile…</h1>
+    </div>
+  );
+}
+
 export function LearnerHomeRuntime({ api = defaultApi }: { api?: LearnerApi }) {
   const state = useLoad(
     async () => ({
@@ -644,22 +723,19 @@ export function LearnerHomeRuntime({ api = defaultApi }: { api?: LearnerApi }) {
       state.value.onboarding.status === "skipped");
   const membershipAvailable =
     state.status === "ready" && hasMembershipRole(state.value.me);
+  const homeMode = learnerHomeMode(membershipAvailable, onboardingReady);
   useInvalidateDraftsWithoutMembership(
     state.status === "ready",
     membershipAvailable,
   );
   useEffect(() => {
-    if (state.status === "ready" && membershipAvailable && !onboardingReady) {
+    if (state.status === "ready" && homeMode === "onboarding") {
       window.location.replace(ROUTES.onboarding);
     }
-  }, [membershipAvailable, onboardingReady, state.status]);
+  }, [homeMode, state.status]);
   const publishedProgram =
     state.status === "ready"
       ? selectPublishedFreeCourse(state.value.programs)
-      : undefined;
-  const nextActivity =
-    state.status === "ready" && state.value.learning
-      ? firstActionableActivity(state.value.learning)
       : undefined;
   return (
     <>
@@ -668,15 +744,10 @@ export function LearnerHomeRuntime({ api = defaultApi }: { api?: LearnerApi }) {
         pageTitle="Learner workspace"
         retry={(state as LoadState<unknown> & { retry?: () => void }).retry}
       />
-      {state.status === "ready" && !membershipAvailable ? (
-        <MembershipUnavailable api={api} />
+      {state.status === "ready" && homeMode === "onboarding" ? (
+        <LearnerHomeOnboardingRedirect />
       ) : null}
-      {state.status === "ready" && membershipAvailable && !onboardingReady ? (
-        <div className="surface-state" role="status">
-          <h1>Opening your learner profile…</h1>
-        </div>
-      ) : null}
-      {state.status === "ready" && membershipAvailable && onboardingReady ? (
+      {state.status === "ready" && homeMode !== "onboarding" ? (
         <>
           <section
             className="dashboard-intro"
@@ -690,149 +761,31 @@ export function LearnerHomeRuntime({ api = defaultApi }: { api?: LearnerApi }) {
                 Welcome back, {learnerDisplayName(state.value.me)}
               </h1>
               <p className="dashboard-intro__subhead">
-                Continue the Free Course or start Module 1 when access is ready.
+                {membershipAvailable
+                  ? "Pick up at the next available activity. Your course state is saved to this account."
+                  : "Start the free course to activate your learner workspace. Access remains server-authorized."}
               </p>
             </div>
             {state.value.context.tenant_id ? (
               <span className="dashboard-intro__tenant">Learner workspace</span>
             ) : null}
           </section>
-          <div className="dashboard-grid dashboard-grid--clarity">
+          <div
+            className="dashboard-grid dashboard-grid--clarity dashboard-grid--single"
+            id="my-learning"
+          >
             <LearnerHomeEnrollmentCard
               learning={state.value.learning}
               program={publishedProgram}
               api={api}
+              afterEnrollmentHref={
+                onboardingReady ? undefined : ROUTES.onboarding
+              }
             />
-            <aside className="first-win-card learner-account-card">
-              <p className="kicker">Account</p>
-              <h2>{state.value.me.display_name || "Learner profile"}</h2>
-              <p>{state.value.me.email}</p>
-              <dl className="learner-account-card__facts">
-                <div>
-                  <dt>Access</dt>
-                  <dd>{state.value.me.membership_role}</dd>
-                </div>
-                <div>
-                  <dt>Email</dt>
-                  <dd>Verified</dd>
-                </div>
-              </dl>
-              <SignOutControl api={api} />
-            </aside>
           </div>
-          <section
-            className="dashboard-lower dashboard-lower--clarity"
-            aria-labelledby="my-learning-title"
-            id="my-learning"
-          >
-            <div className="dashboard-lower__heading">
-              <div>
-                <p className="kicker">Your courses</p>
-                <h2 id="my-learning-title">My learning</h2>
-              </div>
-              {state.value.learning ? (
-                <span className="dashboard-lower__caption">
-                  {projectionLabel(state.value.learning.projection)} complete
-                </span>
-              ) : null}
-            </div>
-            {state.value.learning ? (
-              <Link
-                className="learning-list-card"
-                href={ROUTES.programLearning(state.value.learning.program_slug)}
-              >
-                <span className="learning-list-card__icon" aria-hidden="true">
-                  <BookOpenCheck size={21} />
-                </span>
-                <span className="learning-list-card__copy">
-                  <span className="kicker">Free course</span>
-                  <strong>{state.value.learning.program_title}</strong>
-                  <span>
-                    {projectionStateLabel(state.value.learning.projection)}
-                  </span>
-                </span>
-                <span className="learning-list-card__progress">
-                  {Math.round(state.value.learning.projection.percentage * 100)}
-                  %
-                </span>
-                <ChevronRight size={19} aria-hidden="true" />
-              </Link>
-            ) : publishedProgram ? (
-              <div className="learning-list-card learning-list-card--published">
-                <span className="learning-list-card__icon" aria-hidden="true">
-                  <BookOpenCheck size={21} />
-                </span>
-                <span className="learning-list-card__copy">
-                  <span className="kicker">Published free course</span>
-                  <strong>{publishedProgram.title}</strong>
-                  <span>Start the course above to add it to My learning.</span>
-                </span>
-                <Link
-                  className="button button--outline button--small"
-                  href="#continue-learning"
-                >
-                  Start above
-                </Link>
-              </div>
-            ) : (
-              <div className="workspace-card workspace-card--empty">
-                <h3>No published Free Course is available.</h3>
-                <p>Retry when your workspace has a published course.</p>
-              </div>
-            )}
-          </section>
-          <section
-            className="practice-section"
-            aria-labelledby="practice-title"
-            id="practice"
-          >
-            <div className="dashboard-lower__heading">
-              <div>
-                <p className="kicker">Module 1</p>
-                <h2 id="practice-title">Practice</h2>
-              </div>
-            </div>
-            <div className="practice-card">
-              <span className="practice-card__icon" aria-hidden="true">
-                <BarChart3 size={22} />
-              </span>
-              <div>
-                <h3>
-                  {nextActivity
-                    ? nextActivity.title
-                    : state.value.learning
-                      ? "Review your authorized course path"
-                      : "Practice begins after enrollment"}
-                </h3>
-                <p>
-                  {nextActivity
-                    ? activityStateLabel(nextActivity.state)
-                    : state.value.learning
-                      ? "The server currently exposes no next available activity."
-                      : "Start the Free Course to open the activities authorized for your learner account."}
-                </p>
-              </div>
-              <Link
-                className="button button--outline button--small"
-                href={
-                  nextActivity
-                    ? ROUTES.activity(nextActivity.id)
-                    : state.value.learning
-                      ? ROUTES.programLearning(
-                          state.value.learning.program_slug,
-                        )
-                      : "#continue-learning"
-                }
-              >
-                {nextActivity
-                  ? "Open practice"
-                  : state.value.learning
-                    ? "View course"
-                    : "Start above"}
-              </Link>
-            </div>
-          </section>
-          <div id="progress" className="progress-anchor" aria-hidden="true" />
+          {state.value.learning ? (
+            <HomeLearningPath learning={state.value.learning} />
+          ) : null}
         </>
       ) : null}
     </>

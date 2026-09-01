@@ -12,6 +12,7 @@ import {
   FREE_COURSE_SLUG,
   identityState,
   isFreeEnrollmentProgram,
+  learnerHomeMode,
   LearningActivityNavigation,
   LearnerHomeEnrollmentCard,
   selectPublishedFreeCourse,
@@ -954,6 +955,10 @@ describe("connected learner ready states", () => {
     expect(unavailable).toContain("Learner membership is unavailable.");
     expect(unavailable).toContain('role="alert"');
     expect(unavailable).not.toContain("Learner profile");
+    expect(learnerHomeMode(false, false)).toBe("activation");
+    expect(learnerHomeMode(false, true)).toBe("activation");
+    expect(learnerHomeMode(true, false)).toBe("onboarding");
+    expect(learnerHomeMode(true, true)).toBe("workspace");
   });
 
   it.each(["owner", "admin", "support"])(
@@ -1004,8 +1009,31 @@ describe("connected learner ready states", () => {
       recoveryLabel: "Sign in again",
     });
     expect(
-      enrollmentFailureMessage(new ApiError(403, "not eligible")).message,
-    ).toContain("has not authorized Free Course access");
+      enrollmentFailureMessage(
+        new ApiError(403, "context unavailable", {
+          code: "tenant_context_required",
+        }),
+      ),
+    ).toEqual({
+      message:
+        "Learner access could not be activated automatically. Your account and existing progress were not changed.",
+      recoveryHref:
+        "mailto:admin@authorityclosers.com?subject=Authority%20Closers%20learner%20access",
+      recoveryLabel: "Contact learner support",
+    });
+    expect(
+      enrollmentFailureMessage(
+        new ApiError(403, "not eligible", {
+          code: "self_attested_eligibility_denied",
+        }),
+      ),
+    ).toEqual({
+      message:
+        "Free-course access could not be confirmed for this account. Your account and existing progress were not changed.",
+      recoveryHref:
+        "mailto:admin@authorityclosers.com?subject=Authority%20Closers%20learner%20access",
+      recoveryLabel: "Contact learner support",
+    });
   });
 
   it("does not expose guessed course, certificate, or preview identity navigation", () => {
@@ -1016,8 +1044,10 @@ describe("connected learner ready states", () => {
     expect(html).not.toContain("free-course");
     expect(html).not.toContain("preview-certificate");
     expect(html).not.toContain("Preview identity");
-    expect(html.match(/aria-disabled="true"/g)).toHaveLength(3);
-    expect(html.match(/learner-sidebar__item-note/g)).toHaveLength(2);
+    expect(html).not.toContain('aria-disabled="true"');
+    expect(html).not.toContain("Practice");
+    expect(html).not.toContain("Library");
+    expect(html).not.toContain("Search is coming later");
     expect(html).not.toContain('href="/home#practice"');
     expect(html).toContain('href="/progress"');
     expect(html).toContain('href="/settings"');
