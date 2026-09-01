@@ -18,5 +18,5 @@ ProtectHome=true
 ProtectSystem=strict
 RestrictAddressFamilies=AF_INET AF_UNIX
 ReadOnlyPaths=/etc/authority-closers/secrets/infisical-bootstrap.env /usr/local/sbin /usr/local/libexec/authority-closers /srv/authority-closers/application
-ReadWritePaths=/srv/authority-closers/recovery-tmp /srv/authority-closers/recovery-evidence /var/cache/authority-closers-restic /run/lock
+ReadWritePaths=/srv/authority-closers/recovery-tmp /srv/authority-closers/recovery-evidence /var/lib/authority-closers/restore-drill-inputs /var/cache/authority-closers-restic /run/lock
 TimeoutStartSec=75min

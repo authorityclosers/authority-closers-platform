@@ -5,6 +5,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import stat
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -19,6 +20,9 @@ pytestmark = pytest.mark.skipif(
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "infra" / "vps-foundation" / "scripts" / "ac-restic-postgres-restore-proof.py"
 RESTORE_DRILL_SCRIPT = ROOT / "infra" / "application" / "scripts" / "restore-drill.py"
+PREPARE_INPUT_ROOT_SCRIPT = (
+    ROOT / "infra" / "vps-foundation" / "scripts" / "prepare-restore-drill-input-root.py"
+)
 FOUNDATION = ROOT / "infra" / "vps-foundation"
 MIGRATION_HEAD_FIXTURE = "20000101_0001"
 
@@ -35,6 +39,14 @@ assert drill_spec and drill_spec.loader
 restore_drill_contract = importlib.util.module_from_spec(drill_spec)
 sys.modules[drill_spec.name] = restore_drill_contract
 drill_spec.loader.exec_module(restore_drill_contract)
+
+prepare_spec = importlib.util.spec_from_file_location(
+    "prepare_restore_drill_input_root", PREPARE_INPUT_ROOT_SCRIPT
+)
+assert prepare_spec and prepare_spec.loader
+prepare_input_root = importlib.util.module_from_spec(prepare_spec)
+sys.modules[prepare_spec.name] = prepare_input_root
+prepare_spec.loader.exec_module(prepare_input_root)
 
 
 def _snapshot(
@@ -406,6 +418,40 @@ def test_stable_pair_satisfies_the_real_restore_drill_metadata_contract(tmp_path
         proof.remove_restore_directory(restored_dir, restore_root)
 
 
+@pytest.mark.skipif(os.name != "posix", reason="descriptor-relative no-follow proof is POSIX-only")
+def test_prepare_restore_input_root_is_no_follow_and_fail_closed(tmp_path: Path) -> None:
+    root = tmp_path / "root"
+    parent = root / "var" / "lib" / "authority-closers"
+    parent.mkdir(parents=True)
+    root.chmod(0o700)
+    (root / "var").chmod(0o755)
+    (root / "var" / "lib").chmod(0o755)
+    parent.chmod(0o755)
+
+    expected = prepare_input_root.prepare_under(
+        root,
+        expected_uid=os.geteuid(),
+        expected_gid=os.getegid(),
+    )
+    assert expected == parent / "restore-drill-inputs"
+    assert stat.S_IMODE(expected.stat().st_mode) == 0o700
+
+    expected.rmdir()
+    referent = tmp_path / "referent"
+    referent.mkdir(mode=0o755)
+    expected.symlink_to(referent, target_is_directory=True)
+    before = referent.stat()
+    with pytest.raises(prepare_input_root.PreparationError, match="could not be prepared"):
+        prepare_input_root.prepare_under(
+            root,
+            expected_uid=os.geteuid(),
+            expected_gid=os.getegid(),
+        )
+    after = referent.stat()
+    assert stat.S_IMODE(after.st_mode) == stat.S_IMODE(before.st_mode)
+    assert (after.st_uid, after.st_gid) == (before.st_uid, before.st_gid)
+
+
 def test_restore_drill_invocation_is_execute_only_and_uses_immutable_image(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -573,11 +619,6 @@ def test_units_manifest_and_wrapper_are_narrow_and_hardened() -> None:
         "NoNewPrivileges=true",
         "ProtectSystem=strict",
         "PrivateTmp=true",
-        "ReadWritePaths=/srv/authority-closers/recovery-tmp",
-        (
-            "ReadWritePaths=/srv/authority-closers/recovery-tmp "
-            "/srv/authority-closers/recovery-evidence"
-        ),
         "TimeoutStartSec=75min",
     ):
         assert marker in service
@@ -590,13 +631,27 @@ def test_units_manifest_and_wrapper_are_narrow_and_hardened() -> None:
     ]
     assert working_directory_lines == ["WorkingDirectory=/usr/local/libexec/authority-closers"]
     working_directory = Path(working_directory_lines[0].partition("=")[2])
-    for mutable_root in (
+    mutable_roots = (
         Path("/srv/authority-closers/recovery-tmp"),
         Path("/srv/authority-closers/recovery-evidence"),
-    ):
+        Path("/var/lib/authority-closers/restore-drill-inputs"),
+        Path("/var/cache/authority-closers-restic"),
+        Path("/run/lock"),
+    )
+    read_write_path_lines = [
+        line.strip()
+        for line in service.splitlines()
+        if line.strip().startswith("ReadWritePaths=") and not line.lstrip().startswith(("#", ";"))
+    ]
+    assert len(read_write_path_lines) == 1
+    assert read_write_path_lines[0].partition("=")[2].split() == [
+        path.as_posix() for path in mutable_roots
+    ]
+    for mutable_root in mutable_roots:
         assert working_directory != mutable_root
         assert working_directory not in mutable_root.parents
 
     bootstrap = (FOUNDATION / "scripts" / "bootstrap-host.sh").read_text(encoding="utf-8")
     assert "/srv/authority-closers/recovery-tmp" in bootstrap
     assert "/srv/authority-closers/recovery-evidence" in bootstrap
+    assert 'python3 "$repo_root/scripts/prepare-restore-drill-input-root.py"' in bootstrap

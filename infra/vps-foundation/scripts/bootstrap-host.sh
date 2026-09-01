@@ -330,6 +330,7 @@ phase_runtime() {
     /srv/authority-closers/volumes/media \
     /srv/authority-closers/volumes/mailpit \
     /srv/authority-closers/volumes/otel
+  python3 "$repo_root/scripts/prepare-restore-drill-input-root.py"
   install -d -m 0750 -o root -g acops /srv/authority-closers/env
   install -d -m 0750 /var/cache/authority-closers-restic
   install -d -m 0700 /etc/authority-closers/secrets

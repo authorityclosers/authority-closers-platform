@@ -64,3 +64,9 @@ The hardened systemd unit uses
 outside both recovery trees: the restore drill intentionally rejects backup or
 evidence paths beneath its current working directory, and systemd's default
 root working directory would therefore fail closed for every absolute path.
+The only writable exception under `/var/lib/authority-closers` is the
+root-owned `0700` `/var/lib/authority-closers/restore-drill-inputs` staging
+root used for the drill's second, identity-checked copy. Bootstrap creates or
+validates it through no-follow directory descriptors and fails closed on an
+unsafe ancestor, owner, mode, or leaf; do not widen that permission to
+`/var/lib/authority-closers`.
