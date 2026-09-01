@@ -407,7 +407,30 @@ def test_docker_run_commands_are_no_pull_bounded_and_do_not_expose_password(
         assert target.password not in command
 
     assert init[init.index("--user") : init.index("--user") + 2] == ("--user", "0:0")
-    assert "CHOWN" in init
+
+    def docker_option_values(command: tuple[str, ...], option: str) -> list[str]:
+        values: list[str] = []
+        prefix = f"{option}="
+        for index, value in enumerate(command):
+            if value == option:
+                assert index + 1 < len(command), f"{option} is missing its value"
+                values.append(command[index + 1])
+            elif value.startswith(prefix):
+                values.append(value.removeprefix(prefix))
+        return values
+
+    cap_adds = docker_option_values(init, "--cap-add")
+    cap_drops = docker_option_values(init, "--cap-drop")
+    assert cap_adds == ["CHOWN"]
+    assert cap_drops == ["ALL"]
+    assert not any(value == "--privileged" or value.startswith("--privileged=") for value in init)
+    init_script = init[-1]
+    assert init_script.index("chown 0:0 /var/lib/postgresql") < init_script.index(
+        "chmod 0700 /var/lib/postgresql"
+    )
+    assert init_script.index("chmod 0700 /var/lib/postgresql") < init_script.index(
+        "chown 999:999 /var/lib/postgresql"
+    )
     assert init[init.index("--network") : init.index("--network") + 2] == ("--network", "none")
     assert postgres[postgres.index("--user") : postgres.index("--user") + 2] == (
         "--user",
@@ -720,6 +743,93 @@ def test_postgres_container_user_can_read_the_stable_dump(
         if required:
             pytest.fail("the pinned PostgreSQL image is required for the permission proof")
         pytest.skip("the pinned PostgreSQL image is unavailable")
+
+    def create_exact_labeled_test_volume() -> restore_drill.DisposableTarget:
+        for _attempt in range(5):
+            candidate = restore_drill._target_for(restore_drill._short_token())
+            if restore_drill._docker_inspect_optional("volume", candidate.volume) is not None:
+                continue
+            creation_error: BaseException | None = None
+            try:
+                volume_created = subprocess.run(  # noqa: S603 - exact generated disposable volume
+                    [
+                        DOCKER,
+                        "volume",
+                        "create",
+                        "--label",
+                        candidate.label,
+                        candidate.volume,
+                    ],
+                    capture_output=True,
+                    check=False,
+                    text=True,
+                    timeout=30,
+                )
+                if volume_created.returncode != 0:
+                    creation_error = AssertionError(volume_created.stderr)
+                else:
+                    created_payload = restore_drill._docker_inspect_optional(
+                        "volume", candidate.volume
+                    )
+                    if (
+                        created_payload is not None
+                        and restore_drill._resource_labels("volume", created_payload).get(
+                            restore_drill.LABEL_KEY
+                        )
+                        == candidate.run_id
+                    ):
+                        return candidate
+            except BaseException as error:
+                creation_error = error
+            if creation_error is not None:
+                try:
+                    restore_drill._remove_labeled_resource(
+                        "volume", candidate.volume, candidate.run_id
+                    )
+                except restore_drill.DrillError as cleanup_error:
+                    creation_error.add_note(f"cleanup also failed: {cleanup_error}")
+                raise creation_error
+        pytest.fail("could not create a fresh exact labeled test volume")
+
+    volume_target = create_exact_labeled_test_volume()
+
+    initialization_error: BaseException | None = None
+    initialized: subprocess.CompletedProcess[str] | None = None
+    cleanup_errors: list[str] = []
+    try:
+        try:
+            initialized = subprocess.run(  # noqa: S603 - bounded generated Docker command
+                [
+                    DOCKER,
+                    *restore_drill._volume_init_command(
+                        volume_target,
+                        restore_drill.DEFAULT_POSTGRES_IMAGE,
+                    ),
+                ],
+                capture_output=True,
+                check=False,
+                text=True,
+                timeout=60,
+            )
+            if initialized.returncode != 0:
+                initialization_error = AssertionError(initialized.stderr)
+        except BaseException as error:
+            initialization_error = error
+    finally:
+        for kind, name in (
+            ("container", volume_target.init_container),
+            ("volume", volume_target.volume),
+        ):
+            try:
+                restore_drill._remove_labeled_resource(kind, name, volume_target.run_id)
+            except restore_drill.DrillError as error:
+                cleanup_errors.append(f"{kind}:{name}: {error}")
+    if initialization_error is not None:
+        for cleanup_error in cleanup_errors:
+            initialization_error.add_note(f"cleanup also failed: {cleanup_error}")
+        raise initialization_error
+    assert not cleanup_errors, "; ".join(cleanup_errors)
+    assert initialized is not None
 
     if not running_as_root:
         _allow_test_owned_stable_inputs(monkeypatch)

@@ -1141,6 +1141,12 @@ def _volume_init_command(target: DisposableTarget, image: str) -> tuple[str, ...
         "/bin/sh",
         image,
         "-euc",
+        # PostgreSQL 18 initializes this mount point as 999:999:1777.  The
+        # initializer deliberately has CAP_CHOWN but not CAP_FOWNER, so first
+        # pivot ownership to its effective uid, normalize the mode as owner,
+        # and then hand the directory back to PostgreSQL.  This keeps the
+        # capability set narrower than adding FOWNER.
+        "chown 0:0 /var/lib/postgresql\n"
         "chmod 0700 /var/lib/postgresql\n"
         "chown 999:999 /var/lib/postgresql\n"
         "stat -c '%u:%g:%a' /var/lib/postgresql | grep -qx '999:999:700'",
