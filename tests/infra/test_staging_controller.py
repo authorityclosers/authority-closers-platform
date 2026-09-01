@@ -39,6 +39,9 @@ def test_staging_controller_preserves_environment_and_provider_gates() -> None:
     assert "/v1/auth/google/callback" in CONTROLLER
     assert '"Secure", "HttpOnly", "SameSite=Lax", "Path=/"' in CONTROLLER
     assert "__Host-ac_oauth_transaction" in CONTROLLER
+    assert "compatibility and state-keyed cookies" in CONTROLLER
+    assert "[A-Za-z0-9_-]{22}" in CONTROLLER
+    assert "bind the same signed transaction" in CONTROLLER
     assert "must not set Domain" in CONTROLLER
 
 

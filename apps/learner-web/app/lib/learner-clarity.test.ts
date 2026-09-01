@@ -15,6 +15,7 @@ import {
   ApiError,
   type ActivityResponse,
   type LearningActivityResponse,
+  type ProgramSummaryResponse,
 } from "./learner-api";
 
 const activity: LearningActivityResponse = {
@@ -46,6 +47,15 @@ const response: ActivityResponse = {
   draft_payload: null,
 };
 
+const publishedFreeCourse: ProgramSummaryResponse = {
+  id: "program-1",
+  slug: "authority-closers-free-course",
+  title: "Authority Closers Free Course",
+  program_version_id: "version-1",
+  version_number: 1,
+  published_at: "2026-08-31T00:00:00Z",
+};
+
 describe("learner Clarity Grid slice", () => {
   it("renders the supported shell with honest disabled extension navigation", () => {
     const html = renderToStaticMarkup(
@@ -53,22 +63,26 @@ describe("learner Clarity Grid slice", () => {
     );
 
     expect(html).toContain('aria-label="Learner workspace navigation"');
-    expect(html).toContain('placeholder="Search courses, lessons, topics"');
+    expect(html).toContain('placeholder="Search is coming later"');
     expect(html).toContain('aria-label="Learner mobile navigation"');
     expect(html).toContain('aria-disabled="true"');
     expect(html).not.toContain("Certificate");
   });
 
-  it("keeps an unassigned home truthful while matching the continue-learning card contract", () => {
+  it("offers the real published Free Course when there is no enrollment", () => {
     const html = renderToStaticMarkup(
-      createElement(LearnerHomeEnrollmentCard, { learning: undefined }),
+      createElement(LearnerHomeEnrollmentCard, {
+        learning: undefined,
+        program: publishedFreeCourse,
+      }),
     );
 
     expect(html).toContain('class="current-course-card"');
-    expect(html).toContain("Continue learning");
-    expect(html).toContain("Enrollment summary unavailable");
-    expect(html).toContain("No current course selected.");
-    expect(html).toContain("absence of a projection is not treated as proof");
+    expect(html).toContain("Free course");
+    expect(html).toContain("Authority Closers Free Course");
+    expect(html).toContain("Start free course");
+    expect(html).toContain('href="/programs/authority-closers-free-course"');
+    expect(html).not.toMatch(/projection unavailable|assignment collection/i);
   });
 
   it("renders server activity metadata and leaves locked activity non-navigable", () => {
@@ -93,7 +107,7 @@ describe("learner Clarity Grid slice", () => {
       createElement(ConnectedActivityWorkspace, { activity: response }),
     );
 
-    expect(html).toContain("Course path");
+    expect(html).toContain("My learning");
     expect(html).toContain("REFLECTION");
     expect(html).toContain('class="activity-response-form"');
     expect(html).toContain("Submit evidence");

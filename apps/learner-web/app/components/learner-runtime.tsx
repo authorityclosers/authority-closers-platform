@@ -1,9 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
+  ArrowRight,
+  BarChart3,
+  BookOpenCheck,
   CheckCircle2,
+  ChevronRight,
   FileText,
   Flag,
   LockKeyhole,
@@ -25,9 +29,34 @@ import {
   type MeResponse,
   type ProgramSummaryResponse,
 } from "../lib/learner-api";
+import {
+  activityRecoveryText,
+  activityServerFingerprint,
+  clearAllLearnerLocalDrafts,
+  clearActivityLocalDraft,
+  localDraftMatchesServer,
+  mutationFailureKind,
+  readActivityLocalDraft,
+  registerBeforeUnloadGuard,
+  writeActivityLocalDraft,
+  type ActivityDraftEnvelope,
+  type ActivityDraftScope,
+  type MutationFailureKind,
+} from "../lib/local-drafts";
 import { ROUTES } from "../lib/routes";
+import { userFacingRequestError } from "../lib/user-facing-error";
+import {
+  hasMembershipRole,
+  MembershipUnavailable,
+} from "./membership-availability";
+import { SignOutControl } from "./sign-out-control";
 
 const defaultApi = createLearnerApi();
+export const FREE_COURSE_SLUG = "authority-closers-free-course";
+
+export function isFreeEnrollmentProgram(program: { slug: string }): boolean {
+  return program.slug === FREE_COURSE_SLUG;
+}
 
 type LoadState<T> =
   | { status: "loading" }
@@ -38,10 +67,13 @@ type LoadState<T> =
 function errorText(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.status === 401)
-      return "Sign in is required for this learner surface.";
+      return "Your session has expired. Sign in again to continue.";
     if (error.status === 403)
-      return "This learner resource is not available for the current account.";
-    return error.title ?? error.message;
+      return "This account is not permitted to use this learner action.";
+    return userFacingRequestError(
+      error,
+      "The learning service could not complete this request. Try again.",
+    );
   }
   if (error instanceof TypeError)
     return "The service could not be reached. Try again when connected.";
@@ -64,18 +96,15 @@ function StateMessage({
     return (
       <div className="surface-state" role="status">
         <Heading>{pageTitle}</Heading>
-        <p>Loading server data…</p>
+        <p>Loading your learning…</p>
       </div>
     );
   }
   if (state.status === "empty") {
     return (
       <div className="surface-state" role="status">
-        <Heading>Nothing is published here yet.</Heading>
-        <p>
-          The API returned no learner content. No local course data is
-          substituted.
-        </p>
+        <Heading>No published learning is available yet.</Heading>
+        <p>Try again after a course has been published for this workspace.</p>
       </div>
     );
   }
@@ -222,11 +251,17 @@ export function PublicProgramDetail({
     "idle" | "saving" | "done" | "error"
   >("idle");
   const [enrollmentMessage, setEnrollmentMessage] = useState("");
+  const [enrollmentRecovery, setEnrollmentRecovery] = useState<ReturnType<
+    typeof enrollmentFailureMessage
+  > | null>(null);
   const program = state.status === "ready" ? state.value : null;
+  const freeEnrollmentAvailable =
+    program !== null && isFreeEnrollmentProgram(program);
   async function enroll() {
-    if (!program) return;
+    if (!program || !freeEnrollmentAvailable) return;
     setEnrollment("saving");
     setEnrollmentMessage("");
+    setEnrollmentRecovery(null);
     try {
       const result = await api.enrollFree(program.program_version_id);
       setEnrollment("done");
@@ -237,7 +272,9 @@ export function PublicProgramDetail({
       );
     } catch (error) {
       setEnrollment("error");
-      setEnrollmentMessage(errorText(error));
+      const recovery = enrollmentFailureMessage(error);
+      setEnrollmentRecovery(recovery);
+      setEnrollmentMessage(recovery.message);
     }
   }
   return (
@@ -260,35 +297,43 @@ export function PublicProgramDetail({
                 This detail is supplied by the published catalog API. Learner
                 guidance appears only when the API publishes it.
               </p>
-              <div className="hero-actions">
-                <button
-                  className="button button--ink"
-                  type="button"
-                  onClick={enroll}
-                  disabled={enrollment === "saving"}
-                >
-                  {enrollment === "saving"
-                    ? "Enrolling…"
-                    : enrollment === "done"
-                      ? "Enrolled"
-                      : "Enroll free"}
-                </button>
-                <Link
-                  className="text-link"
-                  href={ROUTES.programLearning(program.slug)}
-                >
-                  Open learner path →
-                </Link>
-              </div>
+              {freeEnrollmentAvailable ? (
+                <div className="hero-actions">
+                  <button
+                    className="button button--ink"
+                    type="button"
+                    onClick={enroll}
+                    disabled={enrollment === "saving"}
+                  >
+                    {enrollment === "saving"
+                      ? "Enrolling…"
+                      : enrollment === "done"
+                        ? "Enrolled"
+                        : "Enroll free"}
+                  </button>
+                  <Link
+                    className="text-link"
+                    href={ROUTES.programLearning(program.slug)}
+                  >
+                    Open learner path →
+                  </Link>
+                </div>
+              ) : (
+                <p role="status">
+                  Free enrollment is unavailable for this program.
+                </p>
+              )}
               {enrollmentMessage ? (
                 <p role={enrollment === "error" ? "alert" : "status"}>
                   {enrollmentMessage}
                 </p>
               ) : null}
-              {enrollment === "error" &&
-              enrollmentMessage.includes("Sign in") ? (
-                <Link className="text-link" href={ROUTES.login}>
-                  Go to sign in →
+              {enrollmentRecovery?.recoveryHref ? (
+                <Link
+                  className="text-link"
+                  href={enrollmentRecovery.recoveryHref}
+                >
+                  {enrollmentRecovery.recoveryLabel} →
                 </Link>
               ) : null}
             </div>
@@ -329,24 +374,35 @@ export async function identityState(
 ): Promise<{
   me: MeResponse;
   context: ContextResponse;
+  programs: ProgramSummaryResponse[];
   learning?: LearningResponse;
 }> {
-  const [me, context] = await Promise.all([api.me(), api.context()]);
-  const candidateProgramIds = programId
-    ? [programId]
-    : (await api.listPrograms()).items.map((program) => program.id);
+  const [me, context, programs] = await Promise.all([
+    api.me(),
+    api.context(),
+    programId
+      ? Promise.resolve<ProgramSummaryResponse[]>([])
+      : api.listPrograms().then((response) => response.items),
+  ]);
+  const selectedProgramId =
+    programId ?? selectPublishedFreeCourse(programs)?.id;
   let learning: LearningResponse | undefined;
 
-  for (const candidateProgramId of candidateProgramIds) {
+  if (hasMembershipRole(me) && selectedProgramId) {
     try {
-      learning = await api.learning(candidateProgramId);
-      break;
+      learning = await api.learning(selectedProgramId);
     } catch (error) {
       if (!(error instanceof ApiError) || error.status !== 404) throw error;
     }
   }
 
-  return { me, context, learning };
+  return { me, context, programs, learning };
+}
+
+export function selectPublishedFreeCourse(
+  programs: ProgramSummaryResponse[],
+): ProgramSummaryResponse | undefined {
+  return programs.find((program) => isFreeEnrollmentProgram(program));
 }
 
 function projectionLabel(projection: LearningResponse["projection"]): string {
@@ -365,59 +421,210 @@ export function isSessionExpiredError(error: unknown): boolean {
   return error instanceof ApiError && error.status === 401;
 }
 
+function useInvalidateDraftsWithoutMembership(
+  membershipKnown: boolean,
+  membershipAvailable: boolean,
+) {
+  useEffect(() => {
+    if (membershipKnown && !membershipAvailable) {
+      clearAllLearnerLocalDrafts(window.localStorage);
+    }
+  }, [membershipAvailable, membershipKnown]);
+}
+
+export function enrollmentFailureMessage(error: unknown): {
+  message: string;
+  recoveryHref?: string;
+  recoveryLabel?: string;
+} {
+  if (error instanceof ApiError && error.status === 401) {
+    return {
+      message: "Your session expired before the course could start.",
+      recoveryHref: ROUTES.sessionExpired,
+      recoveryLabel: "Sign in again",
+    };
+  }
+  if (error instanceof ApiError && error.status === 403) {
+    return {
+      message:
+        "Your account is signed in, but the enrollment service has not authorized Free Course access. Try again after learner eligibility is approved.",
+    };
+  }
+  return {
+    message: `${errorText(error)} You can retry without losing progress.`,
+  };
+}
+
+function firstActionableActivity(
+  learning: LearningResponse,
+): LearningActivityResponse | undefined {
+  const activities = learning.modules.flatMap((module) => module.activities);
+  return (
+    activities.find(
+      (activity) => activity.state.toLowerCase() === "in_progress",
+    ) ??
+    activities.find((activity) => activity.state.toLowerCase() === "available")
+  );
+}
+
+function learnerDisplayName(me: MeResponse): string {
+  const displayName = me.display_name?.trim();
+  return displayName ? displayName.split(/\s+/)[0] : "Learner";
+}
+
 export function LearnerHomeEnrollmentCard({
   learning,
+  program,
+  api = defaultApi,
 }: {
   learning?: LearningResponse;
+  program?: ProgramSummaryResponse;
+  api?: LearnerApi;
 }) {
+  const [enrollment, setEnrollment] = useState<"idle" | "saving" | "error">(
+    "idle",
+  );
+  const [failure, setFailure] = useState<ReturnType<
+    typeof enrollmentFailureMessage
+  > | null>(null);
+  const nextActivity = learning ? firstActionableActivity(learning) : undefined;
+
+  async function startFreeCourse() {
+    if (!program || enrollment === "saving") return;
+    setEnrollment("saving");
+    setFailure(null);
+    try {
+      await api.enrollFree(program.program_version_id);
+      window.location.assign(ROUTES.programLearning(program.slug));
+    } catch (error) {
+      setEnrollment("error");
+      setFailure(enrollmentFailureMessage(error));
+    }
+  }
+
   return (
     <section
       className="current-course-card"
       aria-labelledby="current-course-title"
+      id="continue-learning"
     >
       <div className="current-course-card__topline">
-        <p className="kicker">Continue learning</p>
+        <p className="kicker">
+          {learning ? "Continue learning" : "Free course"}
+        </p>
         <span className="status-pill status-pill--neutral">
           {learning
             ? projectionStateLabel(learning.projection)
-            : "Enrollment summary unavailable"}
+            : program
+              ? "Published"
+              : "Not available"}
         </span>
       </div>
       <div className="current-course-card__body">
         <h2 id="current-course-title">
-          {learning?.program_title ?? "No current course selected."}
+          {learning?.program_title ??
+            program?.title ??
+            "No free course is published right now."}
         </h2>
         <p className="current-course-card__description">
           {learning
             ? learning.projection.percentage >= 1
-              ? "Review the completed, server-authorized course path."
-              : "Pick up the next server-authorized activity from your course path."
-            : "This v0.1 home route does not yet expose a complete enrollment collection."}
+              ? "Your required activities are complete. You can revisit the course path at any time."
+              : nextActivity
+                ? `Your next available step is “${nextActivity.title}”.`
+                : "Open the course to review the activity states authorized for your enrollment."
+            : program
+              ? "Start the published Authority Closers Free Course and open Module 1."
+              : "There is no published Free Course available to start in this workspace."}
         </p>
         {learning ? (
-          <p role="status">
-            Authoritative projection: {projectionLabel(learning.projection)}
-          </p>
-        ) : (
-          <p role="status">
-            No catalog item is substituted as a current course, and absence of a
-            projection is not treated as proof that no enrollment exists.
-          </p>
-        )}
+          <div className="course-progress" role="status">
+            <div className="course-progress__labels">
+              <span>{projectionStateLabel(learning.projection)}</span>
+              <strong>{projectionLabel(learning.projection)}</strong>
+            </div>
+            <div
+              className="course-progress__track"
+              role="progressbar"
+              aria-label="Course progress"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(
+                Math.min(1, Math.max(0, learning.projection.percentage)) * 100,
+              )}
+            >
+              <span
+                style={{
+                  width: `${Math.round(
+                    Math.min(1, Math.max(0, learning.projection.percentage)) *
+                      100,
+                  )}%`,
+                }}
+              />
+            </div>
+          </div>
+        ) : null}
         {learning ? (
-          <Link
-            className="button button--ink"
-            href={ROUTES.programLearning(learning.program_slug)}
-          >
-            {learning.projection.percentage >= 1
-              ? "Review course"
-              : "Continue course"}
-          </Link>
-        ) : (
-          <Link className="button button--outline" href={ROUTES.home}>
-            View published programs
-          </Link>
-        )}
+          <div className="current-course-card__actions">
+            <Link
+              className="button button--ink"
+              href={
+                nextActivity
+                  ? ROUTES.activity(nextActivity.id)
+                  : ROUTES.programLearning(learning.program_slug)
+              }
+            >
+              {learning.projection.percentage >= 1
+                ? "Review course"
+                : "Continue"}
+              <ArrowRight size={16} aria-hidden="true" />
+            </Link>
+            <Link
+              className="text-link"
+              href={ROUTES.programLearning(learning.program_slug)}
+            >
+              View course outline
+            </Link>
+          </div>
+        ) : program ? (
+          <div className="current-course-card__actions">
+            <button
+              className="button button--ink"
+              type="button"
+              onClick={() => void startFreeCourse()}
+              disabled={enrollment === "saving"}
+            >
+              {enrollment === "saving"
+                ? "Starting free course…"
+                : "Start free course"}
+              <ArrowRight size={16} aria-hidden="true" />
+            </button>
+            <Link
+              className="text-link"
+              href={ROUTES.programDetail(program.slug)}
+            >
+              View course details
+            </Link>
+          </div>
+        ) : null}
+        {failure ? (
+          <div className="enrollment-recovery" role="alert">
+            <p>{failure.message}</p>
+            {failure.recoveryHref ? (
+              <Link className="text-link" href={failure.recoveryHref}>
+                {failure.recoveryLabel}
+              </Link>
+            ) : (
+              <button
+                className="text-button"
+                type="button"
+                onClick={() => void startFreeCourse()}
+              >
+                Retry enrollment
+              </button>
+            )}
+          </div>
+        ) : null}
       </div>
     </section>
   );
@@ -425,9 +632,35 @@ export function LearnerHomeEnrollmentCard({
 
 export function LearnerHomeRuntime({ api = defaultApi }: { api?: LearnerApi }) {
   const state = useLoad(
-    () => identityState(api),
+    async () => ({
+      ...(await identityState(api)),
+      onboarding: await api.onboarding(),
+    }),
     () => false,
   );
+  const onboardingReady =
+    state.status === "ready" &&
+    (state.value.onboarding.status === "completed" ||
+      state.value.onboarding.status === "skipped");
+  const membershipAvailable =
+    state.status === "ready" && hasMembershipRole(state.value.me);
+  useInvalidateDraftsWithoutMembership(
+    state.status === "ready",
+    membershipAvailable,
+  );
+  useEffect(() => {
+    if (state.status === "ready" && membershipAvailable && !onboardingReady) {
+      window.location.replace(ROUTES.onboarding);
+    }
+  }, [membershipAvailable, onboardingReady, state.status]);
+  const publishedProgram =
+    state.status === "ready"
+      ? selectPublishedFreeCourse(state.value.programs)
+      : undefined;
+  const nextActivity =
+    state.status === "ready" && state.value.learning
+      ? firstActionableActivity(state.value.learning)
+      : undefined;
   return (
     <>
       <StateMessage
@@ -435,7 +668,15 @@ export function LearnerHomeRuntime({ api = defaultApi }: { api?: LearnerApi }) {
         pageTitle="Learner workspace"
         retry={(state as LoadState<unknown> & { retry?: () => void }).retry}
       />
-      {state.status === "ready" ? (
+      {state.status === "ready" && !membershipAvailable ? (
+        <MembershipUnavailable api={api} />
+      ) : null}
+      {state.status === "ready" && membershipAvailable && !onboardingReady ? (
+        <div className="surface-state" role="status">
+          <h1>Opening your learner profile…</h1>
+        </div>
+      ) : null}
+      {state.status === "ready" && membershipAvailable && onboardingReady ? (
         <>
           <section
             className="dashboard-intro"
@@ -446,21 +687,22 @@ export function LearnerHomeRuntime({ api = defaultApi }: { api?: LearnerApi }) {
                 Your learning workspace
               </p>
               <h1 id="dashboard-title">
-                Welcome back,{" "}
-                {state.value.me.display_name || state.value.me.email}
+                Welcome back, {learnerDisplayName(state.value.me)}
               </h1>
               <p className="dashboard-intro__subhead">
-                Here&apos;s what&apos;s happening in your learning journey.
+                Continue the Free Course or start Module 1 when access is ready.
               </p>
             </div>
-            <span className="dashboard-intro__tenant">
-              {state.value.context.tenant_id
-                ? "Workspace selected"
-                : "Workspace not selected"}
-            </span>
+            {state.value.context.tenant_id ? (
+              <span className="dashboard-intro__tenant">Learner workspace</span>
+            ) : null}
           </section>
           <div className="dashboard-grid dashboard-grid--clarity">
-            <LearnerHomeEnrollmentCard learning={state.value.learning} />
+            <LearnerHomeEnrollmentCard
+              learning={state.value.learning}
+              program={publishedProgram}
+              api={api}
+            />
             <aside className="first-win-card learner-account-card">
               <p className="kicker">Account</p>
               <h2>{state.value.me.display_name || "Learner profile"}</h2>
@@ -468,46 +710,129 @@ export function LearnerHomeRuntime({ api = defaultApi }: { api?: LearnerApi }) {
               <dl className="learner-account-card__facts">
                 <div>
                   <dt>Access</dt>
-                  <dd>{state.value.me.membership_role ?? "Learner"}</dd>
+                  <dd>{state.value.me.membership_role}</dd>
                 </div>
                 <div>
-                  <dt>Progress source</dt>
-                  <dd>Server projection</dd>
+                  <dt>Email</dt>
+                  <dd>Verified</dd>
                 </div>
               </dl>
-              <button
-                className="button button--outline"
-                type="button"
-                onClick={() =>
-                  api.logout().then(() => window.location.assign(ROUTES.login))
-                }
-              >
-                Sign out
-              </button>
+              <SignOutControl api={api} />
             </aside>
           </div>
           <section
             className="dashboard-lower dashboard-lower--clarity"
             aria-labelledby="my-learning-title"
+            id="my-learning"
           >
             <div className="dashboard-lower__heading">
               <div>
                 <p className="kicker">Your courses</p>
                 <h2 id="my-learning-title">My learning</h2>
               </div>
-              <span className="dashboard-lower__caption">
-                A complete assignment collection is not available in v0.1.
-              </span>
+              {state.value.learning ? (
+                <span className="dashboard-lower__caption">
+                  {projectionLabel(state.value.learning.projection)} complete
+                </span>
+              ) : null}
             </div>
-            <div className="workspace-card workspace-card--empty">
-              <p className="kicker">Assignment boundary</p>
-              <h3>Additional assignments are not listed in this alpha.</h3>
-              <p>
-                The current API contract exposes a selected program projection,
-                not a complete assignment collection.
-              </p>
+            {state.value.learning ? (
+              <Link
+                className="learning-list-card"
+                href={ROUTES.programLearning(state.value.learning.program_slug)}
+              >
+                <span className="learning-list-card__icon" aria-hidden="true">
+                  <BookOpenCheck size={21} />
+                </span>
+                <span className="learning-list-card__copy">
+                  <span className="kicker">Free course</span>
+                  <strong>{state.value.learning.program_title}</strong>
+                  <span>
+                    {projectionStateLabel(state.value.learning.projection)}
+                  </span>
+                </span>
+                <span className="learning-list-card__progress">
+                  {Math.round(state.value.learning.projection.percentage * 100)}
+                  %
+                </span>
+                <ChevronRight size={19} aria-hidden="true" />
+              </Link>
+            ) : publishedProgram ? (
+              <div className="learning-list-card learning-list-card--published">
+                <span className="learning-list-card__icon" aria-hidden="true">
+                  <BookOpenCheck size={21} />
+                </span>
+                <span className="learning-list-card__copy">
+                  <span className="kicker">Published free course</span>
+                  <strong>{publishedProgram.title}</strong>
+                  <span>Start the course above to add it to My learning.</span>
+                </span>
+                <Link
+                  className="button button--outline button--small"
+                  href="#continue-learning"
+                >
+                  Start above
+                </Link>
+              </div>
+            ) : (
+              <div className="workspace-card workspace-card--empty">
+                <h3>No published Free Course is available.</h3>
+                <p>Retry when your workspace has a published course.</p>
+              </div>
+            )}
+          </section>
+          <section
+            className="practice-section"
+            aria-labelledby="practice-title"
+            id="practice"
+          >
+            <div className="dashboard-lower__heading">
+              <div>
+                <p className="kicker">Module 1</p>
+                <h2 id="practice-title">Practice</h2>
+              </div>
+            </div>
+            <div className="practice-card">
+              <span className="practice-card__icon" aria-hidden="true">
+                <BarChart3 size={22} />
+              </span>
+              <div>
+                <h3>
+                  {nextActivity
+                    ? nextActivity.title
+                    : state.value.learning
+                      ? "Review your authorized course path"
+                      : "Practice begins after enrollment"}
+                </h3>
+                <p>
+                  {nextActivity
+                    ? activityStateLabel(nextActivity.state)
+                    : state.value.learning
+                      ? "The server currently exposes no next available activity."
+                      : "Start the Free Course to open the activities authorized for your learner account."}
+                </p>
+              </div>
+              <Link
+                className="button button--outline button--small"
+                href={
+                  nextActivity
+                    ? ROUTES.activity(nextActivity.id)
+                    : state.value.learning
+                      ? ROUTES.programLearning(
+                          state.value.learning.program_slug,
+                        )
+                      : "#continue-learning"
+                }
+              >
+                {nextActivity
+                  ? "Open practice"
+                  : state.value.learning
+                    ? "View course"
+                    : "Start above"}
+              </Link>
             </div>
           </section>
+          <div id="progress" className="progress-anchor" aria-hidden="true" />
         </>
       ) : null}
     </>
@@ -518,6 +843,21 @@ function activityStateLabel(state: string): string {
   return state
     .replaceAll("_", " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+export function activityLockReason(
+  activity: LearningActivityResponse,
+): string | null {
+  if (activity.state.toLowerCase() !== "locked") return null;
+  const missingActivities = activity.explanation.missing_activity_ids.length;
+  const missingModules = activity.explanation.missing_module_ids.length;
+  if (missingActivities > 0) {
+    return `Complete ${missingActivities} earlier required ${missingActivities === 1 ? "activity" : "activities"} to unlock.`;
+  }
+  if (missingModules > 0) {
+    return `Complete ${missingModules} prerequisite ${missingModules === 1 ? "module" : "modules"} to unlock.`;
+  }
+  return "This step remains locked until the learning service authorizes access.";
 }
 
 function activityIcon(kind: string) {
@@ -542,6 +882,7 @@ export function LearningActivityNavigation({
 }: {
   activity: LearningActivityResponse;
 }) {
+  const lockedReason = activityLockReason(activity);
   const content = (
     <>
       <span className="activity-row__order">
@@ -559,23 +900,31 @@ export function LearningActivityNavigation({
         <span className="activity-row__objective">
           {activity.kind.replaceAll("_", " ")}
         </span>
+        {lockedReason ? (
+          <span className="activity-row__reason">{lockedReason}</span>
+        ) : null}
       </span>
       <span className="activity-row__status">
-        {activityStateLabel(activity.state)}
+        <span>{activityStateLabel(activity.state)}</span>
+        {lockedReason ? (
+          <LockKeyhole size={15} aria-hidden="true" />
+        ) : (
+          <ChevronRight size={16} aria-hidden="true" />
+        )}
       </span>
     </>
   );
   if (activity.state.toLowerCase() === "locked") {
     return (
-      <div className="activity-row activity-row--locked" aria-disabled="true">
-        {content}
-      </div>
+      <li className="activity-row activity-row--locked">
+        <div aria-disabled="true">{content}</div>
+      </li>
     );
   }
   return (
-    <Link className="activity-row" href={ROUTES.activity(activity.id)}>
-      {content}
-    </Link>
+    <li className="activity-row">
+      <Link href={ROUTES.activity(activity.id)}>{content}</Link>
+    </li>
   );
 }
 
@@ -616,9 +965,13 @@ function ActivityLoop({ currentKind }: { currentKind: string }) {
 
 export function ConnectedActivityWorkspace({
   activity,
+  tenantId,
+  personId,
   api = defaultApi,
 }: {
   activity: ActivityResponse;
+  tenantId?: string;
+  personId?: string;
   api?: LearnerApi;
 }) {
   const initialResponse =
@@ -626,6 +979,7 @@ export function ConnectedActivityWorkspace({
       ? activity.draft_payload.response
       : "";
   const [response, setResponse] = useState(initialResponse);
+  const [savedResponse, setSavedResponse] = useState(initialResponse);
   const [draftRevision, setDraftRevision] = useState(activity.draft_revision);
   const [activityRevision, setActivityRevision] = useState(activity.revision);
   const [mutation, setMutation] = useState<
@@ -633,6 +987,21 @@ export function ConnectedActivityWorkspace({
   >("idle");
   const [message, setMessage] = useState("");
   const [reauthRequired, setReauthRequired] = useState(false);
+  const [failureKind, setFailureKind] = useState<MutationFailureKind | null>(
+    null,
+  );
+  const [lastOperation, setLastOperation] = useState<
+    "draft" | "evidence" | null
+  >(null);
+  const [localDraftChecked, setLocalDraftChecked] = useState(false);
+  const [localDraftRestored, setLocalDraftRestored] = useState(false);
+  const [staleLocalDraft, setStaleLocalDraft] =
+    useState<ActivityDraftEnvelope | null>(null);
+  const [localPersistence, setLocalPersistence] = useState<
+    "idle" | "saved" | "failed"
+  >("idle");
+  const [recoveryMessage, setRecoveryMessage] = useState<string | null>(null);
+  const dirty = mutation !== "submitted" && response !== savedResponse;
   const prompt = learnerPrompt(activity);
   const writableState =
     prompt !== null &&
@@ -656,6 +1025,29 @@ export function ConnectedActivityWorkspace({
       "reflection" | "implementation" | "review" | "improvement"
     >
   )[activity.kind.toLowerCase()];
+  const responseLabel =
+    (
+      {
+        reflection: "Your reflection",
+        implementation_challenge: "Implementation evidence",
+        review: "Review record",
+        improve: "Next improvement",
+      } as Record<string, string>
+    )[activity.kind.toLowerCase()] ?? "Your response";
+  const lockedReason = activityLockReason(activity);
+  const localDraftScope = useMemo<ActivityDraftScope | null>(
+    () =>
+      tenantId && personId
+        ? {
+            kind: "activity",
+            tenantId,
+            personId,
+            enrollmentId: activity.enrollment_id,
+            activityId: activity.id,
+          }
+        : null,
+    [activity.enrollment_id, activity.id, personId, tenantId],
+  );
   const draftStatus =
     mutation === "saving"
       ? "Saving to the server…"
@@ -663,14 +1055,148 @@ export function ConnectedActivityWorkspace({
         ? "Saved to the server"
         : mutation === "error"
           ? "Save needs attention"
-          : initialResponse
-            ? "Server draft restored"
-            : "Draft is not submitted";
+          : localPersistence === "failed" && dirty
+            ? "Not saved on this device"
+            : localDraftRestored && dirty
+              ? "Local draft restored — not yet saved"
+              : localPersistence === "saved" && dirty
+                ? "Recovery copy saved on this device — not the server"
+                : dirty
+                  ? "Unsaved local changes"
+                  : initialResponse
+                    ? "Server draft restored"
+                    : "Draft is not submitted";
+
+  useEffect(() => {
+    if (!localDraftScope) {
+      queueMicrotask(() => {
+        setLocalPersistence("failed");
+        setLocalDraftChecked(true);
+      });
+      return;
+    }
+    const localDraft = readActivityLocalDraft(
+      window.localStorage,
+      localDraftScope,
+    );
+    let active = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      if (localDraft.status === "ready") {
+        if (
+          localDraftMatchesServer(
+            localDraft.envelope,
+            activity.draft_revision,
+            activityServerFingerprint(initialResponse),
+          )
+        ) {
+          if (localDraft.envelope.draft.response !== initialResponse) {
+            setResponse(localDraft.envelope.draft.response);
+            setLocalDraftRestored(true);
+            setLocalPersistence("saved");
+          }
+        } else {
+          setStaleLocalDraft(localDraft.envelope);
+        }
+      } else if (localDraft.status === "unavailable") {
+        setLocalPersistence("failed");
+      }
+      setLocalDraftChecked(true);
+    });
+    return () => {
+      active = false;
+    };
+  }, [
+    activity.draft_revision,
+    activity.enrollment_id,
+    activity.id,
+    initialResponse,
+    localDraftScope,
+  ]);
+
+  useEffect(() => {
+    if (!localDraftChecked) return;
+    if (staleLocalDraft) return;
+    let active = true;
+    if (!localDraftScope) {
+      if (dirty) {
+        queueMicrotask(() => {
+          if (active) setLocalPersistence("failed");
+        });
+      }
+      return () => {
+        active = false;
+      };
+    }
+    if (dirty) {
+      const result = writeActivityLocalDraft(window.localStorage, {
+        scope: localDraftScope,
+        response,
+        baseRevision: draftRevision,
+        serverFingerprint: activityServerFingerprint(savedResponse),
+      });
+      queueMicrotask(() => {
+        if (active) setLocalPersistence(result.ok ? "saved" : "failed");
+      });
+    } else {
+      clearActivityLocalDraft(window.localStorage, localDraftScope);
+      queueMicrotask(() => {
+        if (active) setLocalPersistence("idle");
+      });
+    }
+    return () => {
+      active = false;
+    };
+  }, [
+    dirty,
+    draftRevision,
+    localDraftChecked,
+    localDraftScope,
+    response,
+    savedResponse,
+    staleLocalDraft,
+  ]);
+
+  useEffect(() => registerBeforeUnloadGuard(window, dirty), [dirty]);
+
+  function online(): boolean {
+    return typeof navigator === "undefined" ? true : navigator.onLine;
+  }
+
+  function mutationErrorMessage(
+    error: unknown,
+    kind: MutationFailureKind,
+    locallyStored: boolean,
+  ): string {
+    if (kind === "conflict") {
+      return locallyStored
+        ? "The server revision changed elsewhere. Reload to compare this recovery copy with the latest activity before saving again."
+        : "The server revision changed elsewhere, and this browser could not retain a recovery copy. Copy/export your response before reloading.";
+    }
+    if (kind === "offline") {
+      return locallyStored
+        ? "You are offline. A bounded recovery copy is stored on this device; reconnect and retry this operation."
+        : "You are offline, and this browser could not retain a recovery copy. Keep this page open or copy/export your response.";
+    }
+    return errorText(error);
+  }
+
   async function save() {
     if (!canSaveDraft) return;
+    setLastOperation("draft");
     setMutation("saving");
     setMessage("");
     setReauthRequired(false);
+    setFailureKind(null);
+    const localResult = localDraftScope
+      ? writeActivityLocalDraft(window.localStorage, {
+          scope: localDraftScope,
+          response,
+          baseRevision: draftRevision,
+          serverFingerprint: activityServerFingerprint(savedResponse),
+        })
+      : { ok: false as const, reason: "unavailable" as const };
+    setLocalPersistence(localResult.ok ? "saved" : "failed");
     try {
       const saved = await api.saveDraft(
         activity.id,
@@ -679,19 +1205,39 @@ export function ConnectedActivityWorkspace({
       );
       setDraftRevision(saved.revision);
       setActivityRevision(saved.activity_revision);
+      setSavedResponse(response);
       setMutation("saved");
       setMessage("Draft saved by the server.");
+      setLastOperation(null);
+      setLocalDraftRestored(false);
+      if (localDraftScope) {
+        clearActivityLocalDraft(window.localStorage, localDraftScope);
+      }
+      setLocalPersistence("idle");
     } catch (error) {
+      const kind = mutationFailureKind(error, online());
       setMutation("error");
-      setMessage(errorText(error));
+      setFailureKind(kind);
+      setMessage(mutationErrorMessage(error, kind, localResult.ok));
       setReauthRequired(isSessionExpiredError(error));
     }
   }
   async function submit() {
     if (!canSubmitEvidence || !evidenceType) return;
+    setLastOperation("evidence");
     setMutation("saving");
     setMessage("");
     setReauthRequired(false);
+    setFailureKind(null);
+    const localResult = localDraftScope
+      ? writeActivityLocalDraft(window.localStorage, {
+          scope: localDraftScope,
+          response,
+          baseRevision: draftRevision,
+          serverFingerprint: activityServerFingerprint(savedResponse),
+        })
+      : { ok: false as const, reason: "unavailable" as const };
+    setLocalPersistence(localResult.ok ? "saved" : "failed");
     try {
       const submitted = await api.submitEvidence(
         activity.id,
@@ -700,156 +1246,509 @@ export function ConnectedActivityWorkspace({
         activityRevision,
       );
       setActivityRevision(submitted.activity_revision);
+      setSavedResponse(response);
       setMutation("submitted");
-      setMessage("Evidence submitted for server-side processing.");
+      setMessage(
+        "Evidence submitted. The server will determine the next activity state.",
+      );
+      setLastOperation(null);
+      setLocalDraftRestored(false);
+      if (localDraftScope) {
+        clearActivityLocalDraft(window.localStorage, localDraftScope);
+      }
+      setLocalPersistence("idle");
     } catch (error) {
+      const kind = mutationFailureKind(error, online());
       setMutation("error");
-      setMessage(errorText(error));
+      setFailureKind(kind);
+      setMessage(mutationErrorMessage(error, kind, localResult.ok));
       setReauthRequired(isSessionExpiredError(error));
     }
   }
+
+  function keepServerActivityDraft() {
+    if (localDraftScope) {
+      clearActivityLocalDraft(window.localStorage, localDraftScope);
+    }
+    setResponse(savedResponse);
+    setStaleLocalDraft(null);
+    setLocalDraftRestored(false);
+    setLocalPersistence("idle");
+    setRecoveryMessage("The local recovery copy was discarded.");
+  }
+
+  function mergeLocalActivityDraft() {
+    if (!staleLocalDraft) return;
+    setResponse(staleLocalDraft.draft.response);
+    setStaleLocalDraft(null);
+    setLocalDraftRestored(true);
+    setMutation("idle");
+    setRecoveryMessage(
+      "The local recovery copy is now in the editor. Review it before saving against the latest server revision.",
+    );
+  }
+
+  const recoveryResponse =
+    staleLocalDraft?.draft.response ?? (dirty ? response : null);
+
+  async function copyActivityRecovery() {
+    if (recoveryResponse === null) return;
+    try {
+      await navigator.clipboard.writeText(
+        activityRecoveryText(recoveryResponse),
+      );
+      setRecoveryMessage("Recovery copy copied to the clipboard.");
+    } catch {
+      setRecoveryMessage(
+        "Clipboard access was blocked. Download the recovery file instead.",
+      );
+    }
+  }
+
+  function exportActivityRecovery() {
+    if (recoveryResponse === null) return;
+    const href = URL.createObjectURL(
+      new Blob([activityRecoveryText(recoveryResponse)], {
+        type: "text/plain;charset=utf-8",
+      }),
+    );
+    const anchor = document.createElement("a");
+    anchor.href = href;
+    anchor.download = "authority-closers-activity-recovery.txt";
+    anchor.click();
+    URL.revokeObjectURL(href);
+    setRecoveryMessage("Recovery file downloaded on this device.");
+  }
   return (
     <div
-      className={`activity-shell activity-shell--${activity.kind.toLowerCase().replaceAll("_", "-")}`}
+      className={`activity-workspace activity-workspace--${activity.kind.toLowerCase().replaceAll("_", "-")}`}
       aria-label="Connected learner activity"
     >
-      <div className="activity-shell__breadcrumb">
-        <Link href={ROUTES.learnerHome}>Course path</Link>
-        <span aria-hidden="true">/</span> Module 1 activity
-      </div>
-      <div className="activity-shell__header">
-        <div>
-          <p className="activity-shell__type">
-            <span className="activity-shell__type-icon" aria-hidden="true">
-              {activityIcon(activity.kind)}
-            </span>
-            {activity.kind.replaceAll("_", " ")}
-          </p>
-          <h1>{activity.title}</h1>
+      <article className="activity-shell">
+        <div className="activity-shell__breadcrumb">
+          <Link href={ROUTES.myLearning}>My learning</Link>
+          <span aria-hidden="true">/</span> Module 1 activity
         </div>
-        <span className="status-pill">
-          {activityStateLabel(activity.state)}
-        </span>
-      </div>
-      {prompt ? (
-        <p className="prompt-card">{prompt}</p>
-      ) : (
-        <div className="surface-state" role="status">
-          <h3>No learner-facing prompt is published.</h3>
-          <p>
-            Writing and evidence submission stay unavailable until the API
-            supplies activity guidance.
-          </p>
-        </div>
-      )}
-      {activity.kind.toLowerCase() === "video" ? (
-        <div className="activity-media-state" role="status">
-          <div className="activity-media-state__icon" aria-hidden="true">
-            <Play size={24} />
-          </div>
+        <div className="activity-shell__header">
           <div>
-            <strong>Lesson media is pending approval.</strong>
-            <p className="field-help">
-              {canCompleteVideo
-                ? "The server has enabled its versioned playback workflow."
-                : "Playback completion is unavailable because the server has not exposed that action."}
+            <p className="activity-shell__type">
+              <span className="activity-shell__type-icon" aria-hidden="true">
+                {activityIcon(activity.kind)}
+              </span>
+              {activity.kind.replaceAll("_", " ")}
             </p>
+            <h1>{activity.title}</h1>
           </div>
+          <span className="status-pill">
+            {activityStateLabel(activity.state)}
+          </span>
         </div>
-      ) : (
-        <form
-          className="activity-response-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void save();
-          }}
-        >
-          <label
-            className="field-group activity-response-form__label"
-            htmlFor="activity-response"
-          >
-            Your response
-          </label>
-          <textarea
-            id="activity-response"
-            rows={8}
-            value={response}
-            onChange={(event) => setResponse(event.target.value)}
-            disabled={!canEditResponse || mutation === "saving"}
-            placeholder={
-              canEditResponse
-                ? "Write only what the published prompt asks for."
-                : "Unavailable until the server enables an activity action."
-            }
-          />
-          <div className="activity-response-form__meta" aria-live="polite">
-            <span
-              className={
-                mutation === "saved"
-                  ? "activity-response-form__save-state is-saved"
-                  : "activity-response-form__save-state"
-              }
-            >
-              {mutation === "saved" ? (
-                <CheckCircle2 size={16} aria-hidden="true" />
-              ) : null}
-              {draftStatus}
-            </span>
-            <span>{response.length.toLocaleString()} characters</span>
-          </div>
-          <aside className="activity-draft-boundary">
-            <ShieldCheck size={20} aria-hidden="true" />
-            <span>
-              <strong>Controlled learner draft</strong>
-              Your response stays unsubmitted until the server authorizes the
-              next workflow action.
-            </span>
-          </aside>
-          <ActivityLoop currentKind={activity.kind} />
-          <div className="hero-actions activity-response-form__actions">
-            <button
-              className="button button--outline"
-              type="submit"
-              disabled={!canSaveDraft || mutation === "saving"}
-            >
-              Save draft
-            </button>
-            <button
-              className="button button--ink"
-              type="button"
-              onClick={() => void submit()}
-              aria-describedby={
-                !canSubmitEvidence && prompt
-                  ? "activity-submit-boundary"
-                  : undefined
-              }
-              disabled={
-                !canSubmitEvidence || !evidenceType || mutation === "saving"
-              }
-            >
-              Submit evidence
-            </button>
-          </div>
-          {!canSubmitEvidence && prompt ? (
-            <p
-              className="activity-submit-boundary"
-              id="activity-submit-boundary"
-              role="status"
-            >
-              Submission is locked until the server authorizes this step.
+        {prompt ? (
+          <section className="activity-prompt" aria-labelledby="prompt-title">
+            <p className="kicker" id="prompt-title">
+              Published prompt
             </p>
-          ) : null}
-        </form>
-      )}
-      {message ? (
-        <p role={mutation === "error" ? "alert" : "status"}>{message}</p>
-      ) : null}
-      {reauthRequired ? (
-        <Link className="button button--ink" href={ROUTES.sessionExpired}>
-          Sign in again
-        </Link>
-      ) : null}
+            <p>{prompt}</p>
+          </section>
+        ) : lockedReason ? (
+          <div className="activity-access-boundary" role="status">
+            <LockKeyhole size={20} aria-hidden="true" />
+            <div>
+              <strong>This activity is locked.</strong>
+              <p>{lockedReason}</p>
+            </div>
+          </div>
+        ) : (
+          <div className="surface-state" role="status">
+            <h3>No learner prompt is published for this activity.</h3>
+            <p>Draft and evidence controls remain unavailable.</p>
+          </div>
+        )}
+        {staleLocalDraft ? (
+          <section
+            className="activity-mutation-message"
+            aria-labelledby="activity-draft-conflict-title"
+          >
+            <div role="alert">
+              <p className="kicker">Recovery decision required</p>
+              <h2 id="activity-draft-conflict-title">
+                A newer activity draft exists on the server.
+              </h2>
+              <p>
+                This device recovery copy is based on draft revision{" "}
+                {staleLocalDraft.baseRevision}; the server is now at revision{" "}
+                {draftRevision}. Nothing has been placed into the editor.
+              </p>
+            </div>
+            <details>
+              <summary>Compare server and local responses</summary>
+              <div>
+                <h3>Server response</h3>
+                <pre>{savedResponse || "No server response"}</pre>
+                <h3>Local recovery response</h3>
+                <pre>
+                  {staleLocalDraft.draft.response || "No local response"}
+                </pre>
+              </div>
+            </details>
+            <div className="activity-response-form__actions">
+              <button
+                className="button button--outline"
+                type="button"
+                onClick={keepServerActivityDraft}
+              >
+                Keep server and discard local
+              </button>
+              <button
+                className="button button--ink"
+                type="button"
+                onClick={mergeLocalActivityDraft}
+              >
+                Merge local copy into editor
+              </button>
+            </div>
+            <div className="activity-response-form__actions">
+              <button
+                className="text-button"
+                type="button"
+                onClick={() => void copyActivityRecovery()}
+              >
+                Copy local recovery text
+              </button>
+              <button
+                className="text-button"
+                type="button"
+                onClick={exportActivityRecovery}
+              >
+                Download local recovery file
+              </button>
+            </div>
+          </section>
+        ) : activity.kind.toLowerCase() === "video" ? (
+          <div className="activity-media-state" role="status">
+            <div className="activity-media-state__icon" aria-hidden="true">
+              <Play size={24} />
+            </div>
+            <div>
+              <strong>No approved lesson media is connected yet.</strong>
+              <p className="field-help">
+                {canCompleteVideo
+                  ? "Playback authorization exists, but this screen will not fabricate media or completion evidence."
+                  : "Playback and completion remain unavailable for this activity."}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <form
+            className="activity-response-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void save();
+            }}
+          >
+            <div className="activity-response-form__heading">
+              <label
+                className="field-group activity-response-form__label"
+                htmlFor="activity-response"
+              >
+                {responseLabel}
+              </label>
+              <span>Draft v{draftRevision}</span>
+            </div>
+            <textarea
+              id="activity-response"
+              rows={10}
+              value={response}
+              onChange={(event) => {
+                setResponse(event.target.value);
+                setMutation("idle");
+                setMessage("");
+                setFailureKind(null);
+                setReauthRequired(false);
+              }}
+              disabled={!canEditResponse || mutation === "saving"}
+              placeholder={
+                canEditResponse
+                  ? "Write only what the published prompt asks for."
+                  : "Unavailable until the server authorizes a draft or evidence action."
+              }
+            />
+            <div className="activity-response-form__meta" aria-live="polite">
+              <span
+                className={
+                  mutation === "saved"
+                    ? "activity-response-form__save-state is-saved"
+                    : "activity-response-form__save-state"
+                }
+              >
+                {mutation === "saved" ? (
+                  <CheckCircle2 size={16} aria-hidden="true" />
+                ) : null}
+                {draftStatus}
+              </span>
+              <span>{response.length.toLocaleString()} characters</span>
+            </div>
+            <aside className="activity-draft-boundary">
+              <ShieldCheck size={20} aria-hidden="true" />
+              <span>
+                <strong>Versioned learner draft</strong>
+                Saving updates draft revision {draftRevision}. Submission is a
+                separate server-authorized action.
+              </span>
+            </aside>
+            <div className="activity-response-form__actions">
+              <button
+                className="button button--outline"
+                type="submit"
+                disabled={!canSaveDraft || mutation === "saving"}
+              >
+                {mutation === "saving" ? "Saving…" : "Save draft"}
+              </button>
+              <button
+                className="button button--ink"
+                type="button"
+                onClick={() => void submit()}
+                aria-describedby={
+                  !canSubmitEvidence && prompt
+                    ? "activity-submit-boundary"
+                    : undefined
+                }
+                disabled={
+                  !canSubmitEvidence || !evidenceType || mutation === "saving"
+                }
+              >
+                Submit evidence
+              </button>
+            </div>
+            {!canSubmitEvidence && prompt ? (
+              <p
+                className="activity-submit-boundary"
+                id="activity-submit-boundary"
+                role="status"
+              >
+                Submission remains locked until the server authorizes this
+                activity action.
+              </p>
+            ) : null}
+          </form>
+        )}
+        {dirty && localPersistence === "failed" && !staleLocalDraft ? (
+          <div className="activity-mutation-message" role="alert">
+            <p>
+              This browser could not save a recovery copy. Keep this page open
+              or copy/download your response before leaving.
+            </p>
+            <button
+              className="text-button"
+              type="button"
+              onClick={() => void copyActivityRecovery()}
+            >
+              Copy recovery text
+            </button>
+            <button
+              className="text-button"
+              type="button"
+              onClick={exportActivityRecovery}
+            >
+              Download recovery file
+            </button>
+          </div>
+        ) : null}
+        {recoveryMessage ? <p role="status">{recoveryMessage}</p> : null}
+        {message ? (
+          <div
+            className="activity-mutation-message"
+            role={mutation === "error" ? "alert" : "status"}
+          >
+            <p>{message}</p>
+            {failureKind === "conflict" ? (
+              <button
+                className="text-button"
+                type="button"
+                onClick={() => window.location.reload()}
+              >
+                Reload latest activity
+              </button>
+            ) : null}
+            {(failureKind === "offline" || failureKind === "retry") &&
+            lastOperation ? (
+              <button
+                className="text-button"
+                type="button"
+                onClick={() =>
+                  void (lastOperation === "draft" ? save() : submit())
+                }
+              >
+                Retry {lastOperation === "draft" ? "save" : "submission"}
+              </button>
+            ) : null}
+            {dirty && localPersistence === "saved" ? (
+              <div>
+                <button
+                  className="text-button"
+                  type="button"
+                  onClick={() => void copyActivityRecovery()}
+                >
+                  Copy recovery text
+                </button>
+                <button
+                  className="text-button"
+                  type="button"
+                  onClick={exportActivityRecovery}
+                >
+                  Download recovery file
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+        {reauthRequired ? (
+          <Link className="button button--ink" href={ROUTES.sessionExpired}>
+            Sign in again
+          </Link>
+        ) : null}
+      </article>
+      <aside className="activity-authority-panel">
+        <section>
+          <p className="kicker">This activity</p>
+          <h2>Authorized state</h2>
+          <dl>
+            <div>
+              <dt>Status</dt>
+              <dd>{activityStateLabel(activity.state)}</dd>
+            </div>
+            <div>
+              <dt>Activity version</dt>
+              <dd>{activityRevision}</dd>
+            </div>
+            <div>
+              <dt>Draft saving</dt>
+              <dd>{canSaveDraft ? "Enabled" : "Not authorized"}</dd>
+            </div>
+            <div>
+              <dt>Evidence submission</dt>
+              <dd>{canSubmitEvidence ? "Enabled" : "Not authorized"}</dd>
+            </div>
+          </dl>
+        </section>
+        <section>
+          <p className="kicker">Module 1</p>
+          <h2>Learning loop</h2>
+          <ActivityLoop currentKind={activity.kind} />
+        </section>
+      </aside>
     </div>
+  );
+}
+
+function CourseProgressSummary({ learning }: { learning: LearningResponse }) {
+  const percentage = Math.round(
+    Math.min(1, Math.max(0, learning.projection.percentage)) * 100,
+  );
+  return (
+    <aside className="course-progress-card" aria-label="Course progress">
+      <div className="course-progress-card__ring" aria-hidden="true">
+        <strong>{percentage}%</strong>
+        <span>complete</span>
+      </div>
+      <div>
+        <p className="kicker">Your progress</p>
+        <strong>
+          {learning.projection.completed_count} of{" "}
+          {learning.projection.denominator}
+        </strong>
+        <span>required activities complete</span>
+      </div>
+    </aside>
+  );
+}
+
+function moduleStateLabel(module: LearningResponse["modules"][number]): string {
+  if (module.activities.length === 0) return "Not published";
+  if (
+    module.activities.every(
+      (activity) => activity.state.toLowerCase() === "completed",
+    )
+  )
+    return "Complete";
+  if (
+    module.activities.every(
+      (activity) => activity.state.toLowerCase() === "locked",
+    )
+  )
+    return "Locked";
+  return "Available";
+}
+
+function LearningModules({ learning }: { learning: LearningResponse }) {
+  return (
+    <section className="course-outline" aria-labelledby="course-outline-title">
+      <div className="course-outline__heading">
+        <div>
+          <p className="kicker">Free Course path</p>
+          <h2 id="course-outline-title">Course outline</h2>
+        </div>
+        <span>{learning.modules.length} modules</span>
+      </div>
+      <div className="course-path">
+        {learning.modules.map((module) => {
+          const completed = module.activities.filter(
+            (activity) => activity.state.toLowerCase() === "completed",
+          ).length;
+          const moduleState = moduleStateLabel(module);
+          const firstLocked = module.activities.find(
+            (activity) => activity.state.toLowerCase() === "locked",
+          );
+          return (
+            <article
+              className={`module-card${moduleState === "Locked" ? " module-card--locked" : ""}`}
+              key={module.id}
+            >
+              <div className="module-card__header">
+                <div>
+                  <p className="module-card__number">
+                    Module {module.position}
+                  </p>
+                  <h3>{module.title}</h3>
+                </div>
+                <span className="module-card__count">
+                  {module.activities.length > 0
+                    ? `${completed}/${module.activities.length}`
+                    : moduleState}
+                </span>
+              </div>
+              {module.activities.length > 0 ? (
+                <ol className="activity-list">
+                  {module.activities.map((activity) => (
+                    <LearningActivityNavigation
+                      activity={activity}
+                      key={activity.id}
+                    />
+                  ))}
+                </ol>
+              ) : (
+                <p className="module-card__empty">
+                  No activities are published for this module yet.
+                </p>
+              )}
+              {moduleState === "Locked" && firstLocked ? (
+                <p className="module-card__lock-reason">
+                  <LockKeyhole size={14} aria-hidden="true" />
+                  {activityLockReason(firstLocked)}
+                </p>
+              ) : module.activities.length > 0 ? (
+                <Link
+                  className="module-card__footer-link"
+                  href={ROUTES.module(learning.program_slug, module.id)}
+                >
+                  Open module <ArrowRight size={15} aria-hidden="true" />
+                </Link>
+              ) : null}
+            </article>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -868,6 +1767,18 @@ export function LiveLearningPath({
     },
     () => false,
   );
+  const membershipAvailable =
+    state.status === "ready" && hasMembershipRole(state.value.me);
+  useInvalidateDraftsWithoutMembership(
+    state.status === "ready",
+    membershipAvailable,
+  );
+  if (state.status === "ready" && !membershipAvailable) {
+    return <MembershipUnavailable api={api} />;
+  }
+  const learning = state.status === "ready" ? state.value.learning : undefined;
+  const nextActivity = learning ? firstActionableActivity(learning) : undefined;
+  const firstModule = learning?.modules[0];
   return (
     <>
       <StateMessage
@@ -876,65 +1787,68 @@ export function LiveLearningPath({
         retry={(state as LoadState<unknown> & { retry?: () => void }).retry}
       />
       {state.status === "ready" ? (
-        <section className="learning-hero" aria-labelledby="learning-title">
-          <div className="learning-hero__copy">
-            <div
-              className="breadcrumbs breadcrumbs--clarity"
-              aria-label="Course location"
-            >
-              Home <span aria-hidden="true">/</span> My learning
-            </div>
-            <p className="eyebrow">Published course</p>
-            <h1 id="learning-title">
-              {state.value.learning?.program_title ?? state.value.program.title}
-            </h1>
-            <p>
-              Your course outline and activity access are read from the
-              server-authoritative learning response.
-            </p>
-            {state.value.learning ? (
-              <LearningModules learning={state.value.learning} />
-            ) : (
-              <div className="enrollment-required" role="status">
-                <strong>No active enrollment for this course.</strong>
-                <span>
-                  This account cannot open Module 1 until the server returns an
-                  enrollment.
-                </span>
+        <>
+          <section className="course-overview" aria-labelledby="learning-title">
+            <div className="course-overview__main">
+              <div
+                className="breadcrumbs breadcrumbs--clarity"
+                aria-label="Course location"
+              >
+                <Link href={ROUTES.learnerHome}>Home</Link>
+                <span aria-hidden="true">/</span> My learning
               </div>
-            )}
-          </div>
-        </section>
+              <p className="eyebrow">Authority Closers · Free Course</p>
+              <h1 id="learning-title">
+                {learning?.program_title ?? state.value.program.title}
+              </h1>
+              <p>
+                Work through the published Module 1 sequence. Access and
+                progress below reflect your current learner enrollment.
+              </p>
+              {learning ? (
+                <div className="course-overview__actions">
+                  <Link
+                    className="button button--ink"
+                    href={
+                      nextActivity
+                        ? ROUTES.activity(nextActivity.id)
+                        : firstModule
+                          ? ROUTES.module(learning.program_slug, firstModule.id)
+                          : ROUTES.programLearning(learning.program_slug)
+                    }
+                  >
+                    {nextActivity
+                      ? "Continue learning"
+                      : firstModule
+                        ? "Open Module 1"
+                        : "View course"}
+                    <ArrowRight size={16} aria-hidden="true" />
+                  </Link>
+                </div>
+              ) : (
+                <div className="enrollment-required" role="status">
+                  <strong>
+                    Start the Free Course before opening Module 1.
+                  </strong>
+                  <span>
+                    Enrollment is controlled by the server and is not inferred
+                    from this public course page.
+                  </span>
+                  <Link
+                    className="button button--ink"
+                    href={`${ROUTES.learnerHome}#continue-learning`}
+                  >
+                    Start from learner home
+                  </Link>
+                </div>
+              )}
+            </div>
+            {learning ? <CourseProgressSummary learning={learning} /> : null}
+          </section>
+          {learning ? <LearningModules learning={learning} /> : null}
+        </>
       ) : null}
     </>
-  );
-}
-
-function LearningModules({ learning }: { learning: LearningResponse }) {
-  return (
-    <div className="course-path">
-      {learning.modules.map((module) => (
-        <article className="module-card" key={module.id}>
-          <div className="module-card__header">
-            <div>
-              <p className="module-card__number">Module {module.position}</p>
-              <h2>{module.title}</h2>
-            </div>
-            <span className="module-card__count">
-              {
-                module.activities.filter(
-                  (activity) => activity.state.toLowerCase() === "completed",
-                ).length
-              }
-              /{module.activities.length}
-            </span>
-          </div>
-          {module.activities.map((activity) => (
-            <LearningActivityNavigation activity={activity} key={activity.id} />
-          ))}
-        </article>
-      ))}
-    </div>
   );
 }
 
@@ -951,9 +1865,15 @@ export function LiveModule({
     async () => {
       const program = await api.program(slug);
       const identity = await identityState(api, program.id);
-      return identity;
+      return { program, ...identity };
     },
     () => false,
+  );
+  const membershipAvailable =
+    state.status === "ready" && hasMembershipRole(state.value.me);
+  useInvalidateDraftsWithoutMembership(
+    state.status === "ready",
+    membershipAvailable,
   );
   if (state.status !== "ready")
     return (
@@ -963,42 +1883,102 @@ export function LiveModule({
         retry={(state as LoadState<unknown> & { retry?: () => void }).retry}
       />
     );
-  // The slug-shaped module URL is navigation only. The authenticated learning
-  // response below remains the authority for activity access and state.
-  const courseModule = state.value.learning?.modules.find(
+  if (!membershipAvailable) {
+    return <MembershipUnavailable api={api} />;
+  }
+  if (!state.value.learning) {
+    return (
+      <div
+        className="enrollment-required enrollment-required--page"
+        role="status"
+      >
+        <strong>This course is not enrolled for the current learner.</strong>
+        <span>
+          Start the published Free Course from learner home. The interface will
+          not manufacture module access.
+        </span>
+        <Link
+          className="button button--ink"
+          href={`${ROUTES.learnerHome}#continue-learning`}
+        >
+          Go to learner home
+        </Link>
+      </div>
+    );
+  }
+  const courseModule = state.value.learning.modules.find(
     (item) =>
       item.id === moduleId ||
       `module-${String(item.position).padStart(2, "0")}` === moduleId,
   );
   if (!courseModule)
-    return <StateMessage state={{ status: "empty" }} pageTitle="Module" />;
+    return (
+      <div className="surface-state" role="status">
+        <h1>This module is not available.</h1>
+        <p>
+          Return to the enrolled course outline to choose a published module.
+        </p>
+        <Link
+          className="button button--outline"
+          href={ROUTES.programLearning(state.value.learning.program_slug)}
+        >
+          Back to course
+        </Link>
+      </div>
+    );
+  const completed = courseModule.activities.filter(
+    (activity) => activity.state.toLowerCase() === "completed",
+  ).length;
   return (
     <>
-      <section className="module-hero" aria-labelledby="module-title">
+      <section className="module-overview" aria-labelledby="module-title">
         <div>
           <div
             className="breadcrumbs breadcrumbs--clarity"
             aria-label="Module location"
           >
-            Course <span aria-hidden="true">/</span> Module{" "}
-            {courseModule.position}
+            <Link
+              href={ROUTES.programLearning(state.value.learning.program_slug)}
+            >
+              {state.value.learning.program_title}
+            </Link>
+            <span aria-hidden="true">/</span> Module {courseModule.position}
           </div>
-          <p className="eyebrow">Course module</p>
+          <p className="eyebrow">Module {courseModule.position}</p>
           <h1 id="module-title">{courseModule.title}</h1>
           <p>
-            Complete each server-authorized activity in sequence. The status
-            beside every item comes from the learning API.
+            Open only the activities available to this enrollment. Locked rows
+            explain what the server still requires.
           </p>
         </div>
+        <aside className="module-progress-card">
+          <span>{completed}</span>
+          <p>of {courseModule.activities.length} activities complete</p>
+        </aside>
       </section>
-      <section className="module-activities">
-        <ol className="activity-list activity-list--large">
-          {courseModule.activities.map((activity) => (
-            <li className="activity-row" key={activity.id}>
-              <LearningActivityNavigation activity={activity} />
-            </li>
-          ))}
-        </ol>
+      <section className="module-activities" aria-labelledby="activities-title">
+        <div className="course-outline__heading">
+          <div>
+            <p className="kicker">Ordered activities</p>
+            <h2 id="activities-title">Module 1 learning loop</h2>
+          </div>
+          <span>{moduleStateLabel(courseModule)}</span>
+        </div>
+        {courseModule.activities.length > 0 ? (
+          <ol className="activity-list activity-list--large">
+            {courseModule.activities.map((activity) => (
+              <LearningActivityNavigation
+                activity={activity}
+                key={activity.id}
+              />
+            ))}
+          </ol>
+        ) : (
+          <div className="surface-state" role="status">
+            <h3>No activities are published in this module yet.</h3>
+            <p>Return to the course outline to continue with available work.</p>
+          </div>
+        )}
       </section>
     </>
   );
@@ -1012,9 +1992,26 @@ export function LiveActivity({
   api?: LearnerApi;
 }) {
   const state = useLoad(
-    () => api.activity(activityId),
+    async () => {
+      const me = await api.me();
+      return {
+        me,
+        activity: hasMembershipRole(me)
+          ? await api.activity(activityId)
+          : undefined,
+      };
+    },
     () => false,
   );
+  const membershipAvailable =
+    state.status === "ready" && hasMembershipRole(state.value.me);
+  useInvalidateDraftsWithoutMembership(
+    state.status === "ready",
+    membershipAvailable,
+  );
+  if (state.status === "ready" && !membershipAvailable) {
+    return <MembershipUnavailable api={api} />;
+  }
   return (
     <>
       <StateMessage
@@ -1022,8 +2019,13 @@ export function LiveActivity({
         pageTitle="Activity"
         retry={(state as LoadState<unknown> & { retry?: () => void }).retry}
       />
-      {state.status === "ready" ? (
-        <ConnectedActivityWorkspace activity={state.value} api={api} />
+      {state.status === "ready" && state.value.activity ? (
+        <ConnectedActivityWorkspace
+          activity={state.value.activity}
+          api={api}
+          tenantId={state.value.me.selected_tenant_id ?? undefined}
+          personId={state.value.me.person_id}
+        />
       ) : null}
     </>
   );
@@ -1037,9 +2039,26 @@ export function LiveCertificate({
   api?: LearnerApi;
 }) {
   const state = useLoad(
-    () => api.certificate(certificateId),
+    async () => {
+      const me = await api.me();
+      return {
+        me,
+        certificate: hasMembershipRole(me)
+          ? await api.certificate(certificateId)
+          : undefined,
+      };
+    },
     () => false,
   );
+  const membershipAvailable =
+    state.status === "ready" && hasMembershipRole(state.value.me);
+  useInvalidateDraftsWithoutMembership(
+    state.status === "ready",
+    membershipAvailable,
+  );
+  if (state.status === "ready" && !membershipAvailable) {
+    return <MembershipUnavailable api={api} />;
+  }
   return (
     <>
       <StateMessage
@@ -1047,7 +2066,7 @@ export function LiveCertificate({
         pageTitle="Certificate"
         retry={(state as LoadState<unknown> & { retry?: () => void }).retry}
       />
-      {state.status === "ready" ? (
+      {state.status === "ready" && state.value.certificate ? (
         <section
           className="certificate-hero"
           aria-labelledby="certificate-title"
@@ -1055,14 +2074,15 @@ export function LiveCertificate({
           <p className="eyebrow">
             <span aria-hidden="true" /> Server-issued certificate
           </p>
-          <h1 id="certificate-title">{state.value.status}</h1>
+          <h1 id="certificate-title">{state.value.certificate.status}</h1>
           <p>
-            Certificate {state.value.id} · issued {state.value.issued_at}
+            Certificate {state.value.certificate.id} · issued{" "}
+            {state.value.certificate.issued_at}
           </p>
           <p>
-            {state.value.completion.completed_activity_count} of{" "}
-            {state.value.completion.required_activity_count} required activities
-            at capture.
+            {state.value.certificate.completion.completed_activity_count} of{" "}
+            {state.value.certificate.completion.required_activity_count}{" "}
+            required activities at capture.
           </p>
         </section>
       ) : null}
@@ -1085,6 +2105,12 @@ export function LiveCompletionGate({
     },
     () => false,
   );
+  const membershipAvailable =
+    state.status === "ready" && hasMembershipRole(state.value.me);
+  useInvalidateDraftsWithoutMembership(
+    state.status === "ready",
+    membershipAvailable,
+  );
   if (state.status !== "ready") {
     return (
       <StateMessage
@@ -1093,6 +2119,9 @@ export function LiveCompletionGate({
         retry={(state as LoadState<unknown> & { retry?: () => void }).retry}
       />
     );
+  }
+  if (!membershipAvailable) {
+    return <MembershipUnavailable api={api} />;
   }
   const projection = state.value.learning?.projection;
   const completed = projection?.completed_count;
@@ -1105,7 +2134,7 @@ export function LiveCompletionGate({
   return (
     <section className="completion-hero" aria-labelledby="completion-title">
       <p className="eyebrow">
-        <span aria-hidden="true" /> Server-authoritative completion
+        <span aria-hidden="true" /> Course completion
       </p>
       <h1 id="completion-title">Completion status.</h1>
       {state.value.learning ? (
@@ -1113,21 +2142,17 @@ export function LiveCompletionGate({
           <p>
             {typeof completed === "number" && typeof required === "number"
               ? `${completed} of ${required} required activities complete.`
-              : "The API returned learning data without a completion count."}
+              : "Completion details are not available right now."}
           </p>
           <p role="status">
             {complete
-              ? "The server reports completion."
-              : "The server does not report completion."}
+              ? "All required activities are complete."
+              : "Keep going to complete the remaining required activities."}
           </p>
         </>
       ) : (
-        <p>Enrollment or learning state is not available for this account.</p>
+        <p>Start the Free Course to begin tracking completion.</p>
       )}
-      <p className="field-help">
-        This screen never issues a certificate and never promotes progress from
-        the browser.
-      </p>
     </section>
   );
 }

@@ -47,6 +47,17 @@ secrets. An empty environment may leave `AC_OPERATIONS_TENANT_ID` blank only
 while `AC_EXTERNAL_SIDE_EFFECTS_HOLD=true`; settings reject releasing the hold
 without the exact existing control tenant.
 
+The public learner and operations references must point to different tenants.
+Create the public context with the reviewed, idempotent `python -m
+ac_platform.bootstrap --public-learner` command from
+[`FIRST_TENANT_OWNER_BOOTSTRAP.md`](FIRST_TENANT_OWNER_BOOTSTRAP.md); do not
+reuse the operations tenant or create one with SQL.
+
+The package-native API command uses a selector event loop on Windows so async
+PostgreSQL access works under both direct startup and the `pnpm dev` reload
+process. Use `uv run python -m ac_platform.http --port 8000` for an API-only
+smoke; do not replace it with a raw Uvicorn invocation on Windows.
+
 Keep the local database host as `127.0.0.1`. The Compose port is deliberately
 published on IPv4 loopback only; using `localhost` can make Windows async
 clients wait for an IPv6 connection timeout before falling back to IPv4.

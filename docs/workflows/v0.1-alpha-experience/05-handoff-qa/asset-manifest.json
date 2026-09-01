@@ -1,0 +1,476 @@
+{
+  "schema_version": "1.1.0",
+  "workstream_id": "AC-WF-V01-ALPHA",
+  "status": "reference_ready_not_runtime_approved",
+  "status_definitions": {
+    "implementation_candidate": "A bounded current route or component exists but still needs contract comparison or state completion.",
+    "runtime_pending": "Accepted behavior and current implementation are aligned for validation; exact-live proof is not supplied.",
+    "gap_blocked": "The named capability remains unresolved and may be shown only as an honest gated/reference state."
+  },
+  "screen_registry": [
+    {
+      "screen_id": "AUTH-01",
+      "source_asset_ids": ["AUTH-01", "AUTH-02"],
+      "status": "specified_not_generated"
+    },
+    {
+      "screen_id": "AUTH-02",
+      "source_asset_ids": ["AUTH-01"],
+      "status": "specified_not_generated"
+    },
+    {
+      "screen_id": "AUTH-03",
+      "source_asset_ids": ["AUTH-02"],
+      "status": "specified_not_generated"
+    },
+    {
+      "screen_id": "AUTH-04",
+      "source_asset_ids": ["AUTH-02"],
+      "status": "specified_not_generated"
+    },
+    {
+      "screen_id": "AUTH-05",
+      "source_asset_ids": ["AUTH-02"],
+      "status": "specified_not_generated"
+    },
+    {
+      "screen_id": "AUTH-06",
+      "source_asset_ids": ["AUTH-02"],
+      "status": "specified_not_generated"
+    },
+    {
+      "screen_id": "AUTH-07",
+      "source_asset_ids": ["AUTH-02"],
+      "status": "specified_not_generated"
+    },
+    {
+      "screen_id": "ONB-01",
+      "source_asset_ids": ["ONB-01", "ONB-02"],
+      "status": "specified_not_generated"
+    },
+    {
+      "screen_id": "HOME-01",
+      "source_asset_ids": ["SHELL-01", "SHELL-02", "HOME-01"],
+      "status": "specified_not_generated"
+    },
+    {
+      "screen_id": "COURSE-01",
+      "source_asset_ids": ["COURSE-01", "COURSE-02"],
+      "status": "specified_not_generated"
+    },
+    {
+      "screen_id": "COURSE-02",
+      "source_asset_ids": ["COURSE-01", "COURSE-02"],
+      "status": "specified_not_generated"
+    },
+    {
+      "screen_id": "MOD-01",
+      "source_asset_ids": ["COURSE-01", "COURSE-02"],
+      "status": "specified_not_generated"
+    },
+    {
+      "screen_id": "ACT-01",
+      "source_asset_ids": ["PLAYER-01"],
+      "status": "gap_blocked"
+    },
+    {
+      "screen_id": "ACT-02",
+      "source_asset_ids": ["ACT-02"],
+      "status": "specified_not_generated"
+    },
+    {
+      "screen_id": "ACT-03",
+      "source_asset_ids": ["ACT-03"],
+      "status": "specified_not_generated"
+    },
+    {
+      "screen_id": "ACT-04",
+      "source_asset_ids": ["ACT-04"],
+      "status": "specified_not_generated"
+    },
+    {
+      "screen_id": "ACT-05",
+      "source_asset_ids": ["ACT-04", "ACT-03"],
+      "status": "specified_not_generated"
+    },
+    {
+      "screen_id": "PROG-01",
+      "source_asset_ids": ["PROG-01"],
+      "status": "runtime_pending",
+      "authority_source": [
+        "apps/learner-web/app/progress/page.tsx",
+        "apps/learner-web/app/components/progress-runtime.tsx"
+      ]
+    },
+    {
+      "screen_id": "SET-01",
+      "source_asset_ids": ["SHELL-01", "SHELL-02", "ONB-01"],
+      "status": "runtime_pending",
+      "authority_source": [
+        "apps/learner-web/app/settings/page.tsx",
+        "apps/learner-web/app/components/settings-runtime.tsx"
+      ]
+    },
+    {
+      "screen_id": "SET-02",
+      "source_asset_ids": ["SHELL-01", "SHELL-02"],
+      "status": "runtime_pending",
+      "authority_source": ["apps/learner-web/app/components/theme-control.tsx"]
+    },
+    {
+      "screen_id": "SET-03",
+      "source_asset_ids": ["ONB-01", "ONB-02"],
+      "status": "runtime_pending",
+      "authority_source": [
+        "apps/learner-web/app/components/settings-runtime.tsx",
+        "apps/learner-web/app/onboarding/page.tsx"
+      ]
+    },
+    {
+      "screen_id": "SET-04",
+      "source_asset_ids": ["AUTH-02"],
+      "status": "implementation_candidate",
+      "authority_source": [
+        "apps/learner-web/app/components/settings-runtime.tsx",
+        "apps/learner-web/app/forgot-password/page.tsx",
+        "apps/learner-web/app/session-expired/page.tsx"
+      ]
+    },
+    {
+      "screen_id": "SET-05",
+      "source_asset_ids": ["SHELL-01", "SHELL-02"],
+      "status": "implementation_candidate",
+      "authority_source": [
+        "apps/learner-web/app/privacy/page.tsx",
+        "apps/learner-web/app/terms/page.tsx"
+      ]
+    },
+    {
+      "screen_id": "SYS-01",
+      "source_asset_ids": ["SHELL-01", "SHELL-02"],
+      "status": "specified_not_generated"
+    },
+    {
+      "screen_id": "SYS-02",
+      "source_asset_ids": ["SHELL-01", "SHELL-02"],
+      "status": "specified_not_generated"
+    },
+    {
+      "screen_id": "SYS-03",
+      "source_asset_ids": ["SHELL-01", "SHELL-02"],
+      "status": "specified_not_generated"
+    },
+    {
+      "screen_id": "SYS-04",
+      "source_asset_ids": ["SHELL-01", "SHELL-02"],
+      "status": "specified_not_generated"
+    },
+    {
+      "screen_id": "ADM-01",
+      "source_asset_ids": ["ADM-01"],
+      "status": "specified_not_generated"
+    },
+    {
+      "screen_id": "ADM-02",
+      "source_asset_ids": ["ADM-02"],
+      "status": "specified_not_generated"
+    },
+    {
+      "screen_id": "ADM-03",
+      "source_asset_ids": ["ADM-03"],
+      "status": "specified_not_generated"
+    },
+    {
+      "screen_id": "ADM-04",
+      "source_asset_ids": ["ADM-01", "ADM-02"],
+      "status": "specified_not_generated"
+    },
+    {
+      "screen_id": "ADM-05",
+      "source_asset_ids": ["ADM-01", "ADM-02"],
+      "status": "specified_not_generated"
+    },
+    {
+      "screen_id": "ADM-06",
+      "source_asset_ids": ["ADM-01", "ADM-02"],
+      "status": "specified_not_generated"
+    }
+  ],
+  "assets": [
+    {
+      "asset_id": "DIRECTION-A",
+      "type": "drive_png",
+      "state": "selected_visual_direction",
+      "local_path": null,
+      "drive_id": "1VOgXqLvaslXPwYM8bzqboUVQe-JYdT39",
+      "url": "https://drive.google.com/open?id=1VOgXqLvaslXPwYM8bzqboUVQe-JYdT39",
+      "source_or_parent": "Approved Drive UI package",
+      "status": "selected",
+      "known_issue": "Visual direction is not production behavior or runtime evidence."
+    },
+    {
+      "asset_id": "AUTH-01",
+      "type": "drive_png",
+      "state": "registration_reference",
+      "local_path": null,
+      "drive_id": "1K9qpP-OTsgyuhJ3mtmZYDj2-7EFv_MJb",
+      "url": "https://drive.google.com/open?id=1K9qpP-OTsgyuhJ3mtmZYDj2-7EFv_MJb",
+      "source_or_parent": "D02 auth and onboarding",
+      "status": "selected",
+      "known_issue": "Does not alone prove identity storage consent mail or provider behavior."
+    },
+    {
+      "asset_id": "AUTH-02",
+      "type": "drive_png",
+      "state": "verification_reference",
+      "local_path": null,
+      "drive_id": "1NLx4nRVxS_5bsu9hOMjEHW5Yb25GwNr5",
+      "url": "https://drive.google.com/open?id=1NLx4nRVxS_5bsu9hOMjEHW5Yb25GwNr5",
+      "source_or_parent": "D02 auth and onboarding",
+      "status": "selected",
+      "known_issue": "Recovery states require behavior and delivery evidence."
+    },
+    {
+      "asset_id": "ONB-01",
+      "type": "drive_png",
+      "state": "desktop_onboarding_reference",
+      "local_path": null,
+      "drive_id": "1-iZ5l-57RezRmFYyXcyY45jWiIFTF0um",
+      "url": "https://drive.google.com/open?id=1-iZ5l-57RezRmFYyXcyY45jWiIFTF0um",
+      "source_or_parent": "D02 auth and onboarding",
+      "status": "selected",
+      "known_issue": "Fields and revision behavior come from the behavioral contract not pixels."
+    },
+    {
+      "asset_id": "ONB-02",
+      "type": "drive_png",
+      "state": "mobile_onboarding_reference",
+      "local_path": null,
+      "drive_id": "1ewm-HXQZv10tkfq3UNvly4JWHeIAFOWT",
+      "url": "https://drive.google.com/open?id=1ewm-HXQZv10tkfq3UNvly4JWHeIAFOWT",
+      "source_or_parent": "D02 auth and onboarding",
+      "status": "selected",
+      "known_issue": "Real iOS Safari and PWA evidence remains required."
+    },
+    {
+      "asset_id": "SHELL-01",
+      "type": "drive_png",
+      "state": "desktop_learner_shell",
+      "local_path": null,
+      "drive_id": "1JrHdP23rz27ECr2rVPDpRi_GSYMWaKEC",
+      "url": "https://drive.google.com/open?id=1JrHdP23rz27ECr2rVPDpRi_GSYMWaKEC",
+      "source_or_parent": "D01 platform shell",
+      "status": "selected",
+      "known_issue": "Broad search or disabled extensions are not active capability."
+    },
+    {
+      "asset_id": "SHELL-02",
+      "type": "drive_png",
+      "state": "mobile_learner_shell",
+      "local_path": null,
+      "drive_id": "12lQfy7L305LLoBw1VcLulz5gYxI9AM7t",
+      "url": "https://drive.google.com/open?id=12lQfy7L305LLoBw1VcLulz5gYxI9AM7t",
+      "source_or_parent": "D01 platform shell",
+      "status": "selected",
+      "known_issue": "Safe-area and installed-mode behavior require device proof."
+    },
+    {
+      "asset_id": "HOME-01",
+      "type": "drive_png",
+      "state": "mobile_home_reference",
+      "local_path": null,
+      "drive_id": "1CgJ3XhYcclRxj2Zb6HRUXnH6pcQEcu01",
+      "url": "https://drive.google.com/open?id=1CgJ3XhYcclRxj2Zb6HRUXnH6pcQEcu01",
+      "source_or_parent": "D03 learner home",
+      "status": "selected",
+      "known_issue": "Ready state depends on real active enrollment projection."
+    },
+    {
+      "asset_id": "COURSE-01",
+      "type": "drive_png",
+      "state": "desktop_course_reference",
+      "local_path": null,
+      "drive_id": "1sQs7ew-v1IO-Xb4h87dV_LOqFYRtloRk",
+      "url": "https://drive.google.com/open?id=1sQs7ew-v1IO-Xb4h87dV_LOqFYRtloRk",
+      "source_or_parent": "D04 course and content player",
+      "status": "selected",
+      "known_issue": "GAP-ENR-001 is superseded by ADR 0028; exact-current consent-backed start and enrollment runtime proof remains pending."
+    },
+    {
+      "asset_id": "COURSE-02",
+      "type": "drive_png",
+      "state": "mobile_course_outline_reference",
+      "local_path": null,
+      "drive_id": "1vp7jaZ_LUl6Glm1NzljgFxIK8nB8rfs8",
+      "url": "https://drive.google.com/open?id=1vp7jaZ_LUl6Glm1NzljgFxIK8nB8rfs8",
+      "source_or_parent": "D04 course and content player",
+      "status": "selected",
+      "known_issue": "Later module activity breadth must not be invented."
+    },
+    {
+      "asset_id": "PLAYER-01",
+      "type": "drive_png",
+      "state": "desktop_video_player_reference",
+      "local_path": null,
+      "drive_id": "1BASW-gVdQR8lWxDRfXN_svY5yqXkez-u",
+      "url": "https://drive.google.com/open?id=1BASW-gVdQR8lWxDRfXN_svY5yqXkez-u",
+      "source_or_parent": "D04 course and content player",
+      "status": "reference",
+      "known_issue": "GAP-MEDIA-001 blocks real media transcript caption and playback claims."
+    },
+    {
+      "asset_id": "ACT-02",
+      "type": "drive_png",
+      "state": "mobile_reflection_reference",
+      "local_path": null,
+      "drive_id": "1QMLN1QAlFDVnqlCG8JMWjG3OcEbo85ua",
+      "url": "https://drive.google.com/open?id=1QMLN1QAlFDVnqlCG8JMWjG3OcEbo85ua",
+      "source_or_parent": "D05 practice review progress",
+      "status": "selected",
+      "known_issue": "Offline durability is not inferred from the visual."
+    },
+    {
+      "asset_id": "ACT-03",
+      "type": "drive_png",
+      "state": "desktop_implementation_reference",
+      "local_path": null,
+      "drive_id": "1B03Slo9QX3c4vrE552cEtlqnDitVbnaO",
+      "url": "https://drive.google.com/open?id=1B03Slo9QX3c4vrE552cEtlqnDitVbnaO",
+      "source_or_parent": "D05 practice review progress",
+      "status": "selected",
+      "known_issue": "No media upload external review or real-world verification is claimed."
+    },
+    {
+      "asset_id": "ACT-04",
+      "type": "drive_png",
+      "state": "mobile_review_reference",
+      "local_path": null,
+      "drive_id": "16HO9FeftBfm6uW334UWrAWYUyhC4YIwW",
+      "url": "https://drive.google.com/open?id=16HO9FeftBfm6uW334UWrAWYUyhC4YIwW",
+      "source_or_parent": "D05 practice review progress",
+      "status": "reference",
+      "known_issue": "No reviewer assignment AI feedback or score may be fabricated."
+    },
+    {
+      "asset_id": "PROG-01",
+      "type": "drive_png",
+      "state": "desktop_progress_reference",
+      "local_path": null,
+      "drive_id": "1HV9Ea2xn72e9s9pZ8UkAuc5bt4mVZ4yj",
+      "url": "https://drive.google.com/open?id=1HV9Ea2xn72e9s9pZ8UkAuc5bt4mVZ4yj",
+      "source_or_parent": "D05 practice review progress",
+      "status": "reference",
+      "known_issue": "Current /progress implementation is runtime_pending; the visual is not live proof and no mastery claim is permitted."
+    },
+    {
+      "asset_id": "ADM-01",
+      "type": "drive_png",
+      "state": "admin_overview_reference",
+      "local_path": null,
+      "drive_id": "1x--v5pwj4GkCnhqodkSRZfIeLNxXaEjR",
+      "url": "https://drive.google.com/open?id=1x--v5pwj4GkCnhqodkSRZfIeLNxXaEjR",
+      "source_or_parent": "D06 organization admin",
+      "status": "selected",
+      "known_issue": "Metrics must be real or unavailable and authorization is server-side."
+    },
+    {
+      "asset_id": "ADM-02",
+      "type": "drive_png",
+      "state": "admin_people_reference",
+      "local_path": null,
+      "drive_id": "1dTc6MsylnEvS0a_nIDR9PiL259QLpuF1",
+      "url": "https://drive.google.com/open?id=1dTc6MsylnEvS0a_nIDR9PiL259QLpuF1",
+      "source_or_parent": "D06 organization admin",
+      "status": "reference",
+      "known_issue": "No learner directory or assignment is fabricated."
+    },
+    {
+      "asset_id": "ADM-03",
+      "type": "drive_png",
+      "state": "admin_outline_reference",
+      "local_path": null,
+      "drive_id": "1SNPUHW-TvhMb82bxqQh7zZMK9YmEi8yf",
+      "url": "https://drive.google.com/open?id=1SNPUHW-TvhMb82bxqQh7zZMK9YmEi8yf",
+      "source_or_parent": "D07 author studio",
+      "status": "reference",
+      "known_issue": "Full authoring and unsafe publish actions remain extension scope."
+    },
+    {
+      "asset_id": "PKG-README",
+      "type": "doc",
+      "state": "start_here",
+      "local_path": "docs/workflows/v0.1-alpha-experience/README.md",
+      "drive_id": null,
+      "url": null,
+      "source_or_parent": "AC-WF-V01-ALPHA local package",
+      "status": "approved",
+      "known_issue": null
+    },
+    {
+      "asset_id": "PKG-BRIEF",
+      "type": "doc",
+      "state": "experience_brief",
+      "local_path": "docs/workflows/v0.1-alpha-experience/00-start-here/experience-brief.md",
+      "drive_id": null,
+      "url": null,
+      "source_or_parent": "AC-WF-V01-ALPHA local package",
+      "status": "approved",
+      "known_issue": null
+    },
+    {
+      "asset_id": "PKG-JOURNEYS",
+      "type": "doc",
+      "state": "journey_spec",
+      "local_path": "docs/workflows/v0.1-alpha-experience/01-research-journeys/journeys.md",
+      "drive_id": null,
+      "url": null,
+      "source_or_parent": "AC-WF-V01-ALPHA local package",
+      "status": "approved",
+      "known_issue": null
+    },
+    {
+      "asset_id": "PKG-STATES",
+      "type": "csv",
+      "state": "transition_matrix",
+      "local_path": "docs/workflows/v0.1-alpha-experience/02-ux-state-spec/state-transition-matrix.csv",
+      "drive_id": null,
+      "url": null,
+      "source_or_parent": "AC-WF-V01-ALPHA local package",
+      "status": "approved",
+      "known_issue": "runtime_pending and implementation_candidate rows are not live proof; gap_blocked remains active for GAP-MEDIA-001."
+    },
+    {
+      "asset_id": "PKG-AI-CONTEXT",
+      "type": "json",
+      "state": "machine_context",
+      "local_path": "docs/workflows/v0.1-alpha-experience/04-ai-context/ai-design-context.json",
+      "drive_id": null,
+      "url": null,
+      "source_or_parent": "AC-WF-V01-ALPHA local package",
+      "status": "approved",
+      "known_issue": null
+    },
+    {
+      "asset_id": "PKG-DIAGRAM",
+      "type": "puml",
+      "state": "editable_flow_source",
+      "local_path": "docs/workflows/v0.1-alpha-experience/04-ai-context/v0.1-alpha-experience.puml",
+      "drive_id": null,
+      "url": null,
+      "source_or_parent": "AC-WF-V01-ALPHA local package",
+      "status": "approved",
+      "known_issue": "Not uploaded or rendered because this task is local-folder-only."
+    },
+    {
+      "asset_id": "PKG-QA",
+      "type": "doc",
+      "state": "release_checklist",
+      "local_path": "docs/workflows/v0.1-alpha-experience/05-handoff-qa/qa-release-checklist.md",
+      "drive_id": null,
+      "url": null,
+      "source_or_parent": "AC-WF-V01-ALPHA local package",
+      "status": "approved",
+      "known_issue": "Runtime gates remain open until implementation and exact-release evidence exist."
+    }
+  ]
+}

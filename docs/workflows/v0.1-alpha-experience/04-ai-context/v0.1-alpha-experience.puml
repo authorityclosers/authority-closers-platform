@@ -1,0 +1,123 @@
+@startuml AC_V01_ALPHA_EXPERIENCE
+title Authority Closers v0.1 Alpha — end-to-end learner and admin workflow
+
+skinparam backgroundColor transparent
+skinparam activity {
+  BackgroundColor #F7F9FC
+  BorderColor #315EEB
+  FontColor #111827
+  DiamondBackgroundColor #E8EEFF
+  DiamondBorderColor #315EEB
+}
+skinparam note {
+  BackgroundColor #FFF8D8
+  BorderColor #8A6D00
+}
+
+legend left
+  Stable workstream: AC-WF-V01-ALPHA
+  This diagram describes target behavior, not runtime proof.
+  Gaps block only their named capability.
+endlegend
+
+note "Screen registry\nAUTH-01 AUTH-02 AUTH-03 AUTH-04 AUTH-05 AUTH-06 AUTH-07\nONB-01\nHOME-01 COURSE-01 COURSE-02 MOD-01\nACT-01 ACT-02 ACT-03 ACT-04 ACT-05 PROG-01\nSET-01 SET-02 SET-03 SET-04 SET-05\nSYS-01 SYS-02 SYS-03 SYS-04\nADM-01 ADM-02 ADM-03 ADM-04 ADM-05 ADM-06" as SCREEN_REGISTRY
+
+start
+
+partition "Public + identity (JRN-01/JRN-02)" {
+  :COURSE-01\nPublished free-course detail;
+  if (Verified session?) then (no)
+    :AUTH-02\nConsent-gated registration\nor AUTH-01 login;
+    if (Account needs verification?) then (yes)
+      :AUTH-03\nVerification pending/consume/resend;
+    endif
+    if (Identity recovery?) then (yes)
+      :AUTH-04/05\nPassword recovery/reset;
+      :AUTH-06/07\nGoogle/session recovery;
+    endif
+  endif
+}
+
+partition "Progressive onboarding (JRN-01)" {
+  :ONB-01 step 1\nExperience context;
+  if (Skip?) then (yes)
+    :Persist skipped status;
+  else (no)
+    :ONB-01 step 2\nLearning goal;
+    :ONB-01 step 3\nOptional situation + weekly minutes;
+    :Revisioned completed save;
+  endif
+  note right
+    Answers do not create a role,
+    score, entitlement, or
+    unreviewed recommendation.
+  end note
+}
+
+partition "Enrollment boundary" {
+  :COURSE-01\nExplicit Start free course;
+  if (Exact recorded consent +\nactive learner membership in\ndistinct public tenant?) then (no)
+    :Fail closed\nShow safe recovery state;
+    note right
+      GAP-ENR-001 superseded.
+      Never infer authority from
+      login, analytics, or provider state.
+    end note
+    stop
+  else (yes)
+    :Create/reuse AC-FREE-SELF-ATTESTATION-v1\nand idempotently enroll in one transaction;
+  endif
+}
+
+partition "Learner foundation (JRN-03/JRN-04/JRN-05)" {
+  :HOME-01\nContinue-learning projection;
+  :COURSE-02\nPinned program path;
+  :MOD-01\nOrdered Module 1 activities;
+
+  repeat
+    :ACT-01 WATCH\nserver watch evidence;
+    if (Media/evidence available?) then (no)
+      :GAP-MEDIA-001\nRetry/provider status;
+    endif
+  repeat while (Video complete?) is (no)
+
+  :ACT-02 REFLECT\nrevisioned private draft;
+  if (Offline or conflict?) then (yes)
+    :Preserve honest local/server state\nand recover without overwrite;
+  endif
+  :ACT-03 IMPLEMENT\nbounded evidence;
+  :ACT-04 REVIEW\nlearner-observed pattern;
+  :ACT-05 IMPROVE\none explicit next action;
+  :Server evaluates Module 1 completion;
+  :PROG-01\nfactual progress\n(runtime pending);
+
+  fork
+    :SET-01/03\nSettings + learning profile\n(runtime pending);
+  fork again
+    :SET-02\nDevice-local Light / Dark / System\n(runtime pending);
+  fork again
+    :SYS-01..04\nLoading/error/offline/locked;
+  end fork
+}
+
+partition "Separate admin boundary (JRN-06)" {
+  :Admin hostname + edge Access + AC session;
+  :ADM-01\nTenant/role/freshness overview;
+  if (Named permission?) then (no)
+    :Permission denied without\nresource disclosure;
+  else (yes)
+    :ADM-02/03/04\nPeople catalog learning diagnosis;
+    if (Authorized named command?) then (yes)
+      :ADM-05/06\nReason + confirmation + idempotency;
+      :Append-safe audit result;
+    endif
+  endif
+}
+
+:Exact-release implementation and QA gates;
+note right
+  No production approval without
+  current runtime evidence.
+end note
+stop
+@enduml

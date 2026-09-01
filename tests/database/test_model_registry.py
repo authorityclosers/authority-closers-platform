@@ -13,6 +13,7 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "deletion_requests",
         "authentication_replays",
         "provider_authorization_transactions",
+        "identity_command_idempotency",
         "tenants",
         "memberships",
         "programs",

@@ -31,14 +31,12 @@ const stateCopy: Record<
   LOADING: {
     eyebrow: "Loading",
     title: "Getting the next useful thing ready",
-    detail:
-      "The preview is preparing this surface. Keep this tab open for a moment.",
+    detail: "Keep this tab open while your learning state is loaded.",
   },
   EMPTY: {
     eyebrow: "Nothing here yet",
     title: "This surface has no content to show",
-    detail:
-      "The item may not be published or may not be part of this preview. No content was invented to fill the gap.",
+    detail: "The item may not be published for this learner workspace.",
     actionLabel: "Return home",
     actionKind: "back",
   },
@@ -53,8 +51,7 @@ const stateCopy: Record<
   ERROR_TERMINAL: {
     eyebrow: "Unavailable",
     title: "This view cannot be opened right now",
-    detail:
-      "The preview has no safe recovery for this condition. Return to a known surface or try again later.",
+    detail: "Return to a known surface or try again later.",
     actionLabel: "Return home",
     actionKind: "back",
   },
@@ -62,7 +59,7 @@ const stateCopy: Record<
     eyebrow: "Offline",
     title: "You are offline",
     detail:
-      "Read-only preview content can remain visible, but drafts and evidence must wait for a confirmed connection.",
+      "Reconnect before saving drafts, submitting evidence, or refreshing progress.",
   },
   PERMISSION_DENIED: {
     eyebrow: "Permission denied",
@@ -75,22 +72,19 @@ const stateCopy: Record<
   LOCKED: {
     eyebrow: "Locked",
     title: "Complete the previous step first",
-    detail:
-      "Progression is sequential. This preview does not unlock protected work from a client-side click.",
+    detail: "Progression is sequential. Complete the required earlier work.",
     actionLabel: "View the course path",
     actionKind: "back",
   },
   PARTIAL: {
     eyebrow: "Partial",
     title: "Some information is unavailable",
-    detail:
-      "You can continue with the clearly marked preview data. Missing values are not guessed or presented as live.",
+    detail: "Continue with the information currently available on this page.",
   },
   SUCCESS_FEEDBACK: {
     eyebrow: "Success feedback",
     title: "Your next step is clear",
-    detail:
-      "This acknowledgement is local preview feedback. No server mutation, official result, or certificate was created.",
+    detail: "Your action finished. Follow the next available step.",
   },
 };
 
@@ -111,20 +105,7 @@ export function SurfaceStatePanel({
   signInHref = "/login",
   pageHeadingPresent = false,
 }: StatePanelProps) {
-  if (state === "DEFAULT") {
-    return (
-      <div
-        className="state-line"
-        role="status"
-        aria-live="polite"
-        data-state={state}
-      >
-        <span className="state-line__dot" aria-hidden="true" />
-        <span>Default view</span>
-        <span className="state-line__detail">Surface ready</span>
-      </div>
-    );
-  }
+  if (state === "DEFAULT") return null;
 
   const copy = stateCopy[state];
   const actionHref =
@@ -150,7 +131,7 @@ export function SurfaceStatePanel({
         <StateIcon state={state} />
       </div>
       <div className="surface-state__body">
-        <p className="surface-state__eyebrow">State · {copy.eyebrow}</p>
+        <p className="surface-state__eyebrow">{copy.eyebrow}</p>
         <Heading>{copy.title}</Heading>
         <p>{copy.detail}</p>
         {copy.actionLabel ? (

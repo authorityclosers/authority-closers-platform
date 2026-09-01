@@ -290,3 +290,33 @@
     flex: 1;
   }
 }
+
+.site-frame--learner .clarity-onboarding-main {
+  min-height: calc(100svh - 64px);
+  padding: 28px 0 56px;
+}
+
+.site-frame--learner .clarity-onboarding-layout {
+  width: min(1120px, calc(100% - 40px));
+  grid-template-columns: minmax(280px, 0.72fr) minmax(470px, 1.1fr);
+  gap: clamp(34px, 6vw, 80px);
+}
+
+.site-frame--learner .clarity-onboarding-intro h1 {
+  max-width: 470px;
+  margin: 14px 0 17px;
+  font-size: clamp(2.15rem, 4vw, 3.35rem);
+  line-height: 1.04;
+}
+
+@media (max-width: 900px) {
+  .site-frame--learner .clarity-onboarding-layout {
+    width: min(100% - 32px, 620px);
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+
+  .site-frame--learner .clarity-onboarding-intro h1 {
+    font-size: clamp(2rem, 8vw, 2.8rem);
+  }
+}

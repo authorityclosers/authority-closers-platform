@@ -7,9 +7,10 @@ import {
   CircleHelp,
   Home,
   Library,
-  Menu,
   Medal,
+  PenLine,
   Search,
+  Settings,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -18,7 +19,13 @@ import { BrandMark } from "@ac/ui";
 import { ROUTES } from "../lib/routes";
 
 type PublicCurrent = "home" | "program";
-type LearnerCurrent = "home" | "course" | "certificate" | "none";
+type LearnerCurrent =
+  | "home"
+  | "course"
+  | "progress"
+  | "settings"
+  | "certificate"
+  | "none";
 
 function BrandLink({ href = ROUTES.home }: { href?: string }) {
   return (
@@ -66,7 +73,7 @@ export function PublicShell({
       <footer className="site-footer">
         <div className="site-footer__inner">
           <BrandLink />
-          <p>v0.1 alpha · browser-first learning foundation.</p>
+          <p>Authority Closers Free Course · browser-first learning.</p>
           <nav className="site-footer__links" aria-label="Legal and access">
             <Link href={ROUTES.privacy}>Privacy</Link>
             <Link href={ROUTES.terms}>Terms</Link>
@@ -106,10 +113,12 @@ function LearnerNavLink({
 function LearnerSideItem({
   label,
   icon,
+  note,
   current = false,
 }: {
   label: string;
   icon: React.ReactNode;
+  note?: string;
   current?: boolean;
 }) {
   return (
@@ -117,9 +126,15 @@ function LearnerSideItem({
       className={`learner-sidebar__item${current ? " is-current" : ""}`}
       aria-disabled="true"
       aria-current={current ? "page" : undefined}
+      aria-label={note ? `${label} — ${note}` : label}
     >
       {icon}
-      <span>{label}</span>
+      <span className="learner-sidebar__item-copy">
+        <span>{label}</span>
+        {note ? (
+          <small className="learner-sidebar__item-note">{note}</small>
+        ) : null}
+      </span>
     </span>
   );
 }
@@ -142,7 +157,7 @@ export function LearnerShell({
       >
         <div className="learner-sidebar__brand">
           <BrandLink href={ROUTES.learnerHome} />
-          <span className="learner-sidebar__version">v0.1</span>
+          <span className="learner-sidebar__version">LMS</span>
         </div>
         <nav className="learner-sidebar__nav" aria-label="Learner sections">
           <LearnerNavLink
@@ -151,24 +166,34 @@ export function LearnerShell({
             current={current === "home"}
             icon={<Home size={18} aria-hidden="true" />}
           />
-          <LearnerSideItem
+          <LearnerNavLink
+            href={ROUTES.myLearning}
             label="My learning"
             icon={<BookOpen size={18} aria-hidden="true" />}
             current={current === "course"}
           />
           <LearnerSideItem
+            label="Practice"
+            icon={<PenLine size={18} aria-hidden="true" />}
+            note="Coming later"
+          />
+          <LearnerSideItem
             label="Library"
             icon={<Library size={18} aria-hidden="true" />}
           />
-          <LearnerSideItem
+          <LearnerNavLink
+            href={ROUTES.progress}
             label="Progress"
             icon={<Medal size={18} aria-hidden="true" />}
+            current={current === "progress"}
           />
         </nav>
         <div className="learner-sidebar__footer">
-          <LearnerSideItem
-            label="More"
-            icon={<CircleHelp size={18} aria-hidden="true" />}
+          <LearnerNavLink
+            href={ROUTES.settings}
+            label="Settings"
+            icon={<Settings size={18} aria-hidden="true" />}
+            current={current === "settings"}
           />
           <span className="learner-sidebar__collapse">Collapse</span>
         </div>
@@ -177,24 +202,16 @@ export function LearnerShell({
         <div className="learner-header__inner">
           <div className="learner-header__mobile-brand">
             <BrandLink href={ROUTES.learnerHome} />
-            <span className="learner-sidebar__version">v0.1</span>
+            <span className="learner-sidebar__version">LMS</span>
           </div>
-          <button
-            className="learner-header__menu"
-            type="button"
-            aria-label="Learner navigation menu is unavailable in this alpha"
-            disabled
-          >
-            <Menu size={20} aria-hidden="true" />
-          </button>
           <label className="learner-search" htmlFor="learner-search">
             <Search size={18} aria-hidden="true" />
             <span className="sr-only">Search courses and lessons</span>
             <input
               id="learner-search"
               type="search"
-              placeholder="Search courses, lessons, topics"
-              aria-label="Search is unavailable in this alpha"
+              placeholder="Search is coming later"
+              aria-label="Search is not available for the current Free Course"
               disabled
             />
           </label>
@@ -202,7 +219,7 @@ export function LearnerShell({
             <button
               type="button"
               className="icon-button"
-              aria-label="Help is unavailable in this alpha"
+              aria-label="Help center is not connected"
               disabled
             >
               <CircleHelp size={19} aria-hidden="true" />
@@ -210,23 +227,22 @@ export function LearnerShell({
             <button
               type="button"
               className="icon-button learner-notifications"
-              aria-label="Notifications are unavailable in this alpha"
+              aria-label="Notifications are not connected"
               disabled
             >
               <Bell size={19} aria-hidden="true" />
             </button>
-            <button
-              type="button"
+            <Link
+              href={ROUTES.settings}
               className="learner-profile"
-              aria-label="Profile menu is unavailable in this alpha"
-              disabled
+              aria-label="Open profile and settings"
             >
               <span className="learner-profile__avatar" aria-hidden="true">
                 AC
               </span>
               <span className="learner-profile__label">Profile</span>
               <ChevronDown size={15} aria-hidden="true" />
-            </button>
+            </Link>
           </div>
         </div>
       </header>
@@ -240,22 +256,28 @@ export function LearnerShell({
           current={current === "home"}
           icon={<Home size={21} aria-hidden="true" />}
         />
-        <LearnerSideItem
-          label="Library"
-          icon={<Library size={21} aria-hidden="true" />}
+        <LearnerNavLink
+          href={ROUTES.myLearning}
+          label="Learning"
+          current={current === "course"}
+          icon={<BookOpen size={21} aria-hidden="true" />}
         />
         <LearnerSideItem
           label="Practice"
-          icon={<BookOpen size={21} aria-hidden="true" />}
-          current={current === "course"}
+          icon={<PenLine size={21} aria-hidden="true" />}
+          note="Coming later"
         />
-        <LearnerSideItem
+        <LearnerNavLink
+          href={ROUTES.progress}
           label="Progress"
           icon={<Medal size={21} aria-hidden="true" />}
+          current={current === "progress"}
         />
-        <LearnerSideItem
-          label="More"
-          icon={<Menu size={21} aria-hidden="true" />}
+        <LearnerNavLink
+          href={ROUTES.settings}
+          label="Settings"
+          icon={<Settings size={21} aria-hidden="true" />}
+          current={current === "settings"}
         />
       </nav>
       {children}

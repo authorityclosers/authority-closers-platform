@@ -8,6 +8,7 @@ const SHELL_ASSETS = [
   "/icon-512.png",
   "/apple-touch-icon.png",
   "/manifest.webmanifest",
+  "/theme-init.js",
 ];
 
 self.addEventListener("install", (event) => {
@@ -54,7 +55,8 @@ self.addEventListener("fetch", (event) => {
 
   if (
     url.pathname.startsWith("/_next/static/") ||
-    url.pathname === "/icon.svg"
+    url.pathname === "/icon.svg" ||
+    url.pathname === "/theme-init.js"
   ) {
     event.respondWith(
       caches.match(request).then((cached) => {

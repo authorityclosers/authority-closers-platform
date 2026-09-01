@@ -109,6 +109,19 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def require_deployment_identity_secrets(self) -> Settings:
+        if self.public_learner_tenant_id is not None and self.operations_tenant_id is None:
+            raise ValueError(
+                "AC_OPERATIONS_TENANT_ID is required when AC_PUBLIC_LEARNER_TENANT_ID is configured"
+            )
+        if (
+            self.public_learner_tenant_id is not None
+            and self.operations_tenant_id is not None
+            and self.public_learner_tenant_id == self.operations_tenant_id
+        ):
+            raise ValueError(
+                "AC_PUBLIC_LEARNER_TENANT_ID and AC_OPERATIONS_TENANT_ID must identify "
+                "different tenants"
+            )
         if self.environment not in {"staging", "production"}:
             self._validate_google_oauth_pair()
             self._validate_email_provider()

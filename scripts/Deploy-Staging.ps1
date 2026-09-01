@@ -167,23 +167,34 @@ function Assert-GoogleOAuthStart {
     ) {
         throw "Google OAuth start returned an unexpected provider, path, port, or cache policy."
     }
-    $transactionCookies = @(
+    $compatibilityCookies = @(
         $oauth.SetCookies | Where-Object { $_ -match "^__Host-ac_oauth_transaction=" }
     )
-    if ($transactionCookies.Count -ne 1) {
-        throw "Google OAuth start did not set exactly one transaction cookie."
+    $stateCookies = @(
+        $oauth.SetCookies |
+            Where-Object { $_ -match "^__Host-ac_oauth_transaction\.[A-Za-z0-9_-]{22}=" }
+    )
+    if ($compatibilityCookies.Count -ne 1 -or $stateCookies.Count -ne 1) {
+        throw "Google OAuth start did not set the exact compatibility and state-keyed cookies."
     }
-    $cookieParts = @($transactionCookies[0].Split(";") | ForEach-Object { $_.Trim() })
-    if ($cookieParts[0] -notmatch "^__Host-ac_oauth_transaction=[A-Za-z0-9_-]{1,4000}\.[A-Za-z0-9_-]{43}$") {
-        throw "Google OAuth transaction cookie has an invalid name or value contract."
-    }
-    foreach ($attribute in @("Secure", "HttpOnly", "SameSite=Lax", "Path=/")) {
-        if (-not ($cookieParts | Where-Object { $_ -ieq $attribute })) {
-            throw "Google OAuth transaction cookie lacks exact attribute $attribute."
+    $transactionValues = @()
+    foreach ($transactionCookie in @($compatibilityCookies[0], $stateCookies[0])) {
+        $cookieParts = @($transactionCookie.Split(";") | ForEach-Object { $_.Trim() })
+        if ($cookieParts[0] -notmatch "^__Host-ac_oauth_transaction(?:\.[A-Za-z0-9_-]{22})?=([A-Za-z0-9_-]{1,4000}\.[A-Za-z0-9_-]{43})$") {
+            throw "Google OAuth transaction cookie has an invalid name or value contract."
+        }
+        $transactionValues += $Matches[1]
+        foreach ($attribute in @("Secure", "HttpOnly", "SameSite=Lax", "Path=/")) {
+            if (-not ($cookieParts | Where-Object { $_ -ieq $attribute })) {
+                throw "Google OAuth transaction cookie lacks exact attribute $attribute."
+            }
+        }
+        if ($cookieParts | Where-Object { $_ -imatch "^Domain=" }) {
+            throw "Google OAuth __Host- transaction cookie must not set Domain."
         }
     }
-    if ($cookieParts | Where-Object { $_ -imatch "^Domain=" }) {
-        throw "Google OAuth __Host- transaction cookie must not set Domain."
+    if ($transactionValues.Count -ne 2 -or $transactionValues[0] -cne $transactionValues[1]) {
+        throw "Google OAuth transaction cookies do not bind the same signed transaction."
     }
     $query = [System.Web.HttpUtility]::ParseQueryString($oauth.Location.Query)
     $callback = [Uri]$query["redirect_uri"]

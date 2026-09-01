@@ -102,6 +102,11 @@ class AsyncLearnerProvisioningApplication:
                 raise LearnerProvisioningError(
                     "an inactive membership cannot be reactivated by learner registration"
                 )
+            if membership.role != MembershipRole.LEARNER.value:
+                raise LearnerProvisioningError(
+                    "learner registration requires the canonical membership role "
+                    "to be exactly learner"
+                )
             return LearnerProvisioningResult(
                 tenant_id=tenant_id,
                 person_id=person_id,
@@ -127,6 +132,11 @@ class AsyncLearnerProvisioningApplication:
             if membership is None or membership.status != MembershipStatus.ACTIVE.value:
                 raise LearnerProvisioningError(
                     "learner membership creation raced without an active canonical result"
+                ) from None
+            if membership.role != MembershipRole.LEARNER.value:
+                raise LearnerProvisioningError(
+                    "learner registration requires the raced canonical membership role "
+                    "to be exactly learner"
                 ) from None
             return LearnerProvisioningResult(
                 tenant_id=tenant_id,

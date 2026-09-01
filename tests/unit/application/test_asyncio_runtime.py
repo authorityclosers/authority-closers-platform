@@ -30,7 +30,27 @@ def test_windows_entrypoints_use_a_selector_loop(monkeypatch: Any) -> None:
     monkeypatch.setattr(asyncio_runtime.asyncio, "Runner", FakeRunner)
 
     assert asyncio_runtime.run_async(_value()) == 42
-    assert captured["loop_factory"] is asyncio_runtime.asyncio.SelectorEventLoop
+    assert captured["loop_factory"] is asyncio_runtime.compatible_event_loop_factory
+
+
+def test_windows_loop_factory_returns_a_selector_loop(monkeypatch: Any) -> None:
+    sentinel = object()
+    monkeypatch.setattr(asyncio_runtime.sys, "platform", "win32")
+    monkeypatch.setattr(
+        asyncio_runtime.asyncio,
+        "SelectorEventLoop",
+        lambda: sentinel,
+    )
+
+    assert asyncio_runtime.compatible_event_loop_factory() is sentinel
+
+
+def test_non_windows_loop_factory_returns_the_platform_default(monkeypatch: Any) -> None:
+    sentinel = object()
+    monkeypatch.setattr(asyncio_runtime.sys, "platform", "linux")
+    monkeypatch.setattr(asyncio_runtime.asyncio, "new_event_loop", lambda: sentinel)
+
+    assert asyncio_runtime.compatible_event_loop_factory() is sentinel
 
 
 def test_non_windows_entrypoints_keep_the_standard_runner(monkeypatch: Any) -> None:

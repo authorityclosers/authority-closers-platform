@@ -41,6 +41,16 @@ class _EnrollmentApplication:
         return type(self).result
 
 
+class _EligibilityApplication:
+    call: dict[str, Any] | None = None
+
+    def __init__(self, _database: object) -> None:
+        pass
+
+    async def ensure(self, **values: Any) -> None:
+        type(self).call = values
+
+
 @pytest.fixture(autouse=True)
 def _reset_enrollment_application() -> None:
     _EnrollmentApplication.command = None
@@ -53,9 +63,10 @@ def _reset_enrollment_application() -> None:
         created=True,
         replayed=False,
     )
+    _EligibilityApplication.call = None
 
 
-def _settings() -> Settings:
+def _settings(*, public_learner_tenant_id: UUID | None) -> Settings:
     return Settings(
         environment="test",
         database_url="postgresql+psycopg://unused:unused@localhost/unused",
@@ -65,6 +76,9 @@ def _settings() -> Settings:
         public_app_url="https://app.authorityclosers.test",
         admin_app_url="https://admin.authorityclosers.test",
         api_url="https://api.authorityclosers.test",
+        learner_consent_version="learner-consent-v1",
+        public_learner_tenant_id=public_learner_tenant_id,
+        operations_tenant_id=uuid4(),
     )
 
 
@@ -72,8 +86,15 @@ def _client(
     monkeypatch: pytest.MonkeyPatch,
     *,
     tenant_id: UUID | None = None,
+    configured_tenant_id: UUID | None = None,
+    configure_public_tenant: bool = True,
 ) -> tuple[TestClient, ActorContext]:
     monkeypatch.setattr(course_module, "AsyncEnrollmentApplication", _EnrollmentApplication)
+    monkeypatch.setattr(
+        course_module,
+        "AsyncSelfAttestedEligibilityApplication",
+        _EligibilityApplication,
+    )
     actor = ActorContext(
         person_id=uuid4(),
         session_id=uuid4(),
@@ -99,7 +120,13 @@ def _client(
     register_problem_handlers(application)
     install_course_http(
         application,
-        settings=_settings(),
+        settings=_settings(
+            public_learner_tenant_id=(
+                None
+                if not configure_public_tenant
+                else configured_tenant_id or tenant_id or uuid4()
+            )
+        ),
         sessions=cast(Any, object()),
         require_actor=require_actor,
     )
@@ -132,6 +159,12 @@ def test_free_enrollment_uses_only_server_owned_actor_and_tenant(
     assert command.program_version_id == program_version_id
     assert command.idempotency_key == "enroll-once"
     assert _EnrollmentApplication.actor is actor
+    assert _EligibilityApplication.call == {
+        "person_id": actor.person_id,
+        "tenant_id": tenant_id,
+        "program_version_id": program_version_id,
+        "required_consent_version": "learner-consent-v1",
+    }
 
 
 def test_free_enrollment_rejects_client_owned_subject_or_tenant_fields(
@@ -192,6 +225,55 @@ def test_free_enrollment_requires_selected_tenant(
 
     assert response.status_code == 403
     assert response.json()["code"] == "tenant_context_required"
+
+
+def test_free_enrollment_requires_exact_configured_public_tenant(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    selected_tenant_id = uuid4()
+    client, _ = _client(
+        monkeypatch,
+        tenant_id=selected_tenant_id,
+        configured_tenant_id=uuid4(),
+    )
+
+    response = client.post(
+        "/v1/enrollments/free",
+        json={"program_version_id": str(uuid4())},
+        headers={
+            "Origin": "https://app.authorityclosers.test",
+            "Idempotency-Key": "wrong-public-context",
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "tenant_context_required"
+    assert _EligibilityApplication.call is None
+    assert _EnrollmentApplication.command is None
+
+
+def test_free_enrollment_fails_closed_when_public_tenant_is_unconfigured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, _ = _client(
+        monkeypatch,
+        tenant_id=uuid4(),
+        configure_public_tenant=False,
+    )
+
+    response = client.post(
+        "/v1/enrollments/free",
+        json={"program_version_id": str(uuid4())},
+        headers={
+            "Origin": "https://app.authorityclosers.test",
+            "Idempotency-Key": "missing-public-context",
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "tenant_context_required"
+    assert _EligibilityApplication.call is None
+    assert _EnrollmentApplication.command is None
 
 
 def test_replayed_free_enrollment_returns_canonical_result_with_200(

@@ -349,7 +349,10 @@ def test_concurrent_complete_provision_and_tenant_selection_does_not_deadlock(
     "role",
     [MembershipRole.OWNER.value, MembershipRole.ADMIN.value, MembershipRole.SUPPORT.value],
 )
-def test_existing_privileged_role_is_preserved(postgres_harness: URL, role: str) -> None:
+def test_existing_privileged_role_is_preserved_but_rejected_for_learner_provisioning(
+    postgres_harness: URL,
+    role: str,
+) -> None:
     async_engine = create_async_engine(postgres_harness, pool_pre_ping=True)
     sync_engine = create_engine(postgres_harness, pool_pre_ping=True)
     tenant = _tenant()
@@ -365,9 +368,8 @@ def test_existing_privileged_role_is_preserved(postgres_harness: URL, role: str)
 
     try:
         sessions = async_sessionmaker(async_engine, expire_on_commit=False)
-        result = _run_async(_ensure(sessions, person_id=person.id, tenant_id=tenant.id))
-        assert result.created is False
-        assert result.role == role
+        with pytest.raises(LearnerProvisioningError, match="exactly learner"):
+            _run_async(_ensure(sessions, person_id=person.id, tenant_id=tenant.id))
         with Session(sync_engine) as database:
             membership = database.get(Membership, (tenant.id, person.id))
             assert membership is not None

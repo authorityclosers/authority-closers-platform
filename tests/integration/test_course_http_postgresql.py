@@ -39,6 +39,12 @@ from ac_platform.enrollment.models import (
     EnrollmentEligibilityFact,
     Entitlement,
 )
+from ac_platform.enrollment.self_attestation import (
+    AUTHORITY_CLOSERS_FREE_PROGRAM_SLUG,
+    SELF_ATTESTED_ELIGIBILITY_POLICY_VERSION,
+    AsyncSelfAttestedEligibilityApplication,
+    SelfAttestedEligibilityDenied,
+)
 from ac_platform.http.auth import AuthenticatedTransaction
 from ac_platform.http.course import install_course_http
 from ac_platform.http.problem import register_problem_handlers
@@ -48,6 +54,7 @@ from ac_platform.kernel.authz import ActorContext
 from ac_platform.tenancy.models import Membership, Tenant
 
 NOW = datetime(2026, 8, 30, 12, tzinfo=UTC)
+CONSENT_VERSION = "learner-consent-v1"
 
 
 @dataclass(frozen=True, slots=True)
@@ -145,14 +152,25 @@ def postgres_harness() -> Iterator[_Harness]:
         admin_engine.dispose()
 
 
-def _seed(engine: Engine) -> _Seed:
+def _seed(
+    engine: Engine,
+    *,
+    with_eligibility: bool = True,
+    with_consent: bool = False,
+    exact_free_course_slug: bool = False,
+    membership_role: str = "learner",
+) -> _Seed:
     tenant_id = uuid4()
     learner_id = uuid4()
     program_id = uuid4()
     version_id = uuid4()
     module_id = uuid4()
     activity_id = uuid4()
-    slug = f"free-course-{uuid4().hex[:10]}"
+    slug = (
+        "authority-closers-free-course"
+        if exact_free_course_slug
+        else f"free-course-{uuid4().hex[:10]}"
+    )
     with Session(engine) as database:
         database.add_all(
             [
@@ -161,92 +179,118 @@ def _seed(engine: Engine) -> _Seed:
                     id=learner_id,
                     email=f"learner-{learner_id.hex}@example.test",
                     email_verified_at=NOW,
+                    consent_version=CONSENT_VERSION if with_consent else None,
+                    consented_at=NOW if with_consent else None,
                 ),
             ]
         )
         database.flush()
-        database.add(Membership(tenant_id=tenant_id, person_id=learner_id, role="learner"))
-        database.flush()
-        program = Program(
-            id=program_id,
-            scope=CatalogScope.GLOBAL.value,
-            owner_key=GLOBAL_CATALOG_OWNER_KEY,
-            tenant_id=None,
-            slug=slug,
-            title="Authority Closers Free Course",
-        )
-        version = ProgramVersion(
-            id=version_id,
-            program_id=program_id,
-            scope=CatalogScope.GLOBAL.value,
-            owner_key=GLOBAL_CATALOG_OWNER_KEY,
-            tenant_id=None,
-            version_number=1,
-            status=ProgramVersionStatus.DRAFT.value,
-        )
-        database.add(program)
-        database.flush()
-        database.add(version)
-        database.flush()
         database.add(
-            Module(
-                id=module_id,
-                program_version_id=version_id,
-                program_id=program_id,
-                scope=CatalogScope.GLOBAL.value,
-                owner_key=GLOBAL_CATALOG_OWNER_KEY,
-                tenant_id=None,
-                position=1,
-                title="Start with a real sales conversation",
-            )
-        )
-        database.flush()
-        database.add(
-            Activity(
-                id=activity_id,
-                module_id=module_id,
-                program_version_id=version_id,
-                program_id=program_id,
-                scope=CatalogScope.GLOBAL.value,
-                owner_key=GLOBAL_CATALOG_OWNER_KEY,
-                tenant_id=None,
-                position=1,
-                kind=ActivityKind.REFLECTION.value,
-                title="Capture the prospect's current reality",
-                is_required=True,
-            )
-        )
-        database.flush()
-        store = SqlAlchemyCatalogStore(database)
-        catalog = CatalogService(store, clock=lambda: NOW)
-        snapshot = store.get_version(version_id)
-        assert snapshot is not None
-        version.content_digest = catalog._canonical_content_digest(snapshot)  # noqa: SLF001
-        version.content_source_ref = __file__
-        version.content_reviewed_by = "course-http-reviewer@example.test"
-        version.content_reviewed_at = NOW
-        version.release_id = "f" * 40
-        version.content_seed_kind = "reviewed"
-        database.flush()
-        catalog.publish_version(version_id, tenant_id=None, now=NOW)
-        database.add(
-            EnrollmentEligibilityFact(
-                id=uuid4(),
+            Membership(
                 tenant_id=tenant_id,
                 person_id=learner_id,
-                program_version_id=version_id,
-                program_id=program_id,
-                program_scope=CatalogScope.GLOBAL.value,
-                program_tenant_id=None,
-                program_owner_key=GLOBAL_CATALOG_OWNER_KEY,
-                age_gate_passed=True,
-                eligibility_passed=True,
-                prerequisites_satisfied=True,
-                policy_version="g1-http-v1",
-                evidence={"source": "server-test-policy"},
-                evaluated_at=NOW,
+                role=membership_role,
             )
         )
+        database.flush()
+        existing_program = database.scalar(
+            select(Program).where(
+                Program.scope == CatalogScope.GLOBAL.value,
+                Program.slug == slug,
+            )
+        )
+        if existing_program is not None:
+            program_id = existing_program.id
+            existing_version = database.scalar(
+                select(ProgramVersion).where(
+                    ProgramVersion.program_id == program_id,
+                    ProgramVersion.status == ProgramVersionStatus.PUBLISHED.value,
+                )
+            )
+            assert existing_version is not None
+            version_id = existing_version.id
+        else:
+            program = Program(
+                id=program_id,
+                scope=CatalogScope.GLOBAL.value,
+                owner_key=GLOBAL_CATALOG_OWNER_KEY,
+                tenant_id=None,
+                slug=slug,
+                title="Authority Closers Free Course",
+            )
+            version = ProgramVersion(
+                id=version_id,
+                program_id=program_id,
+                scope=CatalogScope.GLOBAL.value,
+                owner_key=GLOBAL_CATALOG_OWNER_KEY,
+                tenant_id=None,
+                version_number=1,
+                status=ProgramVersionStatus.DRAFT.value,
+            )
+            database.add(program)
+            database.flush()
+            database.add(version)
+            database.flush()
+            database.add(
+                Module(
+                    id=module_id,
+                    program_version_id=version_id,
+                    program_id=program_id,
+                    scope=CatalogScope.GLOBAL.value,
+                    owner_key=GLOBAL_CATALOG_OWNER_KEY,
+                    tenant_id=None,
+                    position=1,
+                    title="Start with a real sales conversation",
+                )
+            )
+            database.flush()
+            database.add(
+                Activity(
+                    id=activity_id,
+                    module_id=module_id,
+                    program_version_id=version_id,
+                    program_id=program_id,
+                    scope=CatalogScope.GLOBAL.value,
+                    owner_key=GLOBAL_CATALOG_OWNER_KEY,
+                    tenant_id=None,
+                    position=1,
+                    kind=ActivityKind.REFLECTION.value,
+                    title="Capture the prospect's current reality",
+                    is_required=True,
+                )
+            )
+            database.flush()
+            store = SqlAlchemyCatalogStore(database)
+            catalog = CatalogService(store, clock=lambda: NOW)
+            snapshot = store.get_version(version_id)
+            assert snapshot is not None
+            version.content_digest = catalog._canonical_content_digest(snapshot)  # noqa: SLF001
+            version.content_source_ref = __file__
+            version.content_reviewed_by = "course-http-reviewer@example.test"
+            version.content_reviewed_at = NOW
+            version.release_id = "f" * 40
+            version.content_seed_kind = "reviewed"
+            database.flush()
+            catalog.publish_version(version_id, tenant_id=None, now=NOW)
+        if with_eligibility:
+            database.add(
+                EnrollmentEligibilityFact(
+                    id=uuid4(),
+                    tenant_id=tenant_id,
+                    person_id=learner_id,
+                    program_version_id=version_id,
+                    program_id=program_id,
+                    program_scope=CatalogScope.GLOBAL.value,
+                    program_tenant_id=None,
+                    program_owner_key=GLOBAL_CATALOG_OWNER_KEY,
+                    age_gate_passed=True,
+                    eligibility_passed=True,
+                    prerequisites_satisfied=True,
+                    policy_version="g1-http-v1",
+                    evidence={"source": "server-test-policy"},
+                    evaluated_at=NOW,
+                )
+            )
         database.commit()
     return _Seed(
         tenant_id=tenant_id,
@@ -257,7 +301,11 @@ def _seed(engine: Engine) -> _Seed:
     )
 
 
-def _settings() -> Settings:
+def _settings(
+    *,
+    public_learner_tenant_id: UUID,
+    consent_version: str | None = None,
+) -> Settings:
     return Settings(
         environment="test",
         database_url="postgresql+psycopg://unused:unused@localhost/unused",
@@ -267,13 +315,57 @@ def _settings() -> Settings:
         public_app_url="https://app.authorityclosers.test",
         admin_app_url="https://admin.authorityclosers.test",
         api_url="https://api.authorityclosers.test",
+        learner_consent_version=consent_version,
+        public_learner_tenant_id=public_learner_tenant_id,
+        operations_tenant_id=uuid4(),
     )
+
+
+def _add_self_attested_eligibility_fact(
+    engine: Engine,
+    seed: _Seed,
+    *,
+    policy_version: str = SELF_ATTESTED_ELIGIBILITY_POLICY_VERSION,
+    evidence_overrides: dict[str, str] | None = None,
+) -> None:
+    evidence = {
+        "source": "recorded_learner_consent",
+        "consent_version": CONSENT_VERSION,
+        "consented_at": NOW.isoformat(),
+        "explicit_action": "start_free_course",
+        "program_slug": AUTHORITY_CLOSERS_FREE_PROGRAM_SLUG,
+    }
+    evidence.update(evidence_overrides or {})
+    with Session(engine) as database:
+        database.add(
+            EnrollmentEligibilityFact(
+                tenant_id=seed.tenant_id,
+                person_id=seed.learner_id,
+                program_version_id=seed.program_version_id,
+                program_id=seed.program_id,
+                program_scope=CatalogScope.GLOBAL.value,
+                program_tenant_id=None,
+                program_owner_key=GLOBAL_CATALOG_OWNER_KEY,
+                age_gate_passed=True,
+                eligibility_passed=True,
+                prerequisites_satisfied=True,
+                policy_version=policy_version,
+                evidence=evidence,
+                evaluated_at=NOW,
+            )
+        )
+        database.commit()
 
 
 def test_published_course_to_self_enrollment_over_http(
     postgres_harness: _Harness,
 ) -> None:
-    seed = _seed(postgres_harness.engine)
+    seed = _seed(
+        postgres_harness.engine,
+        with_eligibility=False,
+        with_consent=True,
+        exact_free_course_slug=True,
+    )
 
     async def scenario() -> None:
         async_engine = create_async_engine(postgres_harness.schema_url, pool_pre_ping=True)
@@ -304,7 +396,10 @@ def test_published_course_to_self_enrollment_over_http(
         register_problem_handlers(application)
         install_course_http(
             application,
-            settings=_settings(),
+            settings=_settings(
+                public_learner_tenant_id=seed.tenant_id,
+                consent_version=CONSENT_VERSION,
+            ),
             sessions=sessions,
             require_actor=require_actor,
         )
@@ -366,3 +461,356 @@ def test_published_course_to_self_enrollment_over_http(
     with Session(postgres_harness.engine) as database:
         assert database.scalar(select(func.count()).select_from(Enrollment)) == 1
         assert database.scalar(select(func.count()).select_from(Entitlement)) == 1
+
+
+def test_consent_backed_free_course_enrollment_creates_canonical_eligibility(
+    postgres_harness: _Harness,
+) -> None:
+    seed = _seed(
+        postgres_harness.engine,
+        with_eligibility=False,
+        with_consent=True,
+        exact_free_course_slug=True,
+    )
+
+    async def scenario() -> None:
+        async_engine = create_async_engine(postgres_harness.schema_url, pool_pre_ping=True)
+        sessions = async_sessionmaker(async_engine, expire_on_commit=False)
+        actor = ActorContext(
+            person_id=seed.learner_id,
+            session_id=uuid4(),
+            tenant_id=seed.tenant_id,
+        )
+
+        async def require_actor(_request: Request) -> AsyncIterator[AuthenticatedTransaction]:
+            async with sessions() as database, database.begin():
+                yield AuthenticatedTransaction(
+                    database=database,
+                    identity=cast(Any, object()),
+                    resolved=ResolvedActorContext(
+                        actor=actor,
+                        membership_role="learner",
+                        person_revision=0,
+                        session_revision=0,
+                        tenant_revision=0,
+                        membership_revision=0,
+                    ),
+                    token="course-http-consent-session-token-long-enough",  # noqa: S106
+                )
+
+        application = FastAPI()
+        register_problem_handlers(application)
+        install_course_http(
+            application,
+            settings=_settings(
+                public_learner_tenant_id=seed.tenant_id,
+                consent_version=CONSENT_VERSION,
+            ),
+            sessions=sessions,
+            require_actor=require_actor,
+        )
+        transport = httpx.ASGITransport(app=application)
+        try:
+            async with httpx.AsyncClient(
+                transport=transport,
+                base_url="https://api.authorityclosers.test",
+            ) as client:
+                response = await client.post(
+                    "/v1/enrollments/free",
+                    json={"program_version_id": str(seed.program_version_id)},
+                    headers={
+                        "Origin": "https://app.authorityclosers.test",
+                        "Idempotency-Key": "consent-backed-enrollment",
+                    },
+                )
+                assert response.status_code == 201
+        finally:
+            await async_engine.dispose()
+
+    _run_async(scenario())
+
+    with Session(postgres_harness.engine) as database:
+        fact = database.scalar(
+            select(EnrollmentEligibilityFact).where(
+                EnrollmentEligibilityFact.tenant_id == seed.tenant_id,
+                EnrollmentEligibilityFact.person_id == seed.learner_id,
+                EnrollmentEligibilityFact.program_version_id == seed.program_version_id,
+            )
+        )
+        assert fact is not None
+        assert fact.policy_version == "AC-FREE-SELF-ATTESTATION-v1"
+        assert fact.evidence["consent_version"] == CONSENT_VERSION
+        assert fact.evidence["explicit_action"] == "start_free_course"
+        assert (
+            database.scalar(
+                select(func.count())
+                .select_from(Enrollment)
+                .where(
+                    Enrollment.tenant_id == seed.tenant_id,
+                    Enrollment.person_id == seed.learner_id,
+                )
+            )
+            == 1
+        )
+
+
+def test_self_attested_eligibility_fails_closed_for_missing_consent_wrong_course_and_role(
+    postgres_harness: _Harness,
+) -> None:
+    missing_consent = _seed(
+        postgres_harness.engine,
+        with_eligibility=False,
+        exact_free_course_slug=True,
+    )
+    wrong_course = _seed(
+        postgres_harness.engine,
+        with_eligibility=False,
+        with_consent=True,
+    )
+    wrong_role = _seed(
+        postgres_harness.engine,
+        with_eligibility=False,
+        with_consent=True,
+        exact_free_course_slug=True,
+        membership_role="owner",
+    )
+
+    async def scenario() -> None:
+        async_engine = create_async_engine(postgres_harness.schema_url, pool_pre_ping=True)
+        sessions = async_sessionmaker(async_engine, expire_on_commit=False)
+        try:
+            for seed, message in (
+                (missing_consent, "learner consent"),
+                (wrong_course, "limited to the published Authority Closers free course"),
+                (wrong_role, "active learner membership"),
+            ):
+                async with sessions() as database:
+                    with pytest.raises(SelfAttestedEligibilityDenied, match=message):
+                        async with database.begin():
+                            await AsyncSelfAttestedEligibilityApplication(database).ensure(
+                                person_id=seed.learner_id,
+                                tenant_id=seed.tenant_id,
+                                program_version_id=seed.program_version_id,
+                                required_consent_version=CONSENT_VERSION,
+                            )
+        finally:
+            await async_engine.dispose()
+
+    _run_async(scenario())
+
+    with Session(postgres_harness.engine) as database:
+        assert (
+            database.scalar(
+                select(func.count())
+                .select_from(EnrollmentEligibilityFact)
+                .where(
+                    EnrollmentEligibilityFact.person_id.in_(
+                        [
+                            missing_consent.learner_id,
+                            wrong_course.learner_id,
+                            wrong_role.learner_id,
+                        ]
+                    )
+                )
+            )
+            == 0
+        )
+
+
+def test_existing_positive_fact_cannot_bypass_current_consent_or_exact_course(
+    postgres_harness: _Harness,
+) -> None:
+    stale_consent = _seed(
+        postgres_harness.engine,
+        with_eligibility=True,
+        with_consent=True,
+        exact_free_course_slug=True,
+    )
+    wrong_course = _seed(
+        postgres_harness.engine,
+        with_eligibility=True,
+        with_consent=True,
+    )
+    with Session(postgres_harness.engine) as database:
+        person = database.get(Person, stale_consent.learner_id)
+        assert person is not None
+        person.consent_version = "superseded-consent-v0"
+        database.commit()
+
+    async def scenario() -> None:
+        async_engine = create_async_engine(postgres_harness.schema_url, pool_pre_ping=True)
+        sessions = async_sessionmaker(async_engine, expire_on_commit=False)
+        try:
+            async with sessions() as database:
+                with pytest.raises(SelfAttestedEligibilityDenied, match="exact required 18"):
+                    async with database.begin():
+                        await AsyncSelfAttestedEligibilityApplication(database).ensure(
+                            person_id=stale_consent.learner_id,
+                            tenant_id=stale_consent.tenant_id,
+                            program_version_id=stale_consent.program_version_id,
+                            required_consent_version=CONSENT_VERSION,
+                        )
+            async with sessions() as database:
+                with pytest.raises(
+                    SelfAttestedEligibilityDenied,
+                    match="limited to the published Authority Closers free course",
+                ):
+                    async with database.begin():
+                        await AsyncSelfAttestedEligibilityApplication(database).ensure(
+                            person_id=wrong_course.learner_id,
+                            tenant_id=wrong_course.tenant_id,
+                            program_version_id=wrong_course.program_version_id,
+                            required_consent_version=CONSENT_VERSION,
+                        )
+        finally:
+            await async_engine.dispose()
+
+    _run_async(scenario())
+
+    with Session(postgres_harness.engine) as database:
+        assert (
+            database.scalar(
+                select(func.count())
+                .select_from(Enrollment)
+                .where(
+                    Enrollment.person_id.in_([stale_consent.learner_id, wrong_course.learner_id])
+                )
+            )
+            == 0
+        )
+
+
+def test_existing_self_attested_eligibility_fails_closed_for_wrong_policy(
+    postgres_harness: _Harness,
+) -> None:
+    seed = _seed(
+        postgres_harness.engine,
+        with_eligibility=False,
+        with_consent=True,
+        exact_free_course_slug=True,
+    )
+    _add_self_attested_eligibility_fact(
+        postgres_harness.engine,
+        seed,
+        policy_version="superseded-self-attestation-policy",
+    )
+
+    async def scenario() -> None:
+        async_engine = create_async_engine(postgres_harness.schema_url, pool_pre_ping=True)
+        sessions = async_sessionmaker(async_engine, expire_on_commit=False)
+        try:
+            async with sessions() as database:
+                with pytest.raises(SelfAttestedEligibilityDenied, match="current self-attestation"):
+                    async with database.begin():
+                        await AsyncSelfAttestedEligibilityApplication(database).ensure(
+                            person_id=seed.learner_id,
+                            tenant_id=seed.tenant_id,
+                            program_version_id=seed.program_version_id,
+                            required_consent_version=CONSENT_VERSION,
+                        )
+        finally:
+            await async_engine.dispose()
+
+    _run_async(scenario())
+
+
+@pytest.mark.parametrize(
+    "evidence_overrides",
+    [
+        {"consent_version": "superseded-consent-v0"},
+        {"consented_at": datetime(2026, 8, 29, 12, tzinfo=UTC).isoformat()},
+        {"explicit_action": "session_created"},
+        {"program_slug": "another-free-course"},
+        {"source": "analytics_event"},
+    ],
+    ids=[
+        "wrong-consent-version",
+        "wrong-consent-timestamp",
+        "wrong-explicit-action",
+        "wrong-program-slug",
+        "wrong-evidence-source",
+    ],
+)
+def test_existing_self_attested_eligibility_fails_closed_for_wrong_consent_or_provenance(
+    postgres_harness: _Harness,
+    evidence_overrides: dict[str, str],
+) -> None:
+    seed = _seed(
+        postgres_harness.engine,
+        with_eligibility=False,
+        with_consent=True,
+        exact_free_course_slug=True,
+    )
+    _add_self_attested_eligibility_fact(
+        postgres_harness.engine,
+        seed,
+        evidence_overrides=evidence_overrides,
+    )
+
+    async def scenario() -> None:
+        async_engine = create_async_engine(postgres_harness.schema_url, pool_pre_ping=True)
+        sessions = async_sessionmaker(async_engine, expire_on_commit=False)
+        try:
+            async with sessions() as database:
+                with pytest.raises(SelfAttestedEligibilityDenied, match="current self-attestation"):
+                    async with database.begin():
+                        await AsyncSelfAttestedEligibilityApplication(database).ensure(
+                            person_id=seed.learner_id,
+                            tenant_id=seed.tenant_id,
+                            program_version_id=seed.program_version_id,
+                            required_consent_version=CONSENT_VERSION,
+                        )
+        finally:
+            await async_engine.dispose()
+
+    _run_async(scenario())
+
+
+def test_concurrent_self_attestation_reuses_one_canonical_fact(
+    postgres_harness: _Harness,
+) -> None:
+    seed = _seed(
+        postgres_harness.engine,
+        with_eligibility=False,
+        with_consent=True,
+        exact_free_course_slug=True,
+    )
+
+    async def scenario() -> tuple[Any, Any]:
+        async_engine = create_async_engine(
+            postgres_harness.schema_url,
+            pool_size=4,
+            max_overflow=0,
+        )
+        sessions = async_sessionmaker(async_engine, expire_on_commit=False)
+
+        async def once() -> Any:
+            async with sessions() as database, database.begin():
+                return await AsyncSelfAttestedEligibilityApplication(database).ensure(
+                    person_id=seed.learner_id,
+                    tenant_id=seed.tenant_id,
+                    program_version_id=seed.program_version_id,
+                    required_consent_version=CONSENT_VERSION,
+                )
+
+        try:
+            return await asyncio.gather(once(), once())
+        finally:
+            await async_engine.dispose()
+
+    first, second = _run_async(scenario())
+    assert {first.created, second.created} == {True, False}
+    assert first.fact_id == second.fact_id
+    with Session(postgres_harness.engine) as database:
+        assert (
+            database.scalar(
+                select(func.count())
+                .select_from(EnrollmentEligibilityFact)
+                .where(
+                    EnrollmentEligibilityFact.tenant_id == seed.tenant_id,
+                    EnrollmentEligibilityFact.person_id == seed.learner_id,
+                    EnrollmentEligibilityFact.program_version_id == seed.program_version_id,
+                )
+            )
+            == 1
+        )

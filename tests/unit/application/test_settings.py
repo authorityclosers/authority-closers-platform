@@ -13,6 +13,24 @@ def test_blank_optional_public_learner_tenant_is_unconfigured() -> None:
     assert settings.operations_tenant_id is None
 
 
+def test_public_learner_and_operations_tenants_must_be_distinct() -> None:
+    tenant_id = "10000000-0000-4000-8000-000000000001"
+
+    with pytest.raises(ValidationError, match="must identify different tenants"):
+        Settings(
+            public_learner_tenant_id=tenant_id,
+            operations_tenant_id=tenant_id,
+        )
+
+
+def test_public_learner_tenant_requires_an_operations_tenant() -> None:
+    with pytest.raises(ValidationError, match="AC_OPERATIONS_TENANT_ID is required"):
+        Settings(
+            public_learner_tenant_id="10000000-0000-4000-8000-000000000001",
+            operations_tenant_id=None,
+        )
+
+
 def _production_values() -> dict[str, str]:
     return {
         "release_id": "1" * 40,

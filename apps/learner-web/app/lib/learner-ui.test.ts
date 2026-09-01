@@ -1,6 +1,6 @@
 import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import ActivityPage from "../activity/[activityId]/page";
 import CallbackPage from "../auth/callback/page";
@@ -8,12 +8,25 @@ import CertificatePage from "../certificates/[certificateId]/page";
 import { ActivityRenderer } from "../components/activity-renderers";
 import {
   ConnectedActivityWorkspace,
+  enrollmentFailureMessage,
+  FREE_COURSE_SLUG,
   identityState,
+  isFreeEnrollmentProgram,
   LearningActivityNavigation,
   LearnerHomeEnrollmentCard,
+  selectPublishedFreeCourse,
 } from "../components/learner-runtime";
-import { LoginForm } from "../components/login-form";
+import {
+  hasMembershipRole,
+  MembershipUnavailable,
+} from "../components/membership-availability";
+import {
+  SignOutFailure,
+  signOutFailureMessage,
+} from "../components/sign-out-control";
+import { LoginForm, routeAfterOnboarding } from "../components/login-form";
 import { OnboardingForm } from "../components/onboarding-form";
+import { ThemeControl } from "../components/theme-control";
 import { ActivityStatusPill, ProgressMeter } from "../components/shared-ui";
 import { Breadcrumbs, LearnerShell } from "../components/site-shell";
 import { SurfaceStatePanel } from "../components/surface-state";
@@ -26,11 +39,13 @@ import ForgotPasswordPage from "../forgot-password/page";
 import manifest from "../manifest";
 import OfflinePage from "../offline/page";
 import OnboardingPage from "../onboarding/page";
+import ProgressPage from "../progress/page";
 import PublicHomePage from "../page";
 import PrivacyPage from "../privacy/page";
 import ProgramDetailPage from "../programs/[slug]/page";
 import RegisterPage from "../register/page";
 import ResetPasswordPage from "../reset-password/page";
+import SettingsPage from "../settings/page";
 import SessionExpiredPage from "../session-expired/page";
 import TermsPage from "../terms/page";
 import VerifyEmailPage from "../verify-email/page";
@@ -44,15 +59,18 @@ import {
 import { ROUTES } from "./routes";
 import {
   isContentVisible,
+  isSurfaceStateSimulationEnabled,
   parseSurfaceState,
   stateQuery,
   SURFACE_STATE_ORDER,
   type SurfaceState,
 } from "./surface-state";
-import type {
-  ActivityResponse,
-  LearnerApi,
-  LearningResponse,
+import {
+  ApiError,
+  type ActivityResponse,
+  type LearnerApi,
+  type LearningResponse,
+  type MeResponse,
 } from "./learner-api";
 
 function h1Count(html: string): number {
@@ -101,6 +119,8 @@ const routeRenderers: Array<[string, (state?: string) => Promise<ReactNode>]> =
       "learner home",
       (state) => LearnerHomePage({ searchParams: Promise.resolve({ state }) }),
     ],
+    ["progress", async () => ProgressPage()],
+    ["settings", async () => SettingsPage()],
     [
       "program learning",
       (state) =>
@@ -170,6 +190,18 @@ describe("learner route and state primitives", () => {
     expect(parseSurfaceState(undefined)).toBe("DEFAULT");
   });
 
+  it("disables query-string state simulation in production", () => {
+    expect(isSurfaceStateSimulationEnabled("production")).toBe(false);
+    expect(isSurfaceStateSimulationEnabled("development")).toBe(true);
+    expect(parseSurfaceState("success-feedback", "production")).toBe("DEFAULT");
+    expect(parseSurfaceState("permission-denied", "production")).toBe(
+      "DEFAULT",
+    );
+    expect(parseSurfaceState("success-feedback", "development")).toBe(
+      "SUCCESS_FEEDBACK",
+    );
+  });
+
   it("only renders resource content for usable states", () => {
     expect(isContentVisible("DEFAULT")).toBe(true);
     expect(isContentVisible("PARTIAL")).toBe(true);
@@ -195,6 +227,12 @@ describe("learner route and state primitives", () => {
     expect(ROUTES.verifyEmail).toBe("/verify-email");
     expect(ROUTES.resetPassword).toBe("/reset-password");
     expect(ROUTES.sessionExpired).toBe("/session-expired");
+    expect(ROUTES.onboarding).toBe("/onboarding");
+    expect(ROUTES.learnerHome).toBe("/home");
+    expect(ROUTES.myLearning).toBe("/home#my-learning");
+    expect(ROUTES.practice).toBe("/home#practice");
+    expect(ROUTES.progress).toBe("/progress");
+    expect(ROUTES.settings).toBe("/settings");
     expect(ROUTES.programDetail("free-course")).toBe("/programs/free-course");
     expect(ROUTES.programLearning("free-course")).toBe("/learn/free-course");
     expect(ROUTES.module("free-course", "module-01")).toBe(
@@ -310,7 +348,7 @@ describe("canonical progression access", () => {
       const html = renderToStaticMarkup(page);
 
       expect(html).toContain("Activity");
-      expect(html).toContain("Loading server data");
+      expect(html).toContain("Loading your learning");
       expect(html).not.toContain('data-state="LOCKED"');
       expect(html).not.toContain("Complete the previous step first");
       expect(html).not.toContain("Your turn.");
@@ -330,7 +368,7 @@ describe("canonical progression access", () => {
     const html = renderToStaticMarkup(page);
 
     expect(html).toContain("Module");
-    expect(html).toContain("Loading server data");
+    expect(html).toContain("Loading your learning");
     expect(html).not.toContain('data-state="LOCKED"');
     expect(html).not.toContain("Module sequence");
     expect(html).not.toContain("Open first activity");
@@ -342,7 +380,7 @@ describe("canonical progression access", () => {
       searchParams: Promise.resolve({}),
     });
     const activityHtml = renderToStaticMarkup(activityPage);
-    expect(activityHtml).toContain("Loading server data");
+    expect(activityHtml).toContain("Loading your learning");
     expect(activityHtml).not.toContain('href="/activity/review"');
     expect(activityHtml).not.toContain('href="/activity/improve"');
   });
@@ -415,6 +453,24 @@ describe("honest preview controls", () => {
     expect(onboarding).not.toContain("Choose the context");
   });
 
+  it("routes password sessions through canonical onboarding status", () => {
+    expect(routeAfterOnboarding("not_started")).toBe("/onboarding");
+    expect(routeAfterOnboarding("in_progress")).toBe("/onboarding");
+    expect(routeAfterOnboarding("completed")).toBe("/home");
+    expect(routeAfterOnboarding("skipped")).toBe("/home");
+    expect(routeAfterOnboarding()).toBe("/onboarding");
+  });
+
+  it("exposes an accessible persisted appearance control", () => {
+    const html = renderToStaticMarkup(createElement(ThemeControl));
+
+    expect(html).toContain('aria-label="Appearance theme"');
+    expect(html).toContain("Light");
+    expect(html).toContain("Dark");
+    expect(html).toContain("System");
+    expect(html.match(/aria-pressed=/g)).toHaveLength(3);
+  });
+
   it("turns server-issued Google recovery results into safe learner actions", async () => {
     const consent = renderToStaticMarkup(
       await CallbackPage({
@@ -453,6 +509,8 @@ describe("honest preview controls", () => {
     expect(registration).toContain("Create free account");
     expect(registration).toContain("action=register");
     expect(registration).toContain("Continue with Google");
+    expect(registration).toContain('name="return_path" value="/onboarding"');
+    expect(registration).not.toContain('name="return_path" value="/home"');
     expect(registration).toContain('name="consent"');
     expect(registration).toContain('value="true"');
     expect(registration.match(/type="checkbox"/g)).toHaveLength(1);
@@ -475,7 +533,7 @@ describe("accessibility semantics", () => {
         expect(h1Count(html), `${routeName} in ${state}`).toBe(1);
       }
     }
-  });
+  }, 15_000);
 
   it("keeps the authenticated home empty of invented progress while the API loads", async () => {
     const html = renderToStaticMarkup(
@@ -483,7 +541,7 @@ describe("accessibility semantics", () => {
     );
 
     expect(html).toContain("Learner workspace");
-    expect(html).toContain("Loading server data");
+    expect(html).toContain("Loading your learning");
     expect(html).not.toContain("Open reflect preview");
     expect(html).not.toContain("preview only");
     expect(html).not.toContain('aria-valuenow="0"');
@@ -580,7 +638,7 @@ describe("accessibility semantics", () => {
 
     expect(html.match(/<h1(?:\s|>)/g)).toHaveLength(1);
     expect(html).toContain("Certificate");
-    expect(html).toContain("Loading server data");
+    expect(html).toContain("Loading your learning");
     expect(html).not.toContain("preview-certificate · issued");
   });
 });
@@ -611,11 +669,11 @@ describe("connected learner ready states", () => {
     draft_payload: null,
   };
 
-  it("discovers the first server-authorized learning path for learner home", async () => {
+  it("loads learner home only from the exact Free Course program identity", async () => {
     const learning = {
       program_id: "program-1",
       program_version_id: "version-1",
-      program_slug: "free-course",
+      program_slug: FREE_COURSE_SLUG,
       program_title: "Authority Closers Free Course",
       version_number: 1,
       enrollment_id: "enrollment-1",
@@ -654,7 +712,7 @@ describe("connected learner ready states", () => {
         items: [
           {
             id: "program-1",
-            slug: "free-course",
+            slug: FREE_COURSE_SLUG,
             title: "Authority Closers Free Course",
             program_version_id: "version-1",
             version_number: 1,
@@ -672,6 +730,47 @@ describe("connected learner ready states", () => {
     await expect(identityState(api)).resolves.toMatchObject({ learning });
   });
 
+  it("does not probe title matches or the first accessible program", async () => {
+    const learning = vi.fn();
+    const api = {
+      me: async () => ({
+        person_id: "person-1",
+        email: "learner@example.com",
+        display_name: "Learner",
+        email_verified_at: "2026-08-31T00:00:00Z",
+        selected_tenant_id: "tenant-1",
+        membership_role: "learner",
+        permissions: [],
+      }),
+      context: async () => ({
+        person_id: "person-1",
+        session_id: "session-1",
+        tenant_id: "tenant-1",
+        membership_role: "learner",
+        permissions: [],
+      }),
+      listPrograms: async () => ({
+        items: [
+          {
+            id: "title-impostor",
+            slug: "not-the-free-course",
+            title: "Authority Closers Free Course",
+            program_version_id: "other-version",
+            version_number: 1,
+            published_at: "2026-08-31T00:00:00Z",
+          },
+        ],
+        next_cursor: null,
+      }),
+      learning,
+    } as unknown as LearnerApi;
+
+    await expect(identityState(api)).resolves.toMatchObject({
+      learning: undefined,
+    });
+    expect(learning).not.toHaveBeenCalled();
+  });
+
   it("keeps activity controls disabled when the server has no prompt", () => {
     const html = renderToStaticMarkup(
       createElement(ConnectedActivityWorkspace, {
@@ -683,7 +782,7 @@ describe("connected learner ready states", () => {
       }),
     );
 
-    expect(html).toContain("No learner-facing prompt is published.");
+    expect(html).toContain("No learner prompt is published for this activity.");
     expect(html).toContain('id="activity-response"');
     expect(html.match(/disabled=""/g)).toHaveLength(3);
     expect(html).not.toContain('class="prompt-card"');
@@ -707,7 +806,7 @@ describe("connected learner ready states", () => {
     expect(html).toContain("Restored server draft");
     expect(html).toContain("Module 1 learning loop");
     expect(html).toContain("Server draft restored");
-    expect(html).toContain("Controlled learner draft");
+    expect(html).toContain("Versioned learner draft");
     expect(html).not.toContain("No learner-facing prompt is published.");
     expect(html).not.toContain('id="activity-response" disabled=""');
     expect(html).not.toContain('type="submit" disabled=""');
@@ -757,15 +856,156 @@ describe("connected learner ready states", () => {
     expect(available).toContain('href="/activity/activity-1"');
   });
 
-  it("shows no current course until the server selects an enrollment", () => {
+  it("shows the published Free Course until an enrollment is selected", () => {
+    const program = {
+      id: "program-1",
+      slug: "authority-closers-free-course",
+      title: "Authority Closers Free Course",
+      program_version_id: "version-1",
+      version_number: 1,
+      published_at: "2026-08-31T00:00:00Z",
+    };
     const html = renderToStaticMarkup(
-      createElement(LearnerHomeEnrollmentCard, { learning: undefined }),
+      createElement(LearnerHomeEnrollmentCard, {
+        learning: undefined,
+        program,
+      }),
     );
 
-    expect(html).toContain("No current course selected.");
-    expect(html).toContain("absence of a projection is not treated as proof");
-    expect(html).toContain('href="/"');
-    expect(html).not.toContain("/learn/free-course");
+    expect(html).toContain("Authority Closers Free Course");
+    expect(html).toContain("Start free course");
+    expect(html).toContain('href="/programs/authority-closers-free-course"');
+    expect(html).not.toMatch(/projection unavailable|assignment collection/i);
+  });
+
+  it("selects only the published Authority Closers Free Course", () => {
+    const other = {
+      id: "other",
+      slug: "other",
+      title: "Another Program",
+      program_version_id: "other-version",
+      version_number: 1,
+      published_at: "2026-08-31T00:00:00Z",
+    };
+    const freeCourse = {
+      ...other,
+      id: "free",
+      slug: "authority-closers-free-course",
+      title: "Authority Closers Free Course",
+    };
+
+    expect(selectPublishedFreeCourse([other, freeCourse])).toBe(freeCourse);
+    expect(selectPublishedFreeCourse([other])).toBeUndefined();
+    expect(
+      selectPublishedFreeCourse([
+        { ...other, title: "Authority Closers Free Course" },
+      ]),
+    ).toBeUndefined();
+    expect(isFreeEnrollmentProgram(freeCourse)).toBe(true);
+    expect(isFreeEnrollmentProgram(other)).toBe(false);
+  });
+
+  it("gates protected learner content when membership role is missing", async () => {
+    const me = {
+      person_id: "person-1",
+      email: "learner@example.com",
+      display_name: "Learner",
+      email_verified_at: "2026-08-31T00:00:00Z",
+      selected_tenant_id: null,
+      membership_role: null,
+      permissions: [],
+    };
+    const learning = vi.fn();
+    const api = {
+      me: async () => me,
+      context: async () => ({
+        person_id: "person-1",
+        session_id: "session-1",
+        tenant_id: null,
+        membership_role: null,
+        permissions: [],
+      }),
+      listPrograms: async () => ({
+        items: [
+          {
+            id: "program-1",
+            slug: FREE_COURSE_SLUG,
+            title: "Authority Closers Free Course",
+            program_version_id: "version-1",
+            version_number: 1,
+            published_at: "2026-08-31T00:00:00Z",
+          },
+        ],
+        next_cursor: null,
+      }),
+      learning,
+    } as unknown as LearnerApi;
+
+    await expect(identityState(api)).resolves.toMatchObject({
+      me,
+      learning: undefined,
+    });
+    expect(hasMembershipRole(me)).toBe(false);
+    expect(learning).not.toHaveBeenCalled();
+
+    const unavailable = renderToStaticMarkup(
+      createElement(MembershipUnavailable),
+    );
+    expect(unavailable).toContain("Learner membership is unavailable.");
+    expect(unavailable).toContain('role="alert"');
+    expect(unavailable).not.toContain("Learner profile");
+  });
+
+  it.each(["owner", "admin", "support"])(
+    "gates protected learner content for the %s role",
+    (membershipRole) => {
+      const me: MeResponse = {
+        person_id: "privileged-person-1",
+        email: "privileged@example.test",
+        display_name: "Privileged member",
+        email_verified_at: "2026-09-01T00:00:00Z",
+        selected_tenant_id: "public-learner-tenant-1",
+        membership_role: membershipRole,
+        permissions: [],
+      };
+
+      expect(hasMembershipRole(me)).toBe(false);
+    },
+  );
+
+  it("allows protected learner content only for the exact learner role", () => {
+    const me: MeResponse = {
+      person_id: "learner-person-1",
+      email: "learner@example.test",
+      display_name: "Learner",
+      email_verified_at: "2026-09-01T00:00:00Z",
+      selected_tenant_id: "public-learner-tenant-1",
+      membership_role: "learner",
+      permissions: [],
+    };
+
+    expect(hasMembershipRole(me)).toBe(true);
+  });
+
+  it("renders sign-out failure as an alert with a retry", () => {
+    const message = signOutFailureMessage(new TypeError("offline"));
+    const html = renderToStaticMarkup(
+      createElement(SignOutFailure, { message, retry: () => undefined }),
+    );
+    expect(html).toContain('role="alert"');
+    expect(html).toContain("Retry sign out");
+    expect(html).toContain("Check your connection");
+  });
+
+  it("keeps enrollment failure recovery explicit and policy-gated", () => {
+    expect(enrollmentFailureMessage(new ApiError(401, "expired"))).toEqual({
+      message: "Your session expired before the course could start.",
+      recoveryHref: "/session-expired",
+      recoveryLabel: "Sign in again",
+    });
+    expect(
+      enrollmentFailureMessage(new ApiError(403, "not eligible")).message,
+    ).toContain("has not authorized Free Course access");
   });
 
   it("does not expose guessed course, certificate, or preview identity navigation", () => {
@@ -776,6 +1016,10 @@ describe("connected learner ready states", () => {
     expect(html).not.toContain("free-course");
     expect(html).not.toContain("preview-certificate");
     expect(html).not.toContain("Preview identity");
-    expect(html.match(/aria-disabled="true"/g)).toHaveLength(8);
+    expect(html.match(/aria-disabled="true"/g)).toHaveLength(3);
+    expect(html.match(/learner-sidebar__item-note/g)).toHaveLength(2);
+    expect(html).not.toContain('href="/home#practice"');
+    expect(html).toContain('href="/progress"');
+    expect(html).toContain('href="/settings"');
   });
 });

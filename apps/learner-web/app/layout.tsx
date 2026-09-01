@@ -1,11 +1,14 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Newsreader } from "next/font/google";
+import Script from "next/script";
 
 import "./styles.css";
 import "./auth-clarity.css";
 import "./onboarding-clarity.css";
 import "./learner-clarity.css";
+import "./theme.css";
 import { PwaRegister } from "./components/pwa-register";
+import { ThemeRuntime } from "./components/theme-control";
 
 const sans = Inter({ subsets: ["latin"], variable: "--font-sans" });
 const serif = Newsreader({ subsets: ["latin"], variable: "--font-serif" });
@@ -39,8 +42,16 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${sans.variable} ${serif.variable}`}>
+    <html
+      lang="en"
+      className={`${sans.variable} ${serif.variable}`}
+      suppressHydrationWarning
+    >
+      <head>
+        <Script src="/theme-init.js" strategy="beforeInteractive" />
+      </head>
       <body>
+        <ThemeRuntime />
         {children}
         <PwaRegister />
       </body>

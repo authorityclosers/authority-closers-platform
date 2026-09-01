@@ -11,13 +11,19 @@ import {
 import Link from "next/link";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 
-import { googleAuthStartUrl } from "../lib/auth-links";
-import { ApiError, createLearnerApi } from "../lib/learner-api";
+import {
+  GOOGLE_REGISTRATION_RETURN_PATH,
+  googleAuthStartUrl,
+} from "../lib/auth-links";
+import { createLearnerApi } from "../lib/learner-api";
 import { ROUTES } from "../lib/routes";
+import { userFacingRequestError } from "../lib/user-facing-error";
 
 function requestErrorMessage(error: unknown): string {
-  if (error instanceof ApiError) return error.message;
-  return "The request did not finish. Check your connection and try again.";
+  return userFacingRequestError(
+    error,
+    "The request did not finish. Check your connection and try again.",
+  );
 }
 
 function fragmentToken(): string | null {
@@ -136,8 +142,8 @@ export function RegistrationForm() {
             disabled={pending}
           />
           <p id="register-whatsapp-help" className="field-help">
-            Stored with your learner profile; no WhatsApp messaging is activated
-            in this alpha.
+            Stored with your learner profile. This number is not used for course
+            messages.
           </p>
         </div>
         <div className="field-group">
@@ -211,7 +217,11 @@ export function RegistrationForm() {
       >
         <input type="hidden" name="action" value="register" />
         <input type="hidden" name="surface" value="learner" />
-        <input type="hidden" name="return_path" value="/home" />
+        <input
+          type="hidden"
+          name="return_path"
+          value={GOOGLE_REGISTRATION_RETURN_PATH}
+        />
         <input
           type="hidden"
           name="consent"
@@ -389,9 +399,9 @@ export function VerifyEmailFlow() {
       {state === "success" ? (
         <Link
           className="button button--ink button--full"
-          href={ROUTES.learnerHome}
+          href={ROUTES.onboarding}
         >
-          Continue to learner home
+          Continue to onboarding
         </Link>
       ) : null}
       {state === "error" ? (

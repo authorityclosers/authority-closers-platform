@@ -34,28 +34,21 @@ export default async function OnboardingPage({
           >
             <Link
               className="text-link clarity-onboarding-back"
-              href={ROUTES.home}
+              href={ROUTES.learnerHome}
             >
-              <ArrowLeft size={15} aria-hidden="true" /> Back to published
-              programs
+              <ArrowLeft size={15} aria-hidden="true" /> Back to learner home
             </Link>
             <p className="eyebrow">
               <span aria-hidden="true" /> Start with context
             </p>
-            <h1 id="onboarding-title">
-              Make the first <br />
-              <em>rep yours.</em>
-            </h1>
+            <h1 id="onboarding-title">Set up your learning profile.</h1>
             <p>
               Save a small amount of context, leave optional details blank, or
-              skip and resume later. Your answers never become an automated
-              score.
+              skip and resume later.
             </p>
             <div className="onboarding-signal">
               <Compass size={20} aria-hidden="true" />
-              <span>
-                First Win guidance · one useful move in approximately 15 minutes
-              </span>
+              <span>Your saved answers can be updated from Settings.</span>
             </div>
             <ol className="clarity-onboarding-steps" aria-hidden="true">
               <li className="is-active">
@@ -79,7 +72,7 @@ export default async function OnboardingPage({
             <SurfaceStatePanel
               state={state}
               retryHref={ROUTES.onboarding}
-              backHref={ROUTES.home}
+              backHref={ROUTES.learnerHome}
               pageHeadingPresent
             />
             {isContentVisible(state) ? <OnboardingForm /> : null}

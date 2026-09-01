@@ -2,21 +2,27 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import hmac
+import json
 import re
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable, Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Annotated, Literal, cast
 from urllib.parse import urlencode
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request, Response, status
 from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ac_platform.application.settings import Settings
+from ac_platform.audit.service import AuditRepository
 from ac_platform.http.auth_transactions import (
     AUTH_TRANSACTION_MAX_AGE_SECONDS,
     AuthTransaction,
@@ -32,6 +38,7 @@ from ac_platform.http.identity_provider import (
 )
 from ac_platform.http.problem import problem_response
 from ac_platform.identity.application import AsyncIdentityApplication, ResolvedActorContext
+from ac_platform.identity.models import IdentityCommandIdempotency
 from ac_platform.identity.onboarding import (
     LearnerOnboardingService,
     OnboardingConcurrencyError,
@@ -71,10 +78,15 @@ from ac_platform.tenancy.learner_provisioning import (
     LearnerConsentUpdateRequiredError,
     LearnerProvisioningError,
 )
+from ac_platform.tenancy.models import Membership, MembershipRole, MembershipStatus
 
 SESSION_MAX_AGE_SECONDS = 30 * 24 * 60 * 60
 SESSION_COOKIE_VALUE_PATTERN = re.compile(r"[A-Za-z0-9_-]{43,512}\Z")
 OAUTH_TRANSACTION_COOKIE_VALUE_PATTERN = re.compile(r"[A-Za-z0-9_-]{1,4000}\.[A-Za-z0-9_-]{43}\Z")
+OAUTH_TRANSACTION_COOKIE_SUFFIX_PATTERN = re.compile(r"[A-Za-z0-9_-]{22}\Z")
+OAUTH_TRANSACTION_MAX_PENDING = 4
+ONBOARDING_IDEMPOTENCY_MARKER = "identity.onboarding_save_idempotency"
+ONBOARDING_IDEMPOTENCY_KEY_MAX_LENGTH = 200
 
 ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
     "owner": frozenset(
@@ -308,6 +320,12 @@ class LearnerConsentRequired(DomainError):
     status = 400
 
 
+class AdminRegistrationUnavailable(DomainError):
+    code = "admin_registration_unavailable"
+    title = "Admin self-registration is not available"
+    status = 403
+
+
 class PasswordCredentialsRejected(DomainError):
     code = "password_credentials_rejected"
     title = "The email or password is not valid"
@@ -344,6 +362,24 @@ class OnboardingProfileUnavailable(DomainError):
     status = 404
 
 
+class OnboardingTenantRequired(DomainError):
+    code = "tenant_context_required"
+    title = "A tenant context is required"
+    status = 403
+
+
+class OnboardingIdempotencyKeyRequired(DomainError):
+    code = "idempotency_key_required"
+    title = "An idempotency key is required"
+    status = 428
+
+
+class OnboardingIdempotencyConflict(DomainError):
+    code = "onboarding_idempotency_conflict"
+    title = "The onboarding idempotency key conflicts with an earlier request"
+    status = 409
+
+
 _ONBOARDING_ETAG_PATTERN = re.compile(r'^"onboarding-revision-(?P<revision>0|[1-9][0-9]*)"$')
 
 
@@ -372,6 +408,195 @@ def _onboarding_response(snapshot: OnboardingSnapshot) -> OnboardingResponse:
         next_action_href=snapshot.next_action_href,
         next_action_reason=snapshot.next_action_reason,
     )
+
+
+def _onboarding_idempotency_key(value: str | None) -> str:
+    if value is None or not value.strip():
+        raise OnboardingIdempotencyKeyRequired(
+            "Onboarding updates require an Idempotency-Key header."
+        )
+    normalized = value.strip()
+    if len(normalized) > ONBOARDING_IDEMPOTENCY_KEY_MAX_LENGTH:
+        raise OnboardingRequestInvalid("The Idempotency-Key header is too long.")
+    try:
+        parsed = UUID(normalized)
+    except ValueError as error:
+        raise OnboardingRequestInvalid(
+            "The Idempotency-Key header must be a canonical UUIDv4 value."
+        ) from error
+    canonical = str(parsed)
+    if parsed.version != 4 or normalized.lower() != canonical:
+        raise OnboardingRequestInvalid(
+            "The Idempotency-Key header must be a canonical UUIDv4 value."
+        )
+    return canonical
+
+
+def _onboarding_key_digest(idempotency_key: str) -> str:
+    return hashlib.sha256(idempotency_key.encode("ascii")).hexdigest()
+
+
+def _onboarding_request_digest(
+    body: OnboardingSaveRequest,
+    *,
+    expected_revision: int,
+) -> str:
+    canonical = json.dumps(
+        {
+            "operation": "onboarding_save",
+            "expected_revision": expected_revision,
+            "body": body.model_dump(mode="json"),
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    ).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
+
+
+def _onboarding_request_id(request: Request) -> str | None:
+    value = getattr(request.state, "request_id", None)
+    return value if isinstance(value, str) else None
+
+
+async def _find_onboarding_command(
+    session: AsyncSession,
+    *,
+    tenant_id: UUID,
+    actor_person_id: UUID,
+    key_digest: str,
+) -> IdentityCommandIdempotency | None:
+    return cast(
+        IdentityCommandIdempotency | None,
+        await session.scalar(
+            select(IdentityCommandIdempotency)
+            .where(
+                IdentityCommandIdempotency.tenant_id == tenant_id,
+                IdentityCommandIdempotency.actor_person_id == actor_person_id,
+                IdentityCommandIdempotency.operation == "onboarding_save",
+                IdentityCommandIdempotency.key_digest == key_digest,
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        ),
+    )
+
+
+async def _claim_onboarding_command(
+    session: AsyncSession,
+    *,
+    tenant_id: UUID,
+    actor_person_id: UUID,
+    key_digest: str,
+    request_digest: str,
+) -> tuple[IdentityCommandIdempotency, bool]:
+    existing = await _find_onboarding_command(
+        session,
+        tenant_id=tenant_id,
+        actor_person_id=actor_person_id,
+        key_digest=key_digest,
+    )
+    if existing is not None:
+        return existing, False
+    command = IdentityCommandIdempotency(
+        tenant_id=tenant_id,
+        actor_person_id=actor_person_id,
+        operation="onboarding_save",
+        key_digest=key_digest,
+        request_digest=request_digest,
+        status="pending",
+    )
+    try:
+        async with session.begin_nested():
+            session.add(command)
+            await session.flush()
+    except IntegrityError:
+        raced = await _find_onboarding_command(
+            session,
+            tenant_id=tenant_id,
+            actor_person_id=actor_person_id,
+            key_digest=key_digest,
+        )
+        if raced is None:
+            raise
+        return raced, False
+    return command, True
+
+
+def _onboarding_command_result(
+    command: IdentityCommandIdempotency,
+    *,
+    request_digest: str,
+) -> tuple[int, datetime]:
+    if command.request_digest != request_digest:
+        raise OnboardingIdempotencyConflict(
+            "The Idempotency-Key was already used for a different onboarding request."
+        )
+    if (
+        command.status != "completed"
+        or command.result_revision is None
+        or command.result_updated_at is None
+    ):
+        raise OnboardingIdempotencyConflict(
+            "The onboarding command is still being committed; retry with the same key."
+        )
+    return command.result_revision, command.result_updated_at
+
+
+def _require_onboarding_replay_snapshot(
+    snapshot: OnboardingSnapshot,
+    *,
+    result_revision: int,
+    result_updated_at: datetime,
+) -> None:
+    if snapshot.revision != result_revision or snapshot.updated_at != result_updated_at:
+        raise OnboardingChanged(
+            "The committed onboarding result has since been superseded; refresh before continuing."
+        )
+
+
+async def _complete_onboarding_command(
+    session: AsyncSession,
+    command: IdentityCommandIdempotency,
+    snapshot: OnboardingSnapshot,
+) -> None:
+    command.status = "completed"
+    command.result_revision = snapshot.revision
+    command.result_updated_at = snapshot.updated_at
+    command.completed_at = snapshot.updated_at
+    await session.flush()
+
+
+async def _append_onboarding_marker(
+    auth: AuthenticatedTransaction,
+    request: Request,
+    *,
+    key_digest: str,
+    request_digest: str,
+    snapshot: OnboardingSnapshot,
+) -> None:
+    payload: Mapping[str, object] = {
+        "operation": "onboarding_save",
+        "idempotency_key_digest": key_digest,
+        "request_digest": request_digest,
+        "result_person_id": str(snapshot.person_id),
+        "result_revision": snapshot.revision,
+        "result_updated_at": snapshot.updated_at.isoformat(),
+    }
+    await AuditRepository(auth.database).append_for_actor(
+        auth.resolved.actor,
+        action=ONBOARDING_IDEMPOTENCY_MARKER,
+        resource_type="learner_onboarding_profile",
+        resource_id=snapshot.person_id,
+        payload=payload,
+        request_id=_onboarding_request_id(request),
+    )
+
+
+def _set_onboarding_response_headers(response: Response, snapshot: OnboardingSnapshot) -> None:
+    response.headers["etag"] = f'"onboarding-revision-{snapshot.revision}"'
+    response.headers["cache-control"] = "private, no-store"
 
 
 def _with_role_permissions(resolved: ResolvedActorContext) -> ResolvedActorContext:
@@ -488,19 +713,85 @@ def _session_cookie(request: Request, settings: Settings, *, required: bool = Tr
     return token
 
 
-def _oauth_transaction_cookie(request: Request, settings: Settings) -> str:
+def _read_oauth_transaction_cookie(
+    request: Request,
+    settings: Settings,
+    *,
+    name: str,
+    required: bool,
+) -> str | None:
     try:
         encoded = _single_raw_cookie(
             request,
-            name=settings.oauth_transaction_cookie_name,
+            name=name,
             pattern=OAUTH_TRANSACTION_COOKIE_VALUE_PATTERN,
-            required=True,
+            required=required,
         )
     except _InvalidRawCookie:
         raise InvalidAuthTransaction("The sign-in transaction cookie is invalid.") from None
+    if encoded is None and required:
+        raise InvalidAuthTransaction("The sign-in transaction cookie is invalid.")
+    return encoded
+
+
+def _oauth_transaction_cookie(request: Request, settings: Settings) -> str:
+    encoded = _read_oauth_transaction_cookie(
+        request,
+        settings,
+        name=settings.oauth_transaction_cookie_name,
+        required=True,
+    )
     if encoded is None:  # pragma: no cover - required=True narrows this value
         raise InvalidAuthTransaction("The sign-in transaction cookie is invalid.")
     return encoded
+
+
+def _oauth_transaction_cookie_name(settings: Settings, state: str) -> str:
+    digest = hashlib.sha256(state.encode("utf-8")).digest()[:16]
+    suffix = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
+    return f"{settings.oauth_transaction_cookie_name}.{suffix}"
+
+
+def _callback_oauth_transaction_cookie(
+    request: Request,
+    settings: Settings,
+    *,
+    state: str,
+) -> tuple[str, str]:
+    state_cookie_name = _oauth_transaction_cookie_name(settings, state)
+    encoded = _read_oauth_transaction_cookie(
+        request,
+        settings,
+        name=state_cookie_name,
+        required=False,
+    )
+    if encoded is not None:
+        return state_cookie_name, encoded
+    return settings.oauth_transaction_cookie_name, _oauth_transaction_cookie(request, settings)
+
+
+def _pending_oauth_transaction_cookies(
+    request: Request,
+    settings: Settings,
+) -> dict[str, list[str]]:
+    prefix = f"{settings.oauth_transaction_cookie_name}."
+    values: dict[str, list[str]] = {}
+    for raw_name, raw_value in request.scope.get("headers", []):
+        if raw_name.lower() != b"cookie":
+            continue
+        for segment in raw_value.decode("latin-1").split(";"):
+            pair = segment.strip()
+            separator = pair.find("=")
+            if separator < 1:
+                continue
+            cookie_name = pair[:separator]
+            if cookie_name != cookie_name.strip() or not cookie_name.startswith(prefix):
+                continue
+            suffix = cookie_name.removeprefix(prefix)
+            if OAUTH_TRANSACTION_COOKIE_SUFFIX_PATTERN.fullmatch(suffix) is None:
+                continue
+            values.setdefault(cookie_name, []).append(pair[separator + 1 :])
+    return values
 
 
 def _set_session_cookie(response: Response, token: str, settings: Settings) -> None:
@@ -531,28 +822,220 @@ def _set_oauth_transaction_cookie(
     response: Response,
     encoded_transaction: str,
     settings: Settings,
+    *,
+    state: str,
 ) -> None:
     if OAUTH_TRANSACTION_COOKIE_VALUE_PATTERN.fullmatch(encoded_transaction) is None:
         raise RuntimeError("Refusing to set a malformed OAuth transaction cookie.")
-    response.set_cookie(
+    for name in (
         settings.oauth_transaction_cookie_name,
-        encoded_transaction,
-        max_age=AUTH_TRANSACTION_MAX_AGE_SECONDS,
-        httponly=True,
-        secure=settings.secure_cookies,
-        samesite="lax",
-        path="/",
-    )
+        _oauth_transaction_cookie_name(settings, state),
+    ):
+        response.set_cookie(
+            name,
+            encoded_transaction,
+            max_age=AUTH_TRANSACTION_MAX_AGE_SECONDS,
+            httponly=True,
+            secure=settings.secure_cookies,
+            samesite="lax",
+            path="/",
+        )
 
 
-def _delete_oauth_transaction_cookie(response: Response, settings: Settings) -> None:
+def _delete_oauth_transaction_cookie(
+    response: Response,
+    settings: Settings,
+    *,
+    name: str | None = None,
+) -> None:
     response.delete_cookie(
-        settings.oauth_transaction_cookie_name,
+        name or settings.oauth_transaction_cookie_name,
         httponly=True,
         secure=settings.secure_cookies,
         samesite="lax",
         path="/",
     )
+
+
+def _prune_oauth_transaction_cookies(
+    request: Request,
+    response: Response,
+    settings: Settings,
+    codec: AuthTransactionCodec,
+) -> None:
+    valid: list[tuple[int, str]] = []
+    for name, values in _pending_oauth_transaction_cookies(request, settings).items():
+        if len(values) != 1 or OAUTH_TRANSACTION_COOKIE_VALUE_PATTERN.fullmatch(values[0]) is None:
+            _delete_oauth_transaction_cookie(response, settings, name=name)
+            continue
+        try:
+            transaction = codec.decode(values[0])
+        except InvalidAuthTransaction:
+            _delete_oauth_transaction_cookie(response, settings, name=name)
+            continue
+        expected_name = _oauth_transaction_cookie_name(settings, transaction.state)
+        if not hmac.compare_digest(name, expected_name):
+            _delete_oauth_transaction_cookie(response, settings, name=name)
+            continue
+        valid.append((transaction.issued_at, name))
+
+    valid.sort(reverse=True)
+    for _, name in valid[OAUTH_TRANSACTION_MAX_PENDING - 1 :]:
+        _delete_oauth_transaction_cookie(response, settings, name=name)
+
+
+def _oauth_transaction_cookie_names_to_clear(
+    request: Request,
+    settings: Settings,
+    *,
+    selected_name: str,
+    selected_value: str,
+) -> tuple[str, ...]:
+    if selected_name == settings.oauth_transaction_cookie_name:
+        return (selected_name,)
+    compatibility_value = _read_oauth_transaction_cookie(
+        request,
+        settings,
+        name=settings.oauth_transaction_cookie_name,
+        required=False,
+    )
+    if compatibility_value is not None and hmac.compare_digest(
+        compatibility_value,
+        selected_value,
+    ):
+        return (settings.oauth_transaction_cookie_name, selected_name)
+    return (selected_name,)
+
+
+def _delete_oauth_transaction_cookies(
+    response: Response,
+    settings: Settings,
+    names: tuple[str, ...],
+) -> None:
+    for name in names:
+        _delete_oauth_transaction_cookie(response, settings, name=name)
+
+
+def _oauth_callback_failure_cookie_names(
+    request: Request,
+    settings: Settings,
+    *,
+    state: str,
+) -> tuple[str, ...]:
+    """Select only the failed callback transaction cookies for deletion.
+
+    A state-keyed cookie is authoritative when present.  The compatibility
+    cookie is deleted with it only when both carry the same signed value, so a
+    failed callback cannot consume a different transaction opened in another
+    tab.
+    """
+
+    state_cookie_name = _oauth_transaction_cookie_name(settings, state)
+    try:
+        state_cookie_value = _read_oauth_transaction_cookie(
+            request,
+            settings,
+            name=state_cookie_name,
+            required=False,
+        )
+    except InvalidAuthTransaction:
+        return (state_cookie_name,)
+    if state_cookie_value is not None:
+        try:
+            return _oauth_transaction_cookie_names_to_clear(
+                request,
+                settings,
+                selected_name=state_cookie_name,
+                selected_value=state_cookie_value,
+            )
+        except InvalidAuthTransaction:
+            return (state_cookie_name,)
+
+    try:
+        compatibility_value = _read_oauth_transaction_cookie(
+            request,
+            settings,
+            name=settings.oauth_transaction_cookie_name,
+            required=False,
+        )
+    except InvalidAuthTransaction:
+        return (settings.oauth_transaction_cookie_name,)
+    if compatibility_value is not None:
+        return (settings.oauth_transaction_cookie_name,)
+    return (state_cookie_name,)
+
+
+def _invalid_oauth_callback_response(
+    request: Request,
+    settings: Settings,
+    error: InvalidAuthTransaction,
+    *,
+    transaction_cookie_names: tuple[str, ...],
+) -> JSONResponse:
+    response = problem_response(
+        request=request,
+        status_code=error.status,
+        code=error.code,
+        title=error.title,
+        detail=error.detail,
+    )
+    _delete_oauth_transaction_cookies(response, settings, transaction_cookie_names)
+    response.headers["cache-control"] = "no-store"
+    response.headers["pragma"] = "no-cache"
+    return response
+
+
+def _oauth_terminal_problem_response(
+    request: Request,
+    settings: Settings,
+    error: DomainError,
+    *,
+    transaction_cookie_names: tuple[str, ...],
+) -> JSONResponse:
+    response = problem_response(
+        request=request,
+        status_code=error.status,
+        code=error.code,
+        title=error.title,
+        detail=error.detail,
+    )
+    _delete_oauth_transaction_cookies(response, settings, transaction_cookie_names)
+    response.headers["cache-control"] = "no-store"
+    response.headers["pragma"] = "no-cache"
+    return response
+
+
+def _oauth_callback_unavailable_response(
+    request: Request,
+    settings: Settings,
+    *,
+    transaction_cookie_names: tuple[str, ...],
+) -> JSONResponse:
+    response = problem_response(
+        request=request,
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        code="oauth_callback_unavailable",
+        title="Sign-in could not be completed",
+        detail="The sign-in transaction could not be completed. Start a new sign-in attempt.",
+    )
+    _delete_oauth_transaction_cookies(response, settings, transaction_cookie_names)
+    response.headers["cache-control"] = "no-store"
+    response.headers["pragma"] = "no-cache"
+    return response
+
+
+async def _oauth_identity_problem_response(
+    request: Request,
+    settings: Settings,
+    error: IdentityServiceError,
+    *,
+    transaction_cookie_names: tuple[str, ...],
+) -> JSONResponse:
+    response = await identity_error_handler(request, error)
+    _delete_oauth_transaction_cookies(response, settings, transaction_cookie_names)
+    response.headers["cache-control"] = "no-store"
+    response.headers["pragma"] = "no-cache"
+    return response
 
 
 def _surface_origin(settings: Settings, surface: str) -> str:
@@ -574,12 +1057,13 @@ def _learner_oauth_recovery_response(
         "provider_unavailable",
         "registration_required",
     ],
+    transaction_cookie_names: tuple[str, ...],
 ) -> Response:
     location = (
         f"{_surface_origin(settings, 'learner')}/auth/callback?{urlencode({'result': result})}"
     )
     response = RedirectResponse(location, status_code=status.HTTP_303_SEE_OTHER)
-    _delete_oauth_transaction_cookie(response, settings)
+    _delete_oauth_transaction_cookies(response, settings, transaction_cookie_names)
     response.headers["cache-control"] = "no-store"
     response.headers["pragma"] = "no-cache"
     return response
@@ -759,14 +1243,24 @@ def install_identity_http(
                 person = await PasswordIdentityService(
                     database, token_secret=challenge_secret
                 ).authenticate(email=body.email, password=body.password)
-                tenant_id = await ensure_public_learner(database, person.id)
                 identity = AsyncIdentityApplication(database, token_pepper=token_pepper)
                 issued = await identity.issue_authenticated_session(
                     person.id,
                     user_agent=request.headers.get("user-agent"),
                     ip_address=request.client.host if request.client else None,
                 )
-                await identity.select_tenant(issued.token, tenant_id)
+                tenant_id = settings.public_learner_tenant_id
+                if tenant_id is not None:
+                    membership = await database.scalar(
+                        select(Membership).where(
+                            Membership.tenant_id == tenant_id,
+                            Membership.person_id == person.id,
+                            Membership.role == MembershipRole.LEARNER.value,
+                            Membership.status == MembershipStatus.ACTIVE.value,
+                        )
+                    )
+                    if membership is not None:
+                        await identity.select_tenant(issued.token, tenant_id)
         except EmailVerificationRequired as error:
             raise PasswordEmailVerificationRequired(str(error)) from error
         except (InvalidPasswordCredentials, ValueError) as error:
@@ -892,8 +1386,7 @@ def install_identity_http(
             )
         except OnboardingNotFound as error:
             raise OnboardingProfileUnavailable(str(error)) from error
-        response.headers["etag"] = f'"onboarding-revision-{snapshot.revision}"'
-        response.headers["cache-control"] = "private, no-store"
+        _set_onboarding_response_headers(response, snapshot)
         return _onboarding_response(snapshot)
 
     @router.put("/onboarding", response_model=OnboardingResponse)
@@ -902,13 +1395,58 @@ def install_identity_http(
         response: Response,
         body: OnboardingSaveRequest,
         if_match: Annotated[str | None, Header(alias="If-Match", max_length=96)] = None,
+        idempotency_key: Annotated[
+            str | None,
+            Header(
+                alias="Idempotency-Key",
+                max_length=ONBOARDING_IDEMPOTENCY_KEY_MAX_LENGTH,
+            ),
+        ] = None,
         auth: AuthenticatedTransaction = actor_dependency,
     ) -> OnboardingResponse:
         require_safe_origin(request, settings)
         expected_revision = _onboarding_revision(if_match)
+        command_key = _onboarding_idempotency_key(idempotency_key)
+        command_key_digest = _onboarding_key_digest(command_key)
+        request_digest = _onboarding_request_digest(
+            body,
+            expected_revision=expected_revision,
+        )
+        actor = auth.resolved.actor
+        tenant_id = actor.tenant_id
+        if tenant_id is None:
+            raise OnboardingTenantRequired(
+                "Select an active learner tenant before saving onboarding."
+            )
+        command, claimed = await _claim_onboarding_command(
+            auth.database,
+            tenant_id=tenant_id,
+            actor_person_id=actor.person_id,
+            key_digest=command_key_digest,
+            request_digest=request_digest,
+        )
+        if not claimed:
+            result_revision, result_updated_at = _onboarding_command_result(
+                command,
+                request_digest=request_digest,
+            )
+            try:
+                snapshot = await LearnerOnboardingService(auth.database).get(
+                    actor.person_id,
+                    lock=True,
+                )
+            except OnboardingNotFound as error:
+                raise OnboardingProfileUnavailable(str(error)) from error
+            _require_onboarding_replay_snapshot(
+                snapshot,
+                result_revision=result_revision,
+                result_updated_at=result_updated_at,
+            )
+            _set_onboarding_response_headers(response, snapshot)
+            return _onboarding_response(snapshot)
         try:
             snapshot = await LearnerOnboardingService(auth.database).save(
-                auth.resolved.actor.person_id,
+                actor.person_id,
                 expected_revision=expected_revision,
                 experience_context=body.experience_context,
                 learning_goal=body.learning_goal,
@@ -923,8 +1461,15 @@ def install_identity_http(
             raise OnboardingRequestInvalid(str(error)) from error
         except OnboardingNotFound as error:
             raise OnboardingProfileUnavailable(str(error)) from error
-        response.headers["etag"] = f'"onboarding-revision-{snapshot.revision}"'
-        response.headers["cache-control"] = "private, no-store"
+        await _complete_onboarding_command(auth.database, command, snapshot)
+        await _append_onboarding_marker(
+            auth,
+            request,
+            key_digest=command_key_digest,
+            request_digest=request_digest,
+            snapshot=snapshot,
+        )
+        _set_onboarding_response_headers(response, snapshot)
         return _onboarding_response(snapshot)
 
     @router.get("/auth/google/start", name="google_auth_start")
@@ -937,6 +1482,11 @@ def install_identity_http(
     ) -> Response:
         _require_surface_host(request, settings, surface)
         safe_return_path = normalize_return_path(return_path)
+        if surface == "admin" and authorization_type is ProviderAuthorizationType.REGISTER:
+            raise AdminRegistrationUnavailable(
+                "Admin identities must be provisioned through the reviewed owner and membership "
+                "bootstrap path before they can sign in with Google."
+            )
         if surface == "learner" and authorization_type is ProviderAuthorizationType.REGISTER:
             if not consent:
                 raise LearnerConsentRequired(
@@ -949,17 +1499,6 @@ def install_identity_http(
                 )
         else:
             consent_version = None
-        if (
-            surface == "learner"
-            and authorization_type is ProviderAuthorizationType.AUTHENTICATE
-            and (
-                settings.public_learner_tenant_id is None
-                or not (settings.learner_consent_version or "").strip()
-            )
-        ):
-            raise PasswordRegistrationUnavailable(
-                "Reviewed learner consent and the public learner context must be configured."
-            )
         audience = identity_provider.audience
         person_id: UUID | None = None
         async with sessions() as database, database.begin():
@@ -987,7 +1526,13 @@ def install_identity_http(
             redirect_uri=redirect_uri,
         )
         response = RedirectResponse(authorization_url, status_code=status.HTTP_303_SEE_OTHER)
-        _set_oauth_transaction_cookie(response, codec.encode(transaction), settings)
+        _prune_oauth_transaction_cookies(request, response, settings, codec)
+        _set_oauth_transaction_cookie(
+            response,
+            codec.encode(transaction),
+            settings,
+            state=transaction.state,
+        )
         response.headers["cache-control"] = "no-store"
         response.headers["pragma"] = "no-cache"
         return response
@@ -996,14 +1541,71 @@ def install_identity_http(
     async def google_auth_callback(
         request: Request,
         state_value: Annotated[str, Query(alias="state", min_length=32, max_length=160)],
-        code: Annotated[str, Query(min_length=1, max_length=4096)],
+        code: Annotated[str | None, Query(min_length=1, max_length=4096)] = None,
+        provider_error: Annotated[
+            str | None,
+            Query(alias="error", min_length=1, max_length=200),
+        ] = None,
     ) -> Response:
-        encoded_transaction = _oauth_transaction_cookie(request, settings)
-        presented_session_token = _session_cookie(request, settings, required=False)
-        transaction = codec.decode(encoded_transaction)
-        _require_surface_host(request, settings, transaction.surface)
-        if not hmac.compare_digest(transaction.state, state_value):
-            raise InvalidAuthTransaction("The callback state does not match the transaction.")
+        transaction_cookie_names: tuple[str, ...] = ()
+        try:
+            transaction_cookie_name, encoded_transaction = _callback_oauth_transaction_cookie(
+                request,
+                settings,
+                state=state_value,
+            )
+            transaction_cookie_names = _oauth_transaction_cookie_names_to_clear(
+                request,
+                settings,
+                selected_name=transaction_cookie_name,
+                selected_value=encoded_transaction,
+            )
+            transaction = codec.decode(encoded_transaction)
+            _require_surface_host(request, settings, transaction.surface)
+            if not hmac.compare_digest(transaction.state, state_value):
+                raise InvalidAuthTransaction("The callback state does not match the transaction.")
+        except InvalidAuthTransaction as error:
+            if not transaction_cookie_names:
+                transaction_cookie_names = _oauth_callback_failure_cookie_names(
+                    request,
+                    settings,
+                    state=state_value,
+                )
+            return _invalid_oauth_callback_response(
+                request,
+                settings,
+                error,
+                transaction_cookie_names=transaction_cookie_names,
+            )
+        if provider_error is not None:
+            if transaction.surface == "learner":
+                return _learner_oauth_recovery_response(
+                    settings,
+                    result="provider_rejected",
+                    transaction_cookie_names=transaction_cookie_names,
+                )
+            return _oauth_terminal_problem_response(
+                request,
+                settings,
+                IdentityProviderRejected("The identity provider stopped the sign-in attempt."),
+                transaction_cookie_names=transaction_cookie_names,
+            )
+        if code is None:
+            return _invalid_oauth_callback_response(
+                request,
+                settings,
+                InvalidAuthTransaction("The callback authorization code is missing."),
+                transaction_cookie_names=transaction_cookie_names,
+            )
+        try:
+            presented_session_token = _session_cookie(request, settings, required=False)
+        except AuthenticationRequired as error:
+            return _oauth_terminal_problem_response(
+                request,
+                settings,
+                error,
+                transaction_cookie_names=transaction_cookie_names,
+            )
         if (
             transaction.surface == "learner"
             and transaction.authorization_type is ProviderAuthorizationType.REGISTER
@@ -1017,15 +1619,25 @@ def install_identity_http(
                     required_consent_version,
                 )
             ):
-                raise PasswordRegistrationUnavailable(
-                    "The learner consent version is no longer available for this registration."
+                return _oauth_terminal_problem_response(
+                    request,
+                    settings,
+                    PasswordRegistrationUnavailable(
+                        "The learner consent version is no longer available for this registration."
+                    ),
+                    transaction_cookie_names=transaction_cookie_names,
                 )
         link_session_token = presented_session_token
         if (
             transaction.authorization_type is ProviderAuthorizationType.LINK
             and link_session_token is None
         ):
-            raise AuthenticationRequired("A valid Authority Closers session is required.")
+            return _oauth_terminal_problem_response(
+                request,
+                settings,
+                AuthenticationRequired("A valid Authority Closers session is required."),
+                transaction_cookie_names=transaction_cookie_names,
+            )
         redirect_uri = _surface_callback_uri(settings, transaction.surface)
         try:
             assertion = await identity_provider.exchange_code(
@@ -1039,15 +1651,27 @@ def install_identity_http(
                 return _learner_oauth_recovery_response(
                     settings,
                     result="provider_rejected",
+                    transaction_cookie_names=transaction_cookie_names,
                 )
-            raise
+            return _oauth_terminal_problem_response(
+                request,
+                settings,
+                IdentityProviderRejected("The identity provider rejected the sign-in attempt."),
+                transaction_cookie_names=transaction_cookie_names,
+            )
         except IdentityProviderUnavailable:
             if transaction.surface == "learner":
                 return _learner_oauth_recovery_response(
                     settings,
                     result="provider_unavailable",
+                    transaction_cookie_names=transaction_cookie_names,
                 )
-            raise
+            return _oauth_terminal_problem_response(
+                request,
+                settings,
+                IdentityProviderUnavailable("The identity provider is temporarily unavailable."),
+                transaction_cookie_names=transaction_cookie_names,
+            )
         session_token: str | None = None
         try:
             async with sessions() as database, database.begin():
@@ -1076,15 +1700,6 @@ def install_identity_http(
                         user_agent=request.headers.get("user-agent"),
                     )
                     session_token = issued.token
-                    if transaction.surface == "learner":
-                        tenant_id = await ensure_public_learner(
-                            database,
-                            issued.metadata.person_id,
-                        )
-                        await identity.select_tenant(
-                            session_token,
-                            tenant_id,
-                        )
                 else:
                     if link_session_token is None:  # pragma: no cover - narrowed above
                         raise AuthenticationRequired(
@@ -1098,19 +1713,31 @@ def install_identity_http(
                     )
         except PasswordRegistrationUnavailable as error:
             if transaction.surface != "learner":
-                raise
+                return _oauth_terminal_problem_response(
+                    request,
+                    settings,
+                    error,
+                    transaction_cookie_names=transaction_cookie_names,
+                )
             if isinstance(error.__cause__, LearnerConsentMissingError):
                 return _learner_oauth_recovery_response(
                     settings,
                     result="consent_required",
+                    transaction_cookie_names=transaction_cookie_names,
                 )
             if isinstance(error.__cause__, LearnerConsentUpdateRequiredError):
                 return _learner_oauth_recovery_response(
                     settings,
                     result="consent_update_required",
+                    transaction_cookie_names=transaction_cookie_names,
                 )
-            raise
-        except ProviderConsentVersionConflictError:
+            return _oauth_terminal_problem_response(
+                request,
+                settings,
+                error,
+                transaction_cookie_names=transaction_cookie_names,
+            )
+        except ProviderConsentVersionConflictError as error:
             if (
                 transaction.surface == "learner"
                 and transaction.authorization_type is ProviderAuthorizationType.REGISTER
@@ -1118,9 +1745,15 @@ def install_identity_http(
                 return _learner_oauth_recovery_response(
                     settings,
                     result="consent_update_required",
+                    transaction_cookie_names=transaction_cookie_names,
                 )
-            raise
-        except ProviderIdentityNotLinkedError:
+            return await _oauth_identity_problem_response(
+                request,
+                settings,
+                error,
+                transaction_cookie_names=transaction_cookie_names,
+            )
+        except ProviderIdentityNotLinkedError as error:
             if (
                 transaction.surface == "learner"
                 and transaction.authorization_type is ProviderAuthorizationType.AUTHENTICATE
@@ -1128,8 +1761,27 @@ def install_identity_http(
                 return _learner_oauth_recovery_response(
                     settings,
                     result="registration_required",
+                    transaction_cookie_names=transaction_cookie_names,
                 )
-            raise
+            return await _oauth_identity_problem_response(
+                request,
+                settings,
+                error,
+                transaction_cookie_names=transaction_cookie_names,
+            )
+        except IdentityServiceError as error:
+            return await _oauth_identity_problem_response(
+                request,
+                settings,
+                error,
+                transaction_cookie_names=transaction_cookie_names,
+            )
+        except (SQLAlchemyError, OSError, TimeoutError):
+            return _oauth_callback_unavailable_response(
+                request,
+                settings,
+                transaction_cookie_names=transaction_cookie_names,
+            )
         base_url = (
             settings.admin_app_url if transaction.surface == "admin" else settings.public_app_url
         )
@@ -1137,7 +1789,7 @@ def install_identity_http(
             f"{str(base_url).rstrip('/')}{transaction.return_path}",
             status_code=status.HTTP_303_SEE_OTHER,
         )
-        _delete_oauth_transaction_cookie(response, settings)
+        _delete_oauth_transaction_cookies(response, settings, transaction_cookie_names)
         if session_token is not None:
             _set_session_cookie(response, session_token, settings)
         response.headers["cache-control"] = "no-store"
@@ -1200,16 +1852,44 @@ def install_identity_http(
     @router.post("/auth/logout", status_code=status.HTTP_204_NO_CONTENT)
     async def logout(
         request: Request,
-        auth: AuthenticatedTransaction = actor_dependency,
     ) -> Response:
         require_safe_origin(request, settings)
-        await auth.identity.revoke_self(
-            auth.token,
-            auth.resolved.actor.session_id,
-            reason="user_logout",
-        )
         response = Response(status_code=status.HTTP_204_NO_CONTENT)
         _delete_session_cookie(response, settings)
+        try:
+            token = _session_cookie(request, settings, required=False)
+        except AuthenticationRequired:
+            return response
+        if token is None:
+            return response
+        try:
+            async with sessions() as database, database.begin():
+                identity = AsyncIdentityApplication(database, token_pepper=token_pepper)
+                resolved = await identity.resolve_actor(token)
+                await identity.revoke_self(
+                    token,
+                    resolved.actor.session_id,
+                    reason="user_logout",
+                )
+        except IdentityServiceError:
+            # Logout is idempotent: an absent, expired, or already-revoked
+            # server session still results in clearing the browser cookie.
+            pass
+        except (SQLAlchemyError, OSError, TimeoutError):
+            failure = problem_response(
+                request=request,
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                code="logout_revocation_unavailable",
+                title="Sign-out could not be fully confirmed",
+                detail=(
+                    "The browser session was cleared, but server-side revocation could not be "
+                    "confirmed. This browser is signed out; contact support to revoke outstanding "
+                    "sessions if this was a shared device."
+                ),
+            )
+            _delete_session_cookie(failure, settings)
+            failure.headers["cache-control"] = "no-store"
+            return failure
         return response
 
     application.include_router(router)
@@ -1217,6 +1897,7 @@ def install_identity_http(
 
 
 __all__ = [
+    "AdminRegistrationUnavailable",
     "AdminSurfaceRequired",
     "AuthenticatedTransaction",
     "AuthenticationRequired",

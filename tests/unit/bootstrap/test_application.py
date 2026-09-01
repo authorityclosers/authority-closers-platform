@@ -13,11 +13,13 @@ from ac_platform.bootstrap import BootstrapApplication, BootstrapError
 from ac_platform.bootstrap import application as bootstrap_module
 from ac_platform.identity.application import AsyncIdentityApplication
 from ac_platform.identity.services import PersonSnapshot, StoredSession
+from ac_platform.tenancy.models import TenantStatus
 from ac_platform.tenancy.services import MembershipSnapshot, TenantSnapshot
 
 NOW = datetime(2026, 8, 30, 12, tzinfo=UTC)
 PERSON_ID = uuid4()
 TENANT_ID = uuid4()
+OPERATIONS_TENANT_ID = uuid4()
 
 
 class TransactionalSession:
@@ -56,11 +58,19 @@ class FakeIdentityRepository:
 
 class FakeTenantRepository:
     tenant: TenantSnapshot | None = None
+    operations_tenant: TenantSnapshot | None = None
     membership: MembershipSnapshot | None = None
 
     def __init__(self, _session: object) -> None:
         self.tenant = None
+        self.operations_tenant = None
         self.membership = None
+
+    async def get_tenant(self, tenant_id: UUID) -> TenantSnapshot | None:
+        for tenant in (self.tenant, self.operations_tenant):
+            if tenant is not None and tenant.id == tenant_id:
+                return tenant
+        return None
 
     async def get_tenant_by_slug_for_update(self, slug: str) -> TenantSnapshot | None:
         if self.tenant is not None and self.tenant.slug == slug:
@@ -173,6 +183,123 @@ async def test_bootstrap_creates_owner_and_is_idempotent(
     assert second.tenant_id == first.tenant_id
     assert tenancy.membership is not None
     assert tenancy.membership.role == "owner"
+
+
+@pytest.mark.asyncio
+async def test_public_learner_tenant_bootstrap_is_idempotent_and_creates_no_membership(
+    repositories: tuple[FakeIdentityRepository, FakeTenantRepository],
+) -> None:
+    _, tenancy = repositories
+    tenancy.operations_tenant = TenantSnapshot(
+        id=OPERATIONS_TENANT_ID,
+        slug="authority-closers-operations",
+        name="Authority Closers Operations",
+        status=TenantStatus.ACTIVE.value,
+    )
+    application = BootstrapApplication(cast(AsyncSession, TransactionalSession()))
+
+    first = await application.bootstrap_public_learner_tenant(
+        tenant_slug="authority-closers-public-learners",
+        tenant_name="Authority Closers Public Learners",
+        operations_tenant_id=OPERATIONS_TENANT_ID,
+    )
+    second = await application.bootstrap_public_learner_tenant(
+        tenant_slug="authority-closers-public-learners",
+        tenant_name="Authority Closers Public Learners",
+        operations_tenant_id=OPERATIONS_TENANT_ID,
+    )
+
+    assert first.tenant_created is True
+    assert second.tenant_created is False
+    assert second.tenant_id == first.tenant_id
+    assert tenancy.tenant is not None
+    assert tenancy.operations_tenant.status == TenantStatus.ACTIVE.value
+    assert tenancy.tenant.status == TenantStatus.ACTIVE.value
+    assert tenancy.membership is None
+
+
+@pytest.mark.asyncio
+async def test_public_learner_tenant_bootstrap_rejects_omitted_operations_id(
+    repositories: tuple[FakeIdentityRepository, FakeTenantRepository],
+) -> None:
+    _, tenancy = repositories
+    tenancy.tenant = TenantSnapshot(
+        id=OPERATIONS_TENANT_ID,
+        slug="authority-closers-public-learners",
+        name="Authority Closers Public Learners",
+    )
+
+    with pytest.raises(BootstrapError, match="required to prove"):
+        await BootstrapApplication(
+            cast(AsyncSession, TransactionalSession())
+        ).bootstrap_public_learner_tenant(
+            tenant_slug="authority-closers-public-learners",
+            tenant_name="Authority Closers Public Learners",
+        )
+
+    assert tenancy.tenant.id == OPERATIONS_TENANT_ID
+    assert tenancy.membership is None
+
+
+@pytest.mark.asyncio
+async def test_public_learner_tenant_bootstrap_rejects_unknown_operations_id(
+    repositories: tuple[FakeIdentityRepository, FakeTenantRepository],
+) -> None:
+    with pytest.raises(BootstrapError, match="isolation cannot be proven"):
+        await BootstrapApplication(
+            cast(AsyncSession, TransactionalSession())
+        ).bootstrap_public_learner_tenant(
+            tenant_slug="authority-closers-public-learners",
+            tenant_name="Authority Closers Public Learners",
+            operations_tenant_id=OPERATIONS_TENANT_ID,
+        )
+
+
+@pytest.mark.asyncio
+async def test_public_learner_tenant_bootstrap_rejects_suspended_operations_tenant(
+    repositories: tuple[FakeIdentityRepository, FakeTenantRepository],
+) -> None:
+    _, tenancy = repositories
+    tenancy.operations_tenant = TenantSnapshot(
+        id=OPERATIONS_TENANT_ID,
+        slug="authority-closers-operations",
+        name="Authority Closers Operations",
+        status=TenantStatus.SUSPENDED.value,
+    )
+
+    with pytest.raises(BootstrapError, match="operations control tenant is not active"):
+        await BootstrapApplication(
+            cast(AsyncSession, TransactionalSession())
+        ).bootstrap_public_learner_tenant(
+            tenant_slug="authority-closers-public-learners",
+            tenant_name="Authority Closers Public Learners",
+            operations_tenant_id=OPERATIONS_TENANT_ID,
+        )
+
+    assert tenancy.operations_tenant.status == TenantStatus.SUSPENDED.value
+    assert tenancy.tenant is None
+    assert tenancy.membership is None
+
+
+@pytest.mark.asyncio
+async def test_public_learner_tenant_bootstrap_rejects_operations_tenant_collision(
+    repositories: tuple[FakeIdentityRepository, FakeTenantRepository],
+) -> None:
+    _, tenancy = repositories
+    tenancy.tenant = TenantSnapshot(
+        id=TENANT_ID,
+        slug="authority-closers-public-learners",
+        name="Authority Closers Public Learners",
+    )
+
+    with pytest.raises(BootstrapError, match="different from the operations"):
+        await BootstrapApplication(
+            cast(AsyncSession, TransactionalSession())
+        ).bootstrap_public_learner_tenant(
+            tenant_slug="authority-closers-public-learners",
+            tenant_name="Authority Closers Public Learners",
+            operations_tenant_id=TENANT_ID,
+        )
 
 
 @pytest.mark.asyncio

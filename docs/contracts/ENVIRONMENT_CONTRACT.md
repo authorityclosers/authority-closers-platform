@@ -78,6 +78,22 @@ the application never invents a tenant, changes an existing role, or reactivates
 an inactive membership. Admin-surface Google login never auto-provisions a
 learner membership.
 
+The public learner tenant must be distinct from `AC_OPERATIONS_TENANT_ID`.
+Membership role is singular per person and tenant, so reusing the operations
+tenant would leave an operations owner unable to satisfy the learner-only
+self-enrollment boundary. The dedicated tenant is created or validated only by
+the documented idempotent `python -m ac_platform.bootstrap --public-learner`
+command; the command creates no person or membership. Registration/login then
+creates the exact learner membership after verified, current consent.
+
+For the exact published global program slug `authority-closers-free-course`,
+an explicit start action may convert that recorded consent into a canonical
+eligibility fact under `AC-FREE-SELF-ATTESTATION-v1`. Existing positive facts
+are reused and never overwritten; negative, expired, wrong-course, stale-
+consent, non-learner, inactive or unverified inputs fail closed. The fact and
+enrollment are committed together, and the policy evidence is retained in
+enrollment provenance and audit output.
+
 `AC_OPERATIONS_TENANT_ID` names an existing active control tenant; the
 application never creates it. An empty environment may omit this reference
 only while `AC_EXTERNAL_SIDE_EFFECTS_HOLD=true`. The worker then remains

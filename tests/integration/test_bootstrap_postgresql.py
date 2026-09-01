@@ -20,11 +20,11 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.schema import CreateSchema, DropSchema
 
-from ac_platform.bootstrap import BootstrapApplication
+from ac_platform.bootstrap import BootstrapApplication, BootstrapError
 from ac_platform.identity.models import Person, ProviderIdentity
 from ac_platform.identity.models import Session as SessionRow
 from ac_platform.identity.repositories import AsyncSqlAlchemyIdentityRepository
-from ac_platform.tenancy.models import Membership, Tenant
+from ac_platform.tenancy.models import Membership, Tenant, TenantStatus
 
 NOW = datetime(2026, 8, 30, 12, tzinfo=UTC)
 
@@ -199,6 +199,201 @@ def test_concurrent_same_bootstrap_is_idempotent(postgres_harness: URL) -> None:
         _cleanup(
             sync_engine, person_id=person_id, tenant_ids=() if tenant_id is None else (tenant_id,)
         )
+        _run_async(engine.dispose())
+        sync_engine.dispose()
+
+
+def test_public_learner_bootstrap_is_idempotent_and_creates_no_membership(
+    postgres_harness: URL,
+) -> None:
+    engine = create_async_engine(postgres_harness, pool_size=4, max_overflow=0)
+    sync_engine = create_engine(postgres_harness, pool_pre_ping=True)
+    slug = f"public-learners-{uuid4().hex}"
+    operations_tenant_id = uuid4()
+    with Session(sync_engine) as database, database.begin():
+        database.add(
+            Tenant(
+                id=operations_tenant_id,
+                slug=f"operations-{uuid4().hex}",
+                name="Authority Closers Operations",
+                status=TenantStatus.ACTIVE.value,
+            )
+        )
+
+    async def scenario() -> tuple[Any, Any]:
+        sessions = async_sessionmaker(engine, expire_on_commit=False)
+
+        async def once() -> Any:
+            async with sessions() as database, database.begin():
+                return await BootstrapApplication(database).bootstrap_public_learner_tenant(
+                    tenant_slug=slug,
+                    tenant_name="Authority Closers Public Learners",
+                    operations_tenant_id=operations_tenant_id,
+                )
+
+        return await asyncio.gather(once(), once())
+
+    try:
+        first, second = _run_async(scenario())
+        assert {first.tenant_created, second.tenant_created} == {True, False}
+        assert first.tenant_id == second.tenant_id
+        with Session(sync_engine) as database:
+            public_tenant = database.scalar(select(Tenant).where(Tenant.slug == slug))
+            operations_tenant = database.get(Tenant, operations_tenant_id)
+            assert public_tenant is not None
+            assert public_tenant.status == TenantStatus.ACTIVE.value
+            assert operations_tenant is not None
+            assert operations_tenant.status == TenantStatus.ACTIVE.value
+            assert (
+                database.scalar(select(Membership).where(Membership.tenant_id == first.tenant_id))
+                is None
+            )
+    finally:
+        if "first" in locals():
+            with sync_engine.begin() as connection:
+                connection.execute(delete(Tenant).where(Tenant.id == first.tenant_id))
+        with sync_engine.begin() as connection:
+            connection.execute(delete(Tenant).where(Tenant.id == operations_tenant_id))
+        _run_async(engine.dispose())
+        sync_engine.dispose()
+
+
+def test_public_learner_bootstrap_rejects_suspended_operations_tenant(
+    postgres_harness: URL,
+) -> None:
+    engine = create_async_engine(postgres_harness, pool_size=2, max_overflow=0)
+    sync_engine = create_engine(postgres_harness, pool_pre_ping=True)
+    operations_tenant_id = uuid4()
+    public_slug = f"public-learners-suspended-operations-{uuid4().hex}"
+    with Session(sync_engine) as database, database.begin():
+        database.add(
+            Tenant(
+                id=operations_tenant_id,
+                slug=f"operations-suspended-{uuid4().hex}",
+                name="Suspended Operations Control",
+                status=TenantStatus.SUSPENDED.value,
+            )
+        )
+
+    async def scenario() -> None:
+        sessions = async_sessionmaker(engine, expire_on_commit=False)
+        async with sessions() as database:
+            with pytest.raises(BootstrapError, match="operations control tenant is not active"):
+                async with database.begin():
+                    await BootstrapApplication(database).bootstrap_public_learner_tenant(
+                        tenant_slug=public_slug,
+                        tenant_name="Authority Closers Public Learners",
+                        operations_tenant_id=operations_tenant_id,
+                    )
+
+    try:
+        _run_async(scenario())
+        with Session(sync_engine) as database:
+            operations_tenant = database.get(Tenant, operations_tenant_id)
+            assert operations_tenant is not None
+            assert operations_tenant.status == TenantStatus.SUSPENDED.value
+            assert database.scalar(select(Tenant).where(Tenant.slug == public_slug)) is None
+            assert (
+                database.scalar(
+                    select(Membership).where(Membership.tenant_id == operations_tenant_id)
+                )
+                is None
+            )
+    finally:
+        with sync_engine.begin() as connection:
+            connection.execute(delete(Tenant).where(Tenant.id == operations_tenant_id))
+        _run_async(engine.dispose())
+        sync_engine.dispose()
+
+
+def test_public_learner_bootstrap_rejects_operations_tenant_collision(
+    postgres_harness: URL,
+) -> None:
+    engine = create_async_engine(postgres_harness, pool_size=2, max_overflow=0)
+    sync_engine = create_engine(postgres_harness, pool_pre_ping=True)
+    operations_tenant_id = uuid4()
+    slug = f"operations-collision-{uuid4().hex}"
+    with Session(sync_engine) as database:
+        database.add(
+            Tenant(
+                id=operations_tenant_id,
+                slug=slug,
+                name="Operations Control",
+            )
+        )
+        database.commit()
+
+    async def scenario() -> None:
+        sessions = async_sessionmaker(engine, expire_on_commit=False)
+        async with sessions() as database:
+            with pytest.raises(BootstrapError, match="different from the operations"):
+                async with database.begin():
+                    await BootstrapApplication(database).bootstrap_public_learner_tenant(
+                        tenant_slug=slug,
+                        tenant_name="Operations Control",
+                        operations_tenant_id=operations_tenant_id,
+                    )
+
+    try:
+        _run_async(scenario())
+        with Session(sync_engine) as database:
+            tenant = database.get(Tenant, operations_tenant_id)
+            assert tenant is not None
+            assert tenant.slug == slug
+            assert (
+                database.scalar(
+                    select(Membership).where(Membership.tenant_id == operations_tenant_id)
+                )
+                is None
+            )
+    finally:
+        with sync_engine.begin() as connection:
+            connection.execute(delete(Tenant).where(Tenant.id == operations_tenant_id))
+        _run_async(engine.dispose())
+        sync_engine.dispose()
+
+
+def test_public_learner_bootstrap_rejects_omitted_id_for_existing_operations_tenant(
+    postgres_harness: URL,
+) -> None:
+    engine = create_async_engine(postgres_harness, pool_size=2, max_overflow=0)
+    sync_engine = create_engine(postgres_harness, pool_pre_ping=True)
+    operations_tenant_id = uuid4()
+    slug = f"operations-omitted-{uuid4().hex}"
+    with Session(sync_engine) as database, database.begin():
+        database.add(
+            Tenant(
+                id=operations_tenant_id,
+                slug=slug,
+                name="Operations Control",
+            )
+        )
+
+    async def scenario() -> None:
+        sessions = async_sessionmaker(engine, expire_on_commit=False)
+        async with sessions() as database:
+            with pytest.raises(BootstrapError, match="required to prove"):
+                async with database.begin():
+                    await BootstrapApplication(database).bootstrap_public_learner_tenant(
+                        tenant_slug=slug,
+                        tenant_name="Operations Control",
+                    )
+
+    try:
+        _run_async(scenario())
+        with Session(sync_engine) as database:
+            tenant = database.get(Tenant, operations_tenant_id)
+            assert tenant is not None
+            assert tenant.slug == slug
+            assert (
+                database.scalar(
+                    select(Membership).where(Membership.tenant_id == operations_tenant_id)
+                )
+                is None
+            )
+    finally:
+        with sync_engine.begin() as connection:
+            connection.execute(delete(Tenant).where(Tenant.id == operations_tenant_id))
         _run_async(engine.dispose())
         sync_engine.dispose()
 

@@ -8,6 +8,14 @@ from collections.abc import Coroutine
 from typing import Any
 
 
+def compatible_event_loop_factory() -> asyncio.AbstractEventLoop:
+    """Return an event loop that supports async psycopg on this platform."""
+
+    if sys.platform == "win32":
+        return asyncio.SelectorEventLoop()
+    return asyncio.new_event_loop()
+
+
 def run_async[T](coroutine: Coroutine[Any, Any, T]) -> T:
     """Run a coroutine on an event loop compatible with async psycopg.
 
@@ -17,9 +25,9 @@ def run_async[T](coroutine: Coroutine[Any, Any, T]) -> T:
     """
 
     if sys.platform == "win32":
-        with asyncio.Runner(loop_factory=asyncio.SelectorEventLoop) as runner:
+        with asyncio.Runner(loop_factory=compatible_event_loop_factory) as runner:
             return runner.run(coroutine)
     return asyncio.run(coroutine)
 
 
-__all__ = ["run_async"]
+__all__ = ["compatible_event_loop_factory", "run_async"]

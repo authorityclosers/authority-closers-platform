@@ -84,8 +84,37 @@ def test_authorization_url_uses_code_flow_state_nonce_and_s256_without_secrets()
     assert query["code_challenge"] == [transaction.pkce_challenge]
     assert query["code_challenge_method"] == ["S256"]
     assert query["redirect_uri"] == [REDIRECT_URI]
+    assert "hd" not in query
     assert CLIENT_SECRET not in location
     assert transaction.pkce_verifier not in location
+
+
+@pytest.mark.asyncio
+async def test_google_oidc_accepts_verified_accounts_outside_authority_closers_domain() -> None:
+    transaction = _transaction()
+
+    def exchange(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"id_token": "signed-google-id-token"})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(exchange)) as client:
+        provider = GoogleOIDCProvider(
+            client_id=CLIENT_ID,
+            client_secret=CLIENT_SECRET,
+            http_client=client,
+            token_verifier=lambda token, audience: _claims(
+                transaction,
+                email="eligible.user@gmail.com",
+            ),
+        )
+        assertion = await provider.exchange_code(
+            "authorization-code",
+            transaction,
+            callback_state=transaction.state,
+            redirect_uri=REDIRECT_URI,
+        )
+
+    assert assertion.email == "eligible.user@gmail.com"
+    assert assertion.email_verified is True
 
 
 @pytest.mark.asyncio

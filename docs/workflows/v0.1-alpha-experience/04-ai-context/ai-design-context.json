@@ -1,0 +1,249 @@
+{
+  "schema_version": "1.1.0",
+  "context_id": "AC-WF-V01-ALPHA",
+  "product": "Authority Closers v0.1 Alpha browser-first learner LMS and separate admin foundation",
+  "status": "reference_ready_not_runtime_approved",
+  "baseline_date": "2026-09-01",
+  "authority_order": [
+    "explicit current user decisions",
+    "ratified product legal security accessibility and engineering constraints",
+    "controlled Drive documents in AGENTS.md order",
+    "repository route screen authorization email and traceability contracts",
+    "this workstream behavioral specification and state matrix",
+    "approved Clarity Grid visual references"
+  ],
+  "source_of_truth": [
+    "AGENTS.md",
+    "docs/traceability/CONTROLLED_SOURCE_REGISTER.md",
+    "docs/contracts/V0_1_ROUTE_SCREEN_CONTRACTS.md",
+    "docs/traceability/DRIVE_UI_IMPLEMENTATION_MATRIX.md",
+    "docs/traceability/FREE_COURSE_REQUIREMENTS_MATRIX.md",
+    "docs/security/AUTHORIZATION_MATRIX.md",
+    "docs/contracts/G1_ROUTE_AUTHORIZATION.md",
+    "docs/contracts/V0_1_TRANSACTIONAL_EMAIL_CONTRACT.md",
+    "docs/contracts/PROVISIONAL_SOURCE_GAPS.md",
+    "docs/evidence/V0_1_ALPHA_HANDOFF.md",
+    "docs/adr/0028-separate-public-learner-context-and-consent-backed-free-enrollment.md",
+    "docs/contracts/ENVIRONMENT_CONTRACT.md",
+    "packages/python/ac_platform/enrollment/self_attestation.py",
+    "current apps/learner-web/app routes and components",
+    "docs/workflows/v0.1-alpha-experience/01-research-journeys/source-manifest.md",
+    "docs/workflows/v0.1-alpha-experience/02-ux-state-spec/behavioral-spec.md",
+    "docs/workflows/v0.1-alpha-experience/02-ux-state-spec/state-transition-matrix.csv"
+  ],
+  "audiences": [
+    "anonymous visitor",
+    "unverified person",
+    "verified learner",
+    "AC owner or admin",
+    "authorized support or learning operator"
+  ],
+  "locked_decisions": [
+    "Use Clarity Grid Direction A; Study OS and Signal Path remain reserve references.",
+    "Registration consent is explicit and unchecked and covers 18 plus Terms Privacy and required operational email.",
+    "Google login is existing-identity-only; Google registration starts only from exact current consent.",
+    "Only the explicit Start free course action may convert the exact recorded current consent into AC-FREE-SELF-ATTESTATION-v1 for the exact published global free-course slug and an active learner membership in the distinct active public learner tenant.",
+    "Existing positive eligibility facts are reused without overwrite; negative expired stale-consent wrong-course inactive unverified non-learner wrong-tenant or conflicting inputs fail closed.",
+    "Onboarding is revisioned save or skip and captures only experience_context learning_goal practice_situation and weekly_minutes.",
+    "Onboarding answers do not create roles scores entitlements or unreviewed recommendations.",
+    "Module 1 is VIDEO REFLECTION IMPLEMENTATION_CHALLENGE REVIEW IMPROVE on one activity lifecycle.",
+    "Modules 2-4 are topology-only; do not invent activities content completion or unlock semantics.",
+    "Progress evidence access and completion are server-authoritative; analytics are secondary.",
+    "Theme choices are light dark and system and change presentation only.",
+    "Admin is a separate host app session and permission boundary.",
+    "Offline writes are blocked unless a specific durable queue contract is approved and tested.",
+    "Missing data is unavailable not zero and status never relies on color alone."
+  ],
+  "flows": [
+    {
+      "id": "FLOW-AUTH",
+      "journeys": ["JRN-01", "JRN-02"],
+      "screens": [
+        "AUTH-01",
+        "AUTH-02",
+        "AUTH-03",
+        "AUTH-04",
+        "AUTH-05",
+        "AUTH-06",
+        "AUTH-07"
+      ]
+    },
+    {
+      "id": "FLOW-ONB",
+      "journeys": ["JRN-01"],
+      "screens": ["ONB-01"]
+    },
+    {
+      "id": "FLOW-LEARN",
+      "journeys": ["JRN-03"],
+      "screens": [
+        "HOME-01",
+        "COURSE-01",
+        "COURSE-02",
+        "MOD-01",
+        "ACT-01",
+        "ACT-02",
+        "ACT-03",
+        "ACT-04",
+        "ACT-05",
+        "PROG-01"
+      ]
+    },
+    {
+      "id": "FLOW-SETTINGS",
+      "journeys": ["JRN-04"],
+      "screens": ["SET-01", "SET-02", "SET-03", "SET-04", "SET-05"]
+    },
+    {
+      "id": "FLOW-SYSTEM",
+      "journeys": ["JRN-05"],
+      "screens": ["SYS-01", "SYS-02", "SYS-03", "SYS-04"]
+    },
+    {
+      "id": "FLOW-ADMIN",
+      "journeys": ["JRN-06"],
+      "screens": ["ADM-01", "ADM-02", "ADM-03", "ADM-04", "ADM-05", "ADM-06"]
+    }
+  ],
+  "routes": [
+    { "screen_id": "AUTH-01", "route": "/login", "status": "contract" },
+    { "screen_id": "AUTH-02", "route": "/register", "status": "contract" },
+    { "screen_id": "AUTH-03", "route": "/verify-email", "status": "contract" },
+    {
+      "screen_id": "AUTH-04",
+      "route": "/forgot-password",
+      "status": "contract"
+    },
+    {
+      "screen_id": "AUTH-05",
+      "route": "/reset-password",
+      "status": "contract"
+    },
+    { "screen_id": "AUTH-06", "route": "/auth/callback", "status": "contract" },
+    {
+      "screen_id": "AUTH-07",
+      "route": "/session-expired",
+      "status": "contract"
+    },
+    { "screen_id": "ONB-01", "route": "/onboarding", "status": "contract" },
+    { "screen_id": "HOME-01", "route": "/home", "status": "contract" },
+    {
+      "screen_id": "COURSE-01",
+      "route": "/programs/{slug}",
+      "status": "contract"
+    },
+    {
+      "screen_id": "COURSE-02",
+      "route": "/learn/{programSlug}",
+      "status": "contract"
+    },
+    {
+      "screen_id": "MOD-01",
+      "route": "/learn/{programSlug}/module/{moduleId}",
+      "status": "contract"
+    },
+    {
+      "screen_id": "ACT-01",
+      "route": "/activity/{activityId}",
+      "status": "contract_renderer"
+    },
+    {
+      "screen_id": "ACT-02",
+      "route": "/activity/{activityId}",
+      "status": "contract_renderer"
+    },
+    {
+      "screen_id": "ACT-03",
+      "route": "/activity/{activityId}",
+      "status": "contract_renderer"
+    },
+    {
+      "screen_id": "ACT-04",
+      "route": "/activity/{activityId}",
+      "status": "contract_renderer"
+    },
+    {
+      "screen_id": "ACT-05",
+      "route": "/activity/{activityId}",
+      "status": "contract_renderer"
+    },
+    {
+      "screen_id": "PROG-01",
+      "route": "/progress",
+      "status": "runtime_pending"
+    },
+    {
+      "screen_id": "SET-01",
+      "route": "/settings",
+      "status": "runtime_pending"
+    },
+    {
+      "screen_id": "SET-02",
+      "route": "/settings",
+      "status": "runtime_pending"
+    },
+    {
+      "screen_id": "SET-03",
+      "route": "/settings",
+      "status": "runtime_pending"
+    },
+    {
+      "screen_id": "SET-04",
+      "route": "/settings",
+      "status": "implementation_candidate"
+    },
+    {
+      "screen_id": "SET-05",
+      "route": "/settings",
+      "status": "implementation_candidate"
+    },
+    { "screen_id": "SYS-03", "route": "/offline", "status": "contract" }
+  ],
+  "tokens_or_visual_direction": [
+    "DIRECTION-A-Clarity-Grid Drive ID 1VOgXqLvaslXPwYM8bzqboUVQe-JYdT39",
+    "semantic surface text border brand and status tokens without invented brand values",
+    "4px spacing scale",
+    "compact below 600 medium 600 to 1023 wide 1024 and above",
+    "calm directional learner surfaces and dense auditable admin surfaces",
+    "light dark and system themes with consistent semantic hierarchy"
+  ],
+  "viewport_targets": [
+    { "name": "compact_reference", "width": 390, "height": 844 },
+    { "name": "wide_reference", "width": 1440, "height": 900 },
+    { "name": "minimum_reflow_check", "width": 320, "height": 800 },
+    { "name": "tablet_check", "width": 768, "height": 1024 }
+  ],
+  "implementation_status": [
+    "GAP-ENR-001 is superseded by ADR 0028 and DEC-014; exact-release runtime proof remains pending.",
+    "PROG-01 is runtime_pending against the current /progress route and progress-runtime component.",
+    "SET-01 and SET-03 are runtime_pending against the current /settings route and settings-runtime component.",
+    "SET-02 is runtime_pending for non-sensitive device-local light dark and system behavior; account and cross-app synchronization are not authorized.",
+    "SET-04 and SET-05 are implementation_candidate boundaries limited to current account/session actions and existing Terms/Privacy routes."
+  ],
+  "known_gaps": [
+    "GAP-MEDIA-001 approved media transcript captions and real playback evidence are unresolved.",
+    "GAP-RUNTIME-001 exact-current staging Edge iOS Safari mail OAuth media security performance and production evidence is not supplied by this package.",
+    "Final approved brand color and typography tokens are not registered in the controlled UI source."
+  ],
+  "do_not_infer": [
+    "billing checkout payment refund or paid entitlement behavior",
+    "quiz assessment mastery score certification or autonomous official scoring",
+    "simulator call upload call review real call processing or external AI data flow",
+    "native Windows native iOS store publication or device APIs",
+    "SSO SCIM broad integrations tenant branding white labeling or broad enterprise behavior",
+    "community calendar inbox notifications broad library search recommendations or broad reporting",
+    "new onboarding fields persona roles permissions entitlements or course mappings",
+    "offline mutation queues cross-device preference sync or media upload",
+    "deletion or retention workflows",
+    "production readiness from screenshots mocks generated images or historical staging evidence"
+  ],
+  "generation_rules": [
+    "Attach the exact approved Drive reference for the requested screen family before generating or implementing pixels.",
+    "Use the behavioral spec and state matrix before the visual reference when behavior conflicts.",
+    "Generate each distinct raster state separately and name it with the stable screen ID and state.",
+    "Do not add routes tabs fields controls icons assets or business claims outside this context.",
+    "Use real approved assets or a documented neutral textual placeholder; never draw fake assets with CSS ASCII emoji or handcrafted SVG.",
+    "Compare reference and implementation at the same viewport and state before approval.",
+    "Label outputs reference selected superseded or approved; generated pixels begin as reference only."
+  ]
+}

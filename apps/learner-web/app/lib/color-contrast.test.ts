@@ -3,6 +3,10 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+const themeStyles = readFileSync(
+  new URL("../theme.css", import.meta.url),
+  "utf8",
+);
 
 function colorToken(name: string): string {
   const match = styles.match(new RegExp(`--${name}:\\s*(#[0-9a-f]{6})`, "i"));
@@ -38,6 +42,29 @@ function contrastRatio(foreground: string, background: string): number {
   const darker = Math.min(foregroundLuminance, backgroundLuminance);
 
   return (lighter + 0.05) / (darker + 0.05);
+}
+
+function themeBlock(theme: "light" | "dark"): string {
+  const selector = theme === "dark" ? 'html\\[data-theme="dark"\\]' : "html";
+  const match = themeStyles.match(new RegExp(`${selector}\\s*\\{([^}]*)\\}`));
+
+  if (!match?.[1]) {
+    throw new Error(`Missing ${theme} theme token block`);
+  }
+
+  return match[1];
+}
+
+function themeToken(theme: "light" | "dark", name: string): string {
+  const match = themeBlock(theme).match(
+    new RegExp(`--theme-${name}:\\s*(#[0-9a-f]{6})`, "i"),
+  );
+
+  if (!match?.[1]) {
+    throw new Error(`Missing ${theme} theme token --theme-${name}`);
+  }
+
+  return match[1];
 }
 
 function selectorBlock(selector: string): string {
@@ -77,6 +104,91 @@ function expectSemanticPairing({
 }
 
 describe("learner color tokens", () => {
+  it("defines the complete semantic appearance token contract in both themes", () => {
+    const requiredTokens = [
+      "canvas",
+      "surface",
+      "surface-raised",
+      "surface-subtle",
+      "input",
+      "text",
+      "text-muted",
+      "text-subtle",
+      "text-inverse",
+      "border",
+      "border-strong",
+      "action",
+      "action-hover",
+      "action-text",
+      "focus",
+      "disabled-surface",
+      "disabled-text",
+      "info-surface",
+      "info-text",
+      "success-surface",
+      "success-text",
+      "warning-surface",
+      "warning-text",
+      "danger-surface",
+      "danger-text",
+    ];
+
+    for (const theme of ["light", "dark"] as const) {
+      for (const token of requiredTokens) {
+        expect(themeToken(theme, token)).toMatch(/^#[0-9a-f]{6}$/i);
+      }
+    }
+  });
+
+  it("keeps text, actions, disabled labels, and state text legible", () => {
+    const pairings = [
+      ["text", "canvas"],
+      ["text", "surface"],
+      ["text-muted", "surface"],
+      ["action-text", "action"],
+      ["disabled-text", "disabled-surface"],
+      ["info-text", "info-surface"],
+      ["success-text", "success-surface"],
+      ["warning-text", "warning-surface"],
+      ["danger-text", "danger-surface"],
+    ] as const;
+
+    for (const theme of ["light", "dark"] as const) {
+      for (const [foreground, background] of pairings) {
+        expect(
+          contrastRatio(
+            themeToken(theme, foreground),
+            themeToken(theme, background),
+          ),
+          `${theme} --theme-${foreground} on --theme-${background}`,
+        ).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+
+  it("covers dark form, state, navigation, and mobile overflow regressions", () => {
+    const requiredRules = [
+      ":-webkit-autofill",
+      ":disabled",
+      ":focus-visible",
+      ".site-header, .site-footer",
+      ".surface-state--offline",
+      ".surface-state:not(:has(.surface-state__body))",
+      ".clarity-auth-mobile-header",
+      ".clarity-onboarding-intro h1",
+      ".learner-bottom-nav",
+      '.learner-sidebar__item[aria-disabled="true"]',
+      "overflow-wrap: anywhere",
+      ".clarity-auth-card .consent-check a",
+      "grid-template-columns: 35px minmax(0, 1fr)",
+      "font-size: clamp(1.7rem, 8vw, 2.3rem)",
+    ];
+
+    for (const rule of requiredRules) {
+      expect(themeStyles, `missing regression rule ${rule}`).toContain(rule);
+    }
+  });
+
   it("covers every live small-text surface pairing", () => {
     const pairings = [
       {

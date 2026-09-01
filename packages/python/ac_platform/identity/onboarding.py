@@ -42,15 +42,15 @@ class OnboardingSnapshot:
 
     @property
     def next_action_href(self) -> str:
-        return "/"
+        return "/home"
 
     @property
     def next_action_reason(self) -> str:
         if self.status == OnboardingStatus.NOT_STARTED.value:
-            return "Complete or skip the profile to continue to the published catalog."
+            return "Complete or skip the profile to continue to your learner home."
         return (
-            "Open the server-published catalog. No unreviewed personalized "
-            "course mapping has been inferred from these answers."
+            "Continue to your learner home. No unreviewed personalized course "
+            "mapping has been inferred from these answers."
         )
 
 

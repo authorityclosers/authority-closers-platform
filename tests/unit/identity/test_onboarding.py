@@ -54,7 +54,7 @@ async def test_onboarding_save_is_self_scoped_revisioned_and_explainable() -> No
     assert saved.practice_situation is None
     assert saved.status == OnboardingStatus.COMPLETED.value
     assert saved.revision == 1
-    assert saved.next_action_href == "/"
+    assert saved.next_action_href == "/home"
     assert "No unreviewed personalized course mapping" in saved.next_action_reason
     assert person.revision == 3
     session.flush.assert_awaited_once()

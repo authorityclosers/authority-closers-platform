@@ -1,105 +1,86 @@
-# Learner and admin Clarity Grid design QA
+# Authority Closers v0.1 Alpha design QA
 
-## Source visual truth
+## Controlled visual target
 
-The approved Drive exports were fetched by exact controlled Drive ID and are
-indexed in
-`docs/evidence/screenshots/v0.1-staging-exact-5b55a05/README.md`. The primary
-comparison family is:
+The visual target is the approved Authority Closers Drive package, fetched by
+exact Drive ID under the controlled-source manifest. The selected direction is
+the Clarity Grid system: white/ink surfaces, indigo actions, restrained borders,
+compact learning UI, responsive learner navigation, and a separate admin
+foundation. Route, state, authorization, and release contracts remain
+authoritative when a mockup depicts future or unimplemented breadth.
 
-- desktop and mobile learner shell;
-- auth registration;
-- desktop and mobile course overview;
-- mobile reflection;
-- desktop implementation evidence;
-- admin overview.
+The source registration frame used for the current same-viewport comparison is
+the controlled auth export (`1K9qpP-OTsgyuhJ3mtmZYDj2-7EFv_MJb`). Additional
+ready-state comparisons are required from the controlled learner shell, course,
+reflection, progress, and admin source families after the candidate is deployed.
 
-The approved direction remains Clarity Grid: white surfaces, navy/ink
-structure, indigo actions, restrained borders, compact learning UI, desktop
-rail/top bar, and responsive mobile navigation. Controlled route and state
-contracts override mockup-only claims for media, reviewers, certificates,
-metrics, and future navigation.
+## Candidate implementation evidence
 
-## Exact implementation evidence
+- Candidate: current uncommitted `codex/g1-free-course-foundation` worktree.
+- Local learner preview: port 3000, inspected only through the selected in-app
+  Browser.
+- Registration comparison viewport: 1487 × 1058 CSS pixels.
+- Mobile inspection viewport: 390 × 844 CSS pixels.
+- Combined source/implementation comparison:
+  `docs/evidence/design-qa/v0.1-alpha-20260901/comparisons/auth-register-source-vs-implementation.png`.
+- Local implementation captures:
+  `docs/evidence/design-qa/v0.1-alpha-20260901/implementation/`.
+- Curated pre-candidate staging audit:
+  `docs/evidence/screenshots/v0.1-staging-live-audit-20260901/`.
 
-- Release: `27fafaea1e5de41ae6a830746b1d832b42c7d444`
-- Learner: `https://staging.authorityclosers.com`
-- Admin: `https://admin-staging.authorityclosers.com`
-- API: `https://api-staging.authorityclosers.com`
-- Browser: the user-selected authenticated Chrome session
-- Browser capture viewport: 1521 × 667 CSS pixels
-- Evidence index:
-  `docs/evidence/screenshots/v0.1-staging-exact-27fafae/README.md`
-- Combined source/implementation review:
-  `docs/evidence/screenshots/v0.1-staging-exact-27fafae/comparison-shell-home.png`
-
-The exact-release evidence includes an authenticated learner home with the
-server-authorized free course, the full five-step Module 1 loop, a restored
-server draft, public catalog and program detail, login, registration,
-recovery confirmation, Google-authenticated owner home, and the protected
-admin foundation.
+Historical staging screenshot folders are local-only and are deliberately
+excluded from release commits because some contain account-identifying data.
 
 ## Source plus implementation comparison
 
-The desktop learner shell preserves the approved information hierarchy:
-fixed learner rail, top search/action bar, selected Home state, prominent
-welcome block, current-course card, and account context. The live home now
-surfaces `Authority Closers Free Course` with a working `Continue course`
-action and server-authoritative `0 / 5` projection.
+The registration implementation preserves the approved split-screen hierarchy,
+single primary heading, dense but readable account form, Google alternative,
+versioned consent, and clear sign-in continuation. The same implementation
+collapses to one column at 390 × 844 without horizontal overflow and maintains
+44 px interactive targets. Login and protected-session boundary states were
+also inspected at the mobile viewport. Light/dark/system theming is global and
+the dark preference persists across route transitions.
 
-The comparison is qualitative rather than pixel-perfect because the approved
-desktop export is 1487 × 1058 while the connected Chrome capture is 1521 × 667. No density normalization or crop is presented as a same-viewport pixel
-match.
+The source and implementation were captured at the same desktop viewport and
+placed in one combined image before visual judgment. This is a directional
+fidelity review, not a pixel-diff claim: copy and form contents intentionally
+follow the controlled runtime contracts.
 
-The activity family follows the approved loop language and compact workspace
-treatment for VIDEO → REFLECTION → IMPLEMENTATION_CHALLENGE → REVIEW →
-IMPROVE. The reflection screen restores the server draft and character count.
-Submission and media remain visibly disabled where the controlled server
-contracts do not authorize them.
+## Current findings
 
-## Findings
+- [Resolved locally] Auth and onboarding use the Clarity Grid visual system and
+  responsive mobile composition.
+- [Resolved locally] Learner home, exact Free Course path, five-activity Module
+  1 loop, reflection/workbook, progress, settings, and global theme surfaces are
+  implemented against server-authoritative data or explicit unavailable states.
+- [Resolved locally] Session-expired, loading, error, offline, conflict, and
+  locked/unavailable states are represented without fabricating protected data.
+- [Pending staging] Authenticated ready-state source comparisons for home,
+  course, reflection, progress/settings, and admin must be captured from the
+  immutable candidate release at desktop and mobile viewports.
+- [Pending staging] Real Google registration/login, password verification and
+  recovery delivery, PWA/offline behavior, and live responsive interaction must
+  be re-proven on the candidate release.
+- [Intentional v0.1 boundary] Real course media playback remains provider and
+  content-source gated. Modules 2–4 remain topology/extension contracts; broad
+  LMS, native apps, billing, SSO/SCIM, simulator, and call-review breadth is not
+  claimed.
 
-- [Resolved] Authenticated desktop ready-state evidence now exists for learner
-  home, course path, five activities, Google login landing, and protected
-  admin.
-- [Resolved] The learner home now discovers the first server-authorized
-  published program and shows its real projection; it does not synthesize an
-  entitlement or progress record.
-- [P1] A current-release authenticated mobile visual pass is still missing.
-  The connected Chrome surface did not apply a temporary viewport override,
-  so responsive tests and CSS checks are not substituted for a real 390 × 844
-  browser capture.
-- [P2] Media playback remains provider/policy-gated, and implementation
-  evidence submission remains reviewer-gated. The UI states are intentional
-  and must not be replaced with fabricated completion or review data.
-- [P2] The live v0.1 home is intentionally smaller than the future-rich Drive
-  example: weekly goals, calendars, certificates, broad library analytics,
-  and enterprise navigation remain extension contracts.
+## Verification state
 
-## Verification gates
-
-- Learner tests: 54 passed.
-- Learner lint: passed.
-- Learner typecheck: passed.
-- Prettier check: passed.
-- Learner production build: passed.
-- Pull-request control-plane workflow `33447263943`: passed.
-- Pull-request application workflow `33447263944`: passed.
-- Exact-release validation and packaging workflow `33447522610`: passed.
-- Staging migrations, five-container health, learner/API/PWA route smoke,
-  Cloudflare Access boundary, Google callback binding, and legacy WordPress
-  boundary: passed.
-- Password login for the dedicated learner: passed.
-- Google login for `admin@authorityclosers.com`: passed and landed on `/home`
-  with owner context.
-- Fresh staging password-recovery mail: delivered through Resend.
+- Backend unit gate: 152 passed.
+- Focused PostgreSQL gate: 18 passed.
+- Full PostgreSQL-backed Python suite: 924 passed, 21 documented skips.
+- Python typecheck and Ruff: passed.
+- Learner/frontend full gates: pending final reviewer-fix integration.
+- Immutable exact-SHA CI/package/deploy: pending.
+- Current-release authenticated staging journey and design comparison: pending.
 
 ## Final result
 
-final result: blocked for complete cross-device visual acceptance
+final result: blocked pending immutable staging visual acceptance
 
-The desktop staging alpha visual slice is accepted for the implemented v0.1
-boundary. Complete design acceptance remains blocked only on a current-release
-authenticated mobile capture and the intentionally gated media/reviewer
-capabilities; it is not blocked on desktop staging authentication or the
-Module 1 learner journey.
+The local candidate is materially closer to the approved visual and interaction
+contract, but design acceptance is not complete until the exact candidate is
+packaged, deployed, exercised with canonical learner data, and compared with the
+approved source families at matched desktop and mobile states.

@@ -1,8 +1,13 @@
 # Drive UI implementation matrix
 
-Status: candidate audit, 2026-08-31. This matrix is keyed by exact Drive file
+Status: candidate audit, 2026-09-01. This matrix is keyed by exact Drive file
 ID. It distinguishes the selected v0.1 implementation from future product
 references; a visual reference is not evidence that the capability exists.
+
+The current candidate is an uncommitted worktree and has no exact-SHA staging
+proof. Existing evidence remains scoped to exact release `27fafae` for the full
+learner journey and exact release `81635d1` for the later auth/recovery family;
+neither pack proves the current candidate delta.
 
 The controlled Drive package selects **Clarity Grid**. `Study OS` and `Signal
 Path` are deliberate reserves. The package README also says the images are
@@ -30,11 +35,11 @@ Status meanings:
 
 ## D01 — platform shell and navigation
 
-| Drive asset                                                                  | Status    | v0.1 treatment                                                                      |
-| ---------------------------------------------------------------------------- | --------- | ----------------------------------------------------------------------------------- |
-| `SHELL-01-desktop-home.png` (`1JrHdP23rz27ECr2rVPDpRi_GSYMWaKEC`)            | candidate | Desktop learner rail, header, truthful disabled extensions, and learner home shell. |
-| `SHELL-02-mobile-home.png` (`12lQfy7L305LLoBw1VcLulz5gYxI9AM7t`)             | candidate | Responsive learner header and safe-area bottom navigation.                          |
-| `SEARCH-01-desktop-command-search.png` (`1fIOdGNwwSRx30ba2dRSCsBv1XWguZ01X`) | extension | Search is visibly disabled; permission-aware command search is not claimed.         |
+| Drive asset                                                                  | Status    | v0.1 treatment                                                                                                     |
+| ---------------------------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------ |
+| `SHELL-01-desktop-home.png` (`1JrHdP23rz27ECr2rVPDpRi_GSYMWaKEC`)            | candidate | Desktop learner rail, header, API-backed home, and active Progress/Settings navigation; Library remains disabled.  |
+| `SHELL-02-mobile-home.png` (`12lQfy7L305LLoBw1VcLulz5gYxI9AM7t`)             | candidate | Responsive learner header and safe-area bottom navigation, including candidate `/progress` and `/settings` routes. |
+| `SEARCH-01-desktop-command-search.png` (`1fIOdGNwwSRx30ba2dRSCsBv1XWguZ01X`) | extension | Search remains visibly disabled; library discovery and permission-aware command search are not claimed.            |
 
 ## D02 — auth and onboarding
 
@@ -52,30 +57,30 @@ folder does not contain a separate image for every state.
 
 ## D03 — learner home and library
 
-| Drive asset                                                          | Status    | v0.1 treatment                                                                                                                      |
-| -------------------------------------------------------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `HOME-01-mobile-dashboard.png` (`1CgJ3XhYcclRxj2Zb6HRUXnH6pcQEcu01`) | partial   | Responsive home and server-derived continue-learning projection exist; authenticated ready-state staging capture is still required. |
-| `LIB-01-desktop-library.png` (`1aDOi1nnq2lLOepsAGXIngkGmBtB1lp5q`)   | extension | Broad library discovery, filters, bookmarks, and recommendations are not part of the first slice.                                   |
-| `LIB-02-mobile-library.png` (`1kwrBVOdPm637iqrknWEO79RQzUZM6DGi`)    | extension | Mobile library breadth follows the same explicit extension contract.                                                                |
+| Drive asset                                                          | Status    | v0.1 treatment                                                                                                                                                                                |
+| -------------------------------------------------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `HOME-01-mobile-dashboard.png` (`1CgJ3XhYcclRxj2Zb6HRUXnH6pcQEcu01`) | candidate | Exact release `27fafae` proves the older API-backed enrolled home. The candidate adds onboarding gating and connected consent-backed `Start free course`; exact-SHA staging proof is pending. |
+| `LIB-01-desktop-library.png` (`1aDOi1nnq2lLOepsAGXIngkGmBtB1lp5q`)   | extension | Broad library discovery, filters, bookmarks, and recommendations are not part of the first slice.                                                                                             |
+| `LIB-02-mobile-library.png` (`1kwrBVOdPm637iqrknWEO79RQzUZM6DGi`)    | extension | Mobile library breadth follows the same explicit extension contract.                                                                                                                          |
 
 ## D04 — course and content player
 
-| Drive asset                                                            | Status    | v0.1 treatment                                                                                                                      |
-| ---------------------------------------------------------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `COURSE-01-desktop-overview.png` (`1sQs7ew-v1IO-Xb4h87dV_LOqFYRtloRk`) | candidate | Published-program overview and version-pinned Module 1 path.                                                                        |
-| `COURSE-02-mobile-outline.png` (`1vp7jaZ_LUl6Glm1NzljgFxIK8nB8rfs8`)   | candidate | Responsive module outline with server-explained locked states.                                                                      |
-| `PLAYER-01-desktop-player.png` (`1BASW-gVdQR8lWxDRfXN_svY5yqXkez-u`)   | partial   | Activity workspace, completion policy, and evidence seam exist; approved media, transcript, and real playback proof remain pending. |
+| Drive asset                                                            | Status    | v0.1 treatment                                                                                                                                            |
+| ---------------------------------------------------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `COURSE-01-desktop-overview.png` (`1sQs7ew-v1IO-Xb4h87dV_LOqFYRtloRk`) | candidate | API-backed published overview and version-pinned four-module path; Modules 2–4 remain activity-empty extension topology.                                  |
+| `COURSE-02-mobile-outline.png` (`1vp7jaZ_LUl6Glm1NzljgFxIK8nB8rfs8`)   | candidate | Responsive server-derived module outline and lock reasons; no local two-module fixture is used by the route runtime.                                      |
+| `PLAYER-01-desktop-player.png` (`1BASW-gVdQR8lWxDRfXN_svY5yqXkez-u`)   | partial   | Candidate activity UI connects draft and authorized evidence submission. Approved media, transcript, playback, and reviewer runtime proof remain pending. |
 
 ## D05 — practice, review, progress, and certificates
 
-| Drive asset                                                               | Status    | v0.1 treatment                                                                                                                 |
-| ------------------------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `ACT-01-desktop-quiz.png` (`1vubxTMRoavtCMi7S-BglxOX05HKoEIwl`)           | extension | Quiz is not in the approved Module 1 sequence.                                                                                 |
-| `ACT-02-mobile-reflection.png` (`1QMLN1QAlFDVnqlCG8JMWjG3OcEbo85ua`)      | partial   | Responsive private reflection/workbook and revisioned draft contract exist; live authenticated journey proof remains required. |
-| `ACT-03-desktop-implementation.png` (`1B03Slo9QX3c4vrE552cEtlqnDitVbnaO`) | partial   | Implementation evidence submission exists; no media-upload or external-review breadth is claimed.                              |
-| `REVIEW-01-mobile-feedback.png` (`16HO9FeftBfm6uW334UWrAWYUyhC4YIwW`)     | partial   | Human-review lifecycle and improve step exist; no reviewer assignment or feedback is fabricated in preview.                    |
-| `PROG-01-desktop-progress.png` (`1HV9Ea2xn72e9s9pZ8UkAuc5bt4mVZ4yj`)      | partial   | Canonical progress projections and locked/completed states exist; no analytics or mastery claim is inferred.                   |
-| `CERT-01-mobile-certificate.png` (`1jB15DjmbsZJ3ZTa9Pg1rnYj8a_G-PiLt`)    | extension | Certificate API/read contract exists, but credential issuance UI is not a v0.1 launch claim.                                   |
+| Drive asset                                                               | Status    | v0.1 treatment                                                                                                                                                     |
+| ------------------------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ACT-01-desktop-quiz.png` (`1vubxTMRoavtCMi7S-BglxOX05HKoEIwl`)           | extension | Quiz is not in the approved Module 1 sequence.                                                                                                                     |
+| `ACT-02-mobile-reflection.png` (`1QMLN1QAlFDVnqlCG8JMWjG3OcEbo85ua`)      | partial   | Exact release `27fafae` proves server draft restore. Candidate UI also submits evidence only when the API authorizes it; exact-candidate runtime proof is pending. |
+| `ACT-03-desktop-implementation.png` (`1B03Slo9QX3c4vrE552cEtlqnDitVbnaO`) | partial   | Candidate implementation-evidence form is API-connected; no exact-SHA mutation proof, media upload, or external-review breadth is claimed.                         |
+| `REVIEW-01-mobile-feedback.png` (`16HO9FeftBfm6uW334UWrAWYUyhC4YIwW`)     | partial   | Append-only review domain/routes exist, but reviewer assignment/UI and human feedback runtime remain unconnected and unfabricated.                                 |
+| `PROG-01-desktop-progress.png` (`1HV9Ea2xn72e9s9pZ8UkAuc5bt4mVZ4yj`)      | candidate | `/progress` renders canonical projection counts, module activities, locks, no-enrollment, retry, and 401 recovery; exact-SHA staging proof is pending.             |
+| `CERT-01-mobile-certificate.png` (`1jB15DjmbsZJ3ZTa9Pg1rnYj8a_G-PiLt`)    | partial   | Candidate self-scoped certificate read is API-backed, but authoritative issuance and end-to-end staging proof remain partial.                                      |
 
 ## D06 — organization admin and analytics
 
@@ -95,17 +100,26 @@ folder does not contain a separate image for every state.
 
 ## D08 — settings, billing, and integrations
 
-| Drive asset                                                                      | Status    | v0.1 treatment                                                                     |
-| -------------------------------------------------------------------------------- | --------- | ---------------------------------------------------------------------------------- |
-| `SET-01-desktop-tenant-branding.png` (`1vVHIDFKsfS64YkuYK1ojf9h384P4Qq65`)       | extension | Tenant branding UI is not part of the first slice.                                 |
-| `SET-02-mobile-profile-notifications.png` (`1SmQuMR7fOYaarIJ_1HweVt0nY6ejwKPM`)  | extension | Preferences/notifications are not part of the first slice.                         |
-| `SAAS-01-desktop-plan-billing.png` (`1tI6pOO6sZae9ARqQDgNgHj6GBebNZqeU`)         | extension | Billing is explicitly excluded from v0.1.                                          |
-| `INT-01-desktop-integrations-identity.png` (`1lDZFd007vqdB3PyZBwPD9EbggE4M2Nbc`) | extension | SSO, SCIM, API/webhook management, and broad integrations are explicitly excluded. |
-| `COMM-01-mobile-calendar-inbox.png` (`1S0TOWyIQL31DSx7BiBiG_kcDKfHsdSQI`)        | extension | Calendar/inbox/communication breadth is not part of v0.1.                          |
+| Drive asset                                                                      | Status    | v0.1 treatment                                                                                                                                                                                                                  |
+| -------------------------------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SET-01-desktop-tenant-branding.png` (`1vVHIDFKsfS64YkuYK1ojf9h384P4Qq65`)       | extension | Tenant branding UI is not part of the first slice.                                                                                                                                                                              |
+| `SET-02-mobile-profile-notifications.png` (`1SmQuMR7fOYaarIJ_1HweVt0nY6ejwKPM`)  | partial   | Candidate `/settings` reads verified account/onboarding data, links profile editing, signs out, and offers Light/Dark/System as local browser presentation only. Server-synced preferences and notifications remain extensions. |
+| `SAAS-01-desktop-plan-billing.png` (`1tI6pOO6sZae9ARqQDgNgHj6GBebNZqeU`)         | extension | Billing is explicitly excluded from v0.1.                                                                                                                                                                                       |
+| `INT-01-desktop-integrations-identity.png` (`1lDZFd007vqdB3PyZBwPD9EbggE4M2Nbc`) | extension | SSO, SCIM, API/webhook management, and broad integrations are explicitly excluded.                                                                                                                                              |
+| `COMM-01-mobile-calendar-inbox.png` (`1S0TOWyIQL31DSx7BiBiG_kcDKfHsdSQI`)        | extension | Calendar/inbox/communication breadth is not part of v0.1.                                                                                                                                                                       |
+
+Native Windows/iOS applications remain extension contracts. The v0.1 target is
+the browser/PWA surface; responsive layouts and local appearance preferences do
+not constitute native-app implementation.
 
 ## Release gate
 
 `candidate` is not equivalent to live. Promotion requires an immutable commit,
 Node 24/Linux CI, exact-SHA staging deployment, API/admin/learner smoke tests,
 responsive visual comparisons, and an honest handoff naming every remaining
-`partial` or `extension` item.
+`partial` or `extension` item. In particular, the current candidate still needs
+exact-SHA staging proof for the distinct public learner tenant, consent-backed
+free enrollment, evidence submission, `/progress`, `/settings`, and local theme
+behavior. Media playback, Modules 2–4 content, library/search, certificate
+issuance, broad admin, billing, SSO/SCIM, and native apps remain partial or
+extension boundaries after that proof.

@@ -11,6 +11,10 @@ export const ROUTES = {
   sessionExpired: "/session-expired",
   onboarding: "/onboarding",
   learnerHome: "/home",
+  myLearning: "/home#my-learning",
+  practice: "/home#practice",
+  progress: "/progress",
+  settings: "/settings",
   programDetail: (slug: string) => `/programs/${slug}`,
   programLearning: (slug: string) => `/learn/${slug}`,
   module: (slug: string, moduleId: string) =>

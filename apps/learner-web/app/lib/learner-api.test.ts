@@ -75,6 +75,118 @@ describe("learner API adapter", () => {
     });
   });
 
+  it("retains an enrollment key after an unknown outcome and rotates it after success", async () => {
+    const observedKeys: string[] = [];
+    let requestCount = 0;
+    const fetcher = vi.fn(
+      async (_input: RequestInfo | URL, init?: RequestInit) => {
+        observedKeys.push(
+          new Headers(init?.headers).get("idempotency-key") ?? "missing",
+        );
+        requestCount += 1;
+        if (requestCount === 1) throw new TypeError("connection lost");
+        return response({ created: requestCount === 2, replayed: false });
+      },
+    );
+    const makeKey = vi
+      .fn<() => string>()
+      .mockReturnValueOnce("enrollment-operation-1")
+      .mockReturnValueOnce("enrollment-operation-2");
+    const api = createLearnerApi(fetcher, { idempotencyKey: makeKey });
+
+    await expect(api.enrollFree("version-retry")).rejects.toThrow(
+      "connection lost",
+    );
+    await expect(api.enrollFree("version-retry")).resolves.toMatchObject({
+      created: true,
+    });
+    await expect(api.enrollFree("version-retry")).resolves.toMatchObject({
+      created: false,
+    });
+
+    expect(observedKeys).toEqual([
+      "enrollment-operation-1",
+      "enrollment-operation-1",
+      "enrollment-operation-2",
+    ]);
+    expect(makeKey).toHaveBeenCalledTimes(2);
+  });
+
+  it("retains one key for retries of the same logical draft", async () => {
+    const observedKeys: string[] = [];
+    const fetcher = vi
+      .fn()
+      .mockImplementationOnce(async (_input, init?: RequestInit) => {
+        observedKeys.push(
+          new Headers(init?.headers).get("idempotency-key") ?? "missing",
+        );
+        throw new TypeError("offline");
+      })
+      .mockImplementationOnce(async (_input, init?: RequestInit) => {
+        observedKeys.push(
+          new Headers(init?.headers).get("idempotency-key") ?? "missing",
+        );
+        return response({ revision: 2, activity_revision: 4 });
+      });
+    const makeKey = vi.fn(() => `draft-operation-${observedKeys.length + 1}`);
+    const api = createLearnerApi(fetcher, { idempotencyKey: makeKey });
+
+    await expect(
+      api.saveDraft("activity-retry", { response: "Keep this" }, 1),
+    ).rejects.toThrow("offline");
+    await expect(
+      api.saveDraft("activity-retry", { response: "Keep this" }, 1),
+    ).resolves.toMatchObject({ revision: 2 });
+
+    expect(observedKeys).toEqual(["draft-operation-1", "draft-operation-1"]);
+    expect(makeKey).toHaveBeenCalledOnce();
+  });
+
+  it("retains one key for retries of the same logical evidence submission", async () => {
+    const observedKeys: string[] = [];
+    const fetcher = vi
+      .fn()
+      .mockImplementationOnce(async (_input, init?: RequestInit) => {
+        observedKeys.push(
+          new Headers(init?.headers).get("idempotency-key") ?? "missing",
+        );
+        return response({ code: "upstream_timeout" }, 503);
+      })
+      .mockImplementationOnce(async (_input, init?: RequestInit) => {
+        observedKeys.push(
+          new Headers(init?.headers).get("idempotency-key") ?? "missing",
+        );
+        return response({ activity_revision: 9, submission_status: "pending" });
+      });
+    const makeKey = vi.fn(
+      () => `evidence-operation-${observedKeys.length + 1}`,
+    );
+    const api = createLearnerApi(fetcher, { idempotencyKey: makeKey });
+
+    await expect(
+      api.submitEvidence(
+        "activity-evidence",
+        "reflection",
+        { response: "One submission" },
+        8,
+      ),
+    ).rejects.toMatchObject({ status: 503 });
+    await expect(
+      api.submitEvidence(
+        "activity-evidence",
+        "reflection",
+        { response: "One submission" },
+        8,
+      ),
+    ).resolves.toMatchObject({ activity_revision: 9 });
+
+    expect(observedKeys).toEqual([
+      "evidence-operation-1",
+      "evidence-operation-1",
+    ]);
+    expect(makeKey).toHaveBeenCalledOnce();
+  });
+
   it("preserves server error status and code for honest UI states", async () => {
     const fetcher = vi.fn(async () =>
       response(
@@ -229,6 +341,60 @@ describe("learner API adapter", () => {
       revision: 4,
       next_action_reason: "Server-owned explanation",
     });
+  });
+
+  it("retains one onboarding key after a lost response and rotates it after success", async () => {
+    const observedKeys: string[] = [];
+    const fetcher = vi
+      .fn()
+      .mockImplementationOnce(async (_input, init?: RequestInit) => {
+        observedKeys.push(
+          new Headers(init?.headers).get("idempotency-key") ?? "missing",
+        );
+        throw new TypeError("response lost after commit");
+      })
+      .mockImplementationOnce(async (_input, init?: RequestInit) => {
+        observedKeys.push(
+          new Headers(init?.headers).get("idempotency-key") ?? "missing",
+        );
+        return response({ revision: 4, status: "completed" });
+      })
+      .mockImplementationOnce(async (_input, init?: RequestInit) => {
+        observedKeys.push(
+          new Headers(init?.headers).get("idempotency-key") ?? "missing",
+        );
+        return response({ revision: 5, status: "completed" });
+      });
+    const makeKey = vi
+      .fn<() => string>()
+      .mockReturnValueOnce("onboarding-operation-1")
+      .mockReturnValueOnce("onboarding-operation-2");
+    const api = createLearnerApi(fetcher, { idempotencyKey: makeKey });
+    const input = {
+      experienceContext: "sales",
+      learningGoal: "Ask a clearer next-step question",
+      practiceSituation: null,
+      weeklyMinutes: 30,
+      status: "completed" as const,
+      currentStep: 3,
+    };
+
+    await expect(api.saveOnboarding(input, 3)).rejects.toThrow(
+      "response lost after commit",
+    );
+    await expect(api.saveOnboarding(input, 3)).resolves.toMatchObject({
+      revision: 4,
+    });
+    await expect(api.saveOnboarding(input, 4)).resolves.toMatchObject({
+      revision: 5,
+    });
+
+    expect(observedKeys).toEqual([
+      "onboarding-operation-1",
+      "onboarding-operation-1",
+      "onboarding-operation-2",
+    ]);
+    expect(makeKey).toHaveBeenCalledTimes(2);
   });
 
   it("uses the API's PUT draft and POST evidence verbs with server revisions", async () => {

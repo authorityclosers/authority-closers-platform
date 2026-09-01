@@ -37,6 +37,14 @@ class BootstrapResult:
     sessions_updated: int
 
 
+@dataclass(frozen=True, slots=True)
+class PublicLearnerTenantBootstrapResult:
+    """Safe result for the exact shared self-directed learner context."""
+
+    tenant_id: UUID
+    tenant_created: bool
+
+
 def _required_text(value: str, field_name: str, maximum: int) -> str:
     normalized = value.strip()
     if not normalized:
@@ -181,5 +189,76 @@ class BootstrapApplication:
             sessions_updated=sessions_updated,
         )
 
+    async def bootstrap_public_learner_tenant(
+        self,
+        *,
+        tenant_slug: str,
+        tenant_name: str,
+        operations_tenant_id: UUID | None = None,
+    ) -> PublicLearnerTenantBootstrapResult:
+        """Create or validate the dedicated self-directed learner context.
 
-__all__ = ["BootstrapApplication", "BootstrapError", "BootstrapResult"]
+        This operation deliberately creates no person or membership. Runtime
+        registration remains the only path that can add an active learner
+        membership after verified, versioned consent. Keeping this context
+        separate prevents an operations owner role from replacing the
+        learner role required by self-enrollment.
+        """
+
+        self._require_transaction()
+        if operations_tenant_id is None:
+            raise BootstrapError(
+                "operations tenant id is required to prove public learner tenant isolation"
+            )
+        operations_tenant = await self._tenancy.get_tenant(operations_tenant_id)
+        if operations_tenant is None:
+            raise BootstrapError(
+                "configured operations control tenant is unavailable; "
+                "public learner tenant isolation cannot be proven"
+            )
+        if operations_tenant.status != TenantStatus.ACTIVE.value:
+            raise BootstrapError(
+                "configured operations control tenant is not active; "
+                "public learner tenant isolation cannot be proven"
+            )
+        normalized_slug = _required_text(tenant_slug, "tenant_slug", 63)
+        normalized_name = _required_text(tenant_name, "tenant_name", 200)
+        tenant = await self._tenancy.get_tenant_by_slug_for_update(normalized_slug)
+        tenant_created = tenant is None
+        if tenant is None:
+            candidate = TenantSnapshot(
+                id=uuid4(),
+                slug=normalized_slug,
+                name=normalized_name,
+                status=TenantStatus.ACTIVE.value,
+            )
+            try:
+                await self._tenancy.save_tenant(candidate)
+            except TenantServiceError:
+                tenant = await self._tenancy.get_tenant_by_slug_for_update(normalized_slug)
+                if tenant is None:
+                    raise BootstrapError(
+                        "public learner tenant creation raced and canonical tenant is unavailable"
+                    ) from None
+                tenant_created = False
+            else:
+                tenant = candidate
+        if tenant is None:  # pragma: no cover - defensive narrowing
+            raise BootstrapError("public learner tenant was not resolved")
+        _validate_tenant(tenant, slug=normalized_slug, name=normalized_name)
+        if tenant.id == operations_tenant_id:
+            raise BootstrapError(
+                "public learner tenant must be different from the operations control tenant"
+            )
+        return PublicLearnerTenantBootstrapResult(
+            tenant_id=tenant.id,
+            tenant_created=tenant_created,
+        )
+
+
+__all__ = [
+    "BootstrapApplication",
+    "BootstrapError",
+    "BootstrapResult",
+    "PublicLearnerTenantBootstrapResult",
+]

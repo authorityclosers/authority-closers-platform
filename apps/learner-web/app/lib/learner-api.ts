@@ -254,10 +254,24 @@ export class ApiError extends Error {
 }
 
 const defaultIdempotencyKey = (): string => {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return crypto.randomUUID();
+  const runtimeCrypto = globalThis.crypto as
+    | (Pick<Crypto, "getRandomValues"> & { randomUUID?: () => string })
+    | undefined;
+  if (typeof runtimeCrypto?.randomUUID === "function") {
+    return runtimeCrypto.randomUUID();
   }
-  return `ac-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  if (runtimeCrypto) {
+    const bytes = runtimeCrypto.getRandomValues(new Uint8Array(16));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = Array.from(bytes, (value: number) =>
+      value.toString(16).padStart(2, "0"),
+    ).join("");
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  }
+  throw new Error(
+    "Secure random idempotency keys are unavailable in this browser.",
+  );
 };
 
 function isRecord(value: unknown): value is JsonRecord {
@@ -288,6 +302,10 @@ export function createLearnerApi(
   options: LearnerApiOptions = {},
 ) {
   const makeKey = options.idempotencyKey ?? defaultIdempotencyKey;
+  const pendingOperationKeys = new Map<
+    string,
+    { fingerprint: string; key: string }
+  >();
 
   async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     assertV1Path(path);
@@ -315,17 +333,50 @@ export function createLearnerApi(
     body: JsonRecord,
     extraHeaders: Record<string, string> = {},
     method: "POST" | "PUT" = "POST",
+    idempotencyKey = makeKey(),
   ): Promise<T> {
     return request<T>(path, {
       method,
       cache: "no-store",
       headers: {
         "Content-Type": "application/json",
-        "Idempotency-Key": makeKey(),
+        "Idempotency-Key": idempotencyKey,
         ...extraHeaders,
       },
       body: JSON.stringify(body),
     });
+  }
+
+  function stableFingerprint(value: unknown): string {
+    if (Array.isArray(value)) {
+      return `[${value.map(stableFingerprint).join(",")}]`;
+    }
+    if (isRecord(value)) {
+      return `{${Object.keys(value)
+        .sort()
+        .map((key) => `${JSON.stringify(key)}:${stableFingerprint(value[key])}`)
+        .join(",")}}`;
+    }
+    return JSON.stringify(value) ?? "undefined";
+  }
+
+  async function logicalJsonMutation<T>(
+    operationScope: string,
+    path: string,
+    body: JsonRecord,
+    extraHeaders: Record<string, string> = {},
+    method: "POST" | "PUT" = "POST",
+  ): Promise<T> {
+    const fingerprint = stableFingerprint({ body, extraHeaders, method, path });
+    const pending = pendingOperationKeys.get(operationScope);
+    const key = pending?.fingerprint === fingerprint ? pending.key : makeKey();
+    pendingOperationKeys.set(operationScope, { fingerprint, key });
+
+    const result = await jsonMutation<T>(path, body, extraHeaders, method, key);
+    if (pendingOperationKeys.get(operationScope)?.key === key) {
+      pendingOperationKeys.delete(operationScope);
+    }
+    return result;
   }
 
   return {
@@ -364,7 +415,8 @@ export function createLearnerApi(
     onboarding: () =>
       request<OnboardingResponse>("/v1/onboarding", { cache: "no-store" }),
     saveOnboarding: (input: OnboardingSaveInput, expectedRevision: number) =>
-      jsonMutation<OnboardingResponse>(
+      logicalJsonMutation<OnboardingResponse>(
+        "onboarding",
         "/v1/onboarding",
         {
           experience_context: input.experienceContext,
@@ -396,9 +448,11 @@ export function createLearnerApi(
     enrollFree: (programVersionId: string) =>
       // The browser supplies the Origin header for this same-origin POST;
       // Origin is a forbidden header and must not be forged by app code.
-      jsonMutation<FreeEnrollmentResponse>("/v1/enrollments/free", {
-        program_version_id: programVersionId,
-      }),
+      logicalJsonMutation<FreeEnrollmentResponse>(
+        `enrollment:${programVersionId}`,
+        "/v1/enrollments/free",
+        { program_version_id: programVersionId },
+      ),
     learning: (programId: string) =>
       request<LearningResponse>(
         `/v1/learning/${encodeURIComponent(programId)}`,
@@ -414,7 +468,8 @@ export function createLearnerApi(
         },
       ),
     saveDraft: (activityId: string, payload: JsonRecord, revision: number) =>
-      jsonMutation<DraftResponse>(
+      logicalJsonMutation<DraftResponse>(
+        `draft:${activityId}`,
         `/v1/activities/${encodeURIComponent(activityId)}/draft`,
         { payload },
         { "If-Match": `\"draft-revision-${revision}\"` },
@@ -426,7 +481,8 @@ export function createLearnerApi(
       payload: JsonRecord,
       revision: number,
     ) =>
-      jsonMutation<EvidenceResponse>(
+      logicalJsonMutation<EvidenceResponse>(
+        `evidence:${activityId}`,
         `/v1/activities/${encodeURIComponent(activityId)}/evidence`,
         { evidence_type: evidenceType, payload },
         { "If-Match": `\"activity-revision-${revision}\"` },

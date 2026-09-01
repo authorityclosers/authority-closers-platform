@@ -565,6 +565,70 @@ class ProviderAuthorizationTransaction(Base):
     consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class IdentityCommandIdempotency(Base):
+    """Durable, indexed command claim/result state for identity mutations.
+
+    Raw caller keys are deliberately not retained.  The application stores a
+    SHA-256 digest so retry authority is bounded without turning audit history
+    into a queryable command ledger or persisting a bearer-like client value.
+    """
+
+    __tablename__ = "identity_command_idempotency"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "actor_person_id"],
+            ["memberships.tenant_id", "memberships.person_id"],
+            name="fk_identity_command_idempotency_actor_membership",
+        ),
+        UniqueConstraint(
+            "tenant_id",
+            "actor_person_id",
+            "operation",
+            "key_digest",
+            name="uq_identity_command_idempotency_scope_key",
+        ),
+        CheckConstraint(
+            "operation = 'onboarding_save'",
+            name="operation_supported",
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'completed')",
+            name="status",
+        ),
+        CheckConstraint("length(key_digest) = 64", name="key_digest_sha256"),
+        CheckConstraint("length(request_digest) = 64", name="request_digest_sha256"),
+        CheckConstraint(
+            "(status = 'pending' AND result_revision IS NULL "
+            "AND result_updated_at IS NULL AND completed_at IS NULL) OR "
+            "(status = 'completed' AND result_revision IS NOT NULL "
+            "AND result_revision >= 1 AND result_updated_at IS NOT NULL "
+            "AND completed_at IS NOT NULL)",
+            name="result_state_complete",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    actor_person_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    operation: Mapped[str] = mapped_column(String(64), nullable=False)
+    key_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    request_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="pending",
+        server_default="pending",
+    )
+    result_revision: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    result_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, server_default=func.now()
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 __all__ = [
     "AccountDeletionRequest",
     "AuthenticationReplay",
@@ -572,6 +636,7 @@ __all__ = [
     "DeletionRequestStatus",
     "EmailChallenge",
     "EmailChallengeKind",
+    "IdentityCommandIdempotency",
     "OnboardingStatus",
     "Person",
     "PersonStatus",

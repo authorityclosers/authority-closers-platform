@@ -16,7 +16,12 @@ from ac_platform.application.release_identity import (
     require_baked_release_id,
 )
 from ac_platform.application.settings import Settings
-from ac_platform.bootstrap.application import BootstrapApplication, BootstrapError
+from ac_platform.bootstrap.application import (
+    BootstrapApplication,
+    BootstrapError,
+    BootstrapResult,
+    PublicLearnerTenantBootstrapResult,
+)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -25,6 +30,11 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--tenant-slug", default=os.getenv("AC_BOOTSTRAP_TENANT_SLUG"))
     parser.add_argument("--tenant-name", default=os.getenv("AC_BOOTSTRAP_TENANT_NAME"))
     parser.add_argument("--environment", default=os.getenv("AC_ENVIRONMENT"))
+    parser.add_argument(
+        "--public-learner",
+        action="store_true",
+        help="bootstrap only the dedicated public learner tenant; creates no membership",
+    )
     parser.add_argument(
         "--allow-production",
         action="store_true",
@@ -52,7 +62,6 @@ async def _run(args: argparse.Namespace) -> int:
     if not os.getenv("AC_DATABASE_URL", "").strip():
         raise BootstrapError("AC_DATABASE_URL is required; the local default is not allowed")
 
-    email = _required(args.email, "--email")
     tenant_slug = _required(args.tenant_slug, "--tenant-slug")
     tenant_name = _required(args.tenant_name, "--tenant-name")
     settings = Settings(environment=environment)
@@ -65,11 +74,20 @@ async def _run(args: argparse.Namespace) -> int:
     try:
         sessions = async_sessionmaker(engine, expire_on_commit=False)
         async with sessions() as session, session.begin():
-            result = await BootstrapApplication(session).bootstrap_owner(
-                email=email,
-                tenant_slug=tenant_slug,
-                tenant_name=tenant_name,
-            )
+            application = BootstrapApplication(session)
+            result: BootstrapResult | PublicLearnerTenantBootstrapResult
+            if args.public_learner:
+                result = await application.bootstrap_public_learner_tenant(
+                    tenant_slug=tenant_slug,
+                    tenant_name=tenant_name,
+                    operations_tenant_id=settings.operations_tenant_id,
+                )
+            else:
+                result = await application.bootstrap_owner(
+                    email=_required(args.email, "--email"),
+                    tenant_slug=tenant_slug,
+                    tenant_name=tenant_name,
+                )
     finally:
         await engine.dispose()
     print(json.dumps(asdict(result), default=str, sort_keys=True))

@@ -5,17 +5,30 @@ import Link from "next/link";
 import { type FormEvent, useState } from "react";
 
 import { googleAuthStartUrl } from "../lib/auth-links";
-import { ApiError, createLearnerApi } from "../lib/learner-api";
+import {
+  ApiError,
+  createLearnerApi,
+  type OnboardingStatus,
+} from "../lib/learner-api";
 import { ROUTES } from "../lib/routes";
+import { userFacingRequestError } from "../lib/user-facing-error";
 
 function errorMessage(error: unknown): string {
-  if (error instanceof ApiError) return error.message;
-  return "The request did not finish. Check your connection and try again.";
+  return userFacingRequestError(
+    error,
+    "The request did not finish. Check your connection and try again.",
+  );
 }
 
 type LoginFormProps = {
   sessionExpired?: boolean;
 };
+
+export function routeAfterOnboarding(status?: OnboardingStatus): string {
+  return status === "completed" || status === "skipped"
+    ? ROUTES.learnerHome
+    : ROUTES.onboarding;
+}
 
 export function LoginForm({ sessionExpired = false }: LoginFormProps) {
   const [pending, setPending] = useState(false);
@@ -31,11 +44,17 @@ export function LoginForm({ sessionExpired = false }: LoginFormProps) {
     setVerificationRequired(false);
     const values = new FormData(event.currentTarget);
     try {
-      await createLearnerApi().loginPassword(
+      const api = createLearnerApi();
+      await api.loginPassword(
         String(values.get("email") ?? ""),
         String(values.get("password") ?? ""),
       );
-      window.location.assign(ROUTES.learnerHome);
+      try {
+        const onboarding = await api.onboarding();
+        window.location.assign(routeAfterOnboarding(onboarding.status));
+      } catch {
+        window.location.assign(routeAfterOnboarding());
+      }
     } catch (requestError) {
       setError(errorMessage(requestError));
       setVerificationRequired(

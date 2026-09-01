@@ -23,6 +23,9 @@ from ac_platform.catalog.models import (
     ProgramVersion,
     ProgramVersionStatus,
 )
+from ac_platform.enrollment.self_attestation import (
+    AsyncSelfAttestedEligibilityApplication,
+)
 from ac_platform.enrollment.services import (
     AsyncEnrollmentApplication,
     EnrollmentResult,
@@ -311,6 +314,21 @@ def install_course_http(
             raise TenantContextRequired(
                 "Select an active learner tenant before requesting enrollment."
             )
+        public_learner_tenant_id = settings.public_learner_tenant_id
+        if public_learner_tenant_id is None:
+            raise TenantContextRequired(
+                "The public learner context is not configured for free enrollment."
+            )
+        if tenant_id != public_learner_tenant_id:
+            raise TenantContextRequired(
+                "Select the configured public learner context before requesting enrollment."
+            )
+        await AsyncSelfAttestedEligibilityApplication(auth.database).ensure(
+            person_id=auth.resolved.actor.person_id,
+            tenant_id=tenant_id,
+            program_version_id=body.program_version_id,
+            required_consent_version=settings.learner_consent_version or "",
+        )
         result = await AsyncEnrollmentApplication(auth.database).enroll_free(
             FreeEnrollmentCommand(
                 actor_person_id=auth.resolved.actor.person_id,
