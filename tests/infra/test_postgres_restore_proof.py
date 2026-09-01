@@ -517,9 +517,9 @@ def test_units_manifest_and_wrapper_are_narrow_and_hardened() -> None:
     assert "ac-restic-postgres-restore-proof-inner" in wrapper
     assert "--environment {staging|production}" in wrapper
 
-    inner = (
-        FOUNDATION / "scripts" / "ac-restic-postgres-restore-proof-inner"
-    ).read_text(encoding="utf-8")
+    inner = (FOUNDATION / "scripts" / "ac-restic-postgres-restore-proof-inner").read_text(
+        encoding="utf-8"
+    )
     for marker in (
         'export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID"',
         'export AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"',
