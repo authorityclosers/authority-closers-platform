@@ -244,6 +244,40 @@ export interface EvidenceResponse {
   submission_status: string;
 }
 
+export interface PlaybackStartResponse {
+  session_id: string;
+  activity_id: string;
+  session_token: string;
+  revision: number;
+  expires_at: string;
+  duration_seconds: number;
+}
+
+export interface PlaybackEventInput {
+  session_id: string;
+  event_id: string;
+  sequence: number;
+  start_seconds: number;
+  end_seconds: number;
+  kind: "watch" | "seek";
+}
+
+export interface PlaybackEventResponse {
+  session_id: string;
+  interval_id: string;
+  sequence: number;
+  revision: number;
+  observed_at: string;
+}
+
+export interface PlaybackFinishResponse {
+  session_id: string;
+  activity_id: string;
+  revision: number;
+  status: string;
+  closed_at: string | null;
+}
+
 export interface CertificateResponse {
   id: string;
   certificate_type: "course-completion";
@@ -673,12 +707,54 @@ export function createLearnerApi(
       evidenceType: EvidenceType,
       payload: JsonRecord,
       revision: number,
+      playbackSessionId?: string,
+      playbackToken?: string,
     ) =>
       logicalJsonMutation<EvidenceResponse>(
         `evidence:${activityId}`,
         `/v1/activities/${encodeURIComponent(activityId)}/evidence`,
-        { evidence_type: evidenceType, payload },
+        {
+          evidence_type: evidenceType,
+          payload,
+          ...(playbackSessionId
+            ? { playback_session_id: playbackSessionId }
+            : {}),
+          ...(playbackToken ? { playback_token: playbackToken } : {}),
+        },
         { "If-Match": `\"activity-revision-${revision}\"` },
+      ),
+    startPlayback: (activityId: string, revision: number) =>
+      logicalJsonMutation<PlaybackStartResponse>(
+        `playback-start:${activityId}`,
+        `/v1/activities/${encodeURIComponent(activityId)}/playback/start`,
+        {},
+        { "If-Match": `\"activity-revision-${revision}\"` },
+      ),
+    heartbeatPlayback: (
+      activityId: string,
+      input: PlaybackEventInput,
+      playbackToken: string,
+    ) =>
+      logicalJsonMutation<PlaybackEventResponse>(
+        `playback-heartbeat:${activityId}:${input.session_id}:${input.event_id}`,
+        `/v1/activities/${encodeURIComponent(activityId)}/playback/heartbeat`,
+        { ...input },
+        { "X-Playback-Token": playbackToken },
+      ),
+    finishPlayback: (
+      activityId: string,
+      sessionId: string,
+      revision: number,
+      playbackToken: string,
+    ) =>
+      logicalJsonMutation<PlaybackFinishResponse>(
+        `playback-finish:${activityId}:${sessionId}`,
+        `/v1/activities/${encodeURIComponent(activityId)}/playback/finish`,
+        { session_id: sessionId },
+        {
+          "If-Match": `\"playback-revision-${revision}\"`,
+          "X-Playback-Token": playbackToken,
+        },
       ),
     certificate: (certificateId: string, options: LearnerReadOptions = {}) =>
       request<CertificateResponse>(
