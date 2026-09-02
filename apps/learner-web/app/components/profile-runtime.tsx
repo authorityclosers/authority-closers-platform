@@ -26,6 +26,11 @@ import {
 import { ROUTES } from "../lib/routes";
 import { userFacingRequestError } from "../lib/user-facing-error";
 import {
+  unavailableAvatarUploadPort,
+  type AvatarUploadPort,
+} from "../lib/avatar-upload";
+import { AvatarCropDialog } from "./avatar-crop-dialog";
+import {
   hasMembershipRole,
   MembershipUnavailable,
 } from "./membership-availability";
@@ -88,7 +93,13 @@ export async function loadProfileData(
   }
 }
 
-export function ProfileRuntime({ api = defaultApi }: { api?: LearnerApi }) {
+export function ProfileRuntime({
+  api = defaultApi,
+  avatarUpload = unavailableAvatarUploadPort,
+}: {
+  api?: LearnerApi;
+  avatarUpload?: AvatarUploadPort;
+}) {
   const [me, setMe] = useState<MeResponse | null>(null);
   const [onboarding, setOnboarding] = useState<OnboardingResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -97,6 +108,8 @@ export function ProfileRuntime({ api = defaultApi }: { api?: LearnerApi }) {
   const [offlineRead, setOfflineRead] = useState<
     OfflineReadMetadata | undefined
   >();
+  const [avatarDialogOpen, setAvatarDialogOpen] = useState(false);
+  const avatarButtonRef = useRef<HTMLButtonElement>(null);
   const generationRef = useRef(0);
   const mountedRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
@@ -239,9 +252,30 @@ export function ProfileRuntime({ api = defaultApi }: { api?: LearnerApi }) {
           className="card profile-card"
           aria-labelledby="identity-card-title"
         >
-          <div className="profile-card__hero">
-            <div className="profile-avatar-large" aria-hidden="true">
-              {initials}
+          <div className="profile-card__hero profile-card__hero--avatar">
+            <div className="profile-avatar-panel">
+              <div className="profile-avatar-large" aria-hidden="true">
+                {initials}
+              </div>
+              <div className="profile-avatar-panel__copy">
+                <span className="profile-avatar-panel__label">
+                  Profile photo
+                </span>
+                <p>
+                  Optional. Preview a crop locally before any server-backed
+                  profile update.
+                </p>
+                <button
+                  ref={avatarButtonRef}
+                  className="button button--small button--outline profile-avatar-panel__button"
+                  type="button"
+                  onClick={() => setAvatarDialogOpen(true)}
+                  aria-haspopup="dialog"
+                >
+                  <PencilLine size={15} aria-hidden="true" />
+                  Change photo
+                </button>
+              </div>
             </div>
             <div className="profile-hero-copy">
               <h2 id="identity-card-title" className="profile-name">
@@ -410,6 +444,19 @@ export function ProfileRuntime({ api = defaultApi }: { api?: LearnerApi }) {
           </div>
         </section>
       </div>
+
+      {avatarDialogOpen ? (
+        <AvatarCropDialog
+          displayName={displayName}
+          adapter={avatarUpload}
+          onClose={() => {
+            setAvatarDialogOpen(false);
+            window.requestAnimationFrame(() =>
+              avatarButtonRef.current?.focus(),
+            );
+          }}
+        />
+      ) : null}
     </div>
   );
 }

@@ -67,6 +67,26 @@ function themeToken(theme: "light" | "dark", name: string): string {
   return match[1];
 }
 
+function paletteToken(
+  theme: "light" | "dark",
+  palette: "cobalt" | "meadow" | "ember",
+  name: string,
+): string {
+  const base = themeToken(theme, name);
+  if (palette === "cobalt") return base;
+  const selector =
+    theme === "dark"
+      ? `html\\[data-theme="dark"\\]\\[data-palette="${palette}"\\]`
+      : `html\\[data-palette="${palette}"\\]`;
+  const block = themeStyles.match(
+    new RegExp(`${selector}\\s*\\{([^}]*)\\}`),
+  )?.[1];
+  const match = block?.match(
+    new RegExp(`--theme-${name}:\\s*(#[0-9a-f]{6})`, "i"),
+  );
+  return match?.[1] ?? base;
+}
+
 function selectorBlock(selector: string): string {
   const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const match = styles.match(
@@ -162,6 +182,27 @@ describe("learner color tokens", () => {
           ),
           `${theme} --theme-${foreground} on --theme-${background}`,
         ).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+
+  it("keeps every device-local accent palette legible in both themes", () => {
+    const pairings = [
+      ["action-text", "action"],
+      ["info-text", "info-surface"],
+    ] as const;
+
+    for (const theme of ["light", "dark"] as const) {
+      for (const palette of ["cobalt", "meadow", "ember"] as const) {
+        for (const [foreground, background] of pairings) {
+          expect(
+            contrastRatio(
+              paletteToken(theme, palette, foreground),
+              paletteToken(theme, palette, background),
+            ),
+            `${theme}/${palette} --theme-${foreground} on --theme-${background}`,
+          ).toBeGreaterThanOrEqual(4.5);
+        }
       }
     }
   });

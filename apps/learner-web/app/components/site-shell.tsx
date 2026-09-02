@@ -272,6 +272,10 @@ export function LearnerShell({
   useEffect(() => {
     if (!accountMenuOpen) return;
 
+    const firstMenuItem =
+      accountMenuRef.current?.querySelector<HTMLElement>('[role="menuitem"]');
+    firstMenuItem?.focus();
+
     const handlePointerDown = (event: PointerEvent) => {
       const target = event.target;
       if (
@@ -286,6 +290,44 @@ export function LearnerShell({
     document.addEventListener("pointerdown", handlePointerDown);
     return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, [accountMenuOpen]);
+
+  function handleAccountMenuKeyDown(
+    event: React.KeyboardEvent<HTMLDivElement>,
+  ) {
+    const menuItems = accountMenuRef.current
+      ? Array.from(
+          accountMenuRef.current.querySelectorAll<HTMLElement>(
+            '[role="menuitem"]',
+          ),
+        )
+      : [];
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeAccountMenu(setAccountMenuOpen, accountButtonRef.current);
+      return;
+    }
+    if (
+      !menuItems.length ||
+      !["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)
+    ) {
+      return;
+    }
+    event.preventDefault();
+    const currentIndex = Math.max(
+      0,
+      menuItems.indexOf(document.activeElement as HTMLElement),
+    );
+    const nextIndex =
+      event.key === "Home"
+        ? 0
+        : event.key === "End"
+          ? menuItems.length - 1
+          : (currentIndex +
+              (event.key === "ArrowDown" ? 1 : -1) +
+              menuItems.length) %
+            menuItems.length;
+    menuItems[nextIndex]?.focus();
+  }
 
   const isHome = current === "dashboard" || current === "home";
   const isLearning = current === "learning" || current === "course";
@@ -535,8 +577,11 @@ export function LearnerShell({
                   id="learner-account-menu"
                   ref={accountMenuRef}
                   className="account-menu-popover"
+                  role="menu"
+                  tabIndex={-1}
                   aria-labelledby="learner-account-menu-title"
                   aria-label="Account options"
+                  onKeyDown={handleAccountMenuKeyDown}
                 >
                   <div className="account-menu-header">
                     <strong id="learner-account-menu-title">
@@ -547,12 +592,16 @@ export function LearnerShell({
                   <div className="account-menu-links">
                     <Link
                       href={ROUTES.profile}
+                      role="menuitem"
+                      tabIndex={-1}
                       onClick={() => setAccountMenuOpen(false)}
                     >
                       <User size={15} aria-hidden="true" /> Profile & Identity
                     </Link>
                     <Link
                       href={ROUTES.settings}
+                      role="menuitem"
+                      tabIndex={-1}
                       onClick={() => setAccountMenuOpen(false)}
                     >
                       <Settings size={15} aria-hidden="true" /> Settings &
@@ -560,12 +609,16 @@ export function LearnerShell({
                     </Link>
                     <Link
                       href={ROUTES.notifications}
+                      role="menuitem"
+                      tabIndex={-1}
                       onClick={() => setAccountMenuOpen(false)}
                     >
                       <Bell size={15} aria-hidden="true" /> Notifications
                     </Link>
                     <a
                       href={SUPPORT_MAILTO}
+                      role="menuitem"
+                      tabIndex={-1}
                       onClick={() => setAccountMenuOpen(false)}
                     >
                       <HelpCircle size={15} aria-hidden="true" /> Help & Support

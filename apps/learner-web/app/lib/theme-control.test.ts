@@ -4,7 +4,9 @@ import { runInNewContext } from "node:vm";
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  DEFAULT_THEME_PALETTE,
   normalizeThemePreference,
+  normalizeThemePalette,
   resolveThemePreference,
   subscribeToThemeChanges,
 } from "../components/theme-control";
@@ -12,11 +14,13 @@ import {
 describe("learner theme preference", () => {
   function runPrepaint({
     stored,
+    storedPalette = null,
     systemPrefersDark,
     storageThrows = false,
     mediaThrows = false,
   }: {
     stored: unknown;
+    storedPalette?: unknown;
     systemPrefersDark: boolean;
     storageThrows?: boolean;
     mediaThrows?: boolean;
@@ -31,9 +35,9 @@ describe("learner theme preference", () => {
       document: { documentElement: root },
       window: {
         localStorage: {
-          getItem: () => {
+          getItem: (key: string) => {
             if (storageThrows) throw new Error("storage blocked");
-            return stored;
+            return key === "ac-appearance-palette" ? storedPalette : stored;
           },
         },
         matchMedia: () => {
@@ -67,6 +71,7 @@ describe("learner theme preference", () => {
     expect(root.dataset).toEqual({
       theme: "dark",
       themePreference: "dark",
+      palette: DEFAULT_THEME_PALETTE,
     });
     expect(root.style).toEqual({ colorScheme: "dark" });
   });
@@ -74,13 +79,54 @@ describe("learner theme preference", () => {
   it("resolves system before paint and never overrides explicit choices", () => {
     expect(
       runPrepaint({ stored: "system", systemPrefersDark: true }).dataset,
-    ).toEqual({ theme: "dark", themePreference: "system" });
+    ).toEqual({
+      theme: "dark",
+      themePreference: "system",
+      palette: DEFAULT_THEME_PALETTE,
+    });
     expect(
       runPrepaint({ stored: "system", systemPrefersDark: false }).dataset,
-    ).toEqual({ theme: "light", themePreference: "system" });
+    ).toEqual({
+      theme: "light",
+      themePreference: "system",
+      palette: DEFAULT_THEME_PALETTE,
+    });
     expect(
       runPrepaint({ stored: "light", systemPrefersDark: true }).dataset,
-    ).toEqual({ theme: "light", themePreference: "light" });
+    ).toEqual({
+      theme: "light",
+      themePreference: "light",
+      palette: DEFAULT_THEME_PALETTE,
+    });
+  });
+
+  it("accepts only supported persisted accent palettes", () => {
+    expect(normalizeThemePalette("cobalt")).toBe("cobalt");
+    expect(normalizeThemePalette("meadow")).toBe("meadow");
+    expect(normalizeThemePalette("ember")).toBe("ember");
+    expect(normalizeThemePalette("unexpected")).toBe(DEFAULT_THEME_PALETTE);
+    expect(normalizeThemePalette(null)).toBe(DEFAULT_THEME_PALETTE);
+  });
+
+  it("applies the persisted accent palette before paint", () => {
+    expect(
+      runPrepaint({
+        stored: "dark",
+        storedPalette: "meadow",
+        systemPrefersDark: false,
+      }).dataset,
+    ).toEqual({
+      theme: "dark",
+      themePreference: "dark",
+      palette: "meadow",
+    });
+    expect(
+      runPrepaint({
+        stored: "light",
+        storedPalette: "unknown",
+        systemPrefersDark: false,
+      }).dataset.palette,
+    ).toBe(DEFAULT_THEME_PALETTE);
   });
 
   it("falls back deterministically when storage or media queries are blocked", () => {
@@ -94,6 +140,7 @@ describe("learner theme preference", () => {
     expect(root.dataset).toEqual({
       theme: "light",
       themePreference: "light",
+      palette: DEFAULT_THEME_PALETTE,
     });
     expect(root.style).toEqual({ colorScheme: "light" });
   });

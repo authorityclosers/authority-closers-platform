@@ -374,7 +374,8 @@ describe("Direction A & B UI System & Shell", () => {
 
       expect(shellSource).toContain("accountButtonRef.current");
       expect(shellSource).toContain('aria-controls="learner-account-menu"');
-      expect(shellSource).not.toContain('role="menu"');
+      expect(shellSource).toContain('role="menu"');
+      expect(shellSource).toContain('role="menuitem"');
       expect(shellSource).not.toContain('userDisplayName = "Suyash"');
       expect(shellSource).not.toContain('className="header-badge-dot"');
       expect(shellSource).toContain("aria-expanded={!sidebarCollapsed}");
