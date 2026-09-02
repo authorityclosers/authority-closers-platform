@@ -15,6 +15,13 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  ActivityRow,
+  ModuleCard,
+  NextActionCard,
+  ProgressMeter,
+  RouteHeader,
+} from "@ac/ui";
 
 import {
   ApiError,
@@ -268,50 +275,57 @@ export function LearningViewRuntime({
     );
   }
 
-  const percentage = Math.round(
-    Math.min(1, Math.max(0, learning.projection.percentage)) * 100,
-  );
+  const percentage = Number.isFinite(learning.projection.percentage)
+    ? Math.round(Math.min(1, Math.max(0, learning.projection.percentage)) * 100)
+    : null;
+  const progressDetail =
+    Number.isFinite(learning.projection.completed_count) &&
+    Number.isFinite(learning.projection.denominator) &&
+    learning.projection.completed_count >= 0 &&
+    learning.projection.denominator >= 0
+      ? `${learning.projection.completed_count} of ${learning.projection.denominator} activities complete`
+      : "Progress is unavailable until the learning service can provide it.";
   const moduleOne = learning.modules[0];
+  const nextActivity = learning.modules
+    .flatMap((module) => module.activities)
+    .find(isActivityActionable);
 
   return (
     <div className="learning-view">
       {/* Course Hero & Progression Summary */}
-      <header className="learning-header" aria-labelledby="course-heading">
-        <div className="learning-header__main">
+      <RouteHeader
+        className="learning-header"
+        title={learning.program_title}
+        titleId="course-heading"
+        titleClassName="learning-title"
+        breadcrumbs={
           <div className="learning-breadcrumbs" aria-label="Breadcrumb">
             <Link href={ROUTES.dashboard}>Dashboard</Link>
             <span aria-hidden="true">/</span>
             <span>My Learning</span>
           </div>
+        }
+        eyebrow={
           <span className="card-badge card-badge--primary">
             Enrolled Course
           </span>
-          <h1 id="course-heading" className="learning-title">
-            {learning.program_title}
-          </h1>
-          <p className="learning-subhead">
-            Review the published modules and follow the activity states returned
-            for your enrollment.
-          </p>
-        </div>
-
-        <div className="learning-header__stats">
-          <div className="learning-stat-box">
-            <span className="stat-label">Progress</span>
-            <strong className="stat-value">{percentage}%</strong>
-            <div className="progress-bar-track">
-              <div
-                className="progress-bar-fill"
-                style={{ width: `${percentage}%` }}
+        }
+        description={
+          "Review the published modules and follow the activity states returned for your enrollment."
+        }
+        descriptionClassName="learning-subhead"
+        aside={
+          <div className="learning-header__stats">
+            <div className="learning-stat-box">
+              <ProgressMeter
+                value={percentage}
+                label="Progress"
+                detail={progressDetail}
               />
             </div>
-            <span className="stat-meta">
-              {learning.projection.completed_count} of{" "}
-              {learning.projection.denominator} activities complete
-            </span>
           </div>
-        </div>
-      </header>
+        }
+      />
 
       {offlineRead ? (
         <div
@@ -321,6 +335,23 @@ export function LearningViewRuntime({
         >
           {offlineReadNotice(offlineRead)}
         </div>
+      ) : null}
+
+      {nextActivity && !offlineRead ? (
+        <NextActionCard
+          className="learning-next-action"
+          eyebrow="Next action"
+          title={nextActivity.title}
+          detail="Open the next server-authorized activity in your published learning path."
+          action={
+            <Link
+              className="button button--cobalt"
+              href={ROUTES.activity(nextActivity.id)}
+            >
+              Open activity <ArrowRight size={16} aria-hidden="true" />
+            </Link>
+          }
+        />
       ) : null}
 
       {/* Direction B: Skill Journey Stepper */}
@@ -472,7 +503,7 @@ export function LearningViewRuntime({
           All Course Modules
         </h2>
 
-        <div className="curriculum-module-stack">
+        <div className="curriculum-module-stack ac-module-stack">
           {learning.modules.map((mod) => {
             const isCurrent = mod.id === activeModuleId;
             const completedCount = mod.activities.filter(
@@ -502,66 +533,91 @@ export function LearningViewRuntime({
                         : "Published";
 
             return (
-              <div
+              <ModuleCard
                 key={mod.id}
                 className={`card curriculum-module-card${isCurrent ? " is-expanded" : ""}`}
-              >
-                <div
-                  className="curriculum-module-header"
-                  onClick={() => setActiveModuleId(isCurrent ? null : mod.id)}
-                  role="button"
-                  tabIndex={0}
-                  aria-expanded={isCurrent}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      setActiveModuleId(isCurrent ? null : mod.id);
-                    }
-                  }}
-                >
-                  <div className="curriculum-module-header__left">
-                    <span className="module-index-badge">0{mod.position}</span>
-                    <div>
-                      <h3 className="module-title">{mod.title}</h3>
-                      <span className="module-meta">
-                        {mod.activities.length}{" "}
-                        {mod.activities.length === 1
-                          ? "activity"
-                          : "activities"}{" "}
-                        · {moduleStatus}
-                      </span>
-                    </div>
-                  </div>
-                  <ChevronDown
-                    className={`module-chevron${isCurrent ? " is-rotated" : ""}`}
-                    size={20}
-                    aria-hidden="true"
-                  />
-                </div>
-
-                {isCurrent ? (
-                  <div className="curriculum-module-body">
-                    {mod.activities.length > 0 ? (
-                      <div className="module-activity-list">
-                        {mod.activities.map((act) => (
-                          <div key={act.id} className="module-activity-row">
-                            <span
-                              className="activity-icon-wrapper"
-                              aria-hidden="true"
-                            >
-                              {activityKindIcon(act.kind)}
+                title={mod.title}
+                titleId={`learning-module-${mod.id}-title`}
+                position={`Module ${mod.position}`}
+                status={
+                  <span className="module-meta-status">{moduleStatus}</span>
+                }
+                header={
+                  <div className="curriculum-module-header">
+                    <h3
+                      id={`learning-module-${mod.id}-title`}
+                      className="curriculum-module-heading"
+                    >
+                      <button
+                        type="button"
+                        className="curriculum-module-toggle"
+                        aria-expanded={isCurrent}
+                        aria-controls={`learning-module-${mod.id}-content`}
+                        aria-label={`${isCurrent ? "Collapse" : "Expand"} module ${mod.position}: ${mod.title}`}
+                        onClick={() =>
+                          setActiveModuleId(isCurrent ? null : mod.id)
+                        }
+                      >
+                        <span className="curriculum-module-header__left">
+                          <span className="module-index-badge">
+                            0{mod.position}
+                          </span>
+                          <span>
+                            <span className="module-title">{mod.title}</span>
+                            <span className="module-meta">
+                              {mod.activities.length}{" "}
+                              {mod.activities.length === 1
+                                ? "activity"
+                                : "activities"}{" "}
+                              · {moduleStatus}
                             </span>
-                            <div className="activity-info">
-                              <strong>{act.title}</strong>
-                              <span>{act.kind.replaceAll("_", " ")}</span>
-                            </div>
-                            <div className="activity-actions">
-                              {act.state.toLowerCase() === "locked" ? (
+                          </span>
+                        </span>
+                        <ChevronDown
+                          className={`module-chevron${isCurrent ? " is-rotated" : ""}`}
+                          size={20}
+                          aria-hidden="true"
+                        />
+                      </button>
+                    </h3>
+                  </div>
+                }
+              >
+                {isCurrent ? (
+                  <div
+                    className="curriculum-module-body"
+                    id={`learning-module-${mod.id}-content`}
+                  >
+                    {mod.activities.length > 0 ? (
+                      <ol className="module-activity-list ac-activity-list">
+                        {mod.activities.map((act) => (
+                          <ActivityRow
+                            key={act.id}
+                            className="module-activity-row"
+                            position={String(act.position).padStart(2, "0")}
+                            icon={
+                              <span
+                                className="activity-icon-wrapper"
+                                aria-hidden="true"
+                              >
+                                {activityKindIcon(act.kind)}
+                              </span>
+                            }
+                            eyebrow={act.kind.replaceAll("_", " ")}
+                            title={act.title}
+                            ariaLabel={`${act.position}. ${act.title}, ${activityStateLabel(act.state)}`}
+                            disabled={act.state.toLowerCase() === "locked"}
+                            status={
+                              act.state.toLowerCase() === "locked" ? (
                                 <span className="status-pill status-pill--locked">
                                   <LockKeyhole size={12} aria-hidden="true" />{" "}
                                   Locked
                                 </span>
-                              ) : !offlineRead &&
+                              ) : null
+                            }
+                            action={
+                              act.state.toLowerCase() ===
+                              "locked" ? null : !offlineRead &&
                                 (isActivityActionable(act) ||
                                   act.state.toLowerCase() === "completed") ? (
                                 <Link
@@ -576,11 +632,11 @@ export function LearningViewRuntime({
                                     ? "Reconnect to open"
                                     : activityStateLabel(act.state)}
                                 </span>
-                              )}
-                            </div>
-                          </div>
+                              )
+                            }
+                          />
                         ))}
-                      </div>
+                      </ol>
                     ) : (
                       <div className="module-empty-state">
                         <p>
@@ -590,7 +646,7 @@ export function LearningViewRuntime({
                     )}
                   </div>
                 ) : null}
-              </div>
+              </ModuleCard>
             );
           })}
         </div>

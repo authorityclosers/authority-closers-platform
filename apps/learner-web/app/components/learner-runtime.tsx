@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ModuleCard } from "@ac/ui";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -541,27 +542,33 @@ export function PublicProgramDetail({
 
             <div className="course-path program-modules-stack">
               {program.modules.map((module) => (
-                <article
+                <ModuleCard
                   className="module-card public-module-detail-card"
                   key={module.id}
-                >
-                  <header className="public-module-card__header">
-                    <div className="public-module-card__title-group">
-                      <span className="public-module-card__number">
-                        Module {module.position}
+                  title={module.title}
+                  titleId={`program-module-${module.id}-title`}
+                  header={
+                    <header className="public-module-card__header">
+                      <div className="public-module-card__title-group">
+                        <span className="public-module-card__number">
+                          Module {module.position}
+                        </span>
+                        <h3
+                          id={`program-module-${module.id}-title`}
+                          className="public-module-card__title"
+                        >
+                          {module.title}
+                        </h3>
+                      </div>
+                      <span className="public-module-card__activity-badge">
+                        {module.activities.length}{" "}
+                        {module.activities.length === 1
+                          ? "activity"
+                          : "activities"}
                       </span>
-                      <h3 className="public-module-card__title">
-                        {module.title}
-                      </h3>
-                    </div>
-                    <span className="public-module-card__activity-badge">
-                      {module.activities.length}{" "}
-                      {module.activities.length === 1
-                        ? "activity"
-                        : "activities"}
-                    </span>
-                  </header>
-
+                    </header>
+                  }
+                >
                   {module.activities.length > 0 ? (
                     <div className="public-module-card__activities">
                       <ul
@@ -597,7 +604,7 @@ export function PublicProgramDetail({
                       </ul>
                     </div>
                   ) : null}
-                </article>
+                </ModuleCard>
               ))}
             </div>
           </section>

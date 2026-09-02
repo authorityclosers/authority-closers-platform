@@ -9,6 +9,7 @@ import {
   Play,
   Sparkles,
 } from "lucide-react";
+import { ProgressMeter } from "@ac/ui";
 
 import type { ActivityKind, ActivityStatus } from "../lib/view-models";
 
@@ -91,7 +92,7 @@ export function ActivityStatusPill({ status }: { status: ActivityStatus }) {
   );
 }
 
-export { ProgressMeter } from "@ac/ui";
+export { ProgressMeter };
 
 export function ArrowLabel({ children }: { children: React.ReactNode }) {
   return (

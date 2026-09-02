@@ -3,6 +3,7 @@
 import { ArrowRight, BookOpen, Compass } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ProgramCard, RouteHeader, StatusBanner } from "@ac/ui";
 
 import {
   ApiError,
@@ -94,8 +95,6 @@ export function DiscoverRuntime({
   const [me, setMe] = useState<MeResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
-  const [enrolling, setEnrolling] = useState(false);
-  const [enrollError, setEnrollError] = useState<string | null>(null);
   const [offlineRead, setOfflineRead] = useState<
     OfflineReadMetadata | undefined
   >();
@@ -161,32 +160,6 @@ export function DiscoverRuntime({
     };
   }, [load]);
 
-  async function handleEnroll(programVersionId: string) {
-    setEnrolling(true);
-    setEnrollError(null);
-    try {
-      await api.enrollFree(programVersionId);
-      if (!mountedRef.current) return;
-      const refreshResult = await load();
-      if (refreshResult === "error" && mountedRef.current) {
-        setError(null);
-        setEnrollError(
-          "Enrollment completed, but the catalog could not refresh. Your enrollment was not lost; retry the catalog read.",
-        );
-      }
-    } catch (err) {
-      if (!mountedRef.current) return;
-      setEnrollError(
-        userFacingRequestError(
-          err,
-          "Could not enroll in the published program at this time. Please retry.",
-        ),
-      );
-    } finally {
-      if (mountedRef.current) setEnrolling(false);
-    }
-  }
-
   if (loading) return <DiscoverSkeleton />;
 
   if (error) {
@@ -233,36 +206,32 @@ export function DiscoverRuntime({
 
   return (
     <div className="discover-view">
-      <header className="discover-header" aria-labelledby="discover-title">
-        <div className="learning-breadcrumbs" aria-label="Breadcrumb">
-          <Link href={ROUTES.dashboard}>Dashboard</Link>
-          <span aria-hidden="true">/</span>
-          <span>Discover</span>
-        </div>
-        <h1 id="discover-title" className="discover-title">
-          Discover Programs
-        </h1>
-        <p className="discover-subhead">
-          Published programs in the Authority Closers catalog.
-        </p>
-      </header>
-
-      {enrollError ? (
-        <div className="alert-box alert-box--error" role="alert">
-          <p>{enrollError}</p>
-        </div>
-      ) : null}
+      <RouteHeader
+        className="discover-header"
+        title="Discover Programs"
+        titleId="discover-title"
+        titleClassName="discover-title"
+        breadcrumbs={
+          <div className="learning-breadcrumbs" aria-label="Breadcrumb">
+            <Link href={ROUTES.dashboard}>Dashboard</Link>
+            <span aria-hidden="true">/</span>
+            <span>Discover</span>
+          </div>
+        }
+        description="Published programs in the Authority Closers catalog."
+        descriptionClassName="discover-subhead"
+      />
 
       <MembershipDraftCleanupNotice cleanup={draftCleanup} />
 
       {publicCatalogPreview ? (
-        <div className="alert-box" role="status">
+        <StatusBanner state="info" className="alert-box">
           <p>
             Local preview is showing the published staging catalog. Sign in on
             deployed staging to test enrollment, profile, and progress with
             protected data.
           </p>
-        </div>
+        </StatusBanner>
       ) : null}
 
       {offlineRead ? (
@@ -307,27 +276,34 @@ export function DiscoverRuntime({
           <h2 id="published-programs-title" className="section-title">
             Published Programs
           </h2>
-          <div className="discover-cards-grid">
+          <div className="discover-cards-grid ac-program-grid">
             {programs.map((program) => {
               const isFreeCourse = program.slug === FREE_COURSE_SLUG;
               const isCurrentEnrollment = isFreeCourse && isEnrolled;
               return (
-                <article
+                <ProgramCard
                   className="card discover-program-card"
                   key={program.id}
-                >
-                  <div className="discover-program-card__media">
-                    <div className="discover-media-badge">
-                      {isFreeCourse ? "Free enrollment" : "Published program"}
+                  title={program.title}
+                  titleId={`discover-program-${program.id}`}
+                  titleAs="h3"
+                  media={
+                    <div className="ac-program-card__media-content">
+                      <div className="ac-program-card__media-badge">
+                        {isFreeCourse ? "Free enrollment" : "Published program"}
+                      </div>
+                      <div>
+                        <strong className="ac-program-card__media-title">
+                          {program.title}
+                        </strong>
+                        <span className="ac-program-card__media-meta">
+                          Version {program.version_number}
+                        </span>
+                      </div>
                     </div>
-                    <div className="discover-media-inner">
-                      <strong>{program.title}</strong>
-                      <span>Version {program.version_number}</span>
-                    </div>
-                  </div>
-
-                  <div className="discover-program-card__body">
-                    <div className="discover-card-tags">
+                  }
+                  badges={
+                    <>
                       <span className="card-badge card-badge--primary">
                         Published
                       </span>
@@ -336,13 +312,16 @@ export function DiscoverRuntime({
                           Free
                         </span>
                       ) : null}
-                    </div>
-                    <h3 className="discover-card-title">{program.title}</h3>
-                    <p className="discover-card-description">
+                    </>
+                  }
+                  description={
+                    <>
                       {publishedDate(program.published_at)} · Version{" "}
                       {program.version_number}
-                    </p>
-                    <div className="discover-card-footer">
+                    </>
+                  }
+                  action={
+                    <>
                       {isCurrentEnrollment && !offlineRead ? (
                         <Link
                           className="button button--cobalt button--full"
@@ -358,29 +337,6 @@ export function DiscoverRuntime({
                         >
                           Reconnect to continue
                         </span>
-                      ) : isFreeCourse && !publicCatalogPreview ? (
-                        <button
-                          className="button button--cobalt button--full"
-                          type="button"
-                          disabled={enrolling || Boolean(offlineRead)}
-                          aria-describedby={
-                            offlineRead ? "discover-offline-read" : undefined
-                          }
-                          onClick={() =>
-                            void handleEnroll(program.program_version_id)
-                          }
-                        >
-                          {enrolling ? "Enrolling…" : "Enroll free"}
-                          <ArrowRight size={16} aria-hidden="true" />
-                        </button>
-                      ) : publicCatalogPreview ? (
-                        <a
-                          className="button button--outline button--full"
-                          href="https://staging.authorityclosers.com"
-                        >
-                          Open staging{" "}
-                          <ArrowRight size={16} aria-hidden="true" />
-                        </a>
                       ) : (
                         <Link
                           className="button button--outline button--full"
@@ -390,9 +346,9 @@ export function DiscoverRuntime({
                           <ArrowRight size={16} aria-hidden="true" />
                         </Link>
                       )}
-                    </div>
-                  </div>
-                </article>
+                    </>
+                  }
+                ></ProgramCard>
               );
             })}
           </div>
