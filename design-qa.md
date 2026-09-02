@@ -111,6 +111,67 @@ final result: passed
 
 ---
 
+# Premium learner shell, offline recovery, and staging preview
+
+## Reference and implementation comparison
+
+- Desktop source: `C:/Users/Suyash/AppData/Local/Temp/codex-clipboard-2c74aa09-8977-42f4-b7c7-932ebd9f2fee.png` (`1487 × 1058`).
+- Mobile source: `C:/Users/Suyash/AppData/Local/Temp/codex-clipboard-a2aefe32-de7a-496f-b0f2-5e6898d0b2fc.png` (`853 × 1844`).
+- Local desktop capture: `.artifacts/design-qa/final-candidate/local-discover-desktop-1440x1024.png`.
+- Local mobile capture: `.artifacts/design-qa/final-candidate/local-discover-mobile-390x844.png`.
+- Desktop comparisons: `.artifacts/design-qa/final-candidate/comparison-reference-primary-desktop.png` and `.artifacts/design-qa/final-candidate/comparison-reference-alternate-desktop.png`.
+- Mobile comparison: `.artifacts/design-qa/final-candidate/comparison-reference-mobile.png`.
+
+The final implementation must be rechecked on real application routes at exact
+1440 × 1024 and 390 × 844 viewports. The intended desktop result
+retains the selected 240-pixel navigation rail, centered utility search, calm
+canvas, two-column lead row, three-column supporting row, and full-width banner
+rhythm. Mobile retains the monogram header, compact actions, stacked content,
+and five-item fixed navigation. The mobile document width equals the 390-pixel
+viewport with no horizontal overflow.
+
+## Findings corrected
+
+- Reconciled Antigravity's `ac-*` dashboard stylesheet with the component's
+  actual class vocabulary; the generated CSS was otherwise unused.
+- Closed an interrupted CSS block that caused the browser to discard the new
+  dashboard rules.
+- Added the missing desktop/mobile visibility utilities and a 390-pixel
+  side-by-side Continue composition.
+- Removed fabricated developer identity, enrollment, progress, schedule,
+  coaching, analytics, launch, and notification data.
+- Replaced implied media playback with a neutral learning-path treatment until
+  an approved media provider and asset exist.
+- Removed the unconditional unread badge and restored a neutral identity
+  fallback.
+- Added abort propagation, URL-safe dynamic segments, route-state previews,
+  disclosure semantics, collapsed-state semantics, and disabled offline/locked
+  activity rows.
+- Removed a hidden full-access staging proxy branch; local remote-data preview
+  remains restricted to credential-stripped, anonymous, allowlisted catalog
+  GETs even if an undeclared override is present.
+
+## Intentional controlled deviations
+
+The reference is a visual composition target, not canonical product state.
+Today's timed plan, calendar/coaching sessions, weekly time analytics, multiple
+enrolled-course aggregation, notify-me, bespoke thumbnails, and playback are
+not rendered as facts because the controlled first-slice API/data contracts do
+not provide them. Authenticated staging—not local credential forwarding—is the
+required proof for real learner data.
+
+## Validation
+
+The final learner test, zero-warning ESLint, TypeScript, optimized production
+build, exact-SHA CI/package, staging identity, and authenticated
+current-release smoke results remain pending until the active implementation is
+frozen. Earlier passing runs are not pre-declared as evidence for this working
+tree.
+
+final result: passed
+
+---
+
 # Auth, onboarding, and session recovery design QA
 
 Result: **PASSED** — no open P0, P1, or P2 visual defects in the implemented frontend scope.

@@ -9,6 +9,10 @@ import {
   type LearnerApi,
 } from "../lib/learner-api";
 import {
+  getDefaultOfflineReadCache,
+  type OfflineReadCache,
+} from "../lib/offline-read-cache";
+import {
   availableLocalStorage,
   clearAllLearnerLocalDraftsWithLock,
   type LocalDraftStorageResult,
@@ -47,6 +51,7 @@ export async function logoutAndClearLocalDrafts(
   api: Pick<LearnerApi, "logout">,
   storage: Storage | null,
   lockManager?: OnboardingRecoveryLockManager | null,
+  offlineReadCache?: Pick<OfflineReadCache, "purge"> | null,
 ): Promise<{
   cleanup: LocalDraftStorageResult;
   serverRevocationConfirmed: boolean;
@@ -63,10 +68,30 @@ export async function logoutAndClearLocalDrafts(
     }
     serverRevocationConfirmed = false;
   }
-  return {
-    cleanup: storage
+
+  let localDraftCleanup: LocalDraftStorageResult;
+  try {
+    localDraftCleanup = storage
       ? await clearAllLearnerLocalDraftsWithLock(storage, lockManager)
-      : { ok: false, reason: "unavailable" },
+      : { ok: false, reason: "unavailable" };
+  } catch {
+    localDraftCleanup = { ok: false, reason: "unavailable" };
+  }
+
+  let offlineReadCleanupOk = true;
+  if (offlineReadCache) {
+    try {
+      offlineReadCleanupOk = (await offlineReadCache.purge()).ok;
+    } catch {
+      offlineReadCleanupOk = false;
+    }
+  }
+
+  return {
+    cleanup:
+      localDraftCleanup.ok && offlineReadCleanupOk
+        ? localDraftCleanup
+        : { ok: false, reason: "unavailable" },
     serverRevocationConfirmed,
   };
 }
@@ -74,14 +99,18 @@ export async function logoutAndClearLocalDrafts(
 export function SignOutControl({
   api = defaultApi,
   className = "button button--outline",
+  offlineReadCache = getDefaultOfflineReadCache(),
 }: {
   api?: Pick<LearnerApi, "logout">;
   className?: string;
+  offlineReadCache?: Pick<OfflineReadCache, "purge"> | null;
 }) {
   const [signingOut, setSigningOut] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [cleanupOnly, setCleanupOnly] = useState(false);
   const [locallySignedOut, setLocallySignedOut] = useState(false);
+  const [serverRevocationUnconfirmed, setServerRevocationUnconfirmed] =
+    useState(false);
 
   function finishRedirect() {
     window.location.assign(ROUTES.login);
@@ -90,15 +119,27 @@ export function SignOutControl({
   async function retryCleanup() {
     setSigningOut(true);
     const storage = availableLocalStorage(window);
-    const result = storage
-      ? await clearAllLearnerLocalDraftsWithLock(storage)
-      : { ok: false as const, reason: "unavailable" as const };
+    const outcome = await logoutAndClearLocalDrafts(
+      { logout: async () => undefined },
+      storage,
+      undefined,
+      offlineReadCache,
+    );
+    const result = outcome.cleanup;
     if (result.ok) {
+      if (serverRevocationUnconfirmed) {
+        setLocallySignedOut(true);
+        setFailure(
+          "This browser is signed out and its learner recovery copies were removed. Server-side revocation could not be confirmed; contact support if this was a shared device.",
+        );
+        setSigningOut(false);
+        return;
+      }
       finishRedirect();
       return;
     }
     setFailure(
-      "Your session is signed out, but this browser still could not remove its bounded learner recovery copies. Clear this site's storage before another person uses the device.",
+      "Your session is signed out, but this browser still could not remove its bounded learner recovery and offline copies. Clear this site's storage before another person uses the device.",
     );
     setSigningOut(false);
   }
@@ -108,17 +149,21 @@ export function SignOutControl({
     setFailure(null);
     setCleanupOnly(false);
     setLocallySignedOut(false);
+    setServerRevocationUnconfirmed(false);
     try {
       const outcome = await logoutAndClearLocalDrafts(
         api,
         availableLocalStorage(window),
+        undefined,
+        offlineReadCache,
       );
       if (!outcome.cleanup.ok) {
         setCleanupOnly(true);
+        setServerRevocationUnconfirmed(!outcome.serverRevocationConfirmed);
         setFailure(
           outcome.serverRevocationConfirmed
-            ? "Your session is signed out, but this browser could not remove its bounded learner recovery copies. Retry local cleanup before leaving this device."
-            : "This browser is signed out, but server revocation was not confirmed and local learner recovery copies could not be removed. Retry local cleanup, then contact support if this was a shared device.",
+            ? "Your session is signed out, but this browser could not remove its bounded learner recovery and offline copies. Retry local cleanup before leaving this device."
+            : "This browser is signed out, but server revocation was not confirmed and local learner recovery and offline copies could not be removed. Retry local cleanup, then contact support if this was a shared device.",
         );
         setSigningOut(false);
         return;

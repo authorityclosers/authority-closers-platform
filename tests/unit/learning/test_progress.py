@@ -17,6 +17,7 @@ from ac_platform.learning.services import (
     ModuleDefinition,
     ProgramDefinition,
     ProgressProjector,
+    authoritative_progress,
     evaluate_prerequisites,
     explain_progress,
 )
@@ -106,6 +107,36 @@ def test_authoritative_projection_does_not_count_arbitrary_or_cross_scope_eviden
     )
     assert projection.completed_count == 0
     assert projection.activity_states[0].state is ActivityState.AVAILABLE
+
+
+def test_learner_reads_do_not_expose_a_completed_row_without_authoritative_evidence() -> None:
+    fixture = make_fixture()
+    progress = _progress(
+        fixture,
+        fixture.activity,
+        ActivityState.COMPLETED,
+        evidence_id=uuid4(),
+    )
+    fixture.store.compare_and_swap_progress(None, progress, expected_revision=0)
+    access = fixture.store.resolve_scope(
+        tenant_id=fixture.tenant_id,
+        person_id=fixture.learner_id,
+        enrollment_id=fixture.enrollment_id,
+        program_version_id=fixture.program_version_id,
+        activity_id=fixture.activity.id,
+    )
+
+    assert authoritative_progress(fixture.store, access) == {}
+    assert (
+        fixture.service.activities.current_state(
+            actor=fixture.actor,
+            tenant_id=fixture.tenant_id,
+            enrollment_id=fixture.enrollment_id,
+            program_version_id=fixture.program_version_id,
+            activity_id=fixture.activity.id,
+        )
+        is ActivityState.AVAILABLE
+    )
 
 
 def test_prerequisite_evaluation_is_version_aware_and_service_checks_authority() -> None:

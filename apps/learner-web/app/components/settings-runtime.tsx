@@ -23,6 +23,10 @@ import {
   type MeResponse,
   type OnboardingResponse,
 } from "../lib/learner-api";
+import {
+  getEarliestOfflineReadMetadata,
+  offlineReadNotice,
+} from "../lib/offline-read-cache";
 import { ROUTES } from "../lib/routes";
 import { hasMembershipRole } from "./membership-availability";
 import {
@@ -463,11 +467,24 @@ function LearningSetupCard({
             ]}
           />
           <Link
-            className={styles.outlineAction}
+            className={`${styles.outlineAction}${getEarliestOfflineReadMetadata(resource.data) ? " is-disabled" : ""}`}
             href={ROUTES.onboarding + "?return=settings"}
+            aria-disabled={
+              getEarliestOfflineReadMetadata(resource.data) ? "true" : undefined
+            }
+            tabIndex={
+              getEarliestOfflineReadMetadata(resource.data) ? -1 : undefined
+            }
+            onClick={(event) => {
+              if (getEarliestOfflineReadMetadata(resource.data)) {
+                event.preventDefault();
+              }
+            }}
           >
             <PencilLine size={17} aria-hidden="true" />
-            Edit learning setup
+            {getEarliestOfflineReadMetadata(resource.data)
+              ? "Reconnect to edit learning setup"
+              : "Edit learning setup"}
           </Link>
         </>
       )}
@@ -693,9 +710,22 @@ export function SettingsView({
 
   const learnerAccessConfirmed =
     resources.me.status === "ready" && hasMembershipRole(resources.me.data);
+  const offlineRead = getEarliestOfflineReadMetadata(
+    resources.me.status === "ready" ? resources.me.data : null,
+    resources.onboarding.status === "ready" ? resources.onboarding.data : null,
+  );
 
   return (
     <div className={styles.settingsLedger}>
+      {offlineRead ? (
+        <div
+          className="offline-read-notice"
+          id="settings-offline-read"
+          role="status"
+        >
+          {offlineReadNotice(offlineRead)}
+        </div>
+      ) : null}
       <aside className={styles.settingsIndex} aria-label="Settings sections">
         <p className={styles.indexEyebrow}>Account control surface</p>
         <h1
@@ -760,6 +790,7 @@ export function startSettingsResourceLoad(
   ) => void,
 ): () => void {
   let active = true;
+  const controller = new AbortController();
 
   function publish<K extends SettingsResourceKey>(
     resource: K,
@@ -771,7 +802,7 @@ export function startSettingsResourceLoad(
   function loadOnboarding() {
     let request: Promise<OnboardingResponse>;
     try {
-      request = api.onboarding();
+      request = api.onboarding({ signal: controller.signal });
     } catch (error) {
       publish("onboarding", { status: "error", error });
       return;
@@ -784,7 +815,7 @@ export function startSettingsResourceLoad(
 
   let identityRequest: Promise<MeResponse>;
   try {
-    identityRequest = api.me();
+    identityRequest = api.me({ signal: controller.signal });
   } catch (error) {
     publish("me", { status: "error", error });
     return () => {
@@ -801,6 +832,7 @@ export function startSettingsResourceLoad(
 
   return () => {
     active = false;
+    controller.abort();
   };
 }
 
@@ -815,6 +847,7 @@ export function SettingsRuntime({
   });
   const requestGeneration = useRef(0);
   const activeLoadCleanup = useRef<(() => void) | null>(null);
+  const retryAbortRef = useRef<AbortController | null>(null);
   const draftCleanupController = useRef<SettingsDraftCleanupController | null>(
     null,
   );
@@ -866,6 +899,7 @@ export function SettingsRuntime({
     activeLoadCleanup.current = stop;
     return () => {
       stop();
+      retryAbortRef.current?.abort();
       if (activeLoadCleanup.current === stop) activeLoadCleanup.current = null;
       requestGeneration.current += 1;
     };
@@ -908,10 +942,13 @@ export function SettingsRuntime({
     previousStatuses.current = currentStatuses;
   }, [resources.me.status, resources.onboarding.status]);
 
-  function loadOnboardingForGeneration(generation: number) {
+  function loadOnboardingForGeneration(
+    generation: number,
+    controller: AbortController,
+  ) {
     let request: Promise<OnboardingResponse>;
     try {
-      request = api.onboarding();
+      request = api.onboarding({ signal: controller.signal });
     } catch (error) {
       if (requestGeneration.current === generation) {
         setResources((current) => ({
@@ -945,6 +982,9 @@ export function SettingsRuntime({
     requestGeneration.current = generation;
     activeLoadCleanup.current?.();
     activeLoadCleanup.current = null;
+    retryAbortRef.current?.abort();
+    const controller = new AbortController();
+    retryAbortRef.current = controller;
     setResources((current) => ({
       ...current,
       ...(resource === "me"
@@ -956,13 +996,13 @@ export function SettingsRuntime({
     }));
 
     if (resource === "onboarding") {
-      loadOnboardingForGeneration(generation);
+      loadOnboardingForGeneration(generation, controller);
       return;
     }
 
     let request: Promise<MeResponse>;
     try {
-      request = api.me();
+      request = api.me({ signal: controller.signal });
     } catch (error) {
       setResources((current) => ({
         ...current,
@@ -979,7 +1019,7 @@ export function SettingsRuntime({
           onboarding: { status: "loading" },
         }));
         if (hasMembershipRole(data)) {
-          loadOnboardingForGeneration(generation);
+          loadOnboardingForGeneration(generation, controller);
         }
       },
       (error: unknown) => {

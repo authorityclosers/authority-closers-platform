@@ -1,4 +1,5 @@
-import { LearnerHomeRuntime } from "../components/learner-runtime";
+import { DashboardRuntime } from "../components/dashboard-runtime";
+import { DashboardSkeleton } from "../components/skeletons";
 import { LearnerShell } from "../components/site-shell";
 import { SurfaceStatePanel } from "../components/surface-state";
 import { ROUTES } from "../lib/routes";
@@ -15,15 +16,19 @@ export default async function LearnerHomePage({
   const state = parseSurfaceState(query.state);
 
   return (
-    <LearnerShell current="home">
+    <LearnerShell current="dashboard">
       <main id="main-content" className="learner-main" tabIndex={-1}>
         <div className="page-container home-page">
-          <SurfaceStatePanel
-            state={state}
-            retryHref={ROUTES.learnerHome}
-            backHref={ROUTES.home}
-          />
-          {state === "DEFAULT" ? <LearnerHomeRuntime /> : null}
+          {state === "LOADING" ? (
+            <DashboardSkeleton />
+          ) : (
+            <SurfaceStatePanel
+              state={state}
+              retryHref={ROUTES.dashboard}
+              backHref={ROUTES.home}
+            />
+          )}
+          {state === "DEFAULT" ? <DashboardRuntime /> : null}
         </div>
       </main>
     </LearnerShell>

@@ -1,3 +1,10 @@
+import {
+  getDefaultOfflineReadCache,
+  getOfflineReadPolicy,
+  markOfflineRead,
+  type OfflineReadCache,
+} from "./offline-read-cache";
+
 export type JsonRecord = Record<string, unknown>;
 
 export interface PasswordRegistrationInput {
@@ -230,8 +237,11 @@ export type LearnerFetch = (
   init?: RequestInit,
 ) => Promise<Response>;
 
+export type LearnerReadOptions = Pick<RequestInit, "signal">;
+
 export type LearnerApiOptions = {
   idempotencyKey?: () => string;
+  offlineReadCache?: OfflineReadCache | null;
 };
 
 export class ApiError extends Error {
@@ -252,6 +262,10 @@ export class ApiError extends Error {
     this.title = typeof details?.title === "string" ? details.title : null;
     this.details = details;
   }
+}
+
+export function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === "AbortError";
 }
 
 const defaultIdempotencyKey = (): string => {
@@ -303,30 +317,138 @@ export function createLearnerApi(
   options: LearnerApiOptions = {},
 ) {
   const makeKey = options.idempotencyKey ?? defaultIdempotencyKey;
+  const offlineReadCache =
+    options.offlineReadCache === undefined
+      ? getDefaultOfflineReadCache()
+      : options.offlineReadCache;
   const pendingOperationKeys = new Map<
     string,
     { fingerprint: string; key: string }
   >();
+  const inFlightGetRequests = new Map<string, Promise<unknown>>();
+
+  function getGetDedupeKey(path: string, init: RequestInit): string | null {
+    // A request with a caller-owned signal must remain independently
+    // cancellable. It is therefore intentionally not deduplicated.
+    if (init.signal || init.body !== undefined) return null;
+
+    const headers = Array.from(new Headers(init.headers).entries()).sort(
+      ([left], [right]) => left.localeCompare(right),
+    );
+    return JSON.stringify([
+      path,
+      headers,
+      init.cache ?? "default",
+      "include",
+      init.mode ?? "cors",
+      init.redirect ?? "follow",
+      init.referrer ?? "",
+      init.referrerPolicy ?? "",
+      init.integrity ?? "",
+      init.keepalive ?? false,
+    ]);
+  }
 
   async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     assertV1Path(path);
-    const headers = new Headers(init.headers);
-    headers.set("Accept", "application/json");
-    const response = await fetcher(path, {
-      ...init,
-      headers,
-      credentials: "include",
-    });
-    const body = await parseBody(response);
-    if (!response.ok) {
-      const details = isRecord(body) ? body : null;
-      const message =
-        (details && typeof details.detail === "string" && details.detail) ||
-        (details && typeof details.title === "string" && details.title) ||
-        `Learner API request failed (${response.status}).`;
-      throw new ApiError(response.status, message, details);
+    const method = (init.method || "GET").toUpperCase();
+    const dedupeKey = method === "GET" ? getGetDedupeKey(path, init) : null;
+    if (method === "GET") {
+      const active = dedupeKey ? inFlightGetRequests.get(dedupeKey) : undefined;
+      if (active) {
+        return active as Promise<T>;
+      }
     }
-    return body as T;
+
+    const execution = (async () => {
+      try {
+        const headers = new Headers(init.headers);
+        headers.set("Accept", "application/json");
+        try {
+          const response = await fetcher(path, {
+            ...init,
+            headers,
+            credentials: "include",
+          });
+          const body = await parseBody(response);
+          if (!response.ok) {
+            const details = isRecord(body) ? body : null;
+            const message =
+              (details &&
+                typeof details.detail === "string" &&
+                details.detail) ||
+              (details && typeof details.title === "string" && details.title) ||
+              `Learner API request failed (${response.status}).`;
+            if (response.status === 401 || response.status === 403) {
+              try {
+                await offlineReadCache?.purge();
+              } catch {
+                // The canonical authentication/authorization error still wins.
+              }
+            }
+            throw new ApiError(response.status, message, details);
+          }
+
+          if (
+            method === "GET" &&
+            (path === "/v1/me" || path === "/v1/context") &&
+            isRecord(body) &&
+            typeof body.person_id === "string"
+          ) {
+            try {
+              const tenantId =
+                path === "/v1/me"
+                  ? typeof body.selected_tenant_id === "string"
+                    ? body.selected_tenant_id
+                    : null
+                  : typeof body.tenant_id === "string"
+                    ? body.tenant_id
+                    : null;
+              await offlineReadCache?.activateOwner(body.person_id, tenantId);
+            } catch {
+              // Online identity/context reads must remain available even when
+              // local browser persistence is unavailable.
+            }
+          }
+          if (method === "GET" && getOfflineReadPolicy(path, method)) {
+            void offlineReadCache?.put(path, body).catch(() => undefined);
+          }
+          return body as T;
+        } catch (error) {
+          // Fetch and response-body network failures both surface as TypeError
+          // in browsers. Keep the fallback narrow so API errors, aborts, and
+          // protected mutations can never be replaced by stale data.
+          const canUseOfflineFallback =
+            method === "GET" &&
+            error instanceof TypeError &&
+            !isAbortError(error) &&
+            !init.signal?.aborted &&
+            getOfflineReadPolicy(path, method) !== null;
+          if (canUseOfflineFallback && offlineReadCache) {
+            try {
+              const cached = await offlineReadCache.get(path);
+              if (cached && !init.signal?.aborted) {
+                return markOfflineRead(cached.data, cached.savedAt) as T;
+              }
+            } catch {
+              // Cache recovery is best-effort. Preserve the original network
+              // failure and its honest UI state when recovery is unavailable.
+            }
+          }
+          throw error;
+        }
+      } finally {
+        if (dedupeKey) {
+          inFlightGetRequests.delete(dedupeKey);
+        }
+      }
+    })();
+
+    if (dedupeKey && execution) {
+      inFlightGetRequests.set(dedupeKey, execution);
+    }
+
+    return execution;
   }
 
   function jsonMutation<T>(
@@ -380,6 +502,17 @@ export function createLearnerApi(
     return result;
   }
 
+  async function rememberAuthenticatedOwner<T>(body: T): Promise<T> {
+    if (isRecord(body) && typeof body.person_id === "string") {
+      try {
+        await offlineReadCache?.activateOwner(body.person_id);
+      } catch {
+        // Authentication success must not be made dependent on IndexedDB.
+      }
+    }
+    return body;
+  }
+
   return {
     request,
     registerPassword: (input: PasswordRegistrationInput) =>
@@ -390,11 +523,13 @@ export function createLearnerApi(
         password: input.password,
         consent: input.consent,
       }),
-    loginPassword: (email: string, password: string) =>
-      jsonMutation<PasswordSessionResponse>("/v1/auth/password/login", {
-        email,
-        password,
-      }),
+    loginPassword: async (email: string, password: string) =>
+      rememberAuthenticatedOwner(
+        await jsonMutation<PasswordSessionResponse>("/v1/auth/password/login", {
+          email,
+          password,
+        }),
+      ),
     requestPasswordRecovery: (email: string) =>
       jsonMutation<PasswordRecoveryResponse>("/v1/auth/password/recovery", {
         email,
@@ -404,17 +539,25 @@ export function createLearnerApi(
         "/v1/auth/password/resend-verification",
         { email },
       ),
-    verifyPasswordEmail: (token: string) =>
-      jsonMutation<PasswordSessionResponse>("/v1/auth/password/verify", {
-        token,
-      }),
+    verifyPasswordEmail: async (token: string) =>
+      rememberAuthenticatedOwner(
+        await jsonMutation<PasswordSessionResponse>(
+          "/v1/auth/password/verify",
+          {
+            token,
+          },
+        ),
+      ),
     resetPassword: (token: string, newPassword: string) =>
       jsonMutation<PasswordResetResponse>("/v1/auth/password/reset", {
         token,
         new_password: newPassword,
       }),
-    onboarding: () =>
-      request<OnboardingResponse>("/v1/onboarding", { cache: "no-store" }),
+    onboarding: (options: LearnerReadOptions = {}) =>
+      request<OnboardingResponse>("/v1/onboarding", {
+        ...options,
+        cache: "no-store",
+      }),
     saveOnboarding: (input: OnboardingSaveInput, expectedRevision: number) =>
       logicalJsonMutation<OnboardingResponse>(
         "onboarding",
@@ -432,17 +575,23 @@ export function createLearnerApi(
         },
         "PUT",
       ),
-    me: () => request<MeResponse>("/v1/me", { cache: "no-store" }),
-    context: () =>
-      request<ContextResponse>("/v1/context", { cache: "no-store" }),
-    listPrograms: (limit = 50) =>
-      request<ProgramCollectionResponse>(`/v1/programs?limit=${limit}`, {
+    me: (options: LearnerReadOptions = {}) =>
+      request<MeResponse>("/v1/me", { ...options, cache: "no-store" }),
+    context: (options: LearnerReadOptions = {}) =>
+      request<ContextResponse>("/v1/context", {
+        ...options,
         cache: "no-store",
       }),
-    program: (slug: string) =>
+    listPrograms: (limit = 50, options: LearnerReadOptions = {}) =>
+      request<ProgramCollectionResponse>(`/v1/programs?limit=${limit}`, {
+        ...options,
+        cache: "no-store",
+      }),
+    program: (slug: string, options: LearnerReadOptions = {}) =>
       request<ProgramDetailResponse>(
         `/v1/programs/${encodeURIComponent(slug)}`,
         {
+          ...options,
           cache: "no-store",
         },
       ),
@@ -457,6 +606,7 @@ export function createLearnerApi(
     learning: (
       programId: string,
       scope?: { enrollmentId: string; programVersionId: string },
+      options: LearnerReadOptions = {},
     ) => {
       const query = scope
         ? `?${new URLSearchParams({
@@ -466,13 +616,14 @@ export function createLearnerApi(
         : "";
       return request<LearningResponse>(
         `/v1/learning/${encodeURIComponent(programId)}${query}`,
-        { cache: "no-store" },
+        { ...options, cache: "no-store" },
       );
     },
-    activity: (activityId: string) =>
+    activity: (activityId: string, options: LearnerReadOptions = {}) =>
       request<ActivityResponse>(
         `/v1/activities/${encodeURIComponent(activityId)}`,
         {
+          ...options,
           cache: "no-store",
         },
       ),
@@ -496,17 +647,41 @@ export function createLearnerApi(
         { evidence_type: evidenceType, payload },
         { "If-Match": `\"activity-revision-${revision}\"` },
       ),
-    certificate: (certificateId: string) =>
+    certificate: (certificateId: string, options: LearnerReadOptions = {}) =>
       request<CertificateResponse>(
         `/v1/certificates/${encodeURIComponent(certificateId)}`,
-        { cache: "no-store" },
+        { ...options, cache: "no-store" },
       ),
-    logout: () =>
-      request<void>("/v1/auth/logout", {
-        method: "POST",
-        cache: "no-store",
-        headers: { "Content-Type": "application/json" },
-      }),
+    logout: async () => {
+      try {
+        await request<void>("/v1/auth/logout", {
+          method: "POST",
+          cache: "no-store",
+          headers: { "Content-Type": "application/json" },
+        });
+      } catch (error) {
+        // The API intentionally reports local-only sign-out when revocation
+        // could not be confirmed. The browser is still signed out, so clear
+        // bounded local copies just as the UI does after handling this code.
+        if (
+          !(error instanceof ApiError) ||
+          error.code !== "logout_revocation_unavailable"
+        ) {
+          throw error;
+        }
+        try {
+          await offlineReadCache?.purge();
+        } catch {
+          // SignOutControl performs the user-visible cleanup check and retry.
+        }
+        throw error;
+      }
+      try {
+        await offlineReadCache?.purge();
+      } catch {
+        // SignOutControl performs the user-visible cleanup check and retry.
+      }
+    },
   };
 }
 

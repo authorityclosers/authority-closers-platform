@@ -48,8 +48,13 @@ import { ActivityStatusPill, ProgressMeter } from "../components/shared-ui";
 import { Breadcrumbs, LearnerShell } from "../components/site-shell";
 import { SurfaceStatePanel } from "../components/surface-state";
 import LearnerHomePage from "../home/page";
+import LearningPage from "../learning/page";
+import DiscoverPage from "../discover/page";
+import ProfilePage from "../profile/page";
+import NotificationsPage from "../notifications/page";
 import ProgramLearningPage from "../learn/[programSlug]/page";
 import CompletionPage from "../learn/[programSlug]/complete/page";
+
 import ModulePage from "../learn/[programSlug]/module/[moduleId]/page";
 import LoginPage from "../login/page";
 import ForgotPasswordPage from "../forgot-password/page";
@@ -196,8 +201,32 @@ const routeRenderers: Array<[string, (state?: string) => Promise<ReactNode>]> =
       "learner home",
       (state) => LearnerHomePage({ searchParams: Promise.resolve({ state }) }),
     ],
-    ["progress", async () => ProgressPage()],
-    ["settings", async () => SettingsPage()],
+    [
+      "learning",
+      (state) => LearningPage({ searchParams: Promise.resolve({ state }) }),
+    ],
+    [
+      "discover",
+      (state) => DiscoverPage({ searchParams: Promise.resolve({ state }) }),
+    ],
+    [
+      "profile",
+      (state) => ProfilePage({ searchParams: Promise.resolve({ state }) }),
+    ],
+    [
+      "notifications",
+      (state) =>
+        NotificationsPage({ searchParams: Promise.resolve({ state }) }),
+    ],
+    [
+      "progress",
+      (state) => ProgressPage({ searchParams: Promise.resolve({ state }) }),
+    ],
+    [
+      "settings",
+      (state) => SettingsPage({ searchParams: Promise.resolve({ state }) }),
+    ],
+
     [
       "program learning",
       (state) =>
@@ -306,10 +335,16 @@ describe("learner route and state primitives", () => {
     expect(ROUTES.sessionExpired).toBe("/session-expired");
     expect(ROUTES.onboarding).toBe("/onboarding");
     expect(ROUTES.learnerHome).toBe("/home");
-    expect(ROUTES.myLearning).toBe("/home#my-learning");
+    expect(ROUTES.dashboard).toBe("/home");
+    expect(ROUTES.learning).toBe("/learning");
+    expect(ROUTES.myLearning).toBe("/learning");
+    expect(ROUTES.discover).toBe("/discover");
+    expect(ROUTES.notifications).toBe("/notifications");
+    expect(ROUTES.profile).toBe("/profile");
     expect(ROUTES.practice).toBe("/home#practice");
     expect(ROUTES.progress).toBe("/progress");
     expect(ROUTES.settings).toBe("/settings");
+
     expect(ROUTES.programDetail("free-course")).toBe("/programs/free-course");
     expect(ROUTES.programLearning("free-course")).toBe("/learn/free-course");
     expect(ROUTES.module("free-course", "module-01")).toBe(
@@ -953,9 +988,8 @@ describe("accessibility semantics", () => {
       await LearnerHomePage({ searchParams: Promise.resolve({}) }),
     );
 
-    expect(html).toContain("Learner workspace");
-    expect(html).toContain("Preparing your workspace");
-    expect(html).toContain("surface-state__skeleton");
+    expect(html).toContain("Learning Command Center");
+    expect(html).toContain("dashboard-skeleton");
     expect(html).not.toContain("Open reflect preview");
     expect(html).not.toContain("preview only");
     expect(html).not.toContain('aria-valuenow="0"');

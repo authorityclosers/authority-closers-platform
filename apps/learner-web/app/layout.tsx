@@ -49,6 +49,7 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <head>
+        <meta name="apple-mobile-web-app-capable" content="yes" />
         <Script src="/theme-init.js" strategy="beforeInteractive" />
       </head>
       <body>

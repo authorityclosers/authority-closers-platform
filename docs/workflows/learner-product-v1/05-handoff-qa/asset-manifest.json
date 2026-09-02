@@ -1,0 +1,109 @@
+{
+  "workstream_id": "AC-WF-LEARNER-V1",
+  "assets": [
+    {
+      "path": "03-visual-exploration/direction-a-command-center-desktop.png",
+      "kind": "generated_reference",
+      "status": "candidate",
+      "viewport": "1440x1024"
+    },
+    {
+      "path": "03-visual-exploration/direction-a-command-center-mobile.png",
+      "kind": "generated_reference",
+      "status": "candidate",
+      "viewport": "390x844"
+    },
+    {
+      "path": "03-visual-exploration/direction-b-skill-journey-desktop.png",
+      "kind": "generated_reference",
+      "status": "candidate",
+      "viewport": "1440x1024"
+    },
+    {
+      "path": "03-visual-exploration/direction-b-skill-journey-mobile.png",
+      "kind": "generated_reference",
+      "status": "candidate",
+      "viewport": "390x844"
+    },
+    {
+      "path": "03-visual-exploration/direction-c-content-studio-desktop.png",
+      "kind": "generated_reference",
+      "status": "candidate",
+      "viewport": "1440x1024"
+    },
+    {
+      "path": "03-visual-exploration/direction-c-content-studio-mobile.png",
+      "kind": "generated_reference",
+      "status": "candidate",
+      "viewport": "390x844"
+    },
+    {
+      "path": "03-visual-exploration/founder-selected-dashboard-desktop-rich-v1.png",
+      "kind": "founder_reference",
+      "status": "selected",
+      "viewport": "1487x1058"
+    },
+    {
+      "path": "03-visual-exploration/founder-selected-dashboard-mobile-rich-v1.png",
+      "kind": "founder_reference",
+      "status": "selected",
+      "viewport": "853x1844"
+    },
+    {
+      "path": "03-visual-exploration/founder-selected-dashboard-desktop-planning-v1.png",
+      "kind": "founder_reference",
+      "status": "selected",
+      "viewport": "1487x1058"
+    },
+    {
+      "path": "03-visual-exploration/founder-selected-dashboard-mobile-planning-v1.png",
+      "kind": "founder_reference",
+      "status": "selected",
+      "viewport": "853x1844"
+    },
+    {
+      "path": "03-visual-exploration/public-entry-command-center-v1.png",
+      "kind": "generated_reference",
+      "status": "selected",
+      "viewport": "1536x1024"
+    },
+    {
+      "path": "../../../apps/learner-web/public/media/ac-course-hero-v1.png",
+      "kind": "generated_artwork",
+      "status": "selected",
+      "viewport": "1536x1024"
+    },
+    {
+      "path": "../../../apps/learner-web/public/media/ac-module-conversation-v1.png",
+      "kind": "generated_artwork",
+      "status": "selected",
+      "viewport": "1536x1024"
+    },
+    {
+      "path": "../../../apps/learner-web/public/media/ac-module-presentation-v1.png",
+      "kind": "generated_artwork",
+      "status": "selected",
+      "viewport": "1536x1024"
+    },
+    {
+      "path": "../../../apps/learner-web/public/media/dipak-learning-hero-v1.png",
+      "kind": "generated_artwork",
+      "status": "selected",
+      "viewport": "16:9",
+      "source_url": "https://dipakvishwakarma.com/",
+      "usage_boundary": "public presentation artwork only; not approved lesson media"
+    },
+    {
+      "path": "05-handoff-qa/public-entry-implementation-desktop-v1.png",
+      "kind": "implementation_capture",
+      "status": "candidate",
+      "viewport": "1440x1024"
+    },
+    {
+      "path": "05-handoff-qa/public-entry-implementation-mobile-v1.png",
+      "kind": "implementation_capture",
+      "status": "candidate",
+      "viewport": "390x844"
+    }
+  ]
+}

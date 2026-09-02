@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  loadActivityEntryState,
   loadLearnerHomeState,
   loadProgramLearningState,
 } from "../components/learner-runtime";
@@ -49,7 +50,8 @@ describe("learner home request sequencing", () => {
       }),
     } as unknown as LearnerApi;
 
-    const pending = loadLearnerHomeState(api);
+    const controller = new AbortController();
+    const pending = loadLearnerHomeState(api, controller.signal);
 
     expect(calls).toEqual(["me", "programs", "onboarding"]);
     expect(context).not.toHaveBeenCalled();
@@ -67,6 +69,11 @@ describe("learner home request sequencing", () => {
     const result = await pending;
     expect(result.onboarding.status).toBe("not_started");
     expect(result.learning).toBeUndefined();
+    expect(api.me).toHaveBeenCalledWith({ signal: controller.signal });
+    expect(api.listPrograms).toHaveBeenCalledWith(50, {
+      signal: controller.signal,
+    });
+    expect(api.onboarding).toHaveBeenCalledWith({ signal: controller.signal });
   });
 
   it("starts program and identity reads together before requesting the authorized learning projection", async () => {
@@ -116,9 +123,11 @@ describe("learner home request sequencing", () => {
       listPrograms: vi.fn(),
     } as unknown as LearnerApi;
 
+    const controller = new AbortController();
     const pending = loadProgramLearningState(
       "authority-closers-free-course",
       api,
+      controller.signal,
     );
 
     expect(calls).toEqual(["program", "me"]);
@@ -145,8 +154,58 @@ describe("learner home request sequencing", () => {
     const result = await pending;
     expect(calls).toEqual(["program", "me", "learning"]);
     expect(result.learning?.program_id).toBe("program-1");
+    expect(api.program).toHaveBeenCalledWith("authority-closers-free-course", {
+      signal: controller.signal,
+    });
+    expect(api.me).toHaveBeenCalledWith({ signal: controller.signal });
+    expect(api.learning).toHaveBeenCalledWith("program-1", undefined, {
+      signal: controller.signal,
+    });
     expect(api.context).not.toHaveBeenCalled();
     expect(api.listPrograms).not.toHaveBeenCalled();
+  });
+
+  it("threads one caller signal through activity and identity entry reads", async () => {
+    const controller = new AbortController();
+    const api = {
+      activity: vi.fn(async () => ({
+        id: "activity-1",
+        module_id: "module-1",
+        program_version_id: "version-1",
+        position: 1,
+        kind: "REFLECTION",
+        title: "Published activity",
+        prompt: null,
+        state: "available",
+        revision: 1,
+        required: true,
+        explanation: {
+          activity_id: "activity-1",
+          state: "available",
+          required: true,
+          reason: "Ready.",
+          missing_activity_ids: [],
+          missing_module_ids: [],
+        },
+        allowed_actions: ["save_draft"],
+      })),
+      me: vi.fn(async () => ({
+        person_id: "person-1",
+        email: "learner@example.com",
+        display_name: "Learner",
+        email_verified_at: "2026-09-01T00:00:00Z",
+        selected_tenant_id: "tenant-1",
+        membership_role: "learner",
+        permissions: [],
+      })),
+    } as unknown as LearnerApi;
+
+    await loadActivityEntryState("activity-1", api, controller.signal);
+
+    expect(api.activity).toHaveBeenCalledWith("activity-1", {
+      signal: controller.signal,
+    });
+    expect(api.me).toHaveBeenCalledWith({ signal: controller.signal });
   });
 
   it("prioritizes session recovery when a concurrent Home read also fails", async () => {

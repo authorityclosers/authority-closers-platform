@@ -45,6 +45,7 @@ from ac_platform.learning.services import (
     VideoEvidencePolicy,
     WatchIntervalKind,
     WatchIntervalSnapshot,
+    authoritative_progress,
 )
 
 MAX_IDEMPOTENCY_KEY_LENGTH = 128
@@ -629,15 +630,7 @@ def install_learning_http(
                 program_version_id=version.id,
                 activity_id=catalog_activities[0].id,
             )
-            progress = {
-                item.activity_id: item
-                for item in bundle.store.list_progress(
-                    tenant_id=_tenant(actor),
-                    person_id=actor.person_id,
-                    enrollment_id=enrollment.id,
-                    program_version_id=version.id,
-                )
-            }
+            progress = authoritative_progress(bundle.store, first_access)
             explanation = ProgressProjector().explain(first_access.program, progress)
             by_module: dict[UUID, list[ActivityRequest]] = {}
             for module in first_access.program.modules:
@@ -735,15 +728,7 @@ def install_learning_http(
                 program_version_id=version.id,
                 activity_id=activity_id,
             )
-            progress_by_activity = {
-                item.activity_id: item
-                for item in bundle.store.list_progress(
-                    tenant_id=_tenant(actor),
-                    person_id=actor.person_id,
-                    enrollment_id=enrollment.id,
-                    program_version_id=version.id,
-                )
-            }
+            progress_by_activity = authoritative_progress(bundle.store, access)
             explanation = ProgressProjector().explain(access.program, progress_by_activity)
             reason = _reason_response(
                 explanation,

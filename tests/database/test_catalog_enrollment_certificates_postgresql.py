@@ -78,7 +78,13 @@ from ac_platform.enrollment.services import (
 from ac_platform.identity.models import Person
 from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.kernel.authz import ActorContext
-from ac_platform.learning.models import ActivityProgress, ActivityState, LearningEvidence
+from ac_platform.learning.models import (
+    ActivityProgress,
+    ActivityState,
+    EvidenceCorrection,
+    EvidenceSubmission,
+    LearningEvidence,
+)
 from ac_platform.outbox.models import OutboxEvent
 from ac_platform.tenancy.models import Membership, Tenant
 
@@ -109,6 +115,7 @@ class CertificateSeed:
     enrollment_id: UUID
     program_id: UUID
     program_version_id: UUID
+    activity_id: UUID
     progress_id: UUID
 
 
@@ -980,13 +987,57 @@ def _seed_certificate_scope(engine: Engine) -> CertificateSeed:
             module_id=module.id,
             activity_id=activity.id,
             evidence_type="reflection",
-            activity_version="v1",
+            activity_version=f"activity:{activity.id}",
             policy_version="certificate-postgres-v1",
             idempotency_key=f"evidence-{uuid4().hex}",
             payload={"completed": True},
             captured_at=NOW,
         )
         database.add(evidence)
+        database.flush()
+        submission = EvidenceSubmission(
+            id=uuid4(),
+            evidence_id=evidence.id,
+            tenant_id=tenant_id,
+            person_id=learner_id,
+            enrollment_id=enrollment.id,
+            program_version_id=version.id,
+            program_id=program.id,
+            program_scope=version.scope,
+            program_owner_key=version.owner_key,
+            module_id=module.id,
+            activity_id=activity.id,
+            submitted_by_person_id=learner_id,
+            assigned_reviewer_id=admin_id,
+            idempotency_key=f"submission-{uuid4().hex}",
+            status="awaiting_review",
+            submitted_at=NOW,
+        )
+        database.add(submission)
+        database.flush()
+        database.add(
+            EvidenceCorrection(
+                id=uuid4(),
+                submission_id=submission.id,
+                evidence_id=evidence.id,
+                tenant_id=tenant_id,
+                person_id=learner_id,
+                enrollment_id=enrollment.id,
+                program_version_id=version.id,
+                program_id=program.id,
+                program_scope=version.scope,
+                program_owner_key=version.owner_key,
+                module_id=module.id,
+                activity_id=activity.id,
+                reviewer_person_id=admin_id,
+                decision="approved",
+                reason="Seeded canonical completion approval",
+                idempotency_key=f"correction-{uuid4().hex}",
+                correction_sequence=1,
+                supersedes_correction_id=None,
+                created_at=NOW,
+            )
+        )
         database.flush()
         progress = ActivityProgress(
             id=uuid4(),
@@ -1000,7 +1051,7 @@ def _seed_certificate_scope(engine: Engine) -> CertificateSeed:
             module_id=module.id,
             activity_id=activity.id,
             state=ActivityState.COMPLETED.value,
-            activity_version="v1",
+            activity_version=f"activity:{activity.id}",
             policy_version="certificate-postgres-v1",
             revision=1,
             completed_at=NOW,
@@ -1017,8 +1068,52 @@ def _seed_certificate_scope(engine: Engine) -> CertificateSeed:
         enrollment_id=enrollment.id,
         program_id=program.id,
         program_version_id=version.id,
+        activity_id=activity.id,
         progress_id=progress.id,
     )
+
+
+def test_certificate_issue_accepts_runtime_activity_version(
+    postgres_harness: PostgresHarness,
+) -> None:
+    seed = _seed_certificate_scope(postgres_harness.engine)
+    canonical_activity_version = f"activity:{seed.activity_id}"
+    with Session(postgres_harness.engine, expire_on_commit=False) as database:
+        progress = database.get(ActivityProgress, seed.progress_id)
+        assert progress is not None
+        evidence = database.get(LearningEvidence, progress.completion_evidence_id)
+        assert evidence is not None
+        assert progress.activity_version == canonical_activity_version
+        assert evidence.activity_version == canonical_activity_version
+    command = IssueCertificateCommand(
+        tenant_id=seed.tenant_id,
+        person_id=seed.learner_id,
+        enrollment_id=seed.enrollment_id,
+        program_id=seed.program_id,
+        program_version_id=seed.program_version_id,
+        idempotency_key="canonical-activity-version-issue",
+    )
+    actor = ActorContext(
+        person_id=seed.learner_id,
+        session_id=seed.learner_session_id,
+        tenant_id=seed.tenant_id,
+    )
+
+    async def issue() -> object:
+        async_engine = create_async_engine(postgres_harness.schema_url, pool_size=1, max_overflow=0)
+        sessions = async_sessionmaker(async_engine, expire_on_commit=False)
+        try:
+            async with sessions() as database, database.begin():
+                return await AsyncCertificateApplication(database, clock=lambda: NOW).issue(
+                    command,
+                    actor=actor,
+                )
+        finally:
+            await async_engine.dispose()
+
+    result = _run_async(issue())
+    assert result.created is True
+    assert result.certificate.program_version_id == seed.program_version_id
 
 
 def test_certificate_async_issue_replays_concurrency_and_changes_recheck_authority(

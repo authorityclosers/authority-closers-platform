@@ -19,6 +19,7 @@ build/
 coverage/
 playwright-report/
 test-results/
+.artifacts/
 .tmp/
 .pytest_cache/
 .mypy_cache/

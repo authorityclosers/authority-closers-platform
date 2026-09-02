@@ -2,71 +2,137 @@
 
 import { ArrowRight, BarChart3, LockKeyhole } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   ApiError,
   createLearnerApi,
+  isAbortError,
+  type LearnerApi,
   type LearningResponse,
 } from "../lib/learner-api";
+import {
+  getEarliestOfflineReadMetadata,
+  offlineReadNotice,
+  type OfflineReadMetadata,
+} from "../lib/offline-read-cache";
 import { ROUTES } from "../lib/routes";
 import {
   activityLockReason,
   identityState,
   LearningActivityNavigation,
+  useInvalidateDraftsWithoutMembership,
 } from "./learner-runtime";
 import {
   hasMembershipRole,
   MembershipUnavailable,
 } from "./membership-availability";
+import { ProgressSkeleton } from "./skeletons";
 
 type ProgressState =
   | { status: "loading" }
   | {
       status: "ready";
       membershipAvailable: boolean;
+      personId: string;
       learning?: LearningResponse;
+      offlineRead?: OfflineReadMetadata;
     }
   | { status: "error"; error: unknown };
 
-export function ProgressRuntime() {
-  const [state, setState] = useState<ProgressState>({ status: "loading" });
+const defaultApi = createLearnerApi();
 
-  function load() {
+export async function loadProgressData(
+  api: LearnerApi,
+  signal?: AbortSignal,
+): Promise<Extract<ProgressState, { status: "ready" }>> {
+  const identity = await identityState(api, undefined, signal);
+  return {
+    status: "ready",
+    membershipAvailable: hasMembershipRole(identity.me),
+    personId: identity.me.person_id,
+    learning: identity.learning,
+    offlineRead:
+      getEarliestOfflineReadMetadata(
+        identity.me,
+        identity.programs,
+        identity.learning,
+      ) ?? undefined,
+  };
+}
+
+export function ProgressRuntime({ api = defaultApi }: { api?: LearnerApi }) {
+  const [state, setState] = useState<ProgressState>({ status: "loading" });
+  const generationRef = useRef(0);
+  const mountedRef = useRef(false);
+  const abortRef = useRef<AbortController | null>(null);
+  const membershipKnown = state.status === "ready";
+  const membershipAvailable =
+    state.status === "ready" && state.membershipAvailable;
+  const draftCleanup = useInvalidateDraftsWithoutMembership(
+    membershipKnown,
+    membershipAvailable,
+    state.status === "ready" ? state.personId : null,
+  );
+
+  const load = useCallback(() => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const generation = ++generationRef.current;
+    const isCurrent = () =>
+      mountedRef.current &&
+      generationRef.current === generation &&
+      !controller.signal.aborted;
     setState({ status: "loading" });
-    void identityState(createLearnerApi()).then(
-      (identity) =>
-        setState({
-          status: "ready",
-          membershipAvailable: hasMembershipRole(identity.me),
-          learning: identity.learning,
-        }),
-      (error: unknown) => setState({ status: "error", error }),
+    void loadProgressData(api, controller.signal).then(
+      (ready) => {
+        if (isCurrent()) setState(ready);
+      },
+      (error: unknown) => {
+        if (isCurrent() && !isAbortError(error)) {
+          setState({ status: "error", error });
+        }
+      },
     );
-  }
+  }, [api]);
 
   useEffect(() => {
-    queueMicrotask(load);
-  }, []);
+    mountedRef.current = true;
+    queueMicrotask(() => {
+      if (mountedRef.current) load();
+    });
+    return () => {
+      mountedRef.current = false;
+      generationRef.current += 1;
+      abortRef.current?.abort();
+    };
+  }, [load]);
 
   if (state.status === "loading") {
-    return (
-      <div className="surface-state" role="status">
-        <h1>Loading your progress…</h1>
-      </div>
-    );
+    return <ProgressSkeleton />;
   }
 
   if (state.status === "error") {
     const sessionExpired =
       state.error instanceof ApiError && state.error.status === 401;
+    const accessUnavailable =
+      state.error instanceof ApiError && state.error.status === 403;
     return (
-      <div className="surface-state" role="alert">
-        <h1>Progress could not load.</h1>
+      <div className="surface-state surface-state--error-terminal" role="alert">
+        <h1>
+          {sessionExpired
+            ? "Sign in to view your progress"
+            : accessUnavailable
+              ? "Progress access is unavailable"
+              : "Progress could not load"}
+        </h1>
         <p>
           {sessionExpired
             ? "Your session has expired. Sign in again to continue."
-            : "The progress service could not be reached. Try again."}
+            : accessUnavailable
+              ? "This account is not authorized to view learner progress."
+              : "The progress service could not be reached. Try again."}
         </p>
         {sessionExpired ? (
           <Link className="button button--ink" href={ROUTES.sessionExpired}>
@@ -86,12 +152,21 @@ export function ProgressRuntime() {
   }
 
   if (!state.membershipAvailable) {
-    return <MembershipUnavailable />;
+    return <MembershipUnavailable api={api} draftCleanup={draftCleanup} />;
   }
 
   if (!state.learning) {
     return (
       <section className="progress-empty" aria-labelledby="progress-title">
+        {state.offlineRead ? (
+          <div
+            className="offline-read-notice"
+            id="progress-offline-read"
+            role="status"
+          >
+            {offlineReadNotice(state.offlineRead)}
+          </div>
+        ) : null}
         <span className="progress-empty__icon" aria-hidden="true">
           <BarChart3 size={24} />
         </span>
@@ -117,6 +192,15 @@ export function ProgressRuntime() {
 
   return (
     <>
+      {state.offlineRead ? (
+        <div
+          className="offline-read-notice"
+          id="progress-offline-read"
+          role="status"
+        >
+          {offlineReadNotice(state.offlineRead)}
+        </div>
+      ) : null}
       <header className="progress-heading">
         <p className="eyebrow">Your progress</p>
         <h1>{learning.program_title}</h1>
@@ -187,6 +271,7 @@ export function ProgressRuntime() {
                   {module.activities.map((activity) => (
                     <LearningActivityNavigation
                       activity={activity}
+                      disabled={Boolean(state.offlineRead)}
                       key={activity.id}
                     />
                   ))}

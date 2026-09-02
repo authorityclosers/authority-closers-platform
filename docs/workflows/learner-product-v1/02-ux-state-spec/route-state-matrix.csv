@@ -1,0 +1,13 @@
+screen_id,route,owner,default,loading,empty,error_retryable,error_terminal,offline,permission_denied,locked,partial,success_feedback
+HOME-01,/home,learner-dashboard,yes,shaped-skeleton,first-enrollment,inline-retry,support-path,encrypted-cache-with-stale-label,reauth-or-safe-denial,n/a,partial-sections,retained-confirmation
+LEARN-01,/learning,learning-library,yes,card-skeleton,no-enrollments,inline-retry,support-path,cache-with-stale-label,reauth-or-safe-denial,entitlement-reason,partial-course-cards,retained-confirmation
+DISC-01,/discover,catalog,yes,card-skeleton,no-results,inline-retry,support-path,cache-with-stale-label,safe-catalog-state,program-entitlement,partial-results,n/a
+PROG-01,/progress,progress-projection,yes,chart-and-list-skeleton,no-evidence,inline-retry,unavailable-not-zero,cache-with-stale-label,reauth-or-safe-denial,n/a,partial-projections,n/a
+NOTIF-01,/notifications,notification-center,yes,row-skeleton,no-notifications,inline-retry,support-path,local-shell-only,reauth-or-safe-denial,n/a,partial-pages,read-state-retained
+PROF-01,/profile,profile-service,yes,profile-skeleton,incomplete-profile,inline-retry,support-path,encrypted-cache-with-stale-label,reauth-or-safe-denial,n/a,processing-avatar,save-confirmation
+SET-01,/settings,settings-service,yes,section-skeleton,n/a,inline-retry,support-path,encrypted-cache-with-stale-label,reauth-or-safe-denial,n/a,partial-sections,save-confirmation
+COURSE-01,/learn/{programSlug},learning-projection,yes,course-skeleton,no-published-content,inline-retry,support-path,cache-with-stale-label,reauth-or-safe-denial,entitlement-reason,partial-modules,n/a
+MOD-01,/learn/{programSlug}/module/{moduleId},learning-projection,yes,module-skeleton,no-activities,inline-retry,support-path,cache-with-stale-label,reauth-or-safe-denial,prerequisite-reason,partial-activities,n/a
+ACT-01,/activity/{activityId},activity-service,yes,activity-shaped-skeleton,n/a,retry-preserve-input,support-path,preserve-local-evidence,reauth-or-safe-denial,prerequisite-reason,save-or-media-partial,durable-completion
+MEDIA-01,/activity/{activityId},media-delivery-port,ready,poster-and-control-skeleton,n/a,retry-source,unsupported-media,poster-transcript-fallback,policy-denied,policy-or-prerequisite,caption-or-transcript-partial,resume-confirmation
+MORE-01,shell-overlay,site-shell,yes,n/a,n/a,n/a,n/a,available-local-nav,safe-auth-state,n/a,n/a,n/a

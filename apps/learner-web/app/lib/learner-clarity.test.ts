@@ -124,17 +124,18 @@ const publishedFreeCourse: ProgramSummaryResponse = {
 describe("learner Clarity Grid slice", () => {
   it("renders only working learner navigation", () => {
     const html = renderToStaticMarkup(
-      createElement(LearnerShell, { current: "home" }, "content"),
+      createElement(LearnerShell, { current: "dashboard" }, "content"),
     );
 
     expect(html).toContain('aria-label="Learner workspace navigation"');
     expect(html).toContain('aria-label="Learner mobile navigation"');
-    expect(html).toContain('href="/home#my-learning"');
+    expect(html).toContain('href="/learning"');
+    expect(html).toContain('href="/discover"');
     expect(html).toContain('href="/progress"');
+    expect(html).toContain('href="/notifications"');
+    expect(html).toContain('href="/profile"');
     expect(html).toContain('href="/settings"');
     expect(html).not.toContain('aria-disabled="true"');
-    expect(html).not.toContain("Practice");
-    expect(html).not.toContain("Library");
     expect(html).not.toContain("Search is coming later");
     expect(html).not.toContain("Certificate");
   });
@@ -143,7 +144,7 @@ describe("learner Clarity Grid slice", () => {
     const html = renderToStaticMarkup(
       createElement(
         LearnerShell,
-        { current: "home" },
+        { current: "dashboard" },
         createElement("main", { id: "shell-content" }, "content"),
       ),
     );
@@ -170,7 +171,7 @@ describe("learner Clarity Grid slice", () => {
     expect(redirect).toContain('id="my-learning"');
     expect(redirect).toContain('role="status"');
     expect(onboardingShell).toContain('href="/onboarding"');
-    expect(onboardingShell).not.toContain('href="/home#my-learning"');
+    expect(onboardingShell).not.toContain('href="/learning"');
   });
 
   it("offers the real published Free Course when there is no enrollment", () => {
@@ -203,6 +204,46 @@ describe("learner Clarity Grid slice", () => {
     expect(publicDetail).toContain("Create learner account");
     expect(publicDetail).not.toContain("api.enrollFree");
     expect(publicDetail).not.toContain("Enroll free");
+  });
+
+  it("renders the public program detail storefront with two-column hero and syllabus cards", () => {
+    const source = readFileSync(
+      new URL("../components/learner-runtime.tsx", import.meta.url),
+      "utf8",
+    );
+    const publicDetail = source.slice(
+      source.indexOf("export function PublicProgramDetail"),
+      source.indexOf("export async function identityState"),
+    );
+
+    // Hero artwork & two-column layout
+    expect(publicDetail).toContain("/media/ac-course-hero-v1.png");
+    expect(publicDetail).toContain("program-hero");
+    expect(publicDetail).toContain("program-hero__main");
+    expect(publicDetail).toContain("program-hero__aside");
+    expect(publicDetail).toContain("program-hero__preview-card");
+
+    // Structured syllabus
+    expect(publicDetail).toContain("program-curriculum-section");
+    expect(publicDetail).toContain("public-module-detail-card");
+    expect(publicDetail).toContain("public-activity-row");
+    expect(publicDetail).toContain("Published Syllabus");
+
+    // Clear CTAs
+    expect(publicDetail).toContain("Sign in to start free");
+    expect(publicDetail).toContain("Create learner account");
+
+    // Negative assertions: no invented data or mutations
+    expect(publicDetail).not.toContain("api.enrollFree");
+    expect(publicDetail).not.toContain("Enroll free");
+    expect(publicDetail).not.toContain("Structured Self-Paced");
+    expect(publicDetail).not.toContain("Instant access upon sign-in");
+    expect(publicDetail).not.toContain("Master high-impact closing frameworks");
+    expect(publicDetail).not.toContain("Lessons");
+    expect(publicDetail).toContain(
+      "Published curriculum from the canonical catalog.",
+    );
+    expect(publicDetail).not.toMatch(/rating|stars|hours|reviews|instructor/i);
   });
 
   it("keeps locked modules non-navigable and review-pending modules available", () => {

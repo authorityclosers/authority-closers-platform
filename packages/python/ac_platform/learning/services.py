@@ -2085,13 +2085,14 @@ def _resolve_access(
 def _scope_progress(
     store: LearningRepository, access: LearningAccessContext
 ) -> dict[UUID, ActivityProgressSnapshot]:
+    tenant_id, enrollment_id, person_id, program_version_id, _ = access.scope
     return {
         item.activity_id: item
         for item in store.list_progress(
-            tenant_id=access.tenant_id,
-            person_id=access.person_id,
-            enrollment_id=access.enrollment_id,
-            program_version_id=access.program_version_id,
+            tenant_id=tenant_id,
+            person_id=person_id,
+            enrollment_id=enrollment_id,
+            program_version_id=program_version_id,
         )
     }
 
@@ -2135,6 +2136,37 @@ def _require_authoritative_completion(
         raise ActivityLockedError(
             f"prerequisite {definition.id} has no authoritative completion evidence"
         ) from exc
+
+
+def authoritative_progress(
+    store: LearningRepository, access: LearningAccessContext
+) -> dict[UUID, ActivityProgressSnapshot]:
+    """Return progress that is safe for learner reads and completion predicates.
+
+    ``ActivityProgress`` is deliberately mutable and its state is not itself
+    evidence of completion.  A completed row is only readable as completed
+    when it still matches the pinned activity version and has a valid,
+    same-scope evidence/submission/review (or playback) chain.  Non-completed
+    rows remain visible so the learner can resume work.  This keeps projection
+    and certificate callers on the same server-owned completion boundary.
+    """
+
+    progress = _scope_progress(store, access)
+    definitions = _scope_definitions(store, access)
+    authoritative: dict[UUID, ActivityProgressSnapshot] = {}
+    for activity_id, item in progress.items():
+        if _activity_state(item.state) is not ActivityState.COMPLETED:
+            authoritative[activity_id] = item
+            continue
+        definition = definitions.get(activity_id)
+        if definition is None:
+            continue
+        try:
+            _require_authoritative_completion(store, access, definition, item)
+        except ActivityLockedError:
+            continue
+        authoritative[activity_id] = item
+    return authoritative
 
 
 def _require_prerequisites(store: LearningRepository, access: LearningAccessContext) -> None:
@@ -2731,7 +2763,22 @@ class ActivityService:
             return ActivityState.LOCKED
         if progress is None:
             return ActivityState.AVAILABLE
-        return _activity_state(progress.state)
+        state = _activity_state(progress.state)
+        if state is ActivityState.COMPLETED:
+            try:
+                _require_authoritative_completion(
+                    self.store,
+                    access,
+                    access.activity,
+                    progress,
+                )
+            except ActivityLockedError:
+                # A stale or malformed completion must not be exposed as a
+                # learner completion.  The next checked write can replace it
+                # through the normal CAS path; no direct repair is performed
+                # by this read.
+                return ActivityState.AVAILABLE
+        return state
 
     def _ensure_started(
         self,
@@ -2752,7 +2799,20 @@ class ActivityService:
         if progress is not None:
             state = _activity_state(progress.state)
             if state is ActivityState.COMPLETED:
-                return progress
+                try:
+                    _require_authoritative_completion(
+                        self.store,
+                        access,
+                        access.activity,
+                        progress,
+                    )
+                except ActivityLockedError:
+                    # Treat an invalid historical completion as an available
+                    # activity.  The replacement below is an auditable CAS
+                    # transition, not an out-of-band repair.
+                    pass
+                else:
+                    return progress
             if state in {ActivityState.IN_PROGRESS, ActivityState.AWAITING_REVIEW}:
                 return progress
         replacement = ActivityProgressSnapshot(
@@ -5669,6 +5729,7 @@ __all__ = [
     "WatchIntervalKind",
     "WatchIntervalSnapshot",
     "calculate_video_coverage",
+    "authoritative_progress",
     "explain_progress",
     "merge_intervals",
     "merge_unique_intervals",

@@ -5,21 +5,28 @@ import Link from "next/link";
 import {
   ArrowLeft,
   ArrowRight,
+  BookOpen,
   CheckCircle2,
   ChevronRight,
+  CirclePlay,
   FileText,
   Flag,
+  Layers3,
   LockKeyhole,
   PenLine,
   Play,
   ShieldCheck,
+  Sparkles,
   Trophy,
+  VideoOff,
   Wrench,
 } from "lucide-react";
+import Image from "next/image";
 
 import {
   ApiError,
   createLearnerApi,
+  isAbortError,
   type ActivityResponse,
   type LearnerApi,
   type LearningActivityResponse,
@@ -27,6 +34,12 @@ import {
   type MeResponse,
   type ProgramSummaryResponse,
 } from "../lib/learner-api";
+import {
+  getEarliestOfflineReadMetadata,
+  getOfflineReadMetadata,
+  offlineReadNotice,
+  type OfflineReadMetadata,
+} from "../lib/offline-read-cache";
 import {
   activityRecoveryText,
   activityServerFingerprint,
@@ -161,7 +174,7 @@ function StateMessage({
 }
 
 function useLoad<T>(
-  loader: () => Promise<T>,
+  loader: (signal: AbortSignal) => Promise<T>,
   empty: (value: T) => boolean,
   reloadKey?: string | number,
 ): LoadState<T> {
@@ -169,10 +182,11 @@ function useLoad<T>(
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let active = true;
+    const controller = new AbortController();
     void Promise.resolve().then(() => {
       if (active) setState({ status: "loading" });
     });
-    loader()
+    loader(controller.signal)
       .then((value) => {
         if (!active) return;
         setState(
@@ -180,10 +194,13 @@ function useLoad<T>(
         );
       })
       .catch((error: unknown) => {
-        if (active) setState({ status: "error", error });
+        if (active && !isAbortError(error)) {
+          setState({ status: "error", error });
+        }
       });
     return () => {
       active = false;
+      controller.abort();
     };
     // The loader is intentionally captured per caller; retry and an explicit
     // route/resource identity are the only triggers.
@@ -218,9 +235,13 @@ function CatalogList({ items }: { items: ProgramSummaryResponse[] }) {
 
 export function PublicCatalogHome({ api = defaultApi }: { api?: LearnerApi }) {
   const state = useLoad(
-    () => api.listPrograms(),
+    (signal) => api.listPrograms(50, { signal }),
     (value) => value.items.length === 0,
   );
+  const offlineRead =
+    state.status === "ready"
+      ? getEarliestOfflineReadMetadata(state.value, state.value.items)
+      : null;
   return (
     <>
       <section className="hero landing-hero" aria-labelledby="catalog-title">
@@ -253,11 +274,67 @@ export function PublicCatalogHome({ api = defaultApi }: { api?: LearnerApi }) {
           pageHeadingPresent
           retry={(state as LoadState<unknown> & { retry?: () => void }).retry}
         />
+        {offlineRead ? (
+          <div
+            className="offline-read-notice"
+            id="catalog-offline-read"
+            role="status"
+          >
+            {offlineReadNotice(offlineRead)}
+          </div>
+        ) : null}
         {state.status === "ready" ? (
           <CatalogList items={state.value.items} />
         ) : null}
       </section>
     </>
+  );
+}
+
+function formatPublicActivityKind(kind: string): string {
+  const normalized = kind
+    .toLowerCase()
+    .replace(/[_\s-]+/g, " ")
+    .trim();
+  if (normalized === "video") return "Video Lesson";
+  if (normalized === "reflection") return "Interactive Reflection";
+  if (normalized === "choice") return "Knowledge Check";
+  return normalized
+    .split(" ")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function activityKindIcon(kind: string) {
+  const normalized = kind.toUpperCase();
+  if (normalized === "VIDEO") {
+    return (
+      <CirclePlay
+        size={16}
+        aria-hidden="true"
+        className="public-activity-row__kind-icon"
+      />
+    );
+  }
+  if (
+    normalized === "REFLECTION" ||
+    normalized === "QUIZ" ||
+    normalized === "CHOICE"
+  ) {
+    return (
+      <Sparkles
+        size={16}
+        aria-hidden="true"
+        className="public-activity-row__kind-icon"
+      />
+    );
+  }
+  return (
+    <BookOpen
+      size={16}
+      aria-hidden="true"
+      className="public-activity-row__kind-icon"
+    />
   );
 }
 
@@ -269,12 +346,21 @@ export function PublicProgramDetail({
   api?: LearnerApi;
 }) {
   const state = useLoad(
-    () => api.program(slug),
+    (signal) => api.program(slug, { signal }),
     () => false,
   );
   const program = state.status === "ready" ? state.value : null;
+  const offlineRead = program ? getEarliestOfflineReadMetadata(program) : null;
   const freeEnrollmentAvailable =
     program !== null && isFreeEnrollmentProgram(program);
+
+  const totalActivities = program
+    ? program.modules.reduce(
+        (sum, module) => sum + (module.activities?.length || 0),
+        0,
+      )
+    : 0;
+
   return (
     <>
       <StateMessage
@@ -282,60 +368,271 @@ export function PublicProgramDetail({
         pageTitle="Program details"
         retry={(state as LoadState<unknown> & { retry?: () => void }).retry}
       />
+      {offlineRead ? (
+        <div
+          className="offline-read-notice"
+          id="program-detail-offline-read"
+          role="status"
+        >
+          {offlineReadNotice(offlineRead)}
+        </div>
+      ) : null}
       {program ? (
-        <>
+        <div className="public-program-storefront">
+          {/* Two-Column Hero Section */}
           <section className="program-hero" aria-labelledby="program-title">
             <div className="program-hero__main">
-              <p className="eyebrow">
-                <span aria-hidden="true" /> Published program · v
-                {program.version_number}
-              </p>
-              <h1 id="program-title">{program.title}</h1>
+              <div className="program-hero__badge-row">
+                <span className="eyebrow program-hero__eyebrow">
+                  <span className="eyebrow-dot" aria-hidden="true" />
+                  Published Program · Version {program.version_number}
+                </span>
+                {freeEnrollmentAvailable ? (
+                  <span className="program-hero__access-badge">
+                    Free Enrollment
+                  </span>
+                ) : null}
+              </div>
+
+              <h1 id="program-title" className="program-hero__title">
+                {program.title}
+              </h1>
+
               <p className="program-hero__description">
-                This detail is supplied by the published catalog API. Learner
-                guidance appears only when the API publishes it.
+                Published curriculum from the canonical catalog.
               </p>
+
+              <div
+                className="program-hero__stats-pills"
+                aria-label="Course summary statistics"
+              >
+                <div className="stat-pill">
+                  <Layers3 size={15} aria-hidden="true" />
+                  <span>
+                    <strong>{program.modules.length}</strong>{" "}
+                    {program.modules.length === 1 ? "Module" : "Modules"}
+                  </span>
+                </div>
+                <div className="stat-pill">
+                  <BookOpen size={15} aria-hidden="true" />
+                  <span>
+                    <strong>{totalActivities}</strong>{" "}
+                    {totalActivities === 1 ? "Activity" : "Activities"}
+                  </span>
+                </div>
+                <div className="stat-pill">
+                  <ShieldCheck size={15} aria-hidden="true" />
+                  <span>Canonical Curriculum</span>
+                </div>
+              </div>
+
               {freeEnrollmentAvailable ? (
-                <div className="hero-actions">
-                  <Link className="button button--ink" href={ROUTES.login}>
+                <div className="hero-actions program-hero__actions">
+                  <Link
+                    className="button button--ink program-hero__cta-primary"
+                    href={ROUTES.login}
+                  >
                     Sign in to start free
                   </Link>
-                  <Link className="text-link" href={ROUTES.register}>
+                  <Link
+                    className="button button--outline program-hero__cta-secondary"
+                    href={ROUTES.register}
+                  >
                     Create learner account →
                   </Link>
                 </div>
               ) : (
-                <p role="status">
+                <p className="program-hero__unavailable-note" role="status">
                   Free enrollment is unavailable for this program.
                 </p>
               )}
             </div>
-            <aside className="program-hero__aside">
-              <p>Published modules and activities</p>
-              <strong>{program.modules.length}</strong>
+
+            <aside
+              className="program-hero__aside"
+              aria-label="Course overview card"
+            >
+              <div className="program-hero__preview-card">
+                <div className="program-hero__image-frame">
+                  <Image
+                    src="/media/ac-course-hero-v1.png"
+                    alt=""
+                    width={560}
+                    height={315}
+                    className="program-hero__cover-image"
+                    priority
+                  />
+                  <div
+                    className="program-hero__image-overlay"
+                    aria-hidden="true"
+                  >
+                    <span className="program-hero__overlay-badge">
+                      Official Curriculum
+                    </span>
+                  </div>
+                </div>
+
+                <div className="program-hero__card-body">
+                  <div className="program-hero__card-specs">
+                    <div className="card-spec-item">
+                      <span className="card-spec-label">Modules</span>
+                      <strong className="card-spec-value">
+                        {program.modules.length}{" "}
+                        {program.modules.length === 1 ? "Module" : "Modules"}
+                      </strong>
+                    </div>
+                    <div className="card-spec-item">
+                      <span className="card-spec-label">Activities</span>
+                      <strong className="card-spec-value">
+                        {totalActivities}{" "}
+                        {totalActivities === 1 ? "Activity" : "Activities"}
+                      </strong>
+                    </div>
+                    <div className="card-spec-item">
+                      <span className="card-spec-label">Published Release</span>
+                      <strong className="card-spec-value">
+                        Version {program.version_number}
+                      </strong>
+                    </div>
+                    <div className="card-spec-item">
+                      <span className="card-spec-label">Access Level</span>
+                      <strong className="card-spec-value">
+                        {freeEnrollmentAvailable
+                          ? "Free Enrollment"
+                          : "Restricted"}
+                      </strong>
+                    </div>
+                  </div>
+
+                  <div className="program-hero__card-cta">
+                    <Link
+                      className="button button--ink button--full-width"
+                      href={ROUTES.login}
+                    >
+                      {freeEnrollmentAvailable
+                        ? "Sign in to start free"
+                        : "Sign in"}
+                    </Link>
+                  </div>
+                </div>
+              </div>
             </aside>
           </section>
+
+          {/* Curriculum / Modules Breakdown Section */}
           <section
-            className="detail-section"
+            className="detail-section program-curriculum-section"
             aria-labelledby="module-list-title"
           >
-            <div className="section-heading">
-              <p className="kicker">Published structure</p>
-              <h2 id="module-list-title">Modules.</h2>
+            <div className="section-heading program-curriculum-heading">
+              <div>
+                <p className="kicker">Course Curriculum</p>
+                <h2 id="module-list-title">Published Syllabus</h2>
+              </div>
+              <div className="program-curriculum-meta">
+                <span className="curriculum-count-badge">
+                  {program.modules.length}{" "}
+                  {program.modules.length === 1 ? "Module" : "Modules"} ·{" "}
+                  {totalActivities}{" "}
+                  {totalActivities === 1 ? "Activity" : "Activities"}
+                </span>
+              </div>
             </div>
-            <div className="course-path">
+
+            <div className="course-path program-modules-stack">
               {program.modules.map((module) => (
-                <article className="module-card" key={module.id}>
-                  <p className="module-card__number">
-                    Module {module.position}
-                  </p>
-                  <h3>{module.title}</h3>
-                  <p>{module.activities.length} published activities</p>
+                <article
+                  className="module-card public-module-detail-card"
+                  key={module.id}
+                >
+                  <header className="public-module-card__header">
+                    <div className="public-module-card__title-group">
+                      <span className="public-module-card__number">
+                        Module {module.position}
+                      </span>
+                      <h3 className="public-module-card__title">
+                        {module.title}
+                      </h3>
+                    </div>
+                    <span className="public-module-card__activity-badge">
+                      {module.activities.length}{" "}
+                      {module.activities.length === 1
+                        ? "activity"
+                        : "activities"}
+                    </span>
+                  </header>
+
+                  {module.activities.length > 0 ? (
+                    <div className="public-module-card__activities">
+                      <ul
+                        className="public-activity-list"
+                        aria-label={`Activities in ${module.title}`}
+                      >
+                        {module.activities.map((activity) => (
+                          <li className="public-activity-row" key={activity.id}>
+                            <div className="public-activity-row__icon-wrap">
+                              {activityKindIcon(activity.kind)}
+                            </div>
+                            <div className="public-activity-row__main">
+                              <span className="public-activity-row__title">
+                                {activity.title}
+                              </span>
+                              <span className="public-activity-row__kind">
+                                {formatPublicActivityKind(activity.kind)}
+                              </span>
+                            </div>
+                            <div className="public-activity-row__meta">
+                              {activity.is_required ? (
+                                <span className="activity-requirement-badge activity-requirement-badge--required">
+                                  Required
+                                </span>
+                              ) : (
+                                <span className="activity-requirement-badge activity-requirement-badge--core">
+                                  Core
+                                </span>
+                              )}
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
                 </article>
               ))}
             </div>
           </section>
-        </>
+
+          {/* Bottom Call to Action Section */}
+          <section
+            className="program-bottom-cta"
+            aria-labelledby="bottom-cta-heading"
+          >
+            <div className="program-bottom-cta__inner">
+              <div className="program-bottom-cta__copy">
+                <h2
+                  id="bottom-cta-heading"
+                  className="program-bottom-cta__title"
+                >
+                  Start learning today
+                </h2>
+                <p className="program-bottom-cta__description">
+                  Sign in or create your learner account to access the published
+                  curriculum and your learning workspace.
+                </p>
+              </div>
+              <div className="program-bottom-cta__actions">
+                <Link className="button button--ink" href={ROUTES.login}>
+                  {freeEnrollmentAvailable
+                    ? "Sign in to start free"
+                    : "Sign in"}
+                </Link>
+                <Link className="button button--outline" href={ROUTES.register}>
+                  Create learner account →
+                </Link>
+              </div>
+            </div>
+          </section>
+        </div>
       ) : null}
     </>
   );
@@ -362,16 +659,17 @@ async function settleConcurrentReads<A, B>(
 export async function identityState(
   api: LearnerApi,
   programId?: string,
+  signal?: AbortSignal,
 ): Promise<{
   me: MeResponse;
   programs: ProgramSummaryResponse[];
   learning?: LearningResponse;
 }> {
   const [me, programs] = await settleConcurrentReads(
-    api.me(),
+    api.me({ signal }),
     programId
       ? Promise.resolve<ProgramSummaryResponse[]>([])
-      : api.listPrograms().then((response) => response.items),
+      : api.listPrograms(50, { signal }).then((response) => response.items),
   );
   const selectedProgramId =
     programId ?? selectPublishedFreeCourse(programs)?.id;
@@ -379,7 +677,7 @@ export async function identityState(
 
   if (hasMembershipRole(me) && selectedProgramId) {
     try {
-      learning = await api.learning(selectedProgramId);
+      learning = await api.learning(selectedProgramId, undefined, { signal });
     } catch (error) {
       if (!(error instanceof ApiError) || error.status !== 404) throw error;
     }
@@ -388,15 +686,19 @@ export async function identityState(
   return { me, programs, learning };
 }
 
-export async function loadProgramLearningState(slug: string, api: LearnerApi) {
+export async function loadProgramLearningState(
+  slug: string,
+  api: LearnerApi,
+  signal?: AbortSignal,
+) {
   const [program, me] = await settleConcurrentReads(
-    api.program(slug),
-    api.me(),
+    api.program(slug, { signal }),
+    api.me({ signal }),
   );
   let learning: LearningResponse | undefined;
   if (hasMembershipRole(me)) {
     try {
-      learning = await api.learning(program.id);
+      learning = await api.learning(program.id, undefined, { signal });
     } catch (error) {
       if (!(error instanceof ApiError) || error.status !== 404) throw error;
     }
@@ -495,7 +797,7 @@ export function createMembershipCleanupGuard(): MembershipCleanupGuard {
   };
 }
 
-function useInvalidateDraftsWithoutMembership(
+export function useInvalidateDraftsWithoutMembership(
   membershipKnown: boolean,
   membershipAvailable: boolean,
   personId: string | null,
@@ -761,11 +1063,13 @@ export function LearnerHomeEnrollmentCard({
   program,
   api = defaultApi,
   afterEnrollmentHref,
+  offlineRead: offlineReadOverride,
 }: {
   learning?: LearningResponse;
   program?: ProgramSummaryResponse;
   api?: LearnerApi;
   afterEnrollmentHref?: string;
+  offlineRead?: OfflineReadMetadata;
 }) {
   const [enrollment, setEnrollment] = useState<"idle" | "saving" | "error">(
     "idle",
@@ -774,9 +1078,11 @@ export function LearnerHomeEnrollmentCard({
     typeof enrollmentFailureMessage
   > | null>(null);
   const nextActivity = learning ? firstActionableActivity(learning) : undefined;
+  const offlineRead =
+    offlineReadOverride ?? getEarliestOfflineReadMetadata(learning, program);
 
   async function startFreeCourse() {
-    if (!program || enrollment === "saving") return;
+    if (!program || enrollment === "saving" || offlineRead) return;
     setEnrollment("saving");
     setFailure(null);
     try {
@@ -852,21 +1158,39 @@ export function LearnerHomeEnrollmentCard({
             </div>
           </div>
         ) : null}
+        {offlineRead ? (
+          <div
+            className="offline-read-notice"
+            id="learner-home-offline-read"
+            role="status"
+          >
+            {offlineReadNotice(offlineRead)}
+          </div>
+        ) : null}
         {learning ? (
           <div className="current-course-card__actions">
-            <Link
-              className="button button--ink"
-              href={
-                nextActivity
-                  ? ROUTES.activity(nextActivity.id)
-                  : ROUTES.programLearning(learning.program_slug)
-              }
-            >
-              {learning.projection.percentage >= 1
-                ? "Review course"
-                : "Continue"}
-              <ArrowRight size={16} aria-hidden="true" />
-            </Link>
+            {offlineRead ? (
+              <span
+                className="button button--ink is-disabled"
+                aria-disabled="true"
+              >
+                Reconnect to continue
+              </span>
+            ) : (
+              <Link
+                className="button button--ink"
+                href={
+                  nextActivity
+                    ? ROUTES.activity(nextActivity.id)
+                    : ROUTES.programLearning(learning.program_slug)
+                }
+              >
+                {learning.projection.percentage >= 1
+                  ? "Review course"
+                  : "Continue"}
+                <ArrowRight size={16} aria-hidden="true" />
+              </Link>
+            )}
             <Link
               className="text-link"
               href={ROUTES.programLearning(learning.program_slug)}
@@ -880,7 +1204,7 @@ export function LearnerHomeEnrollmentCard({
               className="button button--ink"
               type="button"
               onClick={() => void startFreeCourse()}
-              disabled={enrollment === "saving"}
+              disabled={enrollment === "saving" || Boolean(offlineRead)}
             >
               {enrollment === "saving"
                 ? "Starting free course…"
@@ -926,17 +1250,20 @@ export function LearnerHomeOnboardingRedirect() {
   );
 }
 
-export async function loadLearnerHomeState(api: LearnerApi) {
+export async function loadLearnerHomeState(
+  api: LearnerApi,
+  signal?: AbortSignal,
+) {
   const [identity, onboarding] = await settleConcurrentReads(
-    identityState(api),
-    api.onboarding(),
+    identityState(api, undefined, signal),
+    api.onboarding({ signal }),
   );
   return { ...identity, onboarding };
 }
 
 export function LearnerHomeRuntime({ api = defaultApi }: { api?: LearnerApi }) {
   const state = useLoad(
-    () => loadLearnerHomeState(api),
+    (signal) => loadLearnerHomeState(api, signal),
     () => false,
   );
   const onboardingReady =
@@ -960,6 +1287,15 @@ export function LearnerHomeRuntime({ api = defaultApi }: { api?: LearnerApi }) {
     state.status === "ready"
       ? selectPublishedFreeCourse(state.value.programs)
       : undefined;
+  const offlineRead =
+    state.status === "ready"
+      ? getEarliestOfflineReadMetadata(
+          state.value.me,
+          state.value.programs,
+          state.value.learning,
+          state.value.onboarding,
+        )
+      : null;
   return (
     <>
       <StateMessage
@@ -993,6 +1329,15 @@ export function LearnerHomeRuntime({ api = defaultApi }: { api?: LearnerApi }) {
               <span className="dashboard-intro__tenant">Learner workspace</span>
             ) : null}
           </section>
+          {offlineRead ? (
+            <div
+              className="offline-read-notice"
+              id="learner-home-state-offline-read"
+              role="status"
+            >
+              {offlineReadNotice(offlineRead)}
+            </div>
+          ) : null}
           {!membershipAvailable ? (
             <MembershipDraftCleanupNotice cleanup={draftCleanup} />
           ) : null}
@@ -1004,6 +1349,7 @@ export function LearnerHomeRuntime({ api = defaultApi }: { api?: LearnerApi }) {
               afterEnrollmentHref={
                 onboardingReady ? undefined : ROUTES.onboarding
               }
+              offlineRead={offlineRead ?? undefined}
             />
             {state.value.learning ? (
               <HomeLearningPath learning={state.value.learning} />
@@ -1061,10 +1407,16 @@ function activityIcon(kind: string) {
 
 export function LearningActivityNavigation({
   activity,
+  disabled = false,
 }: {
   activity: LearningActivityResponse;
+  disabled?: boolean;
 }) {
   const lockedReason = activityLockReason(activity);
+  const offlineRead = disabled || Boolean(getOfflineReadMetadata(activity));
+  const unavailableReason = offlineRead
+    ? "Reconnect to open this activity."
+    : lockedReason;
   const content = (
     <>
       <span className="activity-row__order">
@@ -1087,8 +1439,12 @@ export function LearningActivityNavigation({
         ) : null}
       </span>
       <span className="activity-row__status">
-        <span>{activityStateLabel(activity.state)}</span>
-        {lockedReason ? (
+        <span>
+          {offlineRead
+            ? "Reconnect to open"
+            : activityStateLabel(activity.state)}
+        </span>
+        {unavailableReason ? (
           <LockKeyhole size={15} aria-hidden="true" />
         ) : (
           <ChevronRight size={16} aria-hidden="true" />
@@ -1096,10 +1452,14 @@ export function LearningActivityNavigation({
       </span>
     </>
   );
-  if (activity.state.toLowerCase() === "locked") {
+  if (activity.state.toLowerCase() === "locked" || offlineRead) {
     return (
-      <li className="activity-row activity-row--locked">
-        <div aria-disabled="true">{content}</div>
+      <li
+        className={`activity-row activity-row--locked${offlineRead ? " activity-row--offline" : ""}`}
+      >
+        <div aria-disabled="true" title={unavailableReason ?? undefined}>
+          {content}
+        </div>
       </li>
     );
   }
@@ -1159,13 +1519,17 @@ function ActivityLoop({
             <span className="activity-loop__copy">
               <strong>{activityKindLabel(step.kind)}</strong>
               <span className="activity-loop__status">
-                {current ? "Current" : activityStateLabel(step.state)}
+                {current
+                  ? "Current"
+                  : getOfflineReadMetadata(step)
+                    ? "Reconnect to open"
+                    : activityStateLabel(step.state)}
               </span>
               {lockedReason ? (
                 <span className="activity-loop__reason">{lockedReason}</span>
               ) : null}
             </span>
-            {!lockedReason && !current ? (
+            {!lockedReason && !current && !getOfflineReadMetadata(step) ? (
               <ChevronRight
                 className="activity-loop__chevron"
                 size={16}
@@ -1176,14 +1540,25 @@ function ActivityLoop({
         );
         return (
           <li
-            className={`activity-loop__step${current ? " is-current" : ""}${completed ? " is-complete" : ""}${lockedReason ? " is-locked" : ""}`}
+            className={`activity-loop__step${current ? " is-current" : ""}${completed ? " is-complete" : ""}${lockedReason ? " is-locked" : ""}${getOfflineReadMetadata(step) ? " is-offline" : ""}`}
             aria-current={current ? "step" : undefined}
             key={step.id}
           >
-            {!lockedReason && !current ? (
+            {!lockedReason && !current && !getOfflineReadMetadata(step) ? (
               <Link href={ROUTES.activity(step.id)}>{content}</Link>
             ) : (
-              <div aria-disabled={lockedReason ? "true" : undefined}>
+              <div
+                aria-disabled={
+                  lockedReason || getOfflineReadMetadata(step)
+                    ? "true"
+                    : undefined
+                }
+                title={
+                  getOfflineReadMetadata(step)
+                    ? "Reconnect to open this activity."
+                    : undefined
+                }
+              >
                 {content}
               </div>
             )}
@@ -2361,15 +2736,30 @@ export function ConnectedActivityWorkspace({
             </div>
           </section>
         ) : activity.kind.toLowerCase() === "video" ? (
-          <div className="activity-media-state" role="status">
-            <div className="activity-media-state__icon" aria-hidden="true">
-              <Play size={24} />
-            </div>
-            <div>
+          <div
+            className="activity-media-state"
+            role="status"
+            aria-label="Approved lesson media is unavailable"
+          >
+            <Image
+              src="/media/ac-course-hero-v1.png"
+              alt=""
+              fill
+              sizes="(max-width: 720px) 100vw, 760px"
+              className="activity-media-state__art"
+            />
+            <div className="activity-media-state__veil" aria-hidden="true" />
+            <div className="activity-media-state__copy">
+              <div className="activity-media-state__icon" aria-hidden="true">
+                <VideoOff size={24} />
+              </div>
+              <span className="activity-media-state__eyebrow">
+                VIDEO · presentation artwork
+              </span>
               <strong>No approved lesson media is connected yet.</strong>
               <p className="field-help">
                 {canCompleteVideo
-                  ? "Playback authorization exists, but this screen will not fabricate media or completion evidence."
+                  ? "The server exposes a completion action, but this unavailable state cannot submit it without approved lesson media."
                   : "Playback and completion remain unavailable for this activity."}
               </p>
             </div>
@@ -2789,7 +3179,7 @@ export function LiveLearningPath({
   api?: LearnerApi;
 }) {
   const state = useLoad(
-    () => loadProgramLearningState(slug, api),
+    (signal) => loadProgramLearningState(slug, api, signal),
     () => false,
   );
   const membershipAvailable =
@@ -2803,6 +3193,14 @@ export function LiveLearningPath({
     return <MembershipUnavailable api={api} draftCleanup={draftCleanup} />;
   }
   const learning = state.status === "ready" ? state.value.learning : undefined;
+  const offlineRead =
+    state.status === "ready"
+      ? getEarliestOfflineReadMetadata(
+          state.value.program,
+          state.value.me,
+          state.value.learning,
+        )
+      : null;
   const nextActivity = learning ? firstActionableActivity(learning) : undefined;
   const firstModule = learning?.modules[0];
   return (
@@ -2814,6 +3212,15 @@ export function LiveLearningPath({
       />
       {state.status === "ready" ? (
         <>
+          {offlineRead ? (
+            <div
+              className="offline-read-notice"
+              id="learning-path-offline-read"
+              role="status"
+            >
+              {offlineReadNotice(offlineRead)}
+            </div>
+          ) : null}
           <section className="course-overview" aria-labelledby="learning-title">
             <div className="course-overview__main">
               <div
@@ -2833,23 +3240,35 @@ export function LiveLearningPath({
               </p>
               {learning ? (
                 <div className="course-overview__actions">
-                  <Link
-                    className="button button--ink"
-                    href={
-                      nextActivity
-                        ? ROUTES.activity(nextActivity.id)
+                  {offlineRead ? (
+                    <span
+                      className="button button--ink is-disabled"
+                      aria-disabled="true"
+                    >
+                      Reconnect to continue
+                    </span>
+                  ) : (
+                    <Link
+                      className="button button--ink"
+                      href={
+                        nextActivity
+                          ? ROUTES.activity(nextActivity.id)
+                          : firstModule
+                            ? ROUTES.module(
+                                learning.program_slug,
+                                firstModule.id,
+                              )
+                            : ROUTES.programLearning(learning.program_slug)
+                      }
+                    >
+                      {nextActivity
+                        ? "Continue learning"
                         : firstModule
-                          ? ROUTES.module(learning.program_slug, firstModule.id)
-                          : ROUTES.programLearning(learning.program_slug)
-                    }
-                  >
-                    {nextActivity
-                      ? "Continue learning"
-                      : firstModule
-                        ? "Open Module 1"
-                        : "View course"}
-                    <ArrowRight size={16} aria-hidden="true" />
-                  </Link>
+                          ? "Open Module 1"
+                          : "View course"}
+                      <ArrowRight size={16} aria-hidden="true" />
+                    </Link>
+                  )}
                 </div>
               ) : (
                 <div className="enrollment-required" role="status">
@@ -2888,7 +3307,7 @@ export function LiveModule({
   api?: LearnerApi;
 }) {
   const state = useLoad(
-    () => loadProgramLearningState(slug, api),
+    (signal) => loadProgramLearningState(slug, api, signal),
     () => false,
   );
   const membershipAvailable =
@@ -3010,13 +3429,14 @@ export function LiveModule({
 export async function loadActivityEntryState(
   activityId: string,
   api: LearnerApi,
+  signal?: AbortSignal,
 ): Promise<{
   me: MeResponse;
   activity?: ActivityResponse;
 }> {
   const [meResult, activityResult] = await Promise.allSettled([
-    api.me(),
-    api.activity(activityId),
+    api.me({ signal }),
+    api.activity(activityId, { signal }),
   ]);
 
   if (meResult.status === "rejected") throw meResult.reason;
@@ -3180,7 +3600,7 @@ export function LiveActivity({
   api?: LearnerApi;
 }) {
   const state = useLoad(
-    () => loadActivityEntryState(activityId, api),
+    (signal) => loadActivityEntryState(activityId, api, signal),
     () => false,
     activityId,
   );
@@ -3222,12 +3642,12 @@ export function LiveCertificate({
   api?: LearnerApi;
 }) {
   const state = useLoad(
-    async () => {
-      const me = await api.me();
+    async (signal) => {
+      const me = await api.me({ signal });
       return {
         me,
         certificate: hasMembershipRole(me)
-          ? await api.certificate(certificateId)
+          ? await api.certificate(certificateId, { signal })
           : undefined,
       };
     },
@@ -3282,7 +3702,7 @@ export function LiveCompletionGate({
   api?: LearnerApi;
 }) {
   const state = useLoad(
-    () => loadProgramLearningState(slug, api),
+    (signal) => loadProgramLearningState(slug, api, signal),
     () => false,
   );
   const membershipAvailable =
@@ -3312,28 +3732,44 @@ export function LiveCompletionGate({
     typeof required === "number" &&
     required > 0 &&
     completed === required;
+  const offlineRead = getEarliestOfflineReadMetadata(
+    state.value.program,
+    state.value.me,
+    state.value.learning,
+  );
   return (
-    <section className="completion-hero" aria-labelledby="completion-title">
-      <p className="eyebrow">
-        <span aria-hidden="true" /> Course completion
-      </p>
-      <h1 id="completion-title">Completion status.</h1>
-      {state.value.learning ? (
-        <>
-          <p>
-            {typeof completed === "number" && typeof required === "number"
-              ? `${completed} of ${required} required activities complete.`
-              : "Completion details are not available right now."}
-          </p>
-          <p role="status">
-            {complete
-              ? "All required activities are complete."
-              : "Keep going to complete the remaining required activities."}
-          </p>
-        </>
-      ) : (
-        <p>Start the Free Course to begin tracking completion.</p>
-      )}
-    </section>
+    <>
+      {offlineRead ? (
+        <div
+          className="offline-read-notice"
+          id="completion-offline-read"
+          role="status"
+        >
+          {offlineReadNotice(offlineRead)}
+        </div>
+      ) : null}
+      <section className="completion-hero" aria-labelledby="completion-title">
+        <p className="eyebrow">
+          <span aria-hidden="true" /> Course completion
+        </p>
+        <h1 id="completion-title">Completion status.</h1>
+        {state.value.learning ? (
+          <>
+            <p>
+              {typeof completed === "number" && typeof required === "number"
+                ? `${completed} of ${required} required activities complete.`
+                : "Completion details are not available right now."}
+            </p>
+            <p role="status">
+              {complete
+                ? "All required activities are complete."
+                : "Keep going to complete the remaining required activities."}
+            </p>
+          </>
+        ) : (
+          <p>Start the Free Course to begin tracking completion.</p>
+        )}
+      </section>
+    </>
   );
 }

@@ -24,6 +24,7 @@ Production configuration is injected from Infisical at process start. Git contai
 | `AC_PUBLIC_APP_URL`              | edge              |                    yes | learner origin and redirect allowlist source            |
 | `AC_ADMIN_APP_URL`               | edge              |                    yes | admin origin and redirect allowlist source              |
 | `AC_API_URL`                     | edge              |                    yes | canonical API origin                                    |
+| `AC_DEV_API_ORIGIN`              | local development |                     no | loopback API or exact staging public-catalog preview    |
 | `AC_API_HOST`                    | edge              |                    yes | canonical public API host and health probe Host         |
 | `AC_INTERNAL_API_HOST`           | release           |                    yes | reserved app-network-only API DNS name                  |
 
@@ -40,6 +41,16 @@ environment-specific edge aliases.
 The workflow-produced `release-images.env` binds the full Git SHA to exact image
 IDs and private-registry provenance digests. Staging and production promotion
 must reuse that identical file.
+
+`AC_DEV_API_ORIGIN` is read only by the learner app's `next dev` proxy. It may
+name loopback for normal local development or the exact canonical staging API
+origin for anonymous `GET /v1/programs` and `GET /v1/programs/{slug}`. The
+remote mode forwards only the request's negotiation headers and the original
+`Origin`, strips cookies, authorization, proxy metadata, and arbitrary headers,
+rejects private endpoints and all mutations, and rejects upstream redirects.
+Blank values are treated as unset. It is invalid in staging/production and
+must never contain credentials or a production origin. Protected real-data
+tests run on the deployed staging origin.
 
 Compose assigns only the environment's reserved `AC_INTERNAL_API_HOST` to the
 API container on the isolated application network:

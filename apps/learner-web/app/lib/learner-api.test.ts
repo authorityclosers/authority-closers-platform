@@ -6,12 +6,28 @@ import {
   type ActivityResponse,
   type ProgramDetailResponse,
 } from "./learner-api";
+import {
+  getOfflineReadMetadata,
+  type OfflineReadCache,
+} from "./offline-read-cache";
 
 function response(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { "content-type": "application/json" },
   });
+}
+
+function offlineCache(
+  overrides: Partial<OfflineReadCache> = {},
+): OfflineReadCache {
+  return {
+    get: vi.fn().mockResolvedValue(null),
+    put: vi.fn().mockResolvedValue({ ok: true }),
+    activateOwner: vi.fn().mockResolvedValue({ ok: true }),
+    purge: vi.fn().mockResolvedValue({ ok: true }),
+    ...overrides,
+  };
 }
 
 describe("learner API adapter", () => {
@@ -30,6 +46,206 @@ describe("learner API adapter", () => {
       next_cursor: null,
     });
     expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it("writes allowlisted successful GETs and returns encrypted-cache copies only after a network TypeError", async () => {
+    const cached = { items: [], next_cursor: null };
+    const cache = offlineCache({
+      get: vi.fn().mockResolvedValue({ data: cached, savedAt: 1_000 }),
+    });
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(response(cached))
+      .mockRejectedValueOnce(new TypeError("offline"));
+    const api = createLearnerApi(fetcher, { offlineReadCache: cache });
+
+    await expect(api.listPrograms()).resolves.toEqual(cached);
+    expect(cache.put).toHaveBeenCalledWith("/v1/programs?limit=50", cached);
+
+    const recovered = await api.listPrograms();
+    expect(recovered).toEqual(cached);
+    expect(cache.get).toHaveBeenCalledWith("/v1/programs?limit=50");
+    expect(getOfflineReadMetadata(recovered)).toEqual({
+      isOfflineCopy: true,
+      savedAt: 1_000,
+    });
+  });
+
+  it("marks a recovered response without changing its wire shape", async () => {
+    const cached = { items: [{ id: "program-1" }], next_cursor: null };
+    const cache = offlineCache({
+      get: vi.fn().mockResolvedValue({ data: cached, savedAt: 2_000 }),
+    });
+    const api = createLearnerApi(
+      vi.fn().mockRejectedValue(new TypeError("network unavailable")),
+      { offlineReadCache: cache },
+    );
+
+    const result = await api.listPrograms();
+    expect(result).toEqual(cached);
+    expect(getOfflineReadMetadata(result)).toEqual({
+      isOfflineCopy: true,
+      savedAt: 2_000,
+    });
+    expect(Object.keys(result)).toEqual(["items", "next_cursor"]);
+  });
+
+  it("never falls back for aborts or server errors, and purges private cache on 401/403", async () => {
+    for (const status of [401, 403, 404, 409]) {
+      const cache = offlineCache();
+      const api = createLearnerApi(
+        vi
+          .fn()
+          .mockResolvedValue(response({ title: "server failure" }, status)),
+        { offlineReadCache: cache },
+      );
+
+      await expect(api.onboarding()).rejects.toMatchObject({ status });
+      expect(cache.get).not.toHaveBeenCalled();
+      if (status === 401 || status === 403) {
+        expect(cache.purge).toHaveBeenCalledOnce();
+      } else {
+        expect(cache.purge).not.toHaveBeenCalled();
+      }
+    }
+
+    const abortCache = offlineCache();
+    const abort = Object.assign(new Error("cancelled"), {
+      name: "AbortError",
+    });
+    const abortApi = createLearnerApi(vi.fn().mockRejectedValue(abort), {
+      offlineReadCache: abortCache,
+    });
+    await expect(abortApi.onboarding()).rejects.toMatchObject({
+      name: "AbortError",
+    });
+    expect(abortCache.get).not.toHaveBeenCalled();
+  });
+
+  it("does not use cache for denied paths even when the network fails with TypeError", async () => {
+    const cache = offlineCache();
+    const api = createLearnerApi(
+      vi.fn().mockRejectedValue(new TypeError("offline")),
+      { offlineReadCache: cache },
+    );
+
+    await expect(api.context()).rejects.toThrow("offline");
+    expect(cache.get).not.toHaveBeenCalled();
+  });
+
+  it("activates the online owner without caching or falling back to identity and permissions", async () => {
+    const me = {
+      person_id: "person-1",
+      email: "learner@example.com",
+      display_name: "Learner",
+      email_verified_at: "2026-09-01T00:00:00Z",
+      selected_tenant_id: "tenant-1",
+      membership_role: "learner",
+      permissions: ["learner:read"],
+    };
+    const cache = offlineCache();
+    const api = createLearnerApi(vi.fn().mockResolvedValue(response(me)), {
+      offlineReadCache: cache,
+    });
+
+    await expect(api.me()).resolves.toEqual(me);
+    expect(cache.activateOwner).toHaveBeenCalledWith("person-1", "tenant-1");
+    expect(cache.put).not.toHaveBeenCalled();
+
+    const offlineCacheCopy = offlineCache({
+      get: vi.fn().mockResolvedValue({ data: me, savedAt: 1_000 }),
+    });
+    const offlineApi = createLearnerApi(
+      vi.fn().mockRejectedValue(new TypeError("offline")),
+      { offlineReadCache: offlineCacheCopy },
+    );
+    await expect(offlineApi.me()).rejects.toThrow("offline");
+    expect(offlineCacheCopy.get).not.toHaveBeenCalled();
+  });
+
+  it("rotates private offline scope from the online tenant context without caching the context", async () => {
+    const context = {
+      person_id: "person-1",
+      session_id: "session-1",
+      tenant_id: "tenant-2",
+      membership_role: "learner",
+      permissions: ["learner:read"],
+    };
+    const cache = offlineCache();
+    const api = createLearnerApi(vi.fn().mockResolvedValue(response(context)), {
+      offlineReadCache: cache,
+    });
+
+    await expect(api.context()).resolves.toEqual(context);
+    expect(cache.activateOwner).toHaveBeenCalledWith("person-1", "tenant-2");
+    expect(cache.put).not.toHaveBeenCalled();
+  });
+
+  it("also falls back when reading a successful response body hits a network TypeError", async () => {
+    const cached = { items: [{ id: "program-1" }], next_cursor: null };
+    const cache = offlineCache({
+      get: vi.fn().mockResolvedValue({ data: cached, savedAt: 3_000 }),
+    });
+    const responseWithBrokenBody = {
+      ok: true,
+      status: 200,
+      text: vi.fn().mockRejectedValue(new TypeError("body stream closed")),
+    } as unknown as Response;
+    const api = createLearnerApi(
+      vi.fn().mockResolvedValue(responseWithBrokenBody),
+      { offlineReadCache: cache },
+    );
+
+    await expect(api.listPrograms()).resolves.toEqual(cached);
+    expect(cache.get).toHaveBeenCalledWith("/v1/programs?limit=50");
+    expect(getOfflineReadMetadata(cached)).toMatchObject({
+      isOfflineCopy: true,
+      savedAt: 3_000,
+    });
+  });
+
+  it("purges encrypted offline reads after successful API logout", async () => {
+    const cache = offlineCache();
+    const api = createLearnerApi(
+      vi.fn().mockResolvedValue(new Response(null, { status: 204 })),
+      { offlineReadCache: cache },
+    );
+
+    await expect(api.logout()).resolves.toBeUndefined();
+    expect(cache.purge).toHaveBeenCalledOnce();
+  });
+
+  it("does not purge encrypted offline reads when logout cannot reach the service", async () => {
+    const cache = offlineCache();
+    const api = createLearnerApi(
+      vi.fn().mockRejectedValue(new TypeError("offline")),
+      { offlineReadCache: cache },
+    );
+
+    await expect(api.logout()).rejects.toThrow("offline");
+    expect(cache.purge).not.toHaveBeenCalled();
+  });
+
+  it("purges encrypted offline reads when logout clears the browser but cannot confirm revocation", async () => {
+    const cache = offlineCache();
+    const api = createLearnerApi(
+      vi.fn().mockResolvedValue(
+        response(
+          {
+            code: "logout_revocation_unavailable",
+            title: "Sign-out could not be fully confirmed",
+          },
+          503,
+        ),
+      ),
+      { offlineReadCache: cache },
+    );
+
+    await expect(api.logout()).rejects.toMatchObject({
+      status: 503,
+      code: "logout_revocation_unavailable",
+    });
+    expect(cache.purge).toHaveBeenCalledOnce();
   });
 
   it("rejects absolute and non-v1 paths before a request can escape the app", async () => {

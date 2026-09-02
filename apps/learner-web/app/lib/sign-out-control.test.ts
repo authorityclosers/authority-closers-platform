@@ -70,6 +70,48 @@ describe("learner sign-out local recovery cleanup", () => {
     expect(readOnboardingLocalDraft(storage, scope).status).toBe("missing");
   });
 
+  it("purges encrypted offline reads together with learner recovery copies", async () => {
+    const storage = memoryStorage();
+    seedDraft(storage);
+    const purge = vi.fn().mockResolvedValue({ ok: true });
+
+    await expect(
+      logoutAndClearLocalDrafts(
+        { logout: vi.fn().mockResolvedValue(undefined) },
+        storage,
+        availableLockManager,
+        { purge },
+      ),
+    ).resolves.toEqual({
+      cleanup: { ok: true },
+      serverRevocationConfirmed: true,
+    });
+    expect(purge).toHaveBeenCalledOnce();
+    expect(readOnboardingLocalDraft(storage, scope).status).toBe("missing");
+  });
+
+  it("reports offline-cache purge failure as unclean local cleanup", async () => {
+    const storage = memoryStorage();
+    seedDraft(storage);
+    const purge = vi.fn().mockResolvedValue({
+      ok: false,
+      reason: "unavailable",
+    });
+
+    await expect(
+      logoutAndClearLocalDrafts(
+        { logout: vi.fn().mockResolvedValue(undefined) },
+        storage,
+        availableLockManager,
+        { purge },
+      ),
+    ).resolves.toMatchObject({
+      cleanup: { ok: false, reason: "unavailable" },
+      serverRevocationConfirmed: true,
+    });
+    expect(readOnboardingLocalDraft(storage, scope).status).toBe("missing");
+  });
+
   it("retains the recovery copy when server sign-out fails so retry remains possible", async () => {
     const storage = memoryStorage();
     seedDraft(storage);

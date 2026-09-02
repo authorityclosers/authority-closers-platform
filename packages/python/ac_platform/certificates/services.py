@@ -1479,7 +1479,12 @@ class SqlAlchemyCertificateRepository:
         version: ImmutableProgramVersionSnapshot,
     ) -> PinnedCourseVersion | None:
         from ac_platform.catalog.models import Activity, Module, ModulePrerequisite
-        from ac_platform.learning.models import ActivityProgress
+        from ac_platform.learning.models import ActivityProgress, ActivityState
+        from ac_platform.learning.services import (
+            ActivityDefinition,
+            SqlAlchemyLearningRepository,
+            authoritative_progress,
+        )
 
         modules = list(
             self._session.scalars(
@@ -1519,7 +1524,7 @@ class SqlAlchemyCertificateRepository:
                 .with_for_update()
             ).all()
         )
-        progress = self._session.scalars(
+        _locked_progress = self._session.scalars(
             select(ActivityProgress)
             .where(
                 ActivityProgress.tenant_id == entitlement.tenant_id,
@@ -1529,7 +1534,53 @@ class SqlAlchemyCertificateRepository:
             )
             .with_for_update()
         ).all()
-        completed_ids = {item.activity_id for item in progress if item.state == "completed"}
+        # Completion is a derived fact, not a trusted value on the mutable
+        # progress row.  Reuse the learner evidence authority so certificate
+        # issuance requires the same pinned activity version and
+        # evidence/submission/review (or playback) chain as learner reads.
+        completed_ids: set[UUID] = set()
+        if activities:
+
+            def activity_definition(row: object, _version: object) -> ActivityDefinition:
+                return ActivityDefinition(
+                    id=row.id,  # type: ignore[attr-defined]
+                    kind=row.kind,  # type: ignore[attr-defined]
+                    module_id=row.module_id,  # type: ignore[attr-defined]
+                    program_version_id=row.program_version_id,  # type: ignore[attr-defined]
+                    program_id=row.program_id,  # type: ignore[attr-defined]
+                    program_scope=row.scope,  # type: ignore[attr-defined]
+                    program_owner_key=row.owner_key,  # type: ignore[attr-defined]
+                    title=row.title,  # type: ignore[attr-defined]
+                    order=row.position,  # type: ignore[attr-defined]
+                    required=row.is_required,  # type: ignore[attr-defined]
+                    version=f"activity:{row.id}",  # type: ignore[attr-defined]
+                    tenant_id=row.tenant_id,  # type: ignore[attr-defined]
+                )
+
+            learning_repository = SqlAlchemyLearningRepository(
+                self._session,
+                activity_resolver=activity_definition,
+                reviewer_resolver=lambda _access: None,
+            )
+            try:
+                access = learning_repository.resolve_scope(
+                    tenant_id=entitlement.tenant_id,
+                    person_id=entitlement.person_id,
+                    enrollment_id=entitlement.enrollment_id,
+                    program_version_id=entitlement.program_version_id,
+                    activity_id=activities[0].id,
+                )
+                validated_progress = authoritative_progress(learning_repository, access)
+            except DomainError:
+                # A malformed or no-longer-authorized learner scope must fail
+                # closed for issuance.  The caller turns ``None`` into the
+                # existing authoritative-progress gate.
+                return None
+            completed_ids = {
+                item.activity_id
+                for item in validated_progress.values()
+                if item.state is ActivityState.COMPLETED
+            }
         prerequisites: dict[UUID, list[UUID]] = {module.id: [] for module in modules}
         for edge in edges:
             prerequisites.setdefault(edge.module_id, []).append(edge.prerequisite_module_id)

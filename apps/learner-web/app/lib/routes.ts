@@ -1,3 +1,5 @@
+const routeSegment = (value: string) => encodeURIComponent(value);
+
 export const ROUTES = {
   home: "/",
   privacy: "/privacy",
@@ -11,15 +13,21 @@ export const ROUTES = {
   sessionExpired: "/session-expired",
   onboarding: "/onboarding",
   learnerHome: "/home",
-  myLearning: "/home#my-learning",
-  practice: "/home#practice",
+  dashboard: "/home",
+  learning: "/learning",
+  myLearning: "/learning",
+  discover: "/discover",
   progress: "/progress",
+  notifications: "/notifications",
+  profile: "/profile",
   settings: "/settings",
-  programDetail: (slug: string) => `/programs/${slug}`,
-  programLearning: (slug: string) => `/learn/${slug}`,
+  practice: "/home#practice",
+  programDetail: (slug: string) => `/programs/${routeSegment(slug)}`,
+  programLearning: (slug: string) => `/learn/${routeSegment(slug)}`,
   module: (slug: string, moduleId: string) =>
-    `/learn/${slug}/module/${moduleId}`,
-  activity: (activityId: string) => `/activity/${activityId}`,
-  completion: (slug: string) => `/learn/${slug}/complete`,
-  certificate: (certificateId: string) => `/certificates/${certificateId}`,
+    `/learn/${routeSegment(slug)}/module/${routeSegment(moduleId)}`,
+  activity: (activityId: string) => `/activity/${routeSegment(activityId)}`,
+  completion: (slug: string) => `/learn/${routeSegment(slug)}/complete`,
+  certificate: (certificateId: string) =>
+    `/certificates/${routeSegment(certificateId)}`,
 } as const;
