@@ -1,0 +1,16 @@
+{
+  "workstream_id": "AC-WF-LEARNER-SF-V0.1A",
+  "diagrams": [
+    {
+      "diagram_id": "FLOW-LEARNER-SF-PUML",
+      "type": "puml",
+      "local_path": "04-ai-context/learner-screen-family.puml",
+      "editable": true,
+      "renderer": "PlantUML-compatible source",
+      "drive_id": null,
+      "url": null,
+      "status": "reference",
+      "known_issue": "No Lucid/Figma connector artifact claimed; render locally when needed."
+    }
+  ]
+}

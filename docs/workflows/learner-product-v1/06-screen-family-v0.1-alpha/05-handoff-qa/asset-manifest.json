@@ -1,0 +1,66 @@
+{
+  "workstream_id": "AC-WF-LEARNER-SF-V0.1A",
+  "package_status": "contract_ready_visual_generation_pending",
+  "assets": [
+    {
+      "asset_id": "DOC-PACKAGE-README",
+      "type": "doc",
+      "state": "package",
+      "local_path": "README.md",
+      "drive_id": null,
+      "url": null,
+      "source_or_parent": "repository docs-only package",
+      "status": "reference",
+      "known_issue": "No Drive upload claimed; repository is the requested handoff surface."
+    },
+    {
+      "asset_id": "MATRIX-LEARNER-SF",
+      "type": "csv",
+      "state": "all_states",
+      "local_path": "02-ux-state-spec/state-transition-matrix.csv",
+      "drive_id": null,
+      "url": null,
+      "source_or_parent": "workflow artifact schema",
+      "status": "reference",
+      "known_issue": "Requires exact-current implementation and browser/device evidence."
+    },
+    {
+      "asset_id": "AI-CONTEXT-LEARNER-SF",
+      "type": "json",
+      "state": "context",
+      "local_path": "04-ai-context/ai-design-context.json",
+      "drive_id": null,
+      "url": null,
+      "source_or_parent": "state matrix and controlled source manifest",
+      "status": "reference",
+      "known_issue": "Visual selection is intentionally null pending exactly three new directions if exploration starts."
+    },
+    {
+      "asset_id": "FLOW-LEARNER-SF-PUML",
+      "type": "puml",
+      "state": "flow",
+      "local_path": "04-ai-context/learner-screen-family.puml",
+      "drive_id": null,
+      "url": null,
+      "source_or_parent": "flow catalog and state matrix",
+      "status": "reference",
+      "known_issue": "Editable source is included; no Lucid/Figma artifact claimed."
+    }
+  ],
+  "visual_assets": {
+    "status": "pending",
+    "count": 0,
+    "directions_generated": 0,
+    "selected_direction": null,
+    "approved": false,
+    "next_gate": "When visual exploration starts, generate exactly three independent desktop/mobile directions, review, select or reject, preserve originals, and update this manifest."
+  },
+  "connector_status": {
+    "google_drive_source_fetch": "read_exact_ids_completed",
+    "google_drive_upload": "not_claimed",
+    "figma": "not_claimed",
+    "canva": "not_claimed",
+    "lucid": "not_claimed",
+    "notion": "not_claimed"
+  }
+}
