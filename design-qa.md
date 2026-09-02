@@ -1,3 +1,116 @@
+## Profile, Settings, and click-first onboarding design QA
+
+Final Direction B QA for the profile/settings and click-first onboarding route
+family. The visual result, real browser workflow, responsive checks, and Node24
+validation matrix pass. A fresh independent Luna/`xhigh` merge-gate review of
+the corrected working tree passed with no P0, P1, or P2 findings.
+
+## Selected sources
+
+- .artifacts/ui-workstream/profile-settings-onboarding/03-visual-exploration/selected/PSO-DIR-B-settings-desktop.png — 1440 × 1024
+- .artifacts/ui-workstream/profile-settings-onboarding/03-visual-exploration/selected/PSO-DIR-B-settings-mobile.png — 390 × 844
+- .artifacts/ui-workstream/profile-settings-onboarding/03-visual-exploration/selected/PSO-DIR-B-onboarding-desktop.png — 1440 × 1024
+- .artifacts/ui-workstream/profile-settings-onboarding/03-visual-exploration/selected/PSO-DIR-B-onboarding-mobile.png — 390 × 844
+
+## Final implementation evidence
+
+- .artifacts/design-qa/profile-settings-onboarding/settings-desktop-completed-final.png
+- .artifacts/design-qa/profile-settings-onboarding/settings-mobile-completed-final.png
+- .artifacts/design-qa/profile-settings-onboarding/onboarding-desktop-final-7.png
+- .artifacts/design-qa/profile-settings-onboarding/onboarding-mobile-final-5.png
+- .artifacts/design-qa/profile-settings-onboarding/settings-desktop-final.png
+- .artifacts/design-qa/profile-settings-onboarding/settings-mobile-final.png
+- .artifacts/design-qa/profile-settings-onboarding/onboarding-desktop-post-hardening.png
+- .artifacts/design-qa/profile-settings-onboarding/onboarding-mobile-post-hardening.png
+
+Combined comparisons:
+
+- .artifacts/design-qa/profile-settings-onboarding/settings-desktop-comparison-passed.png
+- .artifacts/design-qa/profile-settings-onboarding/settings-mobile-comparison-passed.png
+- .artifacts/design-qa/profile-settings-onboarding/onboarding-desktop-comparison-passed.png
+- .artifacts/design-qa/profile-settings-onboarding/onboarding-mobile-comparison-passed.png
+
+Additional states:
+
+- .artifacts/design-qa/profile-settings-onboarding/onboarding-desktop-loading-final.png
+- .artifacts/design-qa/profile-settings-onboarding/onboarding-completion-focus-final.png
+
+## States, viewports, and density
+
+The captures cover an authenticated QA learner, Avery, with verified identity
+and exact learner membership. Settings shows the complete profile with Sales,
+“Close more consistently,” no situation, and 30 minutes. Onboarding was checked
+across Context, Goal, optional Situation, Weekly time, Review, and Completion.
+Both routes were checked at the exact 1440 × 1024 and 390 × 844 desktop/mobile
+viewports; no horizontal overflow was present.
+
+Settings mobile controls and policy links have hit targets of at least 44px.
+Onboarding mobile actions have hit targets of at least 44px. The final desktop
+Onboarding card measures approximately x504, y84, width 880, height 512.7,
+against the selected source at approximately x499, y84, width 883, height 510.
+
+## Real workflow QA
+
+The QA workflow selected a goal, advanced to the optional situation, continued
+without a situation, selected 30 minutes, reviewed, saved, and reached
+completion. Completion exposed Return to settings, and Settings immediately
+rendered the canonical saved values. Light/Dark/Light toggling worked and the
+final theme returned to Light.
+
+Fresh post-edit browser tabs had no application errors or warnings. The only
+warning observed in older tabs was the dev-only Fast Refresh warning while
+source files were actively changing.
+
+## Findings corrected
+
+- Neutral unresolved loading state with no guessed Step 1.
+- Source-faithful bordered form and neutral ledger.
+- Numbered/check step rail and connector.
+- Secondary custom-goal affordance.
+- Desktop and mobile density.
+- return=settings allowlist.
+- Completed-profile dirty recovery.
+- 64-character contract.
+- Unknown context rendering.
+- Request generations.
+- Dirty copy/download.
+- Cleanup-pending honesty.
+- Focus restoration and focus-visible completion.
+- A true 44 × 44 mobile profile/settings target after a conflicting mobile
+  min-width rule was discovered in browser QA.
+- Programmatic Settings route-entry focus after Onboarding completion, with the
+  non-interactive H1 focus outline suppressed through a correctly scoped CSS
+  Module class while interactive focus treatment remains intact.
+- Next route-transition scroll-behavior metadata, eliminating the development
+  warning without removing smooth scrolling.
+- Operation-owned onboarding and activity recovery envelopes, so post-server
+  compare-and-clear cannot delete a newer cross-tab recovery record.
+- Delayed activity recovery hydration that preserves input edited while the
+  recovery read is pending.
+- Person-, membership-, generation-, and unmount-scoped membership cleanup
+  publication guards.
+- Executable concurrency coverage for newer-record retention, delayed
+  hydration, and stale cleanup suppression.
+
+## Intentional deviations
+
+Existing LearnerShell, compact mobile shell, live QA identity, and canonical
+values take precedence over generated chrome and mock data. The implementation
+does not expose fake avatar upload, notifications, deletion, purchases, paid
+offers, or entitlement logic.
+
+Automated validation on Node 24.19.0 and pnpm 11.19.0 passed: 168 learner tests,
+TypeScript, zero-warning ESLint, repository formatting, production build, and
+`git diff --check`. The final independent Luna/`xhigh` merge gate passed with
+no P0, P1, or P2 findings. Its residual P3 notes are that mounted component
+tests remain thinner than the production guard/storage interleaving tests and
+that all supported localStorage writers must continue honoring the shared Web
+Lock protocol.
+
+final result: passed
+
+---
+
 # Auth, onboarding, and session recovery design QA
 
 Result: **PASSED** — no open P0, P1, or P2 visual defects in the implemented frontend scope.

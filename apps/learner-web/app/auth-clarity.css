@@ -6,31 +6,25 @@
 .site-frame--auth {
   min-height: 100svh;
   color: var(--theme-text);
-  background:
-    radial-gradient(
-      circle at 82% 8%,
-      rgba(49, 87, 216, 0.08),
-      transparent 28rem
-    ),
-    var(--theme-canvas);
+  background: var(--theme-canvas);
 }
 
 .site-frame--auth .clarity-auth-main {
   min-height: 100svh;
-  padding: clamp(16px, 2.5vw, 32px);
+  padding: 0;
 }
 
 .clarity-auth-shell {
   display: grid;
-  width: min(1180px, 100%);
-  min-height: calc(100svh - clamp(32px, 5vw, 64px));
+  width: 100%;
+  min-height: 100svh;
   grid-template-rows: auto 1fr auto;
-  margin: 0 auto;
-  overflow: hidden;
-  border: 1px solid var(--theme-border);
-  border-radius: 14px;
+  margin: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
   background: var(--theme-surface);
-  box-shadow: var(--theme-shadow);
+  box-shadow: none;
 }
 
 .clarity-auth-masthead {
@@ -85,32 +79,46 @@
 }
 
 .clarity-auth-masthead__task {
+  display: inline-flex;
+  align-items: center;
   justify-self: end;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--theme-border);
+  border-radius: 7px;
+  background: var(--theme-surface-subtle);
   color: var(--theme-text-muted);
   font-size: 0.72rem;
   font-weight: 760;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.clarity-auth-masthead__task > span:last-child {
+  padding: 4px 7px;
+  border-radius: 5px;
+  background: var(--theme-surface);
+  color: var(--theme-text-muted);
 }
 
 .clarity-auth-workspace {
   display: grid;
   min-width: 0;
-  grid-template-columns: minmax(210px, 250px) minmax(0, 1fr);
+  grid-template-columns: minmax(400px, 35%) minmax(0, 1fr);
 }
 
 .clarity-auth-ledger {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 34px;
-  padding: clamp(28px, 4vw, 48px) 28px;
+  gap: 38px;
+  padding: clamp(40px, 5vw, 72px) clamp(32px, 5vw, 72px);
   border-right: 1px solid var(--theme-border);
-  background: color-mix(
-    in srgb,
-    var(--theme-surface-subtle) 48%,
-    var(--theme-surface)
-  );
+  background: var(--theme-canvas);
+}
+
+.clarity-auth-compact-progress {
+  display: none;
 }
 
 .clarity-auth-ledger__eyebrow {
@@ -145,57 +153,149 @@
 }
 
 .clarity-auth-steps {
+  position: relative;
   display: grid;
-  gap: 4px;
+  gap: 12px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
+.clarity-auth-steps::before {
+  position: absolute;
+  top: 38px;
+  bottom: 38px;
+  left: 28px;
+  width: 2px;
+  background: var(--theme-border-strong);
+  content: "";
+}
+
 .clarity-auth-steps li {
   display: grid;
-  min-height: 52px;
-  grid-template-columns: 22px minmax(0, 1fr);
+  position: relative;
+  min-height: 76px;
+  grid-template-columns: 24px minmax(0, 1fr) 18px;
   align-items: center;
-  column-gap: 9px;
-  padding: 8px 10px;
-  border-left: 2px solid transparent;
+  column-gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--theme-border);
+  border-radius: 10px;
   color: var(--theme-text-muted);
+  background: var(--theme-surface);
+  box-shadow: 0 1px 0 rgba(31, 42, 61, 0.04);
+}
+
+.clarity-auth-step-marker {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  width: 26px;
+  height: 26px;
+  grid-row: 1 / span 2;
+  place-items: center;
+  color: var(--theme-text-muted);
+}
+
+.clarity-auth-step-marker > svg {
+  display: block;
+  width: 26px;
+  height: 26px;
+}
+
+.clarity-auth-step-number {
+  position: absolute;
+  color: currentColor;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.clarity-auth-steps li.is-current .clarity-auth-step-marker {
+  color: var(--theme-action);
+}
+
+.clarity-auth-steps li.is-complete .clarity-auth-step-marker {
+  color: var(--theme-success-text);
+}
+
+.clarity-auth-steps li.is-complete:not(:last-child)::after {
+  position: absolute;
+  z-index: 0;
+  top: calc(50% + 13px);
+  bottom: -37px;
+  left: 27px;
+  width: 2px;
+  background: var(--theme-success-text);
+  content: "";
+}
+
+.clarity-auth-steps li > .clarity-auth-step-label {
+  position: relative;
+  z-index: 1;
+}
+
+.clarity-auth-steps li > .clarity-auth-step-label {
+  color: inherit;
+  font-size: 0.82rem;
+  font-weight: 680;
+}
+
+.clarity-auth-steps li > .clarity-auth-step-label + small {
+  position: relative;
+  z-index: 1;
 }
 
 .clarity-auth-steps li svg {
   grid-row: 1 / span 2;
 }
 
-.clarity-auth-steps li > span {
-  color: inherit;
-  font-size: 0.78rem;
-  font-weight: 760;
-}
-
 .clarity-auth-steps li small {
+  margin-top: 3px;
+  color: var(--theme-text-muted);
   font-size: 0.64rem;
   line-height: 1.2;
 }
 
-.clarity-auth-steps li.is-current {
-  border-left-color: var(--theme-action);
-  border-radius: 0 8px 8px 0;
+.clarity-auth-step-chevron {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  align-self: center;
+  color: var(--theme-text-muted);
+}
+
+.clarity-auth-steps li.is-current .clarity-auth-step-chevron {
   color: var(--theme-action);
-  background: var(--theme-info-surface);
+}
+
+.clarity-auth-steps li.is-complete .clarity-auth-step-chevron {
+  color: var(--theme-success-text);
+}
+
+.clarity-auth-steps li.is-current {
+  border-color: var(--theme-action);
+  color: var(--theme-text);
+  background: var(--theme-surface);
+  box-shadow: inset 4px 0 0 var(--theme-action);
 }
 
 .clarity-auth-steps li.is-complete {
+  border-color: color-mix(
+    in srgb,
+    var(--theme-success-text) 45%,
+    var(--theme-border)
+  );
   color: var(--theme-success-text);
 }
 
 .clarity-auth-panel {
   display: grid;
   min-width: 0;
-  align-content: center;
+  align-content: start;
   justify-items: center;
   gap: 18px;
-  padding: clamp(32px, 5vw, 64px);
+  padding: clamp(44px, 6vw, 84px) clamp(40px, 6vw, 96px);
+  background: var(--theme-canvas);
 }
 
 .clarity-auth-panel > .surface-state,
@@ -207,6 +307,23 @@
 .clarity-auth-shell--onboarding .clarity-auth-panel > .surface-state,
 .clarity-auth-shell--onboarding .clarity-onboarding-form {
   width: min(100%, 720px);
+}
+
+.clarity-auth-shell--onboarding .clarity-auth-panel {
+  align-content: start;
+  justify-items: stretch;
+  padding: 20px 56px 20px 0;
+}
+
+.clarity-auth-shell--onboarding .clarity-onboarding-form {
+  width: 100%;
+  margin: 0;
+  gap: 14px;
+  padding: 42px 54px 20px;
+  border: 1px solid var(--theme-border);
+  border-radius: 8px;
+  background: var(--theme-surface);
+  box-shadow: 0 2px 12px rgba(15, 27, 51, 0.06);
 }
 
 .clarity-auth-card {
@@ -593,6 +710,19 @@
     display: none;
   }
 
+  .clarity-auth-shell--onboarding .clarity-auth-masthead__task {
+    display: inline-flex;
+    min-height: 32px;
+    padding: 0 8px;
+    font-size: 0.66rem;
+  }
+
+  .clarity-auth-shell--onboarding
+    .clarity-auth-masthead__task
+    > span:last-child {
+    display: none;
+  }
+
   .clarity-auth-masthead__brand {
     justify-self: start;
     font-size: 0.82rem;
@@ -625,10 +755,127 @@
     display: none;
   }
 
+  .clarity-auth-shell--onboarding .clarity-auth-ledger {
+    position: relative;
+    padding: 16px 18px 10px;
+  }
+
+  .clarity-auth-shell--onboarding .clarity-auth-compact-progress {
+    display: block;
+    margin: 0 0 8px;
+    color: var(--theme-text);
+    font-size: 0.74rem;
+    font-weight: 780;
+  }
+
+  .clarity-auth-shell--onboarding .clarity-auth-ledger__intro {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    border: 0;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .clarity-auth-shell--onboarding .clarity-auth-steps {
+    display: grid;
+    width: 100%;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0;
+  }
+
+  .clarity-auth-shell--onboarding .clarity-auth-steps::before {
+    top: 15px;
+    right: 16.666%;
+    bottom: auto;
+    left: 16.666%;
+    width: auto;
+    height: 2px;
+  }
+
+  .clarity-auth-shell--onboarding .clarity-auth-steps li {
+    min-height: 72px;
+    grid-template-columns: 1fr;
+    justify-items: center;
+    gap: 4px;
+    padding: 2px 4px 8px;
+    border-right: 0;
+    border-bottom: 2px solid var(--theme-border);
+    border-left: 0;
+    border-radius: 0;
+    text-align: center;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .clarity-auth-shell--onboarding .clarity-auth-step-marker {
+    grid-row: auto;
+  }
+
+  .clarity-auth-shell--onboarding .clarity-auth-step-marker > svg {
+    width: 26px;
+    height: 26px;
+  }
+
+  .clarity-auth-shell--onboarding
+    .clarity-auth-steps
+    li.is-complete:not(:last-child)::after {
+    top: 15px;
+    right: auto;
+    bottom: auto;
+    left: 50%;
+    width: 100%;
+    height: 2px;
+  }
+
+  .clarity-auth-shell--onboarding .clarity-auth-steps li > span {
+    font-size: 0.7rem;
+  }
+
+  .clarity-auth-shell--onboarding .clarity-auth-steps li small {
+    font-size: 0.62rem;
+  }
+
+  .clarity-auth-step-chevron {
+    display: none;
+  }
+
+  .clarity-auth-shell--onboarding .clarity-auth-steps li.is-current {
+    border-right: 0;
+    border-bottom-color: var(--theme-action);
+    border-left: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .clarity-auth-shell--onboarding .clarity-auth-steps li.is-complete {
+    color: var(--theme-action);
+  }
+
   .clarity-auth-panel {
     display: block;
     align-content: normal;
     padding: 24px 18px 40px;
+  }
+
+  .clarity-auth-shell--onboarding .clarity-auth-panel {
+    padding: 12px 18px 28px;
+    background: var(--theme-surface);
+  }
+
+  .clarity-auth-shell--onboarding .clarity-onboarding-form {
+    width: 100%;
+    gap: 8px;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
   }
 
   .clarity-auth-card,
@@ -642,8 +889,10 @@
   }
 
   .clarity-auth-footer {
+    min-height: 44px;
     padding-right: 18px;
-    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+    padding-top: 0;
+    padding-bottom: env(safe-area-inset-bottom);
     padding-left: 18px;
   }
 }
@@ -657,6 +906,11 @@
   }
 
   .clarity-auth-panel {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .clarity-auth-shell--onboarding .clarity-auth-panel {
     padding-right: 16px;
     padding-left: 16px;
   }

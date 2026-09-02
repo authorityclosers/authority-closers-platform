@@ -4,21 +4,43 @@ import { ApiError } from "./learner-api";
 import {
   activityServerFingerprint,
   availableLocalStorage,
+  clearActivityLocalDraftIfMatchesWithLock,
   clearActivityLocalDraft,
   clearAllLearnerLocalDrafts,
+  clearAllLearnerLocalDraftsWithLock,
+  clearLearnerLocalDraftsForPerson,
+  clearLearnerLocalDraftsForPersonWithLock,
   clearOnboardingLocalDraft,
+  clearOnboardingLocalDraftIfMatches,
+  clearOnboardingLocalDraftIfMatchesWithLock,
   LEARNER_LOCAL_DRAFT_RETENTION_MS,
   localDraftMatchesServer,
   mutationFailureKind,
   onboardingServerFingerprint,
+  purgeActivityLocalDraftIfMatchesWithLock,
+  purgeOnboardingLocalDraftIfMatchesWithLock,
+  peekOnboardingLocalDraft,
+  peekOnboardingLocalDraftForCleanup,
   readActivityLocalDraft,
+  readActivityLocalDraftWithLock,
   readOnboardingLocalDraft,
+  readOnboardingLocalDraftWithLock,
   registerBeforeUnloadGuard,
   registerHistoryNavigationGuard,
   registerInternalNavigationGuard,
   writeActivityLocalDraft,
+  writeActivityLocalDraftWithLockAndEnvelope,
+  writeActivityLocalDraftWithLease,
+  writeActivityLocalDraftWithLock,
   writeOnboardingLocalDraft,
+  writeOnboardingLocalDraftWithLockAndEnvelope,
+  writeOnboardingLocalDraftWithLease,
+  writeOnboardingLocalDraftWithLock,
+  withOnboardingRecoveryLock,
   type ActivityDraftScope,
+  type LocalDraftStorageResult,
+  type OnboardingRecoveryLease,
+  type OnboardingRecoveryLockManager,
   type OnboardingDraftScope,
 } from "./local-drafts";
 
@@ -33,6 +55,21 @@ function memoryStorage(): Storage {
     key: (index) => [...values.keys()][index] ?? null,
     removeItem: (key) => void values.delete(key),
     setItem: (key, value) => void values.set(key, value),
+  };
+}
+
+function exclusiveLockManager(): OnboardingRecoveryLockManager {
+  let held = false;
+  return {
+    request: async (_name, _options, callback) => {
+      if (held) return callback(null);
+      held = true;
+      try {
+        return await callback({});
+      } finally {
+        held = false;
+      }
+    },
   };
 }
 
@@ -57,6 +94,102 @@ const onboardingServerDraft = {
 };
 
 describe("scoped recoverable local learner drafts", () => {
+  it("retains a newer onboarding recovery copy when an older save cleans up", async () => {
+    const storage = memoryStorage();
+    const lockManager = exclusiveLockManager();
+    const now = Date.UTC(2026, 8, 2, 12);
+    const oldWrite = await writeOnboardingLocalDraftWithLockAndEnvelope(
+      storage,
+      {
+        scope: onboardingScope,
+        draft: onboardingServerDraft,
+        baseRevision: 1,
+        serverFingerprint: onboardingServerFingerprint(onboardingServerDraft),
+        localStep: 1,
+        now,
+      },
+      lockManager,
+    );
+    const newerDraft = { ...onboardingServerDraft, learningGoal: "New tab" };
+    const newerWrite = await writeOnboardingLocalDraftWithLockAndEnvelope(
+      storage,
+      {
+        scope: onboardingScope,
+        draft: newerDraft,
+        baseRevision: 1,
+        serverFingerprint: onboardingServerFingerprint(onboardingServerDraft),
+        localStep: 2,
+        now: now + 1,
+      },
+      lockManager,
+    );
+
+    expect(oldWrite.result).toEqual({ ok: true });
+    expect(newerWrite.result).toEqual({ ok: true });
+    expect(oldWrite.envelope).not.toEqual(newerWrite.envelope);
+    expect(
+      await clearOnboardingLocalDraftIfMatchesWithLock(
+        storage,
+        onboardingScope,
+        oldWrite.envelope,
+        now + 2,
+        lockManager,
+      ),
+    ).toEqual({ ok: false, reason: "changed" });
+    expect(
+      readOnboardingLocalDraft(storage, onboardingScope, now + 2),
+    ).toMatchObject({
+      status: "ready",
+      envelope: { draft: newerDraft, localStep: 2 },
+    });
+  });
+
+  it("retains a newer activity recovery copy when an older submit cleans up", async () => {
+    const storage = memoryStorage();
+    const lockManager = exclusiveLockManager();
+    const now = Date.UTC(2026, 8, 2, 12);
+    const oldWrite = await writeActivityLocalDraftWithLockAndEnvelope(
+      storage,
+      {
+        scope: activityScope,
+        response: "Old operation",
+        baseRevision: 1,
+        serverFingerprint: activityServerFingerprint(""),
+        now,
+      },
+      lockManager,
+    );
+    const newerWrite = await writeActivityLocalDraftWithLockAndEnvelope(
+      storage,
+      {
+        scope: activityScope,
+        response: "New tab response",
+        baseRevision: 1,
+        serverFingerprint: activityServerFingerprint(""),
+        now: now + 1,
+      },
+      lockManager,
+    );
+
+    expect(oldWrite.result).toEqual({ ok: true });
+    expect(newerWrite.result).toEqual({ ok: true });
+    expect(
+      await clearActivityLocalDraftIfMatchesWithLock(
+        storage,
+        activityScope,
+        oldWrite.envelope,
+        now + 2,
+        lockManager,
+      ),
+    ).toEqual({ ok: false, reason: "changed" });
+    expect(
+      readActivityLocalDraft(storage, activityScope, now + 2),
+    ).toMatchObject({
+      status: "ready",
+      envelope: { draft: { response: "New tab response" } },
+    });
+  });
+
   it("treats a blocked localStorage getter as unavailable", () => {
     const owner = Object.defineProperty({}, "localStorage", {
       get() {
@@ -68,6 +201,25 @@ describe("scoped recoverable local learner drafts", () => {
     expect(
       availableLocalStorage({ localStorage: memoryStorage() }),
     ).not.toBeNull();
+  });
+
+  it("keeps onboarding read, write, and clear safe when storage is unavailable", () => {
+    expect(readOnboardingLocalDraft(null, onboardingScope)).toEqual({
+      status: "unavailable",
+    });
+    expect(
+      writeOnboardingLocalDraft(null, {
+        scope: onboardingScope,
+        draft: onboardingServerDraft,
+        baseRevision: 1,
+        serverFingerprint: onboardingServerFingerprint(onboardingServerDraft),
+        localStep: 2,
+      }),
+    ).toEqual({ ok: false, reason: "unavailable" });
+    expect(clearOnboardingLocalDraft(null, onboardingScope)).toEqual({
+      ok: false,
+      reason: "unavailable",
+    });
   });
 
   it("stores onboarding recovery with its person, server base, fingerprint, and bounded timestamps", () => {
@@ -82,6 +234,7 @@ describe("scoped recoverable local learner drafts", () => {
         draft: localDraft,
         baseRevision: 4,
         serverFingerprint: fingerprint,
+        localStep: 3,
         now,
       }),
     ).toEqual({ ok: true });
@@ -90,10 +243,12 @@ describe("scoped recoverable local learner drafts", () => {
     expect(result).toMatchObject({
       status: "ready",
       envelope: {
+        version: 3,
         scope: onboardingScope,
         baseRevision: 4,
         serverFingerprint: fingerprint,
         draft: localDraft,
+        localStep: 3,
         createdAt: new Date(now).toISOString(),
         updatedAt: new Date(now).toISOString(),
         expiresAt: new Date(
@@ -103,6 +258,132 @@ describe("scoped recoverable local learner drafts", () => {
     });
 
     clearOnboardingLocalDraft(storage, onboardingScope);
+    expect(readOnboardingLocalDraft(storage, onboardingScope).status).toBe(
+      "missing",
+    );
+  });
+
+  it("does not remove a newer onboarding recovery copy during conditional cleanup", () => {
+    const storage = memoryStorage();
+    const now = Date.UTC(2026, 8, 1, 12);
+    const savedDraft = { ...onboardingServerDraft, learningGoal: "Saved goal" };
+    const newerDraft = { ...savedDraft, learningGoal: "Newer unsaved goal" };
+
+    writeOnboardingLocalDraft(storage, {
+      scope: onboardingScope,
+      draft: savedDraft,
+      baseRevision: 4,
+      serverFingerprint: onboardingServerFingerprint(onboardingServerDraft),
+      localStep: 2,
+      now,
+    });
+    const saved = peekOnboardingLocalDraft(storage, onboardingScope, now + 1);
+    expect(saved.status).toBe("ready");
+    if (saved.status !== "ready") throw new Error("expected saved envelope");
+
+    writeOnboardingLocalDraft(storage, {
+      scope: onboardingScope,
+      draft: newerDraft,
+      baseRevision: 4,
+      serverFingerprint: onboardingServerFingerprint(onboardingServerDraft),
+      localStep: 2,
+      now: now + 1,
+    });
+
+    expect(
+      clearOnboardingLocalDraftIfMatches(
+        storage,
+        onboardingScope,
+        saved.envelope,
+      ),
+    ).toEqual({ ok: false, reason: "changed" });
+    expect(
+      readOnboardingLocalDraft(storage, onboardingScope, now + 2),
+    ).toMatchObject({ status: "ready", envelope: { draft: newerDraft } });
+  });
+
+  it("migrates a valid legacy onboarding envelope and rejects an invalid local step", async () => {
+    const storage = memoryStorage();
+    const now = Date.UTC(2026, 8, 1, 12);
+    const legacyEnvelope = {
+      version: 2,
+      scope: onboardingScope,
+      baseRevision: 4,
+      serverFingerprint: onboardingServerFingerprint(onboardingServerDraft),
+      createdAt: new Date(now).toISOString(),
+      updatedAt: new Date(now).toISOString(),
+      expiresAt: new Date(now + LEARNER_LOCAL_DRAFT_RETENTION_MS).toISOString(),
+      draft: onboardingServerDraft,
+    };
+    storage.setItem(
+      "ac-learner-local-draft:onboarding:person-1",
+      JSON.stringify(legacyEnvelope),
+    );
+
+    expect(
+      readOnboardingLocalDraft(storage, onboardingScope, now + 1, 3),
+    ).toMatchObject({
+      status: "ready",
+      envelope: { version: 3, localStep: 3 },
+    });
+    await expect(
+      readOnboardingLocalDraftWithLock(
+        storage,
+        onboardingScope,
+        now + 1,
+        3,
+        exclusiveLockManager(),
+      ),
+    ).resolves.toMatchObject({
+      status: "ready",
+      envelope: { version: 3, localStep: 3 },
+      cleanupTarget: { version: 2 },
+    });
+
+    storage.setItem(
+      "ac-learner-local-draft:onboarding:person-1",
+      JSON.stringify({ ...legacyEnvelope, version: 3, localStep: 4 }),
+    );
+    expect(readOnboardingLocalDraft(storage, onboardingScope, now + 1)).toEqual(
+      { status: "invalid" },
+    );
+  });
+
+  it("conditionally clears a valid legacy onboarding envelope by its raw snapshot", () => {
+    const storage = memoryStorage();
+    const now = Date.UTC(2026, 8, 1, 12);
+    const legacyEnvelope = {
+      version: 2,
+      scope: onboardingScope,
+      baseRevision: 4,
+      serverFingerprint: onboardingServerFingerprint(onboardingServerDraft),
+      createdAt: new Date(now).toISOString(),
+      updatedAt: new Date(now).toISOString(),
+      expiresAt: new Date(now + LEARNER_LOCAL_DRAFT_RETENTION_MS).toISOString(),
+      draft: onboardingServerDraft,
+    };
+    storage.setItem(
+      "ac-learner-local-draft:onboarding:person-1",
+      JSON.stringify(legacyEnvelope),
+    );
+
+    const cleanupTarget = peekOnboardingLocalDraftForCleanup(
+      storage,
+      onboardingScope,
+      now + 1,
+    );
+    expect(cleanupTarget).toEqual({
+      status: "ready",
+      envelope: legacyEnvelope,
+    });
+    expect(
+      clearOnboardingLocalDraftIfMatches(
+        storage,
+        onboardingScope,
+        cleanupTarget.status === "ready" ? cleanupTarget.envelope : null,
+        now + 1,
+      ),
+    ).toEqual({ ok: true });
     expect(readOnboardingLocalDraft(storage, onboardingScope).status).toBe(
       "missing",
     );
@@ -142,6 +423,127 @@ describe("scoped recoverable local learner drafts", () => {
     ).toBe("missing");
 
     clearActivityLocalDraft(storage, activityScope);
+    expect(readActivityLocalDraft(storage, activityScope).status).toBe(
+      "missing",
+    );
+  });
+
+  it("uses the shared lock for activity read, write, and conditional cleanup", async () => {
+    const storage = memoryStorage();
+    const now = Date.UTC(2026, 8, 1, 12);
+    const lockManager = exclusiveLockManager();
+
+    expect(
+      await writeActivityLocalDraftWithLock(
+        storage,
+        {
+          scope: activityScope,
+          response: "Locked recovery response",
+          baseRevision: 2,
+          serverFingerprint: activityServerFingerprint("Server response"),
+          now,
+        },
+        lockManager,
+      ),
+    ).toEqual({ ok: true });
+    const read = await readActivityLocalDraftWithLock(
+      storage,
+      activityScope,
+      now,
+      lockManager,
+    );
+    expect(read).toMatchObject({ status: "ready" });
+    if (read.status !== "ready") throw new Error("expected activity envelope");
+
+    expect(
+      await clearActivityLocalDraftIfMatchesWithLock(
+        storage,
+        activityScope,
+        read.envelope,
+        now,
+        lockManager,
+      ),
+    ).toEqual({ ok: true });
+    expect(readActivityLocalDraft(storage, activityScope).status).toBe(
+      "missing",
+    );
+    expect(
+      await readActivityLocalDraftWithLock(storage, activityScope, now, null),
+    ).toEqual({ status: "unavailable" });
+  });
+
+  it("blocks activity writers and person cleanup while activity cleanup holds the lock", async () => {
+    const storage = memoryStorage();
+    const now = Date.UTC(2026, 8, 1, 12);
+    writeActivityLocalDraft(storage, {
+      scope: activityScope,
+      response: "Original recovery response",
+      baseRevision: 2,
+      serverFingerprint: activityServerFingerprint("Server response"),
+      now,
+    });
+    const expected = readActivityLocalDraft(storage, activityScope, now);
+    if (expected.status !== "ready") throw new Error("expected envelope");
+
+    const lockManager = exclusiveLockManager();
+    let writerAttempt: Promise<LocalDraftStorageResult> | null = null;
+    let personCleanupAttempt: Promise<LocalDraftStorageResult> | null = null;
+    let signOutCleanupAttempt: Promise<LocalDraftStorageResult> | null = null;
+    const originalGetItem = storage.getItem;
+    storage.getItem = (key) => {
+      if (
+        !writerAttempt &&
+        key ===
+          "ac-learner-local-draft:activity:tenant-1:person-1:enrollment-1:activity-1"
+      ) {
+        writerAttempt = writeActivityLocalDraftWithLock(
+          storage,
+          {
+            scope: activityScope,
+            response: "Concurrent response",
+            baseRevision: 2,
+            serverFingerprint: activityServerFingerprint("Server response"),
+            now: now + 1,
+          },
+          lockManager,
+        );
+        personCleanupAttempt = clearLearnerLocalDraftsForPersonWithLock(
+          storage,
+          activityScope.personId,
+          lockManager,
+        );
+        signOutCleanupAttempt = clearAllLearnerLocalDraftsWithLock(
+          storage,
+          lockManager,
+        );
+      }
+      return originalGetItem(key);
+    };
+
+    expect(
+      await clearActivityLocalDraftIfMatchesWithLock(
+        storage,
+        activityScope,
+        expected.envelope,
+        now,
+        lockManager,
+      ),
+    ).toEqual({ ok: true });
+    expect(writerAttempt).not.toBeNull();
+    expect(personCleanupAttempt).not.toBeNull();
+    expect(signOutCleanupAttempt).not.toBeNull();
+    await expect(writerAttempt).resolves.toEqual({
+      ok: false,
+      reason: "unavailable",
+    });
+    await expect(personCleanupAttempt).resolves.toEqual({
+      ok: false,
+      reason: "unavailable",
+    });
+    await expect(signOutCleanupAttempt).resolves.toEqual({
+      ok: false,
+      reason: "unavailable",
+    });
     expect(readActivityLocalDraft(storage, activityScope).status).toBe(
       "missing",
     );
@@ -194,7 +596,7 @@ describe("scoped recoverable local learner drafts", () => {
     ).toBe(false);
   });
 
-  it("expires and removes recovery copies after the approved seven-day window", () => {
+  it("reports expired recovery copies without deleting them outside a lock", () => {
     const storage = memoryStorage();
     const now = Date.UTC(2026, 8, 1, 12);
     writeOnboardingLocalDraft(storage, {
@@ -212,9 +614,545 @@ describe("scoped recoverable local learner drafts", () => {
         now + LEARNER_LOCAL_DRAFT_RETENTION_MS,
       ).status,
     ).toBe("expired");
+    expect(
+      readOnboardingLocalDraft(
+        storage,
+        onboardingScope,
+        now + LEARNER_LOCAL_DRAFT_RETENTION_MS,
+      ).status,
+    ).toBe("expired");
+    expect(
+      storage.getItem("ac-learner-local-draft:onboarding:person-1"),
+    ).not.toBeNull();
+  });
+
+  it("purges only an unchanged expired or invalid raw onboarding snapshot under lock", async () => {
+    const now = Date.UTC(2026, 8, 8, 12);
+    const expiredStorage = memoryStorage();
+    const createdAt = now - LEARNER_LOCAL_DRAFT_RETENTION_MS;
+    const expiredEnvelope = {
+      version: 3,
+      scope: onboardingScope,
+      baseRevision: 1,
+      serverFingerprint: onboardingServerFingerprint(onboardingServerDraft),
+      createdAt: new Date(createdAt).toISOString(),
+      updatedAt: new Date(createdAt).toISOString(),
+      expiresAt: new Date(now).toISOString(),
+      localStep: 1,
+      draft: onboardingServerDraft,
+    };
+    expiredStorage.setItem(
+      "ac-learner-local-draft:onboarding:person-1",
+      JSON.stringify(expiredEnvelope),
+    );
+    expect(
+      await purgeOnboardingLocalDraftIfMatchesWithLock(
+        expiredStorage,
+        onboardingScope,
+        { raw: JSON.stringify(expiredEnvelope) },
+        now,
+        exclusiveLockManager(),
+      ),
+    ).toEqual({ ok: true });
+    expect(
+      expiredStorage.getItem("ac-learner-local-draft:onboarding:person-1"),
+    ).toBeNull();
+
+    const invalidStorage = memoryStorage();
+    const invalidRaw = "not-json";
+    invalidStorage.setItem(
+      "ac-learner-local-draft:onboarding:person-1",
+      invalidRaw,
+    );
+    expect(
+      await purgeOnboardingLocalDraftIfMatchesWithLock(
+        invalidStorage,
+        onboardingScope,
+        { raw: invalidRaw },
+        now,
+        exclusiveLockManager(),
+      ),
+    ).toEqual({ ok: true });
+    expect(
+      invalidStorage.getItem("ac-learner-local-draft:onboarding:person-1"),
+    ).toBeNull();
+
+    const changedStorage = memoryStorage();
+    const invalidEnvelope = { ...expiredEnvelope, expiresAt: "later" };
+    changedStorage.setItem(
+      "ac-learner-local-draft:onboarding:person-1",
+      JSON.stringify(invalidEnvelope),
+    );
+    changedStorage.setItem(
+      "ac-learner-local-draft:onboarding:person-1",
+      JSON.stringify({ ...invalidEnvelope, localStep: 2 }),
+    );
+    expect(
+      await purgeOnboardingLocalDraftIfMatchesWithLock(
+        changedStorage,
+        onboardingScope,
+        { raw: JSON.stringify(invalidEnvelope) },
+        now,
+        exclusiveLockManager(),
+      ),
+    ).toEqual({ ok: false, reason: "changed" });
+    expect(
+      changedStorage.getItem("ac-learner-local-draft:onboarding:person-1"),
+    ).not.toBeNull();
+  });
+
+  it("never purges a newer valid onboarding copy that replaces the raw snapshot", async () => {
+    const base = Date.UTC(2026, 8, 1, 12);
+    const expiredAt = base + LEARNER_LOCAL_DRAFT_RETENTION_MS;
+    const storage = memoryStorage();
+    writeOnboardingLocalDraft(storage, {
+      scope: onboardingScope,
+      draft: onboardingServerDraft,
+      baseRevision: 1,
+      serverFingerprint: onboardingServerFingerprint(onboardingServerDraft),
+      now: base,
+    });
+    const expectedRaw = {
+      raw: storage.getItem("ac-learner-local-draft:onboarding:person-1")!,
+    };
+    const originalGetItem = storage.getItem;
+    let reads = 0;
+    storage.getItem = (key) => {
+      reads += 1;
+      if (reads === 2) {
+        writeOnboardingLocalDraft(storage, {
+          scope: onboardingScope,
+          draft: { ...onboardingServerDraft, learningGoal: "New answer" },
+          baseRevision: 1,
+          serverFingerprint: onboardingServerFingerprint(onboardingServerDraft),
+          now: expiredAt + 1,
+        });
+      }
+      return originalGetItem(key);
+    };
+
+    expect(
+      await purgeOnboardingLocalDraftIfMatchesWithLock(
+        storage,
+        onboardingScope,
+        expectedRaw,
+        expiredAt,
+        exclusiveLockManager(),
+      ),
+    ).toEqual({ ok: false, reason: "changed" });
+    expect(
+      readOnboardingLocalDraft(storage, onboardingScope, expiredAt + 2),
+    ).toMatchObject({
+      status: "ready",
+      envelope: { draft: { learningGoal: "New answer" } },
+    });
+  });
+
+  it("never purges a newer valid activity copy that replaces an expired raw snapshot", async () => {
+    const base = Date.UTC(2026, 8, 1, 12);
+    const expiredAt = base + LEARNER_LOCAL_DRAFT_RETENTION_MS;
+    const storage = memoryStorage();
+    writeActivityLocalDraft(storage, {
+      scope: activityScope,
+      response: "Expired response",
+      baseRevision: 1,
+      serverFingerprint: activityServerFingerprint("Server response"),
+      now: base,
+    });
+    const expectedRaw = {
+      raw: storage.getItem(
+        "ac-learner-local-draft:activity:tenant-1:person-1:enrollment-1:activity-1",
+      )!,
+    };
+    const originalGetItem = storage.getItem;
+    let reads = 0;
+    storage.getItem = (key) => {
+      reads += 1;
+      if (reads === 2) {
+        writeActivityLocalDraft(storage, {
+          scope: activityScope,
+          response: "New activity answer",
+          baseRevision: 1,
+          serverFingerprint: activityServerFingerprint("Server response"),
+          now: expiredAt + 1,
+        });
+      }
+      return originalGetItem(key);
+    };
+
+    expect(
+      await purgeActivityLocalDraftIfMatchesWithLock(
+        storage,
+        activityScope,
+        expectedRaw,
+        expiredAt,
+        exclusiveLockManager(),
+      ),
+    ).toEqual({ ok: false, reason: "changed" });
+    expect(
+      readActivityLocalDraft(storage, activityScope, expiredAt + 2),
+    ).toMatchObject({
+      status: "ready",
+      envelope: { draft: { response: "New activity answer" } },
+    });
+  });
+
+  it("wires expired and invalid cleanup into locked production reads", async () => {
+    const base = Date.UTC(2026, 8, 1, 12);
+    const expiredAt = base + LEARNER_LOCAL_DRAFT_RETENTION_MS;
+    const onboardingStorage = memoryStorage();
+    writeOnboardingLocalDraft(onboardingStorage, {
+      scope: onboardingScope,
+      draft: onboardingServerDraft,
+      baseRevision: 1,
+      serverFingerprint: onboardingServerFingerprint(onboardingServerDraft),
+      now: base,
+    });
+    await expect(
+      readOnboardingLocalDraftWithLock(
+        onboardingStorage,
+        onboardingScope,
+        expiredAt,
+        1,
+        exclusiveLockManager(),
+      ),
+    ).resolves.toEqual({ status: "missing" });
+    expect(
+      onboardingStorage.getItem("ac-learner-local-draft:onboarding:person-1"),
+    ).toBeNull();
+
+    const activityStorage = memoryStorage();
+    activityStorage.setItem(
+      "ac-learner-local-draft:activity:tenant-1:person-1:enrollment-1:activity-1",
+      "malformed",
+    );
+    await expect(
+      readActivityLocalDraftWithLock(
+        activityStorage,
+        activityScope,
+        base,
+        exclusiveLockManager(),
+      ),
+    ).resolves.toEqual({ status: "missing" });
+    expect(
+      activityStorage.getItem(
+        "ac-learner-local-draft:activity:tenant-1:person-1:enrollment-1:activity-1",
+      ),
+    ).toBeNull();
+  });
+
+  it("revokes a captured recovery lease after the lock callback returns", async () => {
+    const storage = memoryStorage();
+    const now = Date.UTC(2026, 8, 1, 12);
+    let capturedLease: OnboardingRecoveryLease | undefined;
+    await expect(
+      withOnboardingRecoveryLock(
+        storage,
+        onboardingScope,
+        (lease) => {
+          capturedLease = lease;
+        },
+        exclusiveLockManager(),
+      ),
+    ).resolves.toEqual({ ok: true, value: undefined });
+    expect(capturedLease).toBeDefined();
+    expect(
+      writeOnboardingLocalDraftWithLease(
+        storage,
+        {
+          scope: onboardingScope,
+          draft: onboardingServerDraft,
+          baseRevision: 1,
+          serverFingerprint: onboardingServerFingerprint(onboardingServerDraft),
+          now,
+        },
+        capturedLease as OnboardingRecoveryLease,
+      ),
+    ).toEqual({ ok: false, reason: "unavailable" });
+    expect(
+      writeActivityLocalDraftWithLease(
+        storage,
+        {
+          scope: activityScope,
+          response: "Should not be written",
+          baseRevision: 1,
+          serverFingerprint: activityServerFingerprint(""),
+          now,
+        },
+        capturedLease as OnboardingRecoveryLease,
+      ),
+    ).toEqual({ ok: false, reason: "unavailable" });
+  });
+
+  it("fails closed when the Web Lock is unavailable or busy", async () => {
+    const storage = memoryStorage();
+    const now = Date.UTC(2026, 8, 1, 12);
+    const draft = { ...onboardingServerDraft, learningGoal: "Keep locally" };
+    writeOnboardingLocalDraft(storage, {
+      scope: onboardingScope,
+      draft,
+      baseRevision: 4,
+      serverFingerprint: onboardingServerFingerprint(onboardingServerDraft),
+      localStep: 2,
+      now,
+    });
+    const expected = peekOnboardingLocalDraftForCleanup(
+      storage,
+      onboardingScope,
+      now,
+    );
+    if (expected.status !== "ready") throw new Error("expected envelope");
+
+    expect(
+      await readOnboardingLocalDraftWithLock(
+        storage,
+        onboardingScope,
+        now,
+        2,
+        null,
+      ),
+    ).toEqual({ status: "unavailable" });
+    expect(
+      await writeOnboardingLocalDraftWithLock(
+        storage,
+        {
+          scope: onboardingScope,
+          draft: { ...draft, learningGoal: "Should remain unchanged" },
+          baseRevision: 4,
+          serverFingerprint: onboardingServerFingerprint(onboardingServerDraft),
+          localStep: 2,
+          now: now + 1,
+        },
+        null,
+      ),
+    ).toEqual({ ok: false, reason: "unavailable" });
+    expect(
+      await clearOnboardingLocalDraftIfMatchesWithLock(
+        storage,
+        onboardingScope,
+        expected.envelope,
+        now,
+        {
+          request: async (_name, _options, callback) => callback(null),
+        },
+      ),
+    ).toEqual({ ok: false, reason: "busy" });
+    expect(readOnboardingLocalDraft(storage, onboardingScope)).toMatchObject({
+      status: "ready",
+      envelope: { draft },
+    });
+  });
+
+  it("does not expose synchronous onboarding storage bypasses in a browser", () => {
+    const storage = memoryStorage();
+    vi.stubGlobal("window", {});
+    try {
+      expect(
+        writeOnboardingLocalDraft(storage, {
+          scope: onboardingScope,
+          draft: onboardingServerDraft,
+          baseRevision: 1,
+          serverFingerprint: onboardingServerFingerprint(onboardingServerDraft),
+        }),
+      ).toEqual({ ok: false, reason: "unavailable" });
+      expect(readOnboardingLocalDraft(storage, onboardingScope)).toEqual({
+        status: "unavailable",
+      });
+      expect(clearOnboardingLocalDraft(storage, onboardingScope)).toEqual({
+        ok: false,
+        reason: "unavailable",
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("blocks a prechecked writer during conditional cleanup interleaving", async () => {
+    const storage = memoryStorage();
+    const now = Date.UTC(2026, 8, 1, 12);
+    const draft = { ...onboardingServerDraft, learningGoal: "Saved goal" };
+    const newerDraft = { ...draft, learningGoal: "Newer unsaved goal" };
+    writeOnboardingLocalDraft(storage, {
+      scope: onboardingScope,
+      draft,
+      baseRevision: 4,
+      serverFingerprint: onboardingServerFingerprint(onboardingServerDraft),
+      localStep: 2,
+      now,
+    });
+    const expected = peekOnboardingLocalDraftForCleanup(
+      storage,
+      onboardingScope,
+      now,
+    );
+    if (expected.status !== "ready") throw new Error("expected envelope");
+
+    let writerAttempt: Promise<LocalDraftStorageResult> | null = null;
+    const lockManager = exclusiveLockManager();
+    const originalGetItem = storage.getItem;
+    storage.getItem = (key) => {
+      if (
+        !writerAttempt &&
+        key === "ac-learner-local-draft:onboarding:person-1"
+      ) {
+        writerAttempt = writeOnboardingLocalDraftWithLock(
+          storage,
+          {
+            scope: onboardingScope,
+            draft: newerDraft,
+            baseRevision: 4,
+            serverFingerprint: onboardingServerFingerprint(
+              onboardingServerDraft,
+            ),
+            localStep: 2,
+            now: now + 1,
+          },
+          lockManager,
+        );
+      }
+      return originalGetItem(key);
+    };
+
+    expect(
+      await clearOnboardingLocalDraftIfMatchesWithLock(
+        storage,
+        onboardingScope,
+        expected.envelope,
+        now,
+        lockManager,
+      ),
+    ).toEqual({ ok: true });
+    expect(writerAttempt).not.toBeNull();
+    await expect(writerAttempt).resolves.toEqual({
+      ok: false,
+      reason: "unavailable",
+    });
     expect(readOnboardingLocalDraft(storage, onboardingScope).status).toBe(
       "missing",
     );
+  });
+
+  it("accepts the exact seven-day timestamp boundary", () => {
+    const storage = memoryStorage();
+    const now = Date.UTC(2026, 8, 8, 12);
+    const createdAt = new Date(
+      now - LEARNER_LOCAL_DRAFT_RETENTION_MS,
+    ).toISOString();
+    const updatedAt = new Date(now).toISOString();
+    storage.setItem(
+      "ac-learner-local-draft:onboarding:person-1",
+      JSON.stringify({
+        version: 3,
+        scope: onboardingScope,
+        baseRevision: 1,
+        serverFingerprint: onboardingServerFingerprint(onboardingServerDraft),
+        createdAt,
+        updatedAt,
+        expiresAt: new Date(
+          now + LEARNER_LOCAL_DRAFT_RETENTION_MS,
+        ).toISOString(),
+        localStep: 1,
+        draft: onboardingServerDraft,
+      }),
+    );
+
+    expect(
+      readOnboardingLocalDraft(storage, onboardingScope, now),
+    ).toMatchObject({ status: "ready" });
+  });
+
+  it("rejects future, reversed, and over-retained envelope timestamps", () => {
+    const now = Date.UTC(2026, 8, 1, 12);
+    const key = "ac-learner-local-draft:onboarding:person-1";
+    const validEnvelope = {
+      version: 3,
+      scope: onboardingScope,
+      baseRevision: 1,
+      serverFingerprint: onboardingServerFingerprint(onboardingServerDraft),
+      createdAt: new Date(now).toISOString(),
+      updatedAt: new Date(now).toISOString(),
+      expiresAt: new Date(now + LEARNER_LOCAL_DRAFT_RETENTION_MS).toISOString(),
+      localStep: 1,
+      draft: onboardingServerDraft,
+    };
+    const invalidCases = [
+      {
+        label: "future createdAt",
+        patch: {
+          createdAt: new Date(now + 1).toISOString(),
+          updatedAt: new Date(now + 1).toISOString(),
+        },
+      },
+      {
+        label: "future updatedAt",
+        patch: { updatedAt: new Date(now + 1).toISOString() },
+      },
+      {
+        label: "reversed timestamps",
+        patch: {
+          createdAt: new Date(now + 2).toISOString(),
+          updatedAt: new Date(now).toISOString(),
+        },
+      },
+      {
+        label: "createdAt older than retention",
+        patch: {
+          createdAt: new Date(
+            now - LEARNER_LOCAL_DRAFT_RETENTION_MS - 1,
+          ).toISOString(),
+        },
+      },
+      {
+        label: "expiresAt beyond retention",
+        patch: {
+          expiresAt: new Date(
+            now + LEARNER_LOCAL_DRAFT_RETENTION_MS + 1,
+          ).toISOString(),
+        },
+      },
+    ];
+
+    for (const invalidCase of invalidCases) {
+      const storage = memoryStorage();
+      storage.setItem(
+        key,
+        JSON.stringify({ ...validEnvelope, ...invalidCase.patch }),
+      );
+      expect(
+        readOnboardingLocalDraft(storage, onboardingScope, now),
+        invalidCase.label,
+      ).toEqual({ status: "invalid" });
+      expect(storage.getItem(key), invalidCase.label).not.toBeNull();
+    }
+  });
+
+  it("fails closed for a global purge without a lock and purges under an exclusive lock", async () => {
+    const storage = memoryStorage();
+    writeOnboardingLocalDraft(storage, {
+      scope: onboardingScope,
+      draft: onboardingServerDraft,
+      baseRevision: 1,
+      serverFingerprint: onboardingServerFingerprint(onboardingServerDraft),
+    });
+    storage.setItem(
+      "ac-learner-local-draft:activity:tenant-1:person-1",
+      "activity",
+    );
+
+    expect(await clearAllLearnerLocalDraftsWithLock(storage, null)).toEqual({
+      ok: false,
+      reason: "unavailable",
+    });
+    expect(
+      storage.getItem("ac-learner-local-draft:onboarding:person-1"),
+    ).not.toBeNull();
+
+    expect(
+      await clearAllLearnerLocalDraftsWithLock(storage, exclusiveLockManager()),
+    ).toEqual({ ok: true });
+    expect(
+      storage.getItem("ac-learner-local-draft:onboarding:person-1"),
+    ).toBeNull();
   });
 
   it("reports quota and throwing storage instead of claiming recovery succeeded", () => {
@@ -222,6 +1160,15 @@ describe("scoped recoverable local learner drafts", () => {
     quotaStorage.setItem = () => {
       throw Object.assign(new Error("full"), { name: "QuotaExceededError" });
     };
+    expect(
+      writeOnboardingLocalDraft(quotaStorage, {
+        scope: onboardingScope,
+        draft: onboardingServerDraft,
+        baseRevision: 1,
+        serverFingerprint: onboardingServerFingerprint(onboardingServerDraft),
+        localStep: 1,
+      }),
+    ).toEqual({ ok: false, reason: "quota" });
     expect(
       writeActivityLocalDraft(quotaStorage, {
         scope: activityScope,
@@ -238,6 +1185,25 @@ describe("scoped recoverable local learner drafts", () => {
     expect(readActivityLocalDraft(blockedStorage, activityScope)).toEqual({
       status: "unavailable",
     });
+    expect(
+      writeOnboardingLocalDraft(blockedStorage, {
+        scope: onboardingScope,
+        draft: onboardingServerDraft,
+        baseRevision: 1,
+        serverFingerprint: onboardingServerFingerprint(onboardingServerDraft),
+        localStep: 1,
+      }),
+    ).toEqual({ ok: false, reason: "unavailable" });
+
+    const clearFailureStorage = memoryStorage();
+    clearFailureStorage.removeItem = () => {
+      throw Object.assign(new Error("blocked"), {
+        name: "QuotaExceededError",
+      });
+    };
+    expect(
+      clearOnboardingLocalDraft(clearFailureStorage, onboardingScope),
+    ).toEqual({ ok: false, reason: "quota" });
   });
 
   it("purges only learner draft keys for sign-out or membership invalidation", () => {
@@ -264,6 +1230,99 @@ describe("scoped recoverable local learner drafts", () => {
       "missing",
     );
     expect(storage.getItem("ac-theme-preference")).toBe("dark");
+  });
+
+  it("purges membership-loss recovery only for the resolved person", () => {
+    const storage = memoryStorage();
+    const otherOnboardingScope = { ...onboardingScope, personId: "person-2" };
+    const otherActivityScope = { ...activityScope, personId: "person-2" };
+
+    writeOnboardingLocalDraft(storage, {
+      scope: onboardingScope,
+      draft: onboardingServerDraft,
+      baseRevision: 1,
+      serverFingerprint: onboardingServerFingerprint(onboardingServerDraft),
+    });
+    writeOnboardingLocalDraft(storage, {
+      scope: otherOnboardingScope,
+      draft: onboardingServerDraft,
+      baseRevision: 1,
+      serverFingerprint: onboardingServerFingerprint(onboardingServerDraft),
+    });
+    writeActivityLocalDraft(storage, {
+      scope: activityScope,
+      response: "Person one response",
+      baseRevision: 1,
+      serverFingerprint: activityServerFingerprint("Person one response"),
+    });
+    writeActivityLocalDraft(storage, {
+      scope: otherActivityScope,
+      response: "Person two response",
+      baseRevision: 1,
+      serverFingerprint: activityServerFingerprint("Person two response"),
+    });
+
+    expect(clearLearnerLocalDraftsForPerson(storage, "person-1")).toEqual({
+      ok: true,
+    });
+    expect(readOnboardingLocalDraft(storage, onboardingScope).status).toBe(
+      "missing",
+    );
+    expect(readActivityLocalDraft(storage, activityScope).status).toBe(
+      "missing",
+    );
+    expect(readOnboardingLocalDraft(storage, otherOnboardingScope).status).toBe(
+      "ready",
+    );
+    expect(readActivityLocalDraft(storage, otherActivityScope).status).toBe(
+      "ready",
+    );
+    expect(clearLearnerLocalDraftsForPerson(storage, null)).toEqual({
+      ok: false,
+      reason: "unavailable",
+    });
+    expect(readOnboardingLocalDraft(storage, otherOnboardingScope).status).toBe(
+      "ready",
+    );
+  });
+
+  it("keeps exact-person membership cleanup locked and honest when unavailable", async () => {
+    const storage = memoryStorage();
+    const otherScope = { ...activityScope, personId: "person-2" };
+    writeActivityLocalDraft(storage, {
+      scope: activityScope,
+      response: "Person one response",
+      baseRevision: 1,
+      serverFingerprint: activityServerFingerprint("Person one response"),
+    });
+    writeActivityLocalDraft(storage, {
+      scope: otherScope,
+      response: "Person two response",
+      baseRevision: 1,
+      serverFingerprint: activityServerFingerprint("Person two response"),
+    });
+
+    expect(
+      await clearLearnerLocalDraftsForPersonWithLock(
+        storage,
+        activityScope.personId,
+        { request: async (_name, _options, callback) => callback(null) },
+      ),
+    ).toEqual({ ok: false, reason: "unavailable" });
+    expect(readActivityLocalDraft(storage, activityScope).status).toBe("ready");
+    expect(readActivityLocalDraft(storage, otherScope).status).toBe("ready");
+
+    expect(
+      await clearLearnerLocalDraftsForPersonWithLock(
+        storage,
+        activityScope.personId,
+        exclusiveLockManager(),
+      ),
+    ).toEqual({ ok: true });
+    expect(readActivityLocalDraft(storage, activityScope).status).toBe(
+      "missing",
+    );
+    expect(readActivityLocalDraft(storage, otherScope).status).toBe("ready");
   });
 
   it("distinguishes conflict, offline, session, and retry failures", () => {
@@ -307,6 +1366,15 @@ describe("scoped recoverable local learner drafts", () => {
   });
 
   it("guards internal soft navigation when no recovery copy exists", () => {
+    const cleanAddEventListener = vi.fn();
+    const cleanCleanup = registerInternalNavigationGuard(
+      { addEventListener: cleanAddEventListener, removeEventListener: vi.fn() },
+      false,
+      () => false,
+    );
+    cleanCleanup();
+    expect(cleanAddEventListener).not.toHaveBeenCalled();
+
     class FakeAnchor {
       href = "https://staging.authorityclosers.com/home";
       target = "";
@@ -390,6 +1458,14 @@ describe("scoped recoverable local learner drafts", () => {
       },
     };
     const confirmNavigation = vi.fn(() => false);
+    const cleanCleanup = registerHistoryNavigationGuard(
+      target,
+      false,
+      confirmNavigation,
+    );
+    cleanCleanup();
+    expect(target.addEventListener).not.toHaveBeenCalled();
+
     const cleanup = registerHistoryNavigationGuard(
       target,
       true,

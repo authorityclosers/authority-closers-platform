@@ -1,4 +1,4 @@
-/* Onboarding task content inside the shared auth shell. */
+/* Direction B: quiet, choice-first onboarding inside the shared auth shell. */
 
 .clarity-onboarding-form {
   display: grid;
@@ -17,13 +17,13 @@
   align-items: center;
   gap: 12px;
   color: var(--theme-text-muted);
-  font-size: 0.68rem;
+  font-size: 0.7rem;
   font-weight: 780;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
 }
 
 .clarity-onboarding-progress > div {
-  height: 5px;
+  height: 4px;
   overflow: hidden;
   border-radius: 999px;
   background: var(--theme-disabled-surface);
@@ -37,57 +37,57 @@
   transition: width 180ms ease;
 }
 
-.clarity-onboarding-optional {
-  padding: 10px 12px;
-  border: 1px solid var(--theme-border);
-  border-radius: 8px;
-  background: var(--theme-surface-subtle);
-  font-size: 0.75rem;
+.clarity-onboarding-progress i[data-step="1"] {
+  width: 33.333%;
+}
+
+.clarity-onboarding-progress i[data-step="2"] {
+  width: 66.666%;
+}
+
+.clarity-onboarding-progress i[data-step="3"] {
+  width: 100%;
+}
+
+.clarity-onboarding-safety-note {
+  max-width: 56rem;
+  color: var(--theme-text-muted);
+  font-size: 0.72rem;
   line-height: 1.45;
 }
 
 .clarity-form-step {
-  display: grid;
-  grid-template-columns: 38px minmax(0, 1fr);
-  align-items: start;
-  gap: 14px;
+  display: block;
 }
 
 .clarity-form-step .form-step__number {
-  display: grid;
-  width: 38px;
-  height: 38px;
-  place-items: center;
-  border-radius: 9px;
-  color: var(--theme-action);
-  background: var(--theme-info-surface);
-  font-size: 0.72rem;
-  font-weight: 820;
+  display: none;
 }
 
 .clarity-form-step h2 {
   margin: 0;
   color: var(--theme-text);
   font-family: var(--font-sans), sans-serif;
-  font-size: clamp(1.45rem, 3vw, 2rem);
+  font-size: clamp(1.55rem, 3vw, 2rem);
   font-weight: 820;
-  letter-spacing: -0.035em;
+  letter-spacing: -0.04em;
   line-height: 1.1;
 }
 
 .clarity-form-step h2:focus {
-  outline: 2px solid var(--theme-focus);
-  outline-offset: 4px;
+  outline: none;
 }
 
 .clarity-form-step p {
-  margin: 7px 0 0;
+  max-width: 48rem;
+  margin: 8px 0 0;
   color: var(--theme-text-muted);
-  font-size: 0.83rem;
+  font-size: 0.88rem;
   line-height: 1.5;
 }
 
 .clarity-onboarding-form .choice-fieldset {
+  min-width: 0;
   margin: 0;
   padding: 0;
   border: 0;
@@ -96,26 +96,40 @@
 .clarity-onboarding-form .choice-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 8px;
+}
+
+.clarity-onboarding-form .choice-grid--stacked {
+  grid-template-columns: 1fr;
 }
 
 .clarity-onboarding-form .choice-card {
-  min-height: 74px;
-  padding: 16px;
-  border: 1px solid var(--theme-border-strong);
-  border-radius: 10px;
+  display: flex;
+  min-width: 0;
+  min-height: 56px;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 16px;
+  border: 1px solid var(--theme-border);
+  border-radius: 8px;
   color: var(--theme-text);
   background: var(--theme-surface);
   font: inherit;
   font-size: 0.88rem;
-  font-weight: 760;
-  text-align: left;
+  font-weight: 500;
+  line-height: 1.35;
   cursor: pointer;
+  justify-content: flex-start;
 }
 
-.clarity-onboarding-form .choice-card:hover:not(:disabled) {
+.clarity-onboarding-form .choice-card:hover {
   border-color: var(--theme-action);
   background: var(--theme-surface-subtle);
+}
+
+.clarity-onboarding-form .choice-card:focus-within {
+  outline: 2px solid var(--theme-focus);
+  outline-offset: 3px;
 }
 
 .clarity-onboarding-form .choice-card.is-selected {
@@ -125,9 +139,81 @@
   box-shadow: inset 0 0 0 1px var(--theme-action);
 }
 
-.clarity-onboarding-form .choice-card:focus-visible {
+.clarity-onboarding-form .choice-card input {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  margin: 0;
+  accent-color: var(--theme-action);
+}
+
+.clarity-onboarding-form .choice-card svg {
+  flex: 0 0 auto;
+  color: var(--theme-action);
+}
+
+.clarity-onboarding-form .choice-card > span:last-child {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: left;
+  font-weight: 500;
+}
+
+.clarity-onboarding-form .choice-help {
+  margin: 10px 0 0;
+  color: var(--theme-text-muted);
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.clarity-onboarding-form .clarity-choice-card--secondary {
+  min-height: 44px;
+  gap: 8px;
+  padding: 8px 4px;
+  border: 0;
+  border-radius: 0;
+  color: var(--theme-text-muted);
+  background: transparent;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.clarity-onboarding-form .clarity-choice-card--secondary:hover,
+.clarity-onboarding-form .clarity-choice-card--secondary.is-selected {
+  border-color: transparent;
+  color: var(--theme-action);
+  background: transparent;
+  box-shadow: none;
+}
+
+.clarity-onboarding-form .clarity-choice-card--secondary:focus-within {
   outline: 2px solid var(--theme-focus);
-  outline-offset: 3px;
+  outline-offset: 4px;
+}
+
+.clarity-onboarding-form .clarity-choice-card--secondary input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.clarity-onboarding-form .choice-help,
+.clarity-onboarding-form .clarity-onboarding-safety-note {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 
 .clarity-onboarding-form .field-group {
@@ -173,60 +259,143 @@
   position: absolute;
   top: 17px;
   left: 14px;
+  z-index: 1;
   color: var(--theme-text-muted);
   pointer-events: none;
 }
 
-.clarity-onboarding-form .input-with-icon input {
+.clarity-onboarding-form .input-with-icon input,
+.clarity-onboarding-form .input-with-icon textarea {
   padding-left: 44px;
+}
+
+.clarity-custom-answer {
+  padding: 14px;
+  border-left: 3px solid var(--theme-action);
+  background: var(--theme-surface-subtle);
+}
+
+.clarity-onboarding-step-note {
+  padding: 11px 13px;
+  border: 1px solid var(--theme-border);
+  border-radius: 8px;
+  color: var(--theme-text-muted);
+  background: var(--theme-surface-subtle);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.clarity-review-list {
+  display: grid;
+  border-top: 1px solid var(--theme-border);
+  border-bottom: 1px solid var(--theme-border);
+}
+
+.clarity-review-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 0;
+  border-top: 1px solid var(--theme-border);
+}
+
+.clarity-review-row:first-child {
+  border-top: 0;
+}
+
+.clarity-review-row > div {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.clarity-review-row span {
+  color: var(--theme-text-muted);
+  font-size: 0.72rem;
+  font-weight: 780;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.clarity-review-row strong {
+  overflow-wrap: anywhere;
+  color: var(--theme-text);
+  font-size: 0.9rem;
+  font-weight: 720;
+}
+
+.clarity-review-edit {
+  min-width: 64px;
+  min-height: 44px;
+  flex: 0 0 auto;
 }
 
 .clarity-onboarding-actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
-  padding-top: 4px;
+  gap: 16px;
+  padding-top: 8px;
+  border-top: 1px solid var(--theme-border);
 }
 
-.clarity-onboarding-actions__secondary {
+.clarity-onboarding-actions__primary {
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: flex-end;
+  gap: 14px;
+  margin-left: auto;
 }
 
 .clarity-onboarding-actions .button {
   min-height: 48px;
   border-radius: 8px;
-  font-size: 0.8rem;
+  font-size: 0.82rem;
   font-weight: 800;
 }
 
 .clarity-onboarding-actions .button--ink {
+  min-width: 176px;
   border-color: var(--theme-action);
   color: var(--theme-action-text);
   background: var(--theme-action);
 }
 
-.clarity-onboarding-actions .button--quiet {
-  color: var(--theme-text-muted);
-  background: transparent;
+.clarity-onboarding-actions .button--ink:hover:not(:disabled) {
+  border-color: var(--theme-action-hover);
+  background: var(--theme-action-hover);
 }
 
-.clarity-onboarding-actions .button--quiet:hover:not(:disabled) {
-  color: var(--theme-text);
-  background: var(--theme-surface-subtle);
+.clarity-onboarding-actions .button--ink:disabled {
+  border-color: var(--theme-disabled-surface);
+  color: var(--theme-disabled-text);
+  background: var(--theme-disabled-surface);
+  cursor: not-allowed;
 }
 
-.clarity-onboarding-form .button--outline {
+.clarity-onboarding-back {
+  min-width: 150px;
   border-color: var(--theme-border-strong);
   color: var(--theme-text);
   background: var(--theme-surface);
 }
 
-.clarity-onboarding-form .button--outline:hover:not(:disabled) {
+.clarity-onboarding-back:hover:not(:disabled) {
   border-color: var(--theme-action);
   color: var(--theme-action);
+  background: var(--theme-surface-subtle);
+}
+
+.clarity-onboarding-skip {
+  min-width: 104px;
+  color: var(--theme-action);
+  background: transparent;
+}
+
+.clarity-onboarding-skip:hover:not(:disabled) {
+  color: var(--theme-action-hover);
   background: var(--theme-surface-subtle);
 }
 
@@ -244,6 +413,68 @@
 .clarity-onboarding-form .form-message--error {
   color: var(--theme-danger-text);
   background: var(--theme-danger-surface);
+}
+
+.onboarding-recovery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  color: var(--theme-text-muted);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.onboarding-recovery-actions span {
+  flex: 1 1 100%;
+}
+
+.onboarding-cleanup-pending {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+  padding: 14px 16px;
+  border: 1px solid var(--theme-border-strong);
+  border-left: 3px solid var(--theme-action);
+  border-radius: 8px;
+  color: var(--theme-text-muted);
+  background: var(--theme-surface-subtle);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.onboarding-cleanup-pending h3,
+.onboarding-cleanup-pending p {
+  margin: 0;
+}
+
+.onboarding-cleanup-pending h3 {
+  color: var(--theme-text);
+  font-size: 0.84rem;
+  font-weight: 760;
+}
+
+.onboarding-cleanup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+
+.onboarding-cleanup-actions .button {
+  min-height: 44px;
+}
+
+.onboarding-cleanup-acknowledge,
+.onboarding-cleanup-acknowledged,
+.onboarding-cleanup-message {
+  margin: 0;
+}
+
+.onboarding-cleanup-acknowledged,
+.onboarding-cleanup-message {
+  color: var(--theme-info-text);
+  font-size: 0.72rem;
 }
 
 .clarity-onboarding-form details {
@@ -280,7 +511,21 @@
 }
 
 .onboarding-complete {
+  max-width: 720px;
   justify-items: start;
+}
+
+.onboarding-complete:focus {
+  outline: none;
+}
+
+.onboarding-complete:focus-visible {
+  outline: 2px solid var(--theme-focus);
+  outline-offset: 6px;
+}
+
+.onboarding-complete__copy {
+  width: 100%;
 }
 
 .onboarding-complete > svg {
@@ -289,50 +534,71 @@
 
 @media (max-width: 760px) {
   .clarity-onboarding-form {
-    gap: 18px;
+    gap: 8px;
   }
 
   .clarity-onboarding-form .choice-grid {
     grid-template-columns: 1fr;
-    gap: 9px;
+    gap: 8px;
   }
 
   .clarity-onboarding-form .choice-card {
-    min-height: 58px;
+    min-height: 56px;
+    padding: 11px 13px;
   }
 
   .clarity-onboarding-actions {
     align-items: stretch;
-    flex-direction: column-reverse;
+    gap: 4px;
+    flex-direction: column;
+    padding-top: 4px;
   }
 
-  .clarity-onboarding-actions__secondary {
+  .clarity-onboarding-actions__primary {
     width: 100%;
-    justify-content: space-between;
+    align-items: stretch;
+    flex-direction: column;
+    gap: 4px;
+    margin-left: 0;
   }
 
-  .clarity-onboarding-actions > .button {
+  .clarity-onboarding-actions > .button,
+  .clarity-onboarding-actions__primary .button {
+    min-height: 44px;
     width: 100%;
+  }
+
+  .clarity-onboarding-skip {
+    border: 1px solid var(--theme-action);
   }
 }
 
-@media (max-width: 390px) {
-  .clarity-form-step {
-    grid-template-columns: 32px minmax(0, 1fr);
-    gap: 10px;
+@media (max-width: 420px) {
+  .clarity-onboarding-progress {
+    grid-template-columns: auto minmax(48px, 1fr) auto;
+    gap: 8px;
+    font-size: 0.66rem;
   }
 
-  .clarity-form-step .form-step__number {
-    width: 32px;
-    height: 32px;
+  .clarity-form-step h2 {
+    font-size: clamp(1.2rem, 5.1vw, 1.5rem);
   }
 
-  .clarity-onboarding-actions__secondary {
-    align-items: stretch;
-    flex-direction: column;
+  .clarity-review-row {
+    align-items: flex-start;
   }
 
-  .clarity-onboarding-actions__secondary .button {
-    width: 100%;
+  .clarity-review-edit {
+    min-width: 58px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .clarity-onboarding-form *,
+  .clarity-onboarding-form *::before,
+  .clarity-onboarding-form *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
   }
 }

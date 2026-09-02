@@ -10,8 +10,9 @@ import {
 } from "../lib/learner-api";
 import {
   availableLocalStorage,
-  clearAllLearnerLocalDrafts,
+  clearAllLearnerLocalDraftsWithLock,
   type LocalDraftStorageResult,
+  type OnboardingRecoveryLockManager,
 } from "../lib/local-drafts";
 import { ROUTES } from "../lib/routes";
 
@@ -45,6 +46,7 @@ export function SignOutFailure({
 export async function logoutAndClearLocalDrafts(
   api: Pick<LearnerApi, "logout">,
   storage: Storage | null,
+  lockManager?: OnboardingRecoveryLockManager | null,
 ): Promise<{
   cleanup: LocalDraftStorageResult;
   serverRevocationConfirmed: boolean;
@@ -63,7 +65,7 @@ export async function logoutAndClearLocalDrafts(
   }
   return {
     cleanup: storage
-      ? clearAllLearnerLocalDrafts(storage)
+      ? await clearAllLearnerLocalDraftsWithLock(storage, lockManager)
       : { ok: false, reason: "unavailable" },
     serverRevocationConfirmed,
   };
@@ -85,11 +87,11 @@ export function SignOutControl({
     window.location.assign(ROUTES.login);
   }
 
-  function retryCleanup() {
+  async function retryCleanup() {
     setSigningOut(true);
     const storage = availableLocalStorage(window);
     const result = storage
-      ? clearAllLearnerLocalDrafts(storage)
+      ? await clearAllLearnerLocalDraftsWithLock(storage)
       : { ok: false as const, reason: "unavailable" as const };
     if (result.ok) {
       finishRedirect();
@@ -152,7 +154,7 @@ export function SignOutControl({
           message={failure}
           retry={
             cleanupOnly
-              ? retryCleanup
+              ? () => void retryCleanup()
               : locallySignedOut
                 ? finishRedirect
                 : () => void signOut()

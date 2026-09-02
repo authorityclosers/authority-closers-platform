@@ -6,6 +6,7 @@ import {
   onboardingServerFingerprint,
   readOnboardingLocalDraft,
   writeOnboardingLocalDraft,
+  type OnboardingRecoveryLockManager,
   type OnboardingDraftScope,
 } from "./local-drafts";
 
@@ -34,6 +35,16 @@ const draft = {
   weeklyMinutes: "30",
 };
 
+const availableLockManager: OnboardingRecoveryLockManager = {
+  async request<T>(
+    _name: string,
+    _options: { mode: "exclusive"; ifAvailable: true },
+    callback: (lock: unknown | null) => Promise<unknown> | unknown,
+  ): Promise<T> {
+    return (await callback({})) as T;
+  },
+};
+
 function seedDraft(storage: Storage) {
   writeOnboardingLocalDraft(storage, {
     scope,
@@ -50,7 +61,7 @@ describe("learner sign-out local recovery cleanup", () => {
     const logout = vi.fn().mockResolvedValue(undefined);
 
     await expect(
-      logoutAndClearLocalDrafts({ logout }, storage),
+      logoutAndClearLocalDrafts({ logout }, storage, availableLockManager),
     ).resolves.toEqual({
       cleanup: { ok: true },
       serverRevocationConfirmed: true,
@@ -65,7 +76,7 @@ describe("learner sign-out local recovery cleanup", () => {
     const logout = vi.fn().mockRejectedValue(new TypeError("offline"));
 
     await expect(
-      logoutAndClearLocalDrafts({ logout }, storage),
+      logoutAndClearLocalDrafts({ logout }, storage, availableLockManager),
     ).rejects.toThrow("offline");
     expect(readOnboardingLocalDraft(storage, scope).status).toBe("ready");
   });
@@ -80,7 +91,7 @@ describe("learner sign-out local recovery cleanup", () => {
     );
 
     await expect(
-      logoutAndClearLocalDrafts({ logout }, storage),
+      logoutAndClearLocalDrafts({ logout }, storage, availableLockManager),
     ).resolves.toEqual({
       cleanup: { ok: true },
       serverRevocationConfirmed: false,
@@ -99,6 +110,7 @@ describe("learner sign-out local recovery cleanup", () => {
       logoutAndClearLocalDrafts(
         { logout: vi.fn().mockResolvedValue(undefined) },
         storage,
+        availableLockManager,
       ),
     ).resolves.toEqual({
       cleanup: { ok: false, reason: "unavailable" },

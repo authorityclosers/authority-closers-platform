@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
@@ -8,6 +9,8 @@ import CertificatePage from "../certificates/[certificateId]/page";
 import { ActivityRenderer } from "../components/activity-renderers";
 import {
   ConnectedActivityWorkspace,
+  activityStateForScope,
+  createActivityOperationLock,
   enrollmentFailureMessage,
   FREE_COURSE_SLUG,
   identityState,
@@ -22,6 +25,7 @@ import {
 } from "../components/learner-runtime";
 import {
   hasMembershipRole,
+  MembershipDraftCleanupNotice,
   MembershipUnavailable,
 } from "../components/membership-availability";
 import {
@@ -29,7 +33,16 @@ import {
   signOutFailureMessage,
 } from "../components/sign-out-control";
 import { LoginForm, routeAfterOnboarding } from "../components/login-form";
-import { OnboardingForm } from "../components/onboarding-form";
+import {
+  ONBOARDING_USE_LOCAL_COPY_LABEL,
+  OnboardingCompletionState,
+  OnboardingForm,
+  createOnboardingMutationLock,
+  onboardingEditorStateFromLocalRecovery,
+  onboardingLocalDraftNeedsEditing,
+  reconcileOnboardingLocalCleanup,
+  type OnboardingFormProps,
+} from "../components/onboarding-form";
 import { ThemeControl } from "../components/theme-control";
 import { ActivityStatusPill, ProgressMeter } from "../components/shared-ui";
 import { Breadcrumbs, LearnerShell } from "../components/site-shell";
@@ -42,7 +55,12 @@ import LoginPage from "../login/page";
 import ForgotPasswordPage from "../forgot-password/page";
 import manifest from "../manifest";
 import OfflinePage from "../offline/page";
-import OnboardingPage from "../onboarding/page";
+import { AuthFlowPage, authFlowStepState } from "../components/auth-flow-page";
+import OnboardingPage, {
+  onboardingHref,
+  onboardingReturnHref,
+  parseOnboardingReturnIntent,
+} from "../onboarding/page";
 import ProgressPage from "../progress/page";
 import PublicHomePage from "../page";
 import PrivacyPage from "../privacy/page";
@@ -75,7 +93,14 @@ import {
   type LearnerApi,
   type LearningResponse,
   type MeResponse,
+  type OnboardingResponse,
 } from "./learner-api";
+import {
+  onboardingServerFingerprint,
+  peekOnboardingLocalDraftForCleanup,
+  writeOnboardingLocalDraft,
+  type OnboardingRecoveryLockManager,
+} from "./local-drafts";
 
 function h1Count(html: string): number {
   return html.match(/<h1(?:\s|>)/g)?.length ?? 0;
@@ -85,6 +110,54 @@ function queryValue(state: SurfaceState): string | undefined {
   return state === "DEFAULT"
     ? undefined
     : state.toLowerCase().replaceAll("_", "-");
+}
+
+function onboardingProfile(
+  overrides: Partial<OnboardingResponse> = {},
+): OnboardingResponse {
+  return {
+    person_id: "person-test",
+    experience_context: "sales",
+    learning_goal: null,
+    practice_situation: null,
+    weekly_minutes: null,
+    status: "in_progress",
+    current_step: 2,
+    revision: 4,
+    updated_at: "2026-09-02T00:00:00Z",
+    next_action_href: "/onboarding",
+    next_action_reason: "complete learning setup",
+    ...overrides,
+  };
+}
+
+function memoryStorage(): Storage {
+  const values = new Map<string, string>();
+  return {
+    get length() {
+      return values.size;
+    },
+    clear: () => values.clear(),
+    getItem: (key) => values.get(key) ?? null,
+    key: (index) => [...values.keys()][index] ?? null,
+    removeItem: (key) => void values.delete(key),
+    setItem: (key, value) => void values.set(key, value),
+  };
+}
+
+function exclusiveLockManager(): OnboardingRecoveryLockManager {
+  let held = false;
+  return {
+    request: async (_name, _options, callback) => {
+      if (held) return callback(null);
+      held = true;
+      try {
+        return await callback({});
+      } finally {
+        held = false;
+      }
+    },
+  };
 }
 
 const routeRenderers: Array<[string, (state?: string) => Promise<ReactNode>]> =
@@ -443,6 +516,11 @@ describe("honest preview controls", () => {
     );
   });
 
+  it("keeps the onboarding conflict action explicit about editor review", () => {
+    expect(ONBOARDING_USE_LOCAL_COPY_LABEL).toBe("Use local copy in editor");
+    expect(ONBOARDING_USE_LOCAL_COPY_LABEL).not.toContain("Merge");
+  });
+
   it("exposes connected password sign-in and waits for canonical onboarding state", () => {
     const login = renderToStaticMarkup(createElement(LoginForm));
     const onboarding = renderToStaticMarkup(createElement(OnboardingForm));
@@ -466,6 +544,45 @@ describe("honest preview controls", () => {
     expect(routeAfterOnboarding("completed")).toBe("/home");
     expect(routeAfterOnboarding("skipped")).toBe("/home");
     expect(routeAfterOnboarding()).toBe("/onboarding");
+  });
+
+  it("allowlists onboarding return intent and preserves it in page transitions", async () => {
+    expect(parseOnboardingReturnIntent("settings")).toBe("settings");
+    expect(parseOnboardingReturnIntent(["settings", "/unsafe"])).toBe(
+      "settings",
+    );
+    expect(parseOnboardingReturnIntent("settings%2Funsafe")).toBe("home");
+    expect(parseOnboardingReturnIntent("unknown")).toBe("home");
+    expect(onboardingReturnHref("settings")).toBe("/settings");
+    expect(onboardingReturnHref("home")).toBe("/home");
+    expect(onboardingHref("settings")).toBe("/onboarding?return=settings");
+    expect(onboardingHref("home")).toBe("/onboarding");
+
+    const settingsError = renderToStaticMarkup(
+      await OnboardingPage({
+        searchParams: Promise.resolve({
+          state: "error-retryable",
+          return: "settings",
+        }),
+      }),
+    );
+    expect(settingsError).toContain(
+      'href="/onboarding?return=settings&amp;state=default"',
+    );
+    expect(settingsError).toContain('href="/settings"');
+    expect(settingsError).toContain('aria-label="Back to settings"');
+
+    const homeError = renderToStaticMarkup(
+      await OnboardingPage({
+        searchParams: Promise.resolve({
+          state: "error-retryable",
+          return: "not-allowlisted",
+        }),
+      }),
+    );
+    expect(homeError).toContain('href="/onboarding?state=default"');
+    expect(homeError).toContain('href="/home"');
+    expect(homeError).not.toContain("return=not-allowlisted");
   });
 
   it("exposes an accessible persisted appearance control", () => {
@@ -540,9 +657,283 @@ describe("honest preview controls", () => {
     expect(onboarding).toContain("clarity-auth-shell--onboarding");
     expect(onboarding).toContain("Make the course fit your work.");
     expect(onboarding).toContain("Skip to learning setup");
-    expect(onboarding.match(/is-outline/g)).toHaveLength(3);
+    expect(onboarding).toContain('aria-live="polite"');
+    expect(onboarding.match(/is-outline/g) ?? []).toHaveLength(0);
+    expect(onboarding).toContain("Loading setup");
     expect(onboarding).not.toContain('aria-current="step"');
     expect(onboarding).not.toContain("learner-sidebar");
+  });
+});
+
+describe("click-first onboarding", () => {
+  it("renders the ready goal question with semantic groups and a disabled empty state", () => {
+    const html = renderToStaticMarkup(
+      createElement<OnboardingFormProps>(OnboardingForm, {
+        initialProfile: onboardingProfile(),
+      }),
+    );
+
+    expect(html).not.toContain("Loading your saved profile");
+    expect(html).toContain("What would you most like to improve?");
+    expect(html).toContain('class="choice-fieldset"');
+    expect(html).toContain('name="learning-goal"');
+    expect(html).toContain('value="Handle objections with confidence"');
+    expect(html).toContain('value="custom"');
+    expect(html).toContain("Write a different goal");
+    expect(html).toContain("Skip setup");
+    expect(html).toContain('disabled=""');
+    expect(html).not.toContain("aria-pressed");
+  });
+
+  it("enables Continue when a common goal is selected and preserves the saved contract value", () => {
+    const html = renderToStaticMarkup(
+      createElement<OnboardingFormProps>(OnboardingForm, {
+        initialProfile: onboardingProfile({
+          learning_goal: "Run clearer discovery calls",
+        }),
+      }),
+    );
+
+    expect(html).toContain(
+      'name="learning-goal" checked="" value="Run clearer discovery calls"',
+    );
+    expect(html).toContain(">Continue");
+    const submitButton =
+      html.match(/<button[^>]*type="submit"[^>]*>[\s\S]*?<\/button>/)?.[0] ??
+      "";
+    expect(submitButton).not.toContain('disabled=""');
+  });
+
+  it("keeps live progress pending until onboarding state is known", () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        AuthFlowPage,
+        {
+          eyebrow: "Learning setup",
+          heading: "Make the course fit your work.",
+          copy: "Answer only what helps.",
+          liveProgress: true,
+          variant: "onboarding",
+          steps: [
+            { label: "Context", state: "upcoming" },
+            { label: "Goal", state: "upcoming" },
+            { label: "Optional details", state: "upcoming" },
+          ],
+        },
+        "content",
+      ),
+    );
+
+    expect(html).toContain("Loading setup");
+    expect(html).not.toContain("Step 1 of 3");
+    expect(html).toContain("Optional details");
+    expect(html).not.toContain('aria-current="step"');
+    expect(html.match(/clarity-auth-step-number/g) ?? []).toHaveLength(3);
+    expect(html).toContain("clarity-auth-step-chevron");
+    expect(authFlowStepState(1, 2)).toBe("complete");
+    expect(authFlowStepState(2, 2)).toBe("current");
+    expect(authFlowStepState(3, 2)).toBe("upcoming");
+    expect(html).not.toContain("Step 4");
+  });
+
+  it("keeps detail answers optional inside step 3 and exposes compact labels", () => {
+    const html = renderToStaticMarkup(
+      createElement<OnboardingFormProps>(OnboardingForm, {
+        initialProfile: onboardingProfile({
+          current_step: 3,
+          learning_goal: "Close more consistently",
+        }),
+      }),
+    );
+
+    expect(html).toContain("What situation are you working through?");
+    expect(html).toContain("Optional");
+    expect(html).toContain("A real conversation coming up");
+    expect(html).toContain("Describe a different situation");
+    expect(html).toContain("Skip setup");
+    expect(html).not.toContain("Step 4 of 4");
+  });
+
+  it("keeps custom context input within the server field limit", () => {
+    const html = renderToStaticMarkup(
+      createElement<OnboardingFormProps>(OnboardingForm, {
+        initialProfile: onboardingProfile({
+          current_step: 1,
+          experience_context: "leading a small sales team",
+        }),
+      }),
+    );
+
+    expect(html).toContain('id="experience-context-custom"');
+    expect(html).toContain('maxLength="64"');
+  });
+
+  it("returns completed settings edits to the allowlisted settings surface", () => {
+    const html = renderToStaticMarkup(
+      createElement<OnboardingFormProps>(OnboardingForm, {
+        initialProfile: onboardingProfile({
+          status: "completed",
+          current_step: 3,
+        }),
+        returnHref: "/settings",
+      }),
+    );
+
+    expect(html).toContain("Your starting context is ready.");
+    expect(html).toContain("Return to settings");
+    expect(html).toContain('href="/settings"');
+    expect(html).not.toContain('href="/home"');
+  });
+
+  it("keeps dirty recovery edits in the editor even after a completed server profile", () => {
+    const serverDraft = {
+      experienceContext: "sales",
+      learningGoal: "Close more consistently",
+      practiceSituation: "",
+      weeklyMinutes: "",
+    };
+    const localDraft = {
+      ...serverDraft,
+      learningGoal: "Run clearer discovery calls",
+    };
+
+    expect(onboardingLocalDraftNeedsEditing(localDraft, serverDraft)).toBe(
+      true,
+    );
+    expect(onboardingLocalDraftNeedsEditing(serverDraft, serverDraft)).toBe(
+      false,
+    );
+  });
+
+  it("enters the editor when a local recovery copy is merged from a completed profile", () => {
+    const localDraft = {
+      experienceContext: "sales",
+      learningGoal: "Run clearer discovery calls",
+      practiceSituation: "",
+      weeklyMinutes: "",
+    };
+
+    expect(onboardingEditorStateFromLocalRecovery(localDraft, 2)).toEqual({
+      finished: false,
+      draft: localDraft,
+      step: 2,
+    });
+  });
+
+  it("serializes onboarding mutations and drops stale completions after unmount", () => {
+    const lock = createOnboardingMutationLock();
+
+    expect(lock.acquire()).toBe(false);
+    lock.activate();
+    expect(lock.acquire()).toBe(true);
+    expect(lock.acquire()).toBe(false);
+    lock.dispose();
+    expect(lock.canCommit()).toBe(false);
+    lock.release();
+    expect(lock.acquire()).toBe(false);
+
+    lock.activate();
+    expect(lock.acquire()).toBe(true);
+    expect(lock.canCommit()).toBe(true);
+    lock.release();
+  });
+
+  it("renders cleanup-pending completion as a successful server save with recovery actions", () => {
+    const html = renderToStaticMarkup(
+      createElement(OnboardingCompletionState, {
+        status: "completed",
+        returnHref: "/settings",
+        cleanupPending: true,
+        cleanupAcknowledged: false,
+        onRetryLocalCleanup: () => undefined,
+        onCopyRecovery: () => undefined,
+        onExportRecovery: () => undefined,
+        onAcknowledgeRemainingCopy: () => undefined,
+        onEdit: () => undefined,
+      }),
+    );
+
+    expect(html).toContain('role="status"');
+    expect(html).toContain("Saved on the server; local cleanup is pending.");
+    expect(html).toContain("The server save succeeded.");
+    expect(html).toContain("Retry local cleanup");
+    expect(html).toContain("Copy recovery text");
+    expect(html).toContain("Download recovery file");
+    expect(html).toContain("Acknowledge remaining copy");
+    expect(html).toContain('href="/settings"');
+    expect(html).not.toContain("Profile save could not be completed");
+  });
+
+  it("surfaces a newer onboarding copy for cleanup retry and authorized discard", async () => {
+    const storage = memoryStorage();
+    const scope = { kind: "onboarding" as const, personId: "person-test" };
+    const oldDraft = {
+      experienceContext: "sales",
+      learningGoal: "Old local answer",
+      practiceSituation: "",
+      weeklyMinutes: "",
+    };
+    const newerDraft = {
+      ...oldDraft,
+      learningGoal: "New local answer",
+    };
+    const oldNow = Date.UTC(2026, 8, 1, 12);
+    const newerNow = oldNow + 1_000;
+    writeOnboardingLocalDraft(storage, {
+      scope,
+      draft: oldDraft,
+      baseRevision: 4,
+      serverFingerprint: onboardingServerFingerprint(oldDraft),
+      now: oldNow,
+    });
+    const oldCopy = peekOnboardingLocalDraftForCleanup(storage, scope, oldNow);
+    expect(oldCopy.status).toBe("ready");
+    if (oldCopy.status !== "ready") throw new Error("expected old copy");
+
+    writeOnboardingLocalDraft(storage, {
+      scope,
+      draft: newerDraft,
+      baseRevision: 4,
+      serverFingerprint: onboardingServerFingerprint(oldDraft),
+      now: newerNow,
+    });
+    const lockManager = exclusiveLockManager();
+    const resolution = await reconcileOnboardingLocalCleanup(
+      storage,
+      scope,
+      oldCopy.envelope,
+      oldDraft,
+      newerNow,
+      lockManager,
+    );
+
+    expect(resolution).toMatchObject({
+      result: { ok: false, reason: "changed" },
+      newer: true,
+      draft: newerDraft,
+      envelope: { draft: newerDraft },
+    });
+    expect(
+      storage.getItem("ac-learner-local-draft:onboarding:person-test"),
+    ).not.toBeNull();
+
+    const discard = await reconcileOnboardingLocalCleanup(
+      storage,
+      scope,
+      resolution.envelope,
+      newerDraft,
+      newerNow,
+      lockManager,
+    );
+    expect(discard).toMatchObject({
+      result: { ok: true },
+      newer: false,
+      envelope: null,
+      draft: null,
+    });
+    expect(
+      storage.getItem("ac-learner-local-draft:onboarding:person-test"),
+    ).toBeNull();
   });
 });
 
@@ -693,6 +1084,94 @@ describe("connected learner ready states", () => {
     draft_revision: 0,
     draft_payload: null,
   };
+
+  it("serializes activity operations and invalidates stale completions", () => {
+    const lock = createActivityOperationLock();
+    lock.activate();
+    const first = lock.acquire();
+    expect(first).not.toBeNull();
+    expect(lock.acquire()).toBeNull();
+    expect(lock.canCommit(first as number)).toBe(true);
+
+    lock.invalidate();
+    expect(lock.canCommit(first as number)).toBe(false);
+    const second = lock.acquire();
+    expect(second).not.toBeNull();
+    lock.release(first as number);
+    expect(lock.canCommit(second as number)).toBe(true);
+    lock.dispose();
+    expect(lock.canCommit(second as number)).toBe(false);
+    lock.release(second as number);
+  });
+
+  it("hides cleanup state from a prior activity when a reused surface changes scope", () => {
+    expect(
+      activityStateForScope(
+        {
+          scopeKey: '"tenant-1","person-1","enrollment-1","activity-1"',
+          value: "old cleanup",
+        },
+        '"tenant-1","person-1","enrollment-1","activity-2"',
+      ),
+    ).toBeNull();
+    expect(
+      activityStateForScope(
+        {
+          scopeKey: '"tenant-1","person-1","enrollment-1","activity-2"',
+          value: "current cleanup",
+        },
+        '"tenant-1","person-1","enrollment-1","activity-2"',
+      ),
+    ).toBe("current cleanup");
+  });
+
+  it("keeps production recovery callers on locked async paths", () => {
+    const runtimeSource = readFileSync(
+      new URL("../components/learner-runtime.tsx", import.meta.url),
+      "utf8",
+    );
+    const onboardingSource = readFileSync(
+      new URL("../components/onboarding-form.tsx", import.meta.url),
+      "utf8",
+    );
+    expect(runtimeSource).toContain("readActivityLocalDraftWithLock");
+    expect(runtimeSource).toContain("writeActivityLocalDraftWithLock");
+    expect(runtimeSource).toContain("clearActivityLocalDraftIfMatchesWithLock");
+    expect(runtimeSource).toContain("purgeActivityLocalDraftIfMatchesWithLock");
+    expect(runtimeSource).not.toMatch(/\breadActivityLocalDraft\(/);
+    expect(runtimeSource).not.toMatch(/\bwriteActivityLocalDraft\(/);
+    expect(runtimeSource).not.toMatch(/\bclearActivityLocalDraft\(/);
+    expect(onboardingSource).toContain("readOnboardingLocalDraftWithLock");
+    expect(onboardingSource).toContain("reconcileOnboardingLocalCleanup");
+    expect(
+      onboardingSource.match(/reconcileOnboardingLocalCleanup/g)?.length ?? 0,
+    ).toBeGreaterThanOrEqual(4);
+    expect(onboardingSource).toContain(
+      "purgeOnboardingLocalDraftIfMatchesWithLock",
+    );
+    expect(onboardingSource).not.toMatch(/\bclearOnboardingLocalDraft\(/);
+  });
+
+  it("keeps Next scroll behavior and Settings route-entry focus contracts explicit", () => {
+    const layoutSource = readFileSync(
+      new URL("../layout.tsx", import.meta.url),
+      "utf8",
+    );
+    const settingsSource = readFileSync(
+      new URL("../components/settings-runtime.tsx", import.meta.url),
+      "utf8",
+    );
+    const settingsCssSource = readFileSync(
+      new URL("../components/settings-clarity.module.css", import.meta.url),
+      "utf8",
+    );
+    expect(layoutSource).toContain('data-scroll-behavior="smooth"');
+    expect(settingsSource).toContain('id="settings-title"');
+    expect(settingsSource).toContain("routeEntryHeadingRef.current?.focus()");
+    expect(settingsCssSource).toContain(".routeEntryHeading:focus");
+    expect(settingsCssSource).toContain("outline: none");
+    expect(settingsCssSource).toContain(".indexLink:focus-visible");
+  });
 
   it("starts only identity and authoritative activity reads together", async () => {
     const started: string[] = [];
@@ -1075,6 +1554,13 @@ describe("connected learner ready states", () => {
     expect(unavailable).toContain("Learner membership is unavailable.");
     expect(unavailable).toContain('role="alert"');
     expect(unavailable).not.toContain("Learner profile");
+    const cleanupFailure = renderToStaticMarkup(
+      createElement(MembershipDraftCleanupNotice, {
+        cleanup: { status: "failed", retry: () => undefined },
+      }),
+    );
+    expect(cleanupFailure).toContain("could not complete");
+    expect(cleanupFailure).toContain("Retry local cleanup");
     expect(learnerHomeMode(false, false)).toBe("activation");
     expect(learnerHomeMode(false, true)).toBe("activation");
     expect(learnerHomeMode(true, false)).toBe("onboarding");

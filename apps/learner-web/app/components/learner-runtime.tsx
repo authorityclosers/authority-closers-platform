@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -31,24 +31,29 @@ import {
   activityRecoveryText,
   activityServerFingerprint,
   availableLocalStorage,
-  clearAllLearnerLocalDrafts,
-  clearActivityLocalDraft,
+  clearActivityLocalDraftIfMatchesWithLock,
+  clearLearnerLocalDraftsForPersonWithLock,
   localDraftMatchesServer,
   mutationFailureKind,
-  readActivityLocalDraft,
+  purgeActivityLocalDraftIfMatchesWithLock,
+  readActivityLocalDraftWithLock,
   registerBeforeUnloadGuard,
   registerHistoryNavigationGuard,
   registerInternalNavigationGuard,
-  writeActivityLocalDraft,
+  writeActivityLocalDraftWithLock,
+  writeActivityLocalDraftWithLockAndEnvelope,
   type ActivityDraftEnvelope,
   type ActivityDraftScope,
+  type LocalDraftRawSnapshot,
   type MutationFailureKind,
 } from "../lib/local-drafts";
 import { ROUTES } from "../lib/routes";
 import { userFacingRequestError } from "../lib/user-facing-error";
 import {
   hasMembershipRole,
+  MembershipDraftCleanupNotice,
   MembershipUnavailable,
+  type MembershipDraftCleanup,
 } from "./membership-availability";
 
 const defaultApi = createLearnerApi();
@@ -433,16 +438,119 @@ export function learningPathStatusForError(
   return "error";
 }
 
+export type MembershipCleanupContext = {
+  membershipKnown: boolean;
+  membershipAvailable: boolean;
+  personId: string | null;
+};
+
+export type MembershipCleanupToken = MembershipCleanupContext & {
+  generation: number;
+};
+
+export type MembershipCleanupGuard = {
+  activate: () => void;
+  begin: (context: MembershipCleanupContext) => MembershipCleanupToken;
+  invalidate: () => void;
+  dispose: () => void;
+  canCommit: (
+    token: MembershipCleanupToken,
+    current: MembershipCleanupContext,
+  ) => boolean;
+};
+
+/**
+ * Membership cleanup is destructive to bounded local recovery data. An async
+ * completion may publish only while its generation, person, and membership
+ * context still describe the current mounted surface.
+ */
+export function createMembershipCleanupGuard(): MembershipCleanupGuard {
+  let mounted = false;
+  let generation = 0;
+  return {
+    activate() {
+      mounted = true;
+      generation += 1;
+    },
+    begin(context) {
+      generation += 1;
+      return { ...context, generation };
+    },
+    invalidate() {
+      generation += 1;
+    },
+    dispose() {
+      mounted = false;
+      generation += 1;
+    },
+    canCommit(token, current) {
+      return (
+        mounted &&
+        token.generation === generation &&
+        token.personId === current.personId &&
+        token.membershipKnown === current.membershipKnown &&
+        token.membershipAvailable === current.membershipAvailable
+      );
+    },
+  };
+}
+
 function useInvalidateDraftsWithoutMembership(
   membershipKnown: boolean,
   membershipAvailable: boolean,
-) {
+  personId: string | null,
+): MembershipDraftCleanup {
+  const [status, setStatus] =
+    useState<MembershipDraftCleanup["status"]>("idle");
+  const cleanupGuardRef = useRef(createMembershipCleanupGuard());
   useEffect(() => {
-    if (membershipKnown && !membershipAvailable) {
-      const storage = availableLocalStorage(window);
-      if (storage) clearAllLearnerLocalDrafts(storage);
+    const guard = cleanupGuardRef.current;
+    guard.activate();
+    return () => guard.dispose();
+  }, []);
+  const attempt = useCallback(async () => {
+    const context: MembershipCleanupContext = {
+      membershipKnown,
+      membershipAvailable,
+      personId,
+    };
+    const guard = cleanupGuardRef.current;
+    const token = guard.begin(context);
+    const canPublish = () =>
+      guard.canCommit(token, {
+        membershipKnown,
+        membershipAvailable,
+        personId,
+      });
+    if (!membershipKnown || membershipAvailable) {
+      if (canPublish()) setStatus("idle");
+      return;
     }
-  }, [membershipAvailable, membershipKnown]);
+    if (canPublish()) setStatus("pending");
+    if (!personId) {
+      if (canPublish()) setStatus("failed");
+      return;
+    }
+    const storage = availableLocalStorage(window);
+    if (!storage) {
+      if (canPublish()) setStatus("failed");
+      return;
+    }
+    const result = await clearLearnerLocalDraftsForPersonWithLock(
+      storage,
+      personId,
+    );
+    if (canPublish()) setStatus(result.ok ? "success" : "failed");
+  }, [membershipAvailable, membershipKnown, personId]);
+  useEffect(() => {
+    const guard = cleanupGuardRef.current;
+    void attempt();
+    return () => guard.invalidate();
+  }, [attempt]);
+  return {
+    status,
+    retry: () => void attempt(),
+  };
 }
 
 export function enrollmentFailureMessage(error: unknown): {
@@ -838,9 +946,10 @@ export function LearnerHomeRuntime({ api = defaultApi }: { api?: LearnerApi }) {
   const membershipAvailable =
     state.status === "ready" && hasMembershipRole(state.value.me);
   const homeMode = learnerHomeMode(membershipAvailable, onboardingReady);
-  useInvalidateDraftsWithoutMembership(
+  const draftCleanup = useInvalidateDraftsWithoutMembership(
     state.status === "ready",
     membershipAvailable,
+    state.status === "ready" ? state.value.me.person_id : null,
   );
   useEffect(() => {
     if (state.status === "ready" && homeMode === "onboarding") {
@@ -884,6 +993,9 @@ export function LearnerHomeRuntime({ api = defaultApi }: { api?: LearnerApi }) {
               <span className="dashboard-intro__tenant">Learner workspace</span>
             ) : null}
           </section>
+          {!membershipAvailable ? (
+            <MembershipDraftCleanupNotice cleanup={draftCleanup} />
+          ) : null}
           <div className="home-workspace-grid" id="my-learning">
             <LearnerHomeEnrollmentCard
               learning={state.value.learning}
@@ -1082,6 +1194,151 @@ function ActivityLoop({
   );
 }
 
+type ActivityRecoveryCleanupAttempt = {
+  result:
+    | { ok: true }
+    | { ok: false; reason: "quota" | "unavailable" | "busy" | "changed" };
+  envelope: ActivityDraftEnvelope | null;
+  rawSnapshot: LocalDraftRawSnapshot | null;
+};
+
+export type ActivityOperationLock = {
+  activate: () => void;
+  acquire: () => number | null;
+  release: (token: number) => void;
+  invalidate: () => void;
+  dispose: () => void;
+  canCommit: (token: number) => boolean;
+};
+
+export function activityStateForScope<T>(
+  state: { scopeKey: string; value: T } | null,
+  scopeKey: string,
+): T | null {
+  return state?.scopeKey === scopeKey ? state.value : null;
+}
+
+export function createActivityOperationLock(): ActivityOperationLock {
+  let mounted = false;
+  let inFlight = false;
+  let generation = 0;
+  return {
+    activate() {
+      mounted = true;
+      generation += 1;
+    },
+    acquire() {
+      if (!mounted || inFlight) return null;
+      inFlight = true;
+      return generation;
+    },
+    release(token) {
+      if (token === generation) inFlight = false;
+    },
+    invalidate() {
+      generation += 1;
+      inFlight = false;
+    },
+    dispose() {
+      mounted = false;
+      generation += 1;
+      inFlight = false;
+    },
+    canCommit(token) {
+      return mounted && token === generation;
+    },
+  };
+}
+
+export type ActivityRecoveryHydrationGuard = {
+  begin: () => number;
+  markLearnerEdit: () => void;
+  canApply: (hydrationGeneration: number) => boolean;
+};
+
+/**
+ * Recovery hydration is advisory. A learner edit wins over a delayed local
+ * read, even if the read began first and the recovery copy matches the server.
+ */
+export function createActivityRecoveryHydrationGuard(): ActivityRecoveryHydrationGuard {
+  let learnerEditGeneration = 0;
+  return {
+    begin: () => learnerEditGeneration,
+    markLearnerEdit: () => {
+      learnerEditGeneration += 1;
+    },
+    canApply: (hydrationGeneration) =>
+      hydrationGeneration === learnerEditGeneration,
+  };
+}
+
+async function clearActivityRecoveryCopy(
+  storage: Storage,
+  scope: ActivityDraftScope,
+  expected?: ActivityDraftEnvelope,
+  expectedRaw?: LocalDraftRawSnapshot,
+): Promise<ActivityRecoveryCleanupAttempt> {
+  let target = expected;
+  const rawSnapshot = expectedRaw;
+  if (!target && !rawSnapshot) {
+    const current = await readActivityLocalDraftWithLock(storage, scope);
+    if (current.status === "missing") {
+      return { result: { ok: true }, envelope: null, rawSnapshot: null };
+    }
+    if (current.status !== "ready") {
+      return {
+        result: {
+          ok: false,
+          reason: current.status === "unavailable" ? "unavailable" : "changed",
+        },
+        envelope: null,
+        rawSnapshot:
+          current.status === "expired" || current.status === "invalid"
+            ? current.cleanupTarget
+            : null,
+      };
+    }
+    target = current.envelope;
+  }
+  const result = rawSnapshot
+    ? await purgeActivityLocalDraftIfMatchesWithLock(
+        storage,
+        scope,
+        rawSnapshot,
+      )
+    : await clearActivityLocalDraftIfMatchesWithLock(
+        storage,
+        scope,
+        target ?? null,
+      );
+  if (!result.ok && result.reason === "changed") {
+    const latest = await readActivityLocalDraftWithLock(storage, scope);
+    if (latest.status === "missing") {
+      return { result: { ok: true }, envelope: null, rawSnapshot: null };
+    }
+    if (latest.status === "ready") {
+      return { result, envelope: latest.envelope, rawSnapshot: null };
+    }
+    if (latest.status === "expired" || latest.status === "invalid") {
+      return {
+        result: {
+          ok: false,
+          reason:
+            latest.cleanupStatus === "unavailable" ? "unavailable" : "changed",
+        },
+        envelope: null,
+        rawSnapshot: latest.cleanupTarget,
+      };
+    }
+    return {
+      result: { ok: false, reason: "unavailable" },
+      envelope: null,
+      rawSnapshot: null,
+    };
+  }
+  return { result, envelope: target ?? null, rawSnapshot: rawSnapshot ?? null };
+}
+
 export function ConnectedActivityWorkspace({
   activity,
   learning,
@@ -1132,10 +1389,26 @@ export function ConnectedActivityWorkspace({
   const [localDraftRestored, setLocalDraftRestored] = useState(false);
   const [staleLocalDraft, setStaleLocalDraft] =
     useState<ActivityDraftEnvelope | null>(null);
+  const [localCleanupState, setLocalCleanupState] = useState<{
+    scopeKey: string;
+    value: {
+      draft: ActivityDraftEnvelope | null;
+      raw: LocalDraftRawSnapshot | null;
+      reason: "server-save" | "expired-record";
+    };
+  } | null>(null);
   const [localPersistence, setLocalPersistence] = useState<
     "idle" | "saved" | "failed"
   >("idle");
-  const [recoveryMessage, setRecoveryMessage] = useState<string | null>(null);
+  const [recoveryMessageState, setRecoveryMessageState] = useState<{
+    scopeKey: string;
+    value: string;
+  } | null>(null);
+  const activityOperationLockRef = useRef(createActivityOperationLock());
+  const activityRecoveryHydrationGuardRef = useRef(
+    createActivityRecoveryHydrationGuard(),
+  );
+  const activityGenerationRef = useRef(0);
   const localDraftStorage =
     typeof window === "undefined" ? null : availableLocalStorage(window);
   const dirty = mutation !== "submitted" && response !== savedResponse;
@@ -1185,6 +1458,83 @@ export function ConnectedActivityWorkspace({
         : null,
     [activity.enrollment_id, activity.id, personId, tenantId],
   );
+  const activityScopeKey = JSON.stringify([
+    tenantId ?? null,
+    personId ?? null,
+    activity.enrollment_id,
+    activity.id,
+  ]);
+  const activeCleanupState = activityStateForScope(
+    localCleanupState,
+    activityScopeKey,
+  );
+  const localCleanupPendingDraft = activeCleanupState?.draft ?? null;
+  const localCleanupPendingRaw = activeCleanupState?.raw ?? null;
+  const localCleanupPendingReason = activeCleanupState?.reason ?? null;
+  const recoveryMessage = activityStateForScope(
+    recoveryMessageState,
+    activityScopeKey,
+  );
+
+  const setLocalCleanupPending = useCallback(
+    (
+      draft: ActivityDraftEnvelope | null,
+      raw: LocalDraftRawSnapshot | null,
+      reason: "server-save" | "expired-record",
+    ) => {
+      setLocalCleanupState({
+        scopeKey: activityScopeKey,
+        value: { draft, raw, reason },
+      });
+    },
+    [activityScopeKey],
+  );
+
+  const clearLocalCleanupPending = useCallback(() => {
+    setLocalCleanupState(null);
+  }, []);
+
+  const setRecoveryMessage = useCallback(
+    (message: string | null) => {
+      setRecoveryMessageState(
+        message === null
+          ? null
+          : { scopeKey: activityScopeKey, value: message },
+      );
+    },
+    [activityScopeKey],
+  );
+
+  useEffect(() => {
+    const generation = ++activityGenerationRef.current;
+    const operationLock = activityOperationLockRef.current;
+    operationLock.activate();
+    return () => {
+      if (activityGenerationRef.current === generation) {
+        activityGenerationRef.current += 1;
+      }
+      operationLock.dispose();
+    };
+  }, [activity.enrollment_id, activity.id, personId, tenantId]);
+
+  function beginActivityOperation(): {
+    generation: number;
+    token: number;
+  } | null {
+    const generation = activityGenerationRef.current;
+    const token = activityOperationLockRef.current.acquire();
+    return token === null ? null : { generation, token };
+  }
+
+  function canCommitActivityOperation(operation: {
+    generation: number;
+    token: number;
+  }): boolean {
+    return (
+      operation.generation === activityGenerationRef.current &&
+      activityOperationLockRef.current.canCommit(operation.token)
+    );
+  }
   const draftStatus =
     mutation === "saving"
       ? "Saving to the server…"
@@ -1206,6 +1556,8 @@ export function ConnectedActivityWorkspace({
 
   useEffect(() => {
     let active = true;
+    const hydrationGeneration =
+      activityRecoveryHydrationGuardRef.current.begin();
     if (!localDraftScope || !localDraftStorage) {
       queueMicrotask(() => {
         if (!active) return;
@@ -1216,11 +1568,10 @@ export function ConnectedActivityWorkspace({
         active = false;
       };
     }
-    const localDraft = readActivityLocalDraft(
+    void readActivityLocalDraftWithLock(
       localDraftStorage,
       localDraftScope,
-    );
-    queueMicrotask(() => {
+    ).then((localDraft) => {
       if (!active) return;
       if (localDraft.status === "ready") {
         if (
@@ -1230,7 +1581,12 @@ export function ConnectedActivityWorkspace({
             activityServerFingerprint(initialResponse),
           )
         ) {
-          if (localDraft.envelope.draft.response !== initialResponse) {
+          if (
+            activityRecoveryHydrationGuardRef.current.canApply(
+              hydrationGeneration,
+            ) &&
+            localDraft.envelope.draft.response !== initialResponse
+          ) {
             setResponse(localDraft.envelope.draft.response);
             setLocalDraftRestored(true);
             setLocalPersistence("saved");
@@ -1240,6 +1596,24 @@ export function ConnectedActivityWorkspace({
         }
       } else if (localDraft.status === "unavailable") {
         setLocalPersistence("failed");
+        setRecoveryMessage(
+          "This browser could not verify local activity recovery storage. The server activity remains authoritative; keep any response you need before leaving.",
+        );
+      } else if (
+        localDraft.status === "expired" ||
+        localDraft.status === "invalid"
+      ) {
+        setLocalCleanupPending(
+          null,
+          localDraft.cleanupTarget,
+          "expired-record",
+        );
+        setLocalPersistence("failed");
+        setRecoveryMessage(
+          localDraft.status === "expired"
+            ? "An expired activity recovery copy could not be removed under the shared lock. Retry local cleanup before leaving."
+            : "An invalid activity recovery copy could not be removed under the shared lock. Retry local cleanup before leaving.",
+        );
       }
       setLocalDraftChecked(true);
     });
@@ -1253,6 +1627,8 @@ export function ConnectedActivityWorkspace({
     initialResponse,
     localDraftScope,
     localDraftStorage,
+    setLocalCleanupPending,
+    setRecoveryMessage,
   ]);
 
   useEffect(() => {
@@ -1278,22 +1654,33 @@ export function ConnectedActivityWorkspace({
           active = false;
         };
       }
-      const result = writeActivityLocalDraft(localDraftStorage, {
+      void writeActivityLocalDraftWithLock(localDraftStorage, {
         scope: localDraftScope,
         response,
         baseRevision: draftRevision,
         serverFingerprint: activityServerFingerprint(savedResponse),
-      });
-      queueMicrotask(() => {
+      }).then((result) => {
         if (active) setLocalPersistence(result.ok ? "saved" : "failed");
       });
     } else {
       if (localDraftStorage) {
-        clearActivityLocalDraft(localDraftStorage, localDraftScope);
-      }
-      queueMicrotask(() => {
-        if (active) setLocalPersistence("idle");
-      });
+        void clearActivityRecoveryCopy(localDraftStorage, localDraftScope).then(
+          ({ result, envelope, rawSnapshot }) => {
+            if (!active) return;
+            if (!result.ok && envelope) {
+              setLocalCleanupPending(envelope, null, "server-save");
+            } else if (!result.ok && rawSnapshot) {
+              setLocalCleanupPending(null, rawSnapshot, "expired-record");
+            } else if (result.ok) {
+              clearLocalCleanupPending();
+            }
+            setLocalPersistence(result.ok ? "idle" : "failed");
+          },
+        );
+      } else
+        queueMicrotask(() => {
+          if (active) setLocalPersistence("idle");
+        });
     }
     return () => {
       active = false;
@@ -1306,6 +1693,8 @@ export function ConnectedActivityWorkspace({
     localDraftStorage,
     response,
     savedResponse,
+    clearLocalCleanupPending,
+    setLocalCleanupPending,
     staleLocalDraft,
   ]);
 
@@ -1373,27 +1762,54 @@ export function ConnectedActivityWorkspace({
 
   async function save() {
     if (!canSaveDraft) return;
+    const operation = beginActivityOperation();
+    if (!operation) return;
     setLastOperation("draft");
     setMutation("saving");
     setMessage("");
     setReauthRequired(false);
     setFailureKind(null);
-    const localResult =
-      localDraftScope && localDraftStorage
-        ? writeActivityLocalDraft(localDraftStorage, {
-            scope: localDraftScope,
-            response,
-            baseRevision: draftRevision,
-            serverFingerprint: activityServerFingerprint(savedResponse),
-          })
-        : { ok: false as const, reason: "unavailable" as const };
-    setLocalPersistence(localResult.ok ? "saved" : "failed");
+    let locallyStored = false;
+    let localRecoveryUsable = false;
+    let cleanupTarget: ActivityDraftEnvelope | null = null;
+    let cleanupRawSnapshot: LocalDraftRawSnapshot | null = null;
     try {
+      if (localDraftScope && localDraftStorage) {
+        const localWrite = dirty
+          ? await writeActivityLocalDraftWithLockAndEnvelope(
+              localDraftStorage,
+              {
+                scope: localDraftScope,
+                response,
+                baseRevision: draftRevision,
+                serverFingerprint: activityServerFingerprint(savedResponse),
+              },
+            )
+          : null;
+        if (localWrite) {
+          localRecoveryUsable = localWrite.result.ok;
+          if (localWrite.result.ok) cleanupTarget = localWrite.envelope;
+          locallyStored = localWrite.result.ok;
+          setLocalPersistence(localWrite.result.ok ? "saved" : "failed");
+        } else {
+          const current = await readActivityLocalDraftWithLock(
+            localDraftStorage,
+            localDraftScope,
+          );
+          if (current.status !== "unavailable") localRecoveryUsable = true;
+          if (current.status === "ready") cleanupTarget = current.envelope;
+          if (current.status === "expired" || current.status === "invalid") {
+            cleanupRawSnapshot = current.cleanupTarget;
+          }
+        }
+      }
+      if (!canCommitActivityOperation(operation)) return;
       const saved = await api.saveDraft(
         activity.id,
         { response },
         draftRevision,
       );
+      if (!canCommitActivityOperation(operation)) return;
       setDraftRevision(saved.revision);
       setActivityRevision(saved.activity_revision);
       setSavedResponse(response);
@@ -1401,43 +1817,104 @@ export function ConnectedActivityWorkspace({
       setMessage("Draft saved by the server.");
       setLastOperation(null);
       setLocalDraftRestored(false);
-      if (localDraftScope && localDraftStorage) {
-        clearActivityLocalDraft(localDraftStorage, localDraftScope);
+      let cleanupMessage = "";
+      if (
+        localDraftScope &&
+        localDraftStorage &&
+        (cleanupTarget || cleanupRawSnapshot)
+      ) {
+        const cleanup = await clearActivityRecoveryCopy(
+          localDraftStorage,
+          localDraftScope,
+          cleanupTarget ?? undefined,
+          cleanupRawSnapshot ?? undefined,
+        );
+        if (!canCommitActivityOperation(operation)) return;
+        if (!cleanup.result.ok) {
+          if (cleanup.envelope) {
+            setLocalCleanupPending(cleanup.envelope, null, "server-save");
+          } else if (cleanup.rawSnapshot) {
+            setLocalCleanupPending(null, cleanup.rawSnapshot, "expired-record");
+          }
+          cleanupMessage =
+            " The server save succeeded, but this browser could not verify or clear its recovery copy. Keep this page open and copy or download the response if it is available, then retry local cleanup.";
+        } else {
+          clearLocalCleanupPending();
+        }
+        setLocalPersistence(cleanup.result.ok ? "idle" : "failed");
+      } else {
+        setLocalPersistence(localRecoveryUsable ? "idle" : "failed");
+        if (!localRecoveryUsable) {
+          cleanupMessage =
+            " The server save succeeded, but this browser could not verify or retain its recovery copy.";
+        }
       }
-      setLocalPersistence("idle");
+      if (!canCommitActivityOperation(operation)) return;
+      if (cleanupMessage)
+        setMessage(`Draft saved by the server.${cleanupMessage}`);
       refreshCommittedMutationState("draft");
     } catch (error) {
       const kind = mutationFailureKind(error, online());
+      if (!canCommitActivityOperation(operation)) return;
       setMutation("error");
       setFailureKind(kind);
-      setMessage(mutationErrorMessage(error, kind, localResult.ok));
+      setMessage(mutationErrorMessage(error, kind, locallyStored));
       setReauthRequired(isSessionExpiredError(error));
+    } finally {
+      activityOperationLockRef.current.release(operation.token);
     }
   }
   async function submit() {
     if (!canSubmitEvidence || !evidenceType) return;
+    const operation = beginActivityOperation();
+    if (!operation) return;
     setLastOperation("evidence");
     setMutation("saving");
     setMessage("");
     setReauthRequired(false);
     setFailureKind(null);
-    const localResult =
-      localDraftScope && localDraftStorage
-        ? writeActivityLocalDraft(localDraftStorage, {
-            scope: localDraftScope,
-            response,
-            baseRevision: draftRevision,
-            serverFingerprint: activityServerFingerprint(savedResponse),
-          })
-        : { ok: false as const, reason: "unavailable" as const };
-    setLocalPersistence(localResult.ok ? "saved" : "failed");
+    let locallyStored = false;
+    let localRecoveryUsable = false;
+    let cleanupTarget: ActivityDraftEnvelope | null = null;
+    let cleanupRawSnapshot: LocalDraftRawSnapshot | null = null;
     try {
+      if (localDraftScope && localDraftStorage) {
+        const localWrite = dirty
+          ? await writeActivityLocalDraftWithLockAndEnvelope(
+              localDraftStorage,
+              {
+                scope: localDraftScope,
+                response,
+                baseRevision: draftRevision,
+                serverFingerprint: activityServerFingerprint(savedResponse),
+              },
+            )
+          : null;
+        if (localWrite) {
+          localRecoveryUsable = localWrite.result.ok;
+          if (localWrite.result.ok) cleanupTarget = localWrite.envelope;
+          locallyStored = localWrite.result.ok;
+          setLocalPersistence(localWrite.result.ok ? "saved" : "failed");
+        } else {
+          const current = await readActivityLocalDraftWithLock(
+            localDraftStorage,
+            localDraftScope,
+          );
+          if (current.status !== "unavailable") localRecoveryUsable = true;
+          if (current.status === "ready") cleanupTarget = current.envelope;
+          if (current.status === "expired" || current.status === "invalid") {
+            cleanupRawSnapshot = current.cleanupTarget;
+          }
+        }
+      }
+      if (!canCommitActivityOperation(operation)) return;
       const submitted = await api.submitEvidence(
         activity.id,
         evidenceType,
         { response },
         activityRevision,
       );
+      if (!canCommitActivityOperation(operation)) return;
       setActivityRevision(submitted.activity_revision);
       setSavedResponse(response);
       setMutation("submitted");
@@ -1446,29 +1923,178 @@ export function ConnectedActivityWorkspace({
       );
       setLastOperation(null);
       setLocalDraftRestored(false);
-      if (localDraftScope && localDraftStorage) {
-        clearActivityLocalDraft(localDraftStorage, localDraftScope);
+      let cleanupMessage = "";
+      if (
+        localDraftScope &&
+        localDraftStorage &&
+        (cleanupTarget || cleanupRawSnapshot)
+      ) {
+        const cleanup = await clearActivityRecoveryCopy(
+          localDraftStorage,
+          localDraftScope,
+          cleanupTarget ?? undefined,
+          cleanupRawSnapshot ?? undefined,
+        );
+        if (!canCommitActivityOperation(operation)) return;
+        if (!cleanup.result.ok) {
+          if (cleanup.envelope) {
+            setLocalCleanupPending(cleanup.envelope, null, "server-save");
+          } else if (cleanup.rawSnapshot) {
+            setLocalCleanupPending(null, cleanup.rawSnapshot, "expired-record");
+          }
+          cleanupMessage =
+            " The server submission succeeded, but this browser could not verify or clear its recovery copy. Keep this page open and copy or download the response if it is available, then retry local cleanup.";
+        } else {
+          clearLocalCleanupPending();
+        }
+        setLocalPersistence(cleanup.result.ok ? "idle" : "failed");
+      } else {
+        setLocalPersistence(localRecoveryUsable ? "idle" : "failed");
+        if (!localRecoveryUsable) {
+          cleanupMessage =
+            " The server submission succeeded, but this browser could not verify or retain its recovery copy.";
+        }
       }
-      setLocalPersistence("idle");
+      if (!canCommitActivityOperation(operation)) return;
+      if (cleanupMessage)
+        setMessage(
+          `Evidence submitted. The server determined the current activity state.${cleanupMessage}`,
+        );
       refreshCommittedMutationState("evidence");
     } catch (error) {
       const kind = mutationFailureKind(error, online());
+      if (!canCommitActivityOperation(operation)) return;
       setMutation("error");
       setFailureKind(kind);
-      setMessage(mutationErrorMessage(error, kind, localResult.ok));
+      setMessage(mutationErrorMessage(error, kind, locallyStored));
       setReauthRequired(isSessionExpiredError(error));
+    } finally {
+      activityOperationLockRef.current.release(operation.token);
     }
   }
 
-  function keepServerActivityDraft() {
-    if (localDraftScope && localDraftStorage) {
-      clearActivityLocalDraft(localDraftStorage, localDraftScope);
+  async function keepServerActivityDraft() {
+    const operation = beginActivityOperation();
+    if (!operation) return;
+    try {
+      if (localDraftScope && localDraftStorage && staleLocalDraft) {
+        const cleanup = await clearActivityRecoveryCopy(
+          localDraftStorage,
+          localDraftScope,
+          staleLocalDraft,
+        );
+        if (!canCommitActivityOperation(operation)) return;
+        if (!cleanup.result.ok) {
+          if (cleanup.envelope) {
+            setLocalCleanupPending(cleanup.envelope, null, "server-save");
+          } else if (cleanup.rawSnapshot) {
+            setLocalCleanupPending(null, cleanup.rawSnapshot, "expired-record");
+          } else {
+            setLocalCleanupPending(staleLocalDraft, null, "server-save");
+          }
+          setLocalPersistence("failed");
+          setRecoveryMessage(
+            "The server response was kept, but the local recovery copy could not be cleared. Retry cleanup or copy/download it before leaving.",
+          );
+          return;
+        }
+      }
+      if (!canCommitActivityOperation(operation)) return;
+      setResponse(savedResponse);
+      setStaleLocalDraft(null);
+      clearLocalCleanupPending();
+      setLocalDraftRestored(false);
+      setLocalPersistence("idle");
+      setRecoveryMessage("The local recovery copy was discarded.");
+    } finally {
+      activityOperationLockRef.current.release(operation.token);
     }
-    setResponse(savedResponse);
-    setStaleLocalDraft(null);
-    setLocalDraftRestored(false);
-    setLocalPersistence("idle");
-    setRecoveryMessage("The local recovery copy was discarded.");
+  }
+
+  async function retryLocalActivityCleanup() {
+    const operation = beginActivityOperation();
+    if (!operation) return;
+    try {
+      if (!localDraftScope || !localDraftStorage) {
+        setRecoveryMessage(
+          "Local cleanup is unavailable. Keep this page open or copy/download the recovery response.",
+        );
+        return;
+      }
+      if (localCleanupPendingRaw) {
+        const result = await purgeActivityLocalDraftIfMatchesWithLock(
+          localDraftStorage,
+          localDraftScope,
+          localCleanupPendingRaw,
+        );
+        if (!canCommitActivityOperation(operation)) return;
+        if (!result.ok && result.reason === "changed") {
+          const current = await readActivityLocalDraftWithLock(
+            localDraftStorage,
+            localDraftScope,
+          );
+          if (!canCommitActivityOperation(operation)) return;
+          if (current.status === "missing") {
+            clearLocalCleanupPending();
+            setLocalPersistence("idle");
+            setRecoveryMessage("The local recovery copy was cleared.");
+            return;
+          }
+          if (current.status === "ready") {
+            setLocalCleanupPending(current.envelope, null, "expired-record");
+            setRecoveryMessage(
+              "A newer activity recovery copy appeared during cleanup. It remains available for review and will not be removed automatically.",
+            );
+            return;
+          }
+          if (current.status === "expired" || current.status === "invalid") {
+            setLocalCleanupPending(
+              null,
+              current.cleanupTarget,
+              "expired-record",
+            );
+          }
+        }
+        if (!result.ok) {
+          setRecoveryMessage(
+            "Local cleanup is still unavailable. The recovery copy remains on this device.",
+          );
+          return;
+        }
+        clearLocalCleanupPending();
+        setLocalPersistence("idle");
+        setRecoveryMessage("The local recovery copy was cleared.");
+        return;
+      }
+      if (!localCleanupPendingDraft) {
+        setRecoveryMessage(
+          "Local cleanup is unavailable. Keep this page open or copy/download the recovery response.",
+        );
+        return;
+      }
+      const cleanup = await clearActivityRecoveryCopy(
+        localDraftStorage,
+        localDraftScope,
+        localCleanupPendingDraft,
+      );
+      if (!canCommitActivityOperation(operation)) return;
+      if (!cleanup.result.ok) {
+        if (cleanup.envelope) {
+          setLocalCleanupPending(cleanup.envelope, null, "server-save");
+        } else if (cleanup.rawSnapshot) {
+          setLocalCleanupPending(null, cleanup.rawSnapshot, "expired-record");
+        }
+        setRecoveryMessage(
+          "Local cleanup is still unavailable. The recovery copy remains on this device.",
+        );
+        return;
+      }
+      clearLocalCleanupPending();
+      setLocalPersistence("idle");
+      setRecoveryMessage("The local recovery copy was cleared.");
+    } finally {
+      activityOperationLockRef.current.release(operation.token);
+    }
   }
 
   function mergeLocalActivityDraft() {
@@ -1483,7 +2109,9 @@ export function ConnectedActivityWorkspace({
   }
 
   const recoveryResponse =
-    staleLocalDraft?.draft.response ?? (dirty ? response : null);
+    staleLocalDraft?.draft.response ??
+    localCleanupPendingDraft?.draft.response ??
+    (dirty ? response : null);
 
   const visibleLearning = learningPathStatus === "ready" ? learning : undefined;
   const currentModule = visibleLearning?.modules.find(
@@ -1703,7 +2331,7 @@ export function ConnectedActivityWorkspace({
               <button
                 className="button button--outline"
                 type="button"
-                onClick={keepServerActivityDraft}
+                onClick={() => void keepServerActivityDraft()}
               >
                 Keep server and discard local
               </button>
@@ -1768,6 +2396,7 @@ export function ConnectedActivityWorkspace({
               rows={10}
               value={response}
               onChange={(event) => {
+                activityRecoveryHydrationGuardRef.current.markLearnerEdit();
                 setResponse(event.target.value);
                 setMutation("idle");
                 setMessage("");
@@ -1850,6 +2479,57 @@ export function ConnectedActivityWorkspace({
             ) : null}
           </form>
         )}
+        {localCleanupPendingDraft || localCleanupPendingRaw ? (
+          <section
+            className="activity-mutation-message"
+            aria-labelledby="activity-local-cleanup-title"
+          >
+            <div role="alert">
+              <p className="kicker">
+                {localCleanupPendingReason === "expired-record"
+                  ? "Recovery cleanup pending"
+                  : "Server save complete"}
+              </p>
+              <h2 id="activity-local-cleanup-title">
+                {localCleanupPendingReason === "expired-record"
+                  ? "Expired or invalid local recovery cleanup is pending."
+                  : "Local recovery cleanup is still pending."}
+              </h2>
+              <p>
+                {localCleanupPendingReason === "expired-record"
+                  ? "The server activity remains authoritative. This device copy could not be verified or removed, so it remains until cleanup succeeds."
+                  : "The server has the saved response. This device copy remains until cleanup succeeds, so it is not being hidden."}
+              </p>
+            </div>
+            <div className="activity-response-form__actions">
+              <button
+                className="button button--outline"
+                type="button"
+                onClick={() => void retryLocalActivityCleanup()}
+              >
+                Retry local cleanup
+              </button>
+              {localCleanupPendingDraft ? (
+                <>
+                  <button
+                    className="text-button"
+                    type="button"
+                    onClick={() => void copyActivityRecovery()}
+                  >
+                    Copy recovery text
+                  </button>
+                  <button
+                    className="text-button"
+                    type="button"
+                    onClick={exportActivityRecovery}
+                  >
+                    Download recovery file
+                  </button>
+                </>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
         {dirty && localPersistence === "failed" && !staleLocalDraft ? (
           <div className="activity-mutation-message" role="alert">
             <p>
@@ -2114,12 +2794,13 @@ export function LiveLearningPath({
   );
   const membershipAvailable =
     state.status === "ready" && hasMembershipRole(state.value.me);
-  useInvalidateDraftsWithoutMembership(
+  const draftCleanup = useInvalidateDraftsWithoutMembership(
     state.status === "ready",
     membershipAvailable,
+    state.status === "ready" ? state.value.me.person_id : null,
   );
   if (state.status === "ready" && !membershipAvailable) {
-    return <MembershipUnavailable api={api} />;
+    return <MembershipUnavailable api={api} draftCleanup={draftCleanup} />;
   }
   const learning = state.status === "ready" ? state.value.learning : undefined;
   const nextActivity = learning ? firstActionableActivity(learning) : undefined;
@@ -2212,9 +2893,10 @@ export function LiveModule({
   );
   const membershipAvailable =
     state.status === "ready" && hasMembershipRole(state.value.me);
-  useInvalidateDraftsWithoutMembership(
+  const draftCleanup = useInvalidateDraftsWithoutMembership(
     state.status === "ready",
     membershipAvailable,
+    state.status === "ready" ? state.value.me.person_id : null,
   );
   if (state.status !== "ready")
     return (
@@ -2225,7 +2907,7 @@ export function LiveModule({
       />
     );
   if (!membershipAvailable) {
-    return <MembershipUnavailable api={api} />;
+    return <MembershipUnavailable api={api} draftCleanup={draftCleanup} />;
   }
   if (!state.value.learning) {
     return (
@@ -2504,12 +3186,13 @@ export function LiveActivity({
   );
   const membershipAvailable =
     state.status === "ready" && hasMembershipRole(state.value.me);
-  useInvalidateDraftsWithoutMembership(
+  const draftCleanup = useInvalidateDraftsWithoutMembership(
     state.status === "ready",
     membershipAvailable,
+    state.status === "ready" ? state.value.me.person_id : null,
   );
   if (state.status === "ready" && !membershipAvailable) {
-    return <MembershipUnavailable api={api} />;
+    return <MembershipUnavailable api={api} draftCleanup={draftCleanup} />;
   }
   return (
     <>
@@ -2552,12 +3235,13 @@ export function LiveCertificate({
   );
   const membershipAvailable =
     state.status === "ready" && hasMembershipRole(state.value.me);
-  useInvalidateDraftsWithoutMembership(
+  const draftCleanup = useInvalidateDraftsWithoutMembership(
     state.status === "ready",
     membershipAvailable,
+    state.status === "ready" ? state.value.me.person_id : null,
   );
   if (state.status === "ready" && !membershipAvailable) {
-    return <MembershipUnavailable api={api} />;
+    return <MembershipUnavailable api={api} draftCleanup={draftCleanup} />;
   }
   return (
     <>
@@ -2603,9 +3287,10 @@ export function LiveCompletionGate({
   );
   const membershipAvailable =
     state.status === "ready" && hasMembershipRole(state.value.me);
-  useInvalidateDraftsWithoutMembership(
+  const draftCleanup = useInvalidateDraftsWithoutMembership(
     state.status === "ready",
     membershipAvailable,
+    state.status === "ready" ? state.value.me.person_id : null,
   );
   if (state.status !== "ready") {
     return (
@@ -2617,7 +3302,7 @@ export function LiveCompletionGate({
     );
   }
   if (!membershipAvailable) {
-    return <MembershipUnavailable api={api} />;
+    return <MembershipUnavailable api={api} draftCleanup={draftCleanup} />;
   }
   const projection = state.value.learning?.projection;
   const completed = projection?.completed_count;

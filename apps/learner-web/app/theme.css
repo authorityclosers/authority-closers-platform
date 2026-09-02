@@ -986,7 +986,10 @@ html[data-theme="dark"] .theme-control__option[aria-pressed="true"] {
   }
 
   .site-frame--learner .learner-profile {
+    width: 44px;
+    min-width: 44px;
     max-width: 44px;
+    flex: 0 0 44px;
     padding: 0;
   }
 
