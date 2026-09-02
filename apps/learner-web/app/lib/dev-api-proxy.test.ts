@@ -498,6 +498,37 @@ describe("development learner API proxy", () => {
     expect(await response.json()).toEqual({ person_id: "person-1" });
   });
 
+  it("keeps anonymous public catalog reads available while the bridge is enabled", async () => {
+    const fetcher = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        expect(String(input)).toBe(
+          "https://api-staging.authorityclosers.com/v1/programs?limit=50",
+        );
+        const headers = new Headers(init?.headers);
+        expect(headers.has("cookie")).toBe(false);
+        expect(headers.has("authorization")).toBe(false);
+        return Response.json({
+          items: [{ slug: "authority-closers-free-course" }],
+        });
+      },
+    );
+    const response = await proxyDevelopmentLearnerApi(
+      bridgeRequest("/v1/programs?limit=50"),
+      fetcher,
+      AUTH_BRIDGE_ENV,
+      "development",
+      new InMemoryDevelopmentBridgeSessionStore(),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-ac-dev-data-mode")).toBe(
+      "staging-public-catalog",
+    );
+    expect(await response.json()).toEqual({
+      items: [{ slug: "authority-closers-free-course" }],
+    });
+  });
+
   it("forwards only the learner mutation contract and keeps browser credentials out", async () => {
     const store = new InMemoryDevelopmentBridgeSessionStore();
     store.set(LOCAL_SESSION, STAGING_SESSION);

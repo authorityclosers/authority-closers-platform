@@ -834,6 +834,19 @@ async function proxyAuthenticatedStaging(
   const isLogout = incomingUrl.pathname === "/v1/auth/logout";
   let stagingSession: string | null = null;
   if (!isLogin) {
+    if (
+      localSession === null &&
+      request.method.toUpperCase() === "GET" &&
+      isStagingPublicCatalogRequest(incomingUrl)
+    ) {
+      const publicCatalog = await proxyUpstream(
+        request,
+        { mode: "staging-public-catalog", origin: STAGING_API_ORIGIN },
+        fetcher,
+        null,
+      );
+      return publicCatalog.response;
+    }
     if (localSession === null) return localBridgeCookieFailure();
     stagingSession = sessionStore.get(localSession);
     if (stagingSession === null) {
