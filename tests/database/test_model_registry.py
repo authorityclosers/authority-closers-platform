@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from sqlalchemy import UniqueConstraint
+
 from ac_platform.db.models import model_metadata
 
 
@@ -61,3 +63,14 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
     }
 
     assert set(model_metadata().tables) == expected
+
+
+def test_media_caption_supersession_target_is_uniquely_addressable() -> None:
+    table = model_metadata().tables["media_caption_tracks"]
+    unique_columns = {
+        tuple(column.name for column in constraint.columns)
+        for constraint in table.constraints
+        if isinstance(constraint, UniqueConstraint)
+    }
+
+    assert ("tenant_id", "version_id", "id") in unique_columns

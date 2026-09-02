@@ -284,6 +284,12 @@ class MediaCaptionTrack(Base):
         ),
         UniqueConstraint("tenant_id", "id", name="uq_media_caption_tracks_tenant_id_id"),
         UniqueConstraint(
+            "tenant_id",
+            "version_id",
+            "id",
+            name="uq_media_caption_tracks_tenant_version_id",
+        ),
+        UniqueConstraint(
             "tenant_id", "version_id", "idempotency_key", name="uq_media_caption_tracks_idempotency"
         ),
         Index("ix_media_caption_tracks_version_state", "tenant_id", "version_id", "state"),

@@ -246,6 +246,12 @@ def upgrade() -> None:
         sa.UniqueConstraint(
             "tenant_id",
             "version_id",
+            "id",
+            name=op.f("uq_media_caption_tracks_tenant_version_id"),
+        ),
+        sa.UniqueConstraint(
+            "tenant_id",
+            "version_id",
             "idempotency_key",
             name=op.f("uq_media_caption_tracks_idempotency"),
         ),
