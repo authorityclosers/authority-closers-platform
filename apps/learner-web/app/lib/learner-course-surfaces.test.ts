@@ -187,6 +187,8 @@ describe("learner course route wiring", () => {
     expect(css).toContain("@media (display-mode: standalone)");
     expect(css).toContain("env(safe-area-inset-bottom)");
     expect(css).toContain("@media (prefers-reduced-motion: reduce)");
+    expect(css).toContain(".site-frame--learner .skeleton-line");
+    expect(css).toContain("max-width: 100%");
     expect(css).toContain("min-height: 44px");
   });
 });

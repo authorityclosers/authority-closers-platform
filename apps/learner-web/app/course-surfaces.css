@@ -27,6 +27,12 @@
   --course-shadow: var(--theme-shadow, 0 8px 28px rgb(15 27 51 / 7%));
 }
 
+/* SkeletonLine receives desktop-friendly inline widths; keep the loading
+ * route contained when the viewport is narrower than those reference widths. */
+.site-frame--learner .skeleton-line {
+  max-width: 100%;
+}
+
 .site-frame--learner .ac-route-header {
   display: block;
   width: 100%;
