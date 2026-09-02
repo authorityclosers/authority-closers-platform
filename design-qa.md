@@ -162,11 +162,12 @@ required proof for real learner data.
 
 ## Validation
 
-The final learner test, zero-warning ESLint, TypeScript, optimized production
-build, exact-SHA CI/package, staging identity, and authenticated
-current-release smoke results remain pending until the active implementation is
-frozen. Earlier passing runs are not pre-declared as evidence for this working
-tree.
+The frozen local candidate passed 248 learner tests, zero-warning ESLint,
+TypeScript, formatting, service-worker syntax, and the optimized production
+build. The shared mark also passed 71 admin tests, zero-warning ESLint,
+TypeScript, and the admin production build. Exact-SHA CI/package, staging
+identity, and authenticated current-release smoke remain separate open release
+gates; this local visual result does not claim them.
 
 final result: passed
 

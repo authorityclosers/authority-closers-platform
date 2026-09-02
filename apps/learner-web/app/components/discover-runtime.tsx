@@ -10,6 +10,7 @@ import {
   isAbortError,
   type LearnerApi,
   type LearningResponse,
+  type MeResponse,
   type ProgramSummaryResponse,
 } from "../lib/learner-api";
 import {
@@ -19,7 +20,11 @@ import {
 } from "../lib/offline-read-cache";
 import { ROUTES } from "../lib/routes";
 import { userFacingRequestError } from "../lib/user-facing-error";
-import { hasMembershipRole } from "./membership-availability";
+import {
+  hasMembershipRole,
+  MembershipDraftCleanupNotice,
+} from "./membership-availability";
+import { useInvalidateDraftsWithoutMembership } from "./learner-runtime";
 import { DiscoverSkeleton } from "./skeletons";
 
 const defaultApi = createLearnerApi();
@@ -38,6 +43,7 @@ export async function loadDiscoverData(
   api: LearnerApi,
   signal?: AbortSignal,
   publicCatalogPreview = false,
+  onIdentity?: (me: MeResponse) => void,
 ): Promise<{
   programs: ProgramSummaryResponse[];
   learning: LearningResponse | null;
@@ -54,6 +60,7 @@ export async function loadDiscoverData(
     };
   }
   const me = await api.me({ signal });
+  onIdentity?.(me);
   const programs = await api.listPrograms(50, { signal });
   let learning: LearningResponse | null = null;
   if (hasMembershipRole(me)) {
@@ -84,6 +91,7 @@ export function DiscoverRuntime({
 }) {
   const [programs, setPrograms] = useState<ProgramSummaryResponse[]>([]);
   const [learning, setLearning] = useState<LearningResponse | null>(null);
+  const [me, setMe] = useState<MeResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
   const [enrolling, setEnrolling] = useState(false);
@@ -94,6 +102,13 @@ export function DiscoverRuntime({
   const generationRef = useRef(0);
   const mountedRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
+  const membershipKnown = me !== null;
+  const membershipAvailable = me !== null && hasMembershipRole(me);
+  const draftCleanup = useInvalidateDraftsWithoutMembership(
+    membershipKnown,
+    membershipAvailable,
+    me?.person_id ?? null,
+  );
 
   const load = useCallback(async (): Promise<LoadResult> => {
     abortRef.current?.abort();
@@ -108,12 +123,16 @@ export function DiscoverRuntime({
     setLoading(true);
     setError(null);
     setLearning(null);
+    setMe(null);
     setOfflineRead(undefined);
     try {
       const result = await loadDiscoverData(
         api,
         controller.signal,
         publicCatalogPreview,
+        (identity) => {
+          if (isCurrent()) setMe(identity);
+        },
       );
       if (!isCurrent()) return "aborted";
       setPrograms(result.programs);
@@ -192,6 +211,7 @@ export function DiscoverRuntime({
                   "The catalog service is temporarily unreachable.",
                 )}
         </p>
+        <MembershipDraftCleanupNotice cleanup={draftCleanup} />
         {is401 ? (
           <Link className="button button--ink" href={ROUTES.sessionExpired}>
             Sign in again
@@ -232,6 +252,8 @@ export function DiscoverRuntime({
           <p>{enrollError}</p>
         </div>
       ) : null}
+
+      <MembershipDraftCleanupNotice cleanup={draftCleanup} />
 
       {publicCatalogPreview ? (
         <div className="alert-box" role="status">

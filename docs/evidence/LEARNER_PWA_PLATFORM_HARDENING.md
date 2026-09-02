@@ -32,7 +32,7 @@ candidate. It is not a deployment or device-certification claim.
 
 - `pnpm --filter @ac/learner-web exec vitest run app/lib/pwa-assets.test.ts` —
   4 tests passed.
-- `pnpm --filter @ac/learner-web test` — 17 files / 241 tests passed.
+- `pnpm --filter @ac/learner-web test` — 17 files / 248 tests passed.
 - `pnpm --filter @ac/learner-web typecheck` — passed.
 - `pnpm --filter @ac/learner-web build` — passed; the generated manifest route
   returned `application/manifest+json` in the local build/dev check.

@@ -39,11 +39,14 @@ decorative artwork are never used as an API or canonical-state fallback.
 
 ## Verification
 
-- Learner web: 17 files / 247 tests passed; zero-warning ESLint, TypeScript,
+- Learner web: 17 files / 248 tests passed; zero-warning ESLint, TypeScript,
   optimized Next production build, repository formatting, service-worker
   syntax, and `git diff --check` passed on the active working tree. Exact-SHA CI
   remains a post-commit gate. The workstation is on Node 22.17.0 while the
   declared/CI runtime is Node 24, so CI remains authoritative.
+- Admin web regression gate: 5 files / 71 tests passed; zero-warning ESLint,
+  TypeScript, and the optimized Next production build passed after the shared
+  Authority Closers brand mark change.
 - Focused backend/API/domain/media audit: 254 tests passed with one existing
   warning; Ruff and mypy passed across 99 Python source files. Fourteen
   PostgreSQL cases remain environment-gated because this workstation has no

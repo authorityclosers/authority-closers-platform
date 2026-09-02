@@ -414,6 +414,7 @@ describe("Direction A & B UI System & Shell", () => {
       expect(progressSource).toContain("Progress access is unavailable");
       expect(dashboardSource).toContain("draftCleanup");
       expect(learningSource).toContain("draftCleanup");
+      expect(discoverSource).toContain("draftCleanup");
       expect(profileSource).toContain("draftCleanup");
       expect(progressSource).toContain("draftCleanup");
       expect(dashboardSource).toContain("const offlineRead = data.offlineRead");
@@ -674,6 +675,26 @@ describe("Direction A & B UI System & Shell", () => {
       await expect(loadDiscoverData(discoverFailure)).rejects.toMatchObject({
         status: 500,
       });
+    });
+
+    it("publishes Discover identity before a later catalog failure", async () => {
+      const identityWithoutMembership: MeResponse = {
+        ...me,
+        membership_role: null,
+      };
+      const onIdentity = vi.fn();
+      const api = apiFor({
+        me: vi.fn(async () => identityWithoutMembership),
+        listPrograms: vi.fn(async () => {
+          throw new ApiError(503, "catalog unavailable");
+        }),
+      });
+
+      await expect(
+        loadDiscoverData(api, undefined, false, onIdentity),
+      ).rejects.toMatchObject({ status: 503 });
+      expect(onIdentity).toHaveBeenCalledOnce();
+      expect(onIdentity).toHaveBeenCalledWith(identityWithoutMembership);
     });
 
     it("loads only anonymous published catalog data in the localhost staging preview", async () => {
