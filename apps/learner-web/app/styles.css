@@ -898,6 +898,180 @@
   }
 }
 
+/* Proposal-level explicit planning surface. Dates are displayed as authored
+   date-only values; this surface does not calculate schedule boundaries. */
+.calendar-view {
+  display: grid;
+  gap: 24px;
+}
+
+.calendar-header {
+  align-items: center;
+  background: var(--ink, #15202b);
+  border-radius: 24px;
+  color: #fff;
+  display: flex;
+  justify-content: space-between;
+  min-height: 190px;
+  padding: 32px clamp(24px, 5vw, 56px);
+}
+
+.calendar-header h1 {
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  margin: 8px 0 10px;
+}
+
+.calendar-header p:last-child {
+  color: rgb(255 255 255 / 78%);
+  margin: 0;
+  max-width: 620px;
+}
+
+.calendar-header > svg {
+  color: #8bc7ff;
+  flex: 0 0 auto;
+  margin-left: 24px;
+}
+
+.calendar-disclaimer {
+  background: rgb(22 91 148 / 8%);
+  border: 1px solid rgb(22 91 148 / 20%);
+  border-radius: 12px;
+  color: var(--ink-muted, #4f5f70);
+  font-size: 0.9rem;
+  line-height: 1.55;
+  padding: 13px 16px;
+}
+
+.calendar-period-grid {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.calendar-period-card {
+  display: grid;
+  gap: 22px;
+  min-height: 220px;
+  padding: 24px;
+}
+
+.calendar-period-card__header {
+  align-items: flex-start;
+  display: flex;
+  justify-content: space-between;
+}
+
+.calendar-period-card__header > svg {
+  color: var(--cobalt, #165b94);
+  margin-top: 3px;
+}
+
+.calendar-period-card h2 {
+  font-size: 1.25rem;
+  margin: 12px 0 0;
+}
+
+.calendar-plan-list {
+  display: grid;
+  gap: 12px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.calendar-plan-item {
+  align-items: center;
+  border-top: 1px solid rgb(21 32 43 / 11%);
+  display: flex;
+  gap: 12px;
+  padding-top: 12px;
+}
+
+.calendar-plan-item__icon {
+  align-items: center;
+  background: rgb(22 91 148 / 10%);
+  border-radius: 50%;
+  color: var(--cobalt, #165b94);
+  display: inline-flex;
+  flex: 0 0 30px;
+  height: 30px;
+  justify-content: center;
+  width: 30px;
+}
+
+.calendar-plan-item__icon.is-complete {
+  background: rgb(37 128 95 / 13%);
+  color: #257f5f;
+}
+
+.calendar-plan-item__copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.calendar-plan-item__copy strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendar-plan-item__copy span,
+.calendar-period-card__empty {
+  color: var(--ink-muted, #617180);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.calendar-plan-item .button {
+  align-items: center;
+  display: inline-flex;
+  gap: 5px;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.calendar-period-card__empty {
+  margin: 0;
+}
+
+.calendar-loading {
+  color: var(--ink-muted, #617180);
+  padding: 48px 0;
+}
+
+@media (max-width: 900px) {
+  .calendar-period-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .calendar-header {
+    align-items: flex-start;
+    min-height: 0;
+    padding: 26px 22px;
+  }
+
+  .calendar-header > svg {
+    display: none;
+  }
+
+  .calendar-period-card {
+    padding: 20px;
+  }
+
+  .calendar-plan-item {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .calendar-plan-item .button {
+    margin-left: 42px;
+  }
+}
+
 *,
 *::before,
 *::after {

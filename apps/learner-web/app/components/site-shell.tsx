@@ -6,6 +6,7 @@ import {
   BarChart2,
   Bell,
   BookOpen,
+  CalendarDays,
   ChevronDown,
   Compass,
   HelpCircle,
@@ -31,6 +32,7 @@ export type LearnerCurrent =
   | "learning"
   | "discover"
   | "progress"
+  | "calendar"
   | "notifications"
   | "profile"
   | "settings"
@@ -289,6 +291,7 @@ export function LearnerShell({
   const isLearning = current === "learning" || current === "course";
   const isDiscover = current === "discover";
   const isProgress = current === "progress";
+  const isCalendar = current === "calendar";
   const isNotifications = current === "notifications";
   const isProfile = current === "profile";
   const isSettings = current === "settings";
@@ -302,15 +305,17 @@ export function LearnerShell({
         ? "Discover"
         : isProgress
           ? "Progress"
-          : isNotifications
-            ? "Notifications"
-            : isProfile
-              ? "Learner Profile"
-              : isSettings
-                ? "Settings"
-                : current === "certificate"
-                  ? "Certificate"
-                  : "Workspace";
+          : isCalendar
+            ? "Calendar"
+            : isNotifications
+              ? "Notifications"
+              : isProfile
+                ? "Learner Profile"
+                : isSettings
+                  ? "Settings"
+                  : current === "certificate"
+                    ? "Certificate"
+                    : "Workspace";
 
   const initials = userDisplayName
     ? userDisplayName
@@ -370,6 +375,12 @@ export function LearnerShell({
               label="Progress"
               current={isProgress}
               icon={<BarChart2 size={19} aria-hidden="true" />}
+            />
+            <LearnerNavLink
+              href={ROUTES.calendar}
+              label="Calendar"
+              current={isCalendar}
+              icon={<CalendarDays size={19} aria-hidden="true" />}
             />
             <LearnerNavLink
               href={ROUTES.notifications}
@@ -676,6 +687,14 @@ export function LearnerShell({
               >
                 <Bell size={18} aria-hidden="true" />
                 <span>Notifications</span>
+              </Link>
+              <Link
+                href={ROUTES.calendar}
+                className="mobile-drawer-link"
+                onClick={() => setMobileDrawerOpen(false)}
+              >
+                <CalendarDays size={18} aria-hidden="true" />
+                <span>Calendar</span>
               </Link>
               <Link
                 href={ROUTES.settings}

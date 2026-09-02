@@ -301,6 +301,36 @@ export function ProgressSkeleton() {
   );
 }
 
+export function CalendarSkeleton() {
+  return (
+    <div
+      className="calendar-skeleton"
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+      aria-label="Loading calendar"
+    >
+      <div className="skeleton-hero-header">
+        <SkeletonLine width="150px" className="skeleton-line--eyebrow" />
+        <h1 className="sr-only">Calendar</h1>
+        <SkeletonLine width="220px" className="skeleton-line--title" />
+        <SkeletonLine width="440px" className="skeleton-line--subhead" />
+      </div>
+      <div className="calendar-period-grid">
+        {[1, 2, 3].map((item) => (
+          <SkeletonCard key={item} className="calendar-period-card">
+            <SkeletonLine width="120px" className="skeleton-line--tag" />
+            <SkeletonLine width="70%" className="skeleton-line--heading" />
+            <SkeletonLine width="92%" className="skeleton-line--text" />
+            <SkeletonLine width="82%" className="skeleton-line--text" />
+          </SkeletonCard>
+        ))}
+      </div>
+      <p className="sr-only">Your calendar is loading.</p>
+    </div>
+  );
+}
+
 export function SettingsSkeleton() {
   return (
     <div

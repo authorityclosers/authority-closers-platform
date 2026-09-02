@@ -16,14 +16,22 @@ from ac_platform.learning.models import (
     PlaybackSession,
     VideoWatchInterval,
 )
+from ac_platform.learning.planning_models import (
+    AnalyticsEvent,
+    LearningNextActionProjection,
+    LearningPlanItem,
+)
 
 __all__ = [
     "ActivityDraft",
     "ActivityProgress",
+    "AnalyticsEvent",
     "ActivityState",
     "EvidenceCorrection",
     "EvidenceSubmission",
     "LearningEvidence",
+    "LearningNextActionProjection",
+    "LearningPlanItem",
     "LearningProgressProjection",
     "PlaybackSession",
     "VideoWatchInterval",

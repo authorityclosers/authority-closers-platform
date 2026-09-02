@@ -21,6 +21,7 @@ from ac_platform.http.identity_provider import OAuthIdentityProvider, create_goo
 from ac_platform.http.learning import install_learning_http
 from ac_platform.http.media import install_media_http
 from ac_platform.http.operations import install_operations_http
+from ac_platform.http.planning import install_planning_http
 from ac_platform.http.problem import problem_response, register_problem_handlers
 from ac_platform.http.rate_limits import RateLimitMiddleware
 from ac_platform.http.request_context import request_context_middleware
@@ -93,6 +94,13 @@ def create_app(
         application,
         settings=settings,
         sessions=session_factory,
+        require_actor=require_actor,
+    )
+    # Static planning paths are registered before the dynamic
+    # /v1/learning/{program_id} route so they cannot be parsed as UUIDs.
+    install_planning_http(
+        application,
+        settings=settings,
         require_actor=require_actor,
     )
     install_learning_http(

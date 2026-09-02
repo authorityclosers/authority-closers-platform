@@ -18,6 +18,7 @@ export const ROUTES = {
   myLearning: "/learning",
   discover: "/discover",
   progress: "/progress",
+  calendar: "/calendar",
   notifications: "/notifications",
   profile: "/profile",
   settings: "/settings",

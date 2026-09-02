@@ -183,6 +183,34 @@ export interface LearningResponse {
   projection: LearningProjectionResponse;
 }
 
+export type PlanningPeriod = "today" | "week" | "month";
+
+export interface LearningPlanItemResponse {
+  id: string;
+  tenant_id: string;
+  person_id: string;
+  period: PlanningPeriod;
+  title: string;
+  activity_id: string | null;
+  planned_for: string | null;
+  state: "planned" | "completed";
+  source: "explicit_learning_plan";
+}
+
+export interface LearningPlanResponse {
+  period: PlanningPeriod;
+  status: "not_configured" | "available";
+  source: "explicit_learning_plan";
+  items: LearningPlanItemResponse[];
+  message: string | null;
+}
+
+export interface CalendarResponse {
+  source: "explicit_learning_plan";
+  periods: Record<PlanningPeriod, LearningPlanResponse>;
+  disclaimer: string;
+}
+
 export interface ActivityResponse extends LearningActivityResponse {
   program_id: string;
   enrollment_id: string;
@@ -619,6 +647,11 @@ export function createLearnerApi(
         { ...options, cache: "no-store" },
       );
     },
+    calendar: (options: LearnerReadOptions = {}) =>
+      request<CalendarResponse>("/v1/learning/calendar", {
+        ...options,
+        cache: "no-store",
+      }),
     activity: (activityId: string, options: LearnerReadOptions = {}) =>
       request<ActivityResponse>(
         `/v1/activities/${encodeURIComponent(activityId)}`,
