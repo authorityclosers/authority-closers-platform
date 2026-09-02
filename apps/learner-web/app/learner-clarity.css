@@ -20,11 +20,6 @@
   font-family: var(--font-sans), Arial, sans-serif;
 }
 
-/* v0.1 learner critical path — Clarity Grid, real Free Course data only. */
-.site-frame--learner {
-  overflow-x: clip;
-}
-
 .site-frame--learner :focus-visible {
   outline: 3px solid #2557d6;
   outline-offset: 3px;

@@ -33,6 +33,11 @@
   background: #fbfcfe;
 }
 
+.site-frame:not(.site-frame--learner) :focus-visible {
+  outline: 3px solid var(--public-blue);
+  outline-offset: 2px;
+}
+
 .site-frame:not(.site-frame--learner) .site-header {
   position: sticky;
   top: 0;
@@ -45,16 +50,20 @@
 .site-frame:not(.site-frame--learner) .site-footer__inner,
 .site-frame:not(.site-frame--learner) .page-container {
   width: min(1280px, calc(100% - 48px));
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .site-frame:not(.site-frame--learner) .site-header__inner {
   min-height: 76px;
+  box-sizing: border-box;
 }
 
 .site-frame:not(.site-frame--learner) .brand {
   color: var(--public-navy);
   font-size: 0.98rem;
   letter-spacing: -0.025em;
+  min-width: 0;
 }
 
 .site-frame:not(.site-frame--learner) .brand-mark {
@@ -66,6 +75,7 @@
 .site-frame:not(.site-frame--learner) .public-nav {
   color: #25324a;
   font-size: 0.82rem;
+  min-width: 0;
 }
 
 .site-frame:not(.site-frame--learner) .public-nav .button {
@@ -85,20 +95,26 @@
 .ac-public-home {
   display: grid;
   gap: clamp(48px, 6vw, 72px);
+  min-width: 0;
+  max-width: 100%;
 }
 
 .ac-public-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1.08fr) minmax(380px, 0.92fr);
+  grid-template-columns: minmax(0, 1.08fr) minmax(360px, 0.92fr);
   gap: clamp(32px, 4vw, 56px);
   align-items: center;
   padding: clamp(20px, 3vh, 36px) 0 clamp(16px, 2vh, 24px);
+  min-width: 0;
+  max-width: 100%;
 }
 
 .ac-public-hero__copy {
   display: flex;
   align-items: flex-start;
   flex-direction: column;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .ac-public-kicker,
@@ -131,6 +147,9 @@
   font-weight: 750;
   letter-spacing: -0.045em;
   line-height: 1.08;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  min-width: 0;
 }
 
 .ac-public-hero h1 span {
@@ -142,6 +161,9 @@
   color: var(--public-muted);
   font-size: clamp(0.95rem, 1.1vw, 1.05rem);
   line-height: 1.55;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  min-width: 0;
 }
 
 .ac-public-hero__actions {
@@ -149,6 +171,8 @@
   flex-wrap: wrap;
   gap: 12px;
   margin-top: 24px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .ac-public-button {
@@ -162,7 +186,10 @@
   border-radius: 11px;
   font-size: 0.86rem;
   font-weight: 750;
-  line-height: 1;
+  line-height: 1.25;
+  text-align: center;
+  box-sizing: border-box;
+  min-width: 0;
   transition:
     transform 160ms ease,
     box-shadow 160ms ease,
@@ -171,6 +198,11 @@
 
 .ac-public-button:hover {
   transform: translateY(-2px);
+}
+
+.ac-public-button:focus-visible {
+  outline: 3px solid var(--public-blue);
+  outline-offset: 2px;
 }
 
 .ac-public-button--primary {
@@ -198,12 +230,15 @@
   color: #4f5e77;
   font-size: 0.78rem;
   font-weight: 700;
+  min-width: 0;
 }
 
 .ac-public-proof span {
   display: inline-flex;
   align-items: center;
   gap: 7px;
+  min-width: 0;
+  overflow-wrap: break-word;
 }
 
 .ac-public-proof svg {
@@ -219,6 +254,8 @@
   background: #071631;
   box-shadow: 0 24px 60px rgb(7 22 49 / 20%);
   isolation: isolate;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .ac-public-hero__visual::after {
@@ -320,6 +357,9 @@
   border-radius: 22px;
   background: #fff;
   box-shadow: 0 16px 44px rgb(18 35 65 / 5%);
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .ac-public-section-heading {
@@ -327,6 +367,7 @@
   align-items: end;
   justify-content: space-between;
   gap: 32px;
+  min-width: 0;
 }
 
 .ac-public-section-heading h2 {
@@ -335,6 +376,9 @@
   font-weight: 740;
   letter-spacing: -0.045em;
   line-height: 1.08;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  min-width: 0;
 }
 
 .ac-public-section-heading__copy {
@@ -342,6 +386,9 @@
   color: var(--public-muted);
   font-size: 0.9rem;
   line-height: 1.55;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  min-width: 0;
 }
 
 .ac-public-method__steps {
@@ -352,6 +399,7 @@
   border: 1px solid var(--public-line);
   border-radius: 16px;
   list-style: none;
+  min-width: 0;
 }
 
 .ac-public-method__steps li {
@@ -389,6 +437,9 @@
 
 .ac-public-method__steps strong {
   font-size: 0.88rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .ac-public-method__steps small {
@@ -402,6 +453,8 @@
 .ac-public-catalog {
   display: grid;
   gap: 24px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .ac-public-catalog-state {
@@ -415,15 +468,28 @@
   border-radius: 16px;
   color: var(--public-muted);
   background: #fff;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .ac-public-catalog-state > div {
   display: grid;
   gap: 3px;
+  min-width: 0;
 }
 
 .ac-public-catalog-state strong {
   color: var(--public-navy);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  min-width: 0;
+}
+
+.ac-public-catalog-state p {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  min-width: 0;
 }
 
 .ac-public-catalog-state--error {
@@ -446,6 +512,8 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(460px, 1fr));
   gap: 22px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .ac-public-program-grid--single {
@@ -460,6 +528,9 @@
   border-radius: 18px;
   background: #fff;
   box-shadow: 0 12px 36px rgb(18 35 65 / 5%);
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
   transition:
     border-color 150ms ease,
     box-shadow 150ms ease;
@@ -480,6 +551,7 @@
   min-height: 220px;
   overflow: hidden;
   background: #071631;
+  min-width: 0;
 }
 
 .ac-public-program-card__image::after {
@@ -513,9 +585,12 @@
 .ac-public-program-card__body {
   display: flex;
   min-width: 0;
+  max-width: 100%;
   align-items: flex-start;
   flex-direction: column;
   padding: 24px 28px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .ac-public-program-card__body h3 {
@@ -524,6 +599,10 @@
   font-weight: 740;
   letter-spacing: -0.04em;
   line-height: 1.15;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .ac-public-program-card__meta {
@@ -532,6 +611,7 @@
   flex-wrap: wrap;
   gap: 8px 12px;
   margin-bottom: 16px;
+  min-width: 0;
 }
 
 .ac-public-program-card__version {
@@ -550,7 +630,7 @@
 
 .ac-public-program-card__cta {
   display: inline-flex;
-  min-height: 40px;
+  min-height: 44px;
   align-items: center;
   gap: 8px;
   margin-top: auto;
@@ -563,6 +643,12 @@
 .ac-public-program-card__cta:hover {
   text-decoration: underline;
   text-underline-offset: 4px;
+}
+
+.ac-public-program-card__cta:focus-visible {
+  outline: 2px solid var(--public-blue);
+  outline-offset: 3px;
+  border-radius: 4px;
 }
 
 @media (max-width: 1040px) {
@@ -601,6 +687,12 @@
     display: none;
   }
 
+  .site-frame:not(.site-frame--learner) .public-nav > a {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+
   .site-frame:not(.site-frame--learner) .site-header__inner {
     min-height: 60px;
   }
@@ -609,30 +701,46 @@
     align-items: flex-start;
     flex-direction: column;
     padding: 28px 0 max(28px, env(safe-area-inset-bottom));
+    gap: 16px;
   }
 
   .site-frame:not(.site-frame--learner) .site-footer__links {
     flex-wrap: wrap;
+    gap: 12px 16px;
+  }
+
+  .site-frame:not(.site-frame--learner) .site-footer__links > a {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
   }
 
   .ac-public-home {
-    gap: 48px;
+    gap: 40px;
   }
 
   .ac-public-hero {
-    gap: 22px;
-    padding-top: 18px;
+    gap: 20px;
+    padding-top: 16px;
     padding-bottom: 12px;
   }
 
   .ac-public-hero h1 {
     margin-top: 12px;
-    font-size: clamp(1.85rem, 7.5vw, 2.35rem);
+    font-size: clamp(1.6rem, 6.8vw, 2.35rem);
+    line-height: 1.1;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   .ac-public-hero__actions,
   .ac-public-hero__actions > * {
     width: 100%;
+  }
+
+  .ac-public-button {
+    padding: 12px 14px;
+    font-size: 0.84rem;
   }
 
   .ac-public-proof {
@@ -645,6 +753,8 @@
   .ac-public-hero__visual {
     height: 240px;
     border-radius: 18px;
+    width: 100%;
+    max-width: 100%;
   }
 
   .ac-public-hero__visual > img {
@@ -652,45 +762,58 @@
   }
 
   .ac-public-hero__overlay {
-    right: 18px;
-    bottom: 64px;
-    left: 18px;
+    right: 14px;
+    bottom: 58px;
+    left: 14px;
+    max-width: calc(100% - 28px);
   }
 
   .ac-public-hero__overlay strong {
-    font-size: 1.25rem;
+    font-size: clamp(1.15rem, 4.2vw, 1.35rem);
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   .ac-public-hero__status {
-    right: 14px;
-    bottom: 14px;
-    left: 14px;
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+    padding: 6px 10px;
+    gap: 8px;
+    max-width: calc(100% - 24px);
   }
 
   .ac-public-method {
-    padding: 22px 16px;
+    padding: 20px 16px;
     border-radius: 18px;
   }
 
   .ac-public-section-heading {
     align-items: flex-start;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
+  }
+
+  .ac-public-section-heading h2 {
+    font-size: clamp(1.35rem, 5.5vw, 1.85rem);
+    line-height: 1.12;
   }
 
   .ac-public-section-heading__copy {
     max-width: none;
+    font-size: 0.86rem;
   }
 
   .ac-public-method__steps {
     grid-template-columns: 1fr;
     overflow: visible;
+    border-radius: 14px;
   }
 
   .ac-public-method__steps li {
     grid-template-columns: 36px minmax(0, 1fr);
     gap: 0 10px;
-    padding: 14px 12px;
+    padding: 12px 10px;
     border-right: 0;
     border-bottom: 1px solid var(--public-line);
   }
@@ -711,11 +834,13 @@
 
   .ac-public-program-grid {
     grid-template-columns: 1fr;
+    gap: 16px;
   }
 
   .ac-public-program-card,
   .ac-public-program-card--featured {
     grid-template-columns: 1fr;
+    border-radius: 16px;
   }
 
   .ac-public-program-card__image {
@@ -723,13 +848,45 @@
   }
 
   .ac-public-program-card__body {
-    padding: 18px;
+    padding: 18px 16px;
+  }
+
+  .ac-public-program-card__body h3 {
+    font-size: clamp(1.15rem, 4.2vw, 1.45rem);
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   .ac-public-catalog-state,
   .ac-public-catalog-state--error {
     align-items: flex-start;
     flex-direction: column;
+    padding: 18px 16px;
+  }
+}
+
+@media (max-width: 430px) {
+  .site-frame:not(.site-frame--learner) .site-header__inner,
+  .site-frame:not(.site-frame--learner) .site-footer__inner,
+  .site-frame:not(.site-frame--learner) .page-container {
+    width: min(100% - 24px, 620px);
+  }
+
+  .ac-public-hero h1 {
+    font-size: clamp(1.45rem, 6.5vw, 1.85rem);
+  }
+
+  .ac-public-button {
+    padding: 11px 12px;
+    font-size: 0.82rem;
+  }
+
+  .ac-public-method {
+    padding: 16px 12px;
+  }
+
+  .ac-public-program-card__body {
+    padding: 16px 12px;
   }
 }
 
@@ -741,7 +898,9 @@
   }
 }
 
-* {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
@@ -834,7 +993,6 @@ svg {
 
 .site-frame {
   min-height: 100vh;
-  overflow: hidden;
 }
 
 .page-container,
