@@ -4095,6 +4095,7 @@ a.learning-list-card:hover {
 .sidebar-collapse-btn {
   display: flex;
   align-items: center;
+  min-height: 40px;
   gap: 8px;
   padding: 6px 8px;
   border-radius: 6px;
@@ -4247,6 +4248,7 @@ a.learning-list-card:hover {
 .learner-profile-button {
   display: flex;
   align-items: center;
+  min-height: 40px;
   gap: 8px;
   padding: 3px 10px 3px 3px;
   background: #f8fafc;
@@ -5860,6 +5862,8 @@ a.learning-list-card:hover {
 }
 
 .skeleton-line {
+  display: block;
+  max-width: 100%;
   height: 12px;
 }
 
