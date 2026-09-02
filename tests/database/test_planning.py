@@ -42,7 +42,7 @@ def _migration() -> Any:
         / "db"
         / "migrations"
         / "versions"
-        / "20260902_0013_planning_analytics.py"
+        / "20260902_0014_planning_analytics.py"
     )
     spec = importlib.util.spec_from_file_location("planning_migration", path)
     assert spec is not None and spec.loader is not None
@@ -60,8 +60,8 @@ def test_planning_models_are_registered_and_migration_is_forward_only() -> None:
     } <= set(metadata.tables)
 
     migration = _migration()
-    assert migration.revision == "20260902_0013"
-    assert migration.down_revision == "20260901_0012"
+    assert migration.revision == "20260902_0014"
+    assert migration.down_revision == "20260902_0013"
     with pytest.raises(RuntimeError, match="forward-only"):
         migration.downgrade()
 

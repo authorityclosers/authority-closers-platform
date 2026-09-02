@@ -65,9 +65,7 @@ class PlanningRepository:
             )
         )
 
-    def purge_expired_analytics(
-        self, database: Session, *, tenant_id: UUID, now: datetime
-    ) -> int:
+    def purge_expired_analytics(self, database: Session, *, tenant_id: UUID, now: datetime) -> int:
         result = cast(
             CursorResult[Any],
             database.execute(

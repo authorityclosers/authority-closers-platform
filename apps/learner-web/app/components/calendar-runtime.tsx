@@ -94,6 +94,7 @@ export function CalendarRuntime({ api = defaultApi }: { api?: LearnerApi }) {
 
   const load = useCallback(
     async (signal?: AbortSignal) => {
+      if (!mountedRef.current) return;
       setLoading(true);
       setError(null);
       try {
@@ -113,12 +114,31 @@ export function CalendarRuntime({ api = defaultApi }: { api?: LearnerApi }) {
   useEffect(() => {
     mountedRef.current = true;
     const controller = new AbortController();
-    void load(controller.signal);
+
+    async function loadInitial() {
+      // Yield before the first state transition so the effect does not perform
+      // a synchronous state update during mount.
+      await Promise.resolve();
+      if (!mountedRef.current) return;
+      try {
+        const result = await api.calendar({ signal: controller.signal });
+        if (!mountedRef.current) return;
+        setError(null);
+        setData(result);
+      } catch (err) {
+        if (isAbortError(err) || !mountedRef.current) return;
+        setError(err);
+      } finally {
+        if (mountedRef.current) setLoading(false);
+      }
+    }
+
+    void loadInitial();
     return () => {
       mountedRef.current = false;
       controller.abort();
     };
-  }, [load]);
+  }, [api]);
 
   if (loading) {
     return (

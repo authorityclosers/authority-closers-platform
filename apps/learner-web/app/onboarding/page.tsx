@@ -1,7 +1,11 @@
 import { AuthFlowPage } from "../components/auth-flow-page";
 import { OnboardingForm } from "../components/onboarding-form";
 import { SurfaceStatePanel } from "../components/surface-state";
-import { ROUTES } from "../lib/routes";
+import {
+  onboardingHref,
+  onboardingReturnHref,
+  parseOnboardingReturnIntent,
+} from "../lib/onboarding-route";
 import {
   isContentVisible,
   parseSurfaceState,
@@ -11,25 +15,6 @@ import {
 type OnboardingPageProps = {
   searchParams: Promise<{ state?: QueryValue; return?: QueryValue }>;
 };
-
-export type OnboardingReturnIntent = "home" | "settings";
-
-export function parseOnboardingReturnIntent(
-  value: QueryValue,
-): OnboardingReturnIntent {
-  const candidate = Array.isArray(value) ? value[0] : value;
-  return candidate === "settings" ? "settings" : "home";
-}
-
-export function onboardingReturnHref(intent: OnboardingReturnIntent): string {
-  return intent === "settings" ? ROUTES.settings : ROUTES.learnerHome;
-}
-
-export function onboardingHref(intent: OnboardingReturnIntent): string {
-  return intent === "settings"
-    ? `${ROUTES.onboarding}?return=settings`
-    : ROUTES.onboarding;
-}
 
 export default async function OnboardingPage({
   searchParams,

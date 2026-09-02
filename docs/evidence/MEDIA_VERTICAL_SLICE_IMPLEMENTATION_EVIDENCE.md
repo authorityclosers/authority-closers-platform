@@ -44,8 +44,11 @@ separate governance gates.
   triggers.
 - A PostgreSQL migration/integration run was not claimed locally when no safe
   configured PostgreSQL test URL was available. No deployment was performed.
-- Integration note: this branch adds `20260902_0013_media_contracts`, while
-  planning commit `8c6248ce` adds `20260902_0013_planning_analytics`; both descend
-  from `20260901_0012`. Integration must renumber/rebase one revision and repair
-  the Alembic chain. This branch intentionally does not rewrite the planning
-  task's history.
+- Integration note: the integrated candidate keeps Media as
+  `20260902_0013_media_contracts` and normalizes Planning to
+  `20260902_0014_planning_analytics` with `down_revision = 20260902_0013`.
+  The isolated planning branch remains unchanged; only the unreleased
+  integration candidate carries the linearized chain.
+
+The integrated candidate's complete cross-workstream verification is recorded
+in `docs/evidence/V0_1_ALPHA_INTEGRATED_CANDIDATE.md`.

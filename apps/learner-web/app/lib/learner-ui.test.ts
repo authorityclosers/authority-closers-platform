@@ -61,11 +61,12 @@ import ForgotPasswordPage from "../forgot-password/page";
 import manifest from "../manifest";
 import OfflinePage from "../offline/page";
 import { AuthFlowPage, authFlowStepState } from "../components/auth-flow-page";
-import OnboardingPage, {
+import OnboardingPage from "../onboarding/page";
+import {
   onboardingHref,
   onboardingReturnHref,
   parseOnboardingReturnIntent,
-} from "../onboarding/page";
+} from "./onboarding-route";
 import ProgressPage from "../progress/page";
 import PublicHomePage from "../page";
 import PrivacyPage from "../privacy/page";
@@ -1218,6 +1219,17 @@ describe("connected learner ready states", () => {
     expect(settingsCssSource).toContain(".routeEntryHeading:focus");
     expect(settingsCssSource).toContain("outline: none");
     expect(settingsCssSource).toContain(".indexLink:focus-visible");
+  });
+
+  it("defers the initial Calendar load while retaining cancellation guards", () => {
+    const calendarSource = readFileSync(
+      new URL("../components/calendar-runtime.tsx", import.meta.url),
+      "utf8",
+    );
+    expect(calendarSource).toContain("async function loadInitial()");
+    expect(calendarSource).toContain("await Promise.resolve();");
+    expect(calendarSource).toContain("controller.abort();");
+    expect(calendarSource).not.toContain("void load(controller.signal)");
   });
 
   it("starts only identity and authoritative activity reads together", async () => {

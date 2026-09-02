@@ -386,7 +386,7 @@ def _canonical_progress(
             message=(
                 "Canonical progress is unavailable until the active learning scope is unambiguous."
             ),
-    )
+        )
     enrollment = enrollments[0]
     activity_ids = tuple(
         database.scalars(
@@ -625,6 +625,7 @@ def install_planning_http(
         actor = auth.resolved.actor
         tenant_id = _tenant(actor)
         person_id = _subject(actor, subject_person_id)
+
         def read(database: Session) -> PlanView:
             canonical = _canonical_progress(
                 database, actor=actor, tenant_id=tenant_id, person_id=person_id
@@ -651,6 +652,7 @@ def install_planning_http(
         actor = auth.resolved.actor
         tenant_id = _tenant(actor)
         person_id = _subject(actor, subject_person_id)
+
         def read(database: Session) -> UpNextView:
             canonical = _canonical_progress(
                 database, actor=actor, tenant_id=tenant_id, person_id=person_id

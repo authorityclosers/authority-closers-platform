@@ -308,15 +308,11 @@ def test_analytics_expiry_is_removed_from_descriptive_projection(
     assert response.status_code == 200
     assert response.json()["status"] == "insufficient_signal"
     assert (
-        session.query(AnalyticsEvent)
-        .filter(AnalyticsEvent.tenant_id == actor.tenant_id)
-        .count()
+        session.query(AnalyticsEvent).filter(AnalyticsEvent.tenant_id == actor.tenant_id).count()
         == 0
     )
     assert (
-        session.query(AnalyticsEvent)
-        .filter(AnalyticsEvent.tenant_id == other_tenant_id)
-        .count()
+        session.query(AnalyticsEvent).filter(AnalyticsEvent.tenant_id == other_tenant_id).count()
         == 1
     )
 

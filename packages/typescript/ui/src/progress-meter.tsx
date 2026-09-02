@@ -8,11 +8,7 @@ export type ProgressMeterProps = {
  * Direction A progress primitive. The caller supplies the server-backed
  * value and human-readable detail; this component only presents it.
  */
-export function ProgressMeter({
-  value,
-  label,
-  detail,
-}: ProgressMeterProps) {
+export function ProgressMeter({ value, label, detail }: ProgressMeterProps) {
   const safeValue = Math.min(100, Math.max(0, value));
 
   return (

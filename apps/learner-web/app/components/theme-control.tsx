@@ -3,6 +3,8 @@
 import { Monitor, Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import styles from "./settings-clarity.module.css";
+
 export const THEME_STORAGE_KEY = "ac-appearance-theme";
 
 export type ThemePreference = "light" | "dark" | "system";
@@ -102,7 +104,11 @@ export function ThemeControl() {
   }
 
   return (
-    <div className="theme-control" role="group" aria-label="Appearance theme">
+    <div
+      className={`theme-control ${styles.themeControl}`}
+      role="group"
+      aria-label="Appearance theme"
+    >
       {options.map((option) => {
         const Icon = option.icon;
         return (

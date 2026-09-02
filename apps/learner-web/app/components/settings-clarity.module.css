@@ -320,7 +320,7 @@
   text-underline-offset: 3px;
 }
 
-:global(.theme-control) {
+.themeControl:global(.theme-control) {
   width: 100%;
   min-height: 44px;
   padding: 0;
@@ -330,7 +330,7 @@
   background: var(--theme-surface);
 }
 
-:global(.theme-control__option) {
+.themeControl :global(.theme-control__option) {
   min-height: 44px;
   border: 0;
   border-right: 1px solid var(--theme-border);
@@ -340,11 +340,11 @@
   font-size: 0.77rem;
 }
 
-:global(.theme-control__option:last-child) {
+.themeControl :global(.theme-control__option:last-child) {
   border-right: 0;
 }
 
-:global(.theme-control__option[aria-pressed="true"]) {
+.themeControl :global(.theme-control__option[aria-pressed="true"]) {
   color: var(--theme-info-text);
   background: var(--theme-info-surface);
   box-shadow: inset 0 0 0 1px var(--theme-action);
@@ -569,23 +569,25 @@
 }
 
 @media (min-width: 761px) {
-  :global(.site-frame--learner .learner-main .page-container.settings-page) {
+  :global(
+    .site-frame--learner .learner-main .page-container.settings-page
+  ).settingsPage {
     padding-top: 0;
   }
 
-  :global(#learning-setup) {
+  :global(#learning-setup).card {
     gap: 12px;
     padding-top: 10px;
     padding-bottom: 10px;
   }
 
-  :global(#appearance) {
+  :global(#appearance).card {
     gap: 14px;
     padding-top: 17px;
     padding-bottom: 17px;
   }
 
-  :global(#security-privacy) {
+  :global(#security-privacy).card {
     gap: 6px;
     padding-top: 12px;
     padding-bottom: 12px;
@@ -692,7 +694,7 @@
     font-size: 0.63rem;
   }
 
-  :global(.theme-control__option) {
+  .themeControl :global(.theme-control__option) {
     gap: 5px;
     padding: 0 5px;
     font-size: 0.64rem;
