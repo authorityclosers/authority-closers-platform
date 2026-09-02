@@ -1,0 +1,97 @@
+@startuml
+title AC-WF-LL-07 — Video to practice to evidence learning loop
+hide footbox
+skinparam shadowing false
+skinparam monochrome true
+
+' Stable package flow IDs: FLOW-LL-01, FLOW-LL-02, FLOW-LL-03, FLOW-LL-04, FLOW-LL-05
+
+actor Learner
+actor "Assigned human reviewer\n(gated)" as Reviewer
+participant "LL-MOD-01\nModule roadmap" as Module
+participant "LL-VID-01\nVideo viewer" as Video
+participant "LL-CAP-01\nCaptions/transcript" as Text
+participant "LL-KC-01\nKnowledge check" as Check
+participant "LL-QZT-01\nQuiz/test" as Quiz
+participant "LL-REF-01\nReflection" as Reflect
+participant "LL-IMP-01\nImplementation evidence" as Evidence
+participant "LL-REV-01\nHuman review" as Review
+participant "LL-IMPR-01\nImprove/retry" as Improve
+participant "Canonical learning\nprojection/API" as API
+participant "Approved local recovery\n(non-canonical)" as Local
+participant "LL-PWA-01 / LL-AUTH-01\nPWA + session boundary" as Recovery
+
+Learner -> Module: open authorized module
+Module -> API: read pinned roadmap and next action
+API --> Module: current/complete/locked projection
+Module --> Learner: show safe roadmap and prerequisite reasons
+
+Learner -> Video: open current activity
+Video -> API: read activity authorization and resume metadata
+alt media policy/source unavailable
+  API --> Video: blocked_media / capability gate
+  Video --> Learner: honest blocked state; no fake player
+else approved playback session
+  API --> Video: scoped session + optional resume
+  Learner -> Video: play/pause/seek/speed/fullscreen/PiP
+  Video -> Text: request approved captions/transcript
+  Text --> Learner: track/panel or unavailable state
+  Video -> API: online playback evidence checkpoint
+  API --> Video: processing or canonical completion
+  alt authored cue reached
+    Video -> Check: pause and show stable authored options
+    Learner -> Check: select and submit online
+    Check -> API: validate authored response
+    API --> Check: deterministic feedback or retry
+  end
+end
+
+Learner -> Quiz: open authored assessment
+Quiz -> API: read schema/attempt revision
+API --> Quiz: questions and stable option IDs
+Learner -> Quiz: answer/review/submit online
+Quiz -> API: idempotent revisioned submission
+API --> Quiz: recorded result/feedback or retry
+
+Learner -> Reflect: write reflection
+Reflect -> Local: optional approved local recovery
+Learner -> Reflect: explicit online save
+Reflect -> API: If-Match revision save
+API --> Reflect: saved / conflict / retry
+
+Learner -> Evidence: record supported implementation evidence
+Evidence -> API: append-safe online submission
+API --> Evidence: submitted / awaiting review / retry
+
+Evidence -> Review: open when assignment policy allows
+Review -> Reviewer: assigned review action only
+Reviewer -> Review: add provenance-bearing note/result
+Review -> API: append-only review command
+API --> Review: visible result or denied/retry
+Review --> Learner: human result if policy permits
+
+Learner -> Improve: choose one next behavior or retry
+Improve -> API: explicit online save/submit
+API --> Improve: canonical completion and next authorized task
+Improve --> Learner: named next action; no mastery claim
+
+opt interruption at any stage
+  Recovery -> Local: preserve approved local draft only
+  Recovery -> API: re-read after reconnect/reauth
+  API --> Recovery: latest authorization/revision
+  Recovery --> Learner: offline/stale or session-expired recovery
+end
+
+note over Video,API
+Watch completion is versioned server evidence, not page open, seek, hidden time,
+analytics, or a player percentage.
+end note
+note over Quiz,Review
+No autonomous AI scoring, mastery, rank, reward, or competency certification
+before AC-SVAL and separate controlled contracts.
+end note
+note over Local,Recovery
+Offline local recovery is not canonical and never performs a hidden canonical
+write or background submit. PWA standalone is still a browser surface.
+end note
+@enduml

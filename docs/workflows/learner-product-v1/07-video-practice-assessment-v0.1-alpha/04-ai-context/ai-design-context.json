@@ -1,0 +1,91 @@
+{
+  "context_id": "AC-WF-LL-07-2026-09-03",
+  "product": "Authority Closers learner learning loop",
+  "package_version": "0.1-alpha",
+  "status": "reference_ready",
+  "source_of_truth": [
+    "../../../../traceability/CONTROLLED_SOURCE_REGISTER.md",
+    "../../../../contracts/V0_1_ROUTE_SCREEN_CONTRACTS.md",
+    "../../../../contracts/LEARNER_LOCAL_DRAFT_RECOVERY_CONTRACT.md",
+    "../../../../knowledge/v0.1-alpha/JRN-03-module-1-learning-loop.md",
+    "../../../../knowledge/v0.1-alpha/JRN-05-resilient-web-pwa.md",
+    "../../../../knowledge/v0.1-alpha/API-003-learning-evidence.md",
+    "../../../../knowledge/v0.1-alpha/SF-EVIDENCE-001-implement-review-improve.md",
+    "../../../../knowledge/v0.1-alpha/DEC-003-canonical-progress-evidence.md",
+    "../../../../../apps/learner-web/app/components/activity-renderers.tsx"
+  ],
+  "locked_decisions": [
+    "The semantic loop is Roadmap -> Watch -> Knowledge check -> Quiz/Test -> Reflect -> Implement -> Human review -> Improve/Retry.",
+    "Canonical activity, progress, evidence, draft, reviewer, and completion state remains server-owned.",
+    "Video, captions, transcript, resume, speed, fullscreen, and PiP are conditional on approved sources, policy, and browser capability.",
+    "Knowledge checks and quiz/test feedback is authored and deterministic; no autonomous AI scoring or mastery claim is present.",
+    "Human review appears only from an explicit assigned-reviewer contract and is append-safe.",
+    "Offline preserves only approved local recovery/read cache and never performs a canonical write or hidden background submit.",
+    "Direction B Momentum Workshop is the selected visual language; Direction A and C remain bounded references."
+  ],
+  "audiences": [
+    "enrolled learner",
+    "explicitly assigned human reviewer"
+  ],
+  "platforms": [
+    "desktop Chrome",
+    "responsive PWA",
+    "iOS Safari/Home Screen",
+    "Android-compatible Chrome PWA"
+  ],
+  "flows": [
+    {
+      "id": "FLOW-LL-01",
+      "name": "module roadmap and activity sequence",
+      "screens": ["LL-MOD-01", "LL-VID-01", "LL-KC-01", "LL-QZT-01", "LL-REF-01", "LL-IMP-01", "LL-REV-01", "LL-IMPR-01"]
+    },
+    {
+      "id": "FLOW-LL-02",
+      "name": "video playback, captions, transcript, resume",
+      "screens": ["LL-VID-01", "LL-CAP-01"]
+    },
+    {
+      "id": "FLOW-LL-03",
+      "name": "knowledge checks and quiz/test",
+      "screens": ["LL-KC-01", "LL-QZT-01"]
+    },
+    {
+      "id": "FLOW-LL-04",
+      "name": "reflection, evidence, human review, improve/retry",
+      "screens": ["LL-REF-01", "LL-IMP-01", "LL-REV-01", "LL-IMPR-01"]
+    },
+    {
+      "id": "FLOW-LL-05",
+      "name": "PWA install/update/offline/auth recovery",
+      "screens": ["LL-PWA-01", "LL-AUTH-01"]
+    }
+  ],
+  "tokens_or_visual_direction": [
+    "Direction B — Momentum Workshop",
+    "deep navy ink and cobalt action",
+    "light warm-white task surface on pale blue-gray canvas",
+    "thin cool-gray dividers and restrained 9-12px radii",
+    "desktop task column plus roadmap rail",
+    "mobile one-column task with safe-area-aware bottom navigation",
+    "semantic native controls and Lucide-sized icons; no raster-as-UI"
+  ],
+  "known_gaps": [
+    "Approved media, provenance, caption tracks, transcript, playback-session, and resume contracts are not activated.",
+    "Browser support for speed, fullscreen, and PiP requires real desktop/iOS/Android evidence.",
+    "Assessment interaction schema and any official result semantics require controlled promotion.",
+    "Human reviewer assignment, privacy, visibility, and append-only correction contract require evidence.",
+    "Offline cache allowlist, local recovery retention, and service-worker update proof require release checks.",
+    "No Drive, Notion, Figma, Canva, or Lucid artifact was created by this package."
+  ],
+  "do_not_infer": [
+    "media provider, CDN, signed URL, codec, duration, captions, transcript, upload type, or playback guarantee",
+    "watched completion from page open, seek, elapsed hidden time, or analytics",
+    "score, mastery, rank, reward, pass/fail, competency certification, or autonomous AI evaluator",
+    "reviewer identity, coach, external call, recording, transcription, or real-world action verification",
+    "offline canonical writes, background synchronization of learning mutations, or native iOS/Android app",
+    "payment, billing, entitlement, notifications, social, marketplace, or broad LMS navigation"
+  ],
+  "visual_direction_count": 3,
+  "selected_direction": "Direction B — Momentum Workshop",
+  "implementation_rule": "Use the matrix and behavioral spec as authority; use images only as reference; leave tests and implementation evidence before any runtime promotion."
+}

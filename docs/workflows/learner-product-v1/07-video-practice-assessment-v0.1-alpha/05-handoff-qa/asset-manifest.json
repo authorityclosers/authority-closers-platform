@@ -1,0 +1,106 @@
+{
+  "manifest_id": "AC-WF-LL-07-ASSETS-2026-09-03",
+  "workstream_id": "AC-WF-LL-07",
+  "status": "reference_ready",
+  "direction_count": 3,
+  "generated_with": "built-in ImageGen source artifacts; no new generation in this package",
+  "connector_status": {
+    "drive": "not_callable; local package only",
+    "notion": "not_callable; no task/status record claimed",
+    "figma": "not_callable; PlantUML is the editable local fallback",
+    "canva": "not_callable; no design claimed",
+    "lucid": "not_callable; PlantUML is the editable local fallback"
+  },
+  "assets": [
+    {
+      "asset_id": "LL-DIR-A-DESKTOP",
+      "type": "png",
+      "state": "reflect_saved_reference",
+      "viewport": "1440x1024",
+      "local_path": "03-visual-exploration/direction-a-guided-practice-canvas-desktop-1440x1024.png",
+      "source_or_parent": ".artifacts/ui-workstream/learning-loop/direction-guided-practice-canvas/GPC-desktop-1440x1024-selected.png",
+      "sha256": "8a333912f62fea65d2154b0f1b743f1984d4c2ed930777824f348f5a00fc5b59",
+      "drive_id": null,
+      "url": null,
+      "status": "reference",
+      "known_issue": "Transcript and Watch-complete elements are conditional on approved media/content evidence."
+    },
+    {
+      "asset_id": "LL-DIR-A-MOBILE",
+      "type": "png",
+      "state": "reflect_saved_reference",
+      "viewport": "390x844",
+      "local_path": "03-visual-exploration/direction-a-guided-practice-canvas-mobile-390x844.png",
+      "source_or_parent": ".artifacts/ui-workstream/learning-loop/direction-guided-practice-canvas/GPC-mobile-390x844-selected.png",
+      "sha256": "e6c1887ca611eaa2083ab477282b5aac6b219e6a112d2e09fe9fca66ddc22ed0",
+      "drive_id": null,
+      "url": null,
+      "status": "reference",
+      "known_issue": "Five-stage labels need 200% zoom/localization fallback; outline panel is not shown."
+    },
+    {
+      "asset_id": "LL-DIR-B-DESKTOP",
+      "type": "png",
+      "state": "reflect_saved_reference",
+      "viewport": "1440x1024",
+      "local_path": "03-visual-exploration/direction-b-momentum-workshop-desktop-1440x1024.png",
+      "source_or_parent": ".artifacts/ui-workstream/learning-loop/direction-momentum-workshop/selected/momentum-workshop-desktop-1440x1024.png",
+      "sha256": "aca21d35116fbb7f1d3f67be99839821e8fa8261461822fac805317078f5e2f6",
+      "drive_id": null,
+      "url": null,
+      "status": "selected",
+      "known_issue": "Reference-only state; media, captions, transcript, resume, and review gates remain open."
+    },
+    {
+      "asset_id": "LL-DIR-B-MOBILE",
+      "type": "png",
+      "state": "reflect_saved_reference",
+      "viewport": "390x844",
+      "local_path": "03-visual-exploration/direction-b-momentum-workshop-mobile-390x844.png",
+      "source_or_parent": ".artifacts/ui-workstream/learning-loop/direction-momentum-workshop/selected/momentum-workshop-mobile-390x844.png",
+      "sha256": "bcab5170c6f88082378220b435cfdb8f040ab9bca052e129f71ac7144266ba96",
+      "drive_id": null,
+      "url": null,
+      "status": "selected",
+      "known_issue": "Compact labels, safe areas, and fixed-navigation clearance require browser/device proof."
+    },
+    {
+      "asset_id": "LL-DIR-C-DESKTOP",
+      "type": "png",
+      "state": "reflect_in_progress_reference",
+      "viewport": "1440x1024",
+      "local_path": "03-visual-exploration/direction-c-studio-ledger-player-desktop-1440x1024.png",
+      "source_or_parent": ".artifacts/ui-workstream/learning-loop/direction-studio-ledger-player/SLLP-REFLECT-01-desktop-1440x1024.png",
+      "sha256": "c5dbd0611f3c1e4f15eb82159d118ae161978e7302e701b57c5fc0e355f0c322",
+      "drive_id": null,
+      "url": null,
+      "status": "reference",
+      "known_issue": "Illustrative notification, duration, and transcript copy are not approved product facts."
+    },
+    {
+      "asset_id": "LL-DIR-C-MOBILE",
+      "type": "png",
+      "state": "reflect_in_progress_reference",
+      "viewport": "390x844",
+      "local_path": "03-visual-exploration/direction-c-studio-ledger-player-mobile-390x844.png",
+      "source_or_parent": ".artifacts/ui-workstream/learning-loop/direction-studio-ledger-player/SLLP-REFLECT-01-mobile-390x844.png",
+      "sha256": "e496d34c759346f28a8e9e8a1e2d66730963d0cd0632165f6f44bd362254f3bf",
+      "drive_id": null,
+      "url": null,
+      "status": "reference",
+      "known_issue": "Dense mobile stepper and fine borders require zoom, contrast, and localization proof."
+    },
+    {
+      "asset_id": "LL-FLOW-PUML",
+      "type": "puml",
+      "state": "workflow_contract",
+      "local_path": "04-ai-context/learning-loop.puml",
+      "source_or_parent": "AC-WF-LL-07 behavioral/state contract",
+      "sha256": null,
+      "drive_id": null,
+      "url": null,
+      "status": "reference",
+      "known_issue": "Local editable fallback; no Lucid/Figma artifact or human-facing edit URL was created."
+    }
+  ]
+}
