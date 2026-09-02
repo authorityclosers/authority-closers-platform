@@ -1050,6 +1050,19 @@ describe("accessibility semantics", () => {
     expect(progress).toContain('aria-valuemax="100"');
   });
 
+  it("clamps the shared library progress meter to its declared range", () => {
+    const progress = renderToStaticMarkup(
+      createElement(ProgressMeter, {
+        value: 140,
+        label: "Preview course path",
+        detail: "7 / 5",
+      }),
+    );
+
+    expect(progress).toContain('aria-valuenow="100"');
+    expect(progress).toContain('style="width:100%"');
+  });
+
   it("preserves renderer labels while marking unavailable controls disabled", () => {
     const activities = freeCourse.modules.flatMap(
       (courseModule) => courseModule.activities,

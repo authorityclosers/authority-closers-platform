@@ -91,36 +91,7 @@ export function ActivityStatusPill({ status }: { status: ActivityStatus }) {
   );
 }
 
-export function ProgressMeter({
-  value,
-  label,
-  detail,
-}: {
-  value: number;
-  label: string;
-  detail: string;
-}) {
-  const safeValue = Math.min(100, Math.max(0, value));
-
-  return (
-    <div className="progress-meter">
-      <div className="progress-meter__labels">
-        <span>{label}</span>
-        <span>{detail}</span>
-      </div>
-      <div
-        className="progress-meter__track"
-        role="progressbar"
-        aria-label={label}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={safeValue}
-      >
-        <span style={{ width: `${safeValue}%` }} />
-      </div>
-    </div>
-  );
-}
+export { ProgressMeter } from "@ac/ui";
 
 export function ArrowLabel({ children }: { children: React.ReactNode }) {
   return (
