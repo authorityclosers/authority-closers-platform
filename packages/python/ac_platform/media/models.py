@@ -202,6 +202,10 @@ class MediaUploadIntent(Base):
         CheckConstraint("declared_bytes > 0", name="declared_bytes_positive"),
         CheckConstraint("max_bytes >= declared_bytes", name="max_bytes_valid"),
         CheckConstraint(
+            "length(request_fingerprint) = 64",
+            name="request_fingerprint_sha256",
+        ),
+        CheckConstraint(
             "state IN ('expected', 'uploading', 'processing', 'ready', 'failed', 'retired')",
             name="state_supported",
         ),
@@ -423,9 +427,6 @@ class MediaWebhookInbox(Base):
             ["media_versions.tenant_id", "media_versions.id"],
             name="fk_media_webhook_inbox_result_version_scope",
         ),
-        UniqueConstraint(
-            "provider_name", "provider_event_id", name="uq_media_webhook_provider_event"
-        ),
         CheckConstraint("length(trim(event_digest)) = 64", name="event_digest_sha256"),
     )
 
@@ -452,9 +453,6 @@ class MediaQuotaUsage(Base):
         ),
         CheckConstraint("upload_count >= 0", name="upload_count_nonnegative"),
         CheckConstraint("bytes_reserved >= 0", name="bytes_reserved_nonnegative"),
-        UniqueConstraint(
-            "tenant_id", "actor_person_id", "window_start", name="uq_media_quota_usage_scope"
-        ),
     )
 
     tenant_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)

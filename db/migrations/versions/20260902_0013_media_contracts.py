@@ -180,6 +180,10 @@ def upgrade() -> None:
             "length(request_fingerprint) = 64",
             name=op.f("ck_media_upload_intents_request_fingerprint_sha256"),
         ),
+        sa.CheckConstraint(
+            "state IN ('expected', 'uploading', 'processing', 'ready', 'failed', 'retired')",
+            name=op.f("ck_media_upload_intents_state_supported"),
+        ),
     )
 
     op.create_table(
@@ -405,9 +409,6 @@ def upgrade() -> None:
             ["tenant_id", "actor_person_id"],
             ["memberships.tenant_id", "memberships.person_id"],
             name=op.f("fk_media_quota_usage_actor_membership"),
-        ),
-        sa.UniqueConstraint(
-            "tenant_id", "actor_person_id", "window_start", name=op.f("uq_media_quota_usage_scope")
         ),
         sa.CheckConstraint(
             "upload_count >= 0", name=op.f("ck_media_quota_usage_upload_count_nonnegative")

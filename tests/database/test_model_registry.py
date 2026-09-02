@@ -74,3 +74,11 @@ def test_media_caption_supersession_target_is_uniquely_addressable() -> None:
     }
 
     assert ("tenant_id", "version_id", "id") in unique_columns
+
+
+def test_media_upload_intent_model_keeps_fail_closed_checks() -> None:
+    table = model_metadata().tables["media_upload_intents"]
+    check_names = {constraint.name for constraint in table.constraints}
+
+    assert "ck_media_upload_intents_request_fingerprint_sha256" in check_names
+    assert "ck_media_upload_intents_state_supported" in check_names

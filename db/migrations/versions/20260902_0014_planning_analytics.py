@@ -105,7 +105,7 @@ def upgrade() -> None:
         sa.UniqueConstraint("tenant_id", "person_id", name=op.f("uq_learning_next_action_subject")),
         sa.CheckConstraint(
             "length(trim(projection_version)) > 0",
-            name=op.f("ck_learning_next_action_projection_version_nonblank"),
+            name=op.f("ck_learning_next_action_projections_projection_version_nonblank"),
         ),
     )
     op.create_index(
