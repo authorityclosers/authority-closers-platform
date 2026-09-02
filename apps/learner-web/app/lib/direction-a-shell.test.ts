@@ -3,7 +3,11 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-import { closeAccountMenu, LearnerShell } from "../components/site-shell";
+import {
+  AppShell,
+  closeAccountMenu,
+  LearnerShell,
+} from "../components/site-shell";
 import {
   firstActionableActivity,
   loadDashboardData,
@@ -334,6 +338,58 @@ describe("Direction A & B UI System & Shell", () => {
       expect(html).toContain('title="Profile"');
       expect(html).toContain('title="Settings"');
       expect(html).toContain('title="Help"');
+    });
+
+    it("exports AppShell as the reusable canonical alias for LearnerShell", () => {
+      expect(AppShell).toBe(LearnerShell);
+
+      const html = renderToStaticMarkup(
+        createElement(AppShell, {
+          current: "dashboard",
+          userDisplayName: "Elena Rostova",
+        }),
+      );
+      expect(html).toContain("Elena Rostova");
+      expect(html).toContain("ER");
+      expect(html).toContain('aria-label="Learner workspace navigation"');
+    });
+
+    it("enforces Direction A navigation fidelity: 44px targets, active indicator bar, safe areas, and 320px polish", () => {
+      const clarityCss = readFileSync(
+        new URL("../learner-clarity.css", import.meta.url),
+        "utf8",
+      );
+
+      // Skip link elevated above shell chrome with visible focus
+      expect(clarityCss).toContain(".site-frame--learner .skip-link");
+      expect(clarityCss).toContain("z-index: 100;");
+
+      // Desktop rail 44px touch targets
+      expect(clarityCss).toContain(
+        ".site-frame--learner .learner-sidebar .learner-nav__link",
+      );
+      expect(clarityCss).toContain("min-height: 44px;");
+      expect(clarityCss).toContain(
+        ".site-frame--learner.site-frame--collapsed .learner-sidebar",
+      );
+
+      // Non-color status signal: visible indicator bar on mobile bottom nav active tab
+      expect(clarityCss).toContain(
+        ".site-frame--learner .learner-bottom-nav .learner-nav__link.is-current::before",
+      );
+
+      // Safe area padding on mobile bottom nav and drawer
+      expect(clarityCss).toContain("env(safe-area-inset-bottom)");
+      expect(clarityCss).toContain("env(safe-area-inset-top)");
+
+      // 320px ultra-compact mobile polish
+      expect(clarityCss).toContain("@media (max-width: 360px)");
+
+      // Long copy truncation protection on user affordances
+      expect(clarityCss).toContain(".site-frame--learner .user-pill__name");
+      expect(clarityCss).toContain(
+        ".site-frame--learner .learner-profile__name",
+      );
     });
   });
 

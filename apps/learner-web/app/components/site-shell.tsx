@@ -39,6 +39,7 @@ export type LearnerCurrent =
   | "course"
   | "certificate"
   | "none";
+export type AppShellCurrent = LearnerCurrent;
 
 function BrandLink({ href = ROUTES.home }: { href?: string }) {
   return (
@@ -157,17 +158,23 @@ export function closeAccountMenu(
   trigger?.focus();
 }
 
+export type LearnerShellProps = {
+  children?: React.ReactNode;
+  current?: LearnerCurrent;
+  learningHref?: string;
+  userDisplayName?: string;
+  className?: string;
+};
+
+export type AppShellProps = LearnerShellProps;
+
 export function LearnerShell({
   children,
   current = "dashboard",
   learningHref = ROUTES.learning,
   userDisplayName = "Learner",
-}: {
-  children?: React.ReactNode;
-  current?: LearnerCurrent;
-  learningHref?: string;
-  userDisplayName?: string;
-}) {
+  className = "",
+}: LearnerShellProps) {
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -373,7 +380,7 @@ export function LearnerShell({
     <div
       className={`site-frame site-frame--learner${
         sidebarCollapsed ? " site-frame--collapsed" : ""
-      }`}
+      }${className ? ` ${className}` : ""}`}
     >
       <a className="skip-link" href="#main-content">
         Skip to content
@@ -777,6 +784,8 @@ export function LearnerShell({
     </div>
   );
 }
+
+export const AppShell = LearnerShell;
 
 export function Breadcrumbs({
   items,

@@ -7660,6 +7660,27 @@ a.learning-list-card:hover {
     display: block !important;
   }
 
+  .site-frame--learner .learner-bottom-nav {
+    display: grid !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .site-frame--learner .learner-header {
+    height: calc(64px + env(safe-area-inset-top));
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .site-frame--learner .learner-header__inner {
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+  }
+
+  .site-frame--learner .learner-main {
+    padding-bottom: calc(96px + env(safe-area-inset-bottom)) !important;
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+
   .mobile-header-icon-button {
     display: inline-flex;
     width: 44px;
@@ -7785,5 +7806,291 @@ a.learning-list-card:hover {
 
   .activity-media-state .field-help {
     font-size: 10px;
+  }
+}
+
+/* ==========================================================================
+   Direction A Signed-In Shell & Navigation Fidelity Polish
+   ========================================================================== */
+
+/* Skip-to-content accessible elevation and visible focus */
+.site-frame--learner .skip-link {
+  position: fixed;
+  top: 14px;
+  left: 14px;
+  z-index: 100;
+  padding: 10px 16px;
+  background: #081b3a;
+  color: #ffffff;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: 0 4px 14px rgba(8, 27, 58, 0.25);
+  transform: translateY(-200%);
+  transition: transform 140ms ease;
+}
+
+.site-frame--learner .skip-link:focus {
+  transform: translateY(0);
+  outline: 3px solid #2563eb;
+  outline-offset: 3px;
+}
+
+/* Desktop rail fidelity & touch targets */
+.site-frame--learner .learner-sidebar {
+  width: 240px;
+  background: #ffffff;
+  border-right: 1px solid #eef2f6;
+}
+
+/* Keep the existing user-controlled collapsed rail width above the fidelity
+   defaults so the desktop collapse affordance remains functional. */
+.site-frame--learner.site-frame--collapsed .learner-sidebar {
+  width: 72px;
+}
+
+.site-frame--learner.site-frame--collapsed .learner-sidebar .learner-nav__link {
+  padding-right: 0;
+  padding-left: 0;
+}
+
+.site-frame--learner .learner-sidebar .learner-nav__link {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #475569;
+  text-decoration: none;
+  position: relative;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.site-frame--learner .learner-sidebar .learner-nav__link:hover {
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.site-frame--learner .learner-sidebar .learner-nav__link.is-current {
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-weight: 600;
+  border-left: 3px solid var(--color-cobalt, #2563eb);
+}
+
+.site-frame--learner .learner-sidebar .learner-sidebar__user-pill {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  text-decoration: none;
+  color: inherit;
+  transition: background-color 140ms ease;
+}
+
+.site-frame--learner .learner-sidebar .sidebar-collapse-btn {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  width: 100%;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+/* Account dropdown popover item touch targets */
+.site-frame--learner .account-menu-links a,
+.site-frame--learner .account-menu-footer a,
+.site-frame--learner .account-menu-footer button {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+
+/* Mobile bottom nav Direction A fidelity & active indicator */
+.site-frame--learner .learner-bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
+  background: #ffffff;
+  border-top: 1px solid #eef2f6;
+  height: calc(60px + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  box-shadow: 0 -2px 10px rgba(15, 23, 42, 0.04);
+}
+
+.site-frame--learner .learner-bottom-nav .learner-nav__link {
+  position: relative;
+  min-height: 48px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 500;
+  text-decoration: none;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 6px 2px;
+  transition: color 140ms ease;
+}
+
+.site-frame--learner .learner-bottom-nav .learner-nav__link.is-current {
+  color: #1d4ed8;
+  font-weight: 700;
+}
+
+/* Non-color status signal: visible active indicator bar on top of the tab */
+.site-frame--learner .learner-bottom-nav .learner-nav__link.is-current::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 28px;
+  height: 3px;
+  background: #2563eb;
+  border-radius: 0 0 3px 3px;
+}
+
+/* Safe area padding on mobile drawer */
+.site-frame--learner .mobile-drawer-sheet {
+  padding-bottom: calc(24px + env(safe-area-inset-bottom));
+  padding-left: max(20px, env(safe-area-inset-left));
+  padding-right: max(20px, env(safe-area-inset-right));
+}
+
+.site-frame--learner .mobile-drawer-link {
+  min-height: 44px;
+}
+
+.site-frame--learner .mobile-drawer-close {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+/* Visible keyboard focus outline */
+.site-frame--learner .learner-sidebar .learner-nav__link:focus-visible,
+.site-frame--learner .sidebar-collapse-btn:focus-visible,
+.site-frame--learner .learner-sidebar__user-pill:focus-visible,
+.site-frame--learner .learner-header__search-trigger:focus-visible,
+.site-frame--learner .header-icon-button:focus-visible,
+.site-frame--learner .mobile-header-icon-button:focus-visible,
+.site-frame--learner .learner-profile-button:focus-visible,
+.site-frame--learner .account-menu-links a:focus-visible,
+.site-frame--learner .account-menu-footer button:focus-visible,
+.site-frame--learner .account-menu-footer a:focus-visible,
+.site-frame--learner .learner-bottom-nav .learner-nav__link:focus-visible,
+.site-frame--learner .mobile-drawer-close:focus-visible,
+.site-frame--learner .mobile-drawer-link:focus-visible {
+  outline: 3px solid #2563eb !important;
+  outline-offset: 2px !important;
+}
+
+/* Long copy safety across user and navigation affordances */
+.site-frame--learner .user-pill__name,
+.site-frame--learner .learner-profile__name,
+.site-frame--learner .account-menu-header strong,
+.site-frame--learner .mobile-drawer-user strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.site-frame--learner .user-pill__name {
+  max-width: 130px;
+}
+
+.site-frame--learner .account-menu-header strong {
+  max-width: 100%;
+}
+
+.site-frame--learner .mobile-drawer-user strong {
+  max-width: 220px;
+}
+
+/* Responsive breakpoint polish: 320px ultra-compact mobile */
+@media (max-width: 360px) {
+  .site-frame--learner .learner-header__inner {
+    padding-left: max(10px, env(safe-area-inset-left)) !important;
+    padding-right: max(10px, env(safe-area-inset-right)) !important;
+    gap: 6px;
+  }
+
+  .mobile-brand-link {
+    gap: 6px;
+  }
+
+  .mobile-brand-icon {
+    width: 28px;
+    height: 28px;
+  }
+
+  .mobile-brand-mark {
+    width: 18px;
+    height: 18px;
+  }
+
+  .mobile-brand-name {
+    font-size: 13px !important;
+    letter-spacing: -0.01em;
+  }
+
+  .site-frame--learner .learner-header__actions {
+    gap: 4px !important;
+  }
+
+  .site-frame--learner .learner-bottom-nav .learner-nav__link {
+    font-size: 10px;
+    gap: 2px;
+    padding: 4px 1px;
+    min-height: 44px;
+  }
+
+  .site-frame--learner .learner-bottom-nav .learner-nav__link .learner-nav__icon svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .site-frame--learner .learner-main .page-container.home-page {
+    padding: 16px 10px calc(96px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .site-frame--learner .ac-card {
+    padding: 14px 10px !important;
+    border-radius: 12px !important;
+  }
+}
+
+/* Keep route-shaped loading chrome inside the narrow learner viewport even
+   when a skeleton line carries a desktop-sized inline width. */
+@media (max-width: 520px) {
+  .site-frame--learner .skeleton-hero-header .skeleton-line {
+    max-width: 100%;
   }
 }
