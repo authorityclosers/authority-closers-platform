@@ -17,6 +17,7 @@ from ac_platform.db.base import Base
 from ac_platform.enrollment import models as enrollment_models
 from ac_platform.identity import models as identity_models
 from ac_platform.learning import models as learning_models
+from ac_platform.media import models as media_models
 from ac_platform.outbox import models as outbox_models
 from ac_platform.providers import models as provider_models
 from ac_platform.tenancy import models as tenancy_models
@@ -27,6 +28,7 @@ MODEL_MODULES = (
     catalog_models,
     enrollment_models,
     learning_models,
+    media_models,
     certificate_models,
     outbox_models,
     provider_models,

@@ -124,7 +124,7 @@ def _require_instance[T](value: object, expected: type[T], *, field: str) -> T:
 
 
 def _tuple_of[T](value: object, expected: type[T], *, field: str) -> tuple[T, ...]:
-    if isinstance(value, (str, bytes, bytearray)) or not isinstance(value, Iterable):
+    if isinstance(value, str | bytes | bytearray) or not isinstance(value, Iterable):
         raise TypeError(f"{field} must be an iterable of {expected.__name__}")
     items = tuple(cast(Iterable[object], value))
     if any(not isinstance(item, expected) for item in items):

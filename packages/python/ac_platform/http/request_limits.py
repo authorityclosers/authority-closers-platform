@@ -10,12 +10,17 @@ from starlette.types import Message, Receive, Scope, Send
 from ac_platform.http.request_context import REQUEST_ID_PATTERN
 
 MAX_REQUEST_BODY_BYTES = 1 * 1024 * 1024
+MAX_MEDIA_CAPTION_BYTES = 25 * 1024 * 1024
+MAX_MEDIA_WEBHOOK_BYTES = 512 * 1024
+MAX_DECLARED_BODY_BYTES = MAX_MEDIA_CAPTION_BYTES
 MAX_PROBLEM_INSTANCE_LENGTH = 512
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
 _DRAFT_PATH = re.compile(r"^/v1/activities/[^/]+/draft$")
 _EVIDENCE_PATH = re.compile(r"^/v1/activities/[^/]+/evidence$")
 _WEBHOOK_PATH = re.compile(r"^/internal/v1/providers/[^/]+/webhooks$")
+_MEDIA_CAPTION_PATH = re.compile(r"^/v1/media/[^/]+/captions$")
+_MEDIA_WEBHOOK_PATH = re.compile(r"^/internal/v1/media/providers/[^/]+/webhooks$")
 
 
 def request_body_limit(scope: Scope) -> int:
@@ -25,7 +30,11 @@ def request_body_limit(scope: Scope) -> int:
     if _EVIDENCE_PATH.fullmatch(path):
         return 256 * 1024
     if _WEBHOOK_PATH.fullmatch(path):
-        return 512 * 1024
+        return MAX_MEDIA_WEBHOOK_BYTES
+    if _MEDIA_WEBHOOK_PATH.fullmatch(path):
+        return MAX_MEDIA_WEBHOOK_BYTES
+    if _MEDIA_CAPTION_PATH.fullmatch(path):
+        return MAX_MEDIA_CAPTION_BYTES
     return MAX_REQUEST_BODY_BYTES
 
 
@@ -40,9 +49,9 @@ def _declared_length(scope: Scope) -> int | None:
         if not normalized or not all(48 <= digit <= 57 for digit in normalized):
             continue
         significant = normalized.lstrip(b"0") or b"0"
-        limit_digits = str(MAX_REQUEST_BODY_BYTES).encode("ascii")
+        limit_digits = str(MAX_DECLARED_BODY_BYTES).encode("ascii")
         if len(significant) > len(limit_digits):
-            lengths.append(MAX_REQUEST_BODY_BYTES + 1)
+            lengths.append(MAX_DECLARED_BODY_BYTES + 1)
         else:
             lengths.append(int(significant))
     return max(lengths, default=None)

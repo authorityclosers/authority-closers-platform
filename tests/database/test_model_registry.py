@@ -46,6 +46,15 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "certificate_command_idempotency",
         "operations_recovery_state",
         "audit_chain_heads",
+        "media_assets",
+        "media_versions",
+        "media_upload_intents",
+        "media_renditions",
+        "media_caption_tracks",
+        "media_playback_grants",
+        "media_resume_states",
+        "media_webhook_inbox",
+        "media_quota_usage",
     }
 
     assert set(model_metadata().tables) == expected

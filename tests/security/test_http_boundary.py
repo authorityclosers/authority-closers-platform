@@ -7,7 +7,13 @@ from httpx import ASGITransport, AsyncByteStream, AsyncClient
 from starlette.types import Message, Receive, Scope, Send
 
 from ac_platform.http.app import app
-from ac_platform.http.request_limits import MAX_REQUEST_BODY_BYTES, RequestBodyLimitMiddleware
+from ac_platform.http.request_limits import (
+    MAX_MEDIA_CAPTION_BYTES,
+    MAX_MEDIA_WEBHOOK_BYTES,
+    MAX_REQUEST_BODY_BYTES,
+    RequestBodyLimitMiddleware,
+    request_body_limit,
+)
 
 
 class ChunkedBody(AsyncByteStream):
@@ -17,6 +23,15 @@ class ChunkedBody(AsyncByteStream):
     async def __aiter__(self) -> AsyncIterator[bytes]:
         for chunk in self.chunks:
             yield chunk
+
+
+def test_media_routes_use_explicit_bounded_body_limits() -> None:
+    assert request_body_limit({"path": "/v1/media/asset/captions"}) == MAX_MEDIA_CAPTION_BYTES
+    assert (
+        request_body_limit({"path": "/internal/v1/media/providers/video/webhooks"})
+        == MAX_MEDIA_WEBHOOK_BYTES
+    )
+    assert request_body_limit({"path": "/v1/media/asset/playback-token"}) == MAX_REQUEST_BODY_BYTES
 
 
 def _body_limit_app() -> RequestBodyLimitMiddleware:

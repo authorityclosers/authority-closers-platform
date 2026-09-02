@@ -19,11 +19,13 @@ from ac_platform.http.certificates import install_certificate_http
 from ac_platform.http.course import install_course_http
 from ac_platform.http.identity_provider import OAuthIdentityProvider, create_google_provider
 from ac_platform.http.learning import install_learning_http
+from ac_platform.http.media import install_media_http
 from ac_platform.http.operations import install_operations_http
 from ac_platform.http.problem import problem_response, register_problem_handlers
 from ac_platform.http.rate_limits import RateLimitMiddleware
 from ac_platform.http.request_context import request_context_middleware
 from ac_platform.http.request_limits import RequestBodyLimitMiddleware
+from ac_platform.media.runtime import MediaRuntime, create_default_media_runtime
 
 logger = structlog.get_logger()
 settings = get_settings()
@@ -54,7 +56,11 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     await engine.dispose()
 
 
-def create_app(*, identity_provider: OAuthIdentityProvider | None = None) -> FastAPI:
+def create_app(
+    *,
+    identity_provider: OAuthIdentityProvider | None = None,
+    media_runtime: MediaRuntime | None = None,
+) -> FastAPI:
     configured_identity_provider: OAuthIdentityProvider | None
     if settings.environment in _DEPLOYMENT_ENVIRONMENTS:
         if identity_provider is not None:
@@ -103,6 +109,13 @@ def create_app(*, identity_provider: OAuthIdentityProvider | None = None) -> Fas
         settings=settings,
         require_actor=require_actor,
     )
+    install_media_http(
+        application,
+        settings=settings,
+        sessions=session_factory,
+        require_actor=require_actor,
+        runtime=media_runtime or create_default_media_runtime(settings),
+    )
     install_operations_http(
         application,
         settings=settings,
@@ -127,6 +140,7 @@ def create_app(*, identity_provider: OAuthIdentityProvider | None = None) -> Fas
                 "idempotency-key",
                 "if-match",
                 "x-request-id",
+                "x-playback-token",
             ],
             expose_headers=["etag", "x-request-id", "x-ac-release-id"],
             max_age=600,
