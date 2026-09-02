@@ -226,6 +226,28 @@
   font-size: 0.75rem;
 }
 
+.site-frame--learner
+  .momentum-video-player__stage[data-media-state="loading"]
+  .momentum-video-player__live-state,
+.site-frame--learner
+  .momentum-video-player__stage[data-media-state="buffering"]
+  .momentum-video-player__live-state,
+.site-frame--learner
+  .momentum-video-player__stage[data-media-state="backgrounded"]
+  .momentum-video-player__live-state {
+  border-color: var(--theme-info-text);
+  background: var(--theme-info-surface);
+  color: var(--theme-info-text);
+}
+
+.site-frame--learner
+  .momentum-video-player__stage[data-media-state="error"]
+  .momentum-video-player__live-state {
+  border-color: var(--theme-danger-text);
+  background: var(--theme-danger-surface);
+  color: var(--theme-danger-text);
+}
+
 .site-frame--learner .momentum-video-controls {
   flex-wrap: wrap;
   gap: 10px;
@@ -377,11 +399,11 @@
 }
 
 .site-frame--learner .momentum-video-viewer__status--error {
-  color: var(--theme-danger, #a63d40);
+  color: var(--theme-danger-text);
 }
 
 .site-frame--learner .momentum-video-viewer__status--error .momentum-video-viewer__status-dot {
-  background: var(--theme-danger, #a63d40);
+  background: var(--theme-danger-text);
 }
 
 .site-frame--learner .momentum-video-viewer__status-copy {

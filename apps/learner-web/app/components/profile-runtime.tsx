@@ -1,5 +1,8 @@
 "use client";
 
+/* Avatar delivery URLs are server-owned and may be private signed origins. */
+/* eslint-disable @next/next/no-img-element */
+
 import {
   ArrowRight,
   CheckCircle2,
@@ -27,6 +30,7 @@ import { ROUTES } from "../lib/routes";
 import { userFacingRequestError } from "../lib/user-facing-error";
 import {
   unavailableAvatarUploadPort,
+  type AvatarPresentation,
   type AvatarUploadPort,
 } from "../lib/avatar-upload";
 import { AvatarCropDialog } from "./avatar-crop-dialog";
@@ -109,6 +113,8 @@ export function ProfileRuntime({
     OfflineReadMetadata | undefined
   >();
   const [avatarDialogOpen, setAvatarDialogOpen] = useState(false);
+  const [currentAvatar, setCurrentAvatar] =
+    useState<AvatarPresentation | null>(null);
   const avatarButtonRef = useRef<HTMLButtonElement>(null);
   const generationRef = useRef(0);
   const mountedRef = useRef(false);
@@ -140,6 +146,7 @@ export function ProfileRuntime({
       const result = await loadProfileData(api, controller.signal);
       if (!isCurrent()) return;
       setMe(result.me);
+      setCurrentAvatar(result.me.avatar ?? null);
       setOnboarding(result.onboarding);
       setOnboardingError(result.onboardingError);
       setOfflineRead(result.offlineRead);
@@ -254,8 +261,16 @@ export function ProfileRuntime({
         >
           <div className="profile-card__hero profile-card__hero--avatar">
             <div className="profile-avatar-panel">
-              <div className="profile-avatar-large" aria-hidden="true">
-                {initials}
+              <div className="profile-avatar-large">
+                {currentAvatar ? (
+                  <img
+                    className="profile-avatar-large__image"
+                    src={currentAvatar.deliveryUrl}
+                    alt={currentAvatar.alt || `${displayName}'s profile photo`}
+                  />
+                ) : (
+                  <span aria-hidden="true">{initials}</span>
+                )}
               </div>
               <div className="profile-avatar-panel__copy">
                 <span className="profile-avatar-panel__label">
@@ -448,12 +463,19 @@ export function ProfileRuntime({
       {avatarDialogOpen ? (
         <AvatarCropDialog
           displayName={displayName}
+          profileRevision={me.profile_revision}
+          currentAvatar={currentAvatar}
           adapter={avatarUpload}
           onClose={() => {
             setAvatarDialogOpen(false);
             window.requestAnimationFrame(() =>
               avatarButtonRef.current?.focus(),
             );
+          }}
+          onSuccess={(avatar) => {
+            setCurrentAvatar(avatar);
+            setAvatarDialogOpen(false);
+            window.requestAnimationFrame(() => avatarButtonRef.current?.focus());
           }}
         />
       ) : null}

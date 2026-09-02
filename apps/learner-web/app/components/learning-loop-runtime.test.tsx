@@ -66,7 +66,7 @@ describe("learning loop video runtime", () => {
 
     expect(html).toContain("No approved lesson media is connected yet.");
     expect(html).toContain("The server exposes a completion action");
-    expect(html).toContain("No watch evidence has been accepted");
+    expect(html).toContain("Watch evidence cannot be submitted while media is unavailable");
     expect(html).not.toContain("<video");
     expect(html).not.toContain("Mastery");
     expect(html).not.toContain("Complete");
@@ -97,6 +97,8 @@ describe("learning loop video runtime", () => {
     expect(html).toContain('src="https://media.example.test/lesson.mp4"');
     expect(html).toContain('kind="captions"');
     expect(html).toContain("Open transcript");
+    expect(html).toContain('role="group" aria-label="Video controls"');
+    expect(html).toContain('data-media-state="loading"');
   });
 
   it("preserves the server-resolved completed state after media is no longer playable", () => {
@@ -110,7 +112,7 @@ describe("learning loop video runtime", () => {
 
     expect(html).toContain("Lesson complete.");
     expect(html).toContain("accepted the completion evidence");
-    expect(html).not.toContain("No watch evidence has been accepted");
+    expect(html).not.toContain("Watch evidence cannot be submitted while media is unavailable");
     expect(html).not.toContain("No approved lesson media is connected yet.");
   });
 });

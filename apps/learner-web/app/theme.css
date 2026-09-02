@@ -65,44 +65,6 @@ html[data-theme="dark"] {
   color-scheme: dark;
 }
 
-/* Device-local palette variants. They only remap presentation tokens; they do
- * not change identity, access, progress, notification, or session state. */
-html[data-palette="meadow"] {
-  --theme-action: #0f766e;
-  --theme-action-hover: #115e59;
-  --theme-action-text: #ffffff;
-  --theme-focus: #0f766e;
-  --theme-info-surface: #e7f7f4;
-  --theme-info-text: #0f5d56;
-}
-
-html[data-theme="dark"][data-palette="meadow"] {
-  --theme-action: #7dd3c7;
-  --theme-action-hover: #a1e7dc;
-  --theme-action-text: #06201d;
-  --theme-focus: #a1e7dc;
-  --theme-info-surface: #153e38;
-  --theme-info-text: #a4eee0;
-}
-
-html[data-palette="ember"] {
-  --theme-action: #b45309;
-  --theme-action-hover: #92400e;
-  --theme-action-text: #ffffff;
-  --theme-focus: #9a3412;
-  --theme-info-surface: #fff3e5;
-  --theme-info-text: #8a3d05;
-}
-
-html[data-theme="dark"][data-palette="ember"] {
-  --theme-action: #fdba74;
-  --theme-action-hover: #fed7aa;
-  --theme-action-text: #2b1304;
-  --theme-focus: #fed7aa;
-  --theme-info-surface: #4c2c16;
-  --theme-info-text: #ffd6ae;
-}
-
 html[data-theme="dark"] body {
   color: var(--theme-text);
   background: var(--theme-canvas);
@@ -959,108 +921,6 @@ html[data-theme="dark"]
   gap: 12px;
 }
 
-.theme-palette-control {
-  display: grid;
-  min-width: 0;
-  gap: 8px;
-  padding: 12px;
-  border: 1px solid var(--theme-border);
-  border-radius: 9px;
-  background: var(--theme-surface-subtle);
-}
-
-.theme-palette-control__heading {
-  display: flex;
-  min-width: 0;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.theme-palette-control__heading > span {
-  color: var(--theme-text);
-  font-size: 0.74rem;
-  font-weight: 800;
-}
-
-.theme-palette-control__heading small {
-  color: var(--theme-text-muted);
-  font-size: 0.66rem;
-}
-
-.theme-palette-control__options {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.theme-palette-control__option {
-  display: flex;
-  min-width: 0;
-  min-height: 56px;
-  align-items: center;
-  gap: 8px;
-  padding: 8px;
-  border: 1px solid var(--theme-border);
-  border-radius: 7px;
-  color: var(--theme-text-muted);
-  background: var(--theme-surface);
-  text-align: left;
-}
-
-.theme-palette-control__option:hover,
-.theme-palette-control__option:focus-visible {
-  color: var(--theme-text);
-  border-color: var(--theme-action);
-}
-
-.theme-palette-control__option[aria-pressed="true"] {
-  color: var(--theme-info-text);
-  border-color: var(--theme-action);
-  background: var(--theme-surface-raised);
-  box-shadow: inset 0 0 0 1px var(--theme-action);
-}
-
-.theme-palette-control__option > span:last-child {
-  display: grid;
-  min-width: 0;
-  gap: 2px;
-}
-
-.theme-palette-control__option strong {
-  color: inherit;
-  font-size: 0.7rem;
-  font-weight: 800;
-}
-
-.theme-palette-control__option small {
-  overflow-wrap: anywhere;
-  color: var(--theme-text-muted);
-  font-size: 0.62rem;
-  line-height: 1.25;
-}
-
-.theme-palette-swatch {
-  width: 20px;
-  height: 20px;
-  flex: 0 0 20px;
-  border: 2px solid var(--theme-surface);
-  border-radius: 50%;
-  box-shadow: 0 0 0 1px var(--theme-border-strong);
-}
-
-.theme-palette-swatch--cobalt {
-  background: #3157d8;
-}
-
-.theme-palette-swatch--meadow {
-  background: #0f766e;
-}
-
-.theme-palette-swatch--ember {
-  background: #b45309;
-}
-
 html[data-theme="dark"] .theme-control__option {
   color: var(--theme-text-muted);
 }
@@ -1182,29 +1042,6 @@ html[data-theme="dark"] .theme-control__option[aria-pressed="true"] {
     color: var(--theme-disabled-text);
   }
 
-  .theme-palette-control__heading {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  .theme-palette-control__options {
-    gap: 5px;
-  }
-
-  .theme-palette-control__option {
-    min-height: 50px;
-    gap: 5px;
-    padding: 6px;
-  }
-
-  .theme-palette-control__option strong {
-    font-size: 0.64rem;
-  }
-
-  .theme-palette-control__option small {
-    display: none;
-  }
 }
 
 @media (max-width: 480px) {

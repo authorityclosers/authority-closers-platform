@@ -36,8 +36,9 @@ export type AvatarCropDialogProps = {
 
 type DialogStatus =
   | { status: "idle" }
+  | { status: "validating" }
   | { status: "uploading" }
-  | { status: "processing"; stage: string }
+  | { status: "processing"; operationId: string; stage: string }
   | { status: "success" }
   | { status: "error"; message: string };
 
@@ -76,6 +77,18 @@ function previewStyle(crop: AvatarCrop): React.CSSProperties {
   };
 }
 
+function readImageDimensions(
+  source: string,
+): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () =>
+      resolve({ width: image.naturalWidth, height: image.naturalHeight });
+    image.onerror = () => reject(new Error("image_dimensions_unreadable"));
+    image.src = source;
+  });
+}
+
 export function AvatarCropDialog({
   displayName,
   profileRevision,
@@ -95,13 +108,47 @@ export function AvatarCropDialog({
   const [status, setStatus] = useState<DialogStatus>({ status: "idle" });
   const dialogRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const mountedRef = useRef(true);
+  const selectionRef = useRef(0);
+  const statusRef = useRef<DialogStatus>(status);
+  const focusOriginRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    dialogRef.current?.querySelector<HTMLElement>("button, input")?.focus();
+    statusRef.current = status;
+  }, [status]);
+
+  useEffect(() => {
     const dialog = dialogRef.current;
+    if (!dialog) return;
+
+    focusOriginRef.current =
+      document.activeElement instanceof HTMLElement &&
+      !dialog.contains(document.activeElement)
+        ? document.activeElement
+        : null;
+
+    const previouslyInert = new Map<HTMLElement, string | null>();
+    const previouslyHidden = new Map<HTMLElement, string | null>();
+    const shell = dialog.closest<HTMLElement>(".site-frame--learner");
+    let branch: HTMLElement | null = dialog.parentElement;
+    while (shell && branch && branch !== shell) {
+      const parent = branch.parentElement;
+      if (!parent) break;
+      for (const sibling of Array.from(parent.children)) {
+        if (sibling === branch || !(sibling instanceof HTMLElement)) continue;
+        previouslyInert.set(sibling, sibling.getAttribute("inert"));
+        previouslyHidden.set(sibling, sibling.getAttribute("aria-hidden"));
+        sibling.setAttribute("inert", "");
+        sibling.setAttribute("aria-hidden", "true");
+      }
+      branch = parent;
+    }
+
+    dialog.querySelector<HTMLElement>("button, input")?.focus();
 
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
+        if (statusRef.current.status === "uploading") return;
         event.preventDefault();
         onClose();
         return;
@@ -109,7 +156,7 @@ export function AvatarCropDialog({
       if (event.key !== "Tab" || !dialog) return;
       const focusable = Array.from(
         dialog.querySelectorAll<HTMLElement>(
-          'button:not(:disabled), input:not(:disabled), [href], [tabindex]:not([tabindex="-1"])',
+          'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [href], [tabindex]:not([tabindex="-1"])',
         ),
       );
       if (focusable.length === 0) {
@@ -129,8 +176,27 @@ export function AvatarCropDialog({
     }
 
     document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      previouslyInert.forEach((value, element) => {
+        if (value === null) element.removeAttribute("inert");
+        else element.setAttribute("inert", value);
+      });
+      previouslyHidden.forEach((value, element) => {
+        if (value === null) element.removeAttribute("aria-hidden");
+        else element.setAttribute("aria-hidden", value);
+      });
+      focusOriginRef.current?.focus();
+      focusOriginRef.current = null;
+    };
   }, [onClose]);
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+      selectionRef.current += 1;
+    };
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -138,10 +204,13 @@ export function AvatarCropDialog({
     };
   }, [previewUrl]);
 
-  function chooseFile(nextFile: File | null) {
+  async function chooseFile(nextFile: File | null) {
+    const selection = ++selectionRef.current;
     const validation = validateAvatarFile(nextFile);
     if (!nextFile || !validation.ok) {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
       setFile(null);
+      setPreviewUrl(null);
       setFileError(
         validation.ok
           ? "Choose an image to preview your avatar."
@@ -151,21 +220,66 @@ export function AvatarCropDialog({
       return;
     }
 
+    let nextPreviewUrl: string;
+    try {
+      nextPreviewUrl = URL.createObjectURL(nextFile);
+    } catch {
+      setFile(null);
+      setPreviewUrl(null);
+      setFileError("This image could not be previewed. Choose another image.");
+      setStatus({ status: "idle" });
+      return;
+    }
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setFile(nextFile);
-    setPreviewUrl(URL.createObjectURL(nextFile));
+    setPreviewUrl(nextPreviewUrl);
     setFileError(null);
     setCrop({ scale: 1, offsetX: 0, offsetY: 0 });
-    setStatus({ status: "idle" });
+    setStatus({ status: "validating" });
+
+    try {
+      const dimensions = await readImageDimensions(nextPreviewUrl);
+      if (!mountedRef.current || selection !== selectionRef.current) {
+        URL.revokeObjectURL(nextPreviewUrl);
+        return;
+      }
+      const dimensionValidation = validateAvatarFile(nextFile, dimensions);
+      if (!dimensionValidation.ok) {
+        URL.revokeObjectURL(nextPreviewUrl);
+        setFile(null);
+        setPreviewUrl(null);
+        setFileError(dimensionValidation.message);
+        setStatus({ status: "idle" });
+      } else {
+        setStatus({ status: "idle" });
+      }
+    } catch {
+      if (!mountedRef.current || selection !== selectionRef.current) {
+        URL.revokeObjectURL(nextPreviewUrl);
+        return;
+      }
+      URL.revokeObjectURL(nextPreviewUrl);
+      setFile(null);
+      setPreviewUrl(null);
+      setFileError(
+        "The image dimensions could not be read. Choose another image.",
+      );
+      setStatus({ status: "idle" });
+    }
   }
 
   function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
-    chooseFile(event.target.files?.[0] ?? null);
+    void chooseFile(event.target.files?.[0] ?? null);
     event.target.value = "";
   }
 
   async function submitAvatar() {
-    if (!file || status.status === "uploading") {
+    if (
+      !file ||
+      status.status === "validating" ||
+      status.status === "uploading" ||
+      status.status === "processing"
+    ) {
       if (!file) setFileError("Choose an image before uploading.");
       return;
     }
@@ -179,6 +293,7 @@ export function AvatarCropDialog({
         profileRevision,
       });
     } catch {
+      if (!mountedRef.current) return;
       setStatus({
         status: "error",
         message:
@@ -187,8 +302,14 @@ export function AvatarCropDialog({
       return;
     }
 
+    if (!mountedRef.current) return;
+
     if (result.status === "processing") {
-      setStatus({ status: "processing", stage: describeStage(result.stage) });
+      setStatus({
+        status: "processing",
+        operationId: result.operationId,
+        stage: describeStage(result.stage),
+      });
       return;
     }
     if (result.status === "success") {
@@ -199,17 +320,84 @@ export function AvatarCropDialog({
     setStatus({ status: "error", message: resultMessage(result) });
   }
 
-  const isBusy = status.status === "uploading";
+  const processingOperationId =
+    status.status === "processing" ? status.operationId : null;
+
+  useEffect(() => {
+    if (!processingOperationId || !adapter.getStatus) return;
+    const getStatus = adapter.getStatus;
+    const controller = new AbortController();
+    let active = true;
+    let delay = 1000;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const poll = async () => {
+      try {
+        const result = await getStatus(processingOperationId, controller.signal);
+        if (!active || !mountedRef.current) return;
+        if (result.status === "processing") {
+          setStatus({
+            status: "processing",
+            operationId: processingOperationId,
+            stage: describeStage(result.stage),
+          });
+          timer = setTimeout(() => void poll(), delay);
+          delay = Math.min(10000, delay * 2);
+          return;
+        }
+        if (result.status === "success") {
+          setStatus({ status: "success" });
+          onSuccess?.(result.avatar);
+          return;
+        }
+        setStatus({ status: "error", message: resultMessage(result) });
+      } catch {
+        if (!active || controller.signal.aborted || !mountedRef.current) return;
+        setStatus({
+          status: "processing",
+          operationId: processingOperationId,
+          stage: "Status check unavailable; retrying safely",
+        });
+        timer = setTimeout(() => void poll(), delay);
+        delay = Math.min(10000, delay * 2);
+      }
+    };
+
+    void poll();
+    return () => {
+      active = false;
+      controller.abort();
+      if (timer) clearTimeout(timer);
+    };
+  }, [adapter, onSuccess, processingOperationId]);
+
+  const isBusy =
+    status.status === "validating" ||
+    status.status === "uploading" ||
+    status.status === "processing";
   const currentPreview = currentAvatar?.deliveryUrl;
 
   return (
-    <div className={styles.overlay} role="presentation" onMouseDown={onClose}>
+    <div
+      className={styles.overlay}
+      role="presentation"
+      onMouseDown={(event) => {
+        if (
+          event.target === event.currentTarget &&
+          statusRef.current.status !== "uploading"
+        ) {
+          onClose();
+        }
+      }}
+    >
       <div
         className={styles.dialog}
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="avatar-dialog-title"
+        aria-describedby="avatar-dialog-description"
+        aria-busy={isBusy}
         tabIndex={-1}
         onMouseDown={(event) => event.stopPropagation()}
       >
@@ -217,7 +405,7 @@ export function AvatarCropDialog({
           <div>
             <p className={styles.eyebrow}>Profile photo</p>
             <h2 id="avatar-dialog-title">Adjust your avatar</h2>
-            <p className={styles.description}>
+            <p className={styles.description} id="avatar-dialog-description">
               Preview a square crop. Your current avatar stays in place until
               the server confirms a new revision.
             </p>
@@ -227,6 +415,7 @@ export function AvatarCropDialog({
             type="button"
             onClick={onClose}
             aria-label="Close avatar editor"
+            disabled={status.status === "uploading"}
           >
             <X size={19} aria-hidden="true" />
           </button>
@@ -270,6 +459,13 @@ export function AvatarCropDialog({
                   type="file"
                   accept="image/jpeg,image/png,image/webp"
                   onChange={handleFileChange}
+                  disabled={isBusy}
+                  aria-invalid={fileError ? true : undefined}
+                  aria-describedby={
+                    fileError
+                      ? "avatar-file-hint avatar-file-error"
+                      : "avatar-file-hint"
+                  }
                 />
               </label>
               <p className={styles.hint} id="avatar-file-hint">
@@ -279,7 +475,7 @@ export function AvatarCropDialog({
             </div>
 
             {fileError ? (
-              <p className={styles.error} role="alert">
+              <p className={styles.error} id="avatar-file-error" role="alert">
                 <CircleAlert size={16} aria-hidden="true" />
                 {fileError}
               </p>
@@ -375,7 +571,7 @@ export function AvatarCropDialog({
                 className={styles.cancelButton}
                 type="button"
                 onClick={onClose}
-                disabled={isBusy}
+                disabled={status.status === "uploading"}
               >
                 Cancel
               </button>
@@ -387,7 +583,13 @@ export function AvatarCropDialog({
                 aria-describedby="avatar-upload-note"
               >
                 <Upload size={16} aria-hidden="true" />
-                {isBusy ? "Checking availability…" : "Upload avatar"}
+                {status.status === "validating"
+                  ? "Checking image…"
+                  : status.status === "uploading"
+                  ? "Checking availability…"
+                  : status.status === "processing"
+                    ? "Waiting for processing…"
+                    : "Upload avatar"}
               </button>
             </div>
             <p className={styles.uploadNote} id="avatar-upload-note">

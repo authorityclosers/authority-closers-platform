@@ -65,13 +65,29 @@ type PlaybackStatus =
   | "submitted"
   | "error";
 
+type MediaState =
+  | "loading"
+  | "ready"
+  | "playing"
+  | "paused"
+  | "buffering"
+  | "processing"
+  | "error"
+  | "blocked"
+  | "backgrounded";
+
 interface PlaybackSessionState {
   id: string;
   token: string;
   revision: number;
   activityRevision: number;
+  expiresAt: number;
   closed: boolean;
 }
+
+type PendingPlaybackEvent = {
+  input: PlaybackEventInput;
+};
 
 export interface VideoViewerProps {
   activity: ActivityResponse;
@@ -118,6 +134,22 @@ function playbackErrorMessage(error: unknown): string {
   return "Watch progress could not be saved. Try again while connected.";
 }
 
+function isPlaybackSessionInvalid(error: unknown): boolean {
+  if (!(error instanceof ApiError)) return false;
+  return (
+    [401, 403, 404, 409, 422].includes(error.status) &&
+    (error.code === null ||
+      [
+        "playback_session_not_found",
+        "playback_session_expired",
+        "playback_session_token_invalid",
+        "playback_session_closed",
+        "evidence_version_mismatch",
+        "playback_event_replay_rejected",
+      ].includes(error.code))
+  );
+}
+
 function LockedMediaStage({
   activity,
   moduleHref,
@@ -155,7 +187,7 @@ function LockedMediaStage({
       <div className="momentum-video-stage__footer">
         <span>
           <ShieldCheck size={15} aria-hidden="true" />
-          No watch evidence has been accepted for this activity.
+          Watch evidence cannot be submitted while media is unavailable.
         </span>
         <Link href={moduleHref}>Return to module</Link>
       </div>
@@ -210,10 +242,12 @@ export function VideoViewer({
   media = null,
   onPlaybackCommitted,
 }: VideoViewerProps) {
+  const authorized = Boolean(media?.src) && canStartPlayback(activity);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const sessionRef = useRef<PlaybackSessionState | null>(null);
   const startRequestRef = useRef<Promise<boolean> | null>(null);
   const heartbeatRequestRef = useRef<Promise<boolean> | null>(null);
+  const pendingHeartbeatRef = useRef<PendingPlaybackEvent | null>(null);
   const completionRequestRef = useRef<Promise<void> | null>(null);
   const mountedRef = useRef(true);
   const unmountingRef = useRef(false);
@@ -234,8 +268,15 @@ export function VideoViewer({
   const [canFullscreen, setCanFullscreen] = useState(false);
   const [canPictureInPicture, setCanPictureInPicture] = useState(false);
   const [hasEnded, setHasEnded] = useState(false);
-
-  const authorized = Boolean(media?.src) && canStartPlayback(activity);
+  const [mediaState, setMediaState] = useState<MediaState>(
+    authorized ? "loading" : "blocked",
+  );
+  const [mediaMessage, setMediaMessage] = useState(
+    authorized
+      ? "Loading approved lesson media…"
+      : "Approved lesson media is unavailable.",
+  );
+  const backgroundedRef = useRef(false);
 
   const updateStatus = useCallback(
     (next: PlaybackStatus, message: string) => {
@@ -246,6 +287,16 @@ export function VideoViewer({
     },
     [],
   );
+
+  const resetPlaybackSession = useCallback(() => {
+    sessionRef.current = null;
+    pendingHeartbeatRef.current = null;
+    finishReadyRef.current = false;
+    sequenceRef.current = 0;
+    watchCursorRef.current = 0;
+    setIsPlaying(false);
+    videoRef.current?.pause();
+  }, []);
 
   const sendPlaybackEvent = useCallback(
     async (
@@ -278,16 +329,19 @@ export function VideoViewer({
       const activeSession = sessionRef.current;
       if (!activeSession || !isLearnerOnline()) return false;
 
-      const sequence = sequenceRef.current + 1;
-      sequenceRef.current = sequence;
-      const input: PlaybackEventInput = {
-        session_id: activeSession.id,
-        event_id: clientEventId(sequence),
-        sequence,
-        start_seconds: Math.max(0, startSeconds),
-        end_seconds: Math.max(0, endSeconds),
-        kind,
-      };
+      const pending = pendingHeartbeatRef.current;
+      const input =
+        pending?.input.session_id === activeSession.id
+          ? pending.input
+          : {
+              session_id: activeSession.id,
+              event_id: clientEventId(sequenceRef.current + 1),
+              sequence: sequenceRef.current + 1,
+              start_seconds: Math.max(0, startSeconds),
+              end_seconds: Math.max(0, endSeconds),
+              kind,
+            };
+      pendingHeartbeatRef.current = { input };
       const request = api
         .heartbeatPlayback(activity.id, input, activeSession.token)
         .then((result) => {
@@ -298,13 +352,20 @@ export function VideoViewer({
               revision: result.revision,
             };
           }
-          watchCursorRef.current = Math.max(0, endSeconds);
+          sequenceRef.current = Math.max(sequenceRef.current, result.sequence);
+          if (pendingHeartbeatRef.current?.input.event_id === input.event_id) {
+            pendingHeartbeatRef.current = null;
+          }
+          watchCursorRef.current = Math.max(0, input.end_seconds);
           if (statusRef.current !== "saving" && statusRef.current !== "submitted") {
             updateStatus("watching", "Watch progress is being recorded by the server.");
           }
           return true;
         })
         .catch((error: unknown) => {
+          if (isPlaybackSessionInvalid(error)) {
+            resetPlaybackSession();
+          }
           updateStatus("error", playbackErrorMessage(error));
           videoRef.current?.pause();
           return false;
@@ -318,7 +379,7 @@ export function VideoViewer({
         }
       }
     },
-    [activity.id, api, updateStatus],
+    [activity.id, api, resetPlaybackSession, updateStatus],
   );
 
   const flushWatch = useCallback(
@@ -343,7 +404,16 @@ export function VideoViewer({
       updateStatus("submitted", "Watch progress has already been submitted.");
       return false;
     }
-    if (sessionRef.current) return true;
+    if (sessionRef.current) {
+      if (
+        sessionRef.current.expiresAt > 0 &&
+        sessionRef.current.expiresAt <= Date.now()
+      ) {
+        resetPlaybackSession();
+      } else {
+        return true;
+      }
+    }
     if (!authorized || !isLearnerOnline()) {
       updateStatus(
         "error",
@@ -362,6 +432,10 @@ export function VideoViewer({
         if (!started.session_token) {
           throw new Error("The server did not return a playback authorization token.");
         }
+        const expiresAt = Date.parse(started.expires_at);
+        if (!Number.isFinite(expiresAt)) {
+          throw new Error("The server did not return a valid playback expiry.");
+        }
         // Starting playback can move the activity to in_progress. Refresh the
         // activity before any evidence submission so its revision is current.
         const currentActivity = await api.activity(activity.id);
@@ -370,8 +444,13 @@ export function VideoViewer({
           token: started.session_token,
           revision: started.revision,
           activityRevision: currentActivity.revision,
+          expiresAt,
           closed: false,
         };
+        sequenceRef.current = 0;
+        pendingHeartbeatRef.current = null;
+        watchCursorRef.current = 0;
+        finishReadyRef.current = false;
         if (started.duration_seconds > 0) setDuration(started.duration_seconds);
         updateStatus("watching", "Watch progress is being recorded by the server.");
         return true;
@@ -384,7 +463,14 @@ export function VideoViewer({
     })();
     startRequestRef.current = request;
     return request;
-  }, [activity.id, activity.revision, api, authorized, updateStatus]);
+  }, [
+    activity.id,
+    activity.revision,
+    api,
+    authorized,
+    resetPlaybackSession,
+    updateStatus,
+  ]);
 
   const startPlaybackAndPlay = useCallback(async () => {
     const video = videoRef.current;
@@ -459,6 +545,9 @@ export function VideoViewer({
         );
         await onPlaybackCommitted?.();
       } catch (error) {
+        if (isPlaybackSessionInvalid(error)) {
+          resetPlaybackSession();
+        }
         updateStatus("error", playbackErrorMessage(error));
       } finally {
         completionRequestRef.current = null;
@@ -466,13 +555,66 @@ export function VideoViewer({
     })();
     completionRequestRef.current = request;
     return request;
-  }, [activity.id, api, duration, flushWatch, onPlaybackCommitted, updateStatus]);
+  }, [
+    activity.id,
+    api,
+    duration,
+    flushWatch,
+    onPlaybackCommitted,
+    resetPlaybackSession,
+    updateStatus,
+  ]);
+
+  const retryPlaybackSave = useCallback(async () => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (sessionRef.current) {
+      await completePlayback();
+      return;
+    }
+    setHasEnded(false);
+    video.currentTime = 0;
+    setCurrentTime(0);
+    setMediaState("loading");
+    setMediaMessage("Starting a fresh approved playback session…");
+    const started = await ensurePlaybackSession();
+    if (!started) return;
+    try {
+      await video.play();
+    } catch (error) {
+      updateStatus("error", playbackErrorMessage(error));
+      setMediaState("error");
+      setMediaMessage("Approved lesson media could not be started. Try again.");
+    }
+  }, [completePlayback, ensurePlaybackSession, updateStatus]);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      if (!authorized) {
+        setMediaState("blocked");
+        setMediaMessage("Approved lesson media is unavailable.");
+        return;
+      }
+      setMediaState("loading");
+      setMediaMessage("Loading approved lesson media…");
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [authorized, media?.src]);
 
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !authorized) return;
+    const safariVideo = video as HTMLVideoElement & {
+      webkitEnterFullscreen?: () => void;
+      webkitSupportsFullscreen?: boolean;
+    };
     setCanFullscreen(
-      typeof document !== "undefined" && Boolean(document.fullscreenEnabled),
+      typeof document !== "undefined" &&
+        (Boolean(document.fullscreenEnabled) ||
+          Boolean(
+            safariVideo.webkitSupportsFullscreen ||
+              safariVideo.webkitEnterFullscreen,
+          )),
     );
     setCanPictureInPicture(
       typeof document !== "undefined" &&
@@ -506,13 +648,25 @@ export function VideoViewer({
       return;
     }
     setIsPlaying(true);
+    setMediaState("playing");
+    setMediaMessage("Playing approved lesson media.");
   }, [startPlaybackAndPlay]);
 
   const handlePause = useCallback(() => {
     if (!mountedRef.current) return;
     setIsPlaying(false);
+    if (backgroundedRef.current) {
+      setMediaState("backgrounded");
+      setMediaMessage("Playback paused while this tab is in the background.");
+    } else if (videoRef.current?.ended || hasEnded) {
+      setMediaState("processing");
+      setMediaMessage("Processing watch evidence with the server…");
+    } else if (mediaState !== "processing") {
+      setMediaState("paused");
+      setMediaMessage("Playback paused. Press Play to resume.");
+    }
     if (!unmountingRef.current) void flushWatch();
-  }, [flushWatch]);
+  }, [flushWatch, hasEnded, mediaState]);
 
   const handleSeeked = useCallback(() => {
     const video = videoRef.current;
@@ -545,6 +699,72 @@ export function VideoViewer({
     const video = videoRef.current;
     if (!video || !Number.isFinite(video.duration)) return;
     setDuration(video.duration);
+    if (!backgroundedRef.current && !isPlaying) {
+      setMediaState("ready");
+      setMediaMessage("Approved lesson media is ready to play.");
+    }
+  }, [isPlaying]);
+
+  const handleLoadStart = useCallback(() => {
+    setMediaState("loading");
+    setMediaMessage("Loading approved lesson media…");
+  }, []);
+
+  const handleCanPlay = useCallback(() => {
+    if (!backgroundedRef.current && !isPlaying) {
+      setMediaState("ready");
+      setMediaMessage("Approved lesson media is ready to play.");
+    }
+  }, [isPlaying]);
+
+  const handleWaiting = useCallback(() => {
+    setMediaState("buffering");
+    setMediaMessage("Playback is buffering. Watch evidence remains paused.");
+  }, []);
+
+  const handleMediaError = useCallback(() => {
+    setIsPlaying(false);
+    setMediaState("error");
+    setMediaMessage(
+      "Approved lesson media could not be loaded. Retry when connected.",
+    );
+    updateStatus(
+      "error",
+      "Approved lesson media could not be loaded. Retry when connected.",
+    );
+    videoRef.current?.pause();
+  }, [updateStatus]);
+
+  const retryMedia = useCallback(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    updateStatus("idle", "Loading approved lesson media…");
+    setMediaState("loading");
+    setMediaMessage("Retrying approved lesson media…");
+    video.load();
+  }, [updateStatus]);
+
+  useEffect(() => {
+    function handleVisibilityChange() {
+      const video = videoRef.current;
+      if (!video) return;
+      if (document.hidden) {
+        backgroundedRef.current = true;
+        if (!video.paused) video.pause();
+        setMediaState("backgrounded");
+        setMediaMessage("Playback paused while this tab is in the background.");
+        return;
+      }
+      if (backgroundedRef.current) {
+        backgroundedRef.current = false;
+        setMediaState("paused");
+        setMediaMessage("Playback paused. Press Play to resume.");
+      }
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () =>
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, []);
 
   const togglePlay = useCallback(() => {
@@ -592,11 +812,34 @@ export function VideoViewer({
     const video = videoRef.current;
     if (!video || typeof document === "undefined") return;
     if (document.fullscreenElement) {
-      void document.exitFullscreen();
-    } else {
-      void video.requestFullscreen?.();
+      void document.exitFullscreen().catch(() => {
+        updateStatus("error", "Fullscreen could not be closed. Try again.");
+        setMediaMessage("Fullscreen could not be closed. Try again.");
+      });
+      return;
     }
-  }, []);
+    const safariVideo = video as HTMLVideoElement & {
+      webkitEnterFullscreen?: () => void;
+    };
+    if (typeof video.requestFullscreen === "function") {
+      void video.requestFullscreen().catch(() => {
+        updateStatus("error", "Fullscreen could not be opened. Try again.");
+        setMediaMessage("Fullscreen could not be opened. Try again.");
+      });
+      return;
+    }
+    if (typeof safariVideo.webkitEnterFullscreen === "function") {
+      try {
+        safariVideo.webkitEnterFullscreen();
+      } catch {
+        updateStatus("error", "Fullscreen could not be opened. Try again.");
+        setMediaMessage("Fullscreen could not be opened. Try again.");
+      }
+      return;
+    }
+    updateStatus("error", "Fullscreen is not available in this browser.");
+    setMediaMessage("Fullscreen is not available in this browser.");
+  }, [updateStatus]);
 
   const togglePictureInPicture = useCallback(() => {
     const video = videoRef.current;
@@ -610,6 +853,15 @@ export function VideoViewer({
     () => (duration > 0 ? Math.min(100, Math.max(0, (currentTime / duration) * 100)) : 0),
     [currentTime, duration],
   );
+
+  const visibleStatusMessage = [
+    "loading",
+    "buffering",
+    "backgrounded",
+    "error",
+  ].includes(mediaState)
+    ? mediaMessage
+    : statusMessage || mediaMessage;
 
   if (!authorized || !media) {
     if (activity.state.toLowerCase() === "completed") {
@@ -677,7 +929,19 @@ export function VideoViewer({
           ? "Submitted"
           : status === "error"
             ? "Needs attention"
-            : "Ready";
+            : mediaState === "loading"
+              ? "Loading"
+              : mediaState === "buffering"
+                ? "Buffering"
+                : mediaState === "backgrounded"
+                  ? "Paused in background"
+                  : mediaState === "processing"
+                    ? "Processing"
+                    : mediaState === "playing"
+                      ? "Playing"
+                      : mediaState === "paused"
+                        ? "Paused"
+                        : "Ready";
 
   return (
     <section className="momentum-video-viewer" aria-labelledby={`video-title-${activity.id}`}>
@@ -696,7 +960,10 @@ export function VideoViewer({
       </div>
 
       <div className="momentum-video-player">
-        <div className="momentum-video-player__stage">
+        <div
+          className="momentum-video-player__stage"
+          data-media-state={mediaState}
+        >
           <video
             ref={videoRef}
             className="momentum-video-player__video"
@@ -704,19 +971,29 @@ export function VideoViewer({
             poster={media.poster}
             playsInline
             preload="metadata"
+            onLoadStart={handleLoadStart}
             onPlay={() => {
               setIsPlaying(true);
+              setMediaState("playing");
               handlePlay();
             }}
             onPause={handlePause}
             onEnded={() => {
               setHasEnded(true);
+              setMediaState("processing");
+              setMediaMessage("Processing watch evidence with the server…");
               void completePlayback();
             }}
             onTimeUpdate={handleTimeUpdate}
             onLoadedMetadata={handleLoadedMetadata}
+            onCanPlay={handleCanPlay}
+            onWaiting={handleWaiting}
+            onStalled={handleWaiting}
+            onSuspend={handleWaiting}
+            onError={handleMediaError}
             onSeeked={handleSeeked}
             aria-label={activity.title}
+            aria-busy={mediaState === "loading" || mediaState === "buffering"}
           >
             {media.captions?.map((track) => (
               <track
@@ -730,10 +1007,14 @@ export function VideoViewer({
             ))}
           </video>
           <div className="momentum-video-player__live-state" role="status" aria-live="polite">
-            {statusMessage || "Playback has not started."}
+            {visibleStatusMessage || "Playback has not started."}
           </div>
         </div>
-        <div className="momentum-video-controls" aria-label="Video controls">
+        <div
+          className="momentum-video-controls"
+          role="group"
+          aria-label="Video controls"
+        >
           <button
             className="momentum-video-controls__play"
             type="button"
@@ -825,17 +1106,23 @@ export function VideoViewer({
             {statusLabel}
           </span>
           <p className="momentum-video-viewer__status-copy">
-            {statusMessage || "Start the lesson when you are ready."}
+            {visibleStatusMessage || "Start the lesson when you are ready."}
           </p>
         </div>
         <div className="momentum-video-viewer__status-actions">
-          {status === "error" && hasEnded ? (
+          {status === "error" && (hasEnded || mediaState === "error") ? (
             <button
               className="momentum-video-viewer__retry"
               type="button"
-              onClick={() => void completePlayback()}
+              onClick={() =>
+                mediaState === "error" && !hasEnded
+                  ? retryMedia()
+                  : void retryPlaybackSave()
+              }
             >
-              Retry server save
+              {mediaState === "error" && !hasEnded
+                ? "Retry media"
+                : "Retry server save"}
             </button>
           ) : null}
           <Link href={moduleHref}>Return to module</Link>

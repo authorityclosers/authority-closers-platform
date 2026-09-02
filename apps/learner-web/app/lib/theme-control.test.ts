@@ -4,9 +4,7 @@ import { runInNewContext } from "node:vm";
 import { describe, expect, it, vi } from "vitest";
 
 import {
-  DEFAULT_THEME_PALETTE,
   normalizeThemePreference,
-  normalizeThemePalette,
   resolveThemePreference,
   subscribeToThemeChanges,
 } from "../components/theme-control";
@@ -14,13 +12,11 @@ import {
 describe("learner theme preference", () => {
   function runPrepaint({
     stored,
-    storedPalette = null,
     systemPrefersDark,
     storageThrows = false,
     mediaThrows = false,
   }: {
     stored: unknown;
-    storedPalette?: unknown;
     systemPrefersDark: boolean;
     storageThrows?: boolean;
     mediaThrows?: boolean;
@@ -37,7 +33,7 @@ describe("learner theme preference", () => {
         localStorage: {
           getItem: (key: string) => {
             if (storageThrows) throw new Error("storage blocked");
-            return key === "ac-appearance-palette" ? storedPalette : stored;
+            return key === "ac-appearance-theme" ? stored : null;
           },
         },
         matchMedia: () => {
@@ -68,65 +64,20 @@ describe("learner theme preference", () => {
   it("applies the persisted theme from an external pre-paint script", () => {
     const root = runPrepaint({ stored: "dark", systemPrefersDark: false });
 
-    expect(root.dataset).toEqual({
-      theme: "dark",
-      themePreference: "dark",
-      palette: DEFAULT_THEME_PALETTE,
-    });
+    expect(root.dataset).toEqual({ theme: "dark", themePreference: "dark" });
     expect(root.style).toEqual({ colorScheme: "dark" });
   });
 
   it("resolves system before paint and never overrides explicit choices", () => {
     expect(
       runPrepaint({ stored: "system", systemPrefersDark: true }).dataset,
-    ).toEqual({
-      theme: "dark",
-      themePreference: "system",
-      palette: DEFAULT_THEME_PALETTE,
-    });
+    ).toEqual({ theme: "dark", themePreference: "system" });
     expect(
       runPrepaint({ stored: "system", systemPrefersDark: false }).dataset,
-    ).toEqual({
-      theme: "light",
-      themePreference: "system",
-      palette: DEFAULT_THEME_PALETTE,
-    });
+    ).toEqual({ theme: "light", themePreference: "system" });
     expect(
       runPrepaint({ stored: "light", systemPrefersDark: true }).dataset,
-    ).toEqual({
-      theme: "light",
-      themePreference: "light",
-      palette: DEFAULT_THEME_PALETTE,
-    });
-  });
-
-  it("accepts only supported persisted accent palettes", () => {
-    expect(normalizeThemePalette("cobalt")).toBe("cobalt");
-    expect(normalizeThemePalette("meadow")).toBe("meadow");
-    expect(normalizeThemePalette("ember")).toBe("ember");
-    expect(normalizeThemePalette("unexpected")).toBe(DEFAULT_THEME_PALETTE);
-    expect(normalizeThemePalette(null)).toBe(DEFAULT_THEME_PALETTE);
-  });
-
-  it("applies the persisted accent palette before paint", () => {
-    expect(
-      runPrepaint({
-        stored: "dark",
-        storedPalette: "meadow",
-        systemPrefersDark: false,
-      }).dataset,
-    ).toEqual({
-      theme: "dark",
-      themePreference: "dark",
-      palette: "meadow",
-    });
-    expect(
-      runPrepaint({
-        stored: "light",
-        storedPalette: "unknown",
-        systemPrefersDark: false,
-      }).dataset.palette,
-    ).toBe(DEFAULT_THEME_PALETTE);
+    ).toEqual({ theme: "light", themePreference: "light" });
   });
 
   it("falls back deterministically when storage or media queries are blocked", () => {
@@ -137,11 +88,7 @@ describe("learner theme preference", () => {
       mediaThrows: true,
     });
 
-    expect(root.dataset).toEqual({
-      theme: "light",
-      themePreference: "light",
-      palette: DEFAULT_THEME_PALETTE,
-    });
+    expect(root.dataset).toEqual({ theme: "light", themePreference: "light" });
     expect(root.style).toEqual({ colorScheme: "light" });
   });
 

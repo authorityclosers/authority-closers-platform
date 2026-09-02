@@ -625,7 +625,11 @@ export function LearnerShell({
                     </a>
                   </div>
                   <div className="account-menu-footer">
-                    <SignOutControl className="menu-sign-out-link" />
+                    <SignOutControl
+                      className="menu-sign-out-link"
+                      role="menuitem"
+                      tabIndex={-1}
+                    />
                   </div>
                 </div>
               ) : null}

@@ -2736,6 +2736,7 @@ export function ConnectedActivityWorkspace({
         ) : activity.kind.toLowerCase() === "video" ? (
           // VideoViewer owns the Approved lesson media is unavailable state.
           <VideoViewer
+            key={activity.id}
             activity={activity}
             api={api}
             moduleHref={moduleHref}

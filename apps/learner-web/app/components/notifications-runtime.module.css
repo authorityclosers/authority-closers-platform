@@ -6,7 +6,7 @@
   border: 1px solid var(--theme-border);
   border-radius: 18px;
   background: var(--theme-surface);
-  box-shadow: var(--theme-shadow-soft);
+  box-shadow: var(--theme-shadow);
 }
 
 .state h2 {
@@ -93,7 +93,7 @@
   border: 1px solid var(--theme-border);
   border-radius: 16px;
   background: var(--theme-surface);
-  box-shadow: var(--theme-shadow-soft);
+  box-shadow: var(--theme-shadow);
 }
 
 .row[data-read="false"] {

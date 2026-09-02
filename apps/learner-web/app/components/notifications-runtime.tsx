@@ -41,9 +41,21 @@ function StateIcon({ tone = "info" }: { tone?: "info" | "warning" | "error" }) {
   );
 }
 
-function ownedTargetHref(href: string | null): string | null {
+export function ownedTargetHref(href: string | null): string | null {
   if (!href || !href.startsWith("/") || href.startsWith("//")) return null;
-  return href;
+  // Backslashes are treated as forward slashes by browser URL parsers. Reject
+  // literal and encoded separators before resolving against an origin so a
+  // value such as /\\evil.example cannot become an external navigation.
+  if (/[\\\u0000-\u001f\u007f]/.test(href) || /%(?:2f|5c)/i.test(href)) {
+    return null;
+  }
+  try {
+    const parsed = new URL(href, "https://learner.invalid");
+    if (parsed.origin !== "https://learner.invalid") return null;
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return null;
+  }
 }
 
 function NotificationRow({ item }: { item: NotificationItem }) {

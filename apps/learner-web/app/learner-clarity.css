@@ -5548,6 +5548,13 @@ a.learning-list-card:hover {
   flex-shrink: 0;
 }
 
+.profile-avatar-large__image {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+
 .profile-card__hero--avatar {
   align-items: flex-start;
 }

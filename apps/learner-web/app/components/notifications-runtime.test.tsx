@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import type { NotificationResource } from "../lib/notifications";
-import { NotificationsRuntime } from "./notifications-runtime";
+import { NotificationsRuntime, ownedTargetHref } from "./notifications-runtime";
 
 const items = [
   {
@@ -66,6 +66,15 @@ describe("NotificationsRuntime", () => {
 
     expect(html).not.toContain("https://example.com");
     expect(html).not.toContain("Open related screen");
+  });
+
+  it("rejects protocol-relative and browser-normalized external targets", () => {
+    expect(ownedTargetHref("//evil.example/path")).toBeNull();
+    expect(ownedTargetHref("/\\\\evil.example/path")).toBeNull();
+    expect(ownedTargetHref("/%5cevil.example/path")).toBeNull();
+    expect(ownedTargetHref("/learning?tab=recent#start")).toBe(
+      "/learning?tab=recent#start",
+    );
   });
 
   it("shows an honest empty state for a connected source with no rows", () => {

@@ -15,6 +15,7 @@ describe("AvatarCropDialog", () => {
 
     expect(html).toContain('role="dialog"');
     expect(html).toContain('aria-modal="true"');
+    expect(html).toContain('aria-describedby="avatar-file-hint"');
     expect(html).toContain('accept="image/jpeg,image/png,image/webp"');
     expect(html).toContain("Use the sliders with a keyboard");
     expect(html).toContain("Your current avatar stays in place");

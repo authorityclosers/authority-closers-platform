@@ -67,6 +67,13 @@ export interface MeResponse {
   person_id: string;
   email: string;
   display_name: string | null;
+  /** Optional until the server-owned profile object contract is activated. */
+  avatar?: {
+    deliveryUrl: string;
+    alt: string;
+    revision: string;
+  } | null;
+  profile_revision?: string | number | null;
   email_verified_at: string;
   selected_tenant_id: string | null;
   membership_role: string | null;

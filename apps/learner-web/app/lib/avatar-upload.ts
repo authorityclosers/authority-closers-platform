@@ -41,18 +41,27 @@ export type AvatarUploadResult =
 
 export interface AvatarUploadPort {
   upload(input: AvatarUploadInput): Promise<AvatarUploadResult>;
+  /**
+   * Optional provider-owned status lookup. A processing result is never
+   * treated as success without a later server confirmation.
+   */
+  getStatus?: (
+    operationId: string,
+    signal?: AbortSignal,
+  ) => Promise<AvatarUploadResult>;
 }
 
 export type AvatarFileValidation =
   | { ok: true; mimeType: AvatarAcceptedMimeType }
   | {
       ok: false;
-      code: "missing" | "unsupported_type";
+      code: "missing" | "unsupported_type" | "invalid_size" | "invalid_dimensions";
       message: string;
     };
 
 export function validateAvatarFile(
-  file: Pick<File, "type"> | null | undefined,
+  file: Pick<File, "type" | "size"> | null | undefined,
+  dimensions?: { width: number; height: number },
 ): AvatarFileValidation {
   if (!file) {
     return {
@@ -69,6 +78,28 @@ export function validateAvatarFile(
       ok: false,
       code: "unsupported_type",
       message: "Use a JPEG, PNG, or WebP image.",
+    };
+  }
+
+  if (!Number.isFinite(file.size) || file.size <= 0) {
+    return {
+      ok: false,
+      code: "invalid_size",
+      message: "This image has no readable file data. Choose another image.",
+    };
+  }
+
+  if (
+    dimensions &&
+    (!Number.isInteger(dimensions.width) ||
+      !Number.isInteger(dimensions.height) ||
+      dimensions.width <= 0 ||
+      dimensions.height <= 0)
+  ) {
+    return {
+      ok: false,
+      code: "invalid_dimensions",
+      message: "The image dimensions could not be read. Choose another image.",
     };
   }
 

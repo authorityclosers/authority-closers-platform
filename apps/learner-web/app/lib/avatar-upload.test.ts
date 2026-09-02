@@ -21,6 +21,19 @@ describe("avatar upload boundary", () => {
     });
   });
 
+  it("rejects empty files and unreadable dimensions before any upload", () => {
+    expect(validateAvatarFile({ type: "image/png", size: 0 })).toMatchObject({
+      ok: false,
+      code: "invalid_size",
+    });
+    expect(
+      validateAvatarFile(file("image/png"), { width: 0, height: 256 }),
+    ).toMatchObject({ ok: false, code: "invalid_dimensions" });
+    expect(
+      validateAvatarFile(file("image/png"), { width: 256, height: 256 }),
+    ).toMatchObject({ ok: true });
+  });
+
   it("clamps crop values before handing them to a future adapter", () => {
     expect(clampAvatarCrop({ scale: 4, offsetX: -40, offsetY: 40 })).toEqual({
       scale: 2,
