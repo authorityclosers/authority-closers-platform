@@ -1583,6 +1583,40 @@ svg {
   background: rgba(255, 255, 255, 0.22);
 }
 
+.dev-staging-bridge-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px clamp(18px, 4vw, 48px);
+  border-bottom: 1px solid #c6a33b;
+  background: #fff1bd;
+  color: #493700;
+  font-size: 0.78rem;
+}
+
+.dev-staging-bridge-notice__icon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid #6f5712;
+  background: #f9d96b;
+}
+
+.dev-staging-bridge-notice strong {
+  display: block;
+  margin: 1px 0 3px;
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.dev-staging-bridge-notice p {
+  max-width: 840px;
+  line-height: 1.45;
+}
+
 .preview-notice__icon {
   display: grid;
   width: 31px;

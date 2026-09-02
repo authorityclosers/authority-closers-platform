@@ -7,6 +7,7 @@ import "./auth-clarity.css";
 import "./onboarding-clarity.css";
 import "./learner-clarity.css";
 import "./theme.css";
+import { DevStagingBridgeNotice } from "./components/dev-staging-bridge-notice";
 import { PwaRegister } from "./components/pwa-register";
 import { ThemeRuntime } from "./components/theme-control";
 
@@ -53,6 +54,7 @@ export default function RootLayout({
         <Script src="/theme-init.js" strategy="beforeInteractive" />
       </head>
       <body>
+        <DevStagingBridgeNotice />
         <ThemeRuntime />
         {children}
         <PwaRegister />

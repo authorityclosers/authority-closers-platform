@@ -41,12 +41,43 @@ variable or in Git.
 ## Protected real data
 
 Authenticated profile, onboarding, progress, enrollment, evidence, and session
-behavior must be tested on the deployed staging learner origin. A host-only
-secure staging session cookie cannot be safely reused by localhost, and the API
-must continue rejecting localhost as the Origin for staging mutations.
+behavior may be tested from localhost only through the owner-approved
+development bridge below. Otherwise use the deployed staging learner origin. A
+host-only secure staging session cookie cannot be safely reused by localhost,
+and the API must continue rejecting localhost as the Origin for staging
+mutations.
+
+## Authenticated staging QA bridge
+
+The bridge is default-off, available only to `next dev`, and creates a separate
+local host-only session handle. The real staging session remains server-side in
+ephemeral memory; it is not copied into the browser, written to disk, or
+logged. Use a dedicated staging learner account and treat every mutation as a
+real staging-data change.
+
+In an uncommitted local environment file for `apps/learner-web`, set:
+
+```dotenv
+AC_DEV_AUTH_BRIDGE_ENABLED=true
+AC_DEV_AUTH_BRIDGE_ORIGIN=http://localhost:3000
+AC_DEV_AUTH_BRIDGE_UPSTREAM_ORIGIN=https://staging.authorityclosers.com
+```
+
+Leave `AC_DEV_API_ORIGIN` blank or set it to a loopback API. Run the normal
+learner `next dev` command and open `http://localhost:3000/login`. Sign in
+explicitly with the staging test account through the normal password-login
+form. A persistent banner says `Development bridge • staging data`, and
+responses identify `X-AC-Dev-Data-Mode: staging-authenticated`.
+
+The bridge's local session expires when the dev server restarts or after eight
+hours. Restarting the server drops its in-memory mapping; revoke the remote
+staging session if the process or machine may have been exposed. Google,
+registration, recovery, verification, admin, and unsupported routes remain on
+deployed staging. Do not expose the dev port, add credentials or cookies to
+Git, or use production accounts.
 
 Forbidden workarounds include copying cookies, rewriting Origin, disabling CSRF
-checks, exposing a VPS database/API port, or making a local browser cache
-canonical. If a future protected local preview is required, build a dedicated
-isolated preview environment with its own origin, session, database, and audit
-boundary.
+checks in staging, exposing a VPS database/API port, or making a local browser
+cache canonical. If a broader or non-learner protected local preview is
+required, build a dedicated isolated preview environment with its own origin,
+session, database, and audit boundary.
