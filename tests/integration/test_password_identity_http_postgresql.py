@@ -1,0 +1,1506 @@
+"""Fresh-PostgreSQL proof for password identity and progressive onboarding."""
+
+from __future__ import annotations
+
+import asyncio
+import hashlib
+import os
+import subprocess
+import sys
+from collections.abc import Coroutine, Iterator
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
+from uuid import UUID, uuid4
+
+import httpx
+import pytest
+from fastapi import FastAPI
+from sqlalchemy import Engine, create_engine, delete, func, select
+from sqlalchemy.engine import URL, make_url
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.orm import Session
+from sqlalchemy.schema import CreateSchema, DropSchema
+
+from ac_platform.application.settings import Settings
+from ac_platform.audit.models import AuditEvent
+from ac_platform.http.auth import install_identity_http
+from ac_platform.http.auth_transactions import AuthTransaction
+from ac_platform.http.problem import register_problem_handlers
+from ac_platform.identity.models import (
+    EmailChallenge,
+    EmailChallengeKind,
+    IdentityCommandIdempotency,
+    PasswordCredential,
+    Person,
+    ProviderAuthorizationTransaction,
+    ProviderIdentity,
+)
+from ac_platform.identity.models import Session as IdentitySession
+from ac_platform.identity.password_auth import decrypt_challenge_token, hash_password
+from ac_platform.identity.services import ProviderAuthorizationType, VerifiedProviderAssertion
+from ac_platform.outbox.models import OutboxEvent
+from ac_platform.tenancy.models import Membership, Tenant
+
+
+@dataclass(frozen=True, slots=True)
+class _Harness:
+    engine: Engine
+    schema_url: URL
+
+
+class _ExistingGoogleProvider:
+    audience = "postgres-google-client.apps.googleusercontent.com"
+
+    def __init__(self, *, email: str, subject: str) -> None:
+        self.email = email
+        self.subject = subject
+        self.transactions: list[AuthTransaction] = []
+
+    def authorization_url(
+        self,
+        transaction: AuthTransaction,
+        *,
+        redirect_uri: str,
+    ) -> str:
+        assert redirect_uri == "https://app.authorityclosers.test/v1/auth/google/callback"
+        self.transactions.append(transaction)
+        return f"https://accounts.example.test/authorize?state={transaction.state}"
+
+    async def exchange_code(
+        self,
+        code: str,
+        transaction: AuthTransaction,
+        *,
+        callback_state: str,
+        redirect_uri: str,
+    ) -> VerifiedProviderAssertion:
+        assert code == "controlled-google-code"
+        assert callback_state == transaction.state
+        assert redirect_uri == "https://app.authorityclosers.test/v1/auth/google/callback"
+        return VerifiedProviderAssertion(
+            issuer="https://accounts.google.com",
+            subject=self.subject,
+            audience=self.audience,
+            state=callback_state,
+            nonce=transaction.nonce,
+            authorization_type=transaction.authorization_type,
+            email=self.email,
+            email_verified=True,
+        )
+
+
+def _run_async[T](coroutine: Coroutine[Any, Any, T]) -> T:
+    if sys.platform == "win32":
+        with asyncio.Runner(loop_factory=asyncio.SelectorEventLoop) as runner:
+            return runner.run(coroutine)
+    return asyncio.run(coroutine)
+
+
+def _postgres_url() -> URL:
+    raw = os.getenv("AC_PASSWORD_HTTP_POSTGRES_TEST_URL") or os.getenv("AC_TEST_DATABASE_URL")
+    if not raw:
+        pytest.skip("password HTTP PostgreSQL URL is not configured")
+    url = make_url(raw)
+    if url.get_backend_name() != "postgresql":
+        pytest.skip("password HTTP integration requires PostgreSQL")
+    if (
+        url.host not in {None, "127.0.0.1", "localhost", "::1"}
+        and os.getenv("AC_ALLOW_REMOTE_TEST_DATABASE") != "1"
+    ):
+        pytest.skip("refusing to mutate a non-local PostgreSQL database")
+    return url.set(drivername="postgresql+psycopg")
+
+
+@pytest.fixture(scope="module")
+def postgres_harness() -> Iterator[_Harness]:
+    root = Path(__file__).parents[2]
+    base_url = _postgres_url()
+    schema = f"password_http_{uuid4().hex}"
+    admin_engine = create_engine(base_url, pool_pre_ping=True)
+    schema_engine: Engine | None = None
+    created = False
+    try:
+        with admin_engine.begin() as connection:
+            connection.execute(CreateSchema(schema))
+        created = True
+        query = dict(base_url.query)
+        query["options"] = f"-csearch_path={schema}"
+        schema_url = base_url.set(query=query)
+        environment = os.environ.copy()
+        environment.update(
+            {
+                "AC_DATABASE_URL": base_url.render_as_string(hide_password=False),
+                "AC_DATABASE_MIGRATOR_URL": base_url.render_as_string(hide_password=False),
+                "AC_ENVIRONMENT": "test",
+                "PGOPTIONS": f"-csearch_path={schema}",
+                "PYTHONPATH": os.pathsep.join(
+                    part
+                    for part in (
+                        str(root / "packages" / "python"),
+                        environment.get("PYTHONPATH", ""),
+                    )
+                    if part
+                ),
+            }
+        )
+        migration = subprocess.run(
+            [sys.executable, "-m", "alembic", "-c", "alembic.ini", "upgrade", "head"],
+            cwd=root,
+            env=environment,
+            capture_output=True,
+            text=True,
+            timeout=180,
+            check=False,
+        )
+        if migration.returncode != 0:
+            pytest.fail(
+                "fresh PostgreSQL migration failed\n"
+                f"stdout:\n{migration.stdout}\n"
+                f"stderr:\n{migration.stderr}"
+            )
+        schema_engine = create_engine(schema_url, pool_pre_ping=True)
+        yield _Harness(engine=schema_engine, schema_url=schema_url)
+    finally:
+        if schema_engine is not None:
+            schema_engine.dispose()
+        if created:
+            with admin_engine.begin() as connection:
+                connection.execute(DropSchema(schema, cascade=True))
+        admin_engine.dispose()
+
+
+def test_password_identity_recovery_and_onboarding_on_fresh_postgresql(
+    postgres_harness: _Harness,
+) -> None:
+    async def scenario() -> None:
+        token_pepper = "postgres-password-token-pepper-that-is-long-enough"  # noqa: S105
+        challenge_secret = "postgres-email-challenge-secret-that-is-long-enough"  # noqa: S105
+        async_engine = create_async_engine(postgres_harness.schema_url, pool_pre_ping=True)
+        sessions = async_sessionmaker(async_engine, expire_on_commit=False)
+        public_tenant_id = uuid4()
+        with Session(postgres_harness.engine) as database, database.begin():
+            database.add(
+                Tenant(
+                    id=public_tenant_id,
+                    slug="authority-closers-public-alpha",
+                    name="Authority Closers public alpha",
+                )
+            )
+        settings = Settings(
+            environment="test",
+            database_url=postgres_harness.schema_url.render_as_string(hide_password=False),
+            session_token_pepper=token_pepper,
+            oauth_transaction_secret="postgres-oauth-transaction-secret-long-enough",  # noqa: S106
+            email_challenge_secret=challenge_secret,
+            learner_consent_version="staging-test-document-v1",
+            public_learner_tenant_id=public_tenant_id,
+            operations_tenant_id=uuid4(),
+            public_app_url="https://app.authorityclosers.test",
+            admin_app_url="https://admin.authorityclosers.test",
+            api_url="https://api.authorityclosers.test",
+        )
+        application = FastAPI()
+        register_problem_handlers(application)
+        install_identity_http(application, settings=settings, sessions=sessions)
+        transport = httpx.ASGITransport(app=application, client=("127.0.0.1", 12345))
+        headers = {"Origin": "https://app.authorityclosers.test"}
+        try:
+            async with httpx.AsyncClient(
+                transport=transport,
+                base_url="https://app.authorityclosers.test",
+            ) as client:
+                registered = await client.post(
+                    "/v1/auth/password/register",
+                    headers=headers,
+                    json={
+                        "first_name": "Learner",
+                        "email": "learner@example.com",
+                        "whatsapp_number": "+12025550123",
+                        "password": "initial learner password",
+                        "consent": True,
+                    },
+                )
+                assert registered.status_code == 202
+                assert registered.headers["cache-control"] == "no-store"
+                assert registered.json() == {"status": "verification_required"}
+                assert "token" not in registered.text
+
+                with Session(postgres_harness.engine) as database:
+                    person = database.scalar(
+                        select(Person).where(Person.email == "learner@example.com")
+                    )
+                    assert person is not None
+                    challenge = database.scalar(
+                        select(EmailChallenge).where(
+                            EmailChallenge.person_id == person.id,
+                            EmailChallenge.kind == EmailChallengeKind.VERIFICATION.value,
+                        )
+                    )
+                    assert challenge is not None
+                    event = database.scalar(
+                        select(OutboxEvent).where(
+                            OutboxEvent.aggregate_id == person.id,
+                        )
+                    )
+                    assert event is not None
+                    assert set(event.payload) == {"challenge_id", "kind"}
+                    token = decrypt_challenge_token(
+                        challenge_secret,
+                        challenge.encrypted_token,
+                        kind=EmailChallengeKind.VERIFICATION,
+                        person_id=person.id,
+                    )
+
+                other_tenant_id = uuid4()
+                with Session(postgres_harness.engine) as database, database.begin():
+                    database.add(
+                        Tenant(
+                            id=other_tenant_id,
+                            slug="preexisting-membership",
+                            name="Pre-existing membership",
+                        )
+                    )
+                    database.add(
+                        Membership(
+                            tenant_id=other_tenant_id,
+                            person_id=person.id,
+                            role="support",
+                            status="active",
+                        )
+                    )
+
+                resend = await client.post(
+                    "/v1/auth/password/resend-verification",
+                    headers=headers,
+                    json={"email": "learner@example.com"},
+                )
+                assert resend.status_code == 200
+                assert resend.headers["cache-control"] == "no-store"
+                assert resend.json() == {"accepted": True}
+
+                with Session(postgres_harness.engine) as database:
+                    replacement_challenge = database.scalar(
+                        select(EmailChallenge)
+                        .where(
+                            EmailChallenge.person_id == person.id,
+                            EmailChallenge.kind == EmailChallengeKind.VERIFICATION.value,
+                            EmailChallenge.consumed_at.is_(None),
+                        )
+                        .order_by(EmailChallenge.issued_at.desc())
+                    )
+                    assert replacement_challenge is not None
+                    replacement_token = decrypt_challenge_token(
+                        challenge_secret,
+                        replacement_challenge.encrypted_token,
+                        kind=EmailChallengeKind.VERIFICATION,
+                        person_id=person.id,
+                    )
+
+                superseded = await client.post(
+                    "/v1/auth/password/verify",
+                    headers=headers,
+                    json={"token": token},
+                )
+                assert superseded.status_code == 400
+
+                verified = await client.post(
+                    "/v1/auth/password/verify",
+                    headers=headers,
+                    json={"token": replacement_token},
+                )
+                assert verified.status_code == 200
+                assert verified.json()["authenticated"] is True
+                assert "token" not in verified.text
+                with Session(postgres_harness.engine) as database:
+                    membership = database.get(Membership, (public_tenant_id, person.id))
+                    assert membership is not None
+                    assert membership.role == "learner"
+                    assert membership.status == "active"
+                    existing_membership = database.get(
+                        Membership,
+                        (other_tenant_id, person.id),
+                    )
+                    assert existing_membership is not None
+                    assert existing_membership.role == "support"
+                me = await client.get("/v1/me")
+                assert me.status_code == 200
+                assert me.json()["selected_tenant_id"] == str(public_tenant_id)
+                assert me.json()["membership_role"] == "learner"
+
+                initial_profile = await client.get("/v1/onboarding")
+                assert initial_profile.status_code == 200
+                assert initial_profile.json()["status"] == "not_started"
+                assert initial_profile.headers["etag"] == '"onboarding-revision-0"'
+
+                onboarding_payload = {
+                    "experience_context": "sales",
+                    "learning_goal": "Ask a clearer next-step question",
+                    "practice_situation": None,
+                    "weekly_minutes": 30,
+                    "status": "completed",
+                    "current_step": 3,
+                }
+                onboarding_key = str(uuid4())
+                onboarding_headers = headers | {
+                    "If-Match": '"onboarding-revision-0"',
+                    "Idempotency-Key": onboarding_key,
+                }
+                missing_key = await client.put(
+                    "/v1/onboarding",
+                    headers=headers | {"If-Match": '"onboarding-revision-0"'},
+                    json=onboarding_payload,
+                )
+                assert missing_key.status_code == 428
+                assert missing_key.json()["code"] == "idempotency_key_required"
+
+                committed_response, concurrent_replay = await asyncio.wait_for(
+                    asyncio.gather(
+                        client.put(
+                            "/v1/onboarding",
+                            headers=onboarding_headers,
+                            json=onboarding_payload,
+                        ),
+                        client.put(
+                            "/v1/onboarding",
+                            headers=onboarding_headers,
+                            json=onboarding_payload,
+                        ),
+                    ),
+                    timeout=10,
+                )
+                assert committed_response.status_code == 200
+                assert concurrent_replay.status_code == 200
+                assert concurrent_replay.json() == committed_response.json()
+                del committed_response  # The server committed, but the caller lost the response.
+
+                profile = await client.put(
+                    "/v1/onboarding",
+                    headers=onboarding_headers,
+                    json=onboarding_payload,
+                )
+                assert profile.status_code == 200
+                assert profile.headers["etag"] == '"onboarding-revision-1"'
+                assert profile.json()["next_action_href"] == "/home"
+                assert (
+                    "No unreviewed personalized course mapping"
+                    in profile.json()["next_action_reason"]
+                )
+                with Session(postgres_harness.engine) as database:
+                    refreshed_person = database.get(Person, person.id)
+                    assert refreshed_person is not None
+                    assert refreshed_person.onboarding_revision == 1
+                    markers = list(
+                        database.scalars(
+                            select(AuditEvent).where(
+                                AuditEvent.tenant_id == public_tenant_id,
+                                AuditEvent.actor_person_id == person.id,
+                                AuditEvent.action == "identity.onboarding_save_idempotency",
+                            )
+                        )
+                    )
+                    assert len(markers) == 1
+                    marker_payload = markers[0].payload
+                    assert set(marker_payload) == {
+                        "operation",
+                        "idempotency_key_digest",
+                        "request_digest",
+                        "result_person_id",
+                        "result_revision",
+                        "result_updated_at",
+                    }
+                    assert marker_payload["operation"] == "onboarding_save"
+                    key_digest = hashlib.sha256(onboarding_key.encode("ascii")).hexdigest()
+                    assert marker_payload["idempotency_key_digest"] == key_digest
+                    assert onboarding_key not in str(marker_payload)
+                    request_digest = marker_payload["request_digest"]
+                    assert isinstance(request_digest, str)
+                    assert len(request_digest) == 64
+                    assert marker_payload["result_person_id"] == str(person.id)
+                    assert marker_payload["result_revision"] == 1
+                    result_updated_at = marker_payload["result_updated_at"]
+                    assert isinstance(result_updated_at, str)
+                    assert datetime.fromisoformat(result_updated_at) == datetime.fromisoformat(
+                        profile.json()["updated_at"]
+                    )
+                    command = database.scalar(
+                        select(IdentityCommandIdempotency).where(
+                            IdentityCommandIdempotency.tenant_id == public_tenant_id,
+                            IdentityCommandIdempotency.actor_person_id == person.id,
+                            IdentityCommandIdempotency.operation == "onboarding_save",
+                            IdentityCommandIdempotency.key_digest == key_digest,
+                        )
+                    )
+                    assert command is not None
+                    assert command.status == "completed"
+                    assert command.request_digest == request_digest
+                    assert command.result_revision == 1
+
+                conflicting_reuse = await client.put(
+                    "/v1/onboarding",
+                    headers=onboarding_headers,
+                    json=onboarding_payload | {"learning_goal": "A different canonical request"},
+                )
+                assert conflicting_reuse.status_code == 409
+                assert conflicting_reuse.json()["code"] == "onboarding_idempotency_conflict"
+
+                recovery = await client.post(
+                    "/v1/auth/password/recovery",
+                    headers=headers,
+                    json={"email": "learner@example.com"},
+                )
+                assert recovery.status_code == 200
+                assert recovery.headers["cache-control"] == "no-store"
+                assert recovery.json() == {"accepted": True}
+
+                with Session(postgres_harness.engine) as database:
+                    reset_challenge = database.scalar(
+                        select(EmailChallenge)
+                        .where(
+                            EmailChallenge.person_id == person.id,
+                            EmailChallenge.kind == EmailChallengeKind.PASSWORD_RESET.value,
+                        )
+                        .order_by(EmailChallenge.issued_at.desc())
+                    )
+                    assert reset_challenge is not None
+                    reset_token = decrypt_challenge_token(
+                        challenge_secret,
+                        reset_challenge.encrypted_token,
+                        kind=EmailChallengeKind.PASSWORD_RESET,
+                        person_id=person.id,
+                    )
+
+                reset = await client.post(
+                    "/v1/auth/password/reset",
+                    headers=headers,
+                    json={
+                        "token": reset_token,
+                        "new_password": "replacement learner password",
+                    },
+                )
+                assert reset.status_code == 200
+                assert reset.headers["cache-control"] == "no-store"
+                assert (await client.get("/v1/me")).status_code == 401
+
+                old_login = await client.post(
+                    "/v1/auth/password/login",
+                    headers=headers,
+                    json={
+                        "email": "learner@example.com",
+                        "password": "initial learner password",
+                    },
+                )
+                assert old_login.status_code == 401
+                new_login = await client.post(
+                    "/v1/auth/password/login",
+                    headers=headers,
+                    json={
+                        "email": "learner@example.com",
+                        "password": "replacement learner password",
+                    },
+                )
+                assert new_login.status_code == 200
+                me_after_login = await client.get("/v1/me")
+                assert me_after_login.status_code == 200
+                assert me_after_login.json()["selected_tenant_id"] == str(public_tenant_id)
+        finally:
+            await async_engine.dispose()
+
+    _run_async(scenario())
+
+
+def test_password_login_does_not_create_public_membership(
+    postgres_harness: _Harness,
+) -> None:
+    async def scenario() -> None:
+        person_id = uuid4()
+        public_tenant_id = uuid4()
+        password = "existing verified account password"  # noqa: S105
+        now = datetime(2026, 9, 1, 10, tzinfo=UTC)
+        with Session(postgres_harness.engine) as database, database.begin():
+            database.add_all(
+                [
+                    Person(
+                        id=person_id,
+                        email=f"auth-only-{person_id.hex}@example.com",
+                        first_name="Authentication only",
+                        email_verified_at=now,
+                    ),
+                    Tenant(
+                        id=public_tenant_id,
+                        slug=f"auth-only-public-{person_id.hex}",
+                        name="Authentication-only public tenant",
+                    ),
+                ]
+            )
+            database.flush()
+            database.add(
+                PasswordCredential(
+                    person_id=person_id,
+                    password_hash=hash_password(password),
+                )
+            )
+
+        async_engine = create_async_engine(postgres_harness.schema_url, pool_pre_ping=True)
+        sessions = async_sessionmaker(async_engine, expire_on_commit=False)
+        settings = Settings(
+            environment="test",
+            database_url=postgres_harness.schema_url.render_as_string(hide_password=False),
+            session_token_pepper="postgres-auth-only-pepper-that-is-long-enough",  # noqa: S106
+            oauth_transaction_secret="postgres-auth-only-oauth-secret-long-enough",  # noqa: S106
+            email_challenge_secret="postgres-auth-only-email-secret-long-enough",  # noqa: S106
+            learner_consent_version="staging-test-document-v1",
+            public_learner_tenant_id=public_tenant_id,
+            operations_tenant_id=uuid4(),
+            public_app_url="https://app.authorityclosers.test",
+            admin_app_url="https://admin.authorityclosers.test",
+            api_url="https://api.authorityclosers.test",
+        )
+        application = FastAPI()
+        register_problem_handlers(application)
+        install_identity_http(application, settings=settings, sessions=sessions)
+        transport = httpx.ASGITransport(app=application, client=("127.0.0.1", 12345))
+        try:
+            async with httpx.AsyncClient(
+                transport=transport,
+                base_url="https://app.authorityclosers.test",
+            ) as client:
+                login = await client.post(
+                    "/v1/auth/password/login",
+                    headers={"Origin": "https://app.authorityclosers.test"},
+                    json={
+                        "email": f"auth-only-{person_id.hex}@example.com",
+                        "password": password,
+                    },
+                )
+                assert login.status_code == 200
+                me = await client.get("/v1/me")
+                assert me.status_code == 200
+                assert me.json()["selected_tenant_id"] is None
+                assert me.json()["membership_role"] is None
+        finally:
+            await async_engine.dispose()
+
+        with Session(postgres_harness.engine) as database:
+            assert database.get(Membership, (public_tenant_id, person_id)) is None
+
+    _run_async(scenario())
+
+
+def test_existing_google_identity_authenticates_concurrently_without_registration_config(
+    postgres_harness: _Harness,
+) -> None:
+    async def scenario() -> None:
+        now = datetime(2026, 8, 31, 12, tzinfo=UTC)
+        person_id = uuid4()
+        public_tenant_id = uuid4()
+        other_tenant_id = uuid4()
+        provider_subject = f"google-existing-{person_id.hex}"
+        provider_email = f"google-existing-{person_id.hex}@example.com"
+        with Session(postgres_harness.engine) as database, database.begin():
+            database.add_all(
+                [
+                    Person(
+                        id=person_id,
+                        email=provider_email,
+                        first_name="Existing learner",
+                        email_verified_at=now,
+                        consent_version=None,
+                        consented_at=None,
+                    ),
+                    ProviderIdentity(
+                        person_id=person_id,
+                        issuer="https://accounts.google.com",
+                        subject=provider_subject,
+                    ),
+                    Tenant(
+                        id=public_tenant_id,
+                        slug=f"google-public-{person_id.hex}",
+                        name="Google public learner tenant",
+                    ),
+                    Tenant(
+                        id=other_tenant_id,
+                        slug=f"google-existing-{person_id.hex}",
+                        name="Existing support tenant",
+                    ),
+                    Membership(
+                        tenant_id=other_tenant_id,
+                        person_id=person_id,
+                        role="support",
+                        status="active",
+                    ),
+                ]
+            )
+
+        async_engine = create_async_engine(postgres_harness.schema_url, pool_pre_ping=True)
+        sessions = async_sessionmaker(async_engine, expire_on_commit=False)
+        provider = _ExistingGoogleProvider(email=provider_email, subject=provider_subject)
+        settings = Settings(
+            environment="test",
+            database_url=postgres_harness.schema_url.render_as_string(hide_password=False),
+            session_token_pepper="postgres-google-token-pepper-that-is-long-enough",  # noqa: S106
+            oauth_transaction_secret="postgres-google-transaction-secret-long-enough",  # noqa: S106
+            email_challenge_secret="postgres-google-email-secret-that-is-long-enough",  # noqa: S106
+            learner_consent_version=None,
+            public_learner_tenant_id=None,
+            public_app_url="https://app.authorityclosers.test",
+            admin_app_url="https://admin.authorityclosers.test",
+            api_url="https://api.authorityclosers.test",
+        )
+        application = FastAPI()
+        register_problem_handlers(application)
+        install_identity_http(
+            application,
+            settings=settings,
+            sessions=sessions,
+            provider=provider,
+        )
+        transport = httpx.ASGITransport(app=application, client=("127.0.0.1", 12345))
+
+        async def start(
+            client: httpx.AsyncClient,
+            *,
+            return_path: str,
+        ) -> AuthTransaction:
+            started = await client.get(
+                "/v1/auth/google/start",
+                params={
+                    "action": "authenticate",
+                    "surface": "learner",
+                    "return_path": return_path,
+                },
+                follow_redirects=False,
+            )
+            assert started.status_code == 303
+            transaction = provider.transactions[-1]
+            assert transaction.authorization_type is ProviderAuthorizationType.AUTHENTICATE
+            assert transaction.consent_version is None
+            return transaction
+
+        try:
+            async with httpx.AsyncClient(
+                transport=transport,
+                base_url="https://app.authorityclosers.test",
+            ) as client:
+                first_transaction = await start(client, return_path="/home?flow=first")
+                second_transaction = await start(client, return_path="/home?flow=second")
+
+                first_callback = await client.get(
+                    "/v1/auth/google/callback",
+                    params={
+                        "state": first_transaction.state,
+                        "code": "controlled-google-code",
+                    },
+                    follow_redirects=False,
+                )
+                assert first_callback.status_code == 303
+                assert first_callback.headers["location"] == (
+                    "https://app.authorityclosers.test/home?flow=first"
+                )
+
+                second_callback = await client.get(
+                    "/v1/auth/google/callback",
+                    params={
+                        "state": second_transaction.state,
+                        "code": "controlled-google-code",
+                    },
+                    follow_redirects=False,
+                )
+                assert second_callback.status_code == 303
+                assert second_callback.headers["location"] == (
+                    "https://app.authorityclosers.test/home?flow=second"
+                )
+                me = await client.get("/v1/me")
+                assert me.status_code == 200
+                assert me.json()["person_id"] == str(person_id)
+                assert me.json()["selected_tenant_id"] == str(other_tenant_id)
+                assert me.json()["membership_role"] == "support"
+
+                with Session(postgres_harness.engine) as database:
+                    session_rows = list(
+                        database.scalars(
+                            select(IdentitySession).where(IdentitySession.person_id == person_id)
+                        )
+                    )
+                    assert len(session_rows) == 2
+                    assert {row.selected_tenant_id for row in session_rows} == {other_tenant_id}
+                    for accepted_transaction in (first_transaction, second_transaction):
+                        transaction = database.get(
+                            ProviderAuthorizationTransaction,
+                            accepted_transaction.transaction_id,
+                        )
+                        assert transaction is not None
+                        assert transaction.status == "consumed"
+                        assert transaction.consumed_at is not None
+                    assert database.get(Membership, (public_tenant_id, person_id)) is None
+                    support_membership = database.get(
+                        Membership,
+                        (other_tenant_id, person_id),
+                    )
+                    assert support_membership is not None
+                    assert support_membership.role == "support"
+        finally:
+            await async_engine.dispose()
+
+    _run_async(scenario())
+
+
+def test_unknown_google_identity_authenticate_callback_fails_closed_without_registration(
+    postgres_harness: _Harness,
+) -> None:
+    async def scenario() -> None:
+        provider_subject = f"google-unknown-{uuid4().hex}"
+        provider_email = f"google-unknown-{uuid4().hex}@example.com"
+        async_engine = create_async_engine(postgres_harness.schema_url, pool_pre_ping=True)
+        sessions = async_sessionmaker(async_engine, expire_on_commit=False)
+        provider = _ExistingGoogleProvider(email=provider_email, subject=provider_subject)
+        settings = Settings(
+            environment="test",
+            database_url=postgres_harness.schema_url.render_as_string(hide_password=False),
+            session_token_pepper="postgres-unknown-google-token-pepper-long-enough",  # noqa: S106
+            oauth_transaction_secret="postgres-unknown-google-transaction-secret-long-enough",  # noqa: S106
+            email_challenge_secret="postgres-unknown-google-email-secret-long-enough",  # noqa: S106
+            learner_consent_version=None,
+            public_learner_tenant_id=None,
+            public_app_url="https://app.authorityclosers.test",
+            admin_app_url="https://admin.authorityclosers.test",
+            api_url="https://api.authorityclosers.test",
+        )
+        application = FastAPI()
+        register_problem_handlers(application)
+        install_identity_http(
+            application,
+            settings=settings,
+            sessions=sessions,
+            provider=provider,
+        )
+        transport = httpx.ASGITransport(app=application, client=("127.0.0.1", 12345))
+        try:
+            async with httpx.AsyncClient(
+                transport=transport,
+                base_url="https://app.authorityclosers.test",
+            ) as client:
+                started = await client.get(
+                    "/v1/auth/google/start",
+                    params={"action": "authenticate", "surface": "learner"},
+                    follow_redirects=False,
+                )
+                assert started.status_code == 303
+                transaction = provider.transactions[-1]
+
+                callback = await client.get(
+                    "/v1/auth/google/callback",
+                    params={"state": transaction.state, "code": "controlled-google-code"},
+                    follow_redirects=False,
+                )
+                assert callback.status_code == 303
+                assert callback.headers["location"] == (
+                    "https://app.authorityclosers.test/auth/callback?result=registration_required"
+                )
+                assert (await client.get("/v1/me")).status_code == 401
+
+            with Session(postgres_harness.engine) as database:
+                authorization = database.get(
+                    ProviderAuthorizationTransaction,
+                    transaction.transaction_id,
+                )
+                assert authorization is not None
+                assert authorization.status == "issued"
+                assert authorization.consumed_at is None
+                assert (
+                    database.scalar(
+                        select(func.count())
+                        .select_from(ProviderIdentity)
+                        .where(ProviderIdentity.subject == provider_subject)
+                    )
+                    == 0
+                )
+                assert (
+                    database.scalar(
+                        select(func.count())
+                        .select_from(Person)
+                        .where(Person.email == provider_email)
+                    )
+                    == 0
+                )
+        finally:
+            await async_engine.dispose()
+
+    _run_async(scenario())
+
+
+def test_existing_google_registration_records_first_consent_and_enables_password_setup(
+    postgres_harness: _Harness,
+) -> None:
+    async def scenario() -> None:
+        consent_version = "staging-test-document-v1"
+        now = datetime(2026, 8, 31, 12, tzinfo=UTC)
+        person_id = uuid4()
+        public_tenant_id = uuid4()
+        provider_subject = f"google-consent-upgrade-{person_id.hex}"
+        provider_email = f"google-consent-upgrade-{person_id.hex}@example.com"
+        challenge_secret = "postgres-consent-upgrade-email-secret-long-enough"  # noqa: S105
+        with Session(postgres_harness.engine) as database, database.begin():
+            database.add_all(
+                [
+                    Person(
+                        id=person_id,
+                        email=provider_email,
+                        first_name="Existing learner",
+                        email_verified_at=now,
+                        consent_version=None,
+                        consented_at=None,
+                    ),
+                    ProviderIdentity(
+                        person_id=person_id,
+                        issuer="https://accounts.google.com",
+                        subject=provider_subject,
+                    ),
+                    Tenant(
+                        id=public_tenant_id,
+                        slug=f"google-upgrade-{person_id.hex}",
+                        name="Google consent-upgrade learner tenant",
+                    ),
+                ]
+            )
+
+        async_engine = create_async_engine(postgres_harness.schema_url, pool_pre_ping=True)
+        sessions = async_sessionmaker(async_engine, expire_on_commit=False)
+        provider = _ExistingGoogleProvider(email=provider_email, subject=provider_subject)
+        settings = Settings(
+            environment="test",
+            database_url=postgres_harness.schema_url.render_as_string(hide_password=False),
+            session_token_pepper="postgres-consent-upgrade-token-pepper-long-enough",  # noqa: S106
+            oauth_transaction_secret="postgres-consent-upgrade-transaction-secret-long-enough",  # noqa: S106
+            email_challenge_secret=challenge_secret,
+            learner_consent_version=consent_version,
+            public_learner_tenant_id=public_tenant_id,
+            operations_tenant_id=uuid4(),
+            public_app_url="https://app.authorityclosers.test",
+            admin_app_url="https://admin.authorityclosers.test",
+            api_url="https://api.authorityclosers.test",
+        )
+        application = FastAPI()
+        register_problem_handlers(application)
+        install_identity_http(
+            application,
+            settings=settings,
+            sessions=sessions,
+            provider=provider,
+        )
+        transport = httpx.ASGITransport(app=application, client=("127.0.0.1", 12345))
+        headers = {"Origin": "https://app.authorityclosers.test"}
+        try:
+            async with httpx.AsyncClient(
+                transport=transport,
+                base_url="https://app.authorityclosers.test",
+            ) as client:
+                started = await client.get(
+                    "/v1/auth/google/start",
+                    params={
+                        "action": "register",
+                        "surface": "learner",
+                        "return_path": "/home",
+                        "consent": "true",
+                    },
+                    follow_redirects=False,
+                )
+                assert started.status_code == 303
+                transaction = provider.transactions[-1]
+                callback = await client.get(
+                    "/v1/auth/google/callback",
+                    params={"state": transaction.state, "code": "controlled-google-code"},
+                    follow_redirects=False,
+                )
+                assert callback.status_code == 303
+                assert callback.headers["location"] == "https://app.authorityclosers.test/home"
+                me = await client.get("/v1/me")
+                assert me.status_code == 200
+                assert me.json()["person_id"] == str(person_id)
+                assert me.json()["selected_tenant_id"] == str(public_tenant_id)
+
+                with Session(postgres_harness.engine) as database:
+                    person = database.get(Person, person_id)
+                    assert person is not None
+                    assert person.consent_version == consent_version
+                    assert person.consented_at is not None
+                    assert database.get(Membership, (public_tenant_id, person_id)) is not None
+                    assert database.get(PasswordCredential, person_id) is None
+
+                recovery = await client.post(
+                    "/v1/auth/password/recovery",
+                    headers=headers,
+                    json={"email": provider_email},
+                )
+                assert recovery.status_code == 200
+                with Session(postgres_harness.engine) as database:
+                    challenge = database.scalar(
+                        select(EmailChallenge)
+                        .where(
+                            EmailChallenge.person_id == person_id,
+                            EmailChallenge.kind == EmailChallengeKind.PASSWORD_RESET.value,
+                            EmailChallenge.consumed_at.is_(None),
+                        )
+                        .order_by(EmailChallenge.issued_at.desc())
+                    )
+                    assert challenge is not None
+                    reset_token = decrypt_challenge_token(
+                        challenge_secret,
+                        challenge.encrypted_token,
+                        kind=EmailChallengeKind.PASSWORD_RESET,
+                        person_id=person_id,
+                    )
+
+                repeated_recovery, reset = await asyncio.wait_for(
+                    asyncio.gather(
+                        client.post(
+                            "/v1/auth/password/recovery",
+                            headers=headers,
+                            json={"email": provider_email},
+                        ),
+                        client.post(
+                            "/v1/auth/password/reset",
+                            headers=headers,
+                            json={
+                                "token": reset_token,
+                                "new_password": "provider learner password",
+                            },
+                        ),
+                    ),
+                    timeout=10,
+                )
+                assert repeated_recovery.status_code == 200
+                assert reset.status_code in {200, 400}
+                if reset.status_code == 400:
+                    with Session(postgres_harness.engine) as database:
+                        replacement = database.scalar(
+                            select(EmailChallenge)
+                            .where(
+                                EmailChallenge.person_id == person_id,
+                                EmailChallenge.kind == EmailChallengeKind.PASSWORD_RESET.value,
+                                EmailChallenge.consumed_at.is_(None),
+                            )
+                            .order_by(EmailChallenge.issued_at.desc())
+                        )
+                        assert replacement is not None
+                        replacement_token = decrypt_challenge_token(
+                            challenge_secret,
+                            replacement.encrypted_token,
+                            kind=EmailChallengeKind.PASSWORD_RESET,
+                            person_id=person_id,
+                        )
+                    reset = await client.post(
+                        "/v1/auth/password/reset",
+                        headers=headers,
+                        json={
+                            "token": replacement_token,
+                            "new_password": "provider learner password",
+                        },
+                    )
+                    assert reset.status_code == 200
+                assert (await client.get("/v1/me")).status_code == 401
+                login = await client.post(
+                    "/v1/auth/password/login",
+                    headers=headers,
+                    json={
+                        "email": provider_email,
+                        "password": "provider learner password",
+                    },
+                )
+                assert login.status_code == 200
+                assert (await client.get("/v1/me")).status_code == 200
+        finally:
+            await async_engine.dispose()
+
+    _run_async(scenario())
+
+
+def test_concurrent_existing_google_registrations_share_one_canonical_person(
+    postgres_harness: _Harness,
+) -> None:
+    async def scenario() -> None:
+        consent_version = "staging-test-document-v1"
+        now = datetime(2026, 8, 31, 12, tzinfo=UTC)
+        person_id = uuid4()
+        public_tenant_id = uuid4()
+        provider_subject = f"google-concurrent-existing-{person_id.hex}"
+        provider_email = f"google-concurrent-existing-{person_id.hex}@example.com"
+        with Session(postgres_harness.engine) as database, database.begin():
+            database.add_all(
+                [
+                    Person(
+                        id=person_id,
+                        email=provider_email,
+                        first_name="Existing learner",
+                        email_verified_at=now,
+                    ),
+                    ProviderIdentity(
+                        person_id=person_id,
+                        issuer="https://accounts.google.com",
+                        subject=provider_subject,
+                    ),
+                    Tenant(
+                        id=public_tenant_id,
+                        slug=f"google-concurrent-{person_id.hex}",
+                        name="Google concurrent learner tenant",
+                    ),
+                ]
+            )
+
+        async_engine = create_async_engine(postgres_harness.schema_url, pool_pre_ping=True)
+        sessions = async_sessionmaker(async_engine, expire_on_commit=False)
+        provider = _ExistingGoogleProvider(email=provider_email, subject=provider_subject)
+        settings = Settings(
+            environment="test",
+            database_url=postgres_harness.schema_url.render_as_string(hide_password=False),
+            session_token_pepper="postgres-concurrent-token-pepper-long-enough",  # noqa: S106
+            oauth_transaction_secret="postgres-concurrent-transaction-secret-long-enough",  # noqa: S106
+            email_challenge_secret="postgres-concurrent-email-secret-long-enough",  # noqa: S106
+            learner_consent_version=consent_version,
+            public_learner_tenant_id=public_tenant_id,
+            operations_tenant_id=uuid4(),
+            public_app_url="https://app.authorityclosers.test",
+            admin_app_url="https://admin.authorityclosers.test",
+            api_url="https://api.authorityclosers.test",
+        )
+        application = FastAPI()
+        register_problem_handlers(application)
+        install_identity_http(
+            application,
+            settings=settings,
+            sessions=sessions,
+            provider=provider,
+        )
+        transport = httpx.ASGITransport(app=application, client=("127.0.0.1", 12345))
+        clients = [
+            httpx.AsyncClient(
+                transport=transport,
+                base_url="https://app.authorityclosers.test",
+            )
+            for _ in range(2)
+        ]
+        try:
+            starts = []
+            for client in clients:
+                started = await client.get(
+                    "/v1/auth/google/start",
+                    params={
+                        "action": "register",
+                        "surface": "learner",
+                        "return_path": "/home",
+                        "consent": "true",
+                    },
+                    follow_redirects=False,
+                )
+                assert started.status_code == 303
+                starts.append(provider.transactions[-1])
+
+            callbacks = await asyncio.wait_for(
+                asyncio.gather(
+                    *(
+                        client.get(
+                            "/v1/auth/google/callback",
+                            params={
+                                "state": transaction.state,
+                                "code": "controlled-google-code",
+                            },
+                            follow_redirects=False,
+                        )
+                        for client, transaction in zip(clients, starts, strict=True)
+                    )
+                ),
+                timeout=10,
+            )
+            assert [response.status_code for response in callbacks] == [303, 303]
+            assert [(await client.get("/v1/me")).status_code for client in clients] == [200, 200]
+
+            with Session(postgres_harness.engine) as database:
+                people = list(
+                    database.scalars(select(Person).where(Person.email == provider_email))
+                )
+                assert [person.id for person in people] == [person_id]
+                person = people[0]
+                assert person.consent_version == consent_version
+                assert person.consented_at is not None
+                assert (
+                    database.scalar(
+                        select(func.count())
+                        .select_from(ProviderIdentity)
+                        .where(
+                            ProviderIdentity.issuer == "https://accounts.google.com",
+                            ProviderIdentity.subject == provider_subject,
+                        )
+                    )
+                    == 1
+                )
+                assert (
+                    database.scalar(
+                        select(func.count())
+                        .select_from(IdentitySession)
+                        .where(IdentitySession.person_id == person_id)
+                    )
+                    == 2
+                )
+                assert database.get(Membership, (public_tenant_id, person_id)) is not None
+        finally:
+            for client in clients:
+                await client.aclose()
+            await async_engine.dispose()
+
+    _run_async(scenario())
+
+
+def test_concurrent_new_google_registrations_never_commit_an_orphan_person(
+    postgres_harness: _Harness,
+) -> None:
+    async def scenario() -> None:
+        public_tenant_id = uuid4()
+        provider_subject = f"google-concurrent-new-{uuid4().hex}"
+        provider_email = f"google-concurrent-new-{uuid4().hex}@example.com"
+        with Session(postgres_harness.engine) as database, database.begin():
+            database.add(
+                Tenant(
+                    id=public_tenant_id,
+                    slug=f"google-concurrent-new-{public_tenant_id.hex}",
+                    name="Google concurrent new learner tenant",
+                )
+            )
+
+        async_engine = create_async_engine(postgres_harness.schema_url, pool_pre_ping=True)
+        sessions = async_sessionmaker(async_engine, expire_on_commit=False)
+        provider = _ExistingGoogleProvider(email=provider_email, subject=provider_subject)
+        settings = Settings(
+            environment="test",
+            database_url=postgres_harness.schema_url.render_as_string(hide_password=False),
+            session_token_pepper="postgres-concurrent-new-token-pepper-long-enough",  # noqa: S106
+            oauth_transaction_secret="postgres-concurrent-new-transaction-secret-long-enough",  # noqa: S106
+            email_challenge_secret="postgres-concurrent-new-email-secret-long-enough",  # noqa: S106
+            learner_consent_version="staging-test-document-v1",
+            public_learner_tenant_id=public_tenant_id,
+            operations_tenant_id=uuid4(),
+            public_app_url="https://app.authorityclosers.test",
+            admin_app_url="https://admin.authorityclosers.test",
+            api_url="https://api.authorityclosers.test",
+        )
+        application = FastAPI()
+        register_problem_handlers(application)
+        install_identity_http(
+            application,
+            settings=settings,
+            sessions=sessions,
+            provider=provider,
+        )
+        transport = httpx.ASGITransport(app=application, client=("127.0.0.1", 12345))
+        clients = [
+            httpx.AsyncClient(
+                transport=transport,
+                base_url="https://app.authorityclosers.test",
+            )
+            for _ in range(2)
+        ]
+        try:
+            transactions = []
+            for client in clients:
+                started = await client.get(
+                    "/v1/auth/google/start",
+                    params={
+                        "action": "register",
+                        "surface": "learner",
+                        "consent": "true",
+                    },
+                    follow_redirects=False,
+                )
+                assert started.status_code == 303
+                transactions.append(provider.transactions[-1])
+
+            callbacks = await asyncio.wait_for(
+                asyncio.gather(
+                    *(
+                        client.get(
+                            "/v1/auth/google/callback",
+                            params={
+                                "state": transaction.state,
+                                "code": "controlled-google-code",
+                            },
+                            follow_redirects=False,
+                        )
+                        for client, transaction in zip(clients, transactions, strict=True)
+                    )
+                ),
+                timeout=10,
+            )
+            assert sorted(response.status_code for response in callbacks) == [303, 409]
+
+            with Session(postgres_harness.engine) as database:
+                people = list(
+                    database.scalars(select(Person).where(Person.email == provider_email))
+                )
+                assert len(people) == 1
+                person_id = people[0].id
+                assert (
+                    database.scalar(
+                        select(func.count())
+                        .select_from(ProviderIdentity)
+                        .where(
+                            ProviderIdentity.issuer == "https://accounts.google.com",
+                            ProviderIdentity.subject == provider_subject,
+                            ProviderIdentity.person_id == person_id,
+                        )
+                    )
+                    == 1
+                )
+                assert (
+                    database.scalar(
+                        select(func.count())
+                        .select_from(IdentitySession)
+                        .where(IdentitySession.person_id == person_id)
+                    )
+                    == 1
+                )
+                assert database.get(Membership, (public_tenant_id, person_id)) is not None
+        finally:
+            for client in clients:
+                await client.aclose()
+            await async_engine.dispose()
+
+    _run_async(scenario())
+
+
+def test_existing_google_registration_does_not_overwrite_different_consent(
+    postgres_harness: _Harness,
+) -> None:
+    async def scenario() -> None:
+        current_consent_version = "staging-test-document-v2"
+        previous_consent_version = "staging-test-document-v1"
+        consented_at = datetime(2026, 8, 30, 12, tzinfo=UTC)
+        person_id = uuid4()
+        public_tenant_id = uuid4()
+        provider_subject = f"google-stale-consent-{person_id.hex}"
+        provider_email = f"google-stale-consent-{person_id.hex}@example.com"
+        with Session(postgres_harness.engine) as database, database.begin():
+            database.add_all(
+                [
+                    Person(
+                        id=person_id,
+                        email=provider_email,
+                        first_name="Existing learner",
+                        email_verified_at=consented_at,
+                        consent_version=previous_consent_version,
+                        consented_at=consented_at,
+                    ),
+                    ProviderIdentity(
+                        person_id=person_id,
+                        issuer="https://accounts.google.com",
+                        subject=provider_subject,
+                    ),
+                    Tenant(
+                        id=public_tenant_id,
+                        slug=f"google-stale-{person_id.hex}",
+                        name="Google stale-consent learner tenant",
+                    ),
+                ]
+            )
+
+        async_engine = create_async_engine(postgres_harness.schema_url, pool_pre_ping=True)
+        sessions = async_sessionmaker(async_engine, expire_on_commit=False)
+        provider = _ExistingGoogleProvider(email=provider_email, subject=provider_subject)
+        settings = Settings(
+            environment="test",
+            database_url=postgres_harness.schema_url.render_as_string(hide_password=False),
+            session_token_pepper="postgres-stale-consent-token-pepper-long-enough",  # noqa: S106
+            oauth_transaction_secret="postgres-stale-consent-transaction-secret-long-enough",  # noqa: S106
+            email_challenge_secret="postgres-stale-consent-email-secret-long-enough",  # noqa: S106
+            learner_consent_version=current_consent_version,
+            public_learner_tenant_id=public_tenant_id,
+            operations_tenant_id=uuid4(),
+            public_app_url="https://app.authorityclosers.test",
+            admin_app_url="https://admin.authorityclosers.test",
+            api_url="https://api.authorityclosers.test",
+        )
+        application = FastAPI()
+        register_problem_handlers(application)
+        install_identity_http(
+            application,
+            settings=settings,
+            sessions=sessions,
+            provider=provider,
+        )
+        transport = httpx.ASGITransport(app=application, client=("127.0.0.1", 12345))
+        try:
+            async with httpx.AsyncClient(
+                transport=transport,
+                base_url="https://app.authorityclosers.test",
+            ) as client:
+                started = await client.get(
+                    "/v1/auth/google/start",
+                    params={
+                        "action": "register",
+                        "surface": "learner",
+                        "consent": "true",
+                    },
+                    follow_redirects=False,
+                )
+                assert started.status_code == 303
+                transaction = provider.transactions[-1]
+                callback = await client.get(
+                    "/v1/auth/google/callback",
+                    params={"state": transaction.state, "code": "controlled-google-code"},
+                    follow_redirects=False,
+                )
+                assert callback.status_code == 303
+                assert callback.headers["location"] == (
+                    "https://app.authorityclosers.test/auth/callback?result=consent_update_required"
+                )
+                assert (await client.get("/v1/me")).status_code == 401
+
+            with Session(postgres_harness.engine) as database:
+                person = database.get(Person, person_id)
+                assert person is not None
+                assert person.consent_version == previous_consent_version
+                assert person.consented_at == consented_at
+                authorization = database.get(
+                    ProviderAuthorizationTransaction,
+                    transaction.transaction_id,
+                )
+                assert authorization is not None
+                assert authorization.status == "issued"
+                assert authorization.consumed_at is None
+                assert database.get(Membership, (public_tenant_id, person_id)) is None
+                assert (
+                    database.scalar(
+                        select(func.count())
+                        .select_from(IdentitySession)
+                        .where(IdentitySession.person_id == person_id)
+                    )
+                    == 0
+                )
+        finally:
+            await async_engine.dispose()
+
+    _run_async(scenario())
+
+
+def test_new_google_learner_registration_persists_consent_and_public_membership(
+    postgres_harness: _Harness,
+) -> None:
+    async def scenario() -> None:
+        consent_version = "staging-test-document-v1"
+        public_tenant_id = uuid4()
+        provider_email = f"google-new-{uuid4().hex}@example.com"
+        provider_subject = f"google-new-{uuid4().hex}"
+        with Session(postgres_harness.engine) as database, database.begin():
+            database.add(
+                Tenant(
+                    id=public_tenant_id,
+                    slug=f"google-new-{public_tenant_id.hex}",
+                    name="Google public learner tenant",
+                )
+            )
+
+        async_engine = create_async_engine(postgres_harness.schema_url, pool_pre_ping=True)
+        sessions = async_sessionmaker(async_engine, expire_on_commit=False)
+        provider = _ExistingGoogleProvider(email=provider_email, subject=provider_subject)
+        settings = Settings(
+            environment="test",
+            database_url=postgres_harness.schema_url.render_as_string(hide_password=False),
+            session_token_pepper="postgres-new-google-token-pepper-long-enough",  # noqa: S106
+            oauth_transaction_secret="postgres-new-google-transaction-secret-long-enough",  # noqa: S106
+            email_challenge_secret="postgres-new-google-email-secret-long-enough",  # noqa: S106
+            learner_consent_version=consent_version,
+            public_learner_tenant_id=public_tenant_id,
+            operations_tenant_id=uuid4(),
+            public_app_url="https://app.authorityclosers.test",
+            admin_app_url="https://admin.authorityclosers.test",
+            api_url="https://api.authorityclosers.test",
+        )
+        application = FastAPI()
+        register_problem_handlers(application)
+        install_identity_http(
+            application,
+            settings=settings,
+            sessions=sessions,
+            provider=provider,
+        )
+        transport = httpx.ASGITransport(app=application, client=("127.0.0.1", 12345))
+        person_id = None
+        transaction_id = None
+        try:
+            async with httpx.AsyncClient(
+                transport=transport,
+                base_url="https://app.authorityclosers.test",
+            ) as client:
+                started = await client.get(
+                    "/v1/auth/google/start",
+                    params={
+                        "action": "register",
+                        "surface": "learner",
+                        "consent": "true",
+                    },
+                    follow_redirects=False,
+                )
+                assert started.status_code == 303
+                transaction = provider.transactions[-1]
+                transaction_id = transaction.transaction_id
+                assert transaction.consent_version == consent_version
+
+                callback = await client.get(
+                    "/v1/auth/google/callback",
+                    params={"state": transaction.state, "code": "controlled-google-code"},
+                    follow_redirects=False,
+                )
+                assert callback.status_code == 303
+                assert callback.headers["location"] == "https://app.authorityclosers.test/home"
+
+                me = await client.get("/v1/me")
+                assert me.status_code == 200
+                person_id = UUID(me.json()["person_id"])
+                assert me.json()["selected_tenant_id"] == str(public_tenant_id)
+                assert me.json()["membership_role"] == "learner"
+
+            with Session(postgres_harness.engine) as database:
+                person = database.get(Person, person_id)
+                assert person is not None
+                assert person.consent_version == consent_version
+                assert person.consented_at is not None
+                assert person.email_verified_at is not None
+                membership = database.get(Membership, (public_tenant_id, person_id))
+                assert membership is not None
+                assert membership.role == "learner"
+                assert membership.status == "active"
+                transaction_row = database.get(
+                    ProviderAuthorizationTransaction,
+                    transaction_id,
+                )
+                assert transaction_row is not None
+                assert transaction_row.status == "consumed"
+                assert transaction_row.consumed_at is not None
+                assert (
+                    database.scalar(
+                        select(func.count())
+                        .select_from(IdentitySession)
+                        .where(IdentitySession.person_id == person_id)
+                    )
+                    == 1
+                )
+        finally:
+            await async_engine.dispose()
+            with Session(postgres_harness.engine) as database, database.begin():
+                if person_id is not None:
+                    database.execute(
+                        delete(IdentitySession).where(IdentitySession.person_id == person_id)
+                    )
+                    database.execute(delete(Membership).where(Membership.person_id == person_id))
+                    database.execute(
+                        delete(ProviderIdentity).where(ProviderIdentity.person_id == person_id)
+                    )
+                    database.execute(delete(Person).where(Person.id == person_id))
+                if transaction_id is not None:
+                    database.execute(
+                        delete(ProviderAuthorizationTransaction).where(
+                            ProviderAuthorizationTransaction.id == transaction_id
+                        )
+                    )
+                database.execute(delete(Tenant).where(Tenant.id == public_tenant_id))
+
+    _run_async(scenario())

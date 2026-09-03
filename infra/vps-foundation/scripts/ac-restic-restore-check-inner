@@ -14,11 +14,47 @@ export RESTIC_CACHE_DIR='/var/cache/authority-closers-restic'
 : "${AC_FOUNDATION_RPO_TARGET_SECONDS:=86400}"
 : "${AC_FOUNDATION_RESTORE_TARGET_SECONDS:=14400}"
 
+restic_lock_dir='/run/lock/authority-closers'
+restic_lock_file="$restic_lock_dir/ac-restic-repository.lock"
+((EUID == 0)) || { printf 'Restic repository locking requires root.\n' >&2; exit 1; }
+if mkdir --mode=0750 -- "$restic_lock_dir" 2>/dev/null; then
+  chown root:acops "$restic_lock_dir"
+fi
+acops_gid="$(getent group acops | awk -F: 'NR == 1 {print $3}')"
+[[ "$acops_gid" =~ ^[0-9]+$ ]] || { printf 'The acops group is unavailable.\n' >&2; exit 1; }
+[[ -d "$restic_lock_dir" && ! -L "$restic_lock_dir" ]] || {
+  printf 'The private Restic lock directory is unsafe.\n' >&2
+  exit 1
+}
+[[ "$(stat --format='%u:%g:%a' -- "$restic_lock_dir")" == "0:$acops_gid:750" ]] || {
+  printf 'The private Restic lock directory has an unsafe identity.\n' >&2
+  exit 1
+}
+if [[ -e "$restic_lock_file" || -L "$restic_lock_file" ]]; then
+  [[ -f "$restic_lock_file" && ! -L "$restic_lock_file" ]] || {
+    printf 'The Restic repository lock file is unsafe.\n' >&2
+    exit 1
+  }
+fi
+exec 9>>"$restic_lock_file"
+chmod 0640 "$restic_lock_file"
+chown root:acops "$restic_lock_file"
+[[ "$(stat --dereference --format='%u:%g:%a:%h' -- /proc/self/fd/9)" == "0:$acops_gid:640:1" ]] || {
+  printf 'The Restic repository lock descriptor has an unsafe identity.\n' >&2
+  exit 1
+}
+flock --exclusive --nonblock 9 || {
+  printf 'Another Restic backup or prune is already active.\n' >&2
+  exit 1
+}
+
 [[ "$AC_FOUNDATION_RPO_TARGET_SECONDS" =~ ^[0-9]+$ ]]
 [[ "$AC_FOUNDATION_RESTORE_TARGET_SECONDS" =~ ^[0-9]+$ ]]
 
 started_epoch="$(date +%s)"
-snapshots_json="$(restic snapshots --latest 1 --json)"
+# Logical application snapshots are intentionally newer than the daily
+# foundation snapshot; the drill must restore the foundation tag it validates.
+snapshots_json="$(restic snapshots --tag authority-closers-foundation --latest 1 --json)"
 snapshot_count="$(jq 'length' <<<"$snapshots_json")"
 ((snapshot_count == 1)) || { printf 'FAIL  Restic did not return exactly one latest snapshot.\n' >&2; exit 1; }
 

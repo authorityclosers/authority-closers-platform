@@ -5,6 +5,10 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 foundation="$repo_root/infra/vps-foundation"
 manifest="$foundation/config/release/install-manifest.tsv"
 
+grep -q 'AC_APPROVED_LEGACY_RELEASE_ID' "$foundation/scripts/install-foundation-release.sh"
+grep -q 'legacy-foundation.sha256' "$foundation/scripts/install-foundation-release.sh"
+grep -q 'reconcile_legacy_foundation' "$foundation/scripts/install-foundation-release.sh"
+
 [[ -r "$manifest" ]]
 
 while IFS= read -r source; do
@@ -117,6 +121,8 @@ current="$tmp_dir/root/srv/authority-closers/current"
 [[ "$(readlink -f "$current")" == "$release" ]]
 (cd "$release" && sha256sum --check --strict RELEASE-FILES.sha256 >/dev/null)
 [[ "$(<"$release/RELEASE-COMMIT")" == "$release_sha" ]]
+[[ "$(stat -c '%a' "$release/compose/foundation/Caddyfile")" == 644 ]]
+[[ "$(stat -c '%a' "$release/compose/foundation/otel-collector.yaml")" == 644 ]]
 if grep -q 'UNTRACKED-WORKTREE-MUTATION' "$release/compose/foundation/Caddyfile"; then
   printf 'Release included content outside the exact Git commit.\n' >&2
   exit 1
@@ -142,6 +148,65 @@ archive_release="$tmp_dir/archive-root/srv/authority-closers/releases/foundation
 [[ "$(<"$archive_release/RELEASE-COMMIT")" == "$release_sha" ]]
 if grep -q 'UNTRACKED-WORKTREE-MUTATION' "$archive_release/compose/foundation/Caddyfile"; then
   printf 'Archive-mode release included a working-tree mutation.\n' >&2
+  exit 1
+fi
+
+activation_root="$tmp_dir/activation-root"
+activation_release_id="foundation-$release_sha"
+activation_release="$activation_root/srv/authority-closers/releases/$activation_release_id"
+mkdir -p "$(dirname "$activation_release")"
+cp -a "$archive_release" "$activation_release"
+printf '%s\n' "$activation_release_id" > "$activation_release/RELEASE-ID"
+(
+  cd "$activation_release"
+  : > RELEASE-FILES.sha256
+  while IFS= read -r release_file; do
+    sha256sum "$release_file" >> RELEASE-FILES.sha256
+  done < <(find . -type f ! -name RELEASE-FILES.sha256 -print | LC_ALL=C sort)
+  sha256sum --check --strict RELEASE-FILES.sha256 >/dev/null
+)
+ln -s "$activation_release" "$activation_root/srv/authority-closers/current"
+activation_current="$activation_root/srv/authority-closers/current"
+AC_BOOTSTRAP_VERIFY_ONLY=1 \
+AC_RELEASE_ID="$activation_release_id" \
+AC_RELEASE_ARCHIVE="$archive" \
+AC_RELEASE_ARCHIVE_SHA256="$archive_sha" \
+  bash "$activation_current/scripts/bootstrap-host.sh" >/dev/null
+printf 'unexpected activation source\n' > "$activation_current/untracked-source.txt"
+if AC_BOOTSTRAP_VERIFY_ONLY=1 \
+  AC_RELEASE_ID="$activation_release_id" \
+  AC_RELEASE_ARCHIVE="$archive" \
+  AC_RELEASE_ARCHIVE_SHA256="$archive_sha" \
+    bash "$activation_current/scripts/bootstrap-host.sh" >/dev/null 2>&1; then
+  printf 'Activation verifier accepted a file outside the reviewed archive.\n' >&2
+  exit 1
+fi
+rm -- "$activation_current/untracked-source.txt"
+activation_manifest_copy="$tmp_dir/activation-release-files.sha256"
+cp -- "$activation_current/RELEASE-FILES.sha256" "$activation_manifest_copy"
+(
+  cd "$activation_current"
+  sha256sum ./RELEASE-COMMIT > RELEASE-FILES.sha256
+)
+if AC_BOOTSTRAP_VERIFY_ONLY=1 \
+  AC_RELEASE_ID="$activation_release_id" \
+  AC_RELEASE_ARCHIVE="$archive" \
+  AC_RELEASE_ARCHIVE_SHA256="$archive_sha" \
+    bash "$activation_current/scripts/bootstrap-host.sh" >/dev/null 2>&1; then
+  printf 'Activation verifier accepted an incomplete installed-release manifest.\n' >&2
+  exit 1
+fi
+mv -- "$activation_manifest_copy" "$activation_current/RELEASE-FILES.sha256"
+rm -- \
+  "$activation_current/RELEASE-COMMIT" \
+  "$activation_current/RELEASE-ID" \
+  "$activation_current/RELEASE-FILES.sha256"
+if AC_BOOTSTRAP_VERIFY_ONLY=1 \
+  AC_RELEASE_ID="$activation_release_id" \
+  AC_RELEASE_ARCHIVE="$archive" \
+  AC_RELEASE_ARCHIVE_SHA256="$archive_sha" \
+    bash "$activation_current/scripts/bootstrap-host.sh" >/dev/null 2>&1; then
+  printf 'Activation verifier accepted an installed release without metadata.\n' >&2
   exit 1
 fi
 

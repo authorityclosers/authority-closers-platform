@@ -1,0 +1,169 @@
+{
+
+  "package_id": "AC-WF-INSTRUCTOR-ADMIN-V0.1",
+  "package_version": "0.1-alpha",
+  "status": "reference-ready",
+  "purpose": "Bounded workflow and UI architecture for future Instructor-label and AC Admin surfaces; docs only.",
+  "authority": {
+    "precedence": [
+      "current user decisions and law/security/privacy constraints",
+      "controlled Drive sources in ../01-research-journeys/source-manifest.csv",
+      "repository contracts and assurance gates",
+      "this package behavior matrix",
+      "text-only visual references"
+    ],
+    "source_of_truth_rules": [
+      "Platform content domain owns Program, Module, Activity and immutable published versions.",
+      "Platform learning/evidence domains own enrollment, progress and evidence.",
+      "Platform assessment domain owns attempts, rubric/score lineage and human-confirmed official authority.",
+      "Analytics is derived and never grants access or rewrites canonical state.",
+      "Audit history is restricted and append-only/tamper-resistant; corrections supersede."
+    ]
+  },
+  "surfaces": [
+    {
+      "id": "SURFACE-AC-ADMIN",
+      "label": "AC Admin",
+      "host": "admin.authorityclosers.com",
+      "status": "controlled_surface"
+    },
+    {
+      "id": "SURFACE-INSTRUCTOR-LABEL",
+      "label": "Instructor Studio",
+      "host": "admin.authorityclosers.com",
+      "status": "proposed_navigation_label_only",
+      "constraint": "Do not create a new role, host, identity or permission union. Reuse server-granted Content Manager and Coach / Reviewer capabilities."
+    },
+    {
+      "id": "SURFACE-LEARNER",
+      "label": "Learner product",
+      "host": "app.authorityclosers.com",
+      "status": "out_of_scope"
+    }
+  ],
+  "roles": [
+    "Platform Owner",
+    "Technical Administrator",
+    "Business Administrator",
+    "Content Manager",
+    "Coach / Reviewer",
+    "Support Agent",
+    "Auditor / Read-only"
+  ],
+  "flows": [
+    "FLOW-IAS-01 Admin overview",
+    "FLOW-IAS-02 Instructor catalog authoring",
+    "FLOW-IAS-03 Enrollment/progress oversight",
+    "FLOW-IAS-04 Assessment authoring/review gate",
+    "FLOW-IAS-05 Course-media upload/provider gate",
+    "FLOW-IAS-06 Audit/recovery"
+  ],
+  "screens": [
+    {"id": "ADM-OVERVIEW", "route": "/admin", "route_status": "registered"},
+    {"id": "ADM-USERS", "route": "/admin/users", "route_status": "registered"},
+    {"id": "ADM-USER-DETAIL", "route": "/admin/users/{person}", "route_status": "registered"},
+    {"id": "INS-PROGRAMS", "route": "/admin/programs", "route_status": "registered"},
+    {"id": "INS-CONTENT", "route": "/admin/programs/{program}/content", "route_status": "registered"},
+    {"id": "INS-PUBLISH", "route": "/admin/programs/{program}/content", "route_status": "registered"},
+    {"id": "ADM-PROGRESS", "route": "/admin/progress", "route_status": "explicit_candidate"},
+    {"id": "ADM-AUDIT", "route": "/admin/audit", "route_status": "explicit_candidate"},
+    {"id": "ADM-ASSESS-REVIEW", "route": "BLOCKED_ROUTE:assessment-review", "route_status": "blocked_not_registered"},
+    {"id": "ADM-MEDIA", "route": "BLOCKED_ROUTE:media", "route_status": "blocked_not_registered"},
+    {"id": "ADM-HEALTH", "route": "BLOCKED_ROUTE:health", "route_status": "blocked_not_registered"},
+    {"id": "ADM-SUPPORT-VIEWAS", "route": "BLOCKED_ROUTE:support-view-as", "route_status": "blocked_not_registered"}
+  ],
+  "state_names": [
+    "loading",
+    "ready",
+    "empty",
+    "permission_denied",
+    "session_expired",
+    "offline_or_stale",
+    "retryable_error",
+    "terminal_error",
+    "draft",
+    "validation_error",
+    "in_review",
+    "version_conflict",
+    "success",
+    "partial",
+    "reconciliation_required",
+    "provider_failed",
+    "processing",
+    "uploaded",
+    "upload_failed",
+    "assessment_authoring_blocked",
+    "support_required",
+    "blocked"
+  ],
+  "blocked_refs": [
+    "BLK-01 Instructor role/permission union/approval ownership",
+    "BLK-02 instructor hostname/account universe",
+    "BLK-03 full B2B UI",
+    "BLK-04 paid/billing/refunds/learner counts/revenue values",
+    "BLK-05 autonomous official AI scoring/new score classes",
+    "BLK-06 real-call recording/transcription/external AI",
+    "BLK-07 assessment schema/attempt limits/publish approval",
+    "BLK-08 media provider/limits/resumability/retention",
+    "BLK-09 unregistered Admin subroutes",
+    "BLK-10 moderation/community/messaging/reminders/publication audience",
+    "BLK-11 bulk partial-success semantics",
+    "BLK-12 Admin MFA/step-up/view-as duration/masking",
+    "BLK-VIS-01 semantic-to-brand token mapping"
+  ],
+  "component_ids": [
+    "UI-C001",
+    "UI-C004",
+    "UI-C005",
+    "UI-C006",
+    "UI-C014",
+    "UI-C017",
+    "UI-C022",
+    "UI-C024",
+    "UI-C025",
+    "UI-C027",
+    "UI-C037",
+    "UI-C038",
+    "UI-C039",
+    "UI-C040",
+    "UI-C041",
+    "UI-C042",
+    "UI-C044",
+    "UI-C045",
+    "UI-C062",
+    "UI-C064",
+    "UI-C065",
+    "UI-C066"
+  ],
+  "tokens": {
+    "brand": "TBD; do not invent hex values or fonts",
+    "semantic_colors": ["success", "warning", "danger", "info", "surface", "text", "border"],
+    "spacing": "UI System space.0..12 with 4px base",
+    "breakpoints": {"compact": "<600px", "medium": "600-1023px", "wide": ">=1024px", "dense_admin": ">=1280px"},
+    "motion": "fast/base/slow; respect reduced motion",
+    "targets": "at least 44pt or 48dp according to platform guidance"
+  },
+  "allowed_outputs": [
+    "layout hierarchy and responsive reflow",
+    "state presentation and recovery copy placeholders",
+    "component/token mapping",
+    "questions and blocked decisions",
+    "traceability to source keys and QA cases"
+  ],
+  "never_infer": [
+    "permissions, role unions, approval owners",
+    "billing, payment, entitlement or learner/revenue counts",
+    "score values, new score classes or official AI authority",
+    "moderation, publication audience or messaging policy",
+    "provider name, codec/size/SLA, retention or resumability guarantee",
+    "tenant membership, B2B seats or organization behavior",
+    "MFA/view-as duration or masking catalogue",
+    "brand palette, font or production approval"
+  ],
+  "tool_status": {
+    "antigravity_cli": "not found",
+    "gemini_cli": "attempted with gemini-3.8-flash-high; installed client returned IneligibleTierError and no model output was used",
+    "visual_assets": "none; text-only reference wireframes",
+    "connectors": "read-only exact-ID Google Drive fetches only"
+  }
+}

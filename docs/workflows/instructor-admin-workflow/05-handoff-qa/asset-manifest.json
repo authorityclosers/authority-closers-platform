@@ -1,0 +1,22 @@
+{
+
+  "package_id": "AC-WF-INSTRUCTOR-ADMIN-V0.1",
+  "status": "reference-ready",
+  "visual_asset_policy": "No raster or generated asset is included because brand tokens and source-authorized Admin imagery are not approved.",
+  "assets": [],
+  "text_references": [
+    {
+      "id": "VIS-REF-001",
+      "path": "03-visual-exploration/responsive-reference-wireframes.md",
+      "kind": "text_wireframe",
+      "status": "reference-ready",
+      "approved_for": "hierarchy, density, state placement and responsive discussion",
+      "not_approved_for": "brand, final copy, production implementation or behavior beyond state matrix"
+    }
+  ],
+  "blocked_visual_decisions": [
+    "BLK-VIS-01 semantic-to-brand colors and fonts",
+    "BLK-VIS-02 approved non-sensitive fixtures",
+    "BLK-VIS-03 final responsive/accessibility device evidence"
+  ]
+}

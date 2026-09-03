@@ -1,0 +1,28 @@
+{
+  "name": "@authority-closers/platform",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.19.0",
+  "engines": {
+    "node": ">=24.0.0 <25",
+    "pnpm": ">=11.19.0 <12"
+  },
+  "scripts": {
+    "build": "pnpm -r --if-present build",
+    "dev": "pnpm run dev:dependencies && concurrently --kill-others-on-fail --names learner,admin,api,worker --prefix-colors cyan,magenta,green,yellow \"pnpm --filter @ac/learner-web dev\" \"pnpm --filter @ac/admin-web dev\" \"uv run python -m ac_platform.http --reload --port 8000\" \"uv run python -m ac_platform.worker\"",
+    "dev:dependencies": "docker compose --env-file .env.example -f infra/local/compose.yaml up -d --wait",
+    "dev:down": "docker compose --env-file .env.example -f infra/local/compose.yaml down",
+    "format": "prettier --write apps packages/typescript package.json pnpm-workspace.yaml .github/workflows/application.yml && uv run ruff format packages/python tests",
+    "format:check": "prettier --check apps packages/typescript package.json pnpm-workspace.yaml .github/workflows/application.yml && uv run ruff format --check packages/python tests",
+    "lint": "pnpm -r --if-present lint && uv run ruff check packages/python tests",
+    "typecheck": "pnpm -r --if-present typecheck && uv run mypy packages/python",
+    "test": "pnpm -r --if-present test && uv run pytest",
+    "validate": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run build"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "concurrently": "9.2.1",
+    "prettier": "3.6.2",
+    "typescript": "5.9.3"
+  }
+}

@@ -1,1 +1,8 @@
 * @RSuyash
+/db/migrations/ @RSuyash
+/packages/python/ac_platform/identity/ @RSuyash
+/packages/python/ac_platform/tenancy/ @RSuyash
+/packages/python/ac_platform/audit/ @RSuyash
+/packages/python/ac_platform/outbox/ @RSuyash
+/infra/ @RSuyash
+/.github/workflows/ @RSuyash

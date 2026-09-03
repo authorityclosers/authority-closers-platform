@@ -1,0 +1,50 @@
+{
+  "contract_version": "free-course-staging-seed.v1",
+  "seed_key": "free-course",
+  "program": {
+    "slug": "free-course-seed-fixture",
+    "title": "Free Course staging seed fixture"
+  },
+  "content": {
+    "source_ref": "tests/fixtures/free_course_staging_test_fixture.json",
+    "review_status": "test-fixture",
+    "reviewed_by": "automated-seed-fixture-review",
+    "reviewed_at": "2026-08-30T12:00:00Z",
+    "release_id": "0000000000000000000000000000000000000000"
+  },
+  "modules": [
+    {
+      "position": 1,
+      "title": "Fixture module one",
+      "activities": [
+        {"position": 1, "kind": "VIDEO", "title": "Fixture video", "prompt": "Before the next customer conversation, identify the decision the other person is actually trying to make.", "is_required": true}
+      ],
+      "prerequisite_positions": []
+    },
+    {
+      "position": 2,
+      "title": "Fixture module two",
+      "activities": [
+        {"position": 1, "kind": "REFLECTION", "title": "Fixture reflection", "prompt": "Write one sentence naming the signal you would ask about before presenting a solution.", "is_required": true}
+      ],
+      "prerequisite_positions": [1]
+    },
+    {
+      "position": 3,
+      "title": "Fixture module three",
+      "activities": [
+        {"position": 1, "kind": "IMPLEMENTATION_CHALLENGE", "title": "Fixture challenge", "prompt": "Choose one direct question that tests the customer's priority without forcing a premature pitch.", "is_required": true},
+        {"position": 2, "kind": "REVIEW", "title": "Fixture review", "prompt": "Record the observable answer, the evidence you used, and the assumption that still needs review.", "is_required": true}
+      ],
+      "prerequisite_positions": [2]
+    },
+    {
+      "position": 4,
+      "title": "Fixture module four",
+      "activities": [
+        {"position": 1, "kind": "IMPROVE", "title": "Fixture improvement", "prompt": "Choose one specific change you will repeat on the next call and state how you will recognize that it worked.", "is_required": true}
+      ],
+      "prerequisite_positions": [3]
+    }
+  ]
+}

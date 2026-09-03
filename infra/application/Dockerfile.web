@@ -1,0 +1,74 @@
+# syntax=docker/dockerfile:1.7
+
+ARG NODE_IMAGE=node@sha256:a9f5f7c91a432850b2a8a7797adf5eadb6c733ceed61167806cee7ea7fbc29df
+
+FROM ${NODE_IMAGE} AS build
+
+ENV NEXT_TELEMETRY_DISABLED=1 \
+    PNPM_HOME=/pnpm
+ENV PATH="${PNPM_HOME}:${PATH}"
+
+WORKDIR /workspace
+
+RUN corepack enable && corepack prepare pnpm@11.19.0 --activate
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/learner-web/package.json apps/learner-web/package.json
+COPY apps/admin-web/package.json apps/admin-web/package.json
+COPY packages/typescript/ui/package.json packages/typescript/ui/package.json
+COPY packages/typescript/config/package.json packages/typescript/config/package.json
+
+RUN --mount=type=cache,id=ac-pnpm-store,target=/pnpm/store \
+    pnpm config set store-dir /pnpm/store && \
+    pnpm config set fetch-timeout 300000 && \
+    pnpm install \
+      --frozen-lockfile \
+      --network-concurrency 8 \
+      --prefer-offline \
+      --trust-lockfile
+
+COPY apps/learner-web apps/learner-web
+COPY apps/admin-web apps/admin-web
+COPY packages/typescript packages/typescript
+
+RUN pnpm --filter @ac/learner-web build && \
+    pnpm --filter @ac/admin-web build
+
+FROM ${NODE_IMAGE} AS learner
+
+ENV HOSTNAME=0.0.0.0 \
+    NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    PORT=3000
+
+WORKDIR /app
+
+COPY --from=build --chown=node:node /workspace/apps/learner-web/.next/standalone ./
+COPY --from=build --chown=node:node \
+    /workspace/apps/learner-web/.next/static \
+    ./apps/learner-web/.next/static
+COPY --from=build --chown=node:node \
+    /workspace/apps/learner-web/public \
+    ./apps/learner-web/public
+
+USER node
+EXPOSE 3000
+CMD ["node", "apps/learner-web/server.js"]
+
+FROM ${NODE_IMAGE} AS admin
+
+ENV HOSTNAME=0.0.0.0 \
+    NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    PORT=3001
+
+WORKDIR /app
+
+COPY --from=build --chown=node:node /workspace/apps/admin-web/.next/standalone ./
+COPY --from=build --chown=node:node \
+    /workspace/apps/admin-web/.next/static \
+    ./apps/admin-web/.next/static
+
+USER node
+EXPOSE 3001
+CMD ["node", "apps/admin-web/server.js"]

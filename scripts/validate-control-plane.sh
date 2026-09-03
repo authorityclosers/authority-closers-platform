@@ -9,7 +9,7 @@ while IFS= read -r -d '' candidate; do
   if head -n 1 "$candidate" | grep -Eq '^#!.*(ba)?sh([[:space:]]|$)'; then
     shell_files+=("$candidate")
   fi
-done < <(find . -path './.git' -prune -o -type f -print0)
+done < <(git ls-files -z)
 if ((${#shell_files[@]} > 0)); then
   bash -n "${shell_files[@]}"
   shellcheck "${shell_files[@]}"
@@ -21,7 +21,7 @@ if git grep -Il $'\r' -- '*.sh' '*.service' '*.timer' '*.yml' '*.yaml'; then
 fi
 
 if git grep -nEI \
-  '(BEGIN (RSA|OPENSSH|EC|DSA) PRIVATE KEY|cfat_[A-Za-z0-9_-]{20,}|re_[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16})' \
+  '(BEGIN (RSA|OPENSSH|EC|DSA) PRIVATE KEY|(^|[^A-Za-z0-9_])(cfat_[A-Za-z0-9_-]{20,}|re_[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16})([^A-Za-z0-9_-]|$))' \
   -- . ':!.github/workflows/control-plane.yml' ':!scripts/validate-control-plane.sh'; then
   printf 'Possible committed credential detected.\n' >&2
   exit 1

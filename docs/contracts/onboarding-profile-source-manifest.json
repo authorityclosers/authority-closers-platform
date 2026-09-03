@@ -1,0 +1,175 @@
+{
+  "contract_id": "onboarding-profile-taxonomy-v1",
+  "status": "contract_only_no_vendored_dataset",
+  "manifest_generated_on": "2026-09-03",
+  "source_research_checked_on": "2026-09-03",
+  "source_provenance_status": "planned_not_fetched",
+  "proposed_country": {
+    "country_code": "IN",
+    "display_name": "India",
+    "basis": "The assigned work item references official Indian education taxonomies; the end-user country choice is not present in the repository request context.",
+    "is_inference": true,
+    "status": "proposed_not_active",
+    "requires_user_confirmation_before_activation": true
+  },
+  "active_country_allowlist": [],
+  "vendored_datasets": [],
+  "sources": [
+    {
+      "source_id": "ISO-3166-COUNTRY-CODES",
+      "authority": "International Organization for Standardization (ISO)",
+      "url": "https://www.iso.org/iso-3166-country-codes.html",
+      "research_checked_on": "2026-09-03",
+      "planned_use": "ISO 3166-1 alpha-2 country-code shape and current-code lookup path for a country approved later.",
+      "provenance": {
+        "status": "planned",
+        "retrieved_on": null,
+        "source_revision_or_date": null,
+        "sha256": null,
+        "license_or_provenance": "Planned capture: ISO states that country codes may be used free of charge; ISO materials and publications remain copyright-protected. Only an approved two-letter code value may be represented; no ISO export or labels are vendored.",
+        "reuse_decision": "planned_use_code_value_only_after_licence_review",
+        "freshness_note": "ISO 3166-1:2020 is listed by ISO as current after 2025 review; confirm the Maintenance Agency/OBP release during controlled generation."
+      }
+    },
+    {
+      "source_id": "ITU-E164-2026",
+      "authority": "International Telecommunication Union (ITU-T)",
+      "url": "https://www.itu.int/rec/T-REC-E.164-202602-I/en",
+      "research_checked_on": "2026-09-03",
+      "planned_use": "E.164 international-number structure and current recommendation status; canonical profile values use + plus decimal digits and a maximum of 15 digits.",
+      "provenance": {
+        "status": "planned",
+        "retrieved_on": null,
+        "source_revision_or_date": null,
+        "sha256": null,
+        "license_or_provenance": "Planned capture: ITU page marks the recommendation in force and its PDF freely available, while the page carries ITU copyright. No recommendation text or country-code table is copied into the repository.",
+        "reuse_decision": "planned_reference_only_verify_current_revision",
+        "freshness_note": "Recommendation E.164 (02/26), approved 2026-02-13 in the research view; confirm the exact artifact and current revision during controlled generation."
+      }
+    },
+    {
+      "source_id": "ITU-E164-COUNTRY-CODE-91",
+      "authority": "International Telecommunication Union (ITU-T)",
+      "url": "https://www.itu.int/dms_pub/itu-t/opb/sp/T-SP-OB.717-2000-PDF-E.pdf",
+      "research_checked_on": "2026-09-03",
+      "planned_use": "Historical ITU assigned-code table may corroborate 91 for a later-approved India configuration; current allocation must be re-checked against in-force numbering resources.",
+      "provenance": {
+        "status": "planned",
+        "retrieved_on": null,
+        "source_revision_or_date": null,
+        "sha256": null,
+        "license_or_provenance": "Planned capture: official ITU Operational Bulletin PDF; copyright terms are not treated as a dataset licence.",
+        "reuse_decision": "planned_reference_only_no_vendoring"
+      }
+    },
+    {
+      "source_id": "INDIA-DOT-NNP-PLUS91",
+      "authority": "Government of India, Department of Telecommunications",
+      "url": "https://www.dot.gov.in/static/uploads/2025/07/64638bb7d6643bd27a863b1909280c21.pdf",
+      "research_checked_on": "2026-09-03",
+      "planned_use": "Official Indian notice may support a later-approved India configuration using +91 in the National Numbering Plan context; it is not a phone-validity oracle.",
+      "provenance": {
+        "status": "planned",
+        "retrieved_on": null,
+        "source_revision_or_date": null,
+        "sha256": null,
+        "license_or_provenance": "Planned capture: official government publication; a reusable-data licence was not identified.",
+        "reuse_decision": "planned_reference_only_no_vendoring"
+      }
+    },
+    {
+      "source_id": "UNESCO-ISCED-2011",
+      "authority": "UNESCO Institute for Statistics (UIS)",
+      "url": "https://www.uis.unesco.org/en/methods-and-tools/isced",
+      "research_checked_on": "2026-09-03",
+      "planned_use": "ISCED 2011 levels/attainment reference; only stable code identifiers may be used after approval.",
+      "provenance": {
+        "status": "planned",
+        "retrieved_on": null,
+        "source_revision_or_date": null,
+        "sha256": null,
+        "license_or_provenance": "Planned capture: UIS is the custodian of ISCED. The official classification/manual pages did not establish a clear commercial dataset licence in the research view; no full table or prose is copied.",
+        "reuse_decision": "planned_reference_only_generate_after_legal_review"
+      }
+    },
+    {
+      "source_id": "UNESCO-ISCED-F-2013",
+      "authority": "UNESCO Institute for Statistics (UIS)",
+      "url": "https://www.uis.unesco.org/sites/default/files/documents/isced-fields-of-education-and-training-2013-en.pdf",
+      "research_checked_on": "2026-09-03",
+      "planned_use": "Broad field-of-education reference for education_field_code after source and legal review.",
+      "provenance": {
+        "status": "planned",
+        "retrieved_on": null,
+        "source_revision_or_date": null,
+        "sha256": null,
+        "license_or_provenance": "Planned capture: official UIS manual. The research view did not establish a clear commercial reuse licence; the related 2015 operational manual is CC BY-NC-ND 3.0 IGO, which is not suitable for a commercial derivative dataset. No full table or prose is copied.",
+        "reuse_decision": "planned_reference_only_generate_after_legal_review"
+      }
+    },
+    {
+      "source_id": "UGC-DEGREE-NOMENCLATURE",
+      "authority": "University Grants Commission, Government of India",
+      "url": "https://www.ugc.gov.in/regulations/UGC_Regulations_university",
+      "research_checked_on": "2026-09-03",
+      "planned_use": "Current official notification index for a later-approved India configuration; supports retaining degree_name and specialization separately without copying an exhaustive list.",
+      "provenance": {
+        "status": "planned",
+        "retrieved_on": null,
+        "source_revision_or_date": null,
+        "sha256": null,
+        "license_or_provenance": "Planned capture: UGC official publication/index. Reuse terms for the full notification/list were not identified; no degree list is copied or asserted as exhaustive.",
+        "reuse_decision": "planned_reference_only_free_text_degree_and_specialization"
+      }
+    },
+    {
+      "source_id": "UGC-DEGREE-FAQ",
+      "authority": "University Grants Commission, Government of India",
+      "url": "https://www.ugc.gov.in/Home/faq",
+      "research_checked_on": "2026-09-03",
+      "planned_use": "UGC equivalence and specified-degree guidance for a later-approved India configuration; prevents inferring equivalence or verification.",
+      "provenance": {
+        "status": "planned",
+        "retrieved_on": null,
+        "source_revision_or_date": null,
+        "sha256": null,
+        "license_or_provenance": "Planned capture: official UGC FAQ; no reusable dataset licence identified.",
+        "reuse_decision": "planned_reference_only_no_vendoring"
+      }
+    },
+    {
+      "source_id": "W3C-WCAG-2-2",
+      "authority": "World Wide Web Consortium (W3C)",
+      "url": "https://www.w3.org/TR/WCAG22/",
+      "research_checked_on": "2026-09-03",
+      "planned_use": "Accessibility acceptance basis for labels, errors, focus, reflow, target size, authentication, and non-colour status communication.",
+      "provenance": {
+        "status": "planned",
+        "retrieved_on": null,
+        "source_revision_or_date": null,
+        "sha256": null,
+        "license_or_provenance": "Planned capture: W3C Recommendation and W3C document licence; implementation references criteria without copying normative text.",
+        "reuse_decision": "planned_reference_only"
+      }
+    }
+  ],
+  "generation_path": {
+    "runtime_fetch": false,
+    "status": "planned_release_step_not_implemented",
+    "steps": [
+      "At a reviewed release-generation step, fetch the exact official source URL for each required taxonomy and replace the planned provenance fields only after recording retrieval date, source revision/date, response SHA-256, and licence review outcome.",
+      "For country labels/codes, use the current ISO Maintenance Agency/OBP or official collection only after a country is explicitly approved; emit only the approved subset and never infer or default a country from device, IP, provider, or phone.",
+      "For education levels and fields, read the current UIS classification release and emit stable code identifiers only after legal review; do not copy manual prose or third-party components.",
+      "For the proposed India configuration, consult the current UGC degree-notification index for research only; keep degree_name and specialization as exact user-entered values rather than generating an exhaustive degree list.",
+      "Run the contract tests before any source artifact is promoted. A missing or stale source must fail generation/release review, not trigger an end-user network fetch."
+    ],
+    "required_artifact_metadata": [
+      "source_id",
+      "url",
+      "retrieved_on",
+      "source_revision_or_date",
+      "sha256",
+      "reuse_decision"
+    ]
+  }
+}

@@ -78,7 +78,7 @@ done < "$resolved_packages_policy"
 ((${#resolved_packages[@]} > 100)) || { printf 'Resolved package policy is incomplete.\n' >&2; exit 1; }
 
 for conflicting in docker.io containerd runc; do
-  if dpkg-query -W "$conflicting" >/dev/null 2>&1; then
+  if ac_os_package_is_installed "$conflicting"; then
     printf 'Conflicting distribution package is installed: %s\n' "$conflicting" >&2
     exit 1
   fi
@@ -240,7 +240,8 @@ fi
 declare -A managed_hold_candidates=()
 declare -a held_before_managed=()
 for package in "${resolved_packages[@]}"; do
-  managed_hold_candidates[$package]=1
+  hold_name="$(ac_os_package_hold_name "$package")"
+  managed_hold_candidates[$hold_name]=1
 done
 
 previous_marker='/etc/authority-closers/os-baseline.env'
@@ -257,7 +258,8 @@ if [[ -r "$previous_marker" ]]; then
   }
   while IFS=$'\t' read -r package _version _extra; do
     [[ -z "$package" || "$package" == \#* ]] && continue
-    managed_hold_candidates[$package]=1
+    hold_name="$(ac_os_package_hold_name "$package")"
+    managed_hold_candidates[$hold_name]=1
   done < "$previous_manifest"
 fi
 

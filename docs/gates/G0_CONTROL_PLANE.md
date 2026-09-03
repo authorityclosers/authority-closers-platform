@@ -31,3 +31,5 @@ These are conservative stage targets and must be replaced by observed measuremen
 | Controlled external cohort | 15 minutes for canonical PostgreSQL state | 1 hour for critical learner journeys |
 
 Meeting later-stage objectives may require WAL/PITR, more frequent database backups, independent monitoring, and provider-specific recovery controls. A daily Restic snapshot alone does not satisfy the external-cohort objective.
+
+The bounded five-minute logical PostgreSQL writer is implemented in the foundation release but is disabled until its separate activation gate proves exact units, live R2 usage plus the conservative projection, a no-write dry-run, and local capture/`pg_restore --list` evidence. The faster cadence leaves healthy-run processing time inside the 900-second objective; this implementation change does not constitute live activation, a measured RPO, or a completed recovery drill.

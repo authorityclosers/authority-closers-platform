@@ -1,0 +1,32 @@
+{
+
+  "package_id": "AC-WF-INSTRUCTOR-ADMIN-V0.1",
+  "diagrams": [
+    {
+      "diagram_id": "DIA-IAS-001",
+      "path": "04-ai-context/instructor-admin-workflow.puml",
+      "kind": "plantuml_usecase_flow",
+      "status": "reference-ready",
+      "stable_ids": [
+        "FLOW-IAS-01",
+        "FLOW-IAS-02",
+        "FLOW-IAS-03",
+        "FLOW-IAS-04",
+        "FLOW-IAS-05",
+        "FLOW-IAS-06",
+        "ADM-OVERVIEW",
+        "ADM-USERS",
+        "ADM-USER-DETAIL",
+        "INS-PROGRAMS",
+        "INS-CONTENT",
+        "INS-PUBLISH",
+        "ADM-PROGRESS",
+        "ADM-AUDIT",
+        "ADM-ASSESS-REVIEW",
+        "ADM-MEDIA"
+      ],
+      "source": "02-ux-state-spec/route-contract.md and state-transition-matrix.csv",
+      "render_note": "Render only for review; do not treat pixels as behavior authority."
+    }
+  ]
+}

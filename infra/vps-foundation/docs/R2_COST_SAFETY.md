@@ -4,12 +4,12 @@
 
 Authority Closers treats Cloudflare's published free allowance as an outer boundary, not a target. The local deployment ceiling is:
 
-| Dimension | Local ceiling | Published free allowance |
-|---|---:|---:|
-| Standard storage | 8 GiB | 10 GB-month/month |
-| Class A operations | 700,000/month | 1,000,000/month |
-| Class B operations | 7,000,000/month | 10,000,000/month |
-| Infrequent Access | 0 bytes | No free tier |
+| Dimension          |   Local ceiling | Published free allowance |
+| ------------------ | --------------: | -----------------------: |
+| Standard storage   |           8 GiB |        10 GB-month/month |
+| Class A operations |   700,000/month |          1,000,000/month |
+| Class B operations | 7,000,000/month |         10,000,000/month |
+| Infrequent Access  |         0 bytes |             No free tier |
 
 The 30% operation headroom and storage headroom absorb metric delay, unit differences, retries, probes, and administrative operations. R2 usage above Cloudflare's included amounts is billed; Cloudflare does not expose a hard free-tier usage stop.
 
@@ -17,12 +17,24 @@ The 30% operation headroom and storage headroom absorb metric delay, unit differ
 
 - R2 billing is active.
 - Two private Standard buckets exist: `authority-closers-backups-prod` and `authority-closers-objects-prod`.
-- The encrypted foundation backup retained approximately 353 KB at the 2026-08-30 audit; the exact current value must come from the fail-closed metrics guard.
+- The last planning observation supplied for this change was approximately 366,540 Standard bytes on 2026-08-30; the exact current value must come from the fail-closed metrics guard and is never hardcoded by the writer.
 - No R2 provider credentials are stored on the VPS outside short-lived process environments; the Infisical bootstrap contains only machine-auth values.
 - Daily Restic backup, a 30-minute R2 usage guard, and a weekly isolated repository restore drill are enabled. Application uploads, public bucket domains, R2 Data Catalog, R2 SQL, Sippy, Super Slurper, and migration jobs are disabled.
 - The backup credential is restricted to the two AC buckets and the VPS IPv4 address. Infisical injects it only into the bounded operational processes.
+- Application database state, verified logical dumps, deployment evidence, and configuration remain in the encrypted backup source. Reproducible application release directories and compressed Docker transport bundles are excluded: those large artifacts remain in private GHCR and the local VPS rollback store, and can be reconstructed from the exact Git SHA plus registry digest. This prevents routine releases from consuming the R2 storage envelope with duplicate image data.
+- The logical PostgreSQL writer is implemented but remains disabled until the separate `activate postgres-backup` gate passes. It captures each healthy current application release using its exact release profile and compose project; a missing production current link is skipped, while an unhealthy present production link fails closed.
 
-This is a bounded active-writer state, not a zero-writer state. Every scheduled backup fails closed unless the usage guard can prove the local envelope remains safe. Retention is 7 daily, 4 weekly, and 6 monthly snapshots.
+This is a bounded active-writer state, not a zero-writer state. Every scheduled backup fails closed unless the usage guard can prove the local envelope remains safe. Foundation retention is 7 daily, 4 weekly, and 6 monthly snapshots. Logical application snapshots are tagged separately, retained for a 27-hour window, and pruned only by the daily foundation job.
+
+## Logical PostgreSQL storage and operation model
+
+The committed initial model in `config/r2/free-tier-policy.conf` bounds each custom-format dump at 8 MiB, retains 336 points per environment, and reserves for two environments. The worst-case logical retained payload is therefore:
+
+`8 MiB × 336 points × 2 environments = 5,637,144,576 bytes (5.25 GiB)`
+
+This is a conservative payload projection; Restic deduplication may use less storage, but it is not relied on. Before every logical off-host write, the R2 guard queries current Standard storage and rejects `current usage + 5.25 GiB` above the local 8 GiB ceiling. The guard does not hardcode the observed approximately 366,540 bytes; it queries the live metrics API. If a compressed database dump approaches 8 MiB, the job fails closed: migrate to a reviewed continuous-WAL/PITR system or explicitly revise the capacity plan instead of silently increasing the free-tier writer.
+
+At 5-minute cadence the theoretical maximum is 288 captures per day per active environment, or 17,280 captures per 30-day month for two environments. Exact Class A cost depends on Restic's object layout and retries, so the existing 700,000/month Class A guard remains authoritative and is run before each off-host write. No Cloudflare hard billing cap is implied. The five-minute cadence, 30-second jitter, four-minute dump timeout, and four-minute upload timeout leave a bounded healthy-run window inside the 15-minute objective; any failed or skipped run is an RPO incident, not a reason to claim the target still passed.
 
 ## Deployment gate
 
@@ -39,6 +51,8 @@ Any API failure, unknown operation class, Infrequent Access byte, or local-thres
 ## Backup activation rule
 
 Restic was activated only after a reversible object probe, metrics guard, repository initialization, encrypted snapshot, off-host passphrase escrow, bounded retention, and restore drill passed. Any new backup source or writer requires a fresh size/operation model and must remain disabled until the same evidence is produced. If the retained set cannot remain below the envelope, obtain explicit approval for paid R2 usage or choose a different backup target.
+
+The logical PostgreSQL writer has an additional explicit gate. The reviewed host must have exact installed service/timer units, a current R2 usage pass, a dry-run of release/profile/health and projection checks, and a capture-only run that completes `pg_restore --list` verification. The gate enables only `ac-postgres-backup.timer`; it does not claim that the writer is active until the operator performs that command on the host and observes successful snapshots.
 
 ## Important limitation
 

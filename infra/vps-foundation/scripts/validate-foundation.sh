@@ -55,10 +55,12 @@ check 'Docker IPv4 public-ingress guard is ordered before RETURN' \
 check 'Docker IPv6 public-ingress guard is ordered before RETURN' \
   docker_ingress_guard_ordered ip6tables
 check 'AC edge network exists' docker network inspect ac_edge
+check 'AC edge network uses reviewed subnet' bash -c "docker network inspect ac_edge --format '{{(index .IPAM.Config 0).Subnet}}' | grep -qx '172.18.0.0/16'"
 check 'AC telemetry network exists' docker network inspect ac_telemetry
 check 'no public HTTP listener on host' bash -c "! ss -ltn | grep -Eq '(^|[[:space:]])(0\.0\.0\.0|\[::\]):(80|443)[[:space:]]'"
 check 'foundation local health responds' curl --fail --silent --max-time 5 http://127.0.0.1:8080/healthz
 check 'edge container is healthy' bash -c "docker inspect ac-edge-router --format '{{.State.Health.Status}}' | grep -qx healthy"
+check 'edge router uses exact trusted proxy address' bash -c "docker inspect ac-edge-router --format '{{(index .NetworkSettings.Networks \"ac_edge\").IPAddress}}' | grep -qx '172.18.0.2'"
 check 'foundation containers use read-only roots' bash -c "test \"$(docker inspect ac-edge-router ac-telemetry-collector --format '{{.HostConfig.ReadonlyRootfs}}' | grep -c '^true$')\" -eq 2"
 check 'foundation containers are not privileged' bash -c "test \"$(docker inspect ac-edge-router ac-telemetry-collector --format '{{.HostConfig.Privileged}}' | grep -c '^false$')\" -eq 2"
 check 'foundation containers prevent privilege escalation' bash -c "docker inspect ac-edge-router ac-telemetry-collector --format '{{json .HostConfig.SecurityOpt}}' | grep -vc 'no-new-privileges:true' | grep -qx 0"

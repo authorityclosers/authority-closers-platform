@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the Authority Closers off-site logical PostgreSQL restore proof (%i)
+
+[Timer]
+OnCalendar=Sun *-*-* 05:15:00 UTC
+RandomizedDelaySec=5min
+Persistent=true
+Unit=ac-restic-postgres-restore-proof@%i.service
+
+[Install]
+WantedBy=timers.target

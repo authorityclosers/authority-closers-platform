@@ -1,0 +1,94 @@
+{
+  "workstream_id": "AC-WF-LEARNER-V1",
+  "status": "visual_system_selected_shell_offline_candidate_in_implementation",
+  "authority": {
+    "controlled_business_security_data_semantics": "unchanged",
+    "founder_product_direction": "premium full learner app",
+    "generated_images": "reference_only"
+  },
+  "required_routes": [
+    "/home",
+    "/learning",
+    "/discover",
+    "/progress",
+    "/notifications",
+    "/profile",
+    "/settings"
+  ],
+  "desktop_nav": [
+    "Dashboard",
+    "My Learning",
+    "Discover",
+    "Progress",
+    "Notifications",
+    "Profile",
+    "Settings",
+    "Help"
+  ],
+  "mobile_nav": ["Home", "Learning", "Discover", "Progress", "More"],
+  "theme_default": "light",
+  "activity_model": ["Watch", "Choose", "Sequence", "Apply", "Review"],
+  "prohibited": [
+    "autonomous scoring",
+    "fake mastery",
+    "fabricated rewards",
+    "analytics as canonical progress",
+    "direct payment-to-access coupling",
+    "production DB or VPS state as authority"
+  ],
+  "media_seam": "MediaDeliveryPort -> VpsOriginAdapter now -> CDN adapter later",
+  "local_vps_preview": {
+    "local_api": "full same-origin development contract on loopback",
+    "staging_api": "anonymous GET /v1/programs and /v1/programs/{slug} only",
+    "protected_testing": "deployed staging origin only",
+    "forbidden": [
+      "copy staging cookies",
+      "forge Origin",
+      "weaken CSRF",
+      "expose VPS ports",
+      "proxy staging mutations"
+    ]
+  },
+  "offline_read_cache": {
+    "authority": "noncanonical display fallback only",
+    "storage": "versioned IndexedDB with AES-GCM Web Crypto",
+    "scope": "owner-bound allowlisted GET projections",
+    "fallback": "genuine network TypeError only",
+    "never_fallback": [401, 403, 404, 409],
+    "never_cache": [
+      "credentials",
+      "auth responses",
+      "context/permissions",
+      "activity drafts",
+      "evidence",
+      "certificates",
+      "mutations"
+    ],
+    "purge": "sign-out, owner change, expiry, tamper, authorization denial"
+  },
+  "visual_selection": {
+    "authoritative_language": "Direction A light warm-white navy cobalt shell",
+    "global_shell_dashboard": "Direction A",
+    "learning_journey_practice": "Direction B",
+    "player_discover_media": "Direction C after media contracts"
+  },
+  "first_slice": [
+    "shared light shell and wide sidebar/header",
+    "mobile Home Learning Discover Progress More navigation",
+    "avatar/account menu",
+    "distinct learning discover notifications profile routes",
+    "route-shaped skeletons and safe request deduplication",
+    "bounded encrypted offline display fallback",
+    "development-only public staging catalog preview"
+  ],
+  "first_slice_excludes": [
+    "new backend business semantics",
+    "avatar upload mutation",
+    "media playback",
+    "activity schema migration",
+    "durable notification mutations",
+    "analytics",
+    "commerce"
+  ],
+  "implementation_rule": "Implement only the selected bounded slice, preserve canonical server semantics, and leave tests/evidence"
+}

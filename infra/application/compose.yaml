@@ -1,0 +1,255 @@
+name: ${AC_COMPOSE_PROJECT:?AC_COMPOSE_PROJECT must name the isolated environment}
+
+x-service-security: &service-security
+  init: true
+  read_only: true
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,nodev,size=64m
+  logging:
+    driver: local
+    options:
+      max-size: "10m"
+      max-file: "3"
+      compress: "true"
+
+x-application-environment: &application-environment
+  AC_ENVIRONMENT: ${AC_ENVIRONMENT:?AC_ENVIRONMENT must be staging or production}
+  AC_RELEASE_ID: ${AC_RELEASE_ID:?AC_RELEASE_ID must be the verified Git commit}
+  AC_LOG_LEVEL: ${AC_LOG_LEVEL:-INFO}
+  AC_DATABASE_URL: ${AC_DATABASE_URL:?AC_DATABASE_URL is required}
+  AC_SESSION_TOKEN_PEPPER: ${AC_SESSION_TOKEN_PEPPER:?AC_SESSION_TOKEN_PEPPER is required}
+  AC_OAUTH_TRANSACTION_SECRET: ${AC_OAUTH_TRANSACTION_SECRET:?AC_OAUTH_TRANSACTION_SECRET is required}
+  AC_EMAIL_CHALLENGE_SECRET: ${AC_EMAIL_CHALLENGE_SECRET:?AC_EMAIL_CHALLENGE_SECRET is required}
+  AC_GOOGLE_OAUTH_CLIENT_ID: ${AC_GOOGLE_OAUTH_CLIENT_ID:?AC_GOOGLE_OAUTH_CLIENT_ID is required for staging or production}
+  AC_GOOGLE_OAUTH_CLIENT_SECRET: ${AC_GOOGLE_OAUTH_CLIENT_SECRET:?AC_GOOGLE_OAUTH_CLIENT_SECRET is required for staging or production}
+  AC_LEARNER_CONSENT_VERSION: ${AC_LEARNER_CONSENT_VERSION:-}
+  AC_PUBLIC_LEARNER_TENANT_ID: ${AC_PUBLIC_LEARNER_TENANT_ID:-}
+  # An empty value is admitted only while AC_EXTERNAL_SIDE_EFFECTS_HOLD remains
+  # true. Application settings reject releasing the hold without an exact
+  # existing control tenant, and tenantless operations fail closed meanwhile.
+  AC_OPERATIONS_TENANT_ID: ${AC_OPERATIONS_TENANT_ID:-}
+  AC_EXTERNAL_SIDE_EFFECTS_HOLD: ${AC_EXTERNAL_SIDE_EFFECTS_HOLD:-true}
+  AC_OTEL_EXPORTER_OTLP_ENDPOINT: ${AC_OTEL_EXPORTER_OTLP_ENDPOINT:-http://ac-telemetry-collector:4318}
+  AC_PUBLIC_APP_URL: ${AC_PUBLIC_APP_URL:?AC_PUBLIC_APP_URL is required}
+  AC_ADMIN_APP_URL: ${AC_ADMIN_APP_URL:?AC_ADMIN_APP_URL is required}
+  AC_API_URL: ${AC_API_URL:?AC_API_URL is required}
+  AC_API_HOST: ${AC_API_HOST:?AC_API_HOST is required}
+  AC_INTERNAL_API_HOST: ${AC_INTERNAL_API_HOST:?AC_INTERNAL_API_HOST is required}
+  AC_SESSION_COOKIE_NAME: __Host-ac_session
+  AC_OAUTH_TRANSACTION_COOKIE_NAME: __Host-ac_oauth_transaction
+  AC_TRUSTED_PROXY_ADDRESSES: ${AC_TRUSTED_PROXY_ADDRESSES:?AC_TRUSTED_PROXY_ADDRESSES must contain the exact edge-router IP}
+
+x-migration-environment: &migration-environment
+  <<: *application-environment
+  AC_DATABASE_MIGRATOR_URL: ${AC_DATABASE_MIGRATOR_URL:?AC_DATABASE_MIGRATOR_URL is required only by the migrator}
+
+services:
+  postgres:
+    image: ${AC_POSTGRES_IMAGE:-postgres@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af}
+    restart: unless-stopped
+    user: "999:999"
+    read_only: true
+    shm_size: 256m
+    environment:
+      POSTGRES_DB: ac_platform
+      POSTGRES_USER: ac_owner
+      POSTGRES_PASSWORD: ${AC_POSTGRES_OWNER_PASSWORD:?AC_POSTGRES_OWNER_PASSWORD is required}
+      # The official entrypoint bootstraps POSTGRES_USER as the fixed OS
+      # `postgres` user. Local peer auth therefore rejects that deliberate
+      # role-name split; SCRAM keeps both local and TCP bootstrap authenticated.
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256 --auth-local=scram-sha-256 --data-checksums
+      AC_DB_MIGRATOR_PASSWORD: ${AC_DB_MIGRATOR_PASSWORD:?AC_DB_MIGRATOR_PASSWORD is required}
+      AC_DB_RUNTIME_PASSWORD: ${AC_DB_RUNTIME_PASSWORD:?AC_DB_RUNTIME_PASSWORD is required}
+      AC_DB_BACKUP_PASSWORD: ${AC_DB_BACKUP_PASSWORD:?AC_DB_BACKUP_PASSWORD is required}
+    volumes:
+      # PostgreSQL 18+ stores major-versioned clusters beneath this parent so
+      # in-place pg_upgrade workflows do not cross a mount boundary.
+      - ${AC_STATE_ROOT:?AC_STATE_ROOT must isolate durable environment state}/postgres:/var/lib/postgresql
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m
+      - /var/run/postgresql:rw,noexec,nosuid,nodev,size=16m,uid=999,gid=999
+    networks:
+      - data
+    healthcheck:
+      # pg_isready only proves that the server accepts connections; it can
+      # return success while the required database is absent. This probe also
+      # proves authentication, the target database, and bootstrap roles.
+      test:
+        - CMD-SHELL
+        - >-
+          PGPASSWORD="$$POSTGRES_PASSWORD" psql -h 127.0.0.1
+          -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -v ON_ERROR_STOP=1 -Atqc
+          "SELECT count(*) = 3 FROM pg_roles WHERE rolname IN
+          ('ac_migrator', 'ac_runtime', 'ac_backup')" | grep -qx t
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 256
+    cpus: 2.0
+    mem_limit: 2g
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "5"
+        compress: "true"
+
+  migrate:
+    <<: *service-security
+    image: ${AC_API_IMAGE:?AC_API_IMAGE must be the reviewed immutable image reference}
+    pull_policy: never
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    environment:
+      <<: *migration-environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - data
+    profiles:
+      - release
+
+  api:
+    <<: *service-security
+    image: ${AC_API_IMAGE:?AC_API_IMAGE must be the reviewed immutable image reference}
+    pull_policy: never
+    restart: unless-stopped
+    environment:
+      <<: *application-environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+    expose:
+      - "8000"
+    networks:
+      app:
+        aliases:
+          - ${AC_INTERNAL_API_HOST:?AC_INTERNAL_API_HOST is required}
+      data: {}
+      edge:
+        aliases:
+          - ${AC_EDGE_API_ALIAS:?AC_EDGE_API_ALIAS is required}
+      egress: {}
+      telemetry: {}
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import os, urllib.request;
+          request = urllib.request.Request(
+          'http://127.0.0.1:8000/health/ready',
+          headers={'Host': os.environ['AC_API_HOST']});
+          urllib.request.urlopen(request, timeout=3).read()
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    pids_limit: 256
+    cpus: 1.5
+    mem_limit: 768m
+
+  worker:
+    <<: *service-security
+    image: ${AC_API_IMAGE:?AC_API_IMAGE must be the reviewed immutable image reference}
+    pull_policy: never
+    restart: unless-stopped
+    command: ["python", "-m", "ac_platform.worker"]
+    environment:
+      <<: *application-environment
+      AC_EMAIL_PROVIDER: ${AC_EMAIL_PROVIDER:-fake}
+      AC_RESEND_API_KEY: ${AC_RESEND_API_KEY:-}
+      AC_RESEND_FROM: ${AC_RESEND_FROM:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - data
+      - egress
+      - telemetry
+    pids_limit: 256
+    cpus: 1.0
+    mem_limit: 512m
+
+  learner-web:
+    <<: *service-security
+    image: ${AC_LEARNER_IMAGE:?AC_LEARNER_IMAGE must be the reviewed immutable image reference}
+    pull_policy: never
+    restart: unless-stopped
+    expose:
+      - "3000"
+    networks:
+      app: {}
+      edge:
+        aliases:
+          - ${AC_EDGE_LEARNER_ALIAS:?AC_EDGE_LEARNER_ALIAS is required}
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    pids_limit: 256
+    cpus: 1.0
+    mem_limit: 512m
+
+  admin-web:
+    <<: *service-security
+    image: ${AC_ADMIN_IMAGE:?AC_ADMIN_IMAGE must be the reviewed immutable image reference}
+    pull_policy: never
+    restart: unless-stopped
+    environment:
+      AC_INTERNAL_API_URL: "http://${AC_INTERNAL_API_HOST:?AC_INTERNAL_API_HOST is required}:8000"
+      AC_INTERNAL_API_HOST: ${AC_INTERNAL_API_HOST:?AC_INTERNAL_API_HOST is required}
+    depends_on:
+      api:
+        condition: service_healthy
+    expose:
+      - "3001"
+    networks:
+      app: {}
+      edge:
+        aliases:
+          - ${AC_EDGE_ADMIN_ALIAS:?AC_EDGE_ADMIN_ALIAS is required}
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3001/healthz').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    pids_limit: 256
+    cpus: 1.0
+    mem_limit: 512m
+
+networks:
+  app:
+    internal: true
+  data:
+    internal: true
+  egress: {}
+  edge:
+    name: ac_edge
+    external: true
+  telemetry:
+    name: ac_telemetry
+    external: true

@@ -1,11 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+R2_GUARD_UNIT_TIMEOUT_SECONDS=180
+R2_GUARD_STOP_TIMEOUT_SECONDS=30
+
 if [[ "${AC_IPV4_ONLY:-0}" != '1' ]]; then
-  exec systemd-run --quiet --wait --collect --pipe \
+  transient_unit="ac-r2-usage-guard-$$"
+  # shellcheck disable=SC2329  # Invoked by the EXIT/INT/TERM trap below.
+  cancel_transient_unit() {
+    systemctl stop "$transient_unit" >/dev/null 2>&1 || true
+  }
+  trap cancel_transient_unit EXIT INT TERM
+  systemd-run --unit="$transient_unit" --quiet --wait --collect --pipe \
     --setenv=AC_IPV4_ONLY=1 \
+    --setenv=R2_PROJECTED_ADDITIONAL_BYTES="${R2_PROJECTED_ADDITIONAL_BYTES:-0}" \
+    -p "TimeoutStartSec=${R2_GUARD_UNIT_TIMEOUT_SECONDS}s" \
+    -p "TimeoutStopSec=${R2_GUARD_STOP_TIMEOUT_SECONDS}s" \
     -p 'RestrictAddressFamilies=AF_INET AF_UNIX' \
     "$0" "$@"
+  exit $?
 fi
 
 export R2_POLICY_FILE='/srv/authority-closers/current/config/r2/free-tier-policy.conf'

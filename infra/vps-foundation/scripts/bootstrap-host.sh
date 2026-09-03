@@ -4,7 +4,7 @@ set -euo pipefail
 phase="${1:-}"
 admin_key_path="${2:-}"
 admin_user="${AC_ADMIN_USER:-suyash}"
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+repo_root="$(cd -P "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 
 require_root() {
   if [[ "$(id -u)" -ne 0 ]]; then
@@ -14,7 +14,7 @@ require_root() {
 }
 
 verify_bootstrap_source() {
-  local release_id archive archive_sha release_sha verified_root
+  local release_id archive archive_sha release_sha verified_root manifest_expected metadata_file
   release_id="${AC_RELEASE_ID:-}"
   archive="${AC_RELEASE_ARCHIVE:-}"
   archive_sha="${AC_RELEASE_ARCHIVE_SHA256:-}"
@@ -31,6 +31,58 @@ verify_bootstrap_source() {
 
   verified_root="$(mktemp -d /tmp/ac-bootstrap-source.XXXXXX)"
   tar --extract --file="$archive" --directory="$verified_root" --strip-components=2
+  if [[ "${repo_root%/*}" == */srv/authority-closers/releases \
+    || -e "$repo_root/RELEASE-COMMIT" \
+    || -e "$repo_root/RELEASE-ID" \
+    || -e "$repo_root/RELEASE-FILES.sha256" ]]; then
+    [[ -f "$repo_root/RELEASE-COMMIT" \
+      && -f "$repo_root/RELEASE-ID" \
+      && -f "$repo_root/RELEASE-FILES.sha256" ]] || {
+      case "$verified_root" in
+        /tmp/ac-bootstrap-source.*) rm -rf -- "$verified_root" ;;
+        *) printf 'Refusing to remove unexpected verification path: %s\n' "$verified_root" >&2 ;;
+      esac
+      printf 'Installed foundation release metadata is incomplete.\n' >&2
+      exit 1
+    }
+    [[ "${repo_root##*/}" == "$release_id" \
+      && "$(<"$repo_root/RELEASE-COMMIT")" == "$release_sha" \
+      && "$(<"$repo_root/RELEASE-ID")" == "$release_id" ]] || {
+      case "$verified_root" in
+        /tmp/ac-bootstrap-source.*) rm -rf -- "$verified_root" ;;
+        *) printf 'Refusing to remove unexpected verification path: %s\n' "$verified_root" >&2 ;;
+      esac
+      printf 'Installed foundation release identity does not match the reviewed archive.\n' >&2
+      exit 1
+    }
+    (cd "$repo_root" && sha256sum --check --strict RELEASE-FILES.sha256 >/dev/null) || {
+      case "$verified_root" in
+        /tmp/ac-bootstrap-source.*) rm -rf -- "$verified_root" ;;
+        *) printf 'Refusing to remove unexpected verification path: %s\n' "$verified_root" >&2 ;;
+      esac
+      printf 'Installed foundation release manifest verification failed.\n' >&2
+      exit 1
+    }
+    manifest_expected="$(mktemp "$verified_root/.installed-manifest.XXXXXX")"
+    (
+      cd "$repo_root"
+      while IFS= read -r -d '' release_file; do
+        sha256sum "$release_file"
+      done < <(find . -type f ! -path './RELEASE-FILES.sha256' -print0 | LC_ALL=C sort -z)
+    ) > "$manifest_expected"
+    cmp --silent "$manifest_expected" "$repo_root/RELEASE-FILES.sha256" || {
+      case "$verified_root" in
+        /tmp/ac-bootstrap-source.*) rm -rf -- "$verified_root" ;;
+        *) printf 'Refusing to remove unexpected verification path: %s\n' "$verified_root" >&2 ;;
+      esac
+      printf 'Installed foundation release manifest does not cover the exact release files.\n' >&2
+      exit 1
+    }
+    rm -- "$manifest_expected"
+    for metadata_file in RELEASE-COMMIT RELEASE-ID RELEASE-FILES.sha256; do
+      cp -- "$repo_root/$metadata_file" "$verified_root/$metadata_file"
+    done
+  fi
   if ! diff --brief --recursive --no-dereference "$verified_root" "$repo_root" >/dev/null; then
     case "$verified_root" in
       /tmp/ac-bootstrap-source.*) rm -rf -- "$verified_root" ;;
@@ -271,18 +323,32 @@ phase_runtime() {
   install -d -m 2750 -o root -g acops \
     /srv/authority-closers/releases \
     /srv/authority-closers/backups \
+    /srv/authority-closers/recovery-tmp \
+    /srv/authority-closers/recovery-evidence \
     /srv/authority-closers/volumes/postgres \
     /srv/authority-closers/volumes/blob \
     /srv/authority-closers/volumes/media \
     /srv/authority-closers/volumes/mailpit \
     /srv/authority-closers/volumes/otel
+  python3 "$repo_root/scripts/prepare-restore-drill-input-root.py"
   install -d -m 0750 -o root -g acops /srv/authority-closers/env
   install -d -m 0750 /var/cache/authority-closers-restic
   install -d -m 0700 /etc/authority-closers/secrets
   getent passwd cloudflared >/dev/null || useradd --system --user-group --home-dir /var/lib/cloudflared --shell /usr/sbin/nologin cloudflared
   install -d -m 0750 -o root -g cloudflared /etc/cloudflared
 
-  docker network inspect ac_edge >/dev/null 2>&1 || docker network create ac_edge
+  if docker network inspect ac_edge >/dev/null 2>&1; then
+    [[ "$(docker network inspect ac_edge --format '{{(index .IPAM.Config 0).Subnet}}')" == '172.18.0.0/16' ]] || {
+      printf 'Existing ac_edge network does not use the reviewed 172.18.0.0/16 subnet.\n' >&2
+      exit 1
+    }
+  else
+    docker network create \
+      --driver bridge \
+      --subnet 172.18.0.0/16 \
+      --gateway 172.18.0.1 \
+      ac_edge
+  fi
   docker network inspect ac_telemetry >/dev/null 2>&1 || docker network create ac_telemetry --internal
   AC_RELEASE_ID="$release_id" \
   AC_RELEASE_ARCHIVE="${AC_RELEASE_ARCHIVE:-}" \
@@ -320,6 +386,46 @@ phase_activate() {
       systemctl enable --now cloudflared.service
       systemctl is-active --quiet cloudflared.service
       ;;
+    postgres-backup)
+      local foundation_release unit_name source_unit installed_unit
+      foundation_release="$(readlink -f /srv/authority-closers/current)"
+      [[ -d "$foundation_release/config/systemd" ]] || {
+        printf 'Current foundation release has no reviewed systemd unit source.\n' >&2
+        exit 1
+      }
+      for unit_name in ac-postgres-backup.service ac-postgres-backup.timer; do
+        source_unit="$foundation_release/config/systemd/$unit_name"
+        installed_unit="/etc/systemd/system/$unit_name"
+        [[ -f "$source_unit" && -f "$installed_unit" ]] || {
+          printf 'PostgreSQL backup unit is missing from the exact current release: %s\n' "$unit_name" >&2
+          exit 1
+        }
+        cmp --silent "$source_unit" "$installed_unit" || {
+          printf 'Installed PostgreSQL backup unit differs from the exact current release: %s\n' "$unit_name" >&2
+          exit 1
+        }
+        systemd-analyze verify "$installed_unit"
+      done
+      [[ -L /srv/authority-closers/application/current-staging ]] || {
+        printf 'A current staging application release is required before PostgreSQL backup activation.\n' >&2
+        exit 1
+      }
+      [[ -r /etc/authority-closers/secrets/infisical-bootstrap.env ]] || {
+        printf 'Infisical bootstrap is absent; refusing to activate PostgreSQL backup.\n' >&2
+        exit 1
+      }
+      /usr/local/sbin/ac-infisical-verify
+      /usr/local/sbin/ac-r2-usage-guard
+      /usr/local/sbin/ac-postgres-backup --dry-run
+      # This captures staging and any healthy production release that exists,
+      # then verifies pg_restore --list without writing to R2.
+      /usr/local/sbin/ac-postgres-backup --capture-only
+      /usr/local/sbin/ac-r2-usage-guard
+      systemctl daemon-reload
+      systemctl enable --now ac-postgres-backup.timer
+      systemctl is-enabled --quiet ac-postgres-backup.timer
+      systemctl is-active --quiet ac-postgres-backup.timer
+      ;;
     r2-jobs)
       [[ -r /etc/authority-closers/secrets/infisical-bootstrap.env ]] || {
         printf 'Infisical bootstrap is absent; refusing to activate R2 writers.\n' >&2
@@ -334,11 +440,16 @@ phase_activate() {
         ac-restic-restore-check.timer
       ;;
     *)
-      printf 'Usage: %s activate {cloudflared|r2-jobs}\n' "$0" >&2
+      printf 'Usage: %s activate {cloudflared|r2-jobs|postgres-backup}\n' "$0" >&2
       exit 2
       ;;
   esac
 }
+
+if [[ "${AC_BOOTSTRAP_VERIFY_ONLY:-}" == 1 ]]; then
+  verify_bootstrap_source
+  exit 0
+fi
 
 require_root
 verify_bootstrap_source

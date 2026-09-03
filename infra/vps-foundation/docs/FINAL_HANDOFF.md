@@ -1,11 +1,12 @@
 # Authority Closers infrastructure handoff
 
-Updated 2026-08-27 (Asia/Kolkata).
+Updated 2026-08-30 (Asia/Kolkata).
 
 ## Ready now
 
 - VPS: `ac-kvm4-prod`, operator alias `ssh ac`.
 - SSH: Cloudflare Access protects `ssh.authorityclosers.com`; the Access policy allows `admin@authorityclosers.com` and the local private key is used through `cloudflared`. Public TCP/22 is denied by UFW.
+- GitHub: repository fetch/push uses HTTPS through the workstation credential manager as `RSuyash`. The VPS SSH key is deliberately not registered as a GitHub key; `ssh ac` is an operator path, not a Git transport.
 - Tunnel: `ac-kvm4-prod` routes SSH and the two internal health hostnames to the loopback-only service. The WordPress apex and `www` records were not moved.
 - Host controls: UFW, Fail2ban, auditd, AppArmor, unattended upgrades, bounded journald, swap, Docker hardening, loopback-only Caddy, and the five-minute foundation health timer are active.
 - Secrets: runtime and recovery configuration are separated in Infisical projects `AC Infrastructure Secrets` and `AC Human Recovery`. VPS and backup machine-identity client secrets were rotated and their old versions revoked.

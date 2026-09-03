@@ -13,6 +13,17 @@ fi
 grep -q 'export INFISICAL_TOKEN=' "$foundation/scripts/ac-infisical-run"
 grep -q 'export INFISICAL_TOKEN=' "$foundation/scripts/ac-infisical-run-backup"
 
+grep -q 'AC_RESEND_TEST_RECIPIENT is required' \
+  "$foundation/scripts/ac-resend-send-test-inner"
+grep -q 'admin@authorityclosers.com' \
+  "$foundation/scripts/ac-resend-send-test-inner"
+# shellcheck disable=SC2016  # The static assertion intentionally matches a literal PowerShell variable.
+grep -q '\[string\]\$ZoneName = "authorityclosers.com"' \
+  "$foundation/scripts/configure-resend-domain.ps1"
+# shellcheck disable=SC2016  # The static assertion intentionally matches a literal PowerShell variable.
+grep -q '\[string\]\$DomainName = "authorityclosers.com"' \
+  "$foundation/scripts/configure-resend-domain.ps1"
+
 # The PowerShell token is intentionally literal in this static policy check.
 # shellcheck disable=SC2016
 if grep -Eq '\[Parameter\(Mandatory = \$true\)\].*(ApiToken|ApiKey)' \
@@ -54,8 +65,15 @@ grep -Eq '^INFISICAL_LINUX_AMD64_SHA256=[0-9a-f]{64}$' "$foundation/config/relea
 grep -Eq '^INFISICAL_LINUX_AMD64_BINARY_SHA256=[0-9a-f]{64}$' "$foundation/config/release/toolchain.env"
 grep -Eq '^RCLONE_LINUX_AMD64_SHA256=[0-9a-f]{64}$' "$foundation/config/release/toolchain.env"
 grep -Eq '^RCLONE_LINUX_AMD64_BINARY_SHA256=[0-9a-f]{64}$' "$foundation/config/release/toolchain.env"
+grep -q -- '--ipv4' "$foundation/scripts/install-pinned-toolchain.sh"
+grep -q -- '--connect-timeout 10 --max-time 180' "$foundation/scripts/install-pinned-toolchain.sh"
+grep -q -- '--retry 3 --retry-all-errors --retry-delay 2' "$foundation/scripts/install-pinned-toolchain.sh"
 grep -q 'expected_infisical_binary_sha' "$foundation/scripts/ac-restic-restore-check-inner"
 grep -q 'expected_rclone_binary_sha' "$foundation/scripts/ac-restic-restore-check-inner"
+grep -Fq -- "--exclude='/srv/authority-closers/application/artifacts/**'" \
+  "$foundation/scripts/ac-restic-backup-inner"
+grep -Fq -- "--exclude='/srv/authority-closers/application/releases/**'" \
+  "$foundation/scripts/ac-restic-backup-inner"
 # shellcheck disable=SC2016  # This static assertion intentionally matches a literal variable reference.
 grep -q 'trusted_release_dir="/srv/authority-closers/releases/$release_id"' \
   "$foundation/scripts/ac-restic-restore-check-inner"

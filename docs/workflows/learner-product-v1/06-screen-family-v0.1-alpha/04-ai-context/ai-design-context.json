@@ -1,0 +1,84 @@
+{
+  "context_id": "AC-WF-LEARNER-SF-V0.1A",
+  "product": "Authority Closers learner product",
+  "package_version": "0.1-alpha",
+  "status": "contract_ready_visual_generation_pending",
+  "source_of_truth": [
+    "../01-research-journeys/source-manifest.csv",
+    "../../../../traceability/CONTROLLED_SOURCE_REGISTER.md",
+    "../02-ux-state-spec/state-transition-matrix.csv",
+    "../02-ux-state-spec/behavioral-spec.md"
+  ],
+  "authority_order": [
+    "current user decisions",
+    "law/platform/security/privacy/accessibility/engineering invariants",
+    "exact controlled Drive sources",
+    "repository contracts",
+    "this package behavior matrix",
+    "visual references"
+  ],
+  "audiences": [
+    "mobile-heavy self-directed learner",
+    "experienced learner needing a concise next action",
+    "accessibility and assistive-technology learner",
+    "scoped support or domain operator for recovery"
+  ],
+  "flows": [
+    {"id": "FLOW-AUTH-ONB-01", "screens": ["AUTH-01", "AUTH-02", "AUTH-03", "AUTH-04", "AUTH-05", "AUTH-06", "AUTH-07", "ONB-01"]},
+    {"id": "FLOW-SHELL-PLAN-01", "screens": ["HOME-01", "PLAN-01", "PLAN-02", "PLAN-03"]},
+    {"id": "FLOW-DISCOVER-01", "screens": ["DISC-01", "COURSE-01"]},
+    {"id": "FLOW-LEARNING-01", "screens": ["LEARN-01", "COURSE-02", "MOD-01"]},
+    {"id": "FLOW-ACTIVITY-01", "screens": ["ACT-01", "ACT-02", "ACT-03", "ACT-04", "ACT-05", "MEDIA-01"]},
+    {"id": "FLOW-PROGRESS-01", "screens": ["PROG-01", "INSIGHT-01"]},
+    {"id": "FLOW-NOTIFY-01", "screens": ["NOTIF-01"]},
+    {"id": "FLOW-PROFILE-01", "screens": ["PROF-01", "AVATAR-01"]},
+    {"id": "FLOW-SETTINGS-01", "screens": ["SET-01", "SET-02", "SET-03", "SET-04", "SET-05"]},
+    {"id": "FLOW-CERT-01", "screens": ["CERT-01"]},
+    {"id": "FLOW-RESILIENCE-01", "screens": ["SYS-01", "SYS-02", "SYS-03", "SYS-04"]}
+  ],
+  "locked_decisions": [
+    "Dashboard and My Learning are distinct jobs and routes.",
+    "Desktop uses a persistent learner rail; compact mobile uses Home, Learning, Discover, Progress, More.",
+    "The learner shell is light-default; Dark and System are device-local presentation variants.",
+    "A public program preview is read-only; explicit authenticated free enrollment is server-owned.",
+    "Program/module/activity access and prerequisite locks are server-authorized; route possession is not access.",
+    "Watch -> Reflect -> Implement -> Review -> Improve is the first-slice activity loop.",
+    "Progress, completion, evidence, enrollment, notification read state, session, and certificate issuance are canonical only when returned by their owning service.",
+    "Analytics and UI state never grant access or create progress/completion/payment/score authority.",
+    "Video coverage uses versioned unique watched intervals; the provisional 90% operating default is participation evidence, not mastery.",
+    "Course-completion certificates are not competency certification or official skill credentials.",
+    "Every supported mutation needs visible saving/processing/error/retry/expiry/offline behavior and safe input preservation.",
+    "Routine support recovery must not require founder intervention or raw database editing."
+  ],
+  "do_not_infer": [
+    "paid checkout, payment, refund, entitlement, or commerce state",
+    "access grants beyond the controlled free-enrollment policy",
+    "autonomous or official AI scoring, mastery, rank, reward, streak, or leaderboard",
+    "real-call recording, upload, transcription, external AI processing, or provider activation",
+    "new media/caption/transcript provider behavior",
+    "B2B manager, organization membership, tenant switching, or white-label UI",
+    "live coaching, appointments, deadlines, reminders, cadence, or schedule commitments",
+    "account-level or cross-device theme synchronization",
+    "analytics as canonical progress, payment, access, notification, certificate, or evidence state",
+    "protected resource existence from a denied/locked response"
+  ],
+  "state_vocabulary": [
+    "ready", "loading", "empty", "validation_error", "retryable_error", "terminal_error",
+    "offline_or_stale", "unauthorized_or_expired", "permission_denied", "locked", "partial", "processing", "success"
+  ],
+  "visual_generation": {
+    "status": "pending",
+    "directions_required_when_started": 3,
+    "assets_in_package": 0,
+    "selection": null,
+    "approval": null
+  },
+  "known_gaps": [
+    "No approved media, transcript, caption, or playback evidence is bundled.",
+    "Avatar upload/object-processing contract and exact provider gate remain to be activated.",
+    "Certificate issuance implementation and exact-current runtime evidence remain pending.",
+    "Plan/calendar projection semantics are not defined enough to invent dates or commitments.",
+    "Exact-current browser/device accessibility, PWA/offline, and staging evidence are not produced by this docs package.",
+    "No Figma, Canva, Lucid, Drive-upload, or Notion management artifact is claimed."
+  ]
+}

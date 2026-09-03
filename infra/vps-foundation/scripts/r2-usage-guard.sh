@@ -47,7 +47,10 @@ printf 'header = "Authorization: Bearer %s"\n' "$CLOUDFLARE_API_TOKEN" \
       --fail-with-body \
       --silent \
       --show-error \
+      --connect-timeout 10 \
+      --max-time 45 \
       --retry 2 \
+      --retry-max-time 75 \
       --output "$storage_file" \
       "$api_base/accounts/$CLOUDFLARE_ACCOUNT_ID/r2/metrics"
 
@@ -70,7 +73,10 @@ printf 'header = "Authorization: Bearer %s"\n' "$CLOUDFLARE_API_TOKEN" \
       --fail-with-body \
       --silent \
       --show-error \
+      --connect-timeout 10 \
+      --max-time 45 \
       --retry 2 \
+      --retry-max-time 75 \
       --request POST \
       --header 'Content-Type: application/json' \
       --data-binary "@$graphql_body_file" \

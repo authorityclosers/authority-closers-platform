@@ -1,0 +1,96 @@
+@startuml
+title AC learner screen-family v0.1-alpha (behavioral handoff)
+hide empty description
+skinparam shadowing false
+skinparam defaultFontName Arial
+
+actor Learner
+actor "Scoped support" as Support
+rectangle "Public / auth" {
+  usecase "AUTH-01 Sign in" as A1
+  usecase "AUTH-02 Register" as A2
+  usecase "AUTH-03 Verify" as A3
+  usecase "AUTH-04/05 Recovery" as A4
+  usecase "AUTH-06 OAuth callback" as A6
+  usecase "AUTH-07 Session expiry" as A7
+  usecase "ONB-01 Onboarding" as ONB
+}
+rectangle "Learner shell" {
+  usecase "HOME-01 Dashboard" as HOME
+  usecase "PLAN-01..03 Plan horizons" as PLAN
+  usecase "LEARN-01 My Learning" as LIB
+  usecase "DISC-01 Discover" as DISC
+  usecase "COURSE-01 Preview" as PREVIEW
+  usecase "COURSE-02 Program detail" as COURSE
+  usecase "MOD-01 Module map" as MOD
+  usecase "PROG-01 Progress" as PROG
+  usecase "INSIGHT-01 Insights" as INSIGHT
+  usecase "NOTIF-01 Notifications" as NOTIF
+  usecase "PROF-01 Profile" as PROF
+  usecase "AVATAR-01 Avatar crop" as AVATAR
+  usecase "SET-01..05 Settings" as SET
+  usecase "CERT-01 Certificate" as CERT
+}
+rectangle "Activity shell" {
+  usecase "ACT-01 Watch" as ACT1
+  usecase "ACT-02 Reflect" as ACT2
+  usecase "ACT-03 Implement" as ACT3
+  usecase "ACT-04 Review" as ACT4
+  usecase "ACT-05 Improve" as ACT5
+  usecase "MEDIA-01 Player" as MEDIA
+}
+rectangle "Recovery" {
+  usecase "SYS-01 Loading" as SYS1
+  usecase "SYS-02 Retry/terminal" as SYS2
+  usecase "SYS-03 Offline" as SYS3
+  usecase "SYS-04 Locked/denied" as SYS4
+}
+
+Learner --> A1
+Learner --> A2
+A2 --> A3 : verification
+A1 --> HOME : session
+A3 --> HOME : verified session
+A6 --> A1 : bounded recovery
+A4 --> A1 : reset/retry
+HOME --> ONB : optional bounded setup
+HOME --> LIB
+HOME --> PLAN
+HOME --> COURSE : explicit eligible start/resume
+DISC --> PREVIEW
+PREVIEW --> A1 : sign-in return
+A1 --> HOME : return intent
+LIB --> COURSE
+COURSE --> MOD
+MOD --> ACT1
+ACT1 --> ACT2 : configured completion
+ACT2 --> ACT3 : saved evidence
+ACT3 --> ACT4 : recorded evidence
+ACT4 --> ACT5 : review saved
+ACT5 --> PROG : canonical result
+ACT1 --> MEDIA
+PROG --> INSIGHT
+PROG --> CERT : completion/issuance predicate
+HOME --> NOTIF
+HOME --> PROF
+PROF --> AVATAR
+PROF --> SET
+SET --> A7 : session boundary
+A7 --> HOME : reauth + return intent
+SYS1 ..> HOME : retained shell
+SYS2 ..> HOME : preserve/retry
+SYS3 ..> HOME : safe stale/local state
+SYS4 ..> MOD : prerequisite/access reason
+Support ..> SYS2 : scoped recovery only
+Support ..> A7 : assist reauth
+
+note right of MEDIA
+Provider-neutral and gated.
+Watch evidence is unique server intervals;
+participation, not mastery.
+end note
+note bottom
+Analytics events observe; they never grant access,
+progress, payment, score, certificate, or notification authority.
+end note
+@enduml

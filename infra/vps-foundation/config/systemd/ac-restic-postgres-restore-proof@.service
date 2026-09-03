@@ -1,0 +1,22 @@
+[Unit]
+Description=Authority Closers off-site logical PostgreSQL restore proof (%i)
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/ac-restic-postgres-restore-proof --environment %i
+User=root
+Group=root
+Environment=AC_IPV4_ONLY=1
+Environment=DOCKER_CONFIG=/run/ac-docker-cli
+WorkingDirectory=/usr/local/libexec/authority-closers
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+RestrictAddressFamilies=AF_INET AF_UNIX
+ReadOnlyPaths=/etc/authority-closers/secrets/infisical-bootstrap.env /usr/local/sbin /usr/local/libexec/authority-closers /srv/authority-closers/application
+ReadWritePaths=/srv/authority-closers/recovery-tmp /srv/authority-closers/recovery-evidence /var/lib/authority-closers/restore-drill-inputs /var/cache/authority-closers-restic /run/lock
+TimeoutStartSec=75min

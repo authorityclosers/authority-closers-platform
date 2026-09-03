@@ -28,7 +28,8 @@ services:
       - /data:rw,noexec,nosuid,nodev,size=32m,uid=1000,gid=1000
       - /tmp:rw,noexec,nosuid,nodev,size=16m,uid=1000,gid=1000
     networks:
-      - edge
+      edge:
+        ipv4_address: 172.18.0.2
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
       interval: 30s
