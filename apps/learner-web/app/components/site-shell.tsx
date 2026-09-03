@@ -642,9 +642,9 @@ export function LearnerShell({
                       No notifications to show
                     </p>
                     <p className="notification-popover__empty-copy">
-                      This surface does not yet have a server-backed notification
-                      source, so no alerts or read-state changes are being
-                      presented here.
+                      This surface does not yet have a server-backed
+                      notification source, so no alerts or read-state changes
+                      are being presented here.
                     </p>
                   </div>
 

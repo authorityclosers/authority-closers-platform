@@ -131,7 +131,10 @@ export function LearningSkeleton() {
 
       <div className="learning-collection-skeleton__grid">
         {[1, 2, 3].map((course) => (
-          <SkeletonCard key={course} className="learning-collection-skeleton__card">
+          <SkeletonCard
+            key={course}
+            className="learning-collection-skeleton__card"
+          >
             <div className="learning-collection-skeleton__media" />
             <div className="learning-collection-skeleton__body">
               <SkeletonLine width="72px" className="skeleton-line--tag" />

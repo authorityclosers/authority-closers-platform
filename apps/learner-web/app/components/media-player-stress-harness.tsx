@@ -169,13 +169,10 @@ export function MediaPlayerStressHarness({
     scenarioRef.current = scenario;
   }, [scenario]);
 
-  const appendTrace = useCallback(
-    (entry: Omit<TraceEntry, "id">) => {
-      const next = { ...entry, id: ++traceIdRef.current };
-      setTrace((current) => [...current.slice(-49), next]);
-    },
-    [],
-  );
+  const appendTrace = useCallback((entry: Omit<TraceEntry, "id">) => {
+    const next = { ...entry, id: ++traceIdRef.current };
+    setTrace((current) => [...current.slice(-49), next]);
+  }, []);
 
   const api = useMemo(() => {
     const simulation = simulationRef.current;
@@ -194,7 +191,8 @@ export function MediaPlayerStressHarness({
       startPlayback: async (): Promise<PlaybackStartResponse> => {
         simulation.startCalls += 1;
         const expired =
-          scenarioRef.current === "expired-grant" && simulation.startCalls === 1;
+          scenarioRef.current === "expired-grant" &&
+          simulation.startCalls === 1;
         const sessionId = `harness-session-${simulation.startCalls}`;
         trace({
           type: "start",
@@ -253,8 +251,14 @@ export function MediaPlayerStressHarness({
         sessionId: string,
       ): Promise<PlaybackFinishResponse> => {
         simulation.finishCalls += 1;
-        trace({ type: "finish", detail: `${sessionId} attempt #${simulation.finishCalls}` });
-        if (scenarioRef.current === "finish-network" && !simulation.finishFailed) {
+        trace({
+          type: "finish",
+          detail: `${sessionId} attempt #${simulation.finishCalls}`,
+        });
+        if (
+          scenarioRef.current === "finish-network" &&
+          !simulation.finishFailed
+        ) {
           simulation.finishFailed = true;
           trace({ type: "failure", detail: "finish network failure" });
           throw new TypeError("harness finish failed");
@@ -293,7 +297,8 @@ export function MediaPlayerStressHarness({
     return fakeApi;
   }, [appendTrace, fixture]);
 
-  const selectedFixture = FIXTURES.find((entry) => entry.value === fixture) ?? FIXTURES[1];
+  const selectedFixture =
+    FIXTURES.find((entry) => entry.value === fixture) ?? FIXTURES[1];
   const media = useMemo<AuthorizedVideoMedia>(
     () => ({
       src: `/dev-harness/media-player/fixtures/${fixture}.mp4`,
@@ -396,7 +401,9 @@ export function MediaPlayerStressHarness({
               <select
                 aria-label="Fixture"
                 value={fixture}
-                onChange={(event) => changeFixture(event.target.value as FixtureName)}
+                onChange={(event) =>
+                  changeFixture(event.target.value as FixtureName)
+                }
               >
                 {FIXTURES.map((entry) => (
                   <option key={entry.value} value={entry.value}>
@@ -440,7 +447,8 @@ export function MediaPlayerStressHarness({
           >
             <strong>{selectedFixture.label}</strong>
             <span style={{ marginLeft: "10px", overflowWrap: "anywhere" }}>
-              Expected media metadata: {selectedFixture.width}×{selectedFixture.height}, {selectedFixture.duration}s
+              Expected media metadata: {selectedFixture.width}×
+              {selectedFixture.height}, {selectedFixture.duration}s
             </span>
           </section>
 
@@ -481,7 +489,9 @@ export function MediaPlayerStressHarness({
                   </li>
                 ))
               ) : (
-                <li data-testid="harness-trace-empty">No synthetic calls yet.</li>
+                <li data-testid="harness-trace-empty">
+                  No synthetic calls yet.
+                </li>
               )}
             </ol>
           </section>

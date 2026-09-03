@@ -55,7 +55,11 @@ export type AvatarFileValidation =
   | { ok: true; mimeType: AvatarAcceptedMimeType }
   | {
       ok: false;
-      code: "missing" | "unsupported_type" | "invalid_size" | "invalid_dimensions";
+      code:
+        | "missing"
+        | "unsupported_type"
+        | "invalid_size"
+        | "invalid_dimensions";
       message: string;
     };
 

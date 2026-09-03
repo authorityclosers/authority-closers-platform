@@ -46,12 +46,8 @@ describe("learning loop video runtime", () => {
 
   it("requires the server action and a writable activity state before playback", () => {
     expect(canStartPlayback(activity)).toBe(true);
-    expect(
-      canStartPlayback({ ...activity, allowed_actions: [] }),
-    ).toBe(false);
-    expect(
-      canStartPlayback({ ...activity, state: "locked" }),
-    ).toBe(false);
+    expect(canStartPlayback({ ...activity, allowed_actions: [] })).toBe(false);
+    expect(canStartPlayback({ ...activity, state: "locked" })).toBe(false);
   });
 
   it("renders an honest unavailable state when no authorized media descriptor exists", () => {
@@ -66,7 +62,9 @@ describe("learning loop video runtime", () => {
 
     expect(html).toContain("No approved lesson media is connected yet.");
     expect(html).toContain("The server exposes a completion action");
-    expect(html).toContain("Watch evidence cannot be submitted while media is unavailable");
+    expect(html).toContain(
+      "Watch evidence cannot be submitted while media is unavailable",
+    );
     expect(html).not.toContain("<video");
     expect(html).not.toContain("Mastery");
     expect(html).not.toContain("Complete");
@@ -93,7 +91,7 @@ describe("learning loop video runtime", () => {
       }),
     );
 
-    expect(html).toContain('<video');
+    expect(html).toContain("<video");
     expect(html).toContain('src="https://media.example.test/lesson.mp4"');
     expect(html).toContain('kind="captions"');
     expect(html).toContain("Open transcript");
@@ -112,7 +110,9 @@ describe("learning loop video runtime", () => {
 
     expect(html).toContain("Lesson complete.");
     expect(html).toContain("accepted the completion evidence");
-    expect(html).not.toContain("Watch evidence cannot be submitted while media is unavailable");
+    expect(html).not.toContain(
+      "Watch evidence cannot be submitted while media is unavailable",
+    );
     expect(html).not.toContain("No approved lesson media is connected yet.");
   });
 });

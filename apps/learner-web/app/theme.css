@@ -1041,7 +1041,6 @@ html[data-theme="dark"] .theme-control__option[aria-pressed="true"] {
     .learner-sidebar__item[aria-disabled="true"] {
     color: var(--theme-disabled-text);
   }
-
 }
 
 @media (max-width: 480px) {

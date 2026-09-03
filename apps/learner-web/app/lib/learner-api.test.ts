@@ -528,9 +528,11 @@ describe("learner API adapter", () => {
       idempotencyKey: () => keys.shift() ?? "unexpected-key",
     });
 
-    await expect(api.startPlayback("activity-video", 4)).resolves.toMatchObject({
-      session_id: "session-1",
-    });
+    await expect(api.startPlayback("activity-video", 4)).resolves.toMatchObject(
+      {
+        session_id: "session-1",
+      },
+    );
     await expect(
       api.heartbeatPlayback(
         "activity-video",

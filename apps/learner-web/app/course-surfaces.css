@@ -870,9 +870,7 @@
     linear-gradient(140deg, #07142c 0%, #123b84 56%, #1e65de 100%);
 }
 
-.site-frame--learner
-  .learning-course-card--completed
-  .ac-program-card__media {
+.site-frame--learner .learning-course-card--completed .ac-program-card__media {
   background:
     radial-gradient(circle at 82% 20%, rgb(81 218 166 / 30%), transparent 34%),
     linear-gradient(140deg, #071a2d 0%, #13536a 58%, #157f77 100%);
@@ -1106,6 +1104,10 @@
     align-items: flex-start;
     flex-direction: column;
     gap: 8px;
+  }
+
+  .site-frame--learner .learning-collection-skeleton__toolbar {
+    flex-wrap: wrap;
   }
 
   .site-frame--learner .learning-collection-tabs {

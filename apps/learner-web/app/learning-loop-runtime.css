@@ -393,8 +393,12 @@
   background: var(--clarity-muted);
 }
 
-.site-frame--learner .momentum-video-viewer__status--watching .momentum-video-viewer__status-dot,
-.site-frame--learner .momentum-video-viewer__status--submitted .momentum-video-viewer__status-dot {
+.site-frame--learner
+  .momentum-video-viewer__status--watching
+  .momentum-video-viewer__status-dot,
+.site-frame--learner
+  .momentum-video-viewer__status--submitted
+  .momentum-video-viewer__status-dot {
   background: var(--clarity-blue);
 }
 
@@ -402,7 +406,9 @@
   color: var(--theme-danger-text);
 }
 
-.site-frame--learner .momentum-video-viewer__status--error .momentum-video-viewer__status-dot {
+.site-frame--learner
+  .momentum-video-viewer__status--error
+  .momentum-video-viewer__status-dot {
   background: var(--theme-danger-text);
 }
 
@@ -428,7 +434,9 @@
   list-style: none;
 }
 
-.site-frame--learner .momentum-video-transcript summary::-webkit-details-marker {
+.site-frame--learner
+  .momentum-video-transcript
+  summary::-webkit-details-marker {
   display: none;
 }
 

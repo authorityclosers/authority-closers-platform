@@ -104,8 +104,7 @@ export async function loadLearningData(
     me,
     courses,
     savedFilterAvailable,
-    offlineRead:
-      getEarliestOfflineReadMetadata(me, courses) ?? undefined,
+    offlineRead: getEarliestOfflineReadMetadata(me, courses) ?? undefined,
   };
 }
 
@@ -129,9 +128,10 @@ function stateClass(state: LearningCourseSummaryResponse["state"]): string {
   return `learning-course-card--${state.replaceAll("_", "-")}`;
 }
 
-function courseProjection(
-  course: LearningCourseSummaryResponse,
-): { value: number | null; detail: string } {
+function courseProjection(course: LearningCourseSummaryResponse): {
+  value: number | null;
+  detail: string;
+} {
   const projection = course.projection;
   if (
     projection === null ||
@@ -199,7 +199,8 @@ function LearningCourseCard({
       description="Follow the published course path and continue from the next server-authorized activity."
       meta={
         <span>
-          Version {course.version_number} · Enrolled {formatEnrolledDate(course.enrolled_at)}
+          Version {course.version_number} · Enrolled{" "}
+          {formatEnrolledDate(course.enrolled_at)}
         </span>
       }
       action={
@@ -277,7 +278,9 @@ export function LearningViewRuntime({
   const [me, setMe] = useState<MeResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
-  const [offlineRead, setOfflineRead] = useState<OfflineReadMetadata | undefined>();
+  const [offlineRead, setOfflineRead] = useState<
+    OfflineReadMetadata | undefined
+  >();
   const [filter, setFilter] = useState<LearningFilter>("all");
   const generationRef = useRef(0);
   const mountedRef = useRef(false);
@@ -388,16 +391,15 @@ export function LearningViewRuntime({
   }
 
   return (
-    <div
-      className="learning-collection-view"
-      data-testid="learning-collection"
-    >
+    <div className="learning-collection-view" data-testid="learning-collection">
       <RouteHeader
         className="learning-collection-header"
         title="My Learning"
         titleId="learning-collection-title"
         eyebrow={
-          <span className="card-badge card-badge--primary">Learner library</span>
+          <span className="card-badge card-badge--primary">
+            Learner library
+          </span>
         }
         description="Your server-authorized courses, organized around the published paths you can access."
         aside={

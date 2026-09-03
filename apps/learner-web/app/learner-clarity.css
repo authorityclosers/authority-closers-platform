@@ -7867,7 +7867,9 @@ a.learning-list-card:hover {
   color: #475569;
   text-decoration: none;
   position: relative;
-  transition: background-color 140ms ease, color 140ms ease;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
 }
 
 .site-frame--learner .learner-sidebar .learner-nav__link:hover {
@@ -7908,7 +7910,9 @@ a.learning-list-card:hover {
   font-weight: 500;
   cursor: pointer;
   width: 100%;
-  transition: background-color 140ms ease, color 140ms ease;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
 }
 
 /* Account dropdown popover item touch targets */
@@ -8072,7 +8076,11 @@ a.learning-list-card:hover {
     min-height: 44px;
   }
 
-  .site-frame--learner .learner-bottom-nav .learner-nav__link .learner-nav__icon svg {
+  .site-frame--learner
+    .learner-bottom-nav
+    .learner-nav__link
+    .learner-nav__icon
+    svg {
     width: 18px;
     height: 18px;
   }
@@ -8208,7 +8216,8 @@ a.learning-list-card:hover {
   height: 48px;
   margin-bottom: 3px;
   place-items: center;
-  border: 1px solid color-mix(in srgb, var(--clarity-blue) 20%, var(--clarity-border));
+  border: 1px solid
+    color-mix(in srgb, var(--clarity-blue) 20%, var(--clarity-border));
   border-radius: 14px;
   color: var(--clarity-blue);
   background: var(--clarity-soft-blue);
@@ -8288,12 +8297,11 @@ a.learning-list-card:hover {
   width: 132px;
   height: 132px;
   border: 0;
-  background:
-    conic-gradient(
-      from -45deg,
-      var(--clarity-blue) var(--progress-percentage, 0%),
-      var(--clarity-soft-blue) 0
-    );
+  background: conic-gradient(
+    from -45deg,
+    var(--clarity-blue) var(--progress-percentage, 0%),
+    var(--clarity-soft-blue) 0
+  );
   box-shadow: 0 0 0 1px rgba(49, 87, 216, 0.08);
 }
 
@@ -8394,7 +8402,8 @@ a.learning-list-card:hover {
   flex: 0 0 auto;
   min-width: 48px;
   padding: 6px 9px;
-  border: 1px solid color-mix(in srgb, var(--clarity-blue) 22%, var(--clarity-border));
+  border: 1px solid
+    color-mix(in srgb, var(--clarity-blue) 22%, var(--clarity-border));
   border-radius: 999px;
   color: var(--clarity-blue);
   background: var(--clarity-soft-blue);

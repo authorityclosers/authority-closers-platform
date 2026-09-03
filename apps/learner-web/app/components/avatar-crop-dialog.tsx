@@ -333,7 +333,10 @@ export function AvatarCropDialog({
 
     const poll = async () => {
       try {
-        const result = await getStatus(processingOperationId, controller.signal);
+        const result = await getStatus(
+          processingOperationId,
+          controller.signal,
+        );
         if (!active || !mountedRef.current) return;
         if (result.status === "processing") {
           setStatus({
@@ -586,10 +589,10 @@ export function AvatarCropDialog({
                 {status.status === "validating"
                   ? "Checking image…"
                   : status.status === "uploading"
-                  ? "Checking availability…"
-                  : status.status === "processing"
-                    ? "Waiting for processing…"
-                    : "Upload avatar"}
+                    ? "Checking availability…"
+                    : status.status === "processing"
+                      ? "Waiting for processing…"
+                      : "Upload avatar"}
               </button>
             </div>
             <p className={styles.uploadNote} id="avatar-upload-note">

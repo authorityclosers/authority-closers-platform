@@ -28,27 +28,26 @@ from urllib.parse import urlparse
 
 from playwright.sync_api import (
     BrowserContext,
-    Error as PlaywrightError,
     Page,
     Route,
-    TimeoutError as PlaywrightTimeoutError,
     sync_playwright,
 )
-
+from playwright.sync_api import (
+    Error as PlaywrightError,
+)
+from playwright.sync_api import (
+    TimeoutError as PlaywrightTimeoutError,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 ARTIFACT_ROOT = ROOT / ".artifacts" / "media-player"
 OUTPUT_ROOT = ARTIFACT_ROOT / "evidence"
 
 FIXTURE_PATHS = {
-    "official-bbb.mp4": ARTIFACT_ROOT
-    / "official-bbb"
-    / "BigBuckBunny_320x180.mp4",
-    "tiny-16x9-320x180-4s.mp4": ARTIFACT_ROOT
-    / "tiny-16x9-320x180-4s.mp4",
+    "official-bbb.mp4": ARTIFACT_ROOT / "official-bbb" / "BigBuckBunny_320x180.mp4",
+    "tiny-16x9-320x180-4s.mp4": ARTIFACT_ROOT / "tiny-16x9-320x180-4s.mp4",
     "tiny-4x3-320x240-6s.mp4": ARTIFACT_ROOT / "tiny-4x3-320x240-6s.mp4",
-    "tiny-235x-640x272-3s.mp4": ARTIFACT_ROOT
-    / "tiny-235x-640x272-3s.mp4",
+    "tiny-235x-640x272-3s.mp4": ARTIFACT_ROOT / "tiny-235x-640x272-3s.mp4",
 }
 
 CAPTIONS = """WEBVTT
@@ -104,7 +103,7 @@ def add_browser_guards(context: BrowserContext) -> None:
           configurable: true,
           value: true,
         });
-        HTMLMediaElement.prototype.requestFullscreen = () =>
+        Element.prototype.requestFullscreen = () =>
           Promise.reject(new DOMException("Harness rejection", "NotAllowedError"));
         document.exitFullscreen = () =>
           Promise.reject(new DOMException("Harness rejection", "NotAllowedError"));
@@ -133,9 +132,9 @@ def wait_for_metadata(page: Page, width: int, height: int, duration: float) -> N
 
 
 def assert_no_horizontal_overflow(page: Page) -> None:
-    assert page.evaluate(
-        "document.documentElement.scrollWidth <= window.innerWidth + 1"
-    ), "the harness/player overflows horizontally"
+    assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth + 1"), (
+        "the harness/player overflows horizontally"
+    )
 
 
 def trace_entries(page: Page, event_type: str | None = None) -> list[dict[str, Any]]:
@@ -171,7 +170,6 @@ def goto_case(
         wait_until="domcontentloaded",
         timeout=NETWORK_IDLE_TIMEOUT_MS,
     )
-    page.wait_for_load_state("networkidle", timeout=NETWORK_IDLE_TIMEOUT_MS)
     page.get_by_test_id("media-player-harness").wait_for()
     page.locator("video").wait_for()
     wait_for_metadata(page, width, height, duration)
@@ -224,12 +222,16 @@ def run_core_case(
     reduced_motion: bool,
     output_path: Path,
 ) -> CaseResult:
-    name = f"core-{fixture}-{viewport_width}x{viewport_height}-{'reduce' if reduced_motion else 'normal'}"
+    motion = "reduce" if reduced_motion else "normal"
+    name = f"core-{fixture}-{viewport_width}x{viewport_height}-{motion}"
     browser_context = open_context(playwright, viewport_width, viewport_height, reduced_motion)
     page = browser_context.new_page()
     console_errors: list[str] = []
     page_errors: list[str] = []
-    page.on("console", lambda message: console_errors.append(message.text) if message.type == "error" else None)
+    page.on(
+        "console",
+        lambda message: console_errors.append(message.text) if message.type == "error" else None,
+    )
     page.on("pageerror", lambda error: page_errors.append(str(error)))
     try:
         page.goto(
@@ -237,23 +239,33 @@ def run_core_case(
             wait_until="domcontentloaded",
             timeout=NETWORK_IDLE_TIMEOUT_MS,
         )
-        page.wait_for_load_state("networkidle", timeout=NETWORK_IDLE_TIMEOUT_MS)
         page.get_by_test_id("media-player-harness").wait_for()
         page.locator("video").wait_for()
         wait_for_metadata(page, media_width, media_height, duration)
         assert_no_horizontal_overflow(page)
-        assert page.evaluate("window.matchMedia('(prefers-reduced-motion: reduce)').matches") is reduced_motion
+        assert (
+            page.evaluate("window.matchMedia('(prefers-reduced-motion: reduce)').matches")
+            is reduced_motion
+        )
         assert page.locator("video track[kind='captions']").count() == 1
-        page.wait_for_function("() => document.querySelector('video')?.textTracks[0]?.cues?.length", timeout=10_000)
+        page.wait_for_function(
+            "() => document.querySelector('video')?.textTracks[0]?.cues?.length", timeout=10_000
+        )
 
         page.get_by_role("button", name="Play lesson").click()
-        page.wait_for_function("() => document.querySelector('video')?.paused === false", timeout=5_000)
+        page.wait_for_function(
+            "() => document.querySelector('video')?.paused === false", timeout=5_000
+        )
         page.get_by_role("button", name="Pause lesson").wait_for(timeout=5_000)
         page.get_by_role("button", name="Pause lesson").click()
-        page.wait_for_function("() => document.querySelector('video')?.paused === true", timeout=5_000)
+        page.wait_for_function(
+            "() => document.querySelector('video')?.paused === true", timeout=5_000
+        )
         page.get_by_role("button", name="Play lesson").wait_for(timeout=5_000)
         page.get_by_role("button", name="Play lesson").click()
-        page.wait_for_function("() => document.querySelector('video')?.paused === false", timeout=5_000)
+        page.wait_for_function(
+            "() => document.querySelector('video')?.paused === false", timeout=5_000
+        )
 
         page.get_by_label("Playback speed").select_option("1.5")
         assert page.locator(".momentum-video-controls select").input_value() == "1.5"
@@ -278,7 +290,9 @@ def run_core_case(
 
         page.get_by_text("Open transcript", exact=True).click()
         page.get_by_role("button", name=re.compile("Opening frame")).click()
-        page.wait_for_function("() => (document.querySelector('video')?.currentTime || 0) >= 0.2", timeout=5_000)
+        page.wait_for_function(
+            "() => (document.querySelector('video')?.currentTime || 0) >= 0.2", timeout=5_000
+        )
 
         page.get_by_role("button", name="Enter fullscreen").click()
         page.get_by_role("status").filter(
@@ -288,7 +302,12 @@ def run_core_case(
         page.screenshot(path=str(output_path), full_page=True)
         if console_errors or page_errors:
             raise AssertionError(f"browser errors: console={console_errors}, page={page_errors}")
-        return CaseResult(name, True, "metadata, controls, transcript, focus, fullscreen rejection, and overflow passed", str(output_path))
+        return CaseResult(
+            name,
+            True,
+            "metadata, controls, transcript, focus, fullscreen rejection, and overflow passed",
+            str(output_path),
+        )
     except (AssertionError, PlaywrightError, PlaywrightTimeoutError) as error:
         return CaseResult(name, False, str(error), None)
     finally:
@@ -303,16 +322,25 @@ def run_abort_case(playwright: Any, base_url: str, output_path: Path) -> CaseRes
         goto_case(page, base_url, "tiny-4x3-320x240-6s", "abort-heartbeat", 320, 240, 6)
         page.get_by_role("button", name="Play lesson").click()
         page.locator("video").evaluate("video => { video.playbackRate = 2; }")
-        page.get_by_test_id("harness-trace-entry").filter(has_text="heartbeat network abort").wait_for(timeout=8_000)
+        page.get_by_test_id("harness-trace-entry").filter(
+            has_text="heartbeat network abort"
+        ).wait_for(timeout=8_000)
         page.wait_for_function(
-            "() => document.querySelectorAll('[data-testid=harness-trace-entry][data-event-type=heartbeat]').length >= 2",
+            "() => document.querySelectorAll("
+            "'[data-testid=harness-trace-entry][data-event-type=heartbeat]'"
+            ").length >= 2",
             timeout=8_000,
         )
         heartbeats = trace_entries(page, "heartbeat")
         assert [entry["sequence"] for entry in heartbeats[:2]] == [1, 1], heartbeats
         output_path.parent.mkdir(parents=True, exist_ok=True)
         page.screenshot(path=str(output_path), full_page=True)
-        return CaseResult(name, True, "network abort retried the pending event without sequence drift", str(output_path))
+        return CaseResult(
+            name,
+            True,
+            "network abort retried the pending event without sequence drift",
+            str(output_path),
+        )
     except (AssertionError, PlaywrightError, PlaywrightTimeoutError) as error:
         return CaseResult(name, False, str(error), None)
     finally:
@@ -326,15 +354,26 @@ def run_expired_grant_case(playwright: Any, base_url: str, output_path: Path) ->
     try:
         goto_case(page, base_url, "tiny-16x9-320x180-4s", "expired-grant", 320, 180, 4)
         page.get_by_role("button", name="Play lesson").click()
-        page.get_by_test_id("harness-trace-entry").filter(has_text="harness-session-1 expired").wait_for(timeout=5_000)
+        page.get_by_test_id("harness-trace-entry").filter(
+            has_text="harness-session-1 expired"
+        ).wait_for(timeout=5_000)
         page.get_by_role("button", name="Play lesson").click()
-        page.get_by_test_id("harness-trace-entry").filter(has_text="harness-session-2 valid").wait_for(timeout=5_000)
-        page.wait_for_function("() => document.querySelector('video')?.paused === false", timeout=5_000)
+        page.get_by_test_id("harness-trace-entry").filter(
+            has_text="harness-session-2 valid"
+        ).wait_for(timeout=5_000)
+        page.wait_for_function(
+            "() => document.querySelector('video')?.paused === false", timeout=5_000
+        )
         starts = trace_entries(page, "start")
         assert len(starts) == 2, starts
         output_path.parent.mkdir(parents=True, exist_ok=True)
         page.screenshot(path=str(output_path), full_page=True)
-        return CaseResult(name, True, "expired first grant was rejected and a fresh grant started playback", str(output_path))
+        return CaseResult(
+            name,
+            True,
+            "expired first grant was rejected and a fresh grant started playback",
+            str(output_path),
+        )
     except (AssertionError, PlaywrightError, PlaywrightTimeoutError) as error:
         return CaseResult(name, False, str(error), None)
     finally:
@@ -349,16 +388,27 @@ def run_session_expired_case(playwright: Any, base_url: str, output_path: Path) 
         goto_case(page, base_url, "tiny-4x3-320x240-6s", "session-expired", 320, 240, 6)
         page.get_by_role("button", name="Play lesson").click()
         page.locator("video").evaluate("video => { video.playbackRate = 2; }")
-        page.get_by_test_id("harness-trace-entry").filter(has_text="playback session expired").wait_for(timeout=8_000)
+        page.get_by_test_id("harness-trace-entry").filter(
+            has_text="playback session expired"
+        ).wait_for(timeout=8_000)
         page.get_by_role("button", name="Retry server save").wait_for(timeout=8_000)
         page.get_by_role("button", name="Retry server save").click()
-        page.get_by_test_id("harness-trace-entry").filter(has_text="harness-session-2 valid").wait_for(timeout=8_000)
-        page.wait_for_function("() => document.querySelector('video')?.paused === false", timeout=5_000)
+        page.get_by_test_id("harness-trace-entry").filter(
+            has_text="harness-session-2 valid"
+        ).wait_for(timeout=8_000)
+        page.wait_for_function(
+            "() => document.querySelector('video')?.paused === false", timeout=5_000
+        )
         starts = trace_entries(page, "start")
         assert len(starts) == 2, starts
         output_path.parent.mkdir(parents=True, exist_ok=True)
         page.screenshot(path=str(output_path), full_page=True)
-        return CaseResult(name, True, "invalid session paused evidence and retry reacquired from a safe restart", str(output_path))
+        return CaseResult(
+            name,
+            True,
+            "invalid session paused evidence and retry reacquired from a safe restart",
+            str(output_path),
+        )
     except (AssertionError, PlaywrightError, PlaywrightTimeoutError) as error:
         return CaseResult(name, False, str(error), None)
     finally:
@@ -375,7 +425,9 @@ def run_finish_retry_case(playwright: Any, base_url: str, output_path: Path) -> 
         page.locator("video").evaluate("video => { video.playbackRate = 2; }")
         page.get_by_role("button", name="Retry server save").wait_for(timeout=8_000)
         page.get_by_role("button", name="Retry server save").click()
-        page.get_by_test_id("harness-trace-entry").filter(has_text="video_watch for").wait_for(timeout=8_000)
+        page.get_by_test_id("harness-trace-entry").filter(has_text="video_watch for").wait_for(
+            timeout=8_000
+        )
         finishes = trace_entries(page, "finish")
         heartbeats = trace_entries(page, "heartbeat")
         evidence = trace_entries(page, "evidence")
@@ -384,7 +436,12 @@ def run_finish_retry_case(playwright: Any, base_url: str, output_path: Path) -> 
         assert len(evidence) == 1, evidence
         output_path.parent.mkdir(parents=True, exist_ok=True)
         page.screenshot(path=str(output_path), full_page=True)
-        return CaseResult(name, True, "finish retry reused the closed-session path and did not append a heartbeat", str(output_path))
+        return CaseResult(
+            name,
+            True,
+            "finish retry reused the closed-session path and did not append a heartbeat",
+            str(output_path),
+        )
     except (AssertionError, PlaywrightError, PlaywrightTimeoutError) as error:
         return CaseResult(name, False, str(error), None)
     finally:

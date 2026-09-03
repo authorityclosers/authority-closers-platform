@@ -472,7 +472,7 @@ describe("Direction A & B UI System & Shell", () => {
       expect(shellSource).toContain("notificationPopoverOpen");
       expect(shellSource).toContain("closeNotificationPopover");
       expect(shellSource).toContain('id="learner-notifications-popover"');
-      expect(shellSource).toContain('href={ROUTES.notifications}');
+      expect(shellSource).toContain("href={ROUTES.notifications}");
       expect(shellSource).not.toContain('userDisplayName = "Suyash"');
       expect(shellSource).not.toContain('className="header-badge-dot"');
       expect(shellSource).not.toContain("unreadCount");

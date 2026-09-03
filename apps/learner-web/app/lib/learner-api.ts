@@ -218,10 +218,7 @@ export interface CalendarResponse {
   disclaimer: string;
 }
 
-export type LearningCourseState =
-  | "in_progress"
-  | "completed"
-  | "unavailable";
+export type LearningCourseState = "in_progress" | "completed" | "unavailable";
 
 export type LearningSavedState = "saved" | "unavailable";
 

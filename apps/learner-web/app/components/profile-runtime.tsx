@@ -113,8 +113,9 @@ export function ProfileRuntime({
     OfflineReadMetadata | undefined
   >();
   const [avatarDialogOpen, setAvatarDialogOpen] = useState(false);
-  const [currentAvatar, setCurrentAvatar] =
-    useState<AvatarPresentation | null>(null);
+  const [currentAvatar, setCurrentAvatar] = useState<AvatarPresentation | null>(
+    null,
+  );
   const avatarButtonRef = useRef<HTMLButtonElement>(null);
   const generationRef = useRef(0);
   const mountedRef = useRef(false);
@@ -475,7 +476,9 @@ export function ProfileRuntime({
           onSuccess={(avatar) => {
             setCurrentAvatar(avatar);
             setAvatarDialogOpen(false);
-            window.requestAnimationFrame(() => avatarButtonRef.current?.focus());
+            window.requestAnimationFrame(() =>
+              avatarButtonRef.current?.focus(),
+            );
           }}
         />
       ) : null}

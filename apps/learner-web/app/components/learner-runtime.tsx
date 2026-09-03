@@ -2747,7 +2747,9 @@ export function ConnectedActivityWorkspace({
             activity={activity}
             api={api}
             moduleHref={moduleHref}
-            onPlaybackCommitted={() => refreshCommittedMutationState("evidence")}
+            onPlaybackCommitted={() =>
+              refreshCommittedMutationState("evidence")
+            }
           />
         ) : (
           <form

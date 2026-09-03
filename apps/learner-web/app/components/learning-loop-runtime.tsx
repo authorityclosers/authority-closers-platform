@@ -103,7 +103,9 @@ export function formatMediaTime(value: number): string {
   return `${minutes}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
-export function canStartPlayback(activity: Pick<ActivityResponse, "state" | "allowed_actions">): boolean {
+export function canStartPlayback(
+  activity: Pick<ActivityResponse, "state" | "allowed_actions">,
+): boolean {
   return (
     ["available", "in_progress"].includes(activity.state.toLowerCase()) &&
     activity.allowed_actions.includes("complete_video")
@@ -268,7 +270,8 @@ export function VideoViewer({
   const [canFullscreen, setCanFullscreen] = useState(false);
   const [canPictureInPicture, setCanPictureInPicture] = useState(false);
   const [hasEnded, setHasEnded] = useState(false);
-  const [playbackSessionNeedsRetry, setPlaybackSessionNeedsRetry] = useState(false);
+  const [playbackSessionNeedsRetry, setPlaybackSessionNeedsRetry] =
+    useState(false);
   const [mediaState, setMediaState] = useState<MediaState>(
     authorized ? "loading" : "blocked",
   );
@@ -279,15 +282,12 @@ export function VideoViewer({
   );
   const backgroundedRef = useRef(false);
 
-  const updateStatus = useCallback(
-    (next: PlaybackStatus, message: string) => {
-      if (!mountedRef.current) return;
-      statusRef.current = next;
-      setStatus(next);
-      setStatusMessage(message);
-    },
-    [],
-  );
+  const updateStatus = useCallback((next: PlaybackStatus, message: string) => {
+    if (!mountedRef.current) return;
+    statusRef.current = next;
+    setStatus(next);
+    setStatusMessage(message);
+  }, []);
 
   const resetPlaybackSession = useCallback((needsRetry = false) => {
     sessionRef.current = null;
@@ -359,8 +359,14 @@ export function VideoViewer({
             pendingHeartbeatRef.current = null;
           }
           watchCursorRef.current = Math.max(0, input.end_seconds);
-          if (statusRef.current !== "saving" && statusRef.current !== "submitted") {
-            updateStatus("watching", "Watch progress is being recorded by the server.");
+          if (
+            statusRef.current !== "saving" &&
+            statusRef.current !== "submitted"
+          ) {
+            updateStatus(
+              "watching",
+              "Watch progress is being recorded by the server.",
+            );
           }
           return true;
         })
@@ -386,7 +392,11 @@ export function VideoViewer({
 
   const flushWatch = useCallback(
     async (position?: number): Promise<boolean> => {
-      if (!sessionRef.current || sessionRef.current.closed || finishReadyRef.current) {
+      if (
+        !sessionRef.current ||
+        sessionRef.current.closed ||
+        finishReadyRef.current
+      ) {
         return true;
       }
       if (heartbeatRequestRef.current) {
@@ -432,7 +442,9 @@ export function VideoViewer({
       try {
         const started = await api.startPlayback(activity.id, activity.revision);
         if (!started.session_token) {
-          throw new Error("The server did not return a playback authorization token.");
+          throw new Error(
+            "The server did not return a playback authorization token.",
+          );
         }
         const expiresAt = Date.parse(started.expires_at);
         if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
@@ -455,7 +467,10 @@ export function VideoViewer({
         watchCursorRef.current = 0;
         finishReadyRef.current = false;
         if (started.duration_seconds > 0) setDuration(started.duration_seconds);
-        updateStatus("watching", "Watch progress is being recorded by the server.");
+        updateStatus(
+          "watching",
+          "Watch progress is being recorded by the server.",
+        );
         return true;
       } catch (error) {
         updateStatus("error", playbackErrorMessage(error));
@@ -507,7 +522,9 @@ export function VideoViewer({
       updateStatus("saving", "Saving the final watch interval…");
       try {
         if (!session.closed && !finishReadyRef.current) {
-          const flushed = await flushWatch(video.duration || duration || video.currentTime);
+          const flushed = await flushWatch(
+            video.duration || duration || video.currentTime,
+          );
           if (!flushed) return;
           // Once final watch evidence is accepted, a retry must not append a
           // heartbeat after a successful or unknown-outcome close command.
@@ -684,7 +701,10 @@ export function VideoViewer({
     // A seek is explicitly zero-length evidence. Reset the local cursor so a
     // later watch interval cannot claim the skipped section.
     watchCursorRef.current = nextPosition;
-    if (sessionRef.current && Math.abs(nextPosition - previousPosition) > 0.25) {
+    if (
+      sessionRef.current &&
+      Math.abs(nextPosition - previousPosition) > 0.25
+    ) {
       void sendPlaybackEvent("seek", nextPosition, nextPosition);
     }
   }, [sendPlaybackEvent]);
@@ -858,7 +878,10 @@ export function VideoViewer({
   }, [updateStatus]);
 
   const progress = useMemo(
-    () => (duration > 0 ? Math.min(100, Math.max(0, (currentTime / duration) * 100)) : 0),
+    () =>
+      duration > 0
+        ? Math.min(100, Math.max(0, (currentTime / duration) * 100))
+        : 0,
     [currentTime, duration],
   );
 
@@ -874,7 +897,10 @@ export function VideoViewer({
   if (!authorized || !media) {
     if (activity.state.toLowerCase() === "completed") {
       return (
-        <section className="momentum-video-viewer" aria-labelledby={`video-title-${activity.id}`}>
+        <section
+          className="momentum-video-viewer"
+          aria-labelledby={`video-title-${activity.id}`}
+        >
           <div className="momentum-video-viewer__heading">
             <div>
               <p className="momentum-video-viewer__eyebrow">
@@ -889,7 +915,10 @@ export function VideoViewer({
             </span>
           </div>
           <CompletedMediaStage activity={activity} moduleHref={moduleHref} />
-          <div className="momentum-video-viewer__facts" aria-label="Video lesson status">
+          <div
+            className="momentum-video-viewer__facts"
+            aria-label="Video lesson status"
+          >
             <span>
               <CheckCircle2 size={15} aria-hidden="true" />
               Completion is recorded by the server
@@ -899,7 +928,10 @@ export function VideoViewer({
       );
     }
     return (
-      <section className="momentum-video-viewer" aria-labelledby={`video-title-${activity.id}`}>
+      <section
+        className="momentum-video-viewer"
+        aria-labelledby={`video-title-${activity.id}`}
+      >
         <div className="momentum-video-viewer__heading">
           <div>
             <p className="momentum-video-viewer__eyebrow">
@@ -914,7 +946,10 @@ export function VideoViewer({
           </span>
         </div>
         <LockedMediaStage activity={activity} moduleHref={moduleHref} />
-        <div className="momentum-video-viewer__facts" aria-label="Video lesson status">
+        <div
+          className="momentum-video-viewer__facts"
+          aria-label="Video lesson status"
+        >
           <span>
             <CheckCircle2 size={15} aria-hidden="true" />
             Completion is server-determined
@@ -952,7 +987,10 @@ export function VideoViewer({
                         : "Ready";
 
   return (
-    <section className="momentum-video-viewer" aria-labelledby={`video-title-${activity.id}`}>
+    <section
+      className="momentum-video-viewer"
+      aria-labelledby={`video-title-${activity.id}`}
+    >
       <div className="momentum-video-viewer__heading">
         <div>
           <p className="momentum-video-viewer__eyebrow">
@@ -1014,7 +1052,11 @@ export function VideoViewer({
               />
             ))}
           </video>
-          <div className="momentum-video-player__live-state" role="status" aria-live="polite">
+          <div
+            className="momentum-video-player__live-state"
+            role="status"
+            aria-live="polite"
+          >
             {visibleStatusMessage || "Playback has not started."}
           </div>
         </div>
@@ -1029,7 +1071,11 @@ export function VideoViewer({
             onClick={togglePlay}
             aria-label={isPlaying ? "Pause lesson" : "Play lesson"}
           >
-            {isPlaying ? <Pause size={18} aria-hidden="true" /> : <Play size={18} aria-hidden="true" />}
+            {isPlaying ? (
+              <Pause size={18} aria-hidden="true" />
+            ) : (
+              <Play size={18} aria-hidden="true" />
+            )}
             <span>{isPlaying ? "Pause" : "Play"}</span>
           </button>
           <span className="momentum-video-controls__time" aria-live="off">
@@ -1052,7 +1098,11 @@ export function VideoViewer({
             onClick={toggleMute}
             aria-label={isMuted ? "Unmute lesson" : "Mute lesson"}
           >
-            {isMuted ? <VolumeX size={18} aria-hidden="true" /> : <Volume2 size={18} aria-hidden="true" />}
+            {isMuted ? (
+              <VolumeX size={18} aria-hidden="true" />
+            ) : (
+              <Volume2 size={18} aria-hidden="true" />
+            )}
           </button>
           <input
             className="momentum-video-controls__volume"
@@ -1067,9 +1117,14 @@ export function VideoViewer({
           <label className="momentum-video-controls__rate">
             <Gauge size={16} aria-hidden="true" />
             <span className="sr-only">Playback speed</span>
-            <select value={playbackRate} onChange={(event) => changeRate(Number(event.target.value))}>
+            <select
+              value={playbackRate}
+              onChange={(event) => changeRate(Number(event.target.value))}
+            >
               {[0.75, 1, 1.25, 1.5, 2].map((rate) => (
-                <option key={rate} value={rate}>{rate}×</option>
+                <option key={rate} value={rate}>
+                  {rate}×
+                </option>
               ))}
             </select>
           </label>
@@ -1109,8 +1164,13 @@ export function VideoViewer({
 
       <div className="momentum-video-viewer__status-row">
         <div>
-          <span className={`momentum-video-viewer__status momentum-video-viewer__status--${status}`}>
-            <span className="momentum-video-viewer__status-dot" aria-hidden="true" />
+          <span
+            className={`momentum-video-viewer__status momentum-video-viewer__status--${status}`}
+          >
+            <span
+              className="momentum-video-viewer__status-dot"
+              aria-hidden="true"
+            />
             {statusLabel}
           </span>
           <p className="momentum-video-viewer__status-copy">
@@ -1131,9 +1191,7 @@ export function VideoViewer({
                   : void retryPlaybackSave()
               }
             >
-              {mediaState === "error" &&
-              !hasEnded &&
-              !playbackSessionNeedsRetry
+              {mediaState === "error" && !hasEnded && !playbackSessionNeedsRetry
                 ? "Retry media"
                 : "Retry server save"}
             </button>
