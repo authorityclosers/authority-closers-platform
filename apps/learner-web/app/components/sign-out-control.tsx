@@ -1,7 +1,7 @@
 "use client";
 
 import { LogOut } from "lucide-react";
-import { useState } from "react";
+import { useState, type AriaRole } from "react";
 
 import {
   ApiError,
@@ -100,10 +100,14 @@ export function SignOutControl({
   api = defaultApi,
   className = "button button--outline",
   offlineReadCache = getDefaultOfflineReadCache(),
+  role,
+  tabIndex,
 }: {
   api?: Pick<LearnerApi, "logout">;
   className?: string;
   offlineReadCache?: Pick<OfflineReadCache, "purge"> | null;
+  role?: AriaRole;
+  tabIndex?: number;
 }) {
   const [signingOut, setSigningOut] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
@@ -190,6 +194,8 @@ export function SignOutControl({
         type="button"
         onClick={() => void signOut()}
         disabled={signingOut}
+        role={role}
+        tabIndex={tabIndex}
       >
         <LogOut size={16} aria-hidden="true" />
         {signingOut ? "Signing out…" : "Sign out"}

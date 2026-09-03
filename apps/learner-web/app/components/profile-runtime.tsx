@@ -1,5 +1,8 @@
 "use client";
 
+/* Avatar delivery URLs are server-owned and may be private signed origins. */
+/* eslint-disable @next/next/no-img-element */
+
 import {
   ArrowRight,
   CheckCircle2,
@@ -25,6 +28,12 @@ import {
 } from "../lib/offline-read-cache";
 import { ROUTES } from "../lib/routes";
 import { userFacingRequestError } from "../lib/user-facing-error";
+import {
+  unavailableAvatarUploadPort,
+  type AvatarPresentation,
+  type AvatarUploadPort,
+} from "../lib/avatar-upload";
+import { AvatarCropDialog } from "./avatar-crop-dialog";
 import {
   hasMembershipRole,
   MembershipUnavailable,
@@ -88,7 +97,13 @@ export async function loadProfileData(
   }
 }
 
-export function ProfileRuntime({ api = defaultApi }: { api?: LearnerApi }) {
+export function ProfileRuntime({
+  api = defaultApi,
+  avatarUpload = unavailableAvatarUploadPort,
+}: {
+  api?: LearnerApi;
+  avatarUpload?: AvatarUploadPort;
+}) {
   const [me, setMe] = useState<MeResponse | null>(null);
   const [onboarding, setOnboarding] = useState<OnboardingResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -97,6 +112,10 @@ export function ProfileRuntime({ api = defaultApi }: { api?: LearnerApi }) {
   const [offlineRead, setOfflineRead] = useState<
     OfflineReadMetadata | undefined
   >();
+  const [avatarDialogOpen, setAvatarDialogOpen] = useState(false);
+  const [currentAvatar, setCurrentAvatar] =
+    useState<AvatarPresentation | null>(null);
+  const avatarButtonRef = useRef<HTMLButtonElement>(null);
   const generationRef = useRef(0);
   const mountedRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
@@ -127,6 +146,7 @@ export function ProfileRuntime({ api = defaultApi }: { api?: LearnerApi }) {
       const result = await loadProfileData(api, controller.signal);
       if (!isCurrent()) return;
       setMe(result.me);
+      setCurrentAvatar(result.me.avatar ?? null);
       setOnboarding(result.onboarding);
       setOnboardingError(result.onboardingError);
       setOfflineRead(result.offlineRead);
@@ -239,9 +259,38 @@ export function ProfileRuntime({ api = defaultApi }: { api?: LearnerApi }) {
           className="card profile-card"
           aria-labelledby="identity-card-title"
         >
-          <div className="profile-card__hero">
-            <div className="profile-avatar-large" aria-hidden="true">
-              {initials}
+          <div className="profile-card__hero profile-card__hero--avatar">
+            <div className="profile-avatar-panel">
+              <div className="profile-avatar-large">
+                {currentAvatar ? (
+                  <img
+                    className="profile-avatar-large__image"
+                    src={currentAvatar.deliveryUrl}
+                    alt={currentAvatar.alt || `${displayName}'s profile photo`}
+                  />
+                ) : (
+                  <span aria-hidden="true">{initials}</span>
+                )}
+              </div>
+              <div className="profile-avatar-panel__copy">
+                <span className="profile-avatar-panel__label">
+                  Profile photo
+                </span>
+                <p>
+                  Optional. Preview a crop locally before any server-backed
+                  profile update.
+                </p>
+                <button
+                  ref={avatarButtonRef}
+                  className="button button--small button--outline profile-avatar-panel__button"
+                  type="button"
+                  onClick={() => setAvatarDialogOpen(true)}
+                  aria-haspopup="dialog"
+                >
+                  <PencilLine size={15} aria-hidden="true" />
+                  Change photo
+                </button>
+              </div>
             </div>
             <div className="profile-hero-copy">
               <h2 id="identity-card-title" className="profile-name">
@@ -410,6 +459,26 @@ export function ProfileRuntime({ api = defaultApi }: { api?: LearnerApi }) {
           </div>
         </section>
       </div>
+
+      {avatarDialogOpen ? (
+        <AvatarCropDialog
+          displayName={displayName}
+          profileRevision={me.profile_revision}
+          currentAvatar={currentAvatar}
+          adapter={avatarUpload}
+          onClose={() => {
+            setAvatarDialogOpen(false);
+            window.requestAnimationFrame(() =>
+              avatarButtonRef.current?.focus(),
+            );
+          }}
+          onSuccess={(avatar) => {
+            setCurrentAvatar(avatar);
+            setAvatarDialogOpen(false);
+            window.requestAnimationFrame(() => avatarButtonRef.current?.focus());
+          }}
+        />
+      ) : null}
     </div>
   );
 }

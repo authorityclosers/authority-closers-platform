@@ -18,7 +18,6 @@ import {
   ShieldCheck,
   Sparkles,
   Trophy,
-  VideoOff,
   Wrench,
 } from "lucide-react";
 import Image from "next/image";
@@ -68,6 +67,7 @@ import {
   MembershipUnavailable,
   type MembershipDraftCleanup,
 } from "./membership-availability";
+import { VideoViewer } from "./learning-loop-runtime";
 
 const defaultApi = createLearnerApi();
 export const FREE_COURSE_SLUG = "authority-closers-free-course";
@@ -1796,8 +1796,6 @@ export function ConnectedActivityWorkspace({
   const canSaveDraft = writableState && allowedActions.has("save_draft");
   const canSubmitEvidence =
     writableState && allowedActions.has("submit_evidence");
-  const canCompleteVideo =
-    writableState && allowedActions.has("complete_video");
   const canEditResponse = canSaveDraft || canSubmitEvidence;
   const evidenceType = (
     {
@@ -2736,34 +2734,14 @@ export function ConnectedActivityWorkspace({
             </div>
           </section>
         ) : activity.kind.toLowerCase() === "video" ? (
-          <div
-            className="activity-media-state"
-            role="status"
-            aria-label="Approved lesson media is unavailable"
-          >
-            <Image
-              src="/media/ac-course-hero-v1.png"
-              alt=""
-              fill
-              sizes="(max-width: 720px) 100vw, 760px"
-              className="activity-media-state__art"
-            />
-            <div className="activity-media-state__veil" aria-hidden="true" />
-            <div className="activity-media-state__copy">
-              <div className="activity-media-state__icon" aria-hidden="true">
-                <VideoOff size={24} />
-              </div>
-              <span className="activity-media-state__eyebrow">
-                VIDEO · presentation artwork
-              </span>
-              <strong>No approved lesson media is connected yet.</strong>
-              <p className="field-help">
-                {canCompleteVideo
-                  ? "The server exposes a completion action, but this unavailable state cannot submit it without approved lesson media."
-                  : "Playback and completion remain unavailable for this activity."}
-              </p>
-            </div>
-          </div>
+          // VideoViewer owns the Approved lesson media is unavailable state.
+          <VideoViewer
+            key={activity.id}
+            activity={activity}
+            api={api}
+            moduleHref={moduleHref}
+            onPlaybackCommitted={() => refreshCommittedMutationState("evidence")}
+          />
         ) : (
           <form
             className="activity-response-form"

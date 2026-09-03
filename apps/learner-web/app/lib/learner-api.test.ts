@@ -403,6 +403,136 @@ describe("learner API adapter", () => {
     expect(makeKey).toHaveBeenCalledOnce();
   });
 
+  it("keeps playback commands revision-bound and tokens out of URLs", async () => {
+    const fetcher = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const path = String(input);
+        const headers = new Headers(init?.headers);
+        expect(init?.method).toBe("POST");
+        expect(init?.credentials).toBe("include");
+        expect(headers.get("accept")).toBe("application/json");
+        expect(headers.get("content-type")).toBe("application/json");
+
+        if (path.endsWith("/playback/start")) {
+          expect(headers.get("if-match")).toBe('"activity-revision-4"');
+          expect(headers.get("idempotency-key")).toBe("playback-start-1");
+          expect(init?.body).toBe("{}");
+          return response({
+            session_id: "session-1",
+            activity_id: "activity-video",
+            session_token: "opaque-session-token",
+            revision: 0,
+            expires_at: "2026-09-03T01:00:00Z",
+            duration_seconds: 120,
+          });
+        }
+
+        if (path.endsWith("/playback/heartbeat")) {
+          expect(path).not.toContain("opaque-session-token");
+          expect(headers.get("x-playback-token")).toBe("opaque-session-token");
+          expect(headers.get("idempotency-key")).toBe("playback-heartbeat-1");
+          expect(JSON.parse(String(init?.body))).toEqual({
+            session_id: "session-1",
+            event_id: "event-1",
+            sequence: 1,
+            start_seconds: 0,
+            end_seconds: 5,
+            kind: "watch",
+          });
+          return response({
+            session_id: "session-1",
+            interval_id: "interval-1",
+            sequence: 1,
+            revision: 1,
+            observed_at: "2026-09-03T00:00:05Z",
+          });
+        }
+
+        if (path.endsWith("/playback/finish")) {
+          expect(headers.get("if-match")).toBe('"playback-revision-1"');
+          expect(headers.get("x-playback-token")).toBe("opaque-session-token");
+          expect(headers.get("idempotency-key")).toBe("playback-finish-1");
+          expect(JSON.parse(String(init?.body))).toEqual({
+            session_id: "session-1",
+          });
+          return response({
+            session_id: "session-1",
+            activity_id: "activity-video",
+            revision: 2,
+            status: "closed",
+            closed_at: "2026-09-03T00:02:00Z",
+          });
+        }
+
+        expect(path).toBe("/v1/activities/activity-video/evidence");
+        expect(path).not.toContain("opaque-session-token");
+        expect(headers.get("if-match")).toBe('"activity-revision-8"');
+        expect(headers.get("idempotency-key")).toBe("video-evidence-1");
+        expect(JSON.parse(String(init?.body))).toEqual({
+          evidence_type: "video_watch",
+          payload: {},
+          playback_session_id: "session-1",
+          playback_token: "opaque-session-token",
+        });
+        return response({
+          evidence_id: "evidence-1",
+          submission_id: "submission-1",
+          activity_id: "activity-video",
+          activity_revision: 9,
+          evidence_type: "video_watch",
+          submission_status: "pending",
+        });
+      },
+    );
+    const keys = [
+      "playback-start-1",
+      "playback-heartbeat-1",
+      "playback-finish-1",
+      "video-evidence-1",
+    ];
+    const api = createLearnerApi(fetcher, {
+      idempotencyKey: () => keys.shift() ?? "unexpected-key",
+    });
+
+    await expect(api.startPlayback("activity-video", 4)).resolves.toMatchObject({
+      session_id: "session-1",
+    });
+    await expect(
+      api.heartbeatPlayback(
+        "activity-video",
+        {
+          session_id: "session-1",
+          event_id: "event-1",
+          sequence: 1,
+          start_seconds: 0,
+          end_seconds: 5,
+          kind: "watch",
+        },
+        "opaque-session-token",
+      ),
+    ).resolves.toMatchObject({ revision: 1 });
+    await expect(
+      api.finishPlayback(
+        "activity-video",
+        "session-1",
+        1,
+        "opaque-session-token",
+      ),
+    ).resolves.toMatchObject({ status: "closed" });
+    await expect(
+      api.submitEvidence(
+        "activity-video",
+        "video_watch",
+        {},
+        8,
+        "session-1",
+        "opaque-session-token",
+      ),
+    ).resolves.toMatchObject({ submission_status: "pending" });
+
+    expect(fetcher).toHaveBeenCalledTimes(4);
+  });
+
   it("preserves server error status and code for honest UI states", async () => {
     const fetcher = vi.fn(async () =>
       response(

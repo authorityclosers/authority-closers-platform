@@ -31,9 +31,9 @@ describe("learner theme preference", () => {
       document: { documentElement: root },
       window: {
         localStorage: {
-          getItem: () => {
+          getItem: (key: string) => {
             if (storageThrows) throw new Error("storage blocked");
-            return stored;
+            return key === "ac-appearance-theme" ? stored : null;
           },
         },
         matchMedia: () => {
@@ -64,10 +64,7 @@ describe("learner theme preference", () => {
   it("applies the persisted theme from an external pre-paint script", () => {
     const root = runPrepaint({ stored: "dark", systemPrefersDark: false });
 
-    expect(root.dataset).toEqual({
-      theme: "dark",
-      themePreference: "dark",
-    });
+    expect(root.dataset).toEqual({ theme: "dark", themePreference: "dark" });
     expect(root.style).toEqual({ colorScheme: "dark" });
   });
 
@@ -91,10 +88,7 @@ describe("learner theme preference", () => {
       mediaThrows: true,
     });
 
-    expect(root.dataset).toEqual({
-      theme: "light",
-      themePreference: "light",
-    });
+    expect(root.dataset).toEqual({ theme: "light", themePreference: "light" });
     expect(root.style).toEqual({ colorScheme: "light" });
   });
 

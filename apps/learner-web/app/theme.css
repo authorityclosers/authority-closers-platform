@@ -910,9 +910,15 @@ html[data-theme="dark"]
 
 .theme-control__option[aria-pressed="true"] {
   color: var(--theme-info-text);
-  border-color: #bdcaf3;
+  border-color: var(--theme-action);
   background: var(--theme-surface-raised);
   box-shadow: 0 1px 4px rgba(15, 27, 51, 0.08);
+}
+
+.theme-control-stack {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
 }
 
 html[data-theme="dark"] .theme-control__option {
@@ -921,7 +927,7 @@ html[data-theme="dark"] .theme-control__option {
 
 html[data-theme="dark"] .theme-control__option[aria-pressed="true"] {
   color: var(--theme-info-text);
-  border-color: #50669b;
+  border-color: var(--theme-action);
   background: var(--theme-info-surface);
   box-shadow: none;
 }
@@ -1035,6 +1041,7 @@ html[data-theme="dark"] .theme-control__option[aria-pressed="true"] {
     .learner-sidebar__item[aria-disabled="true"] {
     color: var(--theme-disabled-text);
   }
+
 }
 
 @media (max-width: 480px) {

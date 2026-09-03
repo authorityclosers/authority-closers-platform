@@ -1,7 +1,7 @@
 "use client";
 
 import { Monitor, Moon, Sun } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import styles from "./settings-clarity.module.css";
 
@@ -27,21 +27,32 @@ export function resolveThemePreference(
     : preference;
 }
 
-function readPreference(): ThemePreference {
+function readPreference(fallback: ThemePreference = "light"): ThemePreference {
   try {
     return normalizeThemePreference(
       window.localStorage.getItem(THEME_STORAGE_KEY),
     );
   } catch {
-    return "light";
+    const current =
+      typeof document !== "undefined"
+        ? document.documentElement.dataset.themePreference
+        : undefined;
+    return current === "light" || current === "dark" || current === "system"
+      ? current
+      : fallback;
   }
 }
 
 function applyPreference(preference: ThemePreference) {
-  const effective = resolveThemePreference(
-    preference,
-    window.matchMedia("(prefers-color-scheme: dark)").matches,
-  );
+  let systemPrefersDark = false;
+  try {
+    systemPrefersDark = window.matchMedia(
+      "(prefers-color-scheme: dark)",
+    ).matches;
+  } catch {
+    // Light remains the deterministic fallback when media queries are blocked.
+  }
+  const effective = resolveThemePreference(preference, systemPrefersDark);
   document.documentElement.dataset.theme = effective;
   document.documentElement.dataset.themePreference = preference;
   document.documentElement.style.colorScheme = effective;
@@ -63,9 +74,26 @@ export function subscribeToThemeChanges(
 }
 
 export function ThemeRuntime() {
+  const fallbackPreferenceRef = useRef<ThemePreference>("light");
+
   useEffect(() => {
-    const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const refresh = () => applyPreference(readPreference());
+    let media: Pick<
+      MediaQueryList,
+      "addEventListener" | "removeEventListener"
+    > = {
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    };
+    try {
+      media = window.matchMedia("(prefers-color-scheme: dark)");
+    } catch {
+      // The light preference remains usable when media queries are blocked.
+    }
+    const refresh = () => {
+      const preference = readPreference(fallbackPreferenceRef.current);
+      fallbackPreferenceRef.current = preference;
+      applyPreference(preference);
+    };
     refresh();
     return subscribeToThemeChanges(media, window, refresh);
   }, []);
@@ -80,9 +108,14 @@ const options = [
 
 export function ThemeControl() {
   const [preference, setPreference] = useState<ThemePreference>("light");
+  const fallbackPreferenceRef = useRef<ThemePreference>("light");
 
   useEffect(() => {
-    const refresh = () => setPreference(readPreference());
+    const refresh = () => {
+      const nextPreference = readPreference(fallbackPreferenceRef.current);
+      fallbackPreferenceRef.current = nextPreference;
+      setPreference(nextPreference);
+    };
     refresh();
     window.addEventListener("storage", refresh);
     window.addEventListener("ac-theme-change", refresh);
@@ -98,32 +131,35 @@ export function ThemeControl() {
     } catch {
       // Appearance remains usable for the current page when storage is blocked.
     }
+    fallbackPreferenceRef.current = nextPreference;
     setPreference(nextPreference);
     applyPreference(nextPreference);
     window.dispatchEvent(new Event("ac-theme-change"));
   }
 
   return (
-    <div
-      className={`theme-control ${styles.themeControl}`}
-      role="group"
-      aria-label="Appearance theme"
-    >
-      {options.map((option) => {
-        const Icon = option.icon;
-        return (
-          <button
-            className="theme-control__option"
-            type="button"
-            key={option.value}
-            aria-pressed={preference === option.value}
-            onClick={() => choose(option.value)}
-          >
-            <Icon size={18} aria-hidden="true" />
-            <span>{option.label}</span>
-          </button>
-        );
-      })}
+    <div className="theme-control-stack">
+      <div
+        className={`theme-control ${styles.themeControl}`}
+        role="group"
+        aria-label="Appearance theme"
+      >
+        {options.map((option) => {
+          const Icon = option.icon;
+          return (
+            <button
+              className="theme-control__option"
+              type="button"
+              key={option.value}
+              aria-pressed={preference === option.value}
+              onClick={() => choose(option.value)}
+            >
+              <Icon size={18} aria-hidden="true" />
+              <span>{option.label}</span>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

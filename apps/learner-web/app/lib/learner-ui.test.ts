@@ -628,6 +628,7 @@ describe("honest preview controls", () => {
     expect(html).toContain("Light");
     expect(html).toContain("Dark");
     expect(html).toContain("System");
+    expect(html).not.toContain("Accent palette");
     expect(html.match(/aria-pressed=/g)).toHaveLength(3);
   });
 
