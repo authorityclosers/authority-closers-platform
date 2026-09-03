@@ -533,6 +533,15 @@ export function ProfileRuntime({
           }}
           onSuccess={(avatar) => {
             setCurrentAvatar(avatar);
+            window.dispatchEvent(
+              new CustomEvent("ac-profile-avatar-updated", {
+                detail: {
+                  deliveryUrl: avatar.deliveryUrl,
+                  alt: avatar.alt,
+                  revision: avatar.revision,
+                },
+              }),
+            );
             setAvatarDialogOpen(false);
             window.requestAnimationFrame(() =>
               avatarButtonRef.current?.focus(),

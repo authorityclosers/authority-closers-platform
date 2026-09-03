@@ -883,6 +883,150 @@ html[data-theme="dark"] .site-frame--learner .learner-main {
   background: var(--theme-canvas);
 }
 
+/* The current home composition uses the ac-* component family. Keep these
+ * late, high-specificity rules beside the theme bridge so its legacy light
+ * declarations cannot leak white cards or navy text into dark presets. */
+html[data-theme="dark"]
+  .site-frame--learner
+  :is(
+    .ac-card,
+    .ac-plan-row,
+    .dashboard-card-empty,
+    .dashboard-collection-card,
+    .dashboard-discover-card,
+    .dashboard-collection__empty
+  ) {
+  color: var(--theme-text) !important;
+  border-color: var(--theme-border) !important;
+  background: var(--theme-surface) !important;
+  box-shadow: none !important;
+}
+
+html[data-theme="dark"]
+  .site-frame--learner
+  :is(
+    .ac-welcome-title,
+    .ac-card-title,
+    .ac-course-heading,
+    .ac-plan-action,
+    .ac-practice-event-title,
+    .ac-course-name,
+    .ac-metric-count,
+    .ac-upcoming-heading,
+    .dashboard-collection__header h2,
+    .dashboard-collection-card__body strong,
+    .dashboard-discover-card > strong
+  ) {
+  color: var(--theme-text) !important;
+}
+
+html[data-theme="dark"]
+  .site-frame--learner
+  :is(
+    .ac-welcome-subtitle,
+    .ac-card-subtitle,
+    .ac-progress-pct-label,
+    .ac-lw-label,
+    .ac-lw-val,
+    .ac-lesson-btn-text span,
+    .ac-lesson-time-left,
+    .ac-plan-target,
+    .ac-plan-dur,
+    .ac-plan-arrow,
+    .ac-cal-month,
+    .ac-cal-weekday,
+    .ac-practice-time,
+    .ac-practice-coach,
+    .ac-course-prog-line,
+    .ac-course-pct,
+    .ac-course-arrow,
+    .ac-metric-label,
+    .ac-metric-time,
+    .ac-upcoming-desc,
+    .ac-upcoming-date,
+    .soft-card-content > span:last-child,
+    .soft-card-chevron,
+    .ac-plan-fallback-label,
+    .dashboard-collection-card__body > span,
+    .dashboard-discover-card > span
+  ) {
+  color: var(--theme-text-muted) !important;
+}
+
+html[data-theme="dark"] .site-frame--learner .ac-plan-row:hover {
+  background: var(--theme-surface-raised) !important;
+}
+
+html[data-theme="dark"] .site-frame--learner .ac-course-row:hover {
+  background: var(--theme-surface-raised) !important;
+}
+
+html[data-theme="dark"]
+  .site-frame--learner
+  :is(.ac-lesson-btn-text strong, .ac-cal-day, .soft-card-content strong) {
+  color: var(--theme-text) !important;
+}
+
+html[data-theme="dark"]
+  .site-frame--learner
+  :is(
+    .ac-continue-footer,
+    .ac-card-bottom-link,
+    .ac-plan-fallback,
+    .ac-course-row,
+    .ac-activity-metric-row
+  ) {
+  border-color: var(--theme-border) !important;
+}
+
+html[data-theme="dark"]
+  .site-frame--learner
+  :is(
+    .ac-date-pill,
+    .ac-calendar-date-box,
+    .ac-btn-secondary,
+    .ac-upcoming-tag,
+    .upcoming-practice-soft-card
+  ) {
+  color: var(--theme-text) !important;
+  border-color: var(--theme-border) !important;
+  background: var(--theme-surface-subtle) !important;
+}
+
+html[data-theme="dark"]
+  .site-frame--learner
+  :is(
+    .ac-plan-badge--blue,
+    .ac-roleplay-tag,
+    .soft-card-icon,
+    .ac-metric-icon--blue
+  ) {
+  color: var(--theme-info-text) !important;
+  background: var(--theme-info-surface) !important;
+}
+
+html[data-theme="dark"]
+  .site-frame--learner
+  :is(.ac-plan-badge--green, .ac-metric-icon--green) {
+  color: var(--theme-success-text) !important;
+  background: var(--theme-success-surface) !important;
+}
+
+html[data-theme="dark"] .site-frame--learner .ac-plan-badge--amber {
+  color: var(--theme-warning-text) !important;
+  background: var(--theme-warning-surface) !important;
+}
+
+html[data-theme="dark"]
+  .site-frame--learner
+  :is(
+    .ac-progress-bar-track,
+    .ac-course-bar,
+    .dashboard-collection-card__progress
+  ) {
+  background: var(--theme-border) !important;
+}
+
 html[data-theme="dark"]
   .site-frame--learner
   :is(

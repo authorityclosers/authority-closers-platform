@@ -169,15 +169,11 @@ export function toAvatarCropMetadata(crop: AvatarCrop): {
 }
 
 function initialsFor(displayName: string): string {
-  return (
-    displayName
-      .split(" ")
-      .map((part) => part[0])
-      .filter(Boolean)
-      .slice(0, 2)
-      .join("")
-      .toUpperCase() || "AC"
-  );
+  const parts = displayName.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "AC";
+  const first = parts[0]?.[0] ?? "";
+  const last = parts.length > 1 ? (parts.at(-1)?.[0] ?? "") : "";
+  return `${first}${last}`.toUpperCase() || "AC";
 }
 
 function avatarFromResponse(

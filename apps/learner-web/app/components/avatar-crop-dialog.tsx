@@ -43,15 +43,11 @@ type DialogStatus =
   | { status: "error"; message: string };
 
 function initialsFor(displayName: string): string {
-  return (
-    displayName
-      .split(" ")
-      .map((part) => part[0])
-      .filter(Boolean)
-      .slice(0, 2)
-      .join("")
-      .toUpperCase() || "AC"
-  );
+  const parts = displayName.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "AC";
+  const first = parts[0]?.[0] ?? "";
+  const last = parts.length > 1 ? (parts.at(-1)?.[0] ?? "") : "";
+  return `${first}${last}`.toUpperCase() || "AC";
 }
 
 function describeStage(stage: string): string {
@@ -74,6 +70,45 @@ function resultMessage(result: AvatarUploadResult): string {
 function previewStyle(crop: AvatarCrop): React.CSSProperties {
   return {
     transform: `translate(${crop.offsetX}%, ${crop.offsetY}%) scale(${crop.scale})`,
+  };
+}
+
+export function applyAvatarGesture(
+  crop: AvatarCrop,
+  deltaXPercent: number,
+  deltaYPercent: number,
+  scaleRatio = 1,
+): AvatarCrop {
+  return clampAvatarCrop({
+    scale: crop.scale * scaleRatio,
+    offsetX: crop.offsetX + deltaXPercent,
+    offsetY: crop.offsetY + deltaYPercent,
+  });
+}
+
+type PointerPoint = { x: number; y: number };
+type GestureSnapshot = {
+  centroid: PointerPoint;
+  distance: number | null;
+  crop: AvatarCrop;
+};
+
+function gestureSnapshot(
+  pointers: ReadonlyMap<number, PointerPoint>,
+  crop: AvatarCrop,
+): GestureSnapshot | null {
+  const points = Array.from(pointers.values());
+  if (points.length === 0) return null;
+  const first = points[0];
+  const second = points[1];
+  if (!second) return { centroid: first, distance: null, crop };
+  return {
+    centroid: {
+      x: (first.x + second.x) / 2,
+      y: (first.y + second.y) / 2,
+    },
+    distance: Math.hypot(second.x - first.x, second.y - first.y),
+    crop,
   };
 }
 
@@ -106,12 +141,20 @@ export function AvatarCropDialog({
     offsetY: 0,
   });
   const [status, setStatus] = useState<DialogStatus>({ status: "idle" });
+  const [dragActive, setDragActive] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mountedRef = useRef(true);
   const selectionRef = useRef(0);
   const statusRef = useRef<DialogStatus>(status);
   const focusOriginRef = useRef<HTMLElement | null>(null);
+  const cropRef = useRef(crop);
+  const pointersRef = useRef(new Map<number, PointerPoint>());
+  const gestureRef = useRef<GestureSnapshot | null>(null);
+
+  useEffect(() => {
+    cropRef.current = crop;
+  }, [crop]);
 
   useEffect(() => {
     statusRef.current = status;
@@ -273,6 +316,50 @@ export function AvatarCropDialog({
     event.target.value = "";
   }
 
+  function beginPointerGesture(event: React.PointerEvent<HTMLDivElement>) {
+    if (!previewUrl || isBusy) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    pointersRef.current.set(event.pointerId, {
+      x: event.clientX,
+      y: event.clientY,
+    });
+    gestureRef.current = gestureSnapshot(pointersRef.current, cropRef.current);
+  }
+
+  function updatePointerGesture(event: React.PointerEvent<HTMLDivElement>) {
+    if (!previewUrl || !pointersRef.current.has(event.pointerId)) return;
+    event.preventDefault();
+    pointersRef.current.set(event.pointerId, {
+      x: event.clientX,
+      y: event.clientY,
+    });
+    const start = gestureRef.current;
+    const current = gestureSnapshot(pointersRef.current, cropRef.current);
+    if (!start || !current) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const scaleRatio =
+      start.distance && current.distance
+        ? current.distance / start.distance
+        : 1;
+    setCrop(
+      applyAvatarGesture(
+        start.crop,
+        ((current.centroid.x - start.centroid.x) / rect.width) * 100,
+        ((current.centroid.y - start.centroid.y) / rect.height) * 100,
+        scaleRatio,
+      ),
+    );
+  }
+
+  function endPointerGesture(event: React.PointerEvent<HTMLDivElement>) {
+    pointersRef.current.delete(event.pointerId);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    gestureRef.current = gestureSnapshot(pointersRef.current, cropRef.current);
+  }
+
   async function submitAvatar() {
     if (
       !file ||
@@ -428,7 +515,48 @@ export function AvatarCropDialog({
 
         <div className={styles.body}>
           <div className={styles.previewColumn}>
-            <div className={styles.previewFrame} aria-label="Avatar preview">
+            <div
+              className={`${styles.previewFrame}${dragActive ? ` ${styles.previewFrameActive}` : ""}`}
+              aria-label="Avatar image drop zone and crop preview"
+              aria-describedby="avatar-direct-manipulation-hint"
+              onDragEnter={(event) => {
+                event.preventDefault();
+                if (!isBusy) setDragActive(true);
+              }}
+              onDragOver={(event) => {
+                event.preventDefault();
+                if (!isBusy) event.dataTransfer.dropEffect = "copy";
+              }}
+              onDragLeave={(event) => {
+                if (
+                  !event.currentTarget.contains(event.relatedTarget as Node)
+                ) {
+                  setDragActive(false);
+                }
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                setDragActive(false);
+                if (!isBusy)
+                  void chooseFile(event.dataTransfer.files?.[0] ?? null);
+              }}
+              onPointerDown={beginPointerGesture}
+              onPointerMove={updatePointerGesture}
+              onPointerUp={endPointerGesture}
+              onPointerCancel={endPointerGesture}
+              onWheel={(event) => {
+                if (!previewUrl || isBusy) return;
+                event.preventDefault();
+                setCrop((current) =>
+                  applyAvatarGesture(
+                    current,
+                    0,
+                    0,
+                    event.deltaY < 0 ? 1.06 : 0.94,
+                  ),
+                );
+              }}
+            >
               {previewUrl ? (
                 <img
                   src={previewUrl}
@@ -451,6 +579,12 @@ export function AvatarCropDialog({
             </div>
             <span className={styles.previewCaption}>
               {previewUrl ? "Local preview" : "Current avatar"}
+            </span>
+            <span
+              className={styles.directManipulationHint}
+              id="avatar-direct-manipulation-hint"
+            >
+              Drop a photo here. Drag to frame it; scroll or pinch to zoom.
             </span>
           </div>
 
@@ -486,68 +620,72 @@ export function AvatarCropDialog({
               </p>
             ) : null}
 
-            <fieldset className={styles.cropControls} disabled={!previewUrl}>
-              <legend>
-                <Crop size={15} aria-hidden="true" /> Crop controls
-              </legend>
-              <label>
-                <span>Zoom</span>
-                <output>{crop.scale.toFixed(2)}×</output>
-                <input
-                  type="range"
-                  min="1"
-                  max="2"
-                  step="0.05"
-                  value={crop.scale}
-                  onChange={(event) =>
-                    setCrop((current) => ({
-                      ...current,
-                      scale: Number(event.target.value),
-                    }))
-                  }
-                  aria-describedby="avatar-crop-hint"
-                />
-              </label>
-              <label>
-                <span>Horizontal position</span>
-                <output>{crop.offsetX}%</output>
-                <input
-                  type="range"
-                  min="-25"
-                  max="25"
-                  step="1"
-                  value={crop.offsetX}
-                  onChange={(event) =>
-                    setCrop((current) => ({
-                      ...current,
-                      offsetX: Number(event.target.value),
-                    }))
-                  }
-                  aria-describedby="avatar-crop-hint"
-                />
-              </label>
-              <label>
-                <span>Vertical position</span>
-                <output>{crop.offsetY}%</output>
-                <input
-                  type="range"
-                  min="-25"
-                  max="25"
-                  step="1"
-                  value={crop.offsetY}
-                  onChange={(event) =>
-                    setCrop((current) => ({
-                      ...current,
-                      offsetY: Number(event.target.value),
-                    }))
-                  }
-                  aria-describedby="avatar-crop-hint"
-                />
-              </label>
-              <p className={styles.hint} id="avatar-crop-hint">
-                Use the sliders with a keyboard if dragging is not comfortable.
-              </p>
-            </fieldset>
+            <details className={styles.precisionControls}>
+              <summary>
+                <Crop size={15} aria-hidden="true" /> Fine-tune with keyboard
+              </summary>
+              <fieldset className={styles.cropControls} disabled={!previewUrl}>
+                <legend>Crop controls</legend>
+                <label>
+                  <span>Zoom</span>
+                  <output>{crop.scale.toFixed(2)}×</output>
+                  <input
+                    type="range"
+                    min="1"
+                    max="2"
+                    step="0.05"
+                    value={crop.scale}
+                    onChange={(event) =>
+                      setCrop((current) => ({
+                        ...current,
+                        scale: Number(event.target.value),
+                      }))
+                    }
+                    aria-describedby="avatar-crop-hint"
+                  />
+                </label>
+                <label>
+                  <span>Horizontal position</span>
+                  <output>{crop.offsetX}%</output>
+                  <input
+                    type="range"
+                    min="-25"
+                    max="25"
+                    step="1"
+                    value={crop.offsetX}
+                    onChange={(event) =>
+                      setCrop((current) => ({
+                        ...current,
+                        offsetX: Number(event.target.value),
+                      }))
+                    }
+                    aria-describedby="avatar-crop-hint"
+                  />
+                </label>
+                <label>
+                  <span>Vertical position</span>
+                  <output>{crop.offsetY}%</output>
+                  <input
+                    type="range"
+                    min="-25"
+                    max="25"
+                    step="1"
+                    value={crop.offsetY}
+                    onChange={(event) =>
+                      setCrop((current) => ({
+                        ...current,
+                        offsetY: Number(event.target.value),
+                      }))
+                    }
+                    aria-describedby="avatar-crop-hint"
+                  />
+                </label>
+                <p className={styles.hint} id="avatar-crop-hint">
+                  Use the sliders with a keyboard when direct manipulation is
+                  not comfortable.
+                </p>
+              </fieldset>
+            </details>
 
             {previewUrl && status.status === "idle" ? (
               <p className={styles.localOnly} role="status">

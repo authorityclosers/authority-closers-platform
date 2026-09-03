@@ -1,5 +1,8 @@
 "use client";
 
+/* Avatar delivery URLs are signed and provider-owned at runtime. */
+/* eslint-disable @next/next/no-img-element */
+
 import {
   ArrowLeft,
   ArrowUpRight,
@@ -26,6 +29,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { BrandMark } from "@ac/ui";
 
+import { createLearnerApi } from "../lib/learner-api";
 import { ROUTES } from "../lib/routes";
 import { SignOutControl } from "./sign-out-control";
 
@@ -188,6 +192,43 @@ export type LearnerShellProps = {
 
 export type AppShellProps = LearnerShellProps;
 
+export function initialsForDisplayName(displayName: string): string {
+  const parts = displayName.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "AC";
+  const first = parts[0]?.[0] ?? "";
+  const last = parts.length > 1 ? (parts.at(-1)?.[0] ?? "") : "";
+  return `${first}${last}`.toUpperCase() || "AC";
+}
+
+function IdentityAvatar({
+  className,
+  displayName,
+  avatarUrl,
+  avatarAlt,
+}: {
+  className: string;
+  displayName: string;
+  avatarUrl: string | null;
+  avatarAlt: string;
+}) {
+  const [failedAvatarUrl, setFailedAvatarUrl] = useState<string | null>(null);
+
+  return (
+    <span className={className} aria-hidden="true">
+      {avatarUrl && avatarUrl !== failedAvatarUrl ? (
+        <img
+          className="learner-identity-avatar__image"
+          src={avatarUrl}
+          alt={avatarAlt}
+          onError={() => setFailedAvatarUrl(avatarUrl)}
+        />
+      ) : (
+        initialsForDisplayName(displayName)
+      )}
+    </span>
+  );
+}
+
 export function LearnerShell({
   children,
   current = "dashboard",
@@ -201,6 +242,11 @@ export function LearnerShell({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [identity, setIdentity] = useState({
+    displayName: userDisplayName,
+    avatarUrl: null as string | null,
+    avatarAlt: `${userDisplayName}'s profile photo`,
+  });
   const moreButtonRef = useRef<HTMLButtonElement>(null);
   const accountButtonRef = useRef<HTMLButtonElement>(null);
   const accountMenuRef = useRef<HTMLDivElement>(null);
@@ -212,6 +258,7 @@ export function LearnerShell({
   const drawerRef = useRef<HTMLDivElement>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
   const toastTimerRef = useRef<number | undefined>(undefined);
+  const avatarUpdateGenerationRef = useRef(0);
 
   function showToast(message: string): void {
     setToast(message);
@@ -225,14 +272,82 @@ export function LearnerShell({
   }
 
   function toggleSidebar(): void {
-    const nextCollapsed = !sidebarCollapsed;
-    setSidebarCollapsed(nextCollapsed);
-    showToast(
-      nextCollapsed
-        ? "Sidebar collapsed. Navigation labels remain available in tooltips."
-        : "Sidebar expanded.",
-    );
+    setSidebarCollapsed((collapsed) => !collapsed);
   }
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const api = createLearnerApi();
+
+    async function loadIdentity() {
+      const updateGeneration = avatarUpdateGenerationRef.current;
+      const [meResult, avatarResult] = await Promise.allSettled([
+        api.me({ signal: controller.signal }),
+        api.profileAvatar({ signal: controller.signal }),
+      ]);
+      if (controller.signal.aborted || meResult.status !== "fulfilled") return;
+
+      const displayName =
+        meResult.value.display_name?.trim() || userDisplayName;
+      const meAvatar = meResult.value.avatar;
+      const profileAvatar =
+        avatarResult.status === "fulfilled" &&
+        avatarResult.value.avatar?.state === "ready" &&
+        avatarResult.value.avatar.delivery_url
+          ? avatarResult.value.avatar
+          : null;
+      const avatarReadIsCurrent =
+        updateGeneration === avatarUpdateGenerationRef.current;
+
+      setIdentity((current) => ({
+        displayName,
+        avatarUrl: avatarReadIsCurrent
+          ? (profileAvatar?.delivery_url ?? meAvatar?.deliveryUrl ?? null)
+          : current.avatarUrl,
+        avatarAlt: avatarReadIsCurrent
+          ? meAvatar?.alt?.trim() || `${displayName}'s profile photo`
+          : current.avatarAlt,
+      }));
+    }
+
+    void loadIdentity();
+    const refreshTimer = window.setInterval(
+      () => void loadIdentity(),
+      4 * 60 * 1000,
+    );
+
+    function handleAvatarUpdated(event: Event) {
+      if (!(event instanceof CustomEvent) || !event.detail) return;
+      const detail = event.detail as {
+        deliveryUrl?: unknown;
+        alt?: unknown;
+      };
+      const deliveryUrl =
+        typeof detail.deliveryUrl === "string" && detail.deliveryUrl
+          ? detail.deliveryUrl
+          : null;
+      if (!deliveryUrl) return;
+      avatarUpdateGenerationRef.current += 1;
+      setIdentity((current) => ({
+        ...current,
+        avatarUrl: deliveryUrl,
+        avatarAlt:
+          typeof detail.alt === "string" && detail.alt.trim()
+            ? detail.alt
+            : current.avatarAlt,
+      }));
+    }
+
+    window.addEventListener("ac-profile-avatar-updated", handleAvatarUpdated);
+    return () => {
+      controller.abort();
+      window.clearInterval(refreshTimer);
+      window.removeEventListener(
+        "ac-profile-avatar-updated",
+        handleAvatarUpdated,
+      );
+    };
+  }, [userDisplayName]);
 
   useEffect(() => {
     const handleToastEvent = (e: Event) => {
@@ -483,15 +598,7 @@ export function LearnerShell({
                     ? "Certificate"
                     : "Workspace";
 
-  const initials = userDisplayName
-    ? userDisplayName
-        .split(" ")
-        .map((part) => part[0])
-        .filter(Boolean)
-        .slice(0, 2)
-        .join("")
-        .toUpperCase()
-    : "SR";
+  const effectiveDisplayName = identity.displayName;
 
   return (
     <div
@@ -589,35 +696,20 @@ export function LearnerShell({
           <Link
             href={ROUTES.profile}
             className="learner-sidebar__user-pill"
-            aria-label={`Open profile for ${userDisplayName}`}
-            title={userDisplayName}
+            aria-label={`Open profile for ${effectiveDisplayName}`}
+            title={effectiveDisplayName}
           >
-            <span className="user-avatar-badge" aria-hidden="true">
-              {initials}
-            </span>
+            <IdentityAvatar
+              className="user-avatar-badge"
+              displayName={effectiveDisplayName}
+              avatarUrl={identity.avatarUrl}
+              avatarAlt={identity.avatarAlt}
+            />
             <div className="user-pill__copy">
-              <span className="user-pill__name">{userDisplayName}</span>
+              <span className="user-pill__name">{effectiveDisplayName}</span>
               <span className="user-pill__role">Learner</span>
             </div>
           </Link>
-
-          <button
-            type="button"
-            className="sidebar-collapse-btn"
-            onClick={toggleSidebar}
-            aria-label={
-              sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"
-            }
-            aria-expanded={!sidebarCollapsed}
-            title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          >
-            <ChevronDown
-              size={16}
-              aria-hidden="true"
-              className="sidebar-collapse-icon"
-            />
-            <span>Collapse</span>
-          </button>
         </div>
       </aside>
 
@@ -688,11 +780,6 @@ export function LearnerShell({
                   setHelpOpen(false);
                   const nextOpen = !notificationPopoverOpen;
                   setNotificationPopoverOpen(nextOpen);
-                  if (nextOpen) {
-                    showToast(
-                      "Notification history is not connected in this workspace yet.",
-                    );
-                  }
                 }}
                 aria-expanded={notificationPopoverOpen}
                 aria-controls="learner-notifications-popover"
@@ -775,12 +862,17 @@ export function LearnerShell({
                 aria-expanded={accountMenuOpen}
                 aria-controls="learner-account-menu"
                 aria-haspopup="menu"
-                aria-label={`Account menu for ${userDisplayName}`}
+                aria-label={`Account menu for ${effectiveDisplayName}`}
               >
-                <span className="learner-profile__avatar" aria-hidden="true">
-                  {initials}
+                <IdentityAvatar
+                  className="learner-profile__avatar"
+                  displayName={effectiveDisplayName}
+                  avatarUrl={identity.avatarUrl}
+                  avatarAlt={identity.avatarAlt}
+                />
+                <span className="learner-profile__name">
+                  {effectiveDisplayName}
                 </span>
-                <span className="learner-profile__name">{userDisplayName}</span>
                 <ChevronDown
                   size={14}
                   aria-hidden="true"
@@ -801,7 +893,7 @@ export function LearnerShell({
                 >
                   <div className="account-menu-header">
                     <strong id="learner-account-menu-title">
-                      {userDisplayName}
+                      {effectiveDisplayName}
                     </strong>
                     <span>Learner account</span>
                   </div>
@@ -869,9 +961,6 @@ export function LearnerShell({
             setHelpOpen(nextOpen);
             setNotificationPopoverOpen(false);
             setAccountMenuOpen(false);
-            if (nextOpen) {
-              showToast("Help chat is ready; live chat is not connected yet.");
-            }
           }}
           aria-expanded={helpOpen}
           aria-controls="learner-help-chatbox"
@@ -1018,11 +1107,16 @@ export function LearnerShell({
           >
             <div className="mobile-drawer-header">
               <div className="mobile-drawer-user">
-                <span className="user-avatar-badge" aria-hidden="true">
-                  {initials}
-                </span>
+                <IdentityAvatar
+                  className="user-avatar-badge"
+                  displayName={effectiveDisplayName}
+                  avatarUrl={identity.avatarUrl}
+                  avatarAlt={identity.avatarAlt}
+                />
                 <div>
-                  <strong id="learner-more-title">{userDisplayName}</strong>
+                  <strong id="learner-more-title">
+                    {effectiveDisplayName}
+                  </strong>
                   <span>Learner workspace</span>
                 </div>
               </div>
