@@ -247,6 +247,46 @@ export interface ActivityResponse extends LearningActivityResponse {
   enrollment_id: string;
   draft_revision: number;
   draft_payload: JsonRecord | null;
+  media?: ActivityMediaDescriptor | null;
+}
+
+export interface ActivityMediaDescriptor {
+  state: "approved" | "blocked" | "unavailable";
+  reason: string;
+  binding_id: string | null;
+  media_id: string | null;
+  media_version_id: string | null;
+  activity_version: string | null;
+  content_type: string | null;
+  duration_seconds: number | null;
+  width: number | null;
+  height: number | null;
+  renditions: Array<{
+    id: string;
+    protocol: "hls" | "progressive";
+    content_type: string;
+    width: number | null;
+    height: number | null;
+    bitrate_kbps: number | null;
+  }>;
+  captions: Array<{
+    id: string;
+    media_version_id: string;
+    language: string;
+    kind: "captions" | "subtitles" | "transcript";
+    state: "ready" | "superseded" | "retired";
+    content_type: string;
+    is_default: boolean;
+    source_url?: string | null;
+    supersedes_caption_id?: string | null;
+    created_at: string;
+  }>;
+  delivery: {
+    protocol: "hls" | "progressive";
+    manifest_url: string | null;
+    progressive_url: string | null;
+  } | null;
+  playback_available: boolean;
 }
 
 export interface DraftResponse {

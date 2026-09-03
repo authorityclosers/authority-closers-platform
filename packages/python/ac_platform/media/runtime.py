@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from ac_platform.application.settings import Settings
@@ -26,6 +27,19 @@ class NullTelemetrySink:
 class MediaRuntime:
     service: MediaService
     telemetry: TelemetryRecorder
+    activity_media_resolver: Callable[..., object] | None = None
+    media_descriptor_resolver: Callable[..., object] | None = None
+    playback_policy_resolver: Callable[..., object] | None = None
+
+    @property
+    def learning_playback_composed(self) -> bool:
+        """Whether all server-owned seams needed by learning are present."""
+
+        return (
+            self.activity_media_resolver is not None
+            and self.media_descriptor_resolver is not None
+            and self.playback_policy_resolver is not None
+        )
 
 
 def _derive(secret: str, label: bytes) -> bytes:
@@ -42,16 +56,59 @@ def create_default_media_runtime(settings: Settings) -> MediaRuntime:
     storage: PrivateObjectStorage = UnconfiguredPrivateObjectStorage()
     scanner: ContentScanner = FailClosedScanner()
     processor: MediaProcessor = FailClosedProcessor()
+    service = MediaService(
+        storage=storage,
+        signer=MediaSigner(signer_secret),
+        webhook_secret=webhook_secret,
+        scanner=scanner,
+        processor=processor,
+    )
     return MediaRuntime(
-        service=MediaService(
-            storage=storage,
-            signer=MediaSigner(signer_secret),
-            webhook_secret=webhook_secret,
-            scanner=scanner,
-            processor=processor,
-        ),
+        service=service,
         telemetry=TelemetryRecorder(NullTelemetrySink()),
+        activity_media_resolver=service.resolve_activity_media_binding_for_learning,
+        media_descriptor_resolver=service.resolve_activity_media_descriptor_for_learner,
     )
 
 
-__all__ = ["MediaRuntime", "NullTelemetrySink", "create_default_media_runtime"]
+def compose_learning_playback_policy_resolver(
+    policy: object,
+) -> Callable[[object], object]:
+    """Compose an explicit learning policy without inferring media semantics.
+
+    The caller must supply a reviewed ``VideoEvidencePolicy``.  At request
+    time the resolver additionally requires a server-resolved activity/media
+    binding and a ready media duration; no catalog default can enable it.
+    """
+
+    from ac_platform.learning.services import VideoEvidencePolicy
+
+    if not isinstance(policy, VideoEvidencePolicy):
+        raise TypeError("a reviewed VideoEvidencePolicy is required")
+
+    def resolve(access: object) -> object:
+        activity = getattr(access, "activity", None)
+        if activity is None or str(getattr(activity, "kind", "")).upper() != "VIDEO":
+            raise ValueError("learning playback requires a video activity")
+        if (
+            getattr(activity, "media_binding_id", None) is None
+            or getattr(activity, "media_asset_id", None) is None
+            or getattr(activity, "media_version_id", None) is None
+            or getattr(activity, "video_duration_seconds", None) is None
+        ):
+            raise ValueError("learning playback requires an approved ready media binding")
+        if policy.version != activity.policy_version:
+            raise ValueError("learning playback policy is not pinned to the activity")
+        if abs(policy.coverage_threshold - activity.coverage_threshold) > 1e-12:
+            raise ValueError("learning playback threshold is not pinned to the activity")
+        return policy
+
+    return resolve
+
+
+__all__ = [
+    "MediaRuntime",
+    "NullTelemetrySink",
+    "compose_learning_playback_policy_resolver",
+    "create_default_media_runtime",
+]

@@ -16,6 +16,9 @@ from sqlalchemy.orm import Session
 
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.media.api_contracts import (
+    ActivityMediaBindingRequest,
+    ActivityMediaBindingResponse,
+    ActivityMediaDescriptorResponse,
     AvatarVariantResponse,
     CaptionCreateRequest,
     CaptionResponse,
@@ -34,6 +37,12 @@ from ac_platform.media.api_contracts import (
     UploadIntentResponse,
     VideoWebhookRequest,
 )
+from ac_platform.media.bindings import (
+    ActivityMediaBindingSnapshot,
+    binding_response,
+    resolve_activity_media_binding,
+    resolve_activity_media_binding_for_learning,
+)
 from ac_platform.media.contracts import EphemeralMediaUrl
 from ac_platform.media.errors import (
     MediaBadRequest,
@@ -45,10 +54,12 @@ from ac_platform.media.errors import (
     MediaStorageUnavailable,
 )
 from ac_platform.media.models import (
+    ActivityMediaBinding,
     CaptionKind,
     CaptionState,
     DeliveryProtocol,
     MediaAsset,
+    MediaBindingState,
     MediaCaptionTrack,
     MediaLifecycle,
     MediaPlaybackGrant,
@@ -191,6 +202,295 @@ class MediaService:
             return
         if not self._manager(actor):
             raise MediaForbidden("The actor is not authorized to write this media.")
+
+    def resolve_activity_media_binding_for_learning(
+        self,
+        database: Session,
+        tenant_id: UUID,
+        catalog_activity: object,
+        catalog_version: object,
+    ) -> ActivityMediaBindingSnapshot | None:
+        """Resolve a ready approved binding for an already selected activity.
+
+        Learning access is still established by ``SqlAlchemyLearningRepository``;
+        this callback only enriches that trusted scope with media identity and
+        duration.  It never resolves by activity id alone.
+        """
+
+        if str(getattr(catalog_activity, "kind", "")).upper() != MediaPurpose.VIDEO.name:
+            return None
+        return resolve_activity_media_binding_for_learning(
+            database, tenant_id, catalog_activity, catalog_version
+        )
+
+    def bind_activity_media(
+        self,
+        database: Session,
+        actor: ActorContext,
+        request: ActivityMediaBindingRequest,
+        *,
+        idempotency_key: str,
+    ) -> ActivityMediaBindingResponse:
+        """Append a human-approved, tenant-scoped activity/media binding.
+
+        The command can only reference a ready application-owned video version
+        and a published immutable catalog activity.  Supersession is explicit
+        and historical rows are retained.
+        """
+
+        if not idempotency_key or len(idempotency_key) > 128:
+            raise MediaBadRequest(
+                "A bounded Idempotency-Key is required for activity media bindings."
+            )
+        if not self._manager(actor):
+            raise MediaForbidden("The actor is not authorized to approve activity media.")
+        tenant_id = self._tenant(actor)
+
+        from ac_platform.catalog.models import Activity as CatalogActivity
+        from ac_platform.catalog.models import ProgramVersion as CatalogProgramVersion
+
+        activity = database.scalar(
+            select(CatalogActivity)
+            .where(CatalogActivity.id == request.activity_id)
+            .with_for_update()
+        )
+        if activity is None:
+            raise MediaNotFound("The learning activity was not found.")
+        requested_activity_scope = (
+            request.activity_id,
+            request.module_id,
+            request.program_version_id,
+            request.program_id,
+            request.program_scope,
+            request.program_owner_key,
+        )
+        actual_activity_scope = (
+            activity.id,
+            activity.module_id,
+            activity.program_version_id,
+            activity.program_id,
+            activity.scope,
+            activity.owner_key,
+        )
+        if requested_activity_scope != actual_activity_scope:
+            raise MediaForbidden("The activity scope does not match the server catalog row.")
+        if activity.scope == "tenant" and activity.tenant_id != tenant_id:
+            raise MediaForbidden("The activity is outside the active tenant context.")
+        if str(activity.kind).upper() != MediaPurpose.VIDEO.name:
+            raise MediaBadRequest("Only video activities can receive lesson media.")
+        catalog_version = database.scalar(
+            select(CatalogProgramVersion).where(
+                CatalogProgramVersion.id == activity.program_version_id,
+                CatalogProgramVersion.program_id == activity.program_id,
+                CatalogProgramVersion.scope == activity.scope,
+                CatalogProgramVersion.owner_key == activity.owner_key,
+            )
+        )
+        if catalog_version is None or catalog_version.status not in {"published", "superseded"}:
+            raise MediaConflict("Only published catalog activities can receive approved media.")
+
+        asset = self._asset(database, actor, request.asset_id, lock=True)
+        self._require_write(actor, purpose=MediaPurpose.VIDEO, asset=asset)
+        if asset.purpose != MediaPurpose.VIDEO.value or asset.state == MediaLifecycle.RETIRED.value:
+            raise MediaConflict("Only active video media can be approved for an activity.")
+        version = database.scalar(
+            select(MediaVersion)
+            .where(
+                MediaVersion.tenant_id == tenant_id,
+                MediaVersion.asset_id == asset.id,
+                MediaVersion.id == request.version_id,
+            )
+            .with_for_update()
+        )
+        if version is None:
+            raise MediaNotFound("The media version was not found.")
+        if (
+            version.purpose != MediaPurpose.VIDEO.value
+            or version.state != MediaLifecycle.READY.value
+        ):
+            raise MediaConflict("Only a ready video version can be approved for an activity.")
+
+        activity_version = request.activity_version or f"activity:{activity.id}"
+        fingerprint = self._fingerprint(
+            {
+                "activity_id": str(activity.id),
+                "module_id": str(activity.module_id),
+                "program_version_id": str(activity.program_version_id),
+                "program_id": str(activity.program_id),
+                "program_scope": activity.scope,
+                "program_owner_key": str(activity.owner_key),
+                "asset_id": str(asset.id),
+                "version_id": str(version.id),
+                "activity_version": activity_version,
+                "approval_reference": request.approval_reference,
+                "supersedes_binding_id": (
+                    str(request.supersedes_binding_id)
+                    if request.supersedes_binding_id is not None
+                    else None
+                ),
+            }
+        )
+        existing = database.scalar(
+            select(ActivityMediaBinding)
+            .where(
+                ActivityMediaBinding.tenant_id == tenant_id,
+                ActivityMediaBinding.approved_by_person_id == actor.person_id,
+                ActivityMediaBinding.idempotency_key == idempotency_key,
+            )
+            .with_for_update()
+        )
+        if existing is not None:
+            if existing.request_fingerprint != fingerprint:
+                raise MediaConflict(
+                    "The activity media idempotency key was reused with different data."
+                )
+            return binding_response(existing)
+
+        current = database.scalar(
+            select(ActivityMediaBinding)
+            .where(
+                ActivityMediaBinding.tenant_id == tenant_id,
+                ActivityMediaBinding.activity_id == activity.id,
+                ActivityMediaBinding.module_id == activity.module_id,
+                ActivityMediaBinding.program_version_id == activity.program_version_id,
+                ActivityMediaBinding.program_id == activity.program_id,
+                ActivityMediaBinding.program_scope == activity.scope,
+                ActivityMediaBinding.program_owner_key == activity.owner_key,
+                ActivityMediaBinding.state == MediaBindingState.APPROVED.value,
+            )
+            .with_for_update()
+        )
+        prior: ActivityMediaBinding | None = None
+        if request.supersedes_binding_id is not None:
+            prior = database.scalar(
+                select(ActivityMediaBinding)
+                .where(
+                    ActivityMediaBinding.tenant_id == tenant_id,
+                    ActivityMediaBinding.id == request.supersedes_binding_id,
+                )
+                .with_for_update()
+            )
+            if prior is None:
+                raise MediaNotFound("The superseded activity media binding was not found.")
+            prior_scope = (
+                prior.activity_id,
+                prior.module_id,
+                prior.program_version_id,
+                prior.program_id,
+                prior.program_scope,
+                prior.program_owner_key,
+            )
+            if (
+                prior_scope != actual_activity_scope
+                or prior.state != MediaBindingState.APPROVED.value
+            ):
+                raise MediaConflict(
+                    "The superseded binding is not the current approved activity media."
+                )
+            if current is None or current.id != prior.id:
+                raise MediaConflict("The superseded binding is not the current activity media.")
+        elif current is not None:
+            raise MediaConflict(
+                "An approved activity media binding already exists; supersession is explicit."
+            )
+
+        now = self._now()
+        if prior is not None:
+            prior.state = MediaBindingState.SUPERSEDED.value
+            prior.superseded_at = now
+            prior.updated_at = now
+        binding = ActivityMediaBinding(
+            tenant_id=tenant_id,
+            activity_id=activity.id,
+            module_id=activity.module_id,
+            program_version_id=activity.program_version_id,
+            program_id=activity.program_id,
+            program_scope=activity.scope,
+            program_owner_key=activity.owner_key,
+            activity_version=activity_version,
+            asset_id=asset.id,
+            version_id=version.id,
+            state=MediaBindingState.APPROVED.value,
+            approval_reference=request.approval_reference,
+            approved_by_person_id=actor.person_id,
+            approved_at=now,
+            supersedes_binding_id=prior.id if prior is not None else None,
+            idempotency_key=idempotency_key,
+            request_fingerprint=fingerprint,
+            created_at=now,
+            updated_at=now,
+        )
+        database.add(binding)
+        try:
+            database.flush()
+        except IntegrityError as error:
+            raise MediaConflict(
+                "The activity media binding changed concurrently; retry the idempotent command."
+            ) from error
+        return binding_response(binding)
+
+    def resolve_activity_media_descriptor_for_learner(
+        self,
+        database: Session,
+        actor: ActorContext,
+        access: object,
+    ) -> ActivityMediaDescriptorResponse:
+        """Return safe media metadata after learning scope is already resolved."""
+
+        activity = getattr(access, "activity", None)
+        if (
+            activity is None
+            or str(getattr(activity, "kind", "")).upper() != MediaPurpose.VIDEO.name
+        ):
+            return ActivityMediaDescriptorResponse(
+                state="unavailable",
+                reason="activity_media_not_available",
+            )
+        tenant_id = self._tenant(actor)
+        snapshot = resolve_activity_media_binding(
+            database,
+            tenant_id=tenant_id,
+            activity_id=activity.id,
+            module_id=activity.module_id,
+            program_version_id=access.program_version_id,
+            program_id=activity.program_id,
+            program_scope=activity.program_scope,
+            program_owner_key=activity.program_owner_key,
+        )
+        if snapshot is None:
+            return ActivityMediaDescriptorResponse(
+                state="unavailable",
+                reason="approved_activity_media_binding_unavailable",
+            )
+        version = database.scalar(
+            select(MediaVersion).where(
+                MediaVersion.tenant_id == tenant_id,
+                MediaVersion.asset_id == snapshot.asset_id,
+                MediaVersion.id == snapshot.version_id,
+            )
+        )
+        if version is None:
+            return ActivityMediaDescriptorResponse(
+                state="unavailable",
+                reason="approved_media_version_unavailable",
+            )
+        projected = self._version_response(database, version, include_sources=False)
+        return ActivityMediaDescriptorResponse(
+            state="approved",
+            reason="approved_media_delivery_not_composed",
+            binding_id=snapshot.binding_id,
+            media_id=snapshot.asset_id,
+            media_version_id=snapshot.version_id,
+            activity_version=snapshot.activity_version,
+            content_type=snapshot.content_type,
+            duration_seconds=snapshot.duration_seconds,
+            width=snapshot.width,
+            height=snapshot.height,
+            renditions=projected.renditions if projected is not None else [],
+            captions=projected.captions if projected is not None else [],
+            delivery=None,
+            playback_available=False,
+        )
 
     @staticmethod
     def _upload_key(

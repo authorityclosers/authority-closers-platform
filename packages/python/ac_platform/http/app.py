@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import cast
 
 import structlog
 from fastapi import FastAPI, Request, Response, status
@@ -18,7 +19,12 @@ from ac_platform.http.auth import install_identity_http
 from ac_platform.http.certificates import install_certificate_http
 from ac_platform.http.course import install_course_http
 from ac_platform.http.identity_provider import OAuthIdentityProvider, create_google_provider
-from ac_platform.http.learning import install_learning_http
+from ac_platform.http.learning import (
+    ActivityMediaResolver,
+    MediaDescriptorResolver,
+    PolicyResolver,
+    install_learning_http,
+)
 from ac_platform.http.media import install_media_http
 from ac_platform.http.operations import install_operations_http
 from ac_platform.http.planning import install_planning_http
@@ -103,10 +109,22 @@ def create_app(
         settings=settings,
         require_actor=require_actor,
     )
+    resolved_media_runtime = media_runtime or create_default_media_runtime(settings)
     install_learning_http(
         application,
         settings=settings,
         require_actor=require_actor,
+        activity_media_resolver=cast(
+            ActivityMediaResolver | None, resolved_media_runtime.activity_media_resolver
+        ),
+        media_descriptor_resolver=cast(
+            MediaDescriptorResolver | None, resolved_media_runtime.media_descriptor_resolver
+        ),
+        policy_resolver=(
+            cast(PolicyResolver, resolved_media_runtime.playback_policy_resolver)
+            if resolved_media_runtime.learning_playback_composed
+            else None
+        ),
     )
     install_certificate_http(
         application,
@@ -122,7 +140,7 @@ def create_app(
         settings=settings,
         sessions=session_factory,
         require_actor=require_actor,
-        runtime=media_runtime or create_default_media_runtime(settings),
+        runtime=resolved_media_runtime,
     )
     install_operations_http(
         application,

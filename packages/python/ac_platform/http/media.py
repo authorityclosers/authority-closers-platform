@@ -14,6 +14,8 @@ from ac_platform.application.settings import Settings
 from ac_platform.audit import AuditRepository
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, require_safe_origin
 from ac_platform.media.api_contracts import (
+    ActivityMediaBindingRequest,
+    ActivityMediaBindingResponse,
     CaptionCreateRequest,
     CaptionResponse,
     HeartbeatResponse,
@@ -224,6 +226,45 @@ def install_media_http(
     ) -> MediaAssetResponse:
         result = await auth.database.run_sync(
             lambda database: _service(runtime).get_media(database, auth.resolved.actor, asset_id)
+        )
+        _no_store(response)
+        return result
+
+    @router.post(
+        "/media/activity-bindings",
+        response_model=ActivityMediaBindingResponse,
+        status_code=status.HTTP_201_CREATED,
+    )
+    async def bind_activity_media(
+        request: Request,
+        body: ActivityMediaBindingRequest,
+        response: Response,
+        idempotency_key: Annotated[
+            str | None, Header(alias="Idempotency-Key", max_length=MAX_IDEMPOTENCY_KEY_LENGTH)
+        ] = None,
+        auth: AuthenticatedTransaction = actor_dependency,
+    ) -> ActivityMediaBindingResponse:
+        """Append an explicit human approval for ready lesson media."""
+
+        require_safe_origin(request, settings)
+        result = await auth.database.run_sync(
+            lambda database: _service(runtime).bind_activity_media(
+                database,
+                auth.resolved.actor,
+                body,
+                idempotency_key=idempotency_key or "",
+            )
+        )
+        await record_person_audit(
+            auth,
+            request,
+            action="media.activity_binding_approved",
+            resource_type="activity_media_binding",
+            resource_id=result.id,
+            status_value=result.state,
+        )
+        runtime.telemetry.emit(
+            "media.activity_binding.approved", {"outcome": "succeeded"}
         )
         _no_store(response)
         return result
