@@ -8,22 +8,20 @@ export function DevStagingBridgeNotice() {
   }
 
   return (
-    <aside
+    <details
       className="dev-staging-bridge-notice"
       aria-label="Development staging data notice"
-      role="status"
     >
-      <div className="dev-staging-bridge-notice__icon">
-        <ShieldAlert size={18} aria-hidden="true" />
-      </div>
-      <div>
-        <strong>Development bridge · staging data</strong>
-        <p>
-          Signed-in reads and mutations use the real staging learner account.
-          This local session expires when the dev server restarts or after 8
-          hours.
-        </p>
-      </div>
-    </aside>
+      <summary>
+        <span className="dev-staging-bridge-notice__icon">
+          <ShieldAlert size={15} aria-hidden="true" />
+        </span>
+        <strong>Dev · staging data</strong>
+      </summary>
+      <p>
+        Signed-in reads and mutations use the real staging learner account. This
+        local session expires when the dev server restarts or after 8 hours.
+      </p>
+    </details>
   );
 }
