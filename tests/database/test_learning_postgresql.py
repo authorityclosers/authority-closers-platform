@@ -437,7 +437,7 @@ def test_fresh_migration_matches_learning_models_and_installs_append_only_guards
     inspector = inspect(learning_postgres_engine)
     with learning_postgres_engine.connect() as connection:
         schema = connection.scalar(text("SELECT current_schema()"))
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "20260901_0012"
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "20260902_0014"
         trigger_names = set(
             connection.scalars(
                 text(
