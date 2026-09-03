@@ -18,4 +18,6 @@ Route: `/progress`. Actor: learner. States: loading, canonical ready, no-enrollm
 - calls: [[API-003-learning-evidence]].
 - implementation: [progress page](../../../apps/learner-web/app/progress/page.tsx) and [progress runtime](../../../apps/learner-web/app/components/progress-runtime.tsx).
 - decision: [[DEC-003-canonical-progress-evidence]].
-- known-limitation: current uncommitted implementation candidate lacks exact-release staging, responsive, accessibility, and visual-comparison proof.
+- known-limitation: the implementation is included in exact release `5c7333c5`
+  but still lacks route-specific staging, responsive, accessibility, and
+  visual-comparison proof.
