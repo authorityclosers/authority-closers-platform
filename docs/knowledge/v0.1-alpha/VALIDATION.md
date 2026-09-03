@@ -15,8 +15,8 @@ Validated on 2026-09-04. These results cover documentation structure and reposit
 
 | Check           | Result                                                                                              |
 | --------------- | --------------------------------------------------------------------------------------------------- |
-| Graph validator | `PASS` — 77 Markdown nodes, 77 unique IDs, 77 unique titles, zero errors                            |
-| Relationships   | 641 wikilinks; 210 relative repository file links; all resolved                                     |
+| Graph validator | `PASS` — 78 Markdown nodes, 78 unique IDs, 78 unique titles, zero errors                            |
+| Relationships   | 649 wikilinks; 210 relative repository file links; all resolved                                     |
 | Visual boards   | 12 boards; 82 unique ordered screenshot slots; 49 existing-image embeds; all embed targets resolved |
 | Obsidian graph  | 13 unique color groups; traceability display settings active                                        |
 | Prettier        | `PASS` for Markdown, validator JavaScript, and Obsidian JSON                                        |

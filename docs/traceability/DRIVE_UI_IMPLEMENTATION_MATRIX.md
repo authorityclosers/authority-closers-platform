@@ -5,9 +5,11 @@ ID. It distinguishes the selected v0.1 implementation from future product
 references; a visual reference is not evidence that the capability exists.
 
 The current candidate is represented by exact release
-`5c7333c5a588f5209acd5ca9b5ce0e03e20e16a4`, with bounded controller smoke and
-an authenticated `/learning` accessibility-tree observation recorded in
-[EVD-005](../knowledge/v0.1-alpha/EVD-005-exact-staging-5c7333c5.md).
+`65ea3e1094ae462c071a70ef2463f5a8c7754196`, with bounded controller smoke
+recorded in [EVD-006](../knowledge/v0.1-alpha/EVD-006-exact-staging-65ea3e1.md).
+No authenticated `/learning` observation or visual acceptance is claimed for
+this release. The earlier exact release `5c7333c5` and its authenticated
+observation remain recorded in [EVD-005](../knowledge/v0.1-alpha/EVD-005-exact-staging-5c7333c5.md).
 Existing screenshot evidence remains scoped to exact release `27fafae` for the
 full learner journey and exact release `81635d1` for the later auth/recovery
 family; neither pack proves the current candidate's visual or capability delta.
@@ -103,13 +105,13 @@ folder does not contain a separate image for every state.
 
 ## D08 — settings, billing, and integrations
 
-| Drive asset                                                                      | Status    | v0.1 treatment                                                                                                                                                                                                                  |
-| -------------------------------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SET-01-desktop-tenant-branding.png` (`1vVHIDFKsfS64YkuYK1ojf9h384P4Qq65`)       | extension | Tenant branding UI is not part of the first slice.                                                                                                                                                                              |
+| Drive asset                                                                      | Status    | v0.1 treatment                                                                                                                                                                                                                                                                                     |
+| -------------------------------------------------------------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SET-01-desktop-tenant-branding.png` (`1vVHIDFKsfS64YkuYK1ojf9h384P4Qq65`)       | extension | Tenant branding UI is not part of the first slice.                                                                                                                                                                                                                                                 |
 | `SET-02-mobile-profile-notifications.png` (`1SmQuMR7fOYaarIJ_1HweVt0nY6ejwKPM`)  | partial   | Candidate `/settings` reads verified account/onboarding data, links profile editing, signs out, and offers Light/Dark/System theme mode plus bounded named preset/accent/density/motion choices as local browser presentation only. Server-synced preferences and notifications remain extensions. |
-| `SAAS-01-desktop-plan-billing.png` (`1tI6pOO6sZae9ARqQDgNgHj6GBebNZqeU`)         | extension | Billing is explicitly excluded from v0.1.                                                                                                                                                                                       |
-| `INT-01-desktop-integrations-identity.png` (`1lDZFd007vqdB3PyZBwPD9EbggE4M2Nbc`) | extension | SSO, SCIM, API/webhook management, and broad integrations are explicitly excluded.                                                                                                                                              |
-| `COMM-01-mobile-calendar-inbox.png` (`1S0TOWyIQL31DSx7BiBiG_kcDKfHsdSQI`)        | extension | Calendar/inbox/communication breadth is not part of v0.1.                                                                                                                                                                       |
+| `SAAS-01-desktop-plan-billing.png` (`1tI6pOO6sZae9ARqQDgNgHj6GBebNZqeU`)         | extension | Billing is explicitly excluded from v0.1.                                                                                                                                                                                                                                                          |
+| `INT-01-desktop-integrations-identity.png` (`1lDZFd007vqdB3PyZBwPD9EbggE4M2Nbc`) | extension | SSO, SCIM, API/webhook management, and broad integrations are explicitly excluded.                                                                                                                                                                                                                 |
+| `COMM-01-mobile-calendar-inbox.png` (`1S0TOWyIQL31DSx7BiBiG_kcDKfHsdSQI`)        | extension | Calendar/inbox/communication breadth is not part of v0.1.                                                                                                                                                                                                                                          |
 
 Native Windows/iOS applications remain extension contracts. The v0.1 target is
 the browser/PWA surface; responsive layouts and local appearance preferences do
