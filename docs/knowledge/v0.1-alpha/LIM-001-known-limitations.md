@@ -4,7 +4,7 @@ type: limitation
 title: Known Limitations and Explicit Non-Claims
 status: current
 version: v0.1-alpha
-updated: 2026-09-01
+updated: 2026-09-04
 tags:
   - ac/limitation
 ---
@@ -13,7 +13,7 @@ tags:
 
 | ID/boundary             | Current factual state                                                                                  | Smallest next evidence/action                                                                |
 | ----------------------- | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
-| `GAP-RUNTIME-001`       | current candidate is uncommitted; no exact candidate SHA or staging proof                              | immutable commit/release and [[GATE-003-exact-release-staging]]                              |
+| `GAP-RUNTIME-001`       | exact release `5c7333c5` has bounded CI/package/controller smoke; full current browser/device and capability evidence remains open | complete [[GATE-003-exact-release-staging]] evidence                                      |
 | `GAP-MEDIA-001`         | approved media/transcript/captions and playback-policy composition are absent                          | approve source/policy, compose routes, test watched-interval evidence                        |
 | enrollment runtime      | ADR-028 and current code/tests define consent-backed start; exact-current runtime open                 | fresh consent→membership→start→enrollment replay/isolation proof                             |
 | progress/settings/theme | current worktree has implementation candidates                                                         | exact-release canonical-state, accessibility, responsive, first-paint, storage-failure proof |

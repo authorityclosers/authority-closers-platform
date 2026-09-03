@@ -2,9 +2,12 @@
 
 Date: 2026-09-02
 
-This record describes the candidate commit that contains it. Exact commit SHA,
-artifact digest, and staging deployment identity are intentionally supplied by
-the post-commit GitHub and deployment gates rather than guessed here.
+This record describes the candidate now represented by exact release
+`5c7333c5a588f5209acd5ca9b5ce0e03e20e16a4`. GitHub Application validation,
+artifact identity, and trusted staging controller smoke are recorded in the
+[exact-release evidence record](../knowledge/v0.1-alpha/EVD-005-exact-staging-5c7333c5.md);
+this document does not expand that bounded proof into full capability or
+production approval.
 
 ## Implemented scope
 
@@ -83,8 +86,8 @@ decorative artwork are never used as an API or canonical-state fallback.
 
 ## Release boundary
 
-Production remains blocked. Staging is eligible only after the candidate is
-committed, pushed, exact-SHA validation and package jobs pass, one matching
-artifact with a valid SHA-256 digest exists, the documented action-time staging
-approval is obtained, and the staging controller plus authenticated Chrome
-smoke checks pass.
+The exact candidate is now staging-deployed and bounded controller-smoked;
+authenticated Chrome `/learning` accessibility observation is also recorded as
+operator text, not visual proof. Production remains blocked. Fresh enrollment,
+mutation, browser/device, recovery, restore/rollback, and capability-specific
+gates remain open.

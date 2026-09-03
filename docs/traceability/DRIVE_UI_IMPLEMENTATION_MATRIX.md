@@ -1,13 +1,16 @@
 # Drive UI implementation matrix
 
-Status: candidate audit, 2026-09-01. This matrix is keyed by exact Drive file
+Status: candidate audit, 2026-09-04. This matrix is keyed by exact Drive file
 ID. It distinguishes the selected v0.1 implementation from future product
 references; a visual reference is not evidence that the capability exists.
 
-The current candidate is an uncommitted worktree and has no exact-SHA staging
-proof. Existing evidence remains scoped to exact release `27fafae` for the full
-learner journey and exact release `81635d1` for the later auth/recovery family;
-neither pack proves the current candidate delta.
+The current candidate is represented by exact release
+`5c7333c5a588f5209acd5ca9b5ce0e03e20e16a4`, with bounded controller smoke and
+an authenticated `/learning` accessibility-tree observation recorded in
+[EVD-005](../knowledge/v0.1-alpha/EVD-005-exact-staging-5c7333c5.md).
+Existing screenshot evidence remains scoped to exact release `27fafae` for the
+full learner journey and exact release `81635d1` for the later auth/recovery
+family; neither pack proves the current candidate's visual or capability delta.
 
 The controlled Drive package selects **Clarity Grid**. `Study OS` and `Signal
 Path` are deliberate reserves. The package README also says the images are
@@ -118,8 +121,9 @@ not constitute native-app implementation.
 Node 24/Linux CI, exact-SHA staging deployment, API/admin/learner smoke tests,
 responsive visual comparisons, and an honest handoff naming every remaining
 `partial` or `extension` item. In particular, the current candidate still needs
-exact-SHA staging proof for the distinct public learner tenant, consent-backed
+capability-specific proof for the distinct public learner tenant, consent-backed
 free enrollment, evidence submission, `/progress`, `/settings`, and local theme
-behavior. Media playback, Modules 2–4 content, library/search, certificate
-issuance, broad admin, billing, SSO/SCIM, and native apps remain partial or
-extension boundaries after that proof.
+behavior; the bounded exact-SHA deployment/controller smoke is already recorded.
+Media playback, Modules 2–4 content, library/search, certificate issuance,
+broad admin, billing, SSO/SCIM, and native apps remain partial or extension
+boundaries after that proof.
