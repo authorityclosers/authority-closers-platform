@@ -164,7 +164,11 @@
 
 .site-frame--learner .analytics-streak-card--available {
   border-style: solid;
-  border-color: color-mix(in srgb, var(--clarity-blue) 30%, var(--clarity-border));
+  border-color: color-mix(
+    in srgb,
+    var(--clarity-blue) 30%,
+    var(--clarity-border)
+  );
   background: var(--clarity-soft-blue);
 }
 
@@ -356,7 +360,11 @@
 .site-frame--learner .analytics-read-state--error {
   border-style: solid;
   color: var(--theme-danger-text, #9f2535);
-  border-color: color-mix(in srgb, var(--theme-danger-text, #9f2535) 35%, var(--clarity-border));
+  border-color: color-mix(
+    in srgb,
+    var(--theme-danger-text, #9f2535) 35%,
+    var(--clarity-border)
+  );
   background: var(--theme-danger-surface, #fff0f0);
 }
 
@@ -535,7 +543,8 @@
   align-items: flex-start;
   gap: 9px;
   padding: 12px 14px;
-  border: 1px solid color-mix(in srgb, var(--clarity-blue) 30%, var(--clarity-border));
+  border: 1px solid
+    color-mix(in srgb, var(--clarity-blue) 30%, var(--clarity-border));
   border-radius: 12px;
   color: var(--clarity-ink);
   background: var(--clarity-surface);

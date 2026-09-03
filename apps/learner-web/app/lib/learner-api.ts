@@ -923,16 +923,11 @@ export function createLearnerApi(
         cache: "no-store",
       }),
     insights: (period?: PlanningPeriod, options: LearnerReadOptions = {}) => {
-      const query = period
-        ? `?period=${encodeURIComponent(period)}`
-        : "";
-      return request<AnalyticsViewResponse>(
-        `/v1/learning/insights${query}`,
-        {
-          ...options,
-          cache: "no-store",
-        },
-      );
+      const query = period ? `?period=${encodeURIComponent(period)}` : "";
+      return request<AnalyticsViewResponse>(`/v1/learning/insights${query}`, {
+        ...options,
+        cache: "no-store",
+      });
     },
     activity: (activityId: string, options: LearnerReadOptions = {}) =>
       request<ActivityResponse>(

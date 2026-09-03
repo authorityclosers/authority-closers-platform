@@ -872,7 +872,10 @@ export function LearnerShell({
             </div>
             <div className="learner-help-chatbox__body">
               <div className="learner-help-chatbox__message">
-                <span className="learner-help-chatbox__avatar" aria-hidden="true">
+                <span
+                  className="learner-help-chatbox__avatar"
+                  aria-hidden="true"
+                >
                   AC
                 </span>
                 <p>
@@ -885,7 +888,8 @@ export function LearnerShell({
                 href={SUPPORT_MAILTO}
                 onClick={() => setHelpOpen(false)}
               >
-                Email learner support <ArrowUpRight size={14} aria-hidden="true" />
+                Email learner support{" "}
+                <ArrowUpRight size={14} aria-hidden="true" />
               </a>
             </div>
           </div>

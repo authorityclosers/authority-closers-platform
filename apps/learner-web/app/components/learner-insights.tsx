@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  BarChart3,
-  Flame,
-  Info,
-  RefreshCw,
-  Sparkles,
-} from "lucide-react";
+import { BarChart3, Flame, Info, RefreshCw, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
@@ -75,10 +69,7 @@ export async function loadLearnerInsightsData(
     // The route is intentionally additive. If a deployment has not promoted
     // it yet, retain the honest no-signal state while preserving auth and
     // service errors for a distinct UI treatment.
-    if (
-      error instanceof ApiError &&
-      [404, 405, 501].includes(error.status)
-    ) {
+    if (error instanceof ApiError && [404, 405, 501].includes(error.status)) {
       return { status: "ready", analytics: insufficientSignal(period) };
     }
     throw error;
@@ -193,14 +184,21 @@ export function LearnerInsightsPanel({
           </div>
         </div>
       ) : state.status === "error" ? (
-        <div className="analytics-read-state analytics-read-state--error" role="alert">
+        <div
+          className="analytics-read-state analytics-read-state--error"
+          role="alert"
+        >
           <span className="analytics-loading-mark" aria-hidden="true">
             <Info size={18} />
           </span>
           <div>
             <strong>Analytics unavailable</strong>
             <p>{analyticsErrorCopy(state.error)}</p>
-            <button className="button button--outline" type="button" onClick={onRetry}>
+            <button
+              className="button button--outline"
+              type="button"
+              onClick={onRetry}
+            >
               <RefreshCw size={15} aria-hidden="true" /> Retry
             </button>
           </div>
@@ -217,7 +215,9 @@ export function LearnerInsightsPanel({
               </span>
               <div>
                 <p className="analytics-card-kicker">Streak / rhythm</p>
-                <strong>{hasSignals ? "Signal available" : "No signal yet"}</strong>
+                <strong>
+                  {hasSignals ? "Signal available" : "No signal yet"}
+                </strong>
                 <p>
                   {hasSignals
                     ? `A descriptive activity signal was observed for ${periodLabel(period).toLowerCase()}.`
@@ -231,7 +231,10 @@ export function LearnerInsightsPanel({
                 label="Signals observed"
                 value={
                   hasSignals
-                    ? Math.max(0, Math.round(analytics.retained_event_count)).toLocaleString("en-US")
+                    ? Math.max(
+                        0,
+                        Math.round(analytics.retained_event_count),
+                      ).toLocaleString("en-US")
                     : "—"
                 }
               />
@@ -251,14 +254,19 @@ export function LearnerInsightsPanel({
               <ul>
                 {analytics.insights.map((insight) => (
                   <li key={insight.id}>
-                    <span className="analytics-insight-list__marker" aria-hidden="true">
+                    <span
+                      className="analytics-insight-list__marker"
+                      aria-hidden="true"
+                    >
                       <Sparkles size={15} />
                     </span>
                     <div>
                       <strong>{insight.title}</strong>
                       <p>{insight.detail}</p>
                       <span className="analytics-insight-list__source">
-                        Source events: {insight.source_event_names.join(", ") || "Not reported"}
+                        Source events:{" "}
+                        {insight.source_event_names.join(", ") ||
+                          "Not reported"}
                       </span>
                     </div>
                   </li>
@@ -288,9 +296,15 @@ export function LearnerInsightsPanel({
   );
 }
 
-export function LearnerInsightsRuntime({ api = defaultApi }: { api?: LearnerApi }) {
+export function LearnerInsightsRuntime({
+  api = defaultApi,
+}: {
+  api?: LearnerApi;
+}) {
   const [period, setPeriod] = useState<PlanningPeriod>("week");
-  const [state, setState] = useState<LearnerInsightsState>({ status: "loading" });
+  const [state, setState] = useState<LearnerInsightsState>({
+    status: "loading",
+  });
   const generationRef = useRef(0);
   const mountedRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
@@ -306,7 +320,11 @@ export function LearnerInsightsRuntime({ api = defaultApi }: { api?: LearnerApi 
         generationRef.current === generation &&
         !controller.signal.aborted;
       setState({ status: "loading" });
-      void loadLearnerInsightsData(api, requestedPeriod, controller.signal).then(
+      void loadLearnerInsightsData(
+        api,
+        requestedPeriod,
+        controller.signal,
+      ).then(
         (ready) => {
           if (isCurrent()) setState(ready);
         },
