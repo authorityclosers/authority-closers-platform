@@ -15,7 +15,7 @@ tags:
 | Browser route                   | Screen/authority                                    | Boundary                                                    |
 | ------------------------------- | --------------------------------------------------- | ----------------------------------------------------------- |
 | `/progress`                     | `PROG-01`; learning projection                      | implementation candidate; canonical facts only              |
-| `/settings`                     | `SET-01..05`; `/v1/me`, onboarding and session APIs | implementation candidate; bounded local appearance          |
+| `/settings`                     | `SET-01..05`; `/v1/me`, onboarding and session APIs | implementation candidate; bounded browser-local appearance mode and variants |
 | `/learn/{programSlug}/complete` | completion predicate                                | incomplete reasons or course-complete state                 |
 | `/certificates/{certificateId}` | self-scoped certificate API                         | course completion certificate, not competency certification |
 | `/offline`                      | `SYS-03`; static PWA shell                          | no protected data or offline authority                      |

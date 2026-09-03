@@ -20,7 +20,11 @@ tags:
 | `POST /v1/sessions/{sessionId}/revoke` | self-scoped session mutation                           |
 | `POST /v1/auth/logout`                 | same-origin session termination                        |
 
-There is no account-theme API. `/settings` reads self facts, routes profile edits to `/v1/onboarding`, invokes logout, and stores appearance locally. That absence is deliberate and prevents invented cross-device/account synchronization.
+There is no account-theme or account-appearance API. `/settings` reads self
+facts, routes profile edits to `/v1/onboarding`, invokes logout, and stores
+theme mode plus bounded appearance variants locally. That absence is
+deliberate and prevents invented cross-device, account, tenant, or authority
+synchronization.
 
 - controlled-by: [[DEC-002-host-only-sessions]] and [[DEC-004-device-local-theme]].
 - called-by: [[HOME-01-learner-home]] and [[SF-SET-001-settings]].

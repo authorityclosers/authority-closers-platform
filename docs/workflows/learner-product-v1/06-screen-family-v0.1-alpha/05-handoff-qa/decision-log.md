@@ -51,10 +51,26 @@ revision; prior history is superseded under the approved retention policy.
 
 Date: 2026-09-03 · Status: accepted candidate
 
-Light is the default; Dark and System are device-local presentation variants.
-System follows the browser/device preference. Storage failure falls back to a
-usable current/System presentation. Theme cannot change identity, consent,
-tenant, access, notification, progress, certificate, or session state.
+Light is the default theme mode; Dark and System are device-local mode choices,
+and System follows the browser/device preference. Named presets plus accent,
+density, and motion are additional browser-local presentation variants.
+Storage failure falls back to a usable current/System presentation. Theme and
+appearance cannot change identity, account, tenant, authority, consent, access,
+notification, progress, certificate, or session state.
+
+## DLG-LSF-008 — Settings screen-ID and appearance-contract reconciliation
+
+Date: 2026-09-04 · Status: accepted reconciliation
+
+The current settings registry and learner-product screen family are authoritative:
+`SET-01` is verified account, `SET-02` is appearance, `SET-03` is learning
+setup, `SET-04` is security/privacy, and `SET-05` is session. Older
+`v0.1-alpha-experience` references that grouped the last two capabilities under
+different IDs are normalized to this mapping; no new capability or protected
+business meaning is introduced. The appearance contract keeps Light/Dark/System
+as theme mode and treats named presets, accent, density, and motion as
+browser-local presentation-only values, never account, tenant, or authority
+state.
 
 ## DLG-LSF-007 — Unresolved evidence gates
 

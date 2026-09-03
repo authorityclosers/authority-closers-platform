@@ -39,8 +39,10 @@ package can pass structural QA while every runtime checkbox remains open.
       current learner routes are registered as repository authority.
 - [x] `/settings` and `/progress` are labeled implementation candidates/runtime
       pending rather than live.
-- [x] Theme authority is limited to the current device-local implementation;
-      account/cross-app synchronization is not invented.
+- [x] Theme authority is limited to the current browser-local implementation;
+      account/tenant/authority/cross-device/cross-app synchronization is not
+      invented. Light/Dark/System remain mode; named preset/accent/density/motion
+      values remain presentation-only.
 - [x] Visual references are never described as runtime proof.
 - [x] Supersession policy is append-safe in `decision-log.md`.
 
@@ -101,11 +103,14 @@ For each applicable screen family verify:
 - [ ] Final color/type values come from approved assets/tokens, not prompts.
 - [ ] Real icons/assets are used; no emoji, ASCII, CSS art, fake SVG, or
       placeholder boxes are approved.
-- [ ] Light, Dark, and System preserve the same hierarchy and meaning.
+- [ ] Light, Dark, and System preserve the same hierarchy and meaning; named
+      presets, accent, density, and motion preserve the same authority and
+      semantics.
 - [ ] Browser controls, form controls, overlays, skeletons, progress, focus,
       locked/offline/error states, and media controls are checked in both themes.
 - [ ] Theme change avoids first-paint flash and preserves keyboard focus.
-- [ ] Theme cannot alter permissions, progress, content, or completion.
+- [ ] Theme and appearance variants cannot alter account, tenant, authority,
+      permissions, progress, content, or completion.
 - [ ] A selected reference is not called approved until behavioral, visual,
       accessibility, and runtime checks pass.
 
@@ -162,9 +167,10 @@ For each applicable screen family verify:
   projection, empty/error/session, and topology-only states await runtime proof.
 - [~] `/settings` route/component is an implementation candidate; exact current
   cards, identity boundaries, and recovery paths await runtime proof.
-- [~] Device-local Light/Dark/System is implemented; first paint, focus,
-  storage failure, browser, and theme parity checks remain pending. No
-  account/cross-device/cross-app sync is claimed.
+- [~] Browser-local Light/Dark/System theme mode and advanced appearance
+  variants are implemented; first paint, focus, storage failure, browser, and
+  theme parity checks remain pending. No account/tenant/authority,
+  cross-device, or cross-app sync is claimed.
 - [x] No deletion workflow, MFA, SSO, native app, or provider semantics are
       introduced by this package.
 - [ ] Wrong-user, wrong-tenant, no-membership, inactive-person, and wrong-role

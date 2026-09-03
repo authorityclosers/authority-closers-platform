@@ -11,7 +11,7 @@ not image prompts and are not a substitute for visual review.
 | Activity/player | ready, processing, provider failure, offline, completed | participation evidence is not mastery; captions/transcript status visible |
 | Progress/insight | canonical ready, no evidence, stale/partial | missing is distinct from zero; analytics is descriptive |
 | Auth/onboarding | form ready, validation, retry, expiry, draft recovery | no account enumeration; exact consent and safe preservation |
-| Profile/settings | avatar crop, processing, failure, theme variants | avatar provider gate and device-local theme explicit |
+| Profile/settings | avatar crop, processing, failure, theme mode, named presets, accent, density, and motion variants | avatar provider gate and browser-local appearance explicit |
 | Notifications/certificate | empty/partial/read; issued/processing/incomplete | read state and certificate are canonical only when returned by contract |
 
 Visual generation remains blocked until source/asset availability and the

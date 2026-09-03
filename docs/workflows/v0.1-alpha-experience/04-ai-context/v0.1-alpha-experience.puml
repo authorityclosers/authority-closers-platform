@@ -92,9 +92,15 @@ partition "Learner foundation (JRN-03/JRN-04/JRN-05)" {
   :PROG-01\nfactual progress\n(runtime pending);
 
   fork
-    :SET-01/03\nSettings + learning profile\n(runtime pending);
+    :SET-01\nVerified account facts\n(runtime pending);
   fork again
-    :SET-02\nDevice-local Light / Dark / System\n(runtime pending);
+    :SET-02\nLight / Dark / System mode\n+advanced browser-local appearance\n(runtime pending);
+  fork again
+    :SET-03\nLearning setup\n(runtime pending);
+  fork again
+    :SET-04\nSecurity / privacy links\n(implementation candidate);
+  fork again
+    :SET-05\nSession / sign-out\n(implementation candidate);
   fork again
     :SYS-01..04\nLoading/error/offline/locked;
   end fork

@@ -17,7 +17,8 @@ Source matching rules:
 - Preserve the blue/white grid logic, crisp information hierarchy, compact
   utility styling, and restrained shape language visible in Clarity Grid.
 - Do not invent brand hex values, typography assets, gradients, illustrations,
-  icons, radii, or card density not established by the source.
+  icons, or radii not established by the source. Keep appearance density and
+  other presentation variants within the bounded local contract.
 - Use a maintained icon library for interface icons. Do not replace assets with
   emoji, ASCII, CSS drawings, approximate SVGs, or placeholder boxes.
 - Compare reference and implementation at the same viewport and state.
@@ -56,11 +57,17 @@ measured against the approved reference and recorded in implementation code.
 
 ## 4. Theme contract
 
-Choices: `light`, `dark`, `system`.
+Theme mode choices: `light`, `dark`, `system`. The appearance contract also
+includes bounded named presets, accent palette, display density, and motion
+preferences.
 
-- `system` is the default and resolves with `prefers-color-scheme`.
+- `light` is the product default. `system` resolves with
+  `prefers-color-scheme`.
 - The stored choice and resolved theme are different concepts. A System choice
   may resolve to Light or Dark as the environment changes.
+- Named presets are convenience bundles; accent, density, and motion remain
+  presentation variants that can be selected independently. Every appearance
+  value is browser-local and never account, tenant, or authority state.
 - Apply `color-scheme` to browser-provided controls and provide matching theme
   metadata early enough to avoid a first-paint flash.
 - All semantic tokens, focus states, form controls, charts/progress, skeletons,
@@ -70,14 +77,16 @@ Choices: `light`, `dark`, `system`.
   never invert a logo blindly.
 - Dark mode is not a black background substitution. Preserve the Clarity Grid
   hierarchy and avoid low-contrast gray-on-gray controls.
-- The selected preference changes presentation only. It cannot change content,
-  route availability, permissions, completion, or data.
+- The selected mode or appearance variant changes presentation only. It cannot
+  change content, route availability, permissions, completion, or data.
 
-Persistence boundary: the current implementation stores only the non-sensitive
-`light`/`dark`/`system` choice in device-local storage under
-`ac-appearance-theme`. It is a `runtime_pending` implementation candidate, not
-live proof. Cross-device/account persistence and learner/admin synchronization
-are not authorized or inferred by this package.
+Persistence boundary: the current implementation stores only non-sensitive
+theme mode and appearance choices in device-local storage under
+`ac-appearance-theme`, `ac-appearance-accent`, `ac-appearance-density`, and
+`ac-appearance-motion`. It is a `runtime_pending` implementation candidate, not
+live proof. Storage failure falls back to current-session presentation.
+Cross-device/account, tenant, and learner/admin synchronization are not
+authorized or inferred by this package.
 
 ## 5. Responsive composition
 
@@ -99,7 +108,7 @@ and iOS safe-area insets.
 | `UI-C001`    | `AppShell`            | wide/compact, loading, offline banner, session-expired return        |
 | `UI-C002`    | `AuthShell`           | split/stacked, provider retry, legal/consent links                   |
 | `UI-C003`    | `PrimaryNav`          | current, available, disabled-with-reason, focus, compact             |
-| `UI-C004`    | `ThemeControl`        | Light/Dark/System selected, resolved label, keyboard radio semantics |
+| `UI-C004`    | `ThemeControl`        | Light/Dark/System mode plus named presets, accent, density, and motion selected state, resolved label, and keyboard semantics |
 | `UI-C005`    | `ProgressSummary`     | known value, unavailable, loading, completed; no mastery inference   |
 | `UI-C006`    | `ModuleCard`          | available, current, in-progress, completed, locked-with-reason       |
 | `UI-C007`    | `ActivityRow`         | type, order, required, status, lock reason, current action           |
@@ -111,7 +120,7 @@ and iOS safe-area insets.
 | `UI-C013`    | `SaveStatus`          | non-color icon/text, timestamp/revision, live announcement           |
 | `UI-C014`    | `LockedState`         | exact safe reason, prerequisite action, no protected payload         |
 | `UI-C015`    | `ErrorRecoveryPanel`  | retry, restart, support; preserved-input statement                   |
-| `UI-C016`    | `SettingsSection`     | Profile, Appearance, Security, Privacy; dirty/saved/error            |
+| `UI-C016`    | `SettingsSection`     | Verified Account, Appearance, Learning Setup, Security/Privacy, Session; dirty/saved/error |
 | `UI-C017`    | `AdminTable`          | loading, empty, unavailable, permission, pagination when real        |
 | `UI-C018`    | `AdminDetailPanel`    | tenant/resource context, freshness, audit trail, close/focus return  |
 | `UI-C019`    | `ReasonConfirmDialog` | named action, consequence, reason, cancel, processing, result        |

@@ -24,7 +24,7 @@ the controlled UI system and the future three-direction visual gate.
 | `InsightPanel` | descriptive analytics/read model with source/time label | stale/partial/unavailable; chart text equivalent; no canonical mutation |
 | `NotificationRow` | safe title, read state, owned target, optional timestamp | target announced; read mutation separate/idempotent |
 | `AvatarCropDialog` | local preview/crop then explicit submit; current avatar retained until success | focus trap only while open; Escape/cancel; keyboard crop alternative; file errors |
-| `ThemeControl` | Light/Dark/System local preference with immediate preview | radio semantics; fallback on storage failure; no server call or authority effect |
+| `ThemeControl` | Light/Dark/System theme mode plus named presets, accent, density, and motion local preferences with immediate preview | selected-state semantics; fallback on storage failure; no server call or account, tenant, or authority effect |
 | `CertificateStatus` | incomplete/processing/issued/denied/not-found state | course-completion wording; no competency/mastery claim |
 
 ## Responsive modes

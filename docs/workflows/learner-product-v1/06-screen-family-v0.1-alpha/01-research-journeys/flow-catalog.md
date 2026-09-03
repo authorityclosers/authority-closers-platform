@@ -15,7 +15,7 @@ multiple IDs only when the user job or canonical state differs.
 | `FLOW-PROGRESS-01` | enrolled learner | `/progress` or completion link | activity/module/certificate route | understand canonical completion and descriptive insight | canonical progress projection; analytics remains secondary |
 | `FLOW-NOTIFY-01` | authenticated learner | header bell or compact More surface | owned deep link or settings | read an informational notification and continue safely | notification/read-state service; delivery preferences separate from learning facts |
 | `FLOW-PROFILE-01` | authenticated learner | avatar/account menu or `/profile` | profile saved state or settings | review identity/context and prepare a private avatar change | self-scoped profile service; avatar processing/provider gate is explicit |
-| `FLOW-SETTINGS-01` | authenticated learner | `/settings` or More | local confirmation, onboarding, recovery, or sign-out | change bounded presentation/session preferences safely | `/v1/me`/onboarding/session APIs; theme is device-local only |
+| `FLOW-SETTINGS-01` | authenticated learner | `/settings` or More | local confirmation, onboarding, recovery, or sign-out | change bounded presentation/session preferences safely | `/v1/me`/onboarding/session APIs; theme mode and appearance variants are browser-local only |
 | `FLOW-RESILIENCE-01` | learner with degraded connectivity/session | any supported route | retry, stale read, local draft, reauth, or `/offline` | preserve safe work and communicate limits | browser-local cache/draft is never canonical authority |
 | `FLOW-CERT-01` | learner | completion/progress link | issued certificate artifact or truthful unavailable/incomplete state | distinguish course completion artifact from competency credential | self-scoped certificate API and completion predicate |
 
@@ -51,11 +51,11 @@ multiple IDs only when the user job or canonical state differs.
 | `NOTIF-01` | Notification center | `FLOW-NOTIFY-01` | `/notifications` |
 | `PROF-01` | Profile overview | `FLOW-PROFILE-01` | `/profile` |
 | `AVATAR-01` | Avatar select/crop overlay | `FLOW-PROFILE-01` | `/profile` overlay |
-| `SET-01` | Account and profile facts | `FLOW-SETTINGS-01` | `/settings` section `account` |
-| `SET-02` | Appearance and theme | `FLOW-SETTINGS-01` | `/settings` section `appearance` |
-| `SET-03` | Learning setup | `FLOW-SETTINGS-01` | `/settings` section `learning` |
-| `SET-04` | Security, privacy, and help links | `FLOW-SETTINGS-01` | `/settings` section `privacy` |
-| `SET-05` | Sessions and sign-out | `FLOW-SETTINGS-01` | `/settings` section `sessions` |
+| `SET-01` | Account and profile facts | `FLOW-SETTINGS-01` | `/settings#verified-account` |
+| `SET-02` | Appearance and theme | `FLOW-SETTINGS-01` | `/settings#appearance` |
+| `SET-03` | Learning setup | `FLOW-SETTINGS-01` | `/settings#learning-setup` |
+| `SET-04` | Security, privacy, and help links | `FLOW-SETTINGS-01` | `/settings#security-privacy` |
+| `SET-05` | Sessions and sign-out | `FLOW-SETTINGS-01` | `/settings#session` |
 | `CERT-01` | Course-completion certificate | `FLOW-CERT-01` | `/certificates/{certificateId}` |
 | `SYS-01` | Route-shaped loading | `FLOW-RESILIENCE-01` | retained shell on any route |
 | `SYS-02` | Retryable failure | `FLOW-RESILIENCE-01` | inline on any route |

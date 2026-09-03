@@ -14,8 +14,9 @@ Start with:
 ## Build sequencing
 
 1. Reconcile route/authz/data owners against controlled IA/API/Security docs.
-2. Implement or verify shared shell, focus, status, responsive, and theme
-   primitives without changing canonical data semantics.
+2. Implement or verify shared shell, focus, status, responsive, and appearance
+   primitives (theme mode plus browser-local named preset/accent/density/motion)
+   without changing canonical data semantics.
 3. Implement Dashboard/My Learning/Discover/program/module read surfaces with
    route-shaped loading, empty, partial, stale, lock, and expiry states.
 4. Implement activity shell and draft/recovery behavior; media/avatar/

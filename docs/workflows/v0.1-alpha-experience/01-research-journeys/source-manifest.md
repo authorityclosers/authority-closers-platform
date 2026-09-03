@@ -112,15 +112,17 @@ override AC product decisions.
 | Controlled fact                      | `/settings` and `/progress` exist in controlled IA.                                               | high             | keep both in the bounded learner workflow               |
 | Repository fact                      | current app routes/components implement `/settings`, `/progress`, and device-local theme control. | high             | mark candidate/runtime pending; do not claim live proof |
 | Accepted decision                    | ADR 0028 fixes the exact consent-backed free-course self-attestation policy.                      | high             | supersede `GAP-ENR-001`; retain exact-runtime gate      |
-| Current user decision                | include profile/settings and Light/Dark/System globally.                                          | high             | add bounded settings/theme workflow                     |
-| Repository fact                      | theme preference is non-sensitive device-local `light`/`dark`/`system`.                           | high             | do not infer account or cross-app synchronization       |
+| Current user decision                | include profile/settings and Light/Dark/System theme mode plus advanced appearance variants globally. | high             | add bounded settings/appearance workflow                |
+| Repository fact                      | theme mode and named preset, accent, density, and motion preferences are non-sensitive device-local presentation state. | high             | do not infer account, tenant, authority, or cross-app synchronization |
 | Runtime observation                  | historical staging evidence does not prove the current requested complete journey.                | high             | release checklist requires exact-current runtime rerun  |
 | Research-supported operating default | WCAG 2.2 AA and 44px AC mobile target intent.                                                     | high/AC-specific | test normative WCAG plus AC design intent               |
 
 ## Source gaps
 
-- No account preference API/data model authorizes cross-device or learner/admin
-  theme synchronization; the current implementation is device-local only.
+- No account preference API/data model authorizes cross-device, account, tenant,
+  or learner/admin theme/appearance synchronization; the current implementation
+  is browser-local only. Light/Dark/System remain theme mode, while named
+  preset, accent, density, and motion values remain presentation-only.
 - `/settings`, `/progress`, and theme are implementation candidates with
   exact-current runtime, accessibility, and browser evidence pending.
 - `GAP-ENR-001` is superseded by ADR 0028, the environment contract, and the

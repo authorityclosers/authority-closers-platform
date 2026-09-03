@@ -25,7 +25,7 @@ exact-SHA staging proof.
 | `/learn/{programSlug}/module/{moduleId}` | learning projection           | ordered activities and prerequisite locks                                                                                                                           | same as program path                              |
 | `/activity/{activityId}`                 | activity/draft/evidence APIs  | load, offline/error, optimistic draft save, server-authorized reflection/implementation/review/improvement evidence submission, lock/permission states              | approved activity topology and evidence policy    |
 | `/progress`                              | canonical learning projection | loading, session-expired, retry, no-enrollment recovery, course percentage/counts, per-module activity and lock states                                              | enrolled learner and pinned published version     |
-| `/settings`                              | `/v1/me`, `/v1/onboarding`    | loading, session-expired, retry, verified-account facts, learning-profile link, logout, local Light/Dark/System presentation preference                             | authenticated learner; browser storage optional   |
+| `/settings`                              | `/v1/me`, `/v1/onboarding`    | loading, session-expired, retry, verified-account facts, learning-profile link, logout, local Light/Dark/System theme mode plus named preset/accent/density/motion presentation preferences | authenticated learner; browser storage optional   |
 | `/learn/{programSlug}/complete`          | completion predicate          | incomplete reasons or completed state                                                                                                                               | authoritative required-activity projection        |
 | `/certificates/{certificateId}`          | self-scoped certificate API   | issued/not-found/permission states                                                                                                                                  | authoritative completion and immutable issuance   |
 | `/offline`                               | static PWA shell              | explains connectivity boundary; no protected data                                                                                                                   | service-worker registration                       |
@@ -109,9 +109,11 @@ responses are not declared complete in v0.1.
   overflow at 390px, and install manifest/icons.
 - iOS target: Safari/PWA metadata, standalone-capable shell, safe-area-aware
   CSS, and browser storage/network failure states.
-- Light, Dark, and System are local browser presentation preferences only.
-  They use local storage when available and the device color-scheme signal for
-  System; they do not change server profile, tenant branding, notification,
-  consent, access, progress, or account state.
+- Light, Dark, and System are local browser theme mode preferences only.
+  Named presets plus accent, density, and motion are also browser-local
+  presentation preferences. They use local storage when available and the
+  device color-scheme signal for System; they do not change server profile,
+  tenant branding, authority, notification, consent, access, progress, or
+  account/session state.
 - Engine-level Edge and iOS Safari execution is still required before release;
   responsive viewport checks are not a substitute for those browsers.

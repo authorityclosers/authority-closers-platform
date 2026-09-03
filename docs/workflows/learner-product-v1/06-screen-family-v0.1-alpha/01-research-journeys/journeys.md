@@ -77,9 +77,11 @@ artifact only; it is not a competency, mastery, or official skill credential.
 Avatar/More → `PROF-01` → `AVATAR-01` or `SET-01..05`. Profile edits remain
 self-scoped. Avatar selection has a local preview, validation, processing,
 success, and supersession path; upload/provider activation is not claimed.
-`SET-02` applies Light/Dark/System best-effort on the current browser. Theme
-storage or device preference cannot alter access, tenant, consent, progress,
-notifications, or session authority.
+`SET-02` applies Light/Dark/System theme mode plus the bounded named presets,
+accent palette, display density, and motion preferences best-effort on the
+current browser. Theme or appearance storage and device preferences cannot
+alter account, tenant, authority, consent, access, progress, notifications, or
+session state.
 
 ## JRN-LSF-08 — Notification deep link
 

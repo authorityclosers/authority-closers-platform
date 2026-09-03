@@ -49,7 +49,7 @@
     "Module 1 is VIDEO REFLECTION IMPLEMENTATION_CHALLENGE REVIEW IMPROVE on one activity lifecycle.",
     "Modules 2-4 are topology-only; do not invent activities content completion or unlock semantics.",
     "Progress evidence access and completion are server-authoritative; analytics are secondary.",
-    "Theme choices are light dark and system and change presentation only.",
+    "Light dark and system remain theme mode choices; named presets plus accent, density, and motion are browser-local appearance variants and all change presentation only.",
     "Admin is a separate host app session and permission boundary.",
     "Offline writes are blocked unless a specific durable queue contract is approved and tested.",
     "Missing data is unavailable not zero and status never relies on color alone."
@@ -205,7 +205,7 @@
     "4px spacing scale",
     "compact below 600 medium 600 to 1023 wide 1024 and above",
     "calm directional learner surfaces and dense auditable admin surfaces",
-    "light dark and system themes with consistent semantic hierarchy"
+    "light dark and system theme modes plus named preset accent density and motion variants with consistent semantic hierarchy"
   ],
   "viewport_targets": [
     { "name": "compact_reference", "width": 390, "height": 844 },
@@ -217,8 +217,8 @@
     "GAP-ENR-001 is superseded by ADR 0028 and DEC-014; exact-release runtime proof remains pending.",
     "PROG-01 is runtime_pending against the current /progress route and progress-runtime component.",
     "SET-01 and SET-03 are runtime_pending against the current /settings route and settings-runtime component.",
-    "SET-02 is runtime_pending for non-sensitive device-local light dark and system behavior; account and cross-app synchronization are not authorized.",
-    "SET-04 and SET-05 are implementation_candidate boundaries limited to current account/session actions and existing Terms/Privacy routes."
+    "SET-02 is runtime_pending for non-sensitive browser-local Light/Dark/System theme mode plus named preset, accent, density, and motion behavior; account, tenant, and cross-app synchronization are not authorized.",
+    "SET-04 is the implementation_candidate security/privacy boundary limited to existing password recovery and Terms/Privacy routes; SET-05 is the implementation_candidate session boundary limited to current session facts and same-origin sign-out."
   ],
   "known_gaps": [
     "GAP-MEDIA-001 approved media transcript captions and real playback evidence are unresolved.",
@@ -233,7 +233,7 @@
     "SSO SCIM broad integrations tenant branding white labeling or broad enterprise behavior",
     "community calendar inbox notifications broad library search recommendations or broad reporting",
     "new onboarding fields persona roles permissions entitlements or course mappings",
-    "offline mutation queues cross-device preference sync or media upload",
+    "offline mutation queues cross-device account tenant or learner/admin appearance sync or media upload",
     "deletion or retention workflows",
     "production readiness from screenshots mocks generated images or historical staging evidence"
   ],

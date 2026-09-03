@@ -40,7 +40,8 @@ auth/onboarding/expiry/offline/retry surfaces.
    understandable and actionable.
 5. Low-typing activity controls support practice without inventing a scoring
    taxonomy or claiming mastery.
-6. Light-default presentation and local theme variants must not alter authority.
+6. Light-default presentation, theme mode, and local appearance variants must
+   not alter account, tenant, or authority.
 7. Desktop and mobile share semantics but use purpose-built composition.
 
 ## Success evidence required later

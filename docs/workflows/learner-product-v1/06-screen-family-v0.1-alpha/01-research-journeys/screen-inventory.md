@@ -36,7 +36,7 @@ routes or subviews require IA/API confirmation before implementation.
 | `PROF-01` | review identity/context | avatar, name/email facts, context attributes, profile edit link | self-scoped profile | avatar → settings/onboarding | no role/tenant inference from labels |
 | `AVATAR-01` | choose a private avatar | file chooser, crop/preview, validation, processing status | local preview + server object revision | profile → profile or retry | provider/upload gate; supersede safely |
 | `SET-01` | inspect account | verified facts, edit route, data boundary | `/v1/me` | settings → profile/onboarding | no hidden account mutation |
-| `SET-02` | choose presentation | Light/Dark/System radio group and preview | browser-local preference | settings → retained shell | never sync or alter authority |
+| `SET-02` | choose presentation | Light/Dark/System theme mode, named presets, accent, density, motion, and preview | browser-local presentation preferences | settings → retained shell | never sync or alter account, tenant, or authority state |
 | `SET-03` | revise learning setup | onboarding editor link, saved status | onboarding profile | settings → onboarding | bounded fields only |
 | `SET-04` | find privacy/security help | recovery, terms/privacy, deletion-request entry only if contract exists | policy links/session facts | settings → recovery/help | no unapproved deletion/consent workflow invention |
 | `SET-05` | manage current session | current device/session facts, sign-out, expiry link | session API | settings → login/shell | revocation is canonical; cache purge required |

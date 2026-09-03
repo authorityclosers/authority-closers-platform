@@ -58,7 +58,7 @@ controlled AC business, access, progress, scoring, privacy, or provider rules.
 | Controlled fact | Learner UX is mobile-first and outcome-driven; “next action” beats a generic dashboard. | One dominant action per ready state; keep shell navigation consistent. |
 | Controlled fact | Progress and completion are canonical server-owned facts; analytics is lossy/secondary. | Label unavailable/stale distinctly from zero; telemetry rows never mutate facts. |
 | Controlled fact | Free Course module order and required activity prerequisites are program configuration, not a global LMS rule. | Show locks with exact safe reason; do not invent cross-program sequencing. |
-| Controlled fact | Theme is device-local Light/Dark/System presentation preference. | Provide advanced variants without account sync or permission effects. |
+| Controlled fact | Light/Dark/System remain device-local theme mode choices; named presets and accent, density, and motion are browser-local presentation variants. | Provide the advanced appearance controls while keeping every value outside account, tenant, and authority state. |
 | Controlled fact | AC-UXA-01 requires recovery ownership below founder level for routine cases. | Every retry/expiry/offline/error row names the safe learner action and support boundary. |
 | Design inference | Plan horizons improve orientation when sourced by a canonical plan projection. | Provide Today/Week/Month containers; if no plan data exists, show honest empty/unavailable states rather than dates or promises. |
 | Design inference | Profile/avatar crop is useful but mutation is sensitive and provider-dependent. | Specify a local preview and explicit server processing/supersession states; do not claim upload is activated. |
