@@ -28,6 +28,7 @@ import {
   hasMembershipRole,
   MembershipUnavailable,
 } from "./membership-availability";
+import { LearnerInsightsRuntime } from "./learner-insights";
 import { ProgressSkeleton } from "./skeletons";
 
 type ProgressState =
@@ -242,6 +243,7 @@ export function ProgressRuntime({ api = defaultApi }: { api?: LearnerApi }) {
           Open course <ArrowRight size={16} aria-hidden="true" />
         </Link>
       </section>
+      <LearnerInsightsRuntime api={api} />
       <section
         className="progress-modules"
         aria-labelledby="module-progress-title"

@@ -379,6 +379,15 @@ function hasLearningQuery(url: URL): boolean {
   });
 }
 
+function hasAnalyticsQuery(url: URL): boolean {
+  if (url.search === "") return true;
+  const keys = [...url.searchParams.keys()];
+  if (keys.length !== 1 || keys[0] !== "period") return false;
+  return ["today", "week", "month"].includes(
+    url.searchParams.get("period") ?? "",
+  );
+}
+
 /**
  * Allow only the learner surface exercised by the real UI. Admin, internal,
  * provider, arbitrary proxy, and unsupported password-recovery routes remain
@@ -418,6 +427,9 @@ export function isStagingAuthenticatedLearnerRequest(
 
   const learningPrefix = "/v1/learning/";
   if (pathname.startsWith(learningPrefix)) {
+    if (pathname === "/v1/learning/insights") {
+      return normalizedMethod === "GET" && hasAnalyticsQuery(url);
+    }
     return (
       normalizedMethod === "GET" &&
       isCanonicalEncodedPathSegment(pathname.slice(learningPrefix.length)) &&

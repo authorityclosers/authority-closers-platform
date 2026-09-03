@@ -244,6 +244,8 @@ describe("development learner API proxy", () => {
       ["PUT", "/v1/onboarding"],
       ["POST", "/v1/enrollments/free"],
       ["GET", "/v1/learning/lesson-1"],
+      ["GET", "/v1/learning/insights"],
+      ["GET", "/v1/learning/insights?period=week"],
       [
         "GET",
         "/v1/learning/lesson-1?enrollment_id=enrollment-1&program_version_id=version-1",
@@ -270,6 +272,8 @@ describe("development learner API proxy", () => {
       ["GET", "/v1/activities/activity-1/draft/"],
       ["POST", "/v1/activities/activity-1/evidence/extra"],
       ["GET", "/v1/learning/lesson-1?enrollment_id=one"],
+      ["GET", "/v1/learning/insights?period=year"],
+      ["GET", "/v1/learning/insights?period=week&subject_person_id=other"],
       ["GET", "/v1/me?include=admin"],
       ["POST", "/v1/programs"],
     ] as const) {

@@ -292,6 +292,32 @@ export interface CalendarResponse {
   disclaimer: string;
 }
 
+/**
+ * A descriptive read model. This is deliberately kept separate from the
+ * canonical learning projection above: analytics can be unavailable or
+ * stale without changing course completion, access, or payment state.
+ */
+export type AnalyticsStatus = "insufficient_signal" | "available";
+
+export interface LearningInsightResponse {
+  id: string;
+  kind: "descriptive_signal";
+  title: string;
+  detail: string;
+  observed_event_count: number;
+  source_event_names: string[];
+}
+
+export interface AnalyticsViewResponse {
+  status: AnalyticsStatus;
+  source: "descriptive_analytics_projection";
+  period: PlanningPeriod | null;
+  freshness_as_of: string | null;
+  retained_event_count: number;
+  insights: LearningInsightResponse[];
+  disclaimer: string;
+}
+
 export type LearningCourseState = "in_progress" | "completed" | "unavailable";
 
 export type LearningSavedState = "saved" | "unavailable";
@@ -896,6 +922,18 @@ export function createLearnerApi(
         ...options,
         cache: "no-store",
       }),
+    insights: (period?: PlanningPeriod, options: LearnerReadOptions = {}) => {
+      const query = period
+        ? `?period=${encodeURIComponent(period)}`
+        : "";
+      return request<AnalyticsViewResponse>(
+        `/v1/learning/insights${query}`,
+        {
+          ...options,
+          cache: "no-store",
+        },
+      );
+    },
     activity: (activityId: string, options: LearnerReadOptions = {}) =>
       request<ActivityResponse>(
         `/v1/activities/${encodeURIComponent(activityId)}`,
