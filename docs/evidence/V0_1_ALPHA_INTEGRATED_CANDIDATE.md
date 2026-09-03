@@ -1,7 +1,7 @@
 # v0.1-alpha integrated candidate evidence
 
-Status: integrated candidate; staging deployment and production approval are
-not claimed.
+Status: integrated candidate; bounded exact staging deployment/controller
+smoke is recorded, and production approval is not claimed.
 
 ## Candidate lineage
 
@@ -10,6 +10,10 @@ not claimed.
 - Media vertical slice: `5e9adc50bb8752e80113f283d84ade61e3f41e19`.
 - Local authenticated QA bridge: `830ab7313e3010ba9d8a1e7913ea42b4d97d50f6`.
 - Planning and analytics: `8c6248ce3d007bd57704b6ce39dccd1eb7b8ad00`.
+
+The immutable release `5c7333c5a588f5209acd5ca9b5ce0e03e20e16a4` is the
+staging artifact covered by
+[EVD-005 exact staging controller smoke](../knowledge/v0.1-alpha/EVD-005-exact-staging-5c7333c5.md).
 
 ## Migration normalization
 
@@ -51,5 +55,7 @@ unchanged.
 - Authenticated browser proof must use the approved staging origin or complete
   review of the development-only bridge; localhost must not forward staging
   cookies or forge Origin.
-- Exact-SHA CI/package, staging runtime proof, backup/restore evidence, and
-  action-time approval remain required. Production is NO-GO.
+- Exact-SHA CI/package and bounded staging controller smoke are recorded for
+  the named release. Full browser/device, capability, backup/restore,
+  rollback, security, observability, and action-time gates remain required.
+  Production is NO-GO.
