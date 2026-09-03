@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "../lib/learner-api";
 import type { OnboardingRecoveryLockManager } from "../lib/local-drafts";
+import { SETTINGS_SECTIONS } from "../lib/settings-registry";
 import {
   SettingsView,
   clearUnavailableMembershipLearnerLocalDrafts,
@@ -86,9 +87,37 @@ describe("Settings Direction B runtime", () => {
     expect(html).toContain('aria-pressed="true"');
     expect(html).not.toContain("indexLinkCurrent");
     expect(html).not.toContain('aria-current="page"');
+    expect(html).toMatch(/<nav[^>]*aria-label="Settings sections"/);
     expect(html).not.toMatch(
-      /avatar|notification|marketing|payment|delete account/i,
+      /avatar|notification|marketing|payment|delete account|mfa|sso|\bai\b|playback|tenant.?branding/i,
     );
+  });
+
+  it("renders index links and cards from the same bounded registry order", () => {
+    const html = renderToStaticMarkup(
+      createElement(SettingsView, {
+        resources: readyResources(),
+        api,
+        onRetry: vi.fn(),
+      }),
+    );
+    const expectedAnchors = SETTINGS_SECTIONS.map((section) => section.anchor);
+    const indexAnchors = Array.from(html.matchAll(/href="#([^\"]+)"/g)).map(
+      (match) => match[1],
+    );
+    const cardAnchors = Array.from(
+      html.matchAll(/<section[^>]*\sid="([^\"]+)"/g),
+    ).map((match) => match[1]);
+
+    expect(indexAnchors).toEqual(expectedAnchors);
+    expect(cardAnchors).toEqual(expectedAnchors);
+    expect(
+      SETTINGS_SECTIONS.every(
+        (section) =>
+          html.includes(`id="${section.headingId}"`) &&
+          html.includes(`aria-labelledby="${section.headingId}"`),
+      ),
+    ).toBe(true);
   });
 
   it("keeps identity and appearance usable when learning setup fails", () => {

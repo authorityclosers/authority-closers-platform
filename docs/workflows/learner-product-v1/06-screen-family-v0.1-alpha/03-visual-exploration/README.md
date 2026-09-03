@@ -18,7 +18,8 @@ original, and review them against:
 - fidelity to the state matrix and three-layer recovery model;
 - WCAG 2.2 AA intent, visible focus, non-color state, captions, reflow, and
   comfortable mobile targets;
-- light-default / Dark / System behavior without authority changes;
+- light-default / Dark / System theme mode plus named preset, accent, density,
+  and motion behavior without account, tenant, or authority changes;
 - desktop rail versus compact mobile navigation;
 - long copy, 200% zoom, 390px width, safe areas, reduced motion, and keyboard;
 - provider/API readiness and implementation risk.

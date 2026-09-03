@@ -70,7 +70,8 @@ existing-identity Google sign-in/recovery, progressive onboarding, a distinct
 public learner context, explicit consent-backed free-course start, learner
 home, the published free-course overview, the Module 1
 `WATCH -> REFLECT -> IMPLEMENT -> REVIEW -> IMPROVE` loop, honest progress,
-profile/settings, Light/Dark/System appearance, universal recovery states,
+profile/settings, Light/Dark/System theme mode with bounded named preset/accent/
+density/motion appearance variants, universal recovery states,
 Windows Edge/PWA and iOS Safari/PWA behavior, and a separate fail-closed admin
 foundation.
 
@@ -89,10 +90,11 @@ community, calendar, inbox, and external integrations.
   committed with enrollment. Exact-current runtime proof remains pending.
 - `GAP-MEDIA-001`: approved media, transcript, captions, and real playback
   evidence are not established by a UI reference.
-- `/progress`, `/settings`, and device-local Light/Dark/System now have current
-  repository routes/components and are `implementation_candidate` or
-  `runtime_pending` as recorded per screen. This package does not claim live
-  proof, account-level preference sync, or learner/admin theme sync.
+- `/progress`, `/settings`, and browser-local Light/Dark/System theme mode plus
+  bounded appearance variants now have current repository routes/components and
+  are `implementation_candidate` or `runtime_pending` as recorded per screen.
+  This package does not claim live proof, account/tenant/authority preference
+  sync, or learner/admin theme sync.
 - Modules 2-4 remain topology-only. No activity, completion, or unlock breadth
   is inferred for them.
 - `GAP-RUNTIME-001`: this package supplies no exact-SHA staging, Edge, iOS

@@ -94,16 +94,18 @@ provider or upload activation is claimed by this package.
 ## SET-01..05 and theme variants
 
 `SET-01` reads verified account facts; `SET-03` links to onboarding rather than
-duplicating its fields; `SET-04` exposes only approved recovery, policy, help,
-and deletion-request entry points; `SET-05` reads current session facts and
-offers same-origin sign-out. Sensitive commands require recent authentication
-and explicit confirmation where their controlled contract requires it.
+duplicating its fields; `SET-04` exposes only the existing recovery, Terms, and
+Privacy routes; `SET-05` reads current session facts and offers same-origin
+sign-out. Account deletion remains outside this slice until a controlled
+request, retention, authorization, and confirmation contract is approved.
 
-`SET-02` provides Light, Dark, and System. Light is the product default; Dark
-is an explicit local variant; System follows `prefers-color-scheme`. The
-preference is best-effort browser state, not an account, tenant, consent,
-notification, access, progress, or branding fact. Storage failure falls back to
-System/current-page rendering without blocking learning.
+`SET-02` provides Light, Dark, and System as theme mode choices. Light is the
+product default; Dark is an explicit local mode; System follows
+`prefers-color-scheme`. It also provides bounded named presets plus independent
+accent palette, display density, and motion controls. All of these values are
+best-effort browser-local presentation state, not account, tenant, authority,
+consent, notification, access, progress, or branding facts. Storage failure
+falls back to usable current/System-page rendering without blocking learning.
 
 ## Auth, onboarding, expiry, and offline
 

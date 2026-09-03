@@ -28,6 +28,6 @@ release-sensitive states. The full row-level behavior is in
 | `NOTIF-01` | notification/read-state service | safe rows and owned links | empty, partial, retry, expired target, read success | target/settings |
 | `PROF-01` | self-scoped profile | identity/context + avatar | incomplete, retry, stale, expiry | avatar/settings |
 | `AVATAR-01` | local preview + profile object service | crop/preview then explicit submit | invalid file, processing, retry, cancel, success | profile |
-| `SET-01..05` | `/v1/me`, onboarding, session, local theme | section-specific controls | loading, retry, expiry, local storage fallback, sign-out success | profile/login/onboarding |
+| `SET-01..05` | `/v1/me`, onboarding, session, and browser-local appearance | section-specific controls | loading, retry, expiry, local storage fallback, sign-out success | profile/login/onboarding |
 | `CERT-01` | self-scoped certificate/completion | issued artifact only when authorized | incomplete, processing, not found, denied, retry | progress |
 | `SYS-01..04` | presentation layer + named domain state | shape-preserving feedback | loading/retry/offline/lock/permission | original route/recovery |

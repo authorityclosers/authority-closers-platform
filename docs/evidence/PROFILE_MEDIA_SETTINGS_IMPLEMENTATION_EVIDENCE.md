@@ -7,7 +7,10 @@ Status: bounded learner-web slice, provider-neutral and fail-closed. No producti
 The exact Drive IDs used for the controlled product and engineering sources are recorded in [`source-manifest.md`](../workflows/v0.1-alpha-experience/01-research-journeys/source-manifest.md). The slice follows the profile/settings boundaries in `JRN-04-profile-settings-appearance.md`, `SF-SET-001-settings.md`, `API-004-session-settings.md`, `API_CONVENTIONS.md`, and `AUTHORIZATION_MATRIX.md`:
 
 - `/v1/me` remains the source for verified identity and membership facts.
-- Theme remains device-local (Light/Dark/System); no account-theme, notifications, MFA, SSO, integrations, deletion, or tenant-branding semantics were invented.
+- Theme mode remains device-local (Light/Dark/System), and named presets plus
+  accent, density, and motion remain browser-local presentation variants; no
+  account/tenant/authority appearance state, notifications, MFA, SSO,
+  integrations, deletion, or tenant-branding semantics were invented.
 - Learner avatar reads and mutations are self-scoped through the authenticated `ActorContext` and active tenant membership.
 
 ## Server contract

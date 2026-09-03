@@ -19,10 +19,14 @@ Actor: authenticated learner. Goal: inspect bounded account facts, return to the
 | Stage        | Surface      | Boundary                                                                                                                         |
 | ------------ | ------------ | -------------------------------------------------------------------------------------------------------------------------------- |
 | `STG-SET-01` | `SET-01`     | `/v1/me` facts are read-only on settings; profile edits route to `ONB-01` and reuse revision semantics                           |
-| `STG-SET-02` | `SET-02`     | Light, Dark, System is non-sensitive device-local presentation only                                                              |
-| `STG-SET-03` | `SET-03..05` | use existing password recovery, Terms/Privacy, and logout routes; no invented deletion/MFA/SSO/notification/integration behavior |
+| `STG-SET-02` | `SET-02`     | Light/Dark/System mode plus named preset, accent, density, and motion controls are non-sensitive browser-local presentation only |
+| `STG-SET-03` | `SET-03`     | learning profile remains a summary and links to the revisioned onboarding editor                                                  |
+| `STG-SET-04` | `SET-04`     | use existing password recovery and Terms/Privacy routes only; no invented deletion/MFA/SSO/notification/integration behavior   |
+| `STG-SET-05` | `SET-05`     | same-origin logout and session-expiry recovery remain the session boundary                                                          |
 
-Storage failure falls back safely for the current page. Theme changes must preserve hierarchy, meaning, focus, state, and permissions.
+Storage failure falls back safely for the current page. Theme mode and every
+advanced appearance choice must preserve hierarchy, meaning, focus, state, and
+permissions; none is account, tenant, or authority state.
 
 - routes-to: [[RT-004-progress-settings-system]].
 - renders: [[SF-SET-001-settings]] and [[VAR-THEME-001-theme]].

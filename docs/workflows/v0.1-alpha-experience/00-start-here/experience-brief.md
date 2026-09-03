@@ -63,7 +63,8 @@ must be revised.
 ## Current user decisions applied
 
 - Deliver one connected experience from auth through onboarding and Module 1.
-- Include profile/settings and a global Light/Dark/System appearance control.
+- Include profile/settings and a global Light/Dark/System theme mode with
+  bounded named preset, accent, density, and motion appearance controls.
 - Use the approved Clarity Grid direction and the supplied Drive images.
 - Make failure, recovery, offline, locked, and session-expired behavior visible.
 - Keep learner and admin foundations separate.
@@ -72,10 +73,12 @@ must be revised.
   for an active learner membership in the distinct active public learner
   tenant.
 
-The theme decision is interpreted narrowly: it changes semantic presentation
-tokens across the current surface. It does not authorize tenant branding,
-white-labeling, custom typography, custom palettes, or a new preference API.
-The current device-local implementation is an implementation candidate; this
+The theme and appearance decision is interpreted narrowly: it changes semantic
+presentation tokens across the current surface. Light/Dark/System remain theme
+mode choices; named presets plus accent, density, and motion are browser-local
+presentation variants only. This does not authorize tenant branding,
+white-labeling, custom typography, account/tenant/authority state, or a new
+preference API. The current device-local implementation is an implementation candidate; this
 package does not claim cross-device synchronization or live runtime proof.
 
 ## Experience principles

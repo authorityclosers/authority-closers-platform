@@ -22,12 +22,16 @@ Route: `/settings`.
 | ID       | Card/action                    | Boundary                                                |
 | -------- | ------------------------------ | ------------------------------------------------------- |
 | `SET-01` | verified account/profile facts | reads `/v1/me`; profile edits return to `ONB-01`        |
-| `SET-02` | appearance                     | Light, Dark, System; device-local only                  |
+| `SET-02` | appearance                     | Light/Dark/System mode plus named preset, accent, density, and motion controls; browser-local only |
 | `SET-03` | learning profile               | links to existing onboarding editor                     |
 | `SET-04` | security/privacy               | existing password recovery and Terms/Privacy links only |
 | `SET-05` | session                        | same-origin logout and session-expiry recovery          |
 
-No account deletion workflow, MFA, SSO, notifications, integrations, tenant branding, or account-level theme sync is inferred.
+Named presets and accent, density, and motion choices are presentation-only
+browser state. They never become account, tenant, authority, consent, access,
+progress, or session state. No account deletion workflow, MFA, SSO,
+notifications, integrations, tenant branding, or account-level theme sync is
+inferred.
 
 - appears-in: [[JRN-04-profile-settings-appearance]].
 - routes-to: [[RT-004-progress-settings-system]].

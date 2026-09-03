@@ -148,17 +148,18 @@ Prompt:
 
 > Create `SET-01` through `SET-05` as source-bound Clarity Grid references for
 > the current `runtime_pending`/`implementation_candidate` settings route at
-> 1440x900 and 390x844. The current cards are Appearance, verified account,
-> learning profile, and session; Profile edits route through the existing
-> revisioned onboarding flow. Appearance is an accessible Light/Dark/System
-> group and clearly states that the choice is device-local. Security adds no
-> behavior beyond current sign-out and existing password/session recovery
-> routes. Privacy may link only to existing Terms and Privacy pages; do not
-> create a deletion or retention workflow. Produce
-> matched Light and Dark assets using semantic roles; preserve Clarity Grid
-> hierarchy and contrast. Do not invent final brand values, tenant branding,
-> notifications, MFA, SSO/SCIM, integrations, billing, deletion, or provider
-> behavior.
+> 1440x900 and 390x844. Use the reconciled mapping: SET-01 verified account,
+> SET-02 appearance, SET-03 learning setup, SET-04 security/privacy, and
+> SET-05 session. Profile edits route through the existing revisioned
+> onboarding flow. Appearance is an accessible Light/Dark/System theme-mode
+> group plus named presets, accent, density, and motion controls; all choices
+> are browser-local presentation only. Security/privacy adds no behavior beyond
+> existing password recovery and Terms/Privacy routes. Do not create a deletion
+> or retention workflow. Produce matched Light and Dark assets using semantic
+> roles; preserve Clarity Grid hierarchy and contrast. Keep every named preset,
+> accent, density, and motion choice outside account, tenant, and authority
+> state. Do not invent final brand values, tenant branding, notifications, MFA,
+> SSO/SCIM, integrations, billing, deletion, or provider behavior.
 
 ## Prompt 8 — Universal state family
 

@@ -51,8 +51,10 @@ Status: **reference-ready for behavioral handoff; not production-approved**.
       reduced motion are checked.
 - [ ] Media controls, captions, transcript, orientation, and control occlusion
       are tested before media capability is activated.
-- [ ] Light/Dark/System and storage failure are tested; System follows the
-      device signal without server mutation or first-paint flash.
+- [ ] Light/Dark/System theme mode, named presets, accent, density, motion, and
+      storage failure are tested; System follows the device signal without
+      server mutation or first-paint flash. All appearance values remain
+      browser-local and cannot affect account, tenant, or authority state.
 
 ## Resilience/security gate
 

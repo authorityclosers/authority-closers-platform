@@ -48,11 +48,11 @@ page route.
 | `ACT-04`    | `/activity/{activityId}`                 | learner             | same route                 | learner-observed review                                              |
 | `ACT-05`    | `/activity/{activityId}`                 | learner             | same route                 | explicit improvement action                                          |
 | `PROG-01`   | `/progress`                              | learner             | `runtime_pending`          | honest program/module/activity projection                            |
-| `SET-01`    | `/settings`                              | learner             | `runtime_pending`          | implemented settings shell and bounded cards                         |
-| `SET-02`    | `/settings` Appearance card              | learner             | `runtime_pending`          | device-local Light/Dark/System presentation preference               |
-| `SET-03`    | `/settings` Learning profile card        | learner             | `runtime_pending`          | read bounded profile; edit through revisioned onboarding             |
-| `SET-04`    | `/settings` Account/session card         | learner             | `implementation_candidate` | verified-account context and sign-out; existing recovery routes only |
-| `SET-05`    | `/settings` Privacy/legal entry          | learner             | `implementation_candidate` | existing Terms/Privacy links only; no deletion workflow              |
+| `SET-01`    | `/settings` Verified account card       | learner             | `runtime_pending`          | verified-account facts and bounded profile context                   |
+| `SET-02`    | `/settings` Appearance card              | learner             | `runtime_pending`          | device-local Light/Dark/System theme mode and advanced appearance variants |
+| `SET-03`    | `/settings` Learning setup card          | learner             | `runtime_pending`          | read bounded profile; edit through revisioned onboarding             |
+| `SET-04`    | `/settings` Security/privacy card        | learner             | `implementation_candidate` | existing recovery, Terms, and Privacy routes only                    |
+| `SET-05`    | `/settings` Session card                 | learner             | `implementation_candidate` | current session facts and same-origin sign-out                       |
 | `SYS-01`    | current route                            | any                 | contract family            | structure-preserving loading/processing                              |
 | `SYS-02`    | current route                            | any                 | contract family            | retryable/terminal failure and support path                          |
 | `SYS-03`    | `/offline`                               | any                 | contract                   | static, no-protected-data connectivity boundary                      |
@@ -251,31 +251,36 @@ proof.
 
 ## 9. Profile, settings, and theme
 
-`SET-01` has a current route/component implementation. Its bounded current
-cards are:
+`SET-01` through `SET-05` have a current bounded route/component
+interpretation. Their cards are:
 
 - Verified account: display name, email, role, and verification facts are
   read-only unless an existing identity mutation contract says otherwise.
-- Learning profile (`SET-03`): show fields already defined by `ONB-01`; edits
+- Learning setup (`SET-03`): show fields already defined by `ONB-01`; edits
   route to the existing revisioned onboarding flow.
-- Appearance (`SET-02`): Light, Dark, System.
-- Session/account (`SET-04`): current sign-out plus existing identity recovery
-  routes only; no MFA or SSO behavior.
-- Privacy/legal (`SET-05`): only existing Terms and Privacy routes may be
-  linked. This package defines no deletion or retention workflow.
+- Appearance (`SET-02`): Light, Dark, and System theme mode, plus bounded named
+  presets, accent palette, display density, and motion preferences.
+- Security/privacy (`SET-04`): existing password recovery and Terms/Privacy
+  routes only; no MFA or SSO behavior and no deletion or retention workflow.
+- Session (`SET-05`): current session facts, same-origin sign-out, and existing
+  session-expiry recovery only.
 
 Theme behavior:
 
-- Default to System for a person/device without a recorded selection.
+- Default to Light for a person/device without a recorded selection.
 - Resolve System from `prefers-color-scheme`; communicate current resolved
   theme without changing the saved choice.
+- Keep named presets and accent, density, and motion choices as presentation
+  variants in the current browser only; they are never account, tenant, or
+  authority state.
 - Apply semantic tokens to the current learner surface. Admin preference sync
   is not authorized by this device-local implementation.
 - Update user-agent `color-scheme`; verify first-paint behavior separately
   because current code/runtime evidence has not proven a flash-free load.
 - Never store a secret or business state in theme storage.
-- Current device persistence uses the non-sensitive local preference key
-  `ac-appearance-theme`. Cross-device/account persistence and learner/admin
+- Current device persistence uses the non-sensitive local preference keys
+  `ac-appearance-theme`, `ac-appearance-accent`, `ac-appearance-density`, and
+  `ac-appearance-motion`. Cross-device/account persistence and learner/admin
   synchronization are outside the current contract, not inferred gaps to fill.
 
 ## 10. Universal states

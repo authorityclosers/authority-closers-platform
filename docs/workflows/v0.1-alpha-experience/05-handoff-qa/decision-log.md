@@ -54,7 +54,9 @@ IMPROVE` uses one activity route and canonical evidence/progress lifecycle.
 
 - Historical status: proposed workflow target; implementation was blocked by
   `GAP-SET-001`. Superseded by `DEC-015` after current route inspection.
-- Decision: `/settings` contains Profile, Appearance, Security, and Privacy.
+- Decision: `/settings` contains verified account, Appearance, Learning Setup,
+  Security/Privacy, and Session sections using the stable `SET-01` through
+  `SET-05` mapping.
 - Basis: explicit current user decision plus controlled IA `/settings`.
 - Conflict: current repository route/screen contract omits `/settings`; Drive
   settings/notifications/branding images are marked extension.
@@ -66,13 +68,16 @@ IMPROVE` uses one activity route and canonical evidence/progress lifecycle.
 
 - Historical status: current-user decision; persistence gap was open.
   Superseded by `DEC-015` for the device-local implementation candidate.
-- Decision: offer Light, Dark, System. System follows user-agent/OS preference.
-  Apply semantic tokens globally within the current product surface.
+- Decision: offer Light, Dark, and System as theme mode choices, plus bounded
+  named presets, accent palette, display density, and motion preferences.
+  System follows user-agent/OS preference. Apply semantic tokens globally within
+  the current product surface.
 - Basis: explicit current user decision, controlled semantic-token UI system,
   and current web-platform guidance.
-- Consequence: theme cannot change meaning, state, permissions, or content.
-  Device-local persistence is a safe fallback; cross-device and cross-app sync
-  require a ratified preference contract (`GAP-THEME-001`).
+- Consequence: theme mode and every appearance variant cannot change meaning,
+  state, permissions, or content. Browser-local persistence is a safe fallback;
+  account, tenant, authority, cross-device, and cross-app sync require a
+  ratified preference contract (`GAP-THEME-001`).
 
 ## `DEC-007` — Progress is factual, not evaluative
 
@@ -169,22 +174,35 @@ IMPROVE` uses one activity route and canonical evidence/progress lifecycle.
 - Status: `implementation_candidate` / `runtime_pending`; no live proof claim.
 - Decision: `/progress` and `/settings` are current learner-web routes.
   `/progress` renders canonical enrollment/projection facts. `/settings`
-  exposes Appearance, verified account facts, learning profile, and session
-  actions. Learning-profile edits reuse `/onboarding`.
-- Theme decision: `light`, `dark`, and `system` are implemented as a
-  non-sensitive device-local preference. `system` follows
-  `prefers-color-scheme`; account, cross-device, and learner/admin sync are not
-  authorized.
-- Bounded candidates: password recovery remains on the existing identity
-  route; Privacy may expose only the existing Terms/Privacy pages. No deletion
-  workflow, MFA, SSO, integration, notification, or provider semantics are
-  inferred.
+  exposes verified account, Appearance, Learning Setup, Security/Privacy, and
+  Session sections. Learning-Setup edits reuse `/onboarding`; Security/Privacy
+  keeps password recovery and existing Terms/Privacy links; Session keeps
+  current session facts and same-origin sign-out.
+- Theme decision: `light`, `dark`, and `system` remain non-sensitive
+  browser-local theme mode choices. Named presets plus accent, density, and
+  motion are also browser-local presentation variants. `system` follows
+  `prefers-color-scheme`; account, tenant, authority, cross-device, and
+  learner/admin sync are not authorized.
+- Bounded candidates: no deletion workflow, MFA, SSO, integration,
+  notification, or provider semantics are inferred.
 - Basis: current `apps/learner-web/app/progress`, `settings`, `lib/routes.ts`,
   `components/progress-runtime.tsx`, `components/settings-runtime.tsx`, and
   `components/theme-control.tsx`.
 - Consequence: `GAP-PROG-001`, `GAP-SET-001`, and `GAP-THEME-001` are no longer
   unresolved/gap-blocked labels for these candidates. Exact-release runtime,
   accessibility, responsive, and visual-comparison evidence remains pending.
+
+## `DEC-016` — Reconcile settings screen IDs with the current registry
+
+- Status: accepted reconciliation on 2026-09-04.
+- Decision: the current knowledge graph, learner-product screen family, and
+  `apps/learner-web/app/lib/settings-registry.ts` are authoritative: `SET-01`
+  is verified account, `SET-02` is appearance, `SET-03` is Learning Setup,
+  `SET-04` is Security/Privacy, and `SET-05` is Session.
+- Resolution: older references in this workflow that assigned the final two
+  settings capabilities differently are normalized to this mapping. This is an
+  identifier reconciliation only; it does not introduce new protected
+  business semantics.
 
 ## Current status register
 
@@ -193,6 +211,6 @@ IMPROVE` uses one activity route and canonical evidence/progress lifecycle.
 | `GAP-ENR-001`     | superseded by `DEC-014`                | prove accepted policy on the exact immutable staging release                             |
 | `GAP-MEDIA-001`   | unresolved / capability blocked        | approve media/transcript/caption source and prove real playback/evidence                 |
 | `GAP-SET-001`     | `implementation_candidate`             | compare bounded current settings behavior with spec; run exact-release validation        |
-| `GAP-THEME-001`   | `runtime_pending` for device-local use | test first paint, focus, storage failure, and both themes; do not infer account sync     |
+| `GAP-THEME-001`   | `runtime_pending` for browser-local mode/appearance use | test first paint, focus, storage failure, advanced variants, and both themes; do not infer account sync |
 | `GAP-PROG-001`    | `runtime_pending`                      | prove canonical projection states and Module 2-4 topology-only behavior on exact release |
 | `GAP-RUNTIME-001` | unresolved / release evidence pending  | exact-SHA deploy and rerun applicable runtime gates                                      |

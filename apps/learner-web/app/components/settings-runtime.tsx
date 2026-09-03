@@ -28,6 +28,12 @@ import {
   offlineReadNotice,
 } from "../lib/offline-read-cache";
 import { ROUTES } from "../lib/routes";
+import {
+  getSettingsSectionByAnchor,
+  SETTINGS_SECTIONS,
+  type SettingsSection,
+  type SettingsSectionIconName,
+} from "../lib/settings-registry";
 import { hasMembershipRole } from "./membership-availability";
 import {
   availableLocalStorage,
@@ -121,43 +127,16 @@ export function createSettingsDraftCleanupController(
 
 type SettingsHeadingRef = RefObject<HTMLHeadingElement | null>;
 
+type SettingsFocusTargets = {
+  identity?: SettingsHeadingRef;
+  learningSetup?: SettingsHeadingRef;
+  routeEntry?: SettingsHeadingRef;
+};
+
 const initialSettingsResources: SettingsResources = {
   me: { status: "loading" },
   onboarding: { status: "loading" },
 };
-
-const settingsSections = [
-  {
-    id: "verified-account",
-    label: "Verified account",
-    detail: "Your identity and verification",
-    icon: UserRound,
-  },
-  {
-    id: "learning-setup",
-    label: "Learning setup",
-    detail: "Your learning preferences",
-    icon: GraduationCap,
-  },
-  {
-    id: "appearance",
-    label: "Appearance",
-    detail: "Theme and display",
-    icon: MonitorCog,
-  },
-  {
-    id: "security-privacy",
-    label: "Security & privacy",
-    detail: "Account and privacy",
-    icon: ShieldCheck,
-  },
-  {
-    id: "session",
-    label: "Session",
-    detail: "Sign out",
-    icon: KeyRound,
-  },
-] as const;
 
 function isSessionExpired(error: unknown): boolean {
   return error instanceof ApiError && error.status === 401;
@@ -210,7 +189,17 @@ function formatWeeklyTime(value: number | null): string {
   return `${value} minute${value === 1 ? "" : "s"}`;
 }
 
-function SectionIcon({ icon: Icon }: { icon: typeof UserRound }) {
+const settingsSectionIcons: Record<SettingsSectionIconName, typeof UserRound> =
+  {
+    account: UserRound,
+    appearance: MonitorCog,
+    learning: GraduationCap,
+    security: ShieldCheck,
+    session: KeyRound,
+  };
+
+function SectionIcon({ icon }: { icon: SettingsSectionIconName }) {
+  const Icon = settingsSectionIcons[icon];
   return (
     <span className={styles.cardIcon} aria-hidden="true">
       <Icon size={20} strokeWidth={1.8} />
@@ -219,26 +208,20 @@ function SectionIcon({ icon: Icon }: { icon: typeof UserRound }) {
 }
 
 function SectionHeader({
-  id,
-  icon,
-  title,
-  description,
+  section,
   headingRef,
 }: {
-  id: string;
-  icon: typeof UserRound;
-  title: string;
-  description: string;
+  section: SettingsSection;
   headingRef?: SettingsHeadingRef;
 }) {
   return (
     <div className={styles.cardHeader}>
-      <SectionIcon icon={icon} />
+      <SectionIcon icon={section.icon} />
       <div className={styles.cardHeaderCopy}>
-        <h2 ref={headingRef} id={id} tabIndex={-1}>
-          {title}
+        <h2 ref={headingRef} id={section.headingId} tabIndex={-1}>
+          {section.title}
         </h2>
-        <p>{description}</p>
+        <p>{section.description}</p>
       </div>
     </div>
   );
@@ -306,10 +289,12 @@ function ResourceErrorCard({
 }
 
 function IdentityCard({
+  section,
   resource,
   onRetry,
   headingRef,
 }: {
+  section: Extract<SettingsSection, { id: "verified-account" }>;
   resource: SettingsResource<MeResponse>;
   onRetry: () => void;
   headingRef?: SettingsHeadingRef;
@@ -317,8 +302,8 @@ function IdentityCard({
   return (
     <section
       className={styles.card}
-      id="verified-account"
-      aria-labelledby="verified-account-title"
+      id={section.anchor}
+      aria-labelledby={section.headingId}
     >
       {resource.status === "loading" ? (
         <div
@@ -327,13 +312,7 @@ function IdentityCard({
           aria-live="polite"
           aria-busy="true"
         >
-          <SectionHeader
-            id="verified-account-title"
-            icon={UserRound}
-            title="Verified account"
-            description="Your identity and verification details."
-            headingRef={headingRef}
-          />
+          <SectionHeader section={section} headingRef={headingRef} />
           <span className={styles.srOnly}>Verified account loading</span>
           <div className={styles.loadingFacts} aria-hidden="true">
             <span />
@@ -344,8 +323,8 @@ function IdentityCard({
         </div>
       ) : resource.status === "error" ? (
         <ResourceErrorCard
-          title="Verified account"
-          headingId="verified-account-title"
+          title={section.title}
+          headingId={section.headingId}
           resource="identity"
           error={resource.error}
           onRetry={onRetry}
@@ -353,13 +332,7 @@ function IdentityCard({
         />
       ) : (
         <>
-          <SectionHeader
-            id="verified-account-title"
-            icon={UserRound}
-            title="Verified account"
-            description="Your identity and verification details."
-            headingRef={headingRef}
-          />
+          <SectionHeader section={section} headingRef={headingRef} />
           <Facts
             facts={[
               {
@@ -391,10 +364,12 @@ function IdentityCard({
 }
 
 function LearningSetupCard({
+  section,
   resource,
   onRetry,
   headingRef,
 }: {
+  section: Extract<SettingsSection, { id: "learning-setup" }>;
   resource: SettingsResource<OnboardingResponse>;
   onRetry: () => void;
   headingRef?: SettingsHeadingRef;
@@ -402,8 +377,8 @@ function LearningSetupCard({
   return (
     <section
       className={`${styles.card} ${styles.cardWide}`}
-      id="learning-setup"
-      aria-labelledby="learning-setup-title"
+      id={section.anchor}
+      aria-labelledby={section.headingId}
     >
       {resource.status === "loading" ? (
         <div
@@ -412,13 +387,7 @@ function LearningSetupCard({
           aria-live="polite"
           aria-busy="true"
         >
-          <SectionHeader
-            id="learning-setup-title"
-            icon={GraduationCap}
-            title="Learning setup"
-            description="Your learning preferences."
-            headingRef={headingRef}
-          />
+          <SectionHeader section={section} headingRef={headingRef} />
           <span className={styles.srOnly}>Learning setup loading</span>
           <div className={styles.loadingFacts} aria-hidden="true">
             <span />
@@ -429,8 +398,8 @@ function LearningSetupCard({
         </div>
       ) : resource.status === "error" ? (
         <ResourceErrorCard
-          title="Learning setup"
-          headingId="learning-setup-title"
+          title={section.title}
+          headingId={section.headingId}
           resource="learning setup"
           error={resource.error}
           onRetry={onRetry}
@@ -438,13 +407,7 @@ function LearningSetupCard({
         />
       ) : (
         <>
-          <SectionHeader
-            id="learning-setup-title"
-            icon={GraduationCap}
-            title="Learning setup"
-            description="Your learning preferences."
-            headingRef={headingRef}
-          />
+          <SectionHeader section={section} headingRef={headingRef} />
           <Facts
             className={styles.learningFacts}
             facts={[
@@ -493,23 +456,19 @@ function LearningSetupCard({
 }
 
 function LearningSetupGate({
+  section,
   headingRef,
 }: {
+  section: Extract<SettingsSection, { id: "learning-setup" }>;
   headingRef?: SettingsHeadingRef;
 }) {
   return (
     <section
       className={styles.card + " " + styles.cardWide}
-      id="learning-setup"
-      aria-labelledby="learning-setup-title"
+      id={section.anchor}
+      aria-labelledby={section.headingId}
     >
-      <SectionHeader
-        id="learning-setup-title"
-        icon={GraduationCap}
-        title="Learning setup"
-        description="Your learning preferences."
-        headingRef={headingRef}
-      />
+      <SectionHeader section={section} headingRef={headingRef} />
       <p className={styles.gatedCopy}>
         Learning setup will appear after learner access is confirmed.
       </p>
@@ -595,25 +554,28 @@ function MembershipBoundary({
   );
 }
 
-function AppearanceCard() {
+function AppearanceCard({
+  section,
+}: {
+  section: Extract<SettingsSection, { id: "appearance" }>;
+}) {
   return (
     <section
       className={`${styles.card} ${styles.cardWide}`}
-      id="appearance"
-      aria-labelledby="appearance-title"
+      id={section.anchor}
+      aria-labelledby={section.headingId}
     >
-      <SectionHeader
-        id="appearance-title"
-        icon={MonitorCog}
-        title="Appearance"
-        description="Choose how Authority Closers LMS looks."
-      />
+      <SectionHeader section={section} />
       <AppearanceControl />
     </section>
   );
 }
 
-function SecurityPrivacyCard() {
+function SecurityPrivacyCard({
+  section,
+}: {
+  section: Extract<SettingsSection, { id: "security-privacy" }>;
+}) {
   const links = [
     { href: ROUTES.forgotPassword, label: "Password recovery" },
     { href: ROUTES.terms, label: "Terms" },
@@ -623,15 +585,10 @@ function SecurityPrivacyCard() {
   return (
     <section
       className={`${styles.card} ${styles.cardWide}`}
-      id="security-privacy"
-      aria-labelledby="security-privacy-title"
+      id={section.anchor}
+      aria-labelledby={section.headingId}
     >
-      <SectionHeader
-        id="security-privacy-title"
-        icon={ShieldCheck}
-        title="Security & privacy"
-        description="Review important policies and account support."
-      />
+      <SectionHeader section={section} />
       <nav
         className={styles.policyLinks}
         aria-label="Security and privacy links"
@@ -647,24 +604,78 @@ function SecurityPrivacyCard() {
   );
 }
 
-function SessionCard({ api }: { api: LearnerApi }) {
+function SessionCard({
+  api,
+  section,
+}: {
+  api: LearnerApi;
+  section: Extract<SettingsSection, { id: "session" }>;
+}) {
   return (
     <section
       className={`${styles.card} ${styles.cardWide} ${styles.sessionCard}`}
-      id="session"
-      aria-labelledby="session-title"
+      id={section.anchor}
+      aria-labelledby={section.headingId}
     >
       <div className={styles.sessionCopy}>
-        <SectionHeader
-          id="session-title"
-          icon={KeyRound}
-          title="Session"
-          description="Sign out of your account on this device."
-        />
+        <SectionHeader section={section} />
       </div>
       <SignOutControl api={api} className={styles.signOutButton} />
     </section>
   );
+}
+
+function SettingsSectionCard({
+  section,
+  resources,
+  api,
+  onRetry,
+  learnerAccessConfirmed,
+  focusTargets,
+}: {
+  section: SettingsSection;
+  resources: SettingsResources;
+  api: LearnerApi;
+  onRetry: (resource: SettingsResourceKey) => void;
+  learnerAccessConfirmed: boolean;
+  focusTargets?: SettingsFocusTargets;
+}) {
+  switch (section.id) {
+    case "verified-account":
+      return (
+        <IdentityCard
+          section={section}
+          resource={resources.me}
+          onRetry={() => onRetry("me")}
+          headingRef={focusTargets?.identity}
+        />
+      );
+    case "appearance":
+      return <AppearanceCard section={section} />;
+    case "learning-setup":
+      return learnerAccessConfirmed ? (
+        <LearningSetupCard
+          section={section}
+          resource={resources.onboarding}
+          onRetry={() => onRetry("onboarding")}
+          headingRef={focusTargets?.learningSetup}
+        />
+      ) : (
+        <LearningSetupGate
+          section={section}
+          headingRef={focusTargets?.learningSetup}
+        />
+      );
+    case "security-privacy":
+      return <SecurityPrivacyCard section={section} />;
+    case "session":
+      return <SessionCard section={section} api={api} />;
+  }
+}
+
+function focusSettingsHeading(headingId: string) {
+  if (typeof document === "undefined") return;
+  document.getElementById(headingId)?.focus();
 }
 
 export function SettingsView({
@@ -680,11 +691,7 @@ export function SettingsView({
   onRetry: (resource: SettingsResourceKey) => void;
   draftCleanup?: SettingsDraftCleanupState;
   onRetryCleanup?: () => void;
-  focusTargets?: {
-    identity?: SettingsHeadingRef;
-    learningSetup?: SettingsHeadingRef;
-    routeEntry?: SettingsHeadingRef;
-  };
+  focusTargets?: SettingsFocusTargets;
 }) {
   if (resources.me.status === "error" && isSessionExpired(resources.me.error)) {
     return (
@@ -739,14 +746,15 @@ export function SettingsView({
         <p className={styles.indexDescription}>
           Manage your account, learning setup, and preferences.
         </p>
-        <nav className={styles.indexNav}>
-          {settingsSections.map((section) => {
-            const Icon = section.icon;
+        <nav className={styles.indexNav} aria-label="Settings sections">
+          {SETTINGS_SECTIONS.map((section) => {
+            const Icon = settingsSectionIcons[section.icon];
             return (
               <a
                 className={styles.indexLink}
-                href={`#${section.id}`}
+                href={`#${section.anchor}`}
                 key={section.id}
+                onClick={() => focusSettingsHeading(section.headingId)}
               >
                 <Icon size={20} strokeWidth={1.8} aria-hidden="true" />
                 <span>
@@ -760,23 +768,17 @@ export function SettingsView({
       </aside>
 
       <div className={styles.settingsContent}>
-        <IdentityCard
-          resource={resources.me}
-          onRetry={() => onRetry("me")}
-          headingRef={focusTargets?.identity}
-        />
-        {learnerAccessConfirmed ? (
-          <LearningSetupCard
-            resource={resources.onboarding}
-            onRetry={() => onRetry("onboarding")}
-            headingRef={focusTargets?.learningSetup}
+        {SETTINGS_SECTIONS.map((section) => (
+          <SettingsSectionCard
+            key={section.id}
+            section={section}
+            resources={resources}
+            api={api}
+            onRetry={onRetry}
+            learnerAccessConfirmed={learnerAccessConfirmed}
+            focusTargets={focusTargets}
           />
-        ) : (
-          <LearningSetupGate headingRef={focusTargets?.learningSetup} />
-        )}
-        <AppearanceCard />
-        <SecurityPrivacyCard />
-        <SessionCard api={api} />
+        ))}
       </div>
     </div>
   );
@@ -862,6 +864,11 @@ export function SettingsRuntime({
 
   useEffect(() => {
     if (document.activeElement === document.body) {
+      const section = getSettingsSectionByAnchor(window.location.hash.slice(1));
+      if (section) {
+        document.getElementById(section.headingId)?.focus();
+        return;
+      }
       routeEntryHeadingRef.current?.focus();
     }
   }, []);

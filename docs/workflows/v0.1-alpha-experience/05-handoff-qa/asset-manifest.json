@@ -128,12 +128,13 @@
     },
     {
       "screen_id": "SET-04",
-      "source_asset_ids": ["AUTH-02"],
+      "source_asset_ids": ["SHELL-01", "SHELL-02"],
       "status": "implementation_candidate",
       "authority_source": [
         "apps/learner-web/app/components/settings-runtime.tsx",
         "apps/learner-web/app/forgot-password/page.tsx",
-        "apps/learner-web/app/session-expired/page.tsx"
+        "apps/learner-web/app/privacy/page.tsx",
+        "apps/learner-web/app/terms/page.tsx"
       ]
     },
     {
@@ -141,8 +142,8 @@
       "source_asset_ids": ["SHELL-01", "SHELL-02"],
       "status": "implementation_candidate",
       "authority_source": [
-        "apps/learner-web/app/privacy/page.tsx",
-        "apps/learner-web/app/terms/page.tsx"
+        "apps/learner-web/app/components/settings-runtime.tsx",
+        "apps/learner-web/app/session-expired/page.tsx"
       ]
     },
     {

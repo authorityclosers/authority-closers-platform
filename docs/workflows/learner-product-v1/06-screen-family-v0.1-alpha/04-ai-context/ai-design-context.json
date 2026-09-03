@@ -39,7 +39,7 @@
   "locked_decisions": [
     "Dashboard and My Learning are distinct jobs and routes.",
     "Desktop uses a persistent learner rail; compact mobile uses Home, Learning, Discover, Progress, More.",
-    "The learner shell is light-default; Dark and System are device-local presentation variants.",
+    "The learner shell is light-default; Light/Dark/System are device-local theme modes, and named presets plus accent, density, and motion are browser-local presentation variants.",
     "A public program preview is read-only; explicit authenticated free enrollment is server-owned.",
     "Program/module/activity access and prerequisite locks are server-authorized; route possession is not access.",
     "Watch -> Reflect -> Implement -> Review -> Improve is the first-slice activity loop.",
@@ -58,7 +58,7 @@
     "new media/caption/transcript provider behavior",
     "B2B manager, organization membership, tenant switching, or white-label UI",
     "live coaching, appointments, deadlines, reminders, cadence, or schedule commitments",
-    "account-level or cross-device theme synchronization",
+    "account-level, cross-device, tenant, or learner/admin theme and appearance synchronization",
     "analytics as canonical progress, payment, access, notification, certificate, or evidence state",
     "protected resource existence from a denied/locked response"
   ],

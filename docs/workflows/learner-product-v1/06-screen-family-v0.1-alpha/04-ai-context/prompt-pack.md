@@ -32,8 +32,9 @@ gap with plausible product behavior.
 > Focus Not Obscured, Target Size Minimum, keyboard order, accessible names,
 > error association, status announcements, 200% zoom/reflow, 390px mobile,
 > safe areas, reduced motion, captions/transcript status, and non-color
-> communication. Verify Light/Dark/System and forced/high-contrast behavior
-> without changing access, progress, consent, notification, or session state.
+> communication. Verify Light/Dark/System theme mode, named presets, accent,
+> density, motion, and forced/high-contrast behavior without changing account,
+> tenant, authority, access, progress, consent, notification, or session state.
 > Report evidence and gaps; do not claim compliance without observed test
 > results.
 

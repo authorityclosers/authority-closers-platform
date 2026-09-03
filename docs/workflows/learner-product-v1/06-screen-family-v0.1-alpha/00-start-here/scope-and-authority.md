@@ -22,7 +22,8 @@ screen-family contract, not an implementation claim.
 - Login, registration, verification, recovery, OAuth callback, onboarding,
   session expiry, offline/stale, and retry states.
 - Profile, private avatar selection/crop, and safe replacement semantics.
-- Settings sections and Light/Dark/System presentation variants.
+- Settings sections and Light/Dark/System theme mode with named preset, accent,
+  density, and motion presentation variants.
 - Full state matrix, accessibility/recovery criteria, and implementation handoff.
 
 ## Explicitly out of scope or gated
@@ -40,7 +41,9 @@ The package must not invent or activate:
 - live sessions, coach appointments, deadlines, reminders with schedule
   authority, or calendar commitments;
 - analytics as canonical progress, access, payment, or completion state;
-- account-level, cross-device, tenant, or learner/admin theme synchronization;
+- account-level, cross-device, tenant, or learner/admin theme/appearance
+  synchronization; named presets and accent, density, and motion remain
+  browser-local presentation state only;
 - any direct database or production VPS operation.
 
 ## Authority hierarchy used in this package

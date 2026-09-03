@@ -176,34 +176,42 @@
 
 ## `JRN-04` — Profile, settings, and appearance
 
-### `STG-SET-01` Profile
+### `STG-SET-01` Account
 
-- `SET-01` now has a current `/settings` route and implementation candidate for
-  Appearance, verified account facts, learning profile, and session actions.
-- `SET-03` shows the bounded learning profile and routes edits through the
-  existing revisioned `/onboarding` flow rather than inventing a second write
-  contract.
+- `SET-01` has a current `/settings` route and implementation candidate for
+  verified account facts and bounded profile context.
 - Display identity fields that are not backed by an approved mutation API are
   read-only.
 
 ### `STG-SET-02` Theme
 
-1. `SET-02` offers Light, Dark, and System.
+1. `SET-02` offers Light, Dark, and System as theme mode choices plus bounded
+   named presets, accent palette, display density, and motion preferences.
 2. System follows the active user-agent/OS color preference.
 3. The selection changes semantic tokens across the current learner surface;
    content meaning, completion, and status never change with theme.
-4. The current implementation stores only the non-sensitive device-local
-   choice. Cross-device and learner/admin synchronization are not authorized
-   by this package. Exact browser/runtime proof remains pending.
+4. The current implementation stores only non-sensitive browser-local
+   appearance choices. Cross-device, account, tenant, and learner/admin
+   synchronization are not authorized by this package. Exact browser/runtime
+   proof remains pending.
 
-### `STG-SET-03` Security and privacy
+### `STG-SET-03` Learning setup
 
-- The current settings candidate supports verified-account context and
-  sign-out. Password recovery remains on the existing approved identity route;
+- `SET-03` shows the bounded learning profile and routes edits through the
+  existing revisioned `/onboarding` flow rather than inventing a second write
+  contract.
+
+### `STG-SET-04` Security and privacy
+
+- `SET-04` exposes only the existing password recovery and Terms/Privacy routes;
   no additional settings mutation is inferred.
-- Privacy may link only to the existing Terms and Privacy pages. This package
-  defines no deletion workflow, retention command, MFA, SSO, or connected-app
-  behavior.
+- This package defines no deletion workflow, retention command, MFA, SSO, or
+  connected-app behavior.
+
+### `STG-SET-05` Session
+
+- `SET-05` exposes current session facts and same-origin sign-out with existing
+  session-expiry recovery. Session revocation remains canonical.
 
 ## `JRN-05` — Resilient Edge and iOS PWA use
 
