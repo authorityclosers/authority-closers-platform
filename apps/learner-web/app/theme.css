@@ -118,13 +118,13 @@ html[data-theme="dark"][data-accent="indigo"] {
 
 /* 3. Emerald (Signal Closer Green) */
 html[data-accent="emerald"] {
-  --theme-action: #059669;
-  --theme-action-hover: #047857;
+  --theme-action: #047857;
+  --theme-action-hover: #065f46;
   --theme-action-text: #ffffff;
-  --theme-focus: #047857;
+  --theme-focus: #065f46;
   --theme-info-surface: #ecfdf5;
   --theme-info-text: #065f46;
-  --theme-accent-indicator: #059669;
+  --theme-accent-indicator: #047857;
 }
 
 html[data-theme="dark"][data-accent="emerald"] {
@@ -139,13 +139,13 @@ html[data-theme="dark"][data-accent="emerald"] {
 
 /* 4. Amber (Executive Warmth & Authority) */
 html[data-accent="amber"] {
-  --theme-action: #d97706;
-  --theme-action-hover: #b45309;
+  --theme-action: #b45309;
+  --theme-action-hover: #92400e;
   --theme-action-text: #ffffff;
-  --theme-focus: #b45309;
+  --theme-focus: #92400e;
   --theme-info-surface: #fffbeb;
   --theme-info-text: #92400e;
-  --theme-accent-indicator: #d97706;
+  --theme-accent-indicator: #b45309;
 }
 
 html[data-theme="dark"][data-accent="amber"] {
@@ -293,28 +293,47 @@ html[data-reduced-motion="true"],
 html[data-motion="reduced"] {
   --theme-transition-duration: 0.001ms;
   --theme-animation-duration: 0.001ms;
+  scroll-behavior: auto !important;
 }
 
-html[data-reduced-motion="true"] *,
-html[data-reduced-motion="true"] *::before,
-html[data-reduced-motion="true"] *::after,
-html[data-motion="reduced"] *,
-html[data-motion="reduced"] *::before,
-html[data-motion="reduced"] *::after {
-  animation-duration: 0.001ms !important;
-  animation-iteration-count: 1 !important;
-  transition-duration: 0.001ms !important;
+html[data-reduced-motion="true"] .site-frame--learner,
+html[data-reduced-motion="true"] .site-frame--learner *,
+html[data-reduced-motion="true"] .site-frame--learner *::before,
+html[data-reduced-motion="true"] .site-frame--learner *::after,
+html[data-motion="reduced"] .site-frame--learner,
+html[data-motion="reduced"] .site-frame--learner *,
+html[data-motion="reduced"] .site-frame--learner *::before,
+html[data-motion="reduced"] .site-frame--learner *::after {
+  animation: none !important;
+  transition: none !important;
   scroll-behavior: auto !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  html:not([data-motion="full"]) *,
-  html:not([data-motion="full"]) *::before,
-  html:not([data-motion="full"]) *::after {
-    animation-duration: 0.001ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
+  html:not([data-motion="full"]) .site-frame--learner,
+  html:not([data-motion="full"]) .site-frame--learner *,
+  html:not([data-motion="full"]) .site-frame--learner *::before,
+  html:not([data-motion="full"]) .site-frame--learner *::after {
+    animation: none !important;
+    transition: none !important;
     scroll-behavior: auto !important;
+  }
+}
+
+html[data-reduced-motion="true"]
+  .site-frame--learner
+  .learner-help-chatbox__trigger:hover,
+html[data-motion="reduced"]
+  .site-frame--learner
+  .learner-help-chatbox__trigger:hover {
+  transform: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-motion="full"])
+    .site-frame--learner
+    .learner-help-chatbox__trigger:hover {
+    transform: none !important;
   }
 }
 

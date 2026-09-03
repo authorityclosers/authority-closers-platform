@@ -80,6 +80,19 @@ function selectorBlock(selector: string): string {
   return match[1];
 }
 
+function themeSelectorBlock(selector: string): string {
+  const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = themeStyles.match(
+    new RegExp(`${escapedSelector}\\s*\\{([^}]*)\\}`),
+  );
+
+  if (!match?.[1]) {
+    throw new Error(`Missing theme selector block ${selector}`);
+  }
+
+  return match[1];
+}
+
 function expectSemanticPairing({
   selector,
   foreground,
@@ -164,6 +177,57 @@ describe("learner color tokens", () => {
         ).toBeGreaterThanOrEqual(4.5);
       }
     }
+  });
+
+  it("keeps light Emerald and Amber primary button text at WCAG AA", () => {
+    const lightAccentTokens = {
+      emerald: { action: "#047857", hover: "#065f46" },
+      amber: { action: "#b45309", hover: "#92400e" },
+    } as const;
+
+    for (const [accent, tokens] of Object.entries(lightAccentTokens)) {
+      const block = themeSelectorBlock(`html[data-accent="${accent}"]`);
+      expect(block).toContain(`--theme-action: ${tokens.action}`);
+      expect(block).toContain(`--theme-action-hover: ${tokens.hover}`);
+      expect(
+        contrastRatio("#ffffff", tokens.action),
+        `${accent} action white text contrast`,
+      ).toBeGreaterThanOrEqual(4.5);
+      expect(
+        contrastRatio("#ffffff", tokens.hover),
+        `${accent} hover white text contrast`,
+      ).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it("routes learner primary button hover through the selected appearance token", () => {
+    const clarity = readFileSync(
+      new URL("../learner-clarity.css", import.meta.url),
+      "utf8",
+    );
+
+    expect(clarity).toContain(
+      "background: var(--theme-action-hover, var(--color-cobalt-hover));",
+    );
+    expect(clarity).toContain("background: var(--theme-action, #155eef);");
+    expect(clarity).toContain(
+      "background: var(--theme-action-hover, #155eef);",
+    );
+  });
+
+  it("disables learner animations without removing layout transforms", () => {
+    expect(themeStyles).toContain(
+      'html[data-reduced-motion="true"] .site-frame--learner *',
+    );
+    expect(themeStyles).toContain("animation: none !important;");
+    expect(themeStyles).toContain("transition: none !important;");
+    expect(themeStyles).toContain("scroll-behavior: auto !important;");
+    expect(themeStyles).toContain(
+      ".learner-help-chatbox__trigger:hover {\n  transform: none !important;",
+    );
+    expect(themeStyles).not.toContain(
+      "*::after {\n  animation: none !important;\n  transition: none !important;\n  transform: none !important;",
+    );
   });
 
   it("covers dark form, state, navigation, and mobile overflow regressions", () => {

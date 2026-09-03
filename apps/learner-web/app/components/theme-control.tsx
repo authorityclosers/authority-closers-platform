@@ -36,6 +36,10 @@ export type MotionPreference = "system" | "reduced" | "full";
 
 export type EffectiveTheme = Exclude<ThemePreference, "system">;
 
+type AppearancePreferenceKey = keyof AppearancePreferences;
+
+const sessionAppearanceOverrides: Partial<AppearancePreferences> = {};
+
 export interface AppearancePreferences {
   theme: ThemePreference;
   accent: AccentPreference;
@@ -163,6 +167,49 @@ function getLocalStorage(): Storage | null {
   return null;
 }
 
+function readBootstrapAppearancePreferences(): Partial<AppearancePreferences> {
+  if (typeof document === "undefined") {
+    return {};
+  }
+
+  const dataset = document.documentElement.dataset;
+  const bootstrap: Partial<AppearancePreferences> = {};
+
+  if (
+    dataset.themePreference === "light" ||
+    dataset.themePreference === "dark" ||
+    dataset.themePreference === "system"
+  ) {
+    bootstrap.theme = dataset.themePreference;
+  } else if (dataset.theme === "light" || dataset.theme === "dark") {
+    bootstrap.theme = dataset.theme;
+  }
+
+  if (
+    dataset.accent === "cobalt" ||
+    dataset.accent === "indigo" ||
+    dataset.accent === "emerald" ||
+    dataset.accent === "amber" ||
+    dataset.accent === "slate"
+  ) {
+    bootstrap.accent = dataset.accent;
+  }
+
+  if (dataset.density === "comfortable" || dataset.density === "compact") {
+    bootstrap.density = dataset.density;
+  }
+
+  if (
+    dataset.motion === "system" ||
+    dataset.motion === "reduced" ||
+    dataset.motion === "full"
+  ) {
+    bootstrap.motion = dataset.motion;
+  }
+
+  return bootstrap;
+}
+
 export function readAppearancePreferences(
   fallback: Partial<AppearancePreferences> = {},
 ): AppearancePreferences {
@@ -171,56 +218,55 @@ export function readAppearancePreferences(
     accent: "cobalt",
     density: "comfortable",
     motion: "system",
+    ...readBootstrapAppearancePreferences(),
     ...fallback,
   };
 
   const storage = getLocalStorage();
 
-  let theme = defaults.theme;
-  try {
-    theme = normalizeThemePreference(storage?.getItem(THEME_STORAGE_KEY));
-  } catch {
-    const current =
-      typeof document !== "undefined"
-        ? document.documentElement.dataset.themePreference
-        : undefined;
-    theme = normalizeThemePreference(current ?? defaults.theme);
-  }
+  const readStored = <T,>(
+    key: string,
+    fallbackValue: T,
+    normalize: (value: unknown) => T,
+  ): T => {
+    if (!storage) {
+      return fallbackValue;
+    }
+    try {
+      const stored = storage.getItem(key);
+      return stored == null ? fallbackValue : normalize(stored);
+    } catch {
+      return fallbackValue;
+    }
+  };
 
-  let accent = defaults.accent;
-  try {
-    accent = normalizeAccentPreference(storage?.getItem(ACCENT_STORAGE_KEY));
-  } catch {
-    const current =
-      typeof document !== "undefined"
-        ? document.documentElement.dataset.accent
-        : undefined;
-    accent = normalizeAccentPreference(current ?? defaults.accent);
-  }
+  const read = {
+    theme: readStored(
+      THEME_STORAGE_KEY,
+      defaults.theme,
+      normalizeThemePreference,
+    ),
+    accent: readStored(
+      ACCENT_STORAGE_KEY,
+      defaults.accent,
+      normalizeAccentPreference,
+    ),
+    density: readStored(
+      DENSITY_STORAGE_KEY,
+      defaults.density,
+      normalizeDensityPreference,
+    ),
+    motion: readStored(
+      MOTION_STORAGE_KEY,
+      defaults.motion,
+      normalizeMotionPreference,
+    ),
+  } satisfies AppearancePreferences;
 
-  let density = defaults.density;
-  try {
-    density = normalizeDensityPreference(storage?.getItem(DENSITY_STORAGE_KEY));
-  } catch {
-    const current =
-      typeof document !== "undefined"
-        ? document.documentElement.dataset.density
-        : undefined;
-    density = normalizeDensityPreference(current ?? defaults.density);
-  }
-
-  let motion = defaults.motion;
-  try {
-    motion = normalizeMotionPreference(storage?.getItem(MOTION_STORAGE_KEY));
-  } catch {
-    const current =
-      typeof document !== "undefined"
-        ? document.documentElement.dataset.motion
-        : undefined;
-    motion = normalizeMotionPreference(current ?? defaults.motion);
-  }
-
-  return { theme, accent, density, motion };
+  return {
+    ...read,
+    ...sessionAppearanceOverrides,
+  };
 }
 
 export function applyAppearancePreferences(
@@ -292,6 +338,9 @@ export function saveAppearancePreferences(
         : current.motion,
   };
 
+  const changedKeys = (
+    Object.keys(preferences) as AppearancePreferenceKey[]
+  ).filter((key) => preferences[key] !== undefined);
   let storageOk = true;
   let reason: "storage_unavailable" | "quota_exceeded" = "storage_unavailable";
 
@@ -330,6 +379,19 @@ export function saveAppearancePreferences(
         reason = "storage_unavailable";
       }
     }
+  }
+
+  if (storageOk) {
+    for (const key of changedKeys) {
+      delete sessionAppearanceOverrides[key];
+    }
+  } else {
+    Object.assign(sessionAppearanceOverrides, {
+      ...(preferences.theme !== undefined ? { theme: next.theme } : {}),
+      ...(preferences.accent !== undefined ? { accent: next.accent } : {}),
+      ...(preferences.density !== undefined ? { density: next.density } : {}),
+      ...(preferences.motion !== undefined ? { motion: next.motion } : {}),
+    });
   }
 
   applyAppearancePreferences(next);
@@ -444,13 +506,13 @@ const accentOptions = [
   {
     value: "emerald" as const,
     label: "Emerald",
-    color: "#059669",
+    color: "#047857",
     description: "High signal",
   },
   {
     value: "amber" as const,
     label: "Amber",
-    color: "#d97706",
+    color: "#b45309",
     description: "Executive warmth",
   },
   {
@@ -724,9 +786,9 @@ export function ThemeControl({
                             : preset.accent === "indigo"
                               ? "#4f46e5"
                               : preset.accent === "emerald"
-                                ? "#059669"
+                                ? "#047857"
                                 : preset.accent === "amber"
-                                  ? "#d97706"
+                                  ? "#b45309"
                                   : "#334155",
                       }}
                       aria-hidden="true"

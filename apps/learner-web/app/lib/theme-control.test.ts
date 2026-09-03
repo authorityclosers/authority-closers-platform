@@ -173,8 +173,53 @@ describe("learner appearance preference", () => {
       mediaThrows: true,
     });
 
-    expect(root.dataset).toEqual({ theme: "light", themePreference: "light" });
+    expect(root.dataset).toEqual({
+      theme: "light",
+      themePreference: "light",
+    });
     expect(root.style).toEqual({ colorScheme: "light" });
+  });
+
+  it("preserves valid bootstrap appearance data when storage access throws", () => {
+    const source = readFileSync(
+      new URL("../../public/theme-init.js", import.meta.url),
+      "utf8",
+    );
+    const root = {
+      dataset: {
+        theme: "dark",
+        themePreference: "dark",
+        accent: "amber",
+        density: "compact",
+        motion: "reduced",
+        reducedMotion: "true",
+      } as Record<string, string>,
+      style: {},
+    };
+
+    runInNewContext(source, {
+      document: { documentElement: root },
+      window: {
+        localStorage: {
+          getItem: () => {
+            throw new Error("storage blocked");
+          },
+        },
+        matchMedia: (query: string) => ({
+          matches: query.includes("prefers-color-scheme"),
+        }),
+      },
+    });
+
+    expect(root.dataset).toEqual({
+      theme: "dark",
+      themePreference: "dark",
+      accent: "amber",
+      density: "compact",
+      motion: "reduced",
+      reducedMotion: "true",
+    });
+    expect(root.style).toEqual({ colorScheme: "dark" });
   });
 
   it("loads the CSP-compatible theme initializer before interactive code", () => {

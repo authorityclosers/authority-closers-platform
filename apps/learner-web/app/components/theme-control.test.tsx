@@ -43,6 +43,16 @@ describe("ThemeControl Component and Appearance Runtime", () => {
       });
     }
 
+    // A successful write clears any session-only overrides left by a prior
+    // quota/storage failure before this test establishes its own fixture.
+    saveAppearancePreferences({
+      theme: "light",
+      accent: "cobalt",
+      density: "comfortable",
+      motion: "system",
+    });
+    storageState = {};
+
     vi.stubGlobal("matchMedia", (query: string) => ({
       matches: false,
       media: query,
@@ -170,6 +180,100 @@ describe("ThemeControl Component and Appearance Runtime", () => {
     if (!result.ok) {
       expect(result.reason).toBe("quota_exceeded");
     }
+
+    expect(readAppearancePreferences()).toEqual({
+      theme: "dark",
+      accent: "emerald",
+      density: "compact",
+      motion: "reduced",
+    });
+  });
+
+  it("retains all requested session changes after a partial storage write", () => {
+    let writes = 0;
+    const partialMock = {
+      getItem: (key: string) => storageState[key] ?? null,
+      setItem: (key: string, value: string) => {
+        writes += 1;
+        if (writes === 2) {
+          const error = new Error("QuotaExceededError");
+          error.name = "QuotaExceededError";
+          throw error;
+        }
+        storageState[key] = value;
+      },
+      removeItem: () => {},
+      clear: () => {},
+      length: 0,
+      key: () => null,
+    };
+
+    vi.stubGlobal("localStorage", partialMock);
+    if (typeof window !== "undefined") {
+      Object.defineProperty(window, "localStorage", {
+        value: partialMock,
+        configurable: true,
+        writable: true,
+      });
+    }
+
+    const result = saveAppearancePreferences({
+      theme: "dark",
+      accent: "emerald",
+      density: "compact",
+      motion: "reduced",
+    });
+
+    expect(result).toEqual({ ok: false, reason: "quota_exceeded" });
+
+    expect(readAppearancePreferences()).toEqual({
+      theme: "dark",
+      accent: "emerald",
+      density: "compact",
+      motion: "reduced",
+    });
+  });
+
+  it("keeps the bootstrapped document appearance when storage access is blocked", () => {
+    const root = {
+      dataset: {
+        theme: "dark",
+        themePreference: "dark",
+        accent: "amber",
+        density: "compact",
+        motion: "reduced",
+        reducedMotion: "true",
+      } as Record<string, string>,
+      style: {} as Record<string, string>,
+    };
+    vi.stubGlobal("document", { documentElement: root });
+    const blockedStorage = {
+      getItem: () => {
+        throw new Error("SecurityError");
+      },
+      setItem: () => {
+        throw new Error("SecurityError");
+      },
+      removeItem: () => {},
+      clear: () => {},
+      length: 0,
+      key: () => null,
+    };
+    vi.stubGlobal("localStorage", blockedStorage);
+    if (typeof window !== "undefined") {
+      Object.defineProperty(window, "localStorage", {
+        value: blockedStorage,
+        configurable: true,
+        writable: true,
+      });
+    }
+
+    expect(readAppearancePreferences()).toEqual({
+      theme: "dark",
+      accent: "amber",
+      density: "compact",
+      motion: "reduced",
+    });
   });
 
   it("handles storage blocked errors gracefully", () => {
