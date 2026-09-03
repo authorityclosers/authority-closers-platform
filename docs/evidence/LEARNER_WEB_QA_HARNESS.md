@@ -61,10 +61,20 @@ the following implementation-facing surfaces:
 | `FLOW-CERT-01` | `CERT-01` | Certificate boundary |
 | `FLOW-RESILIENCE-01` | `SYS-01..04` | Loading, retry, offline, lock, and permission-denied semantics |
 
-For routes whose implementation shares one URL, the harness records each
-stable screen ID in `ROUTE_SPECS` while de-duplicating the actual geometry
-navigation. This keeps traceability without performing the same browser load
-five times for `ACT-01..05`.
+The route matrix uses the canonical `authority-closers-free-course` slug for
+the public preview, learner path, and module path. `ACT-01..05` retain five
+distinct activity IDs from the exact journey route evidence; the harness does
+not collapse them into one generic `/activity/activity-1` navigation.
+
+For local browser QA, those five activity reads are served by a deterministic
+context-scoped fixture. It returns the five ordered kinds
+(`VIDEO`, `REFLECTION`, `IMPLEMENTATION_CHALLENGE`, `REVIEW`, and `IMPROVE`)
+as independently openable `available` activity reads, while the learning
+projection remains explicitly `0 / 5` with no completed activity, draft,
+evidence, playback, or certificate result. The route handler records any
+non-GET learner API request and the matrix fails if the fixture attempts a
+mutation. This makes renderer coverage repeatable without manufacturing a
+server-authoritative completion or treating the fixture as production data.
 
 The route contract runs at exact reference widths `320`, `390`, `430`, `768`,
 `1024`, and `1440` CSS pixels. The checks cover:
@@ -79,6 +89,8 @@ The route contract runs at exact reference widths `320`, `390`, `430`, `768`,
 - `viewport-fit=cover` plus the app's top/bottom safe-area declarations;
 - all shared non-production surface states, including retryable/terminal
   errors, offline, permission denied, locked, partial, and success feedback;
+- all five current Module 1 activity kinds in their ready-to-work state at
+  every reference viewport, using the read-only fixture described above;
 - explicit registration consent gating for the Google action;
 - optional screenshot evidence at every reference viewport.
 
@@ -113,8 +125,9 @@ state simulation:
    and iOS Safari/PWA. A local Node 22 run is not Node 24 or staging proof.
 2. Candidate exact-SHA proof remains required for canonical `/home`, learning
    path/module/activity ready states, progress/locks, onboarding, settings,
-   and learner evidence mutations. The harness only asserts shell and named
-   presentation states without protected API data.
+   and learner evidence mutations. The harness's activity fixture proves
+   renderer and responsive behavior only; it does not replace protected API
+   reads or staging evidence.
 3. `MEDIA-01`, `AVATAR-01`, `CERT-01`, plan/notification delivery, and any
    provider-backed activation remain capability-gated. The harness does not
    activate or score these capabilities.
