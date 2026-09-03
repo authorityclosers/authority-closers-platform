@@ -10,8 +10,12 @@ import {
   ChevronDown,
   Compass,
   HelpCircle,
+  Info,
   LayoutDashboard,
   MoreHorizontal,
+  MessageCircle,
+  PanelLeftClose,
+  PanelLeftOpen,
   Search,
   Settings,
   User,
@@ -166,6 +170,14 @@ export function closeNotificationPopover(
   trigger?.focus();
 }
 
+export function closeHelpPopover(
+  setOpen: (open: boolean) => void,
+  trigger: Pick<HTMLButtonElement, "focus"> | null,
+): void {
+  setOpen(false);
+  trigger?.focus();
+}
+
 export type LearnerShellProps = {
   children?: React.ReactNode;
   current?: LearnerCurrent;
@@ -187,13 +199,49 @@ export function LearnerShell({
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [notificationPopoverOpen, setNotificationPopoverOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
   const moreButtonRef = useRef<HTMLButtonElement>(null);
   const accountButtonRef = useRef<HTMLButtonElement>(null);
   const accountMenuRef = useRef<HTMLDivElement>(null);
   const notificationButtonRef = useRef<HTMLButtonElement>(null);
   const notificationPopoverRef = useRef<HTMLDivElement>(null);
+  const helpWrapperRef = useRef<HTMLDivElement>(null);
+  const helpButtonRef = useRef<HTMLButtonElement>(null);
+  const helpPanelRef = useRef<HTMLDivElement>(null);
   const drawerRef = useRef<HTMLDivElement>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
+  const toastTimerRef = useRef<number | undefined>(undefined);
+
+  function showToast(message: string): void {
+    setToast(message);
+    if (toastTimerRef.current !== undefined) {
+      window.clearTimeout(toastTimerRef.current);
+    }
+    toastTimerRef.current = window.setTimeout(() => {
+      setToast(null);
+      toastTimerRef.current = undefined;
+    }, 3400);
+  }
+
+  function toggleSidebar(): void {
+    const nextCollapsed = !sidebarCollapsed;
+    setSidebarCollapsed(nextCollapsed);
+    showToast(
+      nextCollapsed
+        ? "Sidebar collapsed. Navigation labels remain available in tooltips."
+        : "Sidebar expanded.",
+    );
+  }
+
+  useEffect(
+    () => () => {
+      if (toastTimerRef.current !== undefined) {
+        window.clearTimeout(toastTimerRef.current);
+      }
+    },
+    [],
+  );
 
   // Close mobile drawer on route change or ESC; activate search on Cmd+K
   useEffect(() => {
@@ -211,6 +259,9 @@ export function LearnerShell({
             notificationButtonRef.current,
           );
         }
+        if (helpOpen) {
+          closeHelpPopover(setHelpOpen, helpButtonRef.current);
+        }
       } else if (
         (e.metaKey || e.ctrlKey) &&
         e.key.toLowerCase() === "k" &&
@@ -227,7 +278,7 @@ export function LearnerShell({
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [mobileDrawerOpen, accountMenuOpen, notificationPopoverOpen]);
+  }, [mobileDrawerOpen, accountMenuOpen, notificationPopoverOpen, helpOpen]);
 
   useEffect(() => {
     if (!mobileDrawerOpen) {
@@ -307,7 +358,7 @@ export function LearnerShell({
         !accountMenuRef.current?.contains(target) &&
         !accountButtonRef.current?.contains(target)
       ) {
-        setAccountMenuOpen(false);
+        closeAccountMenu(setAccountMenuOpen, accountButtonRef.current);
       }
     };
 
@@ -363,13 +414,38 @@ export function LearnerShell({
         !notificationPopoverRef.current?.contains(target) &&
         !notificationButtonRef.current?.contains(target)
       ) {
-        setNotificationPopoverOpen(false);
+        closeNotificationPopover(
+          setNotificationPopoverOpen,
+          notificationButtonRef.current,
+        );
       }
     };
 
     document.addEventListener("pointerdown", handlePointerDown);
     return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, [notificationPopoverOpen]);
+
+  useEffect(() => {
+    if (!helpOpen) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Node && !helpWrapperRef.current?.contains(target)) {
+        closeHelpPopover(setHelpOpen, helpButtonRef.current);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [helpOpen]);
+
+  useEffect(() => {
+    if (!helpOpen) return;
+    const first = helpPanelRef.current?.querySelector<HTMLElement>(
+      'button, a[href], [tabindex]:not([tabindex="-1"])',
+    );
+    first?.focus();
+  }, [helpOpen]);
 
   const isHome = current === "dashboard" || current === "home";
   const isLearning = current === "learning" || current === "course";
@@ -423,6 +499,7 @@ export function LearnerShell({
 
       {/* Desktop Persistent Sidebar */}
       <aside
+        id="learner-sidebar"
         className="learner-sidebar"
         aria-label="Learner workspace navigation"
       >
@@ -521,7 +598,7 @@ export function LearnerShell({
           <button
             type="button"
             className="sidebar-collapse-btn"
-            onClick={() => setSidebarCollapsed((c) => !c)}
+            onClick={toggleSidebar}
             aria-label={
               sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"
             }
@@ -541,6 +618,23 @@ export function LearnerShell({
       {/* Compact Utility Header */}
       <header className="learner-header">
         <div className="learner-header__inner">
+          <button
+            type="button"
+            className="learner-sidebar-toggle"
+            onClick={toggleSidebar}
+            aria-label={
+              sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"
+            }
+            aria-expanded={!sidebarCollapsed}
+            aria-controls="learner-sidebar"
+            title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {sidebarCollapsed ? (
+              <PanelLeftOpen size={18} aria-hidden="true" />
+            ) : (
+              <PanelLeftClose size={18} aria-hidden="true" />
+            )}
+          </button>
           <div className="learner-header__mobile-brand">
             <Link
               className="mobile-brand-link"
@@ -585,7 +679,14 @@ export function LearnerShell({
                 ref={notificationButtonRef}
                 onClick={() => {
                   setAccountMenuOpen(false);
-                  setNotificationPopoverOpen((open) => !open);
+                  setHelpOpen(false);
+                  const nextOpen = !notificationPopoverOpen;
+                  setNotificationPopoverOpen(nextOpen);
+                  if (nextOpen) {
+                    showToast(
+                      "Notification history is not connected in this workspace yet.",
+                    );
+                  }
                 }}
                 aria-expanded={notificationPopoverOpen}
                 aria-controls="learner-notifications-popover"
@@ -662,6 +763,7 @@ export function LearnerShell({
                 ref={accountButtonRef}
                 onClick={() => {
                   setNotificationPopoverOpen(false);
+                  setHelpOpen(false);
                   setAccountMenuOpen((open) => !open);
                 }}
                 aria-expanded={accountMenuOpen}
@@ -749,6 +851,96 @@ export function LearnerShell({
       {/* Main Content Surface */}
       {children}
 
+      {/* Help chatbox shell. Conversation state is intentionally not
+          fabricated until a support provider is connected. */}
+      <div className="learner-help-widget" ref={helpWrapperRef}>
+        <button
+          type="button"
+          className="learner-help-chatbox__trigger"
+          ref={helpButtonRef}
+          onClick={() => {
+            const nextOpen = !helpOpen;
+            setHelpOpen(nextOpen);
+            setNotificationPopoverOpen(false);
+            setAccountMenuOpen(false);
+            if (nextOpen) {
+              showToast("Help chat is ready; live chat is not connected yet.");
+            }
+          }}
+          aria-expanded={helpOpen}
+          aria-controls="learner-help-chatbox"
+          aria-haspopup="dialog"
+          aria-label="Open help chatbox"
+        >
+          <MessageCircle size={19} aria-hidden="true" />
+          <span>Help</span>
+        </button>
+
+        {helpOpen ? (
+          <div
+            id="learner-help-chatbox"
+            ref={helpPanelRef}
+            className="learner-help-chatbox"
+            role="dialog"
+            aria-modal="false"
+            aria-labelledby="learner-help-chatbox-title"
+            tabIndex={-1}
+          >
+            <div className="learner-help-chatbox__header">
+              <div>
+                <p className="kicker">Learner support</p>
+                <h2 id="learner-help-chatbox-title">How can we help?</h2>
+              </div>
+              <button
+                type="button"
+                className="learner-help-chatbox__close"
+                onClick={() => {
+                  closeHelpPopover(setHelpOpen, helpButtonRef.current);
+                }}
+                aria-label="Close help chatbox"
+              >
+                <X size={16} aria-hidden="true" />
+              </button>
+            </div>
+            <div className="learner-help-chatbox__body">
+              <div className="learner-help-chatbox__message">
+                <span
+                  className="learner-help-chatbox__avatar"
+                  aria-hidden="true"
+                >
+                  AC
+                </span>
+                <p>
+                  Live chat is not connected in this workspace yet. Send the
+                  learner support team a note and include the page you were on.
+                </p>
+              </div>
+              <a
+                className="learner-help-chatbox__email"
+                href={SUPPORT_MAILTO}
+                onClick={() => setHelpOpen(false)}
+              >
+                Email learner support{" "}
+                <ArrowUpRight size={14} aria-hidden="true" />
+              </a>
+            </div>
+          </div>
+        ) : null}
+      </div>
+
+      {toast ? (
+        <div
+          className="learner-toast-region"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          <div className="learner-toast" role="status">
+            <Info size={16} aria-hidden="true" />
+            <span>{toast}</span>
+          </div>
+        </div>
+      ) : null}
+
       {/* Mobile Bottom Navigation (Direction A: 5-items) */}
       <nav
         className="learner-bottom-nav"
@@ -785,6 +977,7 @@ export function LearnerShell({
           onClick={() => {
             setNotificationPopoverOpen(false);
             setAccountMenuOpen(false);
+            setHelpOpen(false);
             setMobileDrawerOpen((open) => !open);
           }}
           aria-expanded={mobileDrawerOpen}

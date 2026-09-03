@@ -9,6 +9,7 @@ import "./learner-clarity.css";
 import "./learning-loop-runtime.css";
 import "./course-surfaces.css";
 import "./theme.css";
+import "./learner-next-slice.css";
 import { DevStagingBridgeNotice } from "./components/dev-staging-bridge-notice";
 import { PwaRegister } from "./components/pwa-register";
 import { ThemeRuntime } from "./components/theme-control";

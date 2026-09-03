@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   AppShell,
   closeAccountMenu,
+  closeHelpPopover,
   closeNotificationPopover,
   LearnerShell,
 } from "../components/site-shell";
@@ -297,6 +298,16 @@ describe("Direction A & B UI System & Shell", () => {
       expect(focus).toHaveBeenCalledOnce();
     });
 
+    it("restores help-trigger focus when the help popover closes", () => {
+      const setOpen = vi.fn();
+      const focus = vi.fn();
+
+      closeHelpPopover(setOpen, { focus });
+
+      expect(setOpen).toHaveBeenCalledWith(false);
+      expect(focus).toHaveBeenCalledOnce();
+    });
+
     it("renders the desktop wide sidebar with all 7 primary workspace and account links plus help", () => {
       const html = renderToStaticMarkup(
         createElement(LearnerShell, {
@@ -408,6 +419,8 @@ describe("Direction A & B UI System & Shell", () => {
       expect(html).toContain('class="sidebar-collapse-btn"');
       expect(html).toContain('aria-expanded="true"');
       expect(html).toContain('title="Collapse sidebar"');
+      expect(html).toContain('class="learner-sidebar-toggle"');
+      expect(html).toContain('aria-controls="learner-sidebar"');
       expect(html).toContain('title="Dashboard"');
       expect(html).toContain('title="My Learning"');
       expect(html).toContain('title="Discover"');
@@ -518,6 +531,10 @@ describe("Direction A & B UI System & Shell", () => {
       expect(shellSource).not.toContain('className="header-badge-dot"');
       expect(shellSource).not.toContain("unreadCount");
       expect(shellSource).toContain("aria-expanded={!sidebarCollapsed}");
+      expect(shellSource).toContain('className="learner-sidebar-toggle"');
+      expect(shellSource).toContain('aria-controls="learner-sidebar"');
+      expect(shellSource).toContain("closeHelpPopover");
+      expect(shellSource).toContain("setHelpOpen(false);");
       expect(shellSource).toContain("handlePointerDown");
       expect(shellSource).toContain(
         "!accountButtonRef.current?.contains(target)",
