@@ -8,6 +8,7 @@ import json
 import re
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 from sqlalchemy import func, select
@@ -79,6 +80,9 @@ from ac_platform.media.storage import (
     StorageUploadIntent,
     StoredObjectMetadata,
 )
+
+if TYPE_CHECKING:
+    from ac_platform.learning.services import LearningAccessContext
 
 _CONTENT_TYPES: dict[MediaPurpose, frozenset[str]] = {
     MediaPurpose.AVATAR: frozenset({"image/jpeg", "image/png", "image/webp"}),
@@ -433,7 +437,7 @@ class MediaService:
         self,
         database: Session,
         actor: ActorContext,
-        access: object,
+        access: LearningAccessContext,
     ) -> ActivityMediaDescriptorResponse:
         """Return safe media metadata after learning scope is already resolved."""
 

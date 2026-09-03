@@ -186,12 +186,12 @@ def binding_response(binding: ActivityMediaBinding) -> ActivityMediaBindingRespo
         module_id=binding.module_id,
         program_version_id=binding.program_version_id,
         program_id=binding.program_id,
-        program_scope=binding.program_scope,  # type: ignore[arg-type]
+        program_scope=binding.program_scope,
         program_owner_key=binding.program_owner_key,
         activity_version=binding.activity_version,
         asset_id=binding.asset_id,
         version_id=binding.version_id,
-        state=binding.state,  # type: ignore[arg-type]
+        state=binding.state,
         approval_reference=binding.approval_reference,
         approved_by_person_id=binding.approved_by_person_id,
         approved_at=binding.approved_at,
