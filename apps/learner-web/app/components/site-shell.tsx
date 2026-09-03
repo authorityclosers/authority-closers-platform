@@ -158,6 +158,14 @@ export function closeAccountMenu(
   trigger?.focus();
 }
 
+export function closeNotificationPopover(
+  setOpen: (open: boolean) => void,
+  trigger: Pick<HTMLButtonElement, "focus"> | null,
+): void {
+  setOpen(false);
+  trigger?.focus();
+}
+
 export type LearnerShellProps = {
   children?: React.ReactNode;
   current?: LearnerCurrent;
@@ -177,10 +185,13 @@ export function LearnerShell({
 }: LearnerShellProps) {
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [notificationPopoverOpen, setNotificationPopoverOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const moreButtonRef = useRef<HTMLButtonElement>(null);
   const accountButtonRef = useRef<HTMLButtonElement>(null);
   const accountMenuRef = useRef<HTMLDivElement>(null);
+  const notificationButtonRef = useRef<HTMLButtonElement>(null);
+  const notificationPopoverRef = useRef<HTMLDivElement>(null);
   const drawerRef = useRef<HTMLDivElement>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
 
@@ -193,6 +204,12 @@ export function LearnerShell({
         }
         if (accountMenuOpen) {
           closeAccountMenu(setAccountMenuOpen, accountButtonRef.current);
+        }
+        if (notificationPopoverOpen) {
+          closeNotificationPopover(
+            setNotificationPopoverOpen,
+            notificationButtonRef.current,
+          );
         }
       } else if (
         (e.metaKey || e.ctrlKey) &&
@@ -210,7 +227,7 @@ export function LearnerShell({
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [mobileDrawerOpen, accountMenuOpen]);
+  }, [mobileDrawerOpen, accountMenuOpen, notificationPopoverOpen]);
 
   useEffect(() => {
     if (!mobileDrawerOpen) {
@@ -335,6 +352,24 @@ export function LearnerShell({
             menuItems.length;
     menuItems[nextIndex]?.focus();
   }
+
+  useEffect(() => {
+    if (!notificationPopoverOpen) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (
+        target instanceof Node &&
+        !notificationPopoverRef.current?.contains(target) &&
+        !notificationButtonRef.current?.contains(target)
+      ) {
+        setNotificationPopoverOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [notificationPopoverOpen]);
 
   const isHome = current === "dashboard" || current === "home";
   const isLearning = current === "learning" || current === "course";
@@ -549,20 +584,92 @@ export function LearnerShell({
             >
               <Search size={18} aria-hidden="true" />
             </Link>
-            <Link
-              href={ROUTES.notifications}
-              className="header-icon-button"
-              aria-label="Notifications"
-            >
-              <Bell size={18} aria-hidden="true" />
-            </Link>
+            <div className="notification-dropdown-wrapper">
+              <button
+                type="button"
+                className="header-icon-button notification-bell-button"
+                ref={notificationButtonRef}
+                onClick={() => {
+                  setAccountMenuOpen(false);
+                  setNotificationPopoverOpen((open) => !open);
+                }}
+                aria-expanded={notificationPopoverOpen}
+                aria-controls="learner-notifications-popover"
+                aria-haspopup="dialog"
+                aria-label="Notifications"
+              >
+                <Bell size={18} aria-hidden="true" />
+              </button>
+
+              {notificationPopoverOpen ? (
+                <div
+                  id="learner-notifications-popover"
+                  ref={notificationPopoverRef}
+                  className="notification-popover"
+                  role="dialog"
+                  aria-modal="false"
+                  aria-labelledby="learner-notifications-popover-title"
+                >
+                  <div className="notification-popover__header">
+                    <div className="notification-popover__title-row">
+                      <h2
+                        id="learner-notifications-popover-title"
+                        className="notification-popover__title"
+                      >
+                        Notifications
+                      </h2>
+                      <span
+                        className="notification-popover__status-badge"
+                        role="status"
+                      >
+                        Unavailable
+                      </span>
+                    </div>
+                    <p className="notification-popover__subhead">
+                      Notification history is not available in this first-slice
+                      workspace.
+                    </p>
+                  </div>
+
+                  <div className="notification-popover__body">
+                    <div
+                      className="notification-popover__empty-icon"
+                      aria-hidden="true"
+                    >
+                      <Bell size={24} />
+                    </div>
+                    <p className="notification-popover__empty-title">
+                      No notifications to show
+                    </p>
+                    <p className="notification-popover__empty-copy">
+                      This surface does not yet have a server-backed notification
+                      source, so no alerts or read-state changes are being
+                      presented here.
+                    </p>
+                  </div>
+
+                  <div className="notification-popover__footer">
+                    <Link
+                      href={ROUTES.notifications}
+                      className="notification-popover__action-link"
+                      onClick={() => setNotificationPopoverOpen(false)}
+                    >
+                      View full notifications page
+                    </Link>
+                  </div>
+                </div>
+              ) : null}
+            </div>
 
             <div className="account-dropdown-wrapper">
               <button
                 type="button"
                 className="learner-profile-button"
                 ref={accountButtonRef}
-                onClick={() => setAccountMenuOpen((open) => !open)}
+                onClick={() => {
+                  setNotificationPopoverOpen(false);
+                  setAccountMenuOpen((open) => !open);
+                }}
                 aria-expanded={accountMenuOpen}
                 aria-controls="learner-account-menu"
                 aria-haspopup="menu"
@@ -681,7 +788,11 @@ export function LearnerShell({
           type="button"
           className={`learner-nav__link${isMore || mobileDrawerOpen ? " is-current" : ""}`}
           ref={moreButtonRef}
-          onClick={() => setMobileDrawerOpen((open) => !open)}
+          onClick={() => {
+            setNotificationPopoverOpen(false);
+            setAccountMenuOpen(false);
+            setMobileDrawerOpen((open) => !open);
+          }}
           aria-expanded={mobileDrawerOpen}
           aria-controls="learner-more-drawer"
           aria-current={isMore ? "page" : undefined}

@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   AppShell,
   closeAccountMenu,
+  closeNotificationPopover,
   LearnerShell,
 } from "../components/site-shell";
 import {
@@ -224,6 +225,16 @@ describe("Direction A & B UI System & Shell", () => {
       expect(focus).toHaveBeenCalledOnce();
     });
 
+    it("restores notification-trigger focus when the popover closes", () => {
+      const setOpen = vi.fn();
+      const focus = vi.fn();
+
+      closeNotificationPopover(setOpen, { focus });
+
+      expect(setOpen).toHaveBeenCalledWith(false);
+      expect(focus).toHaveBeenCalledOnce();
+    });
+
     it("renders the desktop wide sidebar with all 7 primary workspace and account links plus help", () => {
       const html = renderToStaticMarkup(
         createElement(LearnerShell, {
@@ -315,6 +326,11 @@ describe("Direction A & B UI System & Shell", () => {
       );
       expect(html).toContain('href="/notifications"');
       expect(html).toContain('aria-label="Notifications"');
+      expect(html).toContain(
+        'class="header-icon-button notification-bell-button"',
+      );
+      expect(html).toContain('aria-controls="learner-notifications-popover"');
+      expect(html).toContain('aria-haspopup="dialog"');
       expect(html).toContain('class="learner-profile-button"');
       expect(html).toContain('aria-label="Account menu for Alex Mercer"');
       expect(html).toContain('aria-controls="learner-account-menu"');
@@ -432,8 +448,13 @@ describe("Direction A & B UI System & Shell", () => {
       expect(shellSource).toContain('aria-controls="learner-account-menu"');
       expect(shellSource).toContain('role="menu"');
       expect(shellSource).toContain('role="menuitem"');
+      expect(shellSource).toContain("notificationPopoverOpen");
+      expect(shellSource).toContain("closeNotificationPopover");
+      expect(shellSource).toContain('id="learner-notifications-popover"');
+      expect(shellSource).toContain('href={ROUTES.notifications}');
       expect(shellSource).not.toContain('userDisplayName = "Suyash"');
       expect(shellSource).not.toContain('className="header-badge-dot"');
+      expect(shellSource).not.toContain("unreadCount");
       expect(shellSource).toContain("aria-expanded={!sidebarCollapsed}");
       expect(shellSource).toContain("handlePointerDown");
       expect(shellSource).toContain(
@@ -484,6 +505,17 @@ describe("Direction A & B UI System & Shell", () => {
       expect(clarityCss).toContain("max-width: min(28vw, 180px);");
       expect(clarityCss).toContain("text-overflow: ellipsis;");
       expect(clarityCss).toContain("overflow-wrap: anywhere;");
+      expect(clarityCss).toContain(
+        ".site-frame--learner .notification-popover",
+      );
+      expect(clarityCss).toContain(
+        ".site-frame--learner .notification-popover__action-link",
+      );
+      expect(clarityCss).toContain(
+        ".site-frame--learner .progress-summary__number::after",
+      );
+      expect(clarityCss).toContain("--progress-percentage");
+      expect(clarityCss).toContain("@media (max-width: 360px)");
       expect(clarityCss).toContain(".section-header-row");
       expect(dashboardSource).toContain("Next activities");
       expect(dashboardSource).toContain("Progress snapshot");

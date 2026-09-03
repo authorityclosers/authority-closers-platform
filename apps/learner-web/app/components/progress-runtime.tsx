@@ -3,6 +3,7 @@
 import { ArrowRight, BarChart3, LockKeyhole } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 
 import {
   ApiError,
@@ -189,6 +190,9 @@ export function ProgressRuntime({ api = defaultApi }: { api?: LearnerApi }) {
   const percentage = Math.round(
     Math.min(1, Math.max(0, learning.projection.percentage)) * 100,
   );
+  const progressRingStyle = {
+    "--progress-percentage": `${percentage}%`,
+  } as CSSProperties;
 
   return (
     <>
@@ -213,7 +217,7 @@ export function ProgressRuntime({ api = defaultApi }: { api?: LearnerApi }) {
         className="progress-summary"
         aria-label="Course progress summary"
       >
-        <div className="progress-summary__number">
+        <div className="progress-summary__number" style={progressRingStyle}>
           <strong>{percentage}%</strong>
           <span>complete</span>
         </div>
