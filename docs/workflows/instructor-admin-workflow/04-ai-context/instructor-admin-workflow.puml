@@ -1,0 +1,69 @@
+@startuml AC-WF-INSTRUCTOR-ADMIN-V0.1
+
+title AC Instructor-label and Admin bounded workflow (reference-ready)
+hide empty description
+skinparam shadowing false
+skinparam monochrome true
+
+' Stable package flow IDs; workflow semantics live in the CSV matrix.
+' FLOW-IAS-01 FLOW-IAS-02 FLOW-IAS-03 FLOW-IAS-04 FLOW-IAS-05 FLOW-IAS-06
+
+actor "Content Manager" as CM
+actor "Coach / Reviewer" as CR
+actor "Business Administrator" as BA
+actor "Support Agent" as SA
+actor "Technical Administrator" as TA
+actor "Auditor / Read-only" as AU
+
+rectangle "admin.authorityclosers.com" as ADMIN {
+  usecase "ADM-OVERVIEW\n/admin" as O
+  usecase "ADM-USERS\n/admin/users" as U
+  usecase "ADM-USER-DETAIL\n/admin/users/{person}" as UD
+  usecase "INS-PROGRAMS\n/admin/programs" as P
+  usecase "INS-CONTENT\n/admin/programs/{program}/content" as C
+  usecase "INS-PUBLISH\ncontent route / version context" as PUB
+  usecase "ADM-PROGRESS\n/admin/progress\nexplicit candidate" as G
+  usecase "ADM-AUDIT\n/admin/audit\nexplicit candidate" as A
+  usecase "ADM-ASSESS-REVIEW\nASSESSMENT REVIEW\nBLOCKED_ROUTE" as X
+  usecase "ADM-MEDIA\nMEDIA OPERATIONS\nBLOCKED_ROUTE" as M
+}
+
+CM --> P
+CM --> C
+CM --> PUB
+CR --> C
+BA --> O
+BA --> U
+BA --> P
+SA --> U
+SA --> UD
+TA --> O
+TA --> G
+AU --> A
+
+P --> C : open content
+C --> PUB : validate / controlled action
+U --> UD : inspect person
+UD --> G : diagnose if route approved
+UD --> A : trace if route approved
+C ..> X : assessment gate
+C ..> M : provider gate
+
+note right of C
+  Program -> Module -> Activity
+  Published version immutable
+  Draft input preserved
+  Server owns actor/tenant/resource/action authz
+end note
+
+note bottom of X
+  BLK-07 / BLK-09 / AC-SVAL gate
+  No invented schema, score or route
+end note
+
+note bottom of M
+  BLK-06 / BLK-08 / BLK-09
+  Course media lifecycle only;
+  real-call processing blocked
+end note
+@enduml
