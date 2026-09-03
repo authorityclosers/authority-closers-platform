@@ -290,6 +290,8 @@ export function AvatarCropDialog({
       result = await adapter.upload({
         file,
         crop: clampAvatarCrop(crop),
+        displayName,
+        currentAvatar,
         profileRevision,
       });
     } catch {
@@ -596,8 +598,8 @@ export function AvatarCropDialog({
               </button>
             </div>
             <p className={styles.uploadNote} id="avatar-upload-note">
-              The default adapter is preview-only. A connected profile service
-              must validate, process, and confirm the new revision.
+              Uploads stay fail-closed until an approved profile service can
+              validate, process, and confirm the new revision.
             </p>
           </div>
         </div>

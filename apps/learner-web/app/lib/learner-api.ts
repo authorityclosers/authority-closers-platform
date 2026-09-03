@@ -80,6 +80,80 @@ export interface MeResponse {
   permissions: string[];
 }
 
+export interface AvatarCropMetadata {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation_degrees: number;
+}
+
+export type MediaLifecycle =
+  | "expected"
+  | "uploading"
+  | "processing"
+  | "ready"
+  | "failed"
+  | "retired";
+
+export interface ProfileAvatarVersionResponse {
+  asset_id: string;
+  version_id: string;
+  version_number: number;
+  state: MediaLifecycle;
+  delivery_url: string | null;
+  content_type: string;
+  size_px: number | null;
+  avatar_crop: AvatarCropMetadata | null;
+  supersedes_version_id: string | null;
+  updated_at: string;
+}
+
+export interface ProfileAvatarResponse {
+  avatar: ProfileAvatarVersionResponse | null;
+  pending: ProfileAvatarVersionResponse | null;
+}
+
+export interface AvatarUploadIntentResponse {
+  upload_id: string;
+  media_id: string;
+  media_version_id: string;
+  version_number: number;
+  state: MediaLifecycle;
+  object_key: string;
+  upload_url: string;
+  upload_headers: Record<string, string>;
+  expires_at: string;
+  max_bytes: number;
+}
+
+export interface MediaAssetResponse {
+  id: string;
+  tenant_id: string;
+  owner_person_id: string;
+  purpose: string;
+  state: MediaLifecycle;
+  current_version_id: string | null;
+  current_version: {
+    id: string;
+    asset_id: string;
+    version_number: number;
+    state: MediaLifecycle;
+    content_type: string;
+    avatar_crop: AvatarCropMetadata | null;
+  } | null;
+  version_count: number;
+}
+
+export interface ProfileAvatarUploadInput {
+  filename: string;
+  content_type: string;
+  content_length: number;
+  asset_id?: string | null;
+  supersedes_version_id?: string | null;
+  crop?: AvatarCropMetadata | null;
+}
+
 export interface ContextResponse {
   person_id: string;
   session_id: string;
@@ -714,6 +788,52 @@ export function createLearnerApi(
       ),
     me: (options: LearnerReadOptions = {}) =>
       request<MeResponse>("/v1/me", { ...options, cache: "no-store" }),
+    profileAvatar: (options: LearnerReadOptions = {}) =>
+      request<ProfileAvatarResponse>("/v1/profile/avatar", {
+        ...options,
+        cache: "no-store",
+      }),
+    createProfileAvatarUpload: (input: ProfileAvatarUploadInput) =>
+      logicalJsonMutation<AvatarUploadIntentResponse>(
+        "profile-avatar-upload",
+        "/v1/profile/avatar",
+        {
+          purpose: "avatar",
+          filename: input.filename,
+          content_type: input.content_type,
+          content_length: input.content_length,
+          ...(input.asset_id ? { asset_id: input.asset_id } : {}),
+          ...(input.supersedes_version_id
+            ? { supersedes_version_id: input.supersedes_version_id }
+            : {}),
+          ...(input.crop ? { crop: input.crop } : {}),
+        },
+      ),
+    completeProfileAvatarUpload: (
+      uploadId: string,
+      input: {
+        actual_bytes?: number;
+        checksum_sha256?: string;
+        storage_version_id?: string;
+        width?: number;
+        height?: number;
+      } = {},
+    ) =>
+      logicalJsonMutation<MediaAssetResponse>(
+        `profile-avatar-complete:${uploadId}`,
+        `/v1/profile/avatar/${encodeURIComponent(uploadId)}/complete`,
+        {
+          ...(input.actual_bytes ? { actual_bytes: input.actual_bytes } : {}),
+          ...(input.checksum_sha256
+            ? { checksum_sha256: input.checksum_sha256 }
+            : {}),
+          ...(input.storage_version_id
+            ? { storage_version_id: input.storage_version_id }
+            : {}),
+          ...(input.width ? { width: input.width } : {}),
+          ...(input.height ? { height: input.height } : {}),
+        },
+      ),
     context: (options: LearnerReadOptions = {}) =>
       request<ContextResponse>("/v1/context", {
         ...options,

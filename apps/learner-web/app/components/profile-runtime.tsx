@@ -20,6 +20,7 @@ import {
   type LearnerApi,
   type MeResponse,
   type OnboardingResponse,
+  type ProfileAvatarResponse,
 } from "../lib/learner-api";
 import {
   getEarliestOfflineReadMetadata,
@@ -29,7 +30,7 @@ import {
 import { ROUTES } from "../lib/routes";
 import { userFacingRequestError } from "../lib/user-facing-error";
 import {
-  unavailableAvatarUploadPort,
+  createApiAvatarUploadPort,
   type AvatarPresentation,
   type AvatarUploadPort,
 } from "../lib/avatar-upload";
@@ -60,6 +61,21 @@ function formatMinutes(value: number | null): string {
   return `${value} minutes / week`;
 }
 
+function avatarPresentationFromResponse(
+  response: ProfileAvatarResponse | null,
+  displayName: string,
+): AvatarPresentation | null {
+  const avatar = response?.avatar;
+  if (!avatar || avatar.state !== "ready" || !avatar.delivery_url) return null;
+  return {
+    assetId: avatar.asset_id,
+    versionId: avatar.version_id,
+    deliveryUrl: avatar.delivery_url,
+    alt: `${displayName || "Learner"}'s profile photo`,
+    revision: String(avatar.version_number),
+  };
+}
+
 export async function loadProfileData(
   api: LearnerApi,
   signal?: AbortSignal,
@@ -67,6 +83,8 @@ export async function loadProfileData(
   me: MeResponse;
   onboarding: OnboardingResponse | null;
   onboardingError: unknown;
+  avatar: ProfileAvatarResponse | null;
+  avatarError: unknown;
   offlineRead?: OfflineReadMetadata;
 }> {
   const me = await api.me({ signal });
@@ -75,31 +93,46 @@ export async function loadProfileData(
       me,
       onboarding: null,
       onboardingError: null,
+      avatar: null,
+      avatarError: null,
       offlineRead: getEarliestOfflineReadMetadata(me) ?? undefined,
     };
   }
+  let onboarding: OnboardingResponse | null = null;
+  let onboardingError: unknown = null;
   try {
-    const onboarding = await api.onboarding({ signal });
-    return {
-      me,
-      onboarding,
-      onboardingError: null,
-      offlineRead: getEarliestOfflineReadMetadata(me, onboarding) ?? undefined,
-    };
-  } catch (onboardingError) {
-    if (isAbortError(onboardingError)) throw onboardingError;
-    return {
-      me,
-      onboarding: null,
-      onboardingError,
-      offlineRead: getEarliestOfflineReadMetadata(me) ?? undefined,
-    };
+    onboarding = await api.onboarding({ signal });
+  } catch (error) {
+    if (isAbortError(error)) throw error;
+    onboardingError = error;
   }
+
+  let avatar: ProfileAvatarResponse | null = null;
+  let avatarError: unknown = null;
+  // Media delivery is a secondary read: a gated/private storage outage must
+  // not hide the authenticated identity or learning preferences.
+  if (typeof api.profileAvatar === "function") {
+    try {
+      avatar = await api.profileAvatar({ signal });
+    } catch (error) {
+      if (isAbortError(error)) throw error;
+      avatarError = error;
+    }
+  }
+
+  return {
+    me,
+    onboarding,
+    onboardingError,
+    avatar,
+    avatarError,
+    offlineRead: getEarliestOfflineReadMetadata(me, onboarding ?? undefined) ?? undefined,
+  };
 }
 
 export function ProfileRuntime({
   api = defaultApi,
-  avatarUpload = unavailableAvatarUploadPort,
+  avatarUpload,
 }: {
   api?: LearnerApi;
   avatarUpload?: AvatarUploadPort;
@@ -109,6 +142,7 @@ export function ProfileRuntime({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
   const [onboardingError, setOnboardingError] = useState<unknown>(null);
+  const [avatarError, setAvatarError] = useState<unknown>(null);
   const [offlineRead, setOfflineRead] = useState<
     OfflineReadMetadata | undefined
   >();
@@ -120,6 +154,7 @@ export function ProfileRuntime({
   const generationRef = useRef(0);
   const mountedRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
+  const effectiveAvatarUpload = avatarUpload ?? createApiAvatarUploadPort(api);
   const membershipKnown = me !== null;
   const membershipAvailable = me !== null && hasMembershipRole(me);
   const draftCleanup = useInvalidateDraftsWithoutMembership(
@@ -142,14 +177,21 @@ export function ProfileRuntime({
     setError(null);
     setOnboardingError(null);
     setOnboarding(null);
+    setAvatarError(null);
     setOfflineRead(undefined);
     try {
       const result = await loadProfileData(api, controller.signal);
       if (!isCurrent()) return;
       setMe(result.me);
-      setCurrentAvatar(result.me.avatar ?? null);
+      setCurrentAvatar(
+        avatarPresentationFromResponse(
+          result.avatar,
+          result.me.display_name || "Learner",
+        ) ?? result.me.avatar ?? null,
+      );
       setOnboarding(result.onboarding);
       setOnboardingError(result.onboardingError);
+      setAvatarError(result.avatarError);
       setOfflineRead(result.offlineRead);
     } catch (err) {
       if (isAbortError(err) || !isCurrent()) return;
@@ -291,6 +333,19 @@ export function ProfileRuntime({
                   <PencilLine size={15} aria-hidden="true" />
                   Change photo
                 </button>
+                {avatarError ? (
+                  <div className="profile-avatar-status" role="status">
+                    Profile photo delivery is unavailable right now; your
+                    account details remain available.
+                    <button
+                      className="text-button"
+                      type="button"
+                      onClick={() => void load()}
+                    >
+                      Retry photo
+                    </button>
+                  </div>
+                ) : null}
               </div>
             </div>
             <div className="profile-hero-copy">
@@ -466,7 +521,7 @@ export function ProfileRuntime({
           displayName={displayName}
           profileRevision={me.profile_revision}
           currentAvatar={currentAvatar}
-          adapter={avatarUpload}
+          adapter={effectiveAvatarUpload}
           onClose={() => {
             setAvatarDialogOpen(false);
             window.requestAnimationFrame(() =>

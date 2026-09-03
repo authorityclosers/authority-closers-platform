@@ -220,6 +220,119 @@ def test_upload_scan_process_and_supersession_are_durable(
     assert {version.state for version in versions} == {MediaLifecycle.READY.value}
 
 
+def test_profile_avatar_returns_scoped_ephemeral_delivery_and_pending_replacement(
+    harness: tuple[Session, ActorContext, MediaService, InMemoryPrivateObjectStorage],
+) -> None:
+    database, actor, service, storage = harness
+    body = b"\x89PNG\r\n\x1a\navatar"
+    first = _upload(
+        database,
+        actor,
+        service,
+        storage,
+        purpose=MediaPurpose.AVATAR,
+        body=body,
+        content_type="image/png",
+        key="profile-avatar-1",
+    )
+    service.process_version(database, actor, first.media_version_id)
+
+    current = service.get_profile_avatar(database, actor)
+    assert current.avatar is not None
+    assert current.avatar.asset_id == first.media_id
+    assert current.avatar.version_id == first.media_version_id
+    assert current.avatar.state is MediaLifecycle.READY
+    assert current.avatar.delivery_url is not None
+    assert current.avatar.delivery_url.startswith("https://")
+    assert "object_key" not in current.avatar.model_dump(mode="json")
+    assert current.pending is None
+
+    replacement = service.create_upload_intent(
+        database,
+        actor,
+        UploadIntentRequest(
+            purpose=MediaPurpose.AVATAR,
+            filename="replacement.png",
+            content_type="image/png",
+            content_length=len(body),
+            checksum_sha256=hashlib.sha256(body).hexdigest(),
+            asset_id=first.media_id,
+            supersedes_version_id=first.media_version_id,
+        ),
+        idempotency_key="profile-avatar-2",
+    )
+    pending = service.get_profile_avatar(database, actor)
+    assert pending.avatar is not None
+    assert pending.avatar.version_id == first.media_version_id
+    assert pending.pending is not None
+    assert pending.pending.version_id == replacement.media_version_id
+    assert pending.pending.state is MediaLifecycle.UPLOADING
+
+
+def test_profile_avatar_never_discloses_another_person_or_tenant_avatar(
+    harness: tuple[Session, ActorContext, MediaService, InMemoryPrivateObjectStorage],
+) -> None:
+    database, actor, service, storage = harness
+    body = b"\x89PNG\r\n\x1a\nprivate-avatar"
+    first = _upload(
+        database,
+        actor,
+        service,
+        storage,
+        purpose=MediaPurpose.AVATAR,
+        body=body,
+        content_type="image/png",
+        key="private-avatar",
+    )
+    service.process_version(database, actor, first.media_version_id)
+
+    other = Person(
+        id=uuid4(),
+        email=f"{uuid4()}@example.com",
+        email_verified_at=datetime.now(UTC),
+    )
+    database.add(other)
+    database.add(
+        Membership(
+            tenant_id=actor.tenant_id,
+            person_id=other.id,
+            role=MembershipRole.LEARNER.value,
+        )
+    )
+    database.commit()
+    other_actor = ActorContext(
+        person_id=other.id,
+        session_id=uuid4(),
+        tenant_id=actor.tenant_id,
+        permissions=frozenset(),
+    )
+
+    result = service.get_profile_avatar(database, other_actor)
+    assert result.avatar is None
+    assert result.pending is None
+
+    other_tenant_id = uuid4()
+    database.add(Tenant(id=other_tenant_id, slug=f"tenant-{other_tenant_id}", name="Other Tenant"))
+    database.add(
+        Membership(
+            tenant_id=other_tenant_id,
+            person_id=actor.person_id,
+            role=MembershipRole.LEARNER.value,
+        )
+    )
+    database.commit()
+    cross_tenant_actor = ActorContext(
+        person_id=actor.person_id,
+        session_id=uuid4(),
+        tenant_id=other_tenant_id,
+        permissions=frozenset(),
+    )
+
+    cross_tenant_result = service.get_profile_avatar(database, cross_tenant_actor)
+    assert cross_tenant_result.avatar is None
+    assert cross_tenant_result.pending is None
+
+
 def test_processor_rendition_mime_is_verified_before_ready(
     harness: tuple[Session, ActorContext, MediaService, InMemoryPrivateObjectStorage],
 ) -> None:

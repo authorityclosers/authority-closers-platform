@@ -5588,6 +5588,19 @@ a.learning-list-card:hover {
   line-height: 1.35;
 }
 
+.profile-avatar-status {
+  display: grid;
+  gap: 4px;
+  margin-top: 4px;
+  color: var(--theme-warning-text, #92400e);
+  font-size: 0.68rem;
+  line-height: 1.35;
+}
+
+.profile-avatar-status .text-button {
+  width: fit-content;
+}
+
 .profile-avatar-panel__button {
   align-self: start;
   min-height: 40px;

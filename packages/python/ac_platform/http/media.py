@@ -24,6 +24,7 @@ from ac_platform.media.api_contracts import (
     MediaVersionResponse,
     PlaybackRequest,
     PlaybackResponse,
+    ProfileAvatarResponse,
     RetireResponse,
     UploadCompleteRequest,
     UploadIntentRequest,
@@ -150,6 +151,17 @@ def install_media_http(
         )
         runtime.telemetry.emit(
             "media.upload.created", {"status": result.state.value, "outcome": "succeeded"}
+        )
+        _no_store(response)
+        return result
+
+    @router.get("/profile/avatar", response_model=ProfileAvatarResponse)
+    async def get_profile_avatar(
+        response: Response,
+        auth: AuthenticatedTransaction = actor_dependency,
+    ) -> ProfileAvatarResponse:
+        result = await auth.database.run_sync(
+            lambda database: _service(runtime).get_profile_avatar(database, auth.resolved.actor)
         )
         _no_store(response)
         return result
