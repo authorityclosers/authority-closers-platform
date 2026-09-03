@@ -12,6 +12,7 @@ import {
 import {
   firstActionableActivity,
   loadDashboardData,
+  presentationModuleTitle,
 } from "../components/dashboard-runtime";
 import {
   DiscoverRuntime,
@@ -49,6 +50,7 @@ import {
   ApiError,
   createLearnerApi,
   type LearnerApi,
+  type CalendarResponse,
   type LearningCollectionResponse,
   type LearningResponse,
   type MeResponse,
@@ -185,6 +187,45 @@ describe("Direction A & B UI System & Shell", () => {
     ],
     next_cursor: null,
     saved_filter_available: false,
+  };
+  const calendar: CalendarResponse = {
+    source: "explicit_learning_plan",
+    disclaimer: "Only explicitly published learning-plan items are shown.",
+    periods: {
+      today: {
+        period: "today",
+        status: "available",
+        source: "explicit_learning_plan",
+        message: null,
+        items: [
+          {
+            id: "plan-1",
+            tenant_id: "tenant-1",
+            person_id: me.person_id,
+            period: "today",
+            title: "Complete the published activity",
+            activity_id: "available",
+            planned_for: null,
+            state: "planned",
+            source: "explicit_learning_plan",
+          },
+        ],
+      },
+      week: {
+        period: "week",
+        status: "not_configured",
+        source: "explicit_learning_plan",
+        message: "No weekly plan is published.",
+        items: [],
+      },
+      month: {
+        period: "month",
+        status: "not_configured",
+        source: "explicit_learning_plan",
+        message: "No monthly plan is published.",
+        items: [],
+      },
+    },
   };
 
   function apiFor(overrides: Partial<LearnerApi> = {}): LearnerApi {
@@ -537,8 +578,11 @@ describe("Direction A & B UI System & Shell", () => {
       expect(clarityCss).toContain("--progress-percentage");
       expect(clarityCss).toContain("@media (max-width: 360px)");
       expect(clarityCss).toContain(".section-header-row");
-      expect(dashboardSource).toContain("Next activities");
-      expect(dashboardSource).toContain("Progress snapshot");
+      expect(dashboardSource).toContain("Today&apos;s plan");
+      expect(dashboardSource).toContain("Your weekly activity");
+      expect(dashboardSource).toContain("calendarStatus");
+      expect(dashboardSource).toContain("planItems");
+      expect(dashboardSource).toContain("ROUTES.calendar");
       expect(dashboardSource).toContain("learning.projection.completed_count");
       expect(dashboardSource).not.toContain("DEV_MOCK_DATA");
       expect(dashboardSource).not.toContain("Today at 9:41 AM");
@@ -703,6 +747,51 @@ describe("Direction A & B UI System & Shell", () => {
       expect(isActivityActionable(learning.modules[0].activities[2])).toBe(
         true,
       );
+    });
+
+    it("normalizes authored module separators only for presentation", () => {
+      expect(presentationModuleTitle("Opening — Module 1")).toBe(
+        "Opening · Module 1",
+      );
+      expect(presentationModuleTitle("Opening — Module 1")).not.toBe(
+        "Opening — Module 1",
+      );
+    });
+
+    it("loads Today’s plan only from the tenant-scoped explicit plan projection", async () => {
+      const tenantMe = { ...me, selected_tenant_id: "tenant-1" };
+      const api = apiFor({
+        me: vi.fn(async () => tenantMe),
+        calendar: vi.fn(async () => calendar),
+      });
+
+      const result = await loadDashboardData(api);
+
+      expect(result).toMatchObject({
+        kind: "ready",
+        data: {
+          calendar,
+          calendarStatus: "available",
+        },
+      });
+      expect(api.calendar).toHaveBeenCalledWith({ signal: undefined });
+    });
+
+    it("keeps the dashboard ready when the optional plan projection is unavailable", async () => {
+      const tenantMe = { ...me, selected_tenant_id: "tenant-1" };
+      const api = apiFor({
+        me: vi.fn(async () => tenantMe),
+        calendar: vi.fn(async () => {
+          throw new ApiError(503, "plan service unavailable");
+        }),
+      });
+
+      const result = await loadDashboardData(api);
+
+      expect(result).toMatchObject({
+        kind: "ready",
+        data: { calendarStatus: "unavailable" },
+      });
     });
 
     it("loads the complete learner collection instead of selecting a free course", async () => {
