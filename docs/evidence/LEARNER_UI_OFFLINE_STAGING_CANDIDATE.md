@@ -1,13 +1,15 @@
 # Learner UI, offline, and staging candidate evidence
 
-Date: 2026-09-02
+Date: 2026-09-04
 
 This record describes the candidate now represented by exact release
-`5c7333c5a588f5209acd5ca9b5ce0e03e20e16a4`. GitHub Application validation,
+`65ea3e1094ae462c071a70ef2463f5a8c7754196`. GitHub Application validation,
 artifact identity, and trusted staging controller smoke are recorded in the
-[exact-release evidence record](../knowledge/v0.1-alpha/EVD-005-exact-staging-5c7333c5.md);
-this document does not expand that bounded proof into full capability or
-production approval.
+[exact-release evidence record](../knowledge/v0.1-alpha/EVD-006-exact-staging-65ea3e1.md);
+the earlier `5c7333c5` record remains retained in
+[EVD-005](../knowledge/v0.1-alpha/EVD-005-exact-staging-5c7333c5.md). This
+document does not expand the bounded proof into full capability or production
+approval.
 
 ## Implemented scope
 
@@ -86,8 +88,7 @@ decorative artwork are never used as an API or canonical-state fallback.
 
 ## Release boundary
 
-The exact candidate is now staging-deployed and bounded controller-smoked;
-authenticated Chrome `/learning` accessibility observation is also recorded as
-operator text, not visual proof. Production remains blocked. Fresh enrollment,
-mutation, browser/device, recovery, restore/rollback, and capability-specific
-gates remain open.
+The exact candidate is now staging-deployed and bounded controller-smoked.
+This slice contains no authenticated learner-route observation or visual proof.
+Production remains blocked. Fresh enrollment, mutation, browser/device,
+recovery, restore/rollback, and capability-specific gates remain open.

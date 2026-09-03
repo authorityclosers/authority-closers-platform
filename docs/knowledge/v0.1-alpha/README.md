@@ -4,7 +4,7 @@ type: moc
 title: Authority Closers v0.1 Alpha Knowledge Graph
 status: current
 version: v0.1-alpha
-updated: 2026-09-01
+updated: 2026-09-04
 aliases:
   - v0.1 Alpha Knowledge Graph
 tags:
@@ -32,7 +32,7 @@ Start with [[META-001-node-taxonomy|node taxonomy]], [[META-002-relationship-leg
 - APIs: [[API-001-identity-onboarding]], [[API-002-catalog-enrollment]], [[API-003-learning-evidence]], [[API-004-session-settings]], [[API-005-admin-operations]].
 - Decisions: [[DEC-001-public-learner-tenancy-consent]], [[DEC-002-host-only-sessions]], [[DEC-003-canonical-progress-evidence]], [[DEC-004-device-local-theme]], [[DEC-005-capability-gates]], [[DEC-006-authenticated-in-app-free-course-enrollment]].
 - Implementation: [[IMP-001-learner-web]], [[IMP-002-platform-api-domain]], [[IMP-003-seed-bootstrap]], [[IMP-004-tests]], [[IMP-005-workflow-artifacts]].
-- Gates and evidence: [[GATE-001-G0-control-plane]], [[GATE-002-G1-free-course]], [[GATE-003-exact-release-staging]], [[GATE-004-production-activation]], [[EVD-001-staging-27fafae]], [[EVD-002-auth-81635d1]], [[EVD-003-current-candidate-design-qa]], [[EVD-004-workflow-structural-validation]], [[EVD-005-exact-staging-5c7333c5]].
+- Gates and evidence: [[GATE-001-G0-control-plane]], [[GATE-002-G1-free-course]], [[GATE-003-exact-release-staging]], [[GATE-004-production-activation]], [[EVD-001-staging-27fafae]], [[EVD-002-auth-81635d1]], [[EVD-003-current-candidate-design-qa]], [[EVD-004-workflow-structural-validation]], [[EVD-005-exact-staging-5c7333c5]], [[EVD-006-exact-staging-65ea3e1]].
 - Boundaries: [[LIM-001-known-limitations]] and [[VALIDATION]].
 
 ## Evidence rule

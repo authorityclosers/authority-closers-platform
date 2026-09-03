@@ -16,8 +16,11 @@ route-shaped state family, owner-scoped encrypted offline reads, safe anonymous
 staging preview adapter, and provider-neutral media contracts. Chrome comparison
 at 1440 × 1024 and 390 × 844 is recorded locally. Immutable exact-SHA
 CI/package and a bounded controller smoke are now recorded for release
-`5c7333c5a588f5209acd5ca9b5ce0e03e20e16a4`; the authenticated staging
-accessibility observation is recorded separately in [[EVD-005-exact-staging-5c7333c5]].
+`65ea3e1094ae462c071a70ef2463f5a8c7754196` in
+[[EVD-006-exact-staging-65ea3e1]]. The earlier authenticated staging
+accessibility observation remains scoped to release `5c7333c5` in
+[[EVD-005-exact-staging-5c7333c5]]; no authenticated observation is claimed for
+`65ea3e1` here.
 
 Evidence: [design-qa.md](../../../design-qa.md), [source-vs-implementation comparison](../../evidence/design-qa/v0.1-alpha-20260901/comparisons/auth-register-source-vs-implementation.png), and [candidate implementation captures](../../evidence/design-qa/v0.1-alpha-20260901/implementation/login-mobile-390x844.png).
 

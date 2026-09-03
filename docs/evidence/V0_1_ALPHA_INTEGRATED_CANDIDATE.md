@@ -11,9 +11,12 @@ smoke is recorded, and production approval is not claimed.
 - Local authenticated QA bridge: `830ab7313e3010ba9d8a1e7913ea42b4d97d50f6`.
 - Planning and analytics: `8c6248ce3d007bd57704b6ce39dccd1eb7b8ad00`.
 
-The immutable release `5c7333c5a588f5209acd5ca9b5ce0e03e20e16a4` is the
-staging artifact covered by
-[EVD-005 exact staging controller smoke](../knowledge/v0.1-alpha/EVD-005-exact-staging-5c7333c5.md).
+The immutable release `65ea3e1094ae462c071a70ef2463f5a8c7754196` is the
+latest staging artifact covered by
+[EVD-006 exact staging controller smoke](../knowledge/v0.1-alpha/EVD-006-exact-staging-65ea3e1.md).
+The earlier release `5c7333c5a588f5209acd5ca9b5ce0e03e20e16a4` remains covered
+by [EVD-005](../knowledge/v0.1-alpha/EVD-005-exact-staging-5c7333c5.md); its
+authenticated observation is not transferred to the latest release.
 
 ## Historical migration normalization
 
@@ -23,10 +26,11 @@ linear head of:
 `20260901_0012 -> 20260902_0013_media_contracts -> 20260902_0014_planning_analytics`
 
 That candidate renamed the planning migration and updated its `down_revision`;
-migration operations and durable table semantics were unchanged. The exact
-staging release named above subsequently adds
+migration operations and durable table semantics were unchanged. The earlier
+exact release `5c7333c5` subsequently adds
 `20260903_0015 -> 20260903_0016`, and its deployed migration head is
-`20260903_0016` as recorded in EVD-005.
+`20260903_0016` as recorded in EVD-005. Release `65ea3e1` does not change this
+migration tree; EVD-006 records controller evidence only.
 
 ## Verification
 
@@ -38,8 +42,9 @@ staging release named above subsequently adds
 - Root format check, lint, and typecheck: passed.
 - Learner web tests: **265 passed**; typecheck and lint passed.
 - Historical candidate check: `uv run alembic heads` returned one head,
-  `20260902_0014`. Exact-release deployment proof records the later single head
-  `20260903_0016`.
+  `20260902_0014`. The prior exact-release deployment record in EVD-005 records
+  the later single head `20260903_0016`; EVD-006 records controller evidence
+  only.
 - `uv run alembic check`: not executable without the required
   `AC_DATABASE_MIGRATOR_URL`; no database URL was invented or committed.
 - Next Webpack build compiled successfully and completed TypeScript, but local
