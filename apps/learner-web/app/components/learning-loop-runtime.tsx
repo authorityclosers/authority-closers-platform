@@ -268,6 +268,7 @@ export function VideoViewer({
   const [canFullscreen, setCanFullscreen] = useState(false);
   const [canPictureInPicture, setCanPictureInPicture] = useState(false);
   const [hasEnded, setHasEnded] = useState(false);
+  const [playbackSessionNeedsRetry, setPlaybackSessionNeedsRetry] = useState(false);
   const [mediaState, setMediaState] = useState<MediaState>(
     authorized ? "loading" : "blocked",
   );
@@ -288,12 +289,13 @@ export function VideoViewer({
     [],
   );
 
-  const resetPlaybackSession = useCallback(() => {
+  const resetPlaybackSession = useCallback((needsRetry = false) => {
     sessionRef.current = null;
     pendingHeartbeatRef.current = null;
     finishReadyRef.current = false;
     sequenceRef.current = 0;
     watchCursorRef.current = 0;
+    setPlaybackSessionNeedsRetry(needsRetry);
     setIsPlaying(false);
     videoRef.current?.pause();
   }, []);
@@ -364,7 +366,7 @@ export function VideoViewer({
         })
         .catch((error: unknown) => {
           if (isPlaybackSessionInvalid(error)) {
-            resetPlaybackSession();
+            resetPlaybackSession(true);
           }
           updateStatus("error", playbackErrorMessage(error));
           videoRef.current?.pause();
@@ -433,7 +435,7 @@ export function VideoViewer({
           throw new Error("The server did not return a playback authorization token.");
         }
         const expiresAt = Date.parse(started.expires_at);
-        if (!Number.isFinite(expiresAt)) {
+        if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
           throw new Error("The server did not return a valid playback expiry.");
         }
         // Starting playback can move the activity to in_progress. Refresh the
@@ -447,6 +449,7 @@ export function VideoViewer({
           expiresAt,
           closed: false,
         };
+        setPlaybackSessionNeedsRetry(false);
         sequenceRef.current = 0;
         pendingHeartbeatRef.current = null;
         watchCursorRef.current = 0;
@@ -546,7 +549,7 @@ export function VideoViewer({
         await onPlaybackCommitted?.();
       } catch (error) {
         if (isPlaybackSessionInvalid(error)) {
-          resetPlaybackSession();
+          resetPlaybackSession(true);
         }
         updateStatus("error", playbackErrorMessage(error));
       } finally {
@@ -623,14 +626,19 @@ export function VideoViewer({
     );
   }, [authorized]);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    // React Strict Mode runs an effect's cleanup during its development-only
+    // probe. Re-arm these guards on setup so the live mount still accepts
+    // media events after that probe has completed.
+    mountedRef.current = true;
+    unmountingRef.current = false;
+    const video = videoRef.current;
+    return () => {
       unmountingRef.current = true;
       mountedRef.current = false;
-      videoRef.current?.pause();
-    },
-    [],
-  );
+      video?.pause();
+    };
+  }, []);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -1110,17 +1118,22 @@ export function VideoViewer({
           </p>
         </div>
         <div className="momentum-video-viewer__status-actions">
-          {status === "error" && (hasEnded || mediaState === "error") ? (
+          {status === "error" &&
+          (hasEnded || mediaState === "error" || playbackSessionNeedsRetry) ? (
             <button
               className="momentum-video-viewer__retry"
               type="button"
               onClick={() =>
-                mediaState === "error" && !hasEnded
+                mediaState === "error" &&
+                !hasEnded &&
+                !playbackSessionNeedsRetry
                   ? retryMedia()
                   : void retryPlaybackSave()
               }
             >
-              {mediaState === "error" && !hasEnded
+              {mediaState === "error" &&
+              !hasEnded &&
+              !playbackSessionNeedsRetry
                 ? "Retry media"
                 : "Retry server save"}
             </button>
