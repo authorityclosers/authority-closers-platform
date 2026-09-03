@@ -9,7 +9,7 @@ while IFS= read -r -d '' candidate; do
   if head -n 1 "$candidate" | grep -Eq '^#!.*(ba)?sh([[:space:]]|$)'; then
     shell_files+=("$candidate")
   fi
-done < <(find . -path './.git' -prune -o -type f -print0)
+done < <(git ls-files -z)
 if ((${#shell_files[@]} > 0)); then
   bash -n "${shell_files[@]}"
   shellcheck "${shell_files[@]}"
