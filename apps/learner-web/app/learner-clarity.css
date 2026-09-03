@@ -1416,12 +1416,12 @@ a.learning-list-card:hover {
 }
 
 .site-frame--learner .button--ink {
-  color: #fff;
-  background: var(--clarity-blue);
+  color: var(--theme-action-text, #fff);
+  background: var(--theme-action, var(--clarity-blue));
 }
 
 .site-frame--learner .button--ink:hover:not(:disabled) {
-  background: #2449bf;
+  background: var(--theme-action-hover, #2449bf);
 }
 
 .site-frame--learner .button--outline {
@@ -3796,8 +3796,8 @@ a.learning-list-card:hover {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  background: var(--color-cobalt);
-  color: #ffffff;
+  background: var(--theme-action, var(--color-cobalt));
+  color: var(--theme-action-text, #ffffff);
   font-weight: 600;
   font-size: 0.88rem;
   padding: 10px 18px;
@@ -3811,8 +3811,8 @@ a.learning-list-card:hover {
 }
 
 .button--cobalt:hover {
-  background: var(--color-cobalt-hover);
-  color: #ffffff;
+  background: var(--theme-action-hover, var(--color-cobalt-hover));
+  color: var(--theme-action-text, #ffffff);
 }
 
 .button--full {
@@ -6820,8 +6820,8 @@ a.learning-list-card:hover {
 }
 
 .ac-btn-primary {
-  background: #0066ff;
-  color: #ffffff;
+  background: var(--theme-action, #0066ff);
+  color: var(--theme-action-text, #ffffff);
   border: none;
   border-radius: 8px;
   font-weight: 600;
@@ -8969,9 +8969,12 @@ a.learning-list-card:hover {
   background: #edf4ff;
 }
 
-.ac-btn-primary,
+.ac-btn-primary {
+  background: var(--theme-action, #155eef);
+}
+
 .ac-btn-primary:hover {
-  background: #155eef;
+  background: var(--theme-action-hover, #155eef);
 }
 
 .ac-courses-list {

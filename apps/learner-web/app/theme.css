@@ -62,7 +62,329 @@ html[data-theme="dark"] {
   --theme-danger-surface: #3b1d25;
   --theme-danger-text: #ffb4c0;
   --theme-shadow: none;
+  --theme-accent-indicator: #9bb3ff;
   color-scheme: dark;
+}
+
+/* ==========================================================================
+   Authority Closers Appearance Presets & CSS Variables Layer
+   ========================================================================== */
+
+/* --- Named Accent Presets: Light & Dark --- */
+
+/* 1. Cobalt (Default Authority Closers) */
+html[data-accent="cobalt"],
+html:not([data-accent]) {
+  --theme-action: #3157d8;
+  --theme-action-hover: #2449bf;
+  --theme-action-text: #ffffff;
+  --theme-focus: #2557d6;
+  --theme-info-surface: #eef3ff;
+  --theme-info-text: #234ec8;
+  --theme-accent-indicator: #3157d8;
+}
+
+html[data-theme="dark"][data-accent="cobalt"],
+html[data-theme="dark"]:not([data-accent]) {
+  --theme-action: #9bb3ff;
+  --theme-action-hover: #b8c8ff;
+  --theme-action-text: #071124;
+  --theme-focus: #b9c8ff;
+  --theme-info-surface: #17284a;
+  --theme-info-text: #c3d1ff;
+  --theme-accent-indicator: #9bb3ff;
+}
+
+/* 2. Indigo (Deep Command & High Focus) */
+html[data-accent="indigo"] {
+  --theme-action: #4f46e5;
+  --theme-action-hover: #4338ca;
+  --theme-action-text: #ffffff;
+  --theme-focus: #4338ca;
+  --theme-info-surface: #eef2ff;
+  --theme-info-text: #3730a3;
+  --theme-accent-indicator: #4f46e5;
+}
+
+html[data-theme="dark"][data-accent="indigo"] {
+  --theme-action: #a5b4fc;
+  --theme-action-hover: #c7d2fe;
+  --theme-action-text: #0b0f19;
+  --theme-focus: #c7d2fe;
+  --theme-info-surface: #1e1b4b;
+  --theme-info-text: #c7d2fe;
+  --theme-accent-indicator: #a5b4fc;
+}
+
+/* 3. Emerald (Signal Closer Green) */
+html[data-accent="emerald"] {
+  --theme-action: #047857;
+  --theme-action-hover: #065f46;
+  --theme-action-text: #ffffff;
+  --theme-focus: #065f46;
+  --theme-info-surface: #ecfdf5;
+  --theme-info-text: #065f46;
+  --theme-accent-indicator: #047857;
+}
+
+html[data-theme="dark"][data-accent="emerald"] {
+  --theme-action: #6ee7b7;
+  --theme-action-hover: #a7f3d0;
+  --theme-action-text: #022c22;
+  --theme-focus: #a7f3d0;
+  --theme-info-surface: #064e3b;
+  --theme-info-text: #a7f3d0;
+  --theme-accent-indicator: #6ee7b7;
+}
+
+/* 4. Amber (Executive Warmth & Authority) */
+html[data-accent="amber"] {
+  --theme-action: #b45309;
+  --theme-action-hover: #92400e;
+  --theme-action-text: #ffffff;
+  --theme-focus: #92400e;
+  --theme-info-surface: #fffbeb;
+  --theme-info-text: #92400e;
+  --theme-accent-indicator: #b45309;
+}
+
+html[data-theme="dark"][data-accent="amber"] {
+  --theme-action: #fcd34d;
+  --theme-action-hover: #fde68a;
+  --theme-action-text: #291b00;
+  --theme-focus: #fde68a;
+  --theme-info-surface: #451a03;
+  --theme-info-text: #fde68a;
+  --theme-accent-indicator: #fcd34d;
+}
+
+/* 5. Slate (Monochrome Precision & Steel) */
+html[data-accent="slate"] {
+  --theme-action: #334155;
+  --theme-action-hover: #1e293b;
+  --theme-action-text: #ffffff;
+  --theme-focus: #1e293b;
+  --theme-info-surface: #f1f5f9;
+  --theme-info-text: #0f172a;
+  --theme-accent-indicator: #334155;
+}
+
+html[data-theme="dark"][data-accent="slate"] {
+  --theme-action: #cbd5e1;
+  --theme-action-hover: #e2e8f0;
+  --theme-action-text: #0f172a;
+  --theme-focus: #e2e8f0;
+  --theme-info-surface: #1e293b;
+  --theme-info-text: #f8fafc;
+  --theme-accent-indicator: #cbd5e1;
+}
+
+/* --- Display Density Preferences --- */
+html {
+  --theme-density-card-padding: 20px 24px;
+  --theme-density-card-gap: 17px;
+  --theme-density-section-gap: 20px;
+  --theme-density-ledger-gap: 20px;
+  --theme-density-item-min-height: 46px;
+}
+
+html[data-density="compact"] {
+  --theme-density-card-padding: 14px 18px;
+  --theme-density-card-gap: 12px;
+  --theme-density-section-gap: 12px;
+  --theme-density-ledger-gap: 14px;
+  --theme-density-item-min-height: 44px; /* Retains strict 44px minimum target */
+}
+
+/* Apply density across Desktop & Mobile Shell */
+html[data-density="compact"]
+  .site-frame--learner
+  .learner-sidebar
+  .learner-nav__link,
+html[data-density="compact"]
+  .site-frame--learner
+  .learner-sidebar
+  .learner-sidebar__item {
+  min-height: 44px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+
+html[data-density="compact"] .site-frame--learner .learner-header,
+html[data-density="compact"] .site-frame--learner .learner-header__inner {
+  min-height: 56px;
+}
+
+html[data-density="compact"]
+  .site-frame--learner
+  .learner-main
+  .page-container {
+  padding-top: 16px;
+}
+
+/* Apply density across Cards */
+html[data-density="compact"] .site-frame--learner .current-course-card,
+html[data-density="compact"] .site-frame--learner .learner-account-card {
+  min-height: 200px;
+}
+
+html[data-density="compact"] .site-frame--learner .current-course-card__body {
+  padding: 16px 18px 16px;
+}
+
+html[data-density="compact"] .site-frame--learner .dashboard-intro {
+  min-height: 60px;
+  margin-bottom: 12px;
+}
+
+/* Apply density across Menus & Popovers */
+html[data-density="compact"] .account-menu-popover {
+  padding: 4px 0;
+}
+
+html[data-density="compact"] .account-menu-header {
+  padding: 8px 14px;
+}
+
+html[data-density="compact"] .account-menu-links a,
+html[data-density="compact"] .account-menu-footer .menu-sign-out-link {
+  min-height: 44px;
+  padding: 5px 14px;
+}
+
+html[data-density="compact"] .notification-popover {
+  max-width: 360px;
+}
+
+html[data-density="compact"] .notification-popover__header {
+  padding: 12px 14px;
+}
+
+html[data-density="compact"] .notification-popover__body {
+  padding: 14px;
+}
+
+/* Apply density across Help Chatbox */
+html[data-density="compact"] .site-frame--learner .learner-help-chatbox {
+  width: min(340px, calc(100vw - 32px));
+  padding: 14px;
+  gap: 10px;
+}
+
+html[data-density="compact"]
+  .site-frame--learner
+  .learner-help-chatbox__header {
+  padding: 10px 12px;
+}
+
+html[data-density="compact"] .site-frame--learner .learner-help-chatbox__body {
+  padding: 10px 12px;
+}
+
+/* Apply density across Video Player */
+html[data-density="compact"] .site-frame--learner .momentum-video-controls {
+  min-height: 52px;
+  padding: 6px 10px;
+  gap: 8px;
+}
+
+/* --- Motion & Reduced-Motion Rules --- */
+html[data-reduced-motion="true"],
+html[data-motion="reduced"] {
+  --theme-transition-duration: 0.001ms;
+  --theme-animation-duration: 0.001ms;
+  scroll-behavior: auto !important;
+}
+
+html[data-reduced-motion="true"] .site-frame--learner,
+html[data-reduced-motion="true"] .site-frame--learner *,
+html[data-reduced-motion="true"] .site-frame--learner *::before,
+html[data-reduced-motion="true"] .site-frame--learner *::after,
+html[data-motion="reduced"] .site-frame--learner,
+html[data-motion="reduced"] .site-frame--learner *,
+html[data-motion="reduced"] .site-frame--learner *::before,
+html[data-motion="reduced"] .site-frame--learner *::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-motion="full"]) .site-frame--learner,
+  html:not([data-motion="full"]) .site-frame--learner *,
+  html:not([data-motion="full"]) .site-frame--learner *::before,
+  html:not([data-motion="full"]) .site-frame--learner *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+html[data-reduced-motion="true"]
+  .site-frame--learner
+  .learner-help-chatbox__trigger:hover,
+html[data-reduced-motion="true"]
+  .site-frame--learner
+  .button:hover:not(:disabled),
+html[data-reduced-motion="true"]
+  .site-frame--learner
+  .button:active:not(:disabled),
+html[data-reduced-motion="true"] .site-frame--learner .practice-step-card:hover,
+html[data-motion="reduced"]
+  .site-frame--learner
+  .learner-help-chatbox__trigger:hover,
+html[data-motion="reduced"] .site-frame--learner .button:hover:not(:disabled),
+html[data-motion="reduced"] .site-frame--learner .button:active:not(:disabled),
+html[data-motion="reduced"] .site-frame--learner .practice-step-card:hover {
+  transform: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-motion="full"])
+    .site-frame--learner
+    .learner-help-chatbox__trigger:hover,
+  html:not([data-motion="full"])
+    .site-frame--learner
+    .button:hover:not(:disabled),
+  html:not([data-motion="full"])
+    .site-frame--learner
+    .button:active:not(:disabled),
+  html:not([data-motion="full"])
+    .site-frame--learner
+    .practice-step-card:hover {
+    transform: none !important;
+  }
+}
+
+/* Premium Microinteractions when motion is permitted */
+html:not([data-reduced-motion="true"]):not([data-motion="reduced"])
+  .theme-control__option:hover,
+html:not([data-reduced-motion="true"]):not([data-motion="reduced"])
+  .learner-help-chatbox__trigger:hover,
+html:not([data-reduced-motion="true"]):not([data-motion="reduced"])
+  .sidebar-collapse-btn:hover {
+  transform: translateY(-1px);
+}
+
+/* Safe Area Insets for Mobile Shell and Popovers */
+.site-frame--learner .learner-header {
+  padding-top: max(0px, env(safe-area-inset-top));
+}
+
+.site-frame--learner .learner-bottom-nav {
+  padding-bottom: max(6px, env(safe-area-inset-bottom));
+  padding-left: max(8px, env(safe-area-inset-left));
+  padding-right: max(8px, env(safe-area-inset-right));
+}
+
+.site-frame--learner .mobile-drawer-sheet {
+  padding-bottom: max(20px, env(safe-area-inset-bottom));
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
+}
+
+.learner-toast-region {
+  bottom: max(24px, calc(env(safe-area-inset-bottom) + 20px));
 }
 
 html[data-theme="dark"] body {

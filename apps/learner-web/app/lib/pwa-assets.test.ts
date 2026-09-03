@@ -110,8 +110,9 @@ describe("learner PWA cache boundary", () => {
   it("keeps the pre-paint theme initializer in the offline shell boundary", () => {
     expect(serviceWorker).toContain('"/theme-init.js"');
     expect(themeInitializer).toContain("root.dataset.theme = effective");
+    expect(themeInitializer).toContain("root.dataset.themePreference =");
     expect(themeInitializer).toContain(
-      "root.dataset.themePreference = preference",
+      "themeStorageReadFailed && bootstrapThemePreference",
     );
     expect(themeInitializer).toContain("root.style.colorScheme = effective");
   });
