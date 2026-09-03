@@ -136,7 +136,11 @@ def learner_base_url() -> str:
 
 
 @pytest.fixture(scope="session")
-def browser() -> Iterator[Browser]:
+def browser(learner_base_url: str) -> Iterator[Browser]:
+    # Resolve the configured target before Playwright starts. This lets an
+    # ordinary repository-wide pytest run skip the browser suite cleanly on
+    # hosts where no learner server was requested (notably Windows).
+    assert learner_base_url
     with sync_playwright() as playwright:
         instance = playwright.chromium.launch(headless=True)
         yield instance
