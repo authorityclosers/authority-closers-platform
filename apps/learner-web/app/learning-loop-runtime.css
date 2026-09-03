@@ -589,12 +589,16 @@
   background: #111827;
 }
 
-.site-frame--learner .momentum-video-stage--blocked .momentum-video-stage__badge {
+.site-frame--learner
+  .momentum-video-stage--blocked
+  .momentum-video-stage__badge {
   border-color: rgba(239, 68, 68, 0.4);
   color: #fca5a5;
 }
 
-.site-frame--learner .momentum-video-stage--blocked .momentum-video-stage__icon {
+.site-frame--learner
+  .momentum-video-stage--blocked
+  .momentum-video-stage__icon {
   border-color: rgba(239, 68, 68, 0.3);
   background: rgba(239, 68, 68, 0.12);
   color: #ef4444;

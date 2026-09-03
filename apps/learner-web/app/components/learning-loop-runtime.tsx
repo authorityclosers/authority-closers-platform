@@ -299,11 +299,11 @@ export function LockedMediaStage({
         <h3>No approved lesson media is connected yet.</h3>
         <p>
           {authorized
-            ? (reason && reason !== "No approved lesson media is connected yet."
-                ? reason
-                : "The server exposes a completion action, but this activity cannot start playback until approved lesson media is attached.")
-            : (reason ||
-              "Playback and completion remain unavailable for this activity until the server resolves the required capability.")}
+            ? reason && reason !== "No approved lesson media is connected yet."
+              ? reason
+              : "The server exposes a completion action, but this activity cannot start playback until approved lesson media is attached."
+            : reason ||
+              "Playback and completion remain unavailable for this activity until the server resolves the required capability."}
         </p>
       </div>
       <div className="momentum-video-stage__footer">
@@ -526,7 +526,9 @@ export function CaptionsTranscriptPanel({
                   aria-pressed={captionsEnabled}
                 >
                   <Captions size={14} aria-hidden="true" />
-                  <span>{captionsEnabled ? "Captions on" : "Captions off"}</span>
+                  <span>
+                    {captionsEnabled ? "Captions on" : "Captions off"}
+                  </span>
                 </button>
               ) : null}
             </div>
@@ -579,7 +581,8 @@ export function CaptionsTranscriptPanel({
             <p>Transcript is not available for this lesson.</p>
             {hasCaptions ? (
               <p className="momentum-video-transcript__hint">
-                Timed captions are connected and can be viewed directly on the video player.
+                Timed captions are connected and can be viewed directly on the
+                video player.
               </p>
             ) : null}
           </div>
@@ -1038,7 +1041,8 @@ export function VideoViewer({
         setMediaState("blocked");
         setMediaMessage(
           isBlocked
-            ? mediaResolution.reason || "Lesson media is blocked by content policy."
+            ? mediaResolution.reason ||
+                "Lesson media is blocked by content policy."
             : "Approved lesson media is unavailable.",
         );
         return;
@@ -1427,7 +1431,10 @@ export function VideoViewer({
           break;
         case "t":
         case "T":
-          if (activeMedia?.transcript?.length || activeMedia?.captions?.length) {
+          if (
+            activeMedia?.transcript?.length ||
+            activeMedia?.captions?.length
+          ) {
             event.preventDefault();
             const next = !transcriptOpen;
             setTranscriptOpen(next);
@@ -1829,7 +1836,9 @@ export function VideoViewer({
                 emitTelemetry("video_transcript_toggle", { open: next });
               }}
               aria-expanded={transcriptOpen}
-              aria-label={transcriptOpen ? "Close transcript" : "Open transcript"}
+              aria-label={
+                transcriptOpen ? "Close transcript" : "Open transcript"
+              }
               aria-keyshortcuts="t"
             >
               <FileText size={18} aria-hidden="true" />

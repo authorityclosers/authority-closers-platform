@@ -269,7 +269,11 @@ describe("learning loop video runtime", () => {
       createElement(CaptionsTranscriptPanel, {
         transcript: [
           { start: 0, end: 5, text: "Welcome to high-stakes closing." },
-          { start: 5, end: 12, text: "Focus entirely on diagnostic discovery." },
+          {
+            start: 5,
+            end: 12,
+            text: "Focus entirely on diagnostic discovery.",
+          },
         ],
         currentTime: 7,
         onSeek: vi.fn(),
@@ -319,4 +323,3 @@ describe("learning loop video runtime", () => {
     expect(html).not.toContain("No approved lesson media is connected yet.");
   });
 });
-
