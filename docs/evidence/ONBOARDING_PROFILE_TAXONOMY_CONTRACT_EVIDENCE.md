@@ -40,12 +40,15 @@ session; the contract records exact Drive IDs and consequences.
 ## External evidence and licensing outcome
 
 The source manifest records official ISO, ITU, UNESCO UIS, Government of India
-DoT/UGC, and W3C URLs with retrieval date `2026-09-03`. No full country,
-numbering, UNESCO, or Indian degree list is vendored: ISO’s free code-use
-statement does not make all materials freely reproducible; ITU/UGC/DoT reuse
-terms were not established; UNESCO’s related operational manual is
-CC BY-NC-ND 3.0 IGO. The repository therefore stores a field contract and a
-reviewed fetch/generation path only.
+DoT/UGC, and W3C URLs and marks the research view as checked on `2026-09-03`.
+External source provenance is explicitly `planned_not_fetched`: each entry has
+null exact-artifact retrieval date, source revision/date, and response SHA-256
+until a controlled generator captures those facts and completes licensing
+review. No full country, numbering, UNESCO, or Indian degree list is vendored:
+ISO’s free code-use statement does not make all materials freely reproducible;
+ITU/UGC/DoT reuse terms were not established; UNESCO’s related operational
+manual is CC BY-NC-ND 3.0 IGO. The repository therefore stores a field contract
+and a documented, non-runtime fetch/generation path only.
 
 ## Verification
 
@@ -56,14 +59,16 @@ uv run pytest tests/unit/test_onboarding_profile_taxonomy_contract.py
 ```
 
 The test asserts schema structure, field separation, E.164 shape, enum
-boundaries, conditional `other` behavior, source URL/retrieval metadata, and
-the explicit empty vendored-dataset list. It does not claim that a number is
-assigned/reachable, that a degree is recognised, or that any taxonomy is a
-scoring/personalization model.
+boundaries, conditional `other` behavior including blank/whitespace rejection,
+explicit input normalization, planned source provenance, non-default proposed
+country state, and the empty vendored-dataset list. It does not claim that a
+number is assigned/reachable, that a degree is recognised, or that any taxonomy
+is a scoring/personalization model.
 
 ## Gates
 
-- Country `IN` is an inference and must be confirmed before activation.
+- Country `IN` is an inference, is not an active/default country, and must be
+  confirmed before activation.
 - Current source revisions, SHA-256 values, and reuse review must be recorded
   by a release-generation job before any generated list is introduced.
 - Controlled product/data/API/security/QA promotion is required before code or

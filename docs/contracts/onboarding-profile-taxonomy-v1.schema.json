@@ -9,7 +9,7 @@
     "country_code": {
       "type": ["string", "null"],
       "pattern": "^[A-Z]{2}$",
-      "description": "ISO 3166-1 alpha-2 code. The current requested-country configuration allows IN; the source manifest owns the allowlist. Do not infer from IP, locale, provider, or phone prefix."
+      "description": "ISO 3166-1 alpha-2 code. No country is active by this contract; the source manifest records IN only as a proposed, unconfirmed value. Do not infer from IP, locale, provider, or phone prefix."
     },
     "phone_number_e164": {
       "type": ["string", "null"],
@@ -88,8 +88,10 @@
     },
     "sales_interest_other": {
       "type": ["string", "null"],
+      "minLength": 1,
       "maxLength": 240,
-      "description": "Optional user-entered sales-learning interest, required only when sales_interest_codes contains other."
+      "pattern": "^\\S(?:[\\s\\S]*\\S)?$",
+      "description": "Optional user-entered sales-learning interest, required only when sales_interest_codes contains other. Canonical value is Unicode NFC and outer-trimmed; it must contain at least one non-whitespace character and must not retain leading or trailing whitespace."
     }
   },
   "allOf": [
@@ -103,7 +105,14 @@
         }
       },
       "then": {
-        "required": ["sales_interest_other"]
+        "required": ["sales_interest_other"],
+        "properties": {
+          "sales_interest_other": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^\\S(?:[\\s\\S]*\\S)?$"
+          }
+        }
       }
     },
     {

@@ -11,10 +11,10 @@ runtime accepts these fields.
 
 The profile extension is a small set of optional, user-declared attributes:
 
-- `country_code` — ISO 3166-1 alpha-2. The current configuration is `IN`
-  (India), based on the assigned-work-item cue that Indian education sources
-  are relevant. That country choice is an explicit inference and must be
-  confirmed before activation.
+- `country_code` — ISO 3166-1 alpha-2. No country is active in this proposal.
+  `IN` (India) is retained only as a proposed value because the assigned work
+  item cues Indian education sources; that country choice is an explicit
+  inference, is not a default, and must be confirmed before activation.
 - `phone_number_e164` and `whatsapp_number_e164` — two independent contact
   endpoints. Either may be absent; equal values are allowed; neither proves
   reachability, WhatsApp availability, verification, opt-in, or consent.
@@ -32,7 +32,7 @@ The profile extension is a small set of optional, user-declared attributes:
 
 The machine shape is in
 [`onboarding-profile-taxonomy-v1.schema.json`](onboarding-profile-taxonomy-v1.schema.json).
-The exact source/provenance and no-vendoring decision is in
+The exact source URLs, planned provenance, and no-vendoring decision are in
 [`onboarding-profile-source-manifest.json`](onboarding-profile-source-manifest.json).
 The route/state contract is in
 [`onboarding-profile-state-matrix.csv`](onboarding-profile-state-matrix.csv).
@@ -96,25 +96,27 @@ these under an explicit `profile_taxonomy` object in the versioned onboarding
 contract; it must not silently reinterpret the existing registration
 `whatsapp_number` field or backfill a direct phone number from it.
 
-| Field                  | Type and bound                                                       | Normalization                                                                                                                                                      | Purpose and source boundary                                                                                                                                                  |
-| ---------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `country_code`         | nullable string; two uppercase ASCII letters; current allowlist `IN` | Trim, uppercase, reject unknown configured code. Do not infer.                                                                                                     | User-declared country context for display/number-entry assistance only. ISO 3166-1 is the code authority.                                                                    |
-| `phone_number_e164`    | nullable string; `+` plus 7–15 decimal digits total                  | Canonical payload is E.164. A future UI parser may accept local presentation only after explicit country choice and a reviewed library; do not validate existence. | Optional direct phone endpoint. ITU E.164 supplies structure/max length; no provider lookup.                                                                                 |
-| `whatsapp_number_e164` | nullable string; same bound as phone                                 | Same as phone; it may equal phone but is never aliased to it.                                                                                                      | Optional user-declared WhatsApp endpoint. It is not messaging consent or provider status.                                                                                    |
-| `education_level_code` | nullable enum `NOT_STATED` or `ISCED_2011_0`…`ISCED_2011_8`          | Uppercase stable code; `NOT_STATED` is explicit.                                                                                                                   | Broad international education-level reference from UNESCO UIS. No degree equivalence/eligibility inference.                                                                  |
-| `degree_name`          | nullable Unicode text, max 120 characters                            | Unicode NFC, trim outer whitespace; preserve case, punctuation, and abbreviations.                                                                                 | Exact user-entered qualification name. UGC is consulted for current nomenclature only; no exhaustive list or verification.                                                   |
-| `education_field_code` | nullable enum `NOT_STATED` or `ISCED_F_00`…`ISCED_F_10`              | Uppercase stable code; never derive from another field.                                                                                                            | Broad field-of-education reference from UNESCO UIS.                                                                                                                          |
-| `specialization`       | nullable Unicode text, max 120 characters                            | Unicode NFC, trim outer whitespace; preserve wording.                                                                                                              | Exact user-entered specialization/concentration, separate from degree name. UGC’s notification pattern supports a specialization suffix, but does not establish equivalence. |
-| `sales_interest_codes` | nullable unique array of 1–3 AC-owned codes                          | Trim and canonicalize codes; order is not meaningful; reject unknown/duplicate codes.                                                                              | User-selected learning-interest labels derived from the existing bounded goal choices. This is an AC product interpretation, not a universal taxonomy.                       |
-| `sales_interest_other` | nullable Unicode text, max 240; required iff `other` is selected     | Unicode NFC, trim outer whitespace; no automatic categorization.                                                                                                   | User-described interest; never converted into a score, recommendation, or protected label.                                                                                   |
+| Field                  | Type and bound                                                                                 | Normalization                                                                                                                                                      | Purpose and source boundary                                                                                                                                                  |
+| ---------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `country_code`         | nullable string; two uppercase ASCII letters; no active allowlist; proposed `IN` only          | Trim, uppercase, then validate against an explicitly approved allowlist. Do not infer or default.                                                                  | User-declared country context for display/number-entry assistance only. ISO 3166-1 is the code authority.                                                                    |
+| `phone_number_e164`    | nullable string; `+` plus 7–15 decimal digits total                                            | Canonical payload is E.164. A future UI parser may accept local presentation only after explicit country choice and a reviewed library; do not validate existence. | Optional direct phone endpoint. ITU E.164 supplies structure/max length; no provider lookup.                                                                                 |
+| `whatsapp_number_e164` | nullable string; same bound as phone                                                           | Same as phone; it may equal phone but is never aliased to it.                                                                                                      | Optional user-declared WhatsApp endpoint. It is not messaging consent or provider status.                                                                                    |
+| `education_level_code` | nullable enum `NOT_STATED` or `ISCED_2011_0`…`ISCED_2011_8`                                    | Uppercase stable code; `NOT_STATED` is explicit.                                                                                                                   | Broad international education-level reference from UNESCO UIS. No degree equivalence/eligibility inference.                                                                  |
+| `degree_name`          | nullable Unicode text, max 120 characters                                                      | Unicode NFC, trim outer whitespace; preserve case, punctuation, and abbreviations.                                                                                 | Exact user-entered qualification name. UGC is consulted for current nomenclature only; no exhaustive list or verification.                                                   |
+| `education_field_code` | nullable enum `NOT_STATED` or `ISCED_F_00`…`ISCED_F_10`                                        | Uppercase stable code; never derive from another field.                                                                                                            | Broad field-of-education reference from UNESCO UIS.                                                                                                                          |
+| `specialization`       | nullable Unicode text, max 120 characters                                                      | Unicode NFC, trim outer whitespace; preserve wording.                                                                                                              | Exact user-entered specialization/concentration, separate from degree name. UGC’s notification pattern supports a specialization suffix, but does not establish equivalence. |
+| `sales_interest_codes` | nullable unique array of 1–3 AC-owned codes                                                    | Trim and canonicalize codes; order is not meaningful; reject unknown/duplicate codes.                                                                              | User-selected learning-interest labels derived from the existing bounded goal choices. This is an AC product interpretation, not a universal taxonomy.                       |
+| `sales_interest_other` | nullable Unicode text, 1–240 characters after trim; nonblank; required iff `other` is selected | Unicode NFC, trim outer whitespace before validation; reject empty/whitespace-only values; no automatic categorization.                                            | User-described interest; never converted into a score, recommendation, or protected label.                                                                                   |
 
 The canonical phone pattern is deliberately narrow (`^\\+[1-9][0-9]{6,14}$`)
 to prevent local-format ambiguity. The seven-digit lower bound is an AC input
 validation choice, not a claim that every such number is assigned or reachable.
 Country calling code is derived from the E.164 value for parsing/display; it is
-not persisted as an independent source of truth. For the India configuration,
-`+91` is corroborated by the official DoT notice and the ITU assigned-code
-table, but the current assignment must be rechecked at activation.
+not persisted as an independent source of truth. For the proposed India
+configuration, `+91` is corroborated by the official DoT notice and the ITU
+assigned-code table, but the current assignment must be rechecked at
+activation; this proposal does not activate India or any country calling-code
+assistance.
 
 ## Normalization and privacy rules
 
@@ -211,17 +213,20 @@ mapping and an explicit evaluation plan.
 ## Source, licensing, and generation decision
 
 No authoritative reusable dataset is vendored. The source manifest records the
-exact URLs, retrieval date, provenance, licensing assessment, and generation
-steps. The decision is based on these facts:
+exact URLs and the date on which the research view was checked. Each external
+source has an explicitly `planned` provenance object with null retrieval date,
+source revision, and response SHA-256 until a controlled generator captures an
+exact artifact and completes licensing review. The decision is based on these
+research findings:
 
 - ISO permits free-of-charge use of country codes, but its full materials and
-  publications remain copyright-protected; the contract stores only a current
-  allowlisted code and fetches labels through a reviewed release step.
+  publications remain copyright-protected; a future release step may store
+  only an explicitly approved code after exact-artifact capture and review.
 - ITU’s in-force E.164 recommendation is freely available on its official
   page, but ITU copyright remains; the contract references the number rule and
   copies no table or prose.
 - UNESCO UIS owns/custodies ISCED. The official manuals provide the standard,
-  but the fetched material did not establish a commercial dataset licence; the
+  but the research view did not establish a commercial dataset licence; the
   related 2015 operational manual is CC BY-NC-ND 3.0 IGO, which does not allow
   a commercial derivative dataset. Only stable identifiers are represented.
 - UGC and Indian DoT official pages are used as authoritative references, but
@@ -230,28 +235,30 @@ steps. The decision is based on these facts:
 - W3C WCAG 2.2 is referenced for acceptance criteria; no normative text is
   copied.
 
-Release generation must fetch each source at the exact manifest URL, record
-`source_id`, URL, retrieval date, source revision/date, response SHA-256, and
-reuse decision, then run the contract tests. End-user runtime must not fetch
-these sources. A stale/missing source blocks taxonomy artifact promotion only;
-it does not block the core learner project.
+Release generation is a planned, non-runtime step. It must fetch each source at
+the exact manifest URL, replace the planned provenance fields with an exact
+retrieval date, source revision/date, response SHA-256, and reuse decision only
+when those facts are captured, then run the contract tests. End-user runtime
+must not fetch these sources. A stale/missing source blocks taxonomy artifact
+promotion only; it does not block the core learner project.
 
 ## Inference ledger
 
-| Item                                                        | Classification                                                                             | Required handling                                                                                 |
-| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| India/`IN` is the requested country                         | Inference from work-item context; not present as a direct user decision in this repository | Confirm before activation; retain an explicit versioned country allowlist.                        |
-| Broad ISCED code identifiers and paraphrased labels         | Standard-derived implementation interpretation                                             | Keep codes separate from local equivalence; recheck current UIS release.                          |
-| India `+91` support                                         | Corroborated by official DoT/ITU references; current assignment freshness remains a gate   | Recheck current E.164/DoT source at activation; do not infer number validity.                     |
-| Sales-interest codebook                                     | AC-owned interpretation of existing candidate goal labels                                  | Product-owner promotion required; no protected or scoring use.                                    |
-| Seven-digit minimum, text lengths, three-interest cap       | Local validation/recovery proposals                                                        | Treat as contract values pending controlled API/data promotion; they are not universal standards. |
-| Contact exclusion from automatic local drafts               | Privacy/data-minimization proposal                                                         | Security/privacy review before implementation; preserve explicit user copy/download recovery.     |
-| `/onboarding` as profile editing and `/settings` as summary | Follows current IA and route contracts                                                     | Do not add a parallel `/profile` route without controlled IA change.                              |
+| Item                                                        | Classification                                                                             | Required handling                                                                                               |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
+| India/`IN` is the proposed country                          | Inference from work-item context; not present as a direct user decision in this repository | Keep it non-default and inactive; confirm before activation and retain an explicit versioned country allowlist. |
+| Broad ISCED code identifiers and paraphrased labels         | Standard-derived implementation interpretation                                             | Keep codes separate from local equivalence; recheck current UIS release.                                        |
+| India `+91` support                                         | Corroborated by official DoT/ITU references; current assignment freshness remains a gate   | Recheck current E.164/DoT source at activation; do not infer number validity.                                   |
+| Sales-interest codebook                                     | AC-owned interpretation of existing candidate goal labels                                  | Product-owner promotion required; no protected or scoring use.                                                  |
+| Seven-digit minimum, text lengths, three-interest cap       | Local validation/recovery proposals                                                        | Treat as contract values pending controlled API/data promotion; they are not universal standards.               |
+| Contact exclusion from automatic local drafts               | Privacy/data-minimization proposal                                                         | Security/privacy review before implementation; preserve explicit user copy/download recovery.                   |
+| `/onboarding` as profile editing and `/settings` as summary | Follows current IA and route contracts                                                     | Do not add a parallel `/profile` route without controlled IA change.                                            |
 
 ## Activation gates and explicit non-goals
 
 This proposal does not activate any of the following:
 
+- any country or country-specific default; `IN` remains proposed and inactive;
 - scoring, evaluation, readiness, competency, certification, hiring, or talent
   decisions;
 - personalized course mapping or recommendation;

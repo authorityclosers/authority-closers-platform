@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import json
 import re
+import unicodedata
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -32,6 +33,25 @@ def _manifest() -> dict[str, Any]:
     return _load_json(MANIFEST_PATH)
 
 
+def _normalize_profile(value: dict[str, Any]) -> dict[str, Any]:
+    """Apply the contract's explicit input normalization before validation."""
+
+    normalized = dict(value)
+    country = normalized.get("country_code")
+    if isinstance(country, str):
+        normalized["country_code"] = country.strip().upper()
+    for key in ("degree_name", "specialization", "sales_interest_other"):
+        text = normalized.get(key)
+        if isinstance(text, str):
+            normalized[key] = unicodedata.normalize("NFC", text).strip()
+    codes = normalized.get("sales_interest_codes")
+    if isinstance(codes, list):
+        normalized["sales_interest_codes"] = [
+            code.strip() if isinstance(code, str) else code for code in codes
+        ]
+    return normalized
+
+
 def _validate_profile(value: dict[str, Any]) -> list[str]:
     """Validate the schema subset used by this contract without new dependencies."""
 
@@ -57,6 +77,8 @@ def _validate_profile(value: dict[str, Any]) -> list[str]:
             errors.append(f"type:{key}")
             continue
         if isinstance(actual, str):
+            if len(actual) < field.get("minLength", 0):
+                errors.append(f"minLength:{key}")
             if len(actual) > field.get("maxLength", len(actual)):
                 errors.append(f"maxLength:{key}")
             pattern = field.get("pattern")
@@ -100,27 +122,42 @@ def test_schema_is_closed_and_keeps_contact_endpoints_separate() -> None:
     assert "marketing_consent" not in properties
     assert "score" not in properties
     assert "recommendation" not in properties
+    assert properties["sales_interest_other"]["minLength"] == 1
+    assert properties["sales_interest_other"]["pattern"] == r"^\S(?:[\s\S]*\S)?$"
+    conditional_other = schema["allOf"][0]["then"]["properties"]["sales_interest_other"]
+    assert conditional_other["type"] == "string"
+    assert conditional_other["minLength"] == 1
+    assert conditional_other["pattern"] == r"^\S(?:[\s\S]*\S)?$"
 
 
-def test_manifest_is_contract_only_and_has_exact_source_metadata() -> None:
+def test_manifest_is_contract_only_and_marks_source_metadata_as_planned() -> None:
     manifest = _manifest()
     assert manifest["status"] == "contract_only_no_vendored_dataset"
-    assert manifest["retrieved_on"] == "2026-09-03"
-    assert manifest["current_country_allowlist"] == ["IN"]
+    assert manifest["manifest_generated_on"] == "2026-09-03"
+    assert manifest["source_research_checked_on"] == "2026-09-03"
+    assert manifest["source_provenance_status"] == "planned_not_fetched"
+    assert manifest["active_country_allowlist"] == []
     assert manifest["vendored_datasets"] == []
-    assert manifest["requested_country_assumption"]["is_inference"] is True
-    assert (
-        manifest["requested_country_assumption"]["requires_user_confirmation_before_activation"]
-        is True
-    )
+    assert manifest["proposed_country"]["country_code"] == "IN"
+    assert manifest["proposed_country"]["status"] == "proposed_not_active"
+    assert manifest["proposed_country"]["is_inference"] is True
+    assert manifest["proposed_country"]["requires_user_confirmation_before_activation"] is True
+    assert manifest["generation_path"]["runtime_fetch"] is False
+    assert manifest["generation_path"]["status"] == "planned_release_step_not_implemented"
 
     sources = manifest["sources"]
     assert len(sources) >= 8
     for source in sources:
         assert source["source_id"]
         assert source["url"].startswith("https://")
-        assert date.fromisoformat(source["retrieved_on"]) == date(2026, 9, 3)
-        assert source["reuse_decision"]
+        assert date.fromisoformat(source["research_checked_on"]) == date(2026, 9, 3)
+        provenance = source["provenance"]
+        assert provenance["status"] == "planned"
+        assert provenance["retrieved_on"] is None
+        assert provenance["source_revision_or_date"] is None
+        assert provenance["sha256"] is None
+        assert provenance["license_or_provenance"].startswith("Planned capture:")
+        assert provenance["reuse_decision"].startswith("planned_")
     urls = {source["url"] for source in sources}
     assert "https://www.iso.org/iso-3166-country-codes.html" in urls
     assert "https://www.itu.int/rec/T-REC-E.164-202602-I/en" in urls
@@ -146,7 +183,7 @@ def test_state_matrix_has_onboarding_settings_and_safe_routing_rows() -> None:
 
 def test_valid_profile_uses_canonical_phone_values_and_explicit_taxonomy_codes() -> None:
     payload = {
-        "country_code": "IN",
+        "country_code": None,
         "phone_number_e164": "+919876543210",
         "whatsapp_number_e164": "+919876543211",
         "education_level_code": "ISCED_2011_6",
@@ -157,6 +194,34 @@ def test_valid_profile_uses_canonical_phone_values_and_explicit_taxonomy_codes()
         "sales_interest_other": "Practice a calmer follow-up conversation",
     }
     assert _validate_profile(payload) == []
+
+
+@pytest.mark.parametrize("blank_other", ["", " ", "\t", "\n", " \t \n "])
+def test_other_interest_rejects_blank_or_whitespace_only_text(blank_other: str) -> None:
+    payload = {
+        "sales_interest_codes": ["other"],
+        "sales_interest_other": blank_other,
+    }
+    assert _validate_profile(payload)
+
+
+def test_proposed_country_is_not_active_and_normalizes_before_validation() -> None:
+    manifest = _manifest()
+    assert manifest["active_country_allowlist"] == []
+    assert manifest["proposed_country"]["country_code"] == "IN"
+    assert manifest["proposed_country"]["country_code"] not in manifest["active_country_allowlist"]
+
+    normalized = _normalize_profile(
+        {
+            "country_code": " in ",
+            "sales_interest_codes": [" other "],
+            "sales_interest_other": "  Practice a calmer follow-up conversation  ",
+        }
+    )
+    assert normalized["country_code"] == "IN"
+    assert normalized["sales_interest_codes"] == ["other"]
+    assert normalized["sales_interest_other"] == "Practice a calmer follow-up conversation"
+    assert _validate_profile(normalized) == []
 
 
 @pytest.mark.parametrize(
