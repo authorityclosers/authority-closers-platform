@@ -2,7 +2,7 @@
 id: IMP-001
 type: implementation
 title: Learner Web Implementation Map
-status: uncommitted-candidate
+status: implementation-candidate
 version: v0.1-alpha
 updated: 2026-09-01
 tags:
@@ -20,7 +20,9 @@ tags:
 | appearance/resilience | [theme-control.tsx](../../../apps/learner-web/app/components/theme-control.tsx), [surface-state.tsx](../../../apps/learner-web/app/components/surface-state.tsx), [sw.js](../../../apps/learner-web/public/sw.js)                                           | [[VAR-THEME-001-theme]], [[SF-SYS-001-universal-states]], [[JRN-05-resilient-web-pwa]]                                       |
 | API client/drafts     | [learner-api.ts](../../../apps/learner-web/app/lib/learner-api.ts), [local-drafts.ts](../../../apps/learner-web/app/lib/local-drafts.ts)                                                                                                                    | [[API-001-identity-onboarding]], [[API-002-catalog-enrollment]], [[API-003-learning-evidence]], [[API-004-session-settings]] |
 
-Status is path-observed in the current uncommitted worktree. This node does not claim an immutable build, staging deployment, browser acceptance, or production behavior.
+Status is path-observed in the current repository. Exact staging inclusion and
+acceptance are release-scoped; this node does not by itself claim route
+acceptance or production behavior.
 
 - controlled-by: [[SRC-070-repository-interpretations]].
 - validated-by: [[IMP-004-tests]] and [[GATE-003-exact-release-staging]].

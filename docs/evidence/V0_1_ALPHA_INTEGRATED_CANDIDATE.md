@@ -15,16 +15,18 @@ The immutable release `5c7333c5a588f5209acd5ca9b5ce0e03e20e16a4` is the
 staging artifact covered by
 [EVD-005 exact staging controller smoke](../knowledge/v0.1-alpha/EVD-005-exact-staging-5c7333c5.md).
 
-## Migration normalization
+## Historical migration normalization
 
-The integrated chain is linear:
+The integration verification recorded for the earlier candidate stopped at a
+linear head of:
 
 `20260901_0012 -> 20260902_0013_media_contracts -> 20260902_0014_planning_analytics`
 
-The isolated planning branch remains unchanged. Only this unreleased
-integration candidate renames the planning migration and updates its
-`down_revision`; migration operations and durable table semantics are
-unchanged.
+That candidate renamed the planning migration and updated its `down_revision`;
+migration operations and durable table semantics were unchanged. The exact
+staging release named above subsequently adds
+`20260903_0015 -> 20260903_0016`, and its deployed migration head is
+`20260903_0016` as recorded in EVD-005.
 
 ## Verification
 
@@ -35,7 +37,9 @@ unchanged.
 - `uv run mypy packages/python`: passed; 112 source files.
 - Root format check, lint, and typecheck: passed.
 - Learner web tests: **265 passed**; typecheck and lint passed.
-- `uv run alembic heads`: one head, `20260902_0014`.
+- Historical candidate check: `uv run alembic heads` returned one head,
+  `20260902_0014`. Exact-release deployment proof records the later single head
+  `20260903_0016`.
 - `uv run alembic check`: not executable without the required
   `AC_DATABASE_MIGRATOR_URL`; no database URL was invented or committed.
 - Next Webpack build compiled successfully and completed TypeScript, but local
