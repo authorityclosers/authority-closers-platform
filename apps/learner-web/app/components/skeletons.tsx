@@ -119,27 +119,29 @@ export function LearningSkeleton() {
         <SkeletonLine width="480px" className="skeleton-line--subhead" />
       </div>
 
-      <SkeletonCard className="skeleton-journey-stepper">
-        <SkeletonLine width="180px" className="skeleton-line--heading" />
-        <div className="skeleton-stepper-steps">
-          {[1, 2, 3, 4, 5].map((step) => (
-            <div key={step} className="skeleton-stepper-step">
-              <span className="skeleton-circle skeleton-circle--step" />
-              <SkeletonLine
-                width="70px"
-                className="skeleton-line--step-label"
-              />
-            </div>
-          ))}
-        </div>
-      </SkeletonCard>
+      <div className="learning-collection-skeleton__toolbar" aria-hidden="true">
+        {[1, 2, 3, 4].map((tab) => (
+          <SkeletonLine
+            key={tab}
+            width={tab === 1 ? "92px" : "78px"}
+            className="skeleton-line--tab"
+          />
+        ))}
+      </div>
 
-      <div className="skeleton-module-list">
-        {[1, 2, 3].map((mod) => (
-          <SkeletonCard key={mod} className="skeleton-module-card">
-            <div className="skeleton-module-header">
-              <SkeletonLine width="100px" className="skeleton-line--tag" />
-              <SkeletonLine width="70%" className="skeleton-line--heading" />
+      <div className="learning-collection-skeleton__grid">
+        {[1, 2, 3].map((course) => (
+          <SkeletonCard key={course} className="learning-collection-skeleton__card">
+            <div className="learning-collection-skeleton__media" />
+            <div className="learning-collection-skeleton__body">
+              <SkeletonLine width="72px" className="skeleton-line--tag" />
+              <SkeletonLine width="88%" className="skeleton-line--heading" />
+              <SkeletonLine width="96%" className="skeleton-line--text" />
+              <SkeletonLine width="78%" className="skeleton-line--text" />
+              <div className="skeleton-progress-bar">
+                <SkeletonLine width="100%" className="skeleton-line--bar" />
+              </div>
+              <SkeletonLine width="100%" className="skeleton-line--btn" />
             </div>
           </SkeletonCard>
         ))}

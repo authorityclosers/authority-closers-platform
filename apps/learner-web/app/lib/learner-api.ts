@@ -218,6 +218,33 @@ export interface CalendarResponse {
   disclaimer: string;
 }
 
+export type LearningCourseState =
+  | "in_progress"
+  | "completed"
+  | "unavailable";
+
+export type LearningSavedState = "saved" | "unavailable";
+
+export interface LearningCourseSummaryResponse {
+  program_id: string;
+  program_version_id: string;
+  program_slug: string;
+  program_title: string;
+  version_number: number;
+  enrollment_id: string;
+  enrolled_at: string;
+  updated_at: string;
+  state: LearningCourseState;
+  saved_state: LearningSavedState;
+  projection: LearningProjectionResponse | null;
+}
+
+export interface LearningCollectionResponse {
+  items: LearningCourseSummaryResponse[];
+  next_cursor: string | null;
+  saved_filter_available: boolean;
+}
+
 export interface ActivityResponse extends LearningActivityResponse {
   program_id: string;
   enrollment_id: string;
@@ -307,6 +334,10 @@ export type LearnerFetch = (
 ) => Promise<Response>;
 
 export type LearnerReadOptions = Pick<RequestInit, "signal">;
+
+export type LearningCollectionReadOptions = LearnerReadOptions & {
+  cursor?: string;
+};
 
 export type LearnerApiOptions = {
   idempotencyKey?: () => string;
@@ -656,6 +687,21 @@ export function createLearnerApi(
         ...options,
         cache: "no-store",
       }),
+    learningCollection: (
+      limit = 50,
+      options: LearningCollectionReadOptions = {},
+    ) => {
+      const { cursor, ...requestOptions } = options;
+      const query = new URLSearchParams({ limit: String(limit) });
+      if (cursor) query.set("cursor", cursor);
+      return request<LearningCollectionResponse>(
+        `/v1/learning?${query.toString()}`,
+        {
+          ...requestOptions,
+          cache: "no-store",
+        },
+      );
+    },
     program: (slug: string, options: LearnerReadOptions = {}) =>
       request<ProgramDetailResponse>(
         `/v1/programs/${encodeURIComponent(slug)}`,

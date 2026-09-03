@@ -49,6 +49,7 @@ import {
   ApiError,
   createLearnerApi,
   type LearnerApi,
+  type LearningCollectionResponse,
   type LearningResponse,
   type MeResponse,
   type ProgramSummaryResponse,
@@ -166,6 +167,25 @@ describe("Direction A & B UI System & Shell", () => {
       activity_reasons: [],
     },
   };
+  const learningCollection: LearningCollectionResponse = {
+    items: [
+      {
+        program_id: learning.program_id,
+        program_version_id: learning.program_version_id,
+        program_slug: learning.program_slug,
+        program_title: learning.program_title,
+        version_number: learning.version_number,
+        enrollment_id: learning.enrollment_id,
+        enrolled_at: "2026-09-01T00:00:00Z",
+        updated_at: "2026-09-01T00:00:00Z",
+        state: "in_progress",
+        saved_state: "unavailable",
+        projection: learning.projection,
+      },
+    ],
+    next_cursor: null,
+    saved_filter_available: false,
+  };
 
   function apiFor(overrides: Partial<LearnerApi> = {}): LearnerApi {
     return {
@@ -187,6 +207,7 @@ describe("Direction A & B UI System & Shell", () => {
         items: [freeCourse],
         next_cursor: null,
       })),
+      learningCollection: vi.fn(async () => learningCollection),
       learning: vi.fn(async () => learning),
       ...overrides,
     } as LearnerApi;
@@ -476,9 +497,8 @@ describe("Direction A & B UI System & Shell", () => {
       expect(clarityCss).toContain(
         ".site-frame--learner .practice-step-card:hover",
       );
-      expect(learningSource).toContain(
-        "No activities are currently available in this module.",
-      );
+      expect(learningSource).toContain("api.learningCollection");
+      expect(learningSource).toContain("savedFilterAvailable");
       expect(learningSource).not.toContain(
         "Module content will be released in the next sequence.",
       );
@@ -685,6 +705,20 @@ describe("Direction A & B UI System & Shell", () => {
       );
     });
 
+    it("loads the complete learner collection instead of selecting a free course", async () => {
+      const api = apiFor();
+
+      const result = await loadLearningData(api);
+
+      expect(result.courses).toHaveLength(1);
+      expect(result.courses[0].program_slug).toBe(freeCourse.slug);
+      expect(result.savedFilterAvailable).toBe(false);
+      expect(api.learningCollection).toHaveBeenCalledWith(50, {
+        signal: undefined,
+      });
+      expect(api.listPrograms).not.toHaveBeenCalled();
+    });
+
     it("disables activity navigation when the learning projection is an offline copy", () => {
       const offlineLearning = JSON.parse(
         JSON.stringify(learning),
@@ -741,7 +775,7 @@ describe("Direction A & B UI System & Shell", () => {
       });
 
       const serviceFailure = apiFor({
-        learning: vi.fn(async () => {
+        learningCollection: vi.fn(async () => {
           throw new ApiError(500, "service failure");
         }),
       });

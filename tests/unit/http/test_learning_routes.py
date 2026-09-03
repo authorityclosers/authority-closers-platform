@@ -29,7 +29,10 @@ class _Database:
 
     async def run_sync(self, operation: Any) -> Any:
         self.run_sync_calls += 1
-        return operation(SimpleNamespace())
+        return operation(self)
+
+    def scalars(self, _statement: Any) -> tuple[Any, ...]:
+        return ()
 
 
 class _ScopeResult:
@@ -239,6 +242,108 @@ def test_program_scope_rejects_ambiguous_active_version_enrollments() -> None:
             actor,
             program_id,
         )
+
+
+def test_learning_collection_scope_requires_active_entitlement_and_exact_identity() -> None:
+    tenant_id = uuid4()
+    actor = ActorContext(person_id=uuid4(), session_id=uuid4(), tenant_id=tenant_id)
+    enrollment = SimpleNamespace(id=uuid4())
+    version = SimpleNamespace(id=uuid4())
+    program = SimpleNamespace(id=uuid4())
+    database = _ScopeDatabase([(enrollment, version, program)])
+
+    assert learning_module._learner_learning_scopes(  # noqa: SLF001
+        database,  # type: ignore[arg-type]
+        actor,
+        limit=50,
+    ) == ((enrollment, version, program),)
+    sql = str(database.statement.compile()).lower()
+    assert "entitlements" in sql
+    assert "entitlements.status" in sql
+    parameters = {
+        value for value in database.statement.compile().params.values() if isinstance(value, UUID)
+    }
+    assert tenant_id in parameters
+    assert actor.person_id in parameters
+
+
+def test_learning_course_state_never_turns_an_empty_projection_into_completion() -> None:
+    def projection(denominator: int, completed_count: int) -> LearningProjectionResponse:
+        return LearningProjectionResponse(
+            scope_type="course",
+            scope_id=uuid4(),
+            program_version="1",
+            projection_version="g1-v1",
+            denominator=denominator,
+            completed_count=completed_count,
+            percentage=(completed_count / denominator) if denominator else 0.0,
+            predicate="required activities",
+            missing_module_ids=[],
+            activity_reasons=[],
+        )
+
+    assert learning_module._learning_course_state(None) == "unavailable"  # noqa: SLF001
+    assert learning_module._learning_course_state(projection(0, 0)) == "unavailable"  # noqa: SLF001
+    assert learning_module._learning_course_state(projection(3, 2)) == "in_progress"  # noqa: SLF001
+    assert learning_module._learning_course_state(projection(3, 3)) == "completed"  # noqa: SLF001
+
+
+def test_learning_collection_route_returns_accessible_rows_without_inventing_progress(
+    harness: tuple[TestClient, ActorContext, _Database, _Bundle],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, actor, database, _bundle = harness
+    enrollment = SimpleNamespace(
+        id=uuid4(),
+        enrolled_at=datetime(2026, 9, 1, tzinfo=UTC),
+        updated_at=datetime(2026, 9, 2, tzinfo=UTC),
+    )
+    version = SimpleNamespace(
+        id=uuid4(),
+        program_id=uuid4(),
+        version_number=2,
+        scope="global",
+        owner_key=uuid4(),
+    )
+    catalog_program = SimpleNamespace(
+        slug="owned-course",
+        title="Owned course",
+    )
+    monkeypatch.setattr(
+        learning_module,
+        "_learner_learning_scopes",
+        lambda _database, resolved_actor, *, limit, cursor=None: (
+            ((enrollment, version, catalog_program),)
+            if resolved_actor is actor and limit == 50 and cursor is None
+            else ()
+        ),
+    )
+
+    response = client.get("/v1/learning")
+
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["pragma"] == "no-cache"
+    assert database.run_sync_calls == 1
+    assert response.json() == {
+        "items": [
+            {
+                "program_id": str(version.program_id),
+                "program_version_id": str(version.id),
+                "program_slug": "owned-course",
+                "program_title": "Owned course",
+                "version_number": 2,
+                "enrollment_id": str(enrollment.id),
+                "enrolled_at": "2026-09-01T00:00:00Z",
+                "updated_at": "2026-09-02T00:00:00Z",
+                "state": "unavailable",
+                "saved_state": "unavailable",
+                "projection": None,
+            }
+        ],
+        "next_cursor": None,
+        "saved_filter_available": False,
+    }
 
 
 def test_draft_uses_only_authenticated_actor_and_existing_transaction(

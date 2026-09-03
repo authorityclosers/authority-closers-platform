@@ -4,30 +4,20 @@ import {
   ArrowRight,
   BookOpen,
   CheckCircle2,
-  ChevronDown,
-  FileText,
   LockKeyhole,
-  PencilLine,
-  Play,
   RotateCcw,
-  ShieldCheck,
-  Sparkles,
 } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  ActivityRow,
-  ModuleCard,
-  NextActionCard,
-  ProgressMeter,
-  RouteHeader,
-} from "@ac/ui";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ProgramCard, ProgressMeter, RouteHeader, StatusBanner } from "@ac/ui";
 
 import {
   ApiError,
   createLearnerApi,
   isAbortError,
   type LearnerApi,
+  type LearningCollectionResponse,
+  type LearningCourseSummaryResponse,
   type LearningResponse,
   type MeResponse,
 } from "../lib/learner-api";
@@ -46,19 +36,19 @@ import { useInvalidateDraftsWithoutMembership } from "./learner-runtime";
 import { LearningSkeleton } from "./skeletons";
 
 const defaultApi = createLearnerApi();
-export const FREE_COURSE_SLUG = "authority-closers-free-course";
 
-function activityKindIcon(kind: string) {
-  const k = kind.toLowerCase();
-  if (k.includes("video") || k.includes("watch"))
-    return <Play size={18} aria-hidden="true" />;
-  if (k.includes("reflect")) return <PencilLine size={18} aria-hidden="true" />;
-  if (k.includes("implement") || k.includes("challenge"))
-    return <Sparkles size={18} aria-hidden="true" />;
-  if (k.includes("review")) return <ShieldCheck size={18} aria-hidden="true" />;
-  if (k.includes("improve")) return <RotateCcw size={18} aria-hidden="true" />;
-  return <FileText size={18} aria-hidden="true" />;
-}
+// Backwards-compatible export for older test fixtures. The learner library
+// itself never uses a slug to select or authorize a course.
+export { FREE_COURSE_SLUG } from "./learner-runtime";
+
+type LearningFilter = "all" | "in_progress" | "completed" | "saved";
+
+const FILTERS: Array<{ id: LearningFilter; label: string }> = [
+  { id: "all", label: "All courses" },
+  { id: "in_progress", label: "In progress" },
+  { id: "completed", label: "Completed" },
+  { id: "saved", label: "Saved" },
+];
 
 export function isActivityActionable(
   activity: LearningResponse["modules"][number]["activities"][number],
@@ -70,57 +60,211 @@ export function isActivityActionable(
   );
 }
 
-function activityStateLabel(state: string): string {
-  return state
-    .replaceAll("_", " ")
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
+/** Load the canonical learner-owned/enrolled course projection. */
 export async function loadLearningData(
   api: LearnerApi,
   signal?: AbortSignal,
 ): Promise<{
   me: MeResponse;
-  learning: LearningResponse | null;
+  courses: LearningCourseSummaryResponse[];
+  savedFilterAvailable: boolean;
   offlineRead?: OfflineReadMetadata;
 }> {
   const me = await api.me({ signal });
   if (!hasMembershipRole(me)) {
     return {
       me,
-      learning: null,
+      courses: [],
+      savedFilterAvailable: false,
       offlineRead: getEarliestOfflineReadMetadata(me) ?? undefined,
     };
   }
 
-  const programs = await api.listPrograms(50, { signal });
-  const freeCourse = programs.items.find((p) => p.slug === FREE_COURSE_SLUG);
-  if (!freeCourse) {
-    return {
-      me,
-      learning: null,
-      offlineRead: getEarliestOfflineReadMetadata(me, programs) ?? undefined,
-    };
-  }
-
-  try {
-    const learning = await api.learning(freeCourse.id, undefined, { signal });
-    return {
-      me,
-      learning,
-      offlineRead:
-        getEarliestOfflineReadMetadata(me, programs, learning) ?? undefined,
-    };
-  } catch (err) {
-    if (err instanceof ApiError && err.status === 404) {
-      return {
-        me,
-        learning: null,
-        offlineRead: getEarliestOfflineReadMetadata(me, programs) ?? undefined,
-      };
+  const courses: LearningCourseSummaryResponse[] = [];
+  let nextCursor: string | undefined;
+  let savedFilterAvailable = false;
+  for (let page = 0; ; page += 1) {
+    if (page >= 1000) {
+      throw new Error("The learning collection returned too many pages.");
     }
-    throw err;
+    const collection: LearningCollectionResponse = await api.learningCollection(
+      50,
+      { signal, cursor: nextCursor },
+    );
+    courses.push(...collection.items);
+    savedFilterAvailable ||= collection.saved_filter_available;
+    const cursor = collection.next_cursor ?? undefined;
+    if (!cursor) break;
+    if (cursor === nextCursor) {
+      throw new Error("The learning collection returned a repeated cursor.");
+    }
+    nextCursor = cursor;
   }
+  return {
+    me,
+    courses,
+    savedFilterAvailable,
+    offlineRead:
+      getEarliestOfflineReadMetadata(me, courses) ?? undefined,
+  };
+}
+
+function formatEnrolledDate(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Enrollment date unavailable";
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(date);
+}
+
+function stateLabel(state: LearningCourseSummaryResponse["state"]): string {
+  if (state === "in_progress") return "In progress";
+  if (state === "completed") return "Completed";
+  return "Progress unavailable";
+}
+
+function stateClass(state: LearningCourseSummaryResponse["state"]): string {
+  return `learning-course-card--${state.replaceAll("_", "-")}`;
+}
+
+function courseProjection(
+  course: LearningCourseSummaryResponse,
+): { value: number | null; detail: string } {
+  const projection = course.projection;
+  if (
+    projection === null ||
+    projection.denominator <= 0 ||
+    !Number.isFinite(projection.percentage)
+  ) {
+    return {
+      value: null,
+      detail: "Progress is unavailable for this published course version.",
+    };
+  }
+  const percentage = Math.round(
+    Math.min(1, Math.max(0, projection.percentage)) * 100,
+  );
+  return {
+    value: percentage,
+    detail: `${projection.completed_count} of ${projection.denominator} required activities`,
+  };
+}
+
+function LearningCourseCard({
+  course,
+  index,
+}: {
+  course: LearningCourseSummaryResponse;
+  index: number;
+}) {
+  const progress = courseProjection(course);
+  const titleId = `learning-course-${course.program_id}-${course.program_version_id}`;
+  const href = ROUTES.programLearning(course.program_slug);
+
+  return (
+    <ProgramCard
+      className={`learning-course-card ${stateClass(course.state)}`}
+      title={course.program_title}
+      titleId={titleId}
+      titleAs="h2"
+      eyebrow={`Course ${String(index + 1).padStart(2, "0")}`}
+      badges={
+        <span
+          className={`learning-course-state learning-course-state--${course.state.replaceAll("_", "-")}`}
+          data-course-state={course.state}
+        >
+          {course.state === "completed" ? (
+            <CheckCircle2 size={14} aria-hidden="true" />
+          ) : course.state === "unavailable" ? (
+            <LockKeyhole size={14} aria-hidden="true" />
+          ) : null}
+          {stateLabel(course.state)}
+        </span>
+      }
+      media={
+        <div className="learning-course-card__media-content">
+          <div className="learning-course-card__media-icon" aria-hidden="true">
+            <BookOpen size={26} />
+          </div>
+          <div>
+            <span className="learning-course-card__media-kicker">
+              Authority Closers learning
+            </span>
+            <strong>Published version {course.version_number}</strong>
+          </div>
+        </div>
+      }
+      description="Follow the published course path and continue from the next server-authorized activity."
+      meta={
+        <span>
+          Version {course.version_number} · Enrolled {formatEnrolledDate(course.enrolled_at)}
+        </span>
+      }
+      action={
+        <Link
+          className="button button--cobalt learning-course-card__action-link"
+          href={href}
+          aria-label={`Open course outline for ${course.program_title}`}
+          data-course-href={href}
+        >
+          Open course <ArrowRight size={16} aria-hidden="true" />
+        </Link>
+      }
+    >
+      <ProgressMeter
+        value={progress.value}
+        label="Course progress"
+        detail={progress.detail}
+      />
+    </ProgramCard>
+  );
+}
+
+function EmptyLearningState({
+  filter,
+  onClearFilter,
+}: {
+  filter: LearningFilter;
+  onClearFilter: () => void;
+}) {
+  const filtered = filter !== "all";
+  return (
+    <section
+      id="learning-course-list"
+      className="card learning-collection-empty"
+      aria-labelledby="learning-empty-title"
+    >
+      <div className="learning-collection-empty__icon" aria-hidden="true">
+        <BookOpen size={26} />
+      </div>
+      <h2 id="learning-empty-title">
+        {filtered
+          ? "No courses match this view"
+          : "No active course enrollments yet"}
+      </h2>
+      <p>
+        {filtered
+          ? "Only server-authorized course states appear in each view. Return to all courses to see the full library."
+          : "Browse the published catalog to find a course available for this learner workspace."}
+      </p>
+      <div className="learning-collection-empty__actions">
+        {filtered ? (
+          <button
+            className="button button--outline"
+            type="button"
+            onClick={onClearFilter}
+          >
+            View all courses
+          </button>
+        ) : null}
+        <Link className="button button--cobalt" href={ROUTES.discover}>
+          Browse Discover <ArrowRight size={16} aria-hidden="true" />
+        </Link>
+      </div>
+    </section>
+  );
 }
 
 export function LearningViewRuntime({
@@ -128,14 +272,13 @@ export function LearningViewRuntime({
 }: {
   api?: LearnerApi;
 }) {
-  const [learning, setLearning] = useState<LearningResponse | null>(null);
+  const [courses, setCourses] = useState<LearningCourseSummaryResponse[]>([]);
+  const [savedFilterAvailable, setSavedFilterAvailable] = useState(false);
   const [me, setMe] = useState<MeResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
-  const [offlineRead, setOfflineRead] = useState<
-    OfflineReadMetadata | undefined
-  >();
-  const [activeModuleId, setActiveModuleId] = useState<string | null>(null);
+  const [offlineRead, setOfflineRead] = useState<OfflineReadMetadata | undefined>();
+  const [filter, setFilter] = useState<LearningFilter>("all");
   const generationRef = useRef(0);
   const mountedRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
@@ -159,16 +302,16 @@ export function LearningViewRuntime({
 
     setLoading(true);
     setError(null);
-    setLearning(null);
+    setCourses([]);
+    setSavedFilterAvailable(false);
     setOfflineRead(undefined);
-    setActiveModuleId(null);
     try {
       const result = await loadLearningData(api, controller.signal);
       if (!isCurrent()) return;
       setMe(result.me);
-      setLearning(result.learning);
+      setCourses(result.courses);
+      setSavedFilterAvailable(result.savedFilterAvailable);
       setOfflineRead(result.offlineRead);
-      setActiveModuleId(result.learning?.modules[0]?.id ?? null);
     } catch (err) {
       if (isAbortError(err) || !isCurrent()) return;
       setError(err);
@@ -189,9 +332,17 @@ export function LearningViewRuntime({
     };
   }, [load]);
 
-  if (loading) {
-    return <LearningSkeleton />;
-  }
+  const visibleCourses = useMemo(() => {
+    if (filter === "all") return courses;
+    if (filter === "saved") {
+      return savedFilterAvailable
+        ? courses.filter((course) => course.saved_state === "saved")
+        : [];
+    }
+    return courses.filter((course) => course.state === filter);
+  }, [courses, filter, savedFilterAvailable]);
+
+  if (loading) return <LearningSkeleton />;
 
   if (error) {
     const is401 = error instanceof ApiError && error.status === 401;
@@ -203,13 +354,13 @@ export function LearningViewRuntime({
             ? "Sign in to view your learning"
             : is403
               ? "Learner access is unavailable"
-              : "Could not load curriculum"}
+              : "Could not load your courses"}
         </h1>
         <p>
           {is401
             ? "Your session has expired. Sign in again to view your courses."
             : is403
-              ? "This account is not authorized to view this curriculum."
+              ? "This account is not authorized to view this learner library."
               : userFacingRequestError(
                   error,
                   "The learning service could not be reached. Try again.",
@@ -225,7 +376,7 @@ export function LearningViewRuntime({
             type="button"
             onClick={() => void load()}
           >
-            Retry
+            <RotateCcw size={16} aria-hidden="true" /> Retry
           </button>
         )}
       </div>
@@ -236,93 +387,28 @@ export function LearningViewRuntime({
     return <MembershipUnavailable api={api} draftCleanup={draftCleanup} />;
   }
 
-  if (!learning) {
-    return (
-      <div className="learning-empty-view">
-        {offlineRead ? (
-          <div
-            className="offline-read-notice"
-            id="learning-offline-read"
-            role="status"
-          >
-            {offlineReadNotice(offlineRead)}
-          </div>
-        ) : null}
-        <section
-          className="card empty-learning-card"
-          aria-labelledby="empty-learning-title"
-        >
-          <div className="empty-icon-circle" aria-hidden="true">
-            <BookOpen size={28} />
-          </div>
-          <h1 id="empty-learning-title" className="empty-title">
-            No active course enrollments yet
-          </h1>
-          <p className="empty-description">
-            Browse the published catalog to find a course available for this
-            learner workspace.
-          </p>
-          <div className="empty-actions">
-            <Link className="button button--cobalt" href={ROUTES.dashboard}>
-              Go to Dashboard <ArrowRight size={16} aria-hidden="true" />
-            </Link>
-            <Link className="button button--outline" href={ROUTES.discover}>
-              Browse Discover
-            </Link>
-          </div>
-        </section>
-      </div>
-    );
-  }
-
-  const percentage = Number.isFinite(learning.projection.percentage)
-    ? Math.round(Math.min(1, Math.max(0, learning.projection.percentage)) * 100)
-    : null;
-  const progressDetail =
-    Number.isFinite(learning.projection.completed_count) &&
-    Number.isFinite(learning.projection.denominator) &&
-    learning.projection.completed_count >= 0 &&
-    learning.projection.denominator >= 0
-      ? `${learning.projection.completed_count} of ${learning.projection.denominator} activities complete`
-      : "Progress is unavailable until the learning service can provide it.";
-  const moduleOne = learning.modules[0];
-  const nextActivity = learning.modules
-    .flatMap((module) => module.activities)
-    .find(isActivityActionable);
-
   return (
-    <div className="learning-view">
-      {/* Course Hero & Progression Summary */}
+    <div
+      className="learning-collection-view"
+      data-testid="learning-collection"
+    >
       <RouteHeader
-        className="learning-header"
-        title={learning.program_title}
-        titleId="course-heading"
-        titleClassName="learning-title"
-        breadcrumbs={
-          <div className="learning-breadcrumbs" aria-label="Breadcrumb">
-            <Link href={ROUTES.dashboard}>Dashboard</Link>
-            <span aria-hidden="true">/</span>
-            <span>My Learning</span>
-          </div>
-        }
+        className="learning-collection-header"
+        title="My Learning"
+        titleId="learning-collection-title"
         eyebrow={
-          <span className="card-badge card-badge--primary">
-            Enrolled Course
-          </span>
+          <span className="card-badge card-badge--primary">Learner library</span>
         }
-        description={
-          "Review the published modules and follow the activity states returned for your enrollment."
-        }
-        descriptionClassName="learning-subhead"
+        description="Your server-authorized courses, organized around the published paths you can access."
         aside={
-          <div className="learning-header__stats">
-            <div className="learning-stat-box">
-              <ProgressMeter
-                value={percentage}
-                label="Progress"
-                detail={progressDetail}
-              />
-            </div>
+          <div
+            className="learning-collection-summary"
+            aria-label="Course library summary"
+          >
+            <strong>{courses.length}</strong>
+            <span>
+              {courses.length === 1 ? "enrolled course" : "enrolled courses"}
+            </span>
           </div>
         }
       />
@@ -337,320 +423,69 @@ export function LearningViewRuntime({
         </div>
       ) : null}
 
-      {nextActivity && !offlineRead ? (
-        <NextActionCard
-          className="learning-next-action"
-          eyebrow="Next action"
-          title={nextActivity.title}
-          detail="Open the next server-authorized activity in your published learning path."
-          action={
-            <Link
-              className="button button--cobalt"
-              href={ROUTES.activity(nextActivity.id)}
-            >
-              Open activity <ArrowRight size={16} aria-hidden="true" />
-            </Link>
-          }
-        />
+      {!savedFilterAvailable ? (
+        <StatusBanner state="info" title="Saved courses are not available yet.">
+          This library does not have a canonical course bookmark projection.
+          Activity drafts are kept separate and are not treated as saved
+          courses.
+        </StatusBanner>
       ) : null}
 
-      {/* Direction B: Skill Journey Stepper */}
-      <section
-        className="card skill-journey-card"
-        aria-labelledby="skill-journey-title"
-      >
-        <div className="skill-journey-header">
-          <div>
-            <span className="card-badge card-badge--neutral">
-              {moduleOne
-                ? `Module ${moduleOne.position} Journey`
-                : "Course journey"}
-            </span>
-            <h2 id="skill-journey-title" className="skill-journey-title">
-              {moduleOne ? moduleOne.title : "Published course activities"}
-            </h2>
-          </div>
-          <span className="skill-journey-count">
-            {moduleOne?.activities.length ?? 0}{" "}
-            {moduleOne?.activities.length === 1 ? "activity" : "activities"}
-          </span>
-        </div>
-
+      <div className="learning-collection-toolbar">
         <div
-          className="skill-journey-chain"
-          role="list"
-          aria-label={
-            moduleOne
-              ? `Module ${moduleOne.position} activity sequence`
-              : "Course activity sequence"
-          }
+          className="learning-collection-tabs"
+          role="tablist"
+          aria-label="Filter courses"
         >
-          {moduleOne?.activities.map((act, index) => {
-            const state = act.state.toLowerCase();
-            const isCompleted = state === "completed";
-            const isLocked = state === "locked";
-            const isActionable = isActivityActionable(act);
-            const canOpen = !offlineRead && (isCompleted || isActionable);
-
+          {FILTERS.map((item) => {
+            const disabled = item.id === "saved" && !savedFilterAvailable;
+            const selected = filter === item.id;
             return (
-              <div
-                key={act.id}
-                role="listitem"
-                className={`journey-step journey-step--${state}`}
+              <button
+                key={item.id}
+                id={`learning-filter-${item.id}`}
+                className={`learning-collection-tab${selected ? " is-active" : ""}`}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                aria-controls="learning-course-list"
+                aria-disabled={disabled}
+                disabled={disabled}
+                onClick={() => setFilter(item.id)}
               >
-                {/* Step Connector Line */}
-                {index < moduleOne.activities.length - 1 ? (
-                  <div
-                    className={`journey-step__connector${isCompleted ? " is-completed" : ""}`}
-                    aria-hidden="true"
-                  />
-                ) : null}
-
-                {/* Step Circle Indicator */}
-                <div className="journey-step__indicator">
-                  {isCompleted ? (
-                    <span
-                      className="step-circle step-circle--completed"
-                      aria-label="Completed"
-                    >
-                      <CheckCircle2 size={20} aria-hidden="true" />
-                    </span>
-                  ) : isLocked ? (
-                    <span
-                      className="step-circle step-circle--locked"
-                      aria-label="Locked"
-                    >
-                      <LockKeyhole size={16} aria-hidden="true" />
-                    </span>
-                  ) : (
-                    <span
-                      className="step-circle step-circle--active"
-                      aria-label="Active"
-                    >
-                      0{index + 1}
-                    </span>
-                  )}
-                </div>
-
-                {/* Step Content */}
-                <div className="journey-step__body">
-                  <div className="journey-step__header-row">
-                    <span className="journey-step__index">
-                      Step 0{index + 1}
-                    </span>
-                    {isCompleted ? (
-                      <span className="step-pill step-pill--done">
-                        Completed
-                      </span>
-                    ) : isLocked ? (
-                      <span className="step-pill step-pill--locked">
-                        Locked
-                      </span>
-                    ) : isActionable ? (
-                      <span className="step-pill step-pill--active">
-                        Ready to practice
-                      </span>
-                    ) : (
-                      <span className="step-pill step-pill--locked">
-                        {activityStateLabel(act.state)}
-                      </span>
-                    )}
-                  </div>
-
-                  <h3 className="journey-step__title">{act.title}</h3>
-                  <p className="journey-step__prompt">
-                    {act.prompt
-                      ? act.prompt
-                      : "No activity prompt is available."}
-                  </p>
-
-                  {isLocked ? (
-                    <p className="journey-step__lock-msg" role="status">
-                      <LockKeyhole size={14} aria-hidden="true" />
-                      {act.explanation.reason ||
-                        "This activity remains locked by the learning service."}
-                    </p>
-                  ) : canOpen ? (
-                    <div className="journey-step__actions">
-                      <Link
-                        href={ROUTES.activity(act.id)}
-                        className={`button button--small ${isCompleted ? "button--outline" : "button--cobalt"}`}
-                      >
-                        {isCompleted ? "Review activity" : "Start activity"}
-                        <ArrowRight size={14} aria-hidden="true" />
-                      </Link>
-                    </div>
-                  ) : (
-                    <p className="journey-step__lock-msg" role="status">
-                      {offlineRead
-                        ? "Reconnect to open this activity."
-                        : activityStateLabel(act.state)}
-                    </p>
-                  )}
-                </div>
-              </div>
+                {item.label}
+                {item.id === "saved" && !savedFilterAvailable
+                  ? " · unavailable"
+                  : null}
+              </button>
             );
           })}
         </div>
-      </section>
+        <span className="learning-collection-count" aria-live="polite">
+          {visibleCourses.length} shown
+        </span>
+      </div>
 
-      {/* Curriculum Modules Overview */}
-      <section
-        className="dashboard-section"
-        aria-labelledby="curriculum-overview-title"
-      >
-        <h2 id="curriculum-overview-title" className="section-title">
-          All Course Modules
-        </h2>
-
-        <div className="curriculum-module-stack ac-module-stack">
-          {learning.modules.map((mod) => {
-            const isCurrent = mod.id === activeModuleId;
-            const completedCount = mod.activities.filter(
-              (activity) => activity.state.toLowerCase() === "completed",
-            ).length;
-            const moduleStatus =
-              mod.activities.length === 0
-                ? "No published activities"
-                : completedCount === mod.activities.length
-                  ? "Complete"
-                  : mod.activities.some((activity) =>
-                        ["in_progress", "available"].includes(
-                          activity.state.toLowerCase(),
-                        ),
-                      )
-                    ? "In progress"
-                    : mod.activities.some(
-                          (activity) =>
-                            activity.state.toLowerCase() === "awaiting_review",
-                        )
-                      ? "Awaiting review"
-                      : mod.activities.every(
-                            (activity) =>
-                              activity.state.toLowerCase() === "locked",
-                          )
-                        ? "Locked"
-                        : "Published";
-
-            return (
-              <ModuleCard
-                key={mod.id}
-                className={`card curriculum-module-card${isCurrent ? " is-expanded" : ""}`}
-                title={mod.title}
-                titleId={`learning-module-${mod.id}-title`}
-                position={`Module ${mod.position}`}
-                status={
-                  <span className="module-meta-status">{moduleStatus}</span>
-                }
-                header={
-                  <div className="curriculum-module-header">
-                    <h3
-                      id={`learning-module-${mod.id}-title`}
-                      className="curriculum-module-heading"
-                    >
-                      <button
-                        type="button"
-                        className="curriculum-module-toggle"
-                        aria-expanded={isCurrent}
-                        aria-controls={`learning-module-${mod.id}-content`}
-                        aria-label={`${isCurrent ? "Collapse" : "Expand"} module ${mod.position}: ${mod.title}`}
-                        onClick={() =>
-                          setActiveModuleId(isCurrent ? null : mod.id)
-                        }
-                      >
-                        <span className="curriculum-module-header__left">
-                          <span className="module-index-badge">
-                            0{mod.position}
-                          </span>
-                          <span>
-                            <span className="module-title">{mod.title}</span>
-                            <span className="module-meta">
-                              {mod.activities.length}{" "}
-                              {mod.activities.length === 1
-                                ? "activity"
-                                : "activities"}{" "}
-                              · {moduleStatus}
-                            </span>
-                          </span>
-                        </span>
-                        <ChevronDown
-                          className={`module-chevron${isCurrent ? " is-rotated" : ""}`}
-                          size={20}
-                          aria-hidden="true"
-                        />
-                      </button>
-                    </h3>
-                  </div>
-                }
-              >
-                {isCurrent ? (
-                  <div
-                    className="curriculum-module-body"
-                    id={`learning-module-${mod.id}-content`}
-                  >
-                    {mod.activities.length > 0 ? (
-                      <ol className="module-activity-list ac-activity-list">
-                        {mod.activities.map((act) => (
-                          <ActivityRow
-                            key={act.id}
-                            className="module-activity-row"
-                            position={String(act.position).padStart(2, "0")}
-                            icon={
-                              <span
-                                className="activity-icon-wrapper"
-                                aria-hidden="true"
-                              >
-                                {activityKindIcon(act.kind)}
-                              </span>
-                            }
-                            eyebrow={act.kind.replaceAll("_", " ")}
-                            title={act.title}
-                            ariaLabel={`${act.position}. ${act.title}, ${activityStateLabel(act.state)}`}
-                            disabled={act.state.toLowerCase() === "locked"}
-                            status={
-                              act.state.toLowerCase() === "locked" ? (
-                                <span className="status-pill status-pill--locked">
-                                  <LockKeyhole size={12} aria-hidden="true" />{" "}
-                                  Locked
-                                </span>
-                              ) : null
-                            }
-                            action={
-                              act.state.toLowerCase() ===
-                              "locked" ? null : !offlineRead &&
-                                (isActivityActionable(act) ||
-                                  act.state.toLowerCase() === "completed") ? (
-                                <Link
-                                  className="button button--small button--outline"
-                                  href={ROUTES.activity(act.id)}
-                                >
-                                  Open
-                                </Link>
-                              ) : (
-                                <span className="status-pill status-pill--locked">
-                                  {offlineRead
-                                    ? "Reconnect to open"
-                                    : activityStateLabel(act.state)}
-                                </span>
-                              )
-                            }
-                          />
-                        ))}
-                      </ol>
-                    ) : (
-                      <div className="module-empty-state">
-                        <p>
-                          No activities are currently available in this module.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                ) : null}
-              </ModuleCard>
-            );
-          })}
-        </div>
-      </section>
+      {visibleCourses.length > 0 ? (
+        <section
+          id="learning-course-list"
+          className="learning-course-list"
+          aria-label="Courses"
+        >
+          {visibleCourses.map((course, index) => (
+            <LearningCourseCard
+              key={`${course.program_id}:${course.program_version_id}`}
+              course={course}
+              index={index}
+            />
+          ))}
+        </section>
+      ) : (
+        <EmptyLearningState
+          filter={filter}
+          onClearFilter={() => setFilter("all")}
+        />
+      )}
     </div>
   );
 }

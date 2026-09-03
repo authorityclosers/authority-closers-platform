@@ -8,6 +8,9 @@ commits, or rolls back a second transaction.
 
 from __future__ import annotations
 
+import base64
+import binascii
+import json
 import re
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -17,14 +20,14 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI, Header, Path, Query, Request, Response, status
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 from ac_platform.application.settings import Settings
 from ac_platform.catalog.models import Activity as CatalogActivity
 from ac_platform.catalog.models import ActivityKind, ProgramVersion
 from ac_platform.catalog.models import Program as CatalogProgram
-from ac_platform.enrollment.models import Enrollment
+from ac_platform.enrollment.models import Enrollment, Entitlement
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, require_safe_origin
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.kernel.errors import DomainError, ResourceNotFound
@@ -50,6 +53,8 @@ from ac_platform.learning.services import (
 
 MAX_IDEMPOTENCY_KEY_LENGTH = 128
 MAX_PLAYBACK_TOKEN_LENGTH = 512
+MAX_LEARNING_COLLECTION_PAGE = 50
+MAX_LEARNING_CURSOR_LENGTH = 512
 _ETAG_PATTERN = re.compile(
     r'^"(?P<kind>draft|activity|submission|playback)-revision-(?P<revision>0|[1-9][0-9]*)"$'
 )
@@ -64,6 +69,12 @@ class LearningTenantContextRequired(DomainError):
     code = "learning_tenant_context_required"
     title = "A tenant context is required"
     status = 403
+
+
+class InvalidLearningCursor(DomainError):
+    code = "invalid_learning_cursor"
+    title = "The learning collection cursor is invalid"
+    status = 400
 
 
 class LearningResourceUnavailable(ResourceNotFound):
@@ -171,6 +182,44 @@ class LearningResponse(BaseModel):
     enrollment_id: UUID
     modules: list[ModuleLearningResponse]
     projection: LearningProjectionResponse
+
+
+type LearningCourseState = Literal["in_progress", "completed", "unavailable"]
+type LearningSavedState = Literal["saved", "unavailable"]
+
+
+class LearningCourseSummaryResponse(BaseModel):
+    """A server-authorized course row for the learner's library.
+
+    The collection intentionally exposes only facts that are backed by the
+    active enrollment, entitlement, published version, and canonical progress
+    projection.  ``saved_state`` stays unavailable until a durable course
+    bookmark projection exists; activity drafts are not course bookmarks.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    program_id: UUID
+    program_version_id: UUID
+    program_slug: str
+    program_title: str
+    version_number: int
+    enrollment_id: UUID
+    enrolled_at: datetime
+    updated_at: datetime
+    state: LearningCourseState
+    saved_state: LearningSavedState = "unavailable"
+    projection: LearningProjectionResponse | None = None
+
+
+class LearningCollectionResponse(BaseModel):
+    """The canonical learner-owned/enrolled course collection."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[LearningCourseSummaryResponse]
+    next_cursor: str | None
+    saved_filter_available: bool = False
 
 
 class ActivityDetailResponse(ActivityRequest):
@@ -493,6 +542,147 @@ def _scope_for_program(
     return cast(tuple[Enrollment, ProgramVersion, CatalogProgram], rows[0])
 
 
+def _learner_learning_scopes(
+    database: Session,
+    actor: ActorContext,
+    *,
+    limit: int,
+    cursor: str | None = None,
+) -> tuple[tuple[Enrollment, ProgramVersion, CatalogProgram], ...]:
+    """Return only active, fully scoped learner access rows.
+
+    Enrollment is not sufficient to expose a course.  The entitlement join is
+    deliberately repeated across the full scope identity so a stale or
+    cross-tenant row cannot turn into a learner-owned card.
+    """
+
+    tenant_id = _tenant(actor)
+    statement = (
+        select(Enrollment, ProgramVersion, CatalogProgram)
+        .join(
+            ProgramVersion,
+            (ProgramVersion.id == Enrollment.program_version_id)
+            & (ProgramVersion.program_id == Enrollment.program_id)
+            & (ProgramVersion.scope == Enrollment.program_scope)
+            & (ProgramVersion.owner_key == Enrollment.program_owner_key),
+        )
+        .join(
+            CatalogProgram,
+            (CatalogProgram.id == ProgramVersion.program_id)
+            & (CatalogProgram.scope == ProgramVersion.scope)
+            & (CatalogProgram.owner_key == ProgramVersion.owner_key),
+        )
+        .join(
+            Entitlement,
+            (Entitlement.tenant_id == Enrollment.tenant_id)
+            & (Entitlement.enrollment_id == Enrollment.id)
+            & (Entitlement.person_id == Enrollment.person_id)
+            & (Entitlement.program_version_id == Enrollment.program_version_id)
+            & (Entitlement.program_id == Enrollment.program_id)
+            & (Entitlement.program_scope == Enrollment.program_scope)
+            & (Entitlement.program_owner_key == Enrollment.program_owner_key),
+        )
+        .where(
+            Enrollment.tenant_id == tenant_id,
+            Enrollment.person_id == actor.person_id,
+            Enrollment.status == "active",
+            Entitlement.status == "active",
+            ProgramVersion.status.in_(("published", "superseded")),
+        )
+        .order_by(
+            CatalogProgram.title.asc(),
+            ProgramVersion.version_number.asc(),
+            Enrollment.id.asc(),
+        )
+    )
+    decoded_cursor = _decode_learning_cursor(cursor)
+    if decoded_cursor is not None:
+        title, version_number, enrollment_id = decoded_cursor
+        statement = statement.where(
+            or_(
+                CatalogProgram.title > title,
+                and_(
+                    CatalogProgram.title == title,
+                    ProgramVersion.version_number > version_number,
+                ),
+                and_(
+                    CatalogProgram.title == title,
+                    ProgramVersion.version_number == version_number,
+                    Enrollment.id > enrollment_id,
+                ),
+            )
+        )
+    # Fetch one sentinel row so the HTTP boundary can truthfully advertise a
+    # next cursor without making the cursor itself part of canonical state.
+    statement = statement.limit(limit + 1)
+    return tuple(
+        cast(tuple[Enrollment, ProgramVersion, CatalogProgram], row)
+        for row in database.execute(statement).all()
+    )
+
+
+def _encode_learning_cursor(
+    scope: tuple[Enrollment, ProgramVersion, CatalogProgram],
+) -> str:
+    enrollment, version, catalog_program = scope
+    payload = json.dumps(
+        {
+            "title": catalog_program.title,
+            "version_number": version.version_number,
+            "enrollment_id": str(enrollment.id),
+        },
+        separators=(",", ":"),
+        ensure_ascii=True,
+    ).encode("utf-8")
+    return base64.urlsafe_b64encode(payload).decode("ascii").rstrip("=")
+
+
+def _decode_learning_cursor(
+    value: str | None,
+) -> tuple[str, int, UUID] | None:
+    if value is None:
+        return None
+    if not value or len(value) > MAX_LEARNING_CURSOR_LENGTH:
+        raise InvalidLearningCursor("The learning collection cursor is invalid.")
+    try:
+        padding = "=" * (-len(value) % 4)
+        decoded = json.loads(base64.urlsafe_b64decode(f"{value}{padding}").decode("utf-8"))
+        title = decoded["title"]
+        version_number = decoded["version_number"]
+        enrollment_id = UUID(decoded["enrollment_id"])
+    except (
+        KeyError,
+        TypeError,
+        ValueError,
+        UnicodeDecodeError,
+        json.JSONDecodeError,
+        binascii.Error,
+    ):
+        raise InvalidLearningCursor("The learning collection cursor is invalid.") from None
+    if (
+        not isinstance(title, str)
+        or not title
+        or len(title) > 200
+        or isinstance(version_number, bool)
+        or not isinstance(version_number, int)
+        or version_number <= 0
+    ):
+        raise InvalidLearningCursor("The learning collection cursor is invalid.")
+    return title, version_number, enrollment_id
+
+
+def _learning_course_state(
+    projection: LearningProjectionResponse | None,
+) -> LearningCourseState:
+    """Map only a complete canonical projection to a learner-facing state."""
+
+    if projection is None or projection.denominator <= 0:
+        return "unavailable"
+    if projection.completed_count >= projection.denominator:
+        return "completed"
+    return "in_progress"
+
+
 def _scope_for_activity(
     database: Session, actor: ActorContext, activity_id: UUID
 ) -> tuple[Enrollment, ProgramVersion, CatalogActivity]:
@@ -586,6 +776,91 @@ def install_learning_http(
             reviewer_resolver=resolved_reviewer,
             policy_resolver=resolved_policy,
         )
+
+    @router.get("/learning", response_model=LearningCollectionResponse)
+    async def get_learning_collection(
+        response: Response,
+        limit: Annotated[int, Query(ge=1, le=MAX_LEARNING_COLLECTION_PAGE)] = (
+            MAX_LEARNING_COLLECTION_PAGE
+        ),
+        cursor: Annotated[str | None, Query(max_length=MAX_LEARNING_CURSOR_LENGTH)] = None,
+        auth: AuthenticatedTransaction = actor_dependency,
+    ) -> LearningCollectionResponse:
+        """Return the authenticated learner's complete course library page.
+
+        Every row is selected from active enrollment + active entitlement and
+        then projected from the pinned catalog version.  No public catalog
+        fallback is used, so the library cannot present a course merely
+        because it is published or because analytics mention it.
+        """
+
+        actor = auth.resolved.actor
+
+        def read(database: Session) -> LearningCollectionResponse:
+            all_scopes = _learner_learning_scopes(
+                database,
+                actor,
+                limit=limit,
+                cursor=cursor,
+            )
+            has_more = len(all_scopes) > limit
+            scopes = all_scopes[:limit]
+            bundle = bundle_for(database)
+            items: list[LearningCourseSummaryResponse] = []
+            for enrollment, version, catalog_program in scopes:
+                catalog_activities = tuple(
+                    database.scalars(
+                        select(CatalogActivity)
+                        .where(
+                            CatalogActivity.program_version_id == version.id,
+                            CatalogActivity.program_id == version.program_id,
+                            CatalogActivity.scope == version.scope,
+                            CatalogActivity.owner_key == version.owner_key,
+                        )
+                        .order_by(
+                            CatalogActivity.module_id,
+                            CatalogActivity.position,
+                            CatalogActivity.id,
+                        )
+                    )
+                )
+                projection: LearningProjectionResponse | None = None
+                if catalog_activities:
+                    access = bundle.store.resolve_access(
+                        actor=actor,
+                        tenant_id=_tenant(actor),
+                        enrollment_id=enrollment.id,
+                        program_version_id=version.id,
+                        activity_id=catalog_activities[0].id,
+                    )
+                    progress = authoritative_progress(bundle.store, access)
+                    explanation = ProgressProjector(access.program.projection_version).explain(
+                        access.program, progress
+                    )
+                    projection = LearningProjectionResponse.model_validate(explanation.as_dict())
+                items.append(
+                    LearningCourseSummaryResponse(
+                        program_id=version.program_id,
+                        program_version_id=version.id,
+                        program_slug=catalog_program.slug,
+                        program_title=catalog_program.title,
+                        version_number=version.version_number,
+                        enrollment_id=enrollment.id,
+                        enrolled_at=enrollment.enrolled_at,
+                        updated_at=enrollment.updated_at,
+                        state=_learning_course_state(projection),
+                        projection=projection,
+                    )
+                )
+            return LearningCollectionResponse(
+                items=items,
+                next_cursor=_encode_learning_cursor(scopes[-1]) if has_more and scopes else None,
+                saved_filter_available=False,
+            )
+
+        result = await _run_in_auth_transaction(auth, read)
+        _no_store(response)
+        return result
 
     @router.get("/learning/{program_id}", response_model=LearningResponse)
     async def get_learning(
@@ -1169,6 +1444,10 @@ __all__ = [
     "EvidenceRequest",
     "EvidenceResponse",
     "InvalidLearningETag",
+    "LearningCollectionResponse",
+    "LearningCourseState",
+    "LearningCourseSummaryResponse",
+    "LearningSavedState",
     "LearningResponse",
     "LearningTenantContextRequired",
     "MissingIdempotencyKey",

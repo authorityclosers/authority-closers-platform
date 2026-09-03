@@ -536,6 +536,26 @@ def test_learning_http_uses_one_authenticated_postgres_transaction(
                 transport=transport,
                 base_url="https://api.authorityclosers.test",
             ) as client:
+                collection = await client.get("/v1/learning")
+                assert collection.status_code == 200
+                assert collection.headers["cache-control"] == "no-store"
+                collection_body = collection.json()
+                assert collection_body["saved_filter_available"] is False
+                assert len(collection_body["items"]) == 1
+                collection_item = collection_body["items"][0]
+                assert collection_item["program_id"] == str(seed.program_id)
+                assert collection_item["program_version_id"] == str(seed.version_id)
+                assert collection_item["enrollment_id"] == str(seed.enrollment_id)
+                assert collection_item["state"] == "in_progress"
+                assert collection_item["projection"]["denominator"] == 2
+                assert collection_item["projection"]["completed_count"] == 0
+
+                wrong_tenant_collection = await client.get(
+                    "/v1/learning", headers={"X-Test-Tenant": "wrong"}
+                )
+                assert wrong_tenant_collection.status_code == 200
+                assert wrong_tenant_collection.json()["items"] == []
+
                 learning = await client.get(f"/v1/learning/{seed.program_id}")
                 assert learning.status_code == 200
                 assert learning.headers["cache-control"] == "no-store"

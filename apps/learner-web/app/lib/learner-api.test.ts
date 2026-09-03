@@ -48,6 +48,40 @@ describe("learner API adapter", () => {
     expect(fetcher).toHaveBeenCalledOnce();
   });
 
+  it("reads the server-authorized multi-course learning collection", async () => {
+    const collection = {
+      items: [
+        {
+          program_id: "program-1",
+          program_version_id: "version-1",
+          program_slug: "first-course",
+          program_title: "First course",
+          version_number: 1,
+          enrollment_id: "enrollment-1",
+          enrolled_at: "2026-09-01T00:00:00Z",
+          updated_at: "2026-09-02T00:00:00Z",
+          state: "in_progress",
+          saved_state: "unavailable",
+          projection: null,
+        },
+      ],
+      next_cursor: null,
+      saved_filter_available: false,
+    };
+    const fetcher = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        expect(input).toBe("/v1/learning?limit=50");
+        expect(init?.credentials).toBe("include");
+        expect(init?.cache).toBe("no-store");
+        return response(collection);
+      },
+    );
+    const api = createLearnerApi(fetcher);
+
+    await expect(api.learningCollection()).resolves.toEqual(collection);
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
   it("writes allowlisted successful GETs and returns encrypted-cache copies only after a network TypeError", async () => {
     const cached = { items: [], next_cursor: null };
     const cache = offlineCache({
