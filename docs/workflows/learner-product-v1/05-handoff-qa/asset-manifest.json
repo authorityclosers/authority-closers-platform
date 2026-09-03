@@ -1,5 +1,171 @@
 {
+  "manifest_id": "AC-WF-LEARNER-V1-ASSETS-2026-09-03",
+  "manifest_revision": 2,
   "workstream_id": "AC-WF-LEARNER-V1",
+  "status": "provenance_blocked",
+  "generated_with": "no new generation; Dipak identity/media gate is blocked",
+  "provenance_gate": {
+    "status": "blocked",
+    "blocked_at": "2026-09-03",
+    "reason": "No standalone approved Dipak reference photo with an exact Drive ID/URL is present in the repository manifests or accessible Drive image results. The official website is public founder evidence only; consent, derivative-use permission, license, and retention metadata are not evidenced.",
+    "controlled_manifest": "docs/traceability/CONTROLLED_SOURCE_REGISTER.md",
+    "drive_connector": {
+      "status": "callable_read_only_checks_completed",
+      "identity_image_query_results": [
+        {
+          "query": "Dipak Vishwakarma",
+          "item_type": "image",
+          "result_count": 0
+        },
+        {
+          "query": "headshot",
+          "item_type": "image",
+          "result_count": 0
+        },
+        {
+          "query": "portrait",
+          "item_type": "image",
+          "result_count": 0
+        },
+        {
+          "query": "photo",
+          "item_type": "image",
+          "result_count": 0
+        },
+        {
+          "query": null,
+          "item_type": "image",
+          "result_count": 75,
+          "identity_matching_titles": 0
+        }
+      ],
+      "result": "no_standalone_approved_identity_photo_found"
+    },
+    "controlled_sources_checked": [
+      {
+        "label": "Authority Closers Master Index",
+        "drive_id": "1gC6BdFZ2LfjrpjM-qPKcX1qWMTUBSAXo3b-AlaOYqus",
+        "drive_url": "https://docs.google.com/document/d/1gC6BdFZ2LfjrpjM-qPKcX1qWMTUBSAXo3b-AlaOYqus/edit",
+        "role": "source order and precedence"
+      },
+      {
+        "label": "Approved BRD",
+        "drive_id": "1HEp7QN4u3c_636uACznnkruYHhGYHAJWXH7Dlfjybpk",
+        "drive_url": "https://docs.google.com/document/d/1HEp7QN4u3c_636uACznnkruYHhGYHAJWXH7Dlfjybpk/edit",
+        "role": "approved business boundary"
+      },
+      {
+        "label": "AC-IMP-00",
+        "drive_id": "10tKbAIJWONFNTzK2-NHffy4h1wKgoQP7VdJH_K2eR-A",
+        "drive_url": "https://docs.google.com/document/d/10tKbAIJWONFNTzK2-NHffy4h1wKgoQP7VdJH_K2eR-A/edit",
+        "role": "capability gates"
+      },
+      {
+        "label": "AC-IMP-01",
+        "drive_id": "1JVnCjDdE79YseM-1PuhvW00xcoicwmhoHtUvEuKKrdU",
+        "drive_url": "https://docs.google.com/document/d/1JVnCjDdE79YseM-1PuhvW00xcoicwmhoHtUvEuKKrdU/edit",
+        "role": "controlled source and forbidden-action rules"
+      },
+      {
+        "label": "AC-IMP-03",
+        "drive_id": "1ncsRMiMMiQ39tCn7dV3vpqwUnirY06BgSuVdm_BuIFo",
+        "drive_url": "https://docs.google.com/document/d/1ncsRMiMMiQ39tCn7dV3vpqwUnirY06BgSuVdm_BuIFo/edit",
+        "role": "guardrails and provider/identity gates"
+      },
+      {
+        "label": "AC-IMP-04",
+        "drive_id": "1gQnsY1JjphpmOmfyCRZkfI-p0TWZjF1PkY1xF744Gnc",
+        "drive_url": "https://docs.google.com/document/d/1gQnsY1JjphpmOmfyCRZkfI-p0TWZjF1PkY1xF744Gnc/edit",
+        "role": "first-slice media boundary"
+      },
+      {
+        "label": "AC-IMP-05",
+        "drive_id": "1Vvf1wCA_JjrJQwhkTsgyDM_9179G4M899pWWc3-UdXw",
+        "drive_url": "https://docs.google.com/document/d/1Vvf1wCA_JjrJQwhkTsgyDM_9179G4M899pWWc3-UdXw/edit",
+        "role": "acceptance and evidence gates"
+      },
+      {
+        "label": "Dipak founder free-LMS direction (raw founder evidence)",
+        "drive_id": "1T5cLrKjnE_5Z_Dhgkj20dxvTYpjX1Rk5",
+        "drive_url": "https://drive.google.com/file/d/1T5cLrKjnE_5Z_Dhgkj20dxvTYpjX1Rk5/view?usp=drivesdk",
+        "role": "context only; not a photo asset or rights grant"
+      },
+      {
+        "label": "Image reference and generation prompt pack",
+        "drive_id": "1cVSuld6Ugzg0KpX9c5BttfzvJt2vhbZw",
+        "drive_url": "https://drive.google.com/file/d/1cVSuld6Ugzg0KpX9c5BttfzvJt2vhbZw/view?usp=drivesdk",
+        "role": "visual generation rules; no Dipak photo entry"
+      }
+    ],
+    "public_founder_evidence": {
+      "url": "https://dipakvishwakarma.com/",
+      "authority": "public founder evidence only; not controlled product/media authority",
+      "observed": "Homepage identifies Dipak Vishwakarma as founder of Authority Closers and exposes portrait image paths.",
+      "observed_image_paths": [
+        "/_next/image?q=92&url=%2F_next%2Fstatic%2Fmedia%2Fdipak-seated-armchair.3qozyuzikzdpv.png&w=2560",
+        "/_next/image?q=92&url=%2Fhero%2Fdipak-seated-mobile.png&w=2560"
+      ],
+      "consent_status": "not_evidenced",
+      "license_status": "not_evidenced",
+      "derivative_use_status": "not_evidenced",
+      "retention_status": "not_evidenced",
+      "allowed_use": "context and identity-disambiguation only; do not treat as approved source media"
+    },
+    "required_before_generation": [
+      "Exact Drive file ID and URL for each approved reference photo, with access verified.",
+      "Written subject/owner consent naming Authority Closers, the permitted surfaces, and whether image-generation derivatives are allowed.",
+      "License/rights statement covering derivative crops, avatar use, thumbnails, video posters, and public/staging distribution.",
+      "Retention, expiry, takedown, and provenance record for source and generated derivatives.",
+      "Approved crop/identity review for desktop, mobile, and square avatar compositions."
+    ]
+  },
+  "requested_assets": [
+    {
+      "asset_id": "DIPAK-V1-HERO-DESKTOP",
+      "role": "learner dashboard hero / video poster",
+      "target_viewport": "1536x864",
+      "intended_path": "../../../apps/learner-web/public/media/dipak-v1-dashboard-hero-desktop.png",
+      "status": "blocked_provenance",
+      "composition_requirement": "desktop-safe subject placement with copy-safe negative space; generate separately from the mobile composition",
+      "preview": null
+    },
+    {
+      "asset_id": "DIPAK-V1-HERO-MOBILE",
+      "role": "learner dashboard hero / video poster",
+      "target_viewport": "390x220",
+      "intended_path": "../../../apps/learner-web/public/media/dipak-v1-dashboard-hero-mobile.png",
+      "status": "blocked_provenance",
+      "composition_requirement": "mobile-safe focal crop with no clipped face/subject; generate separately from the desktop composition",
+      "preview": null
+    },
+    {
+      "asset_id": "AC-V1-COURSE-THUMBNAIL-01-DESKTOP",
+      "role": "course thumbnail",
+      "target_viewport": "640x360",
+      "intended_path": "../../../apps/learner-web/public/media/ac-v1-course-thumbnail-01-desktop.png",
+      "status": "blocked_provenance",
+      "composition_requirement": "no person or course claim until authored copy/media and rights are approved; desktop-safe composition",
+      "preview": null
+    },
+    {
+      "asset_id": "AC-V1-COURSE-THUMBNAIL-01-MOBILE",
+      "role": "course thumbnail",
+      "target_viewport": "390x220",
+      "intended_path": "../../../apps/learner-web/public/media/ac-v1-course-thumbnail-01-mobile.png",
+      "status": "blocked_provenance",
+      "composition_requirement": "mobile-safe composition generated separately from desktop; no invented title or lesson/media claim",
+      "preview": null
+    },
+    {
+      "asset_id": "DIPAK-V1-AVATAR-SQUARE",
+      "role": "profile avatar",
+      "target_viewport": "512x512",
+      "intended_path": "../../../apps/learner-web/public/media/dipak-v1-profile-avatar.png",
+      "status": "blocked_provenance",
+      "composition_requirement": "identity-preserving square crop only after approved source, consent, rights, and avatar processing gates",
+      "preview": null
+    }
+  ],
   "assets": [
     {
       "path": "03-visual-exploration/direction-a-command-center-desktop.png",
@@ -88,11 +254,18 @@
     {
       "path": "../../../apps/learner-web/public/media/dipak-learning-hero-v1.png",
       "kind": "generated_artwork",
-      "status": "selected",
-      "viewport": "16:9",
+      "status": "quarantined_public_evidence",
+      "viewport": "1672x941",
+      "sha256": "91c49f07323dfe3ccd4e477c0b598cad3d131c7ac6557fe87019b43e4178fb86",
+      "original_preserved": true,
       "source_url": "https://dipakvishwakarma.com/",
-      "selection_basis": "operator explicitly requested Dipak-sourced presentation artwork for this staging candidate",
-      "usage_boundary": "public presentation artwork only; not approved lesson media"
+      "historical_selection_basis": "operator explicitly requested Dipak-sourced presentation artwork for this staging candidate",
+      "provenance_status": "unverified_public_source; original reference Drive ID/URL is not recorded",
+      "consent_status": "not_evidenced",
+      "license_status": "not_evidenced",
+      "retention_status": "not_evidenced",
+      "superseded_by": "DEC-LV1-006",
+      "usage_boundary": "quarantined for provenance review; not production identity, avatar, lesson media, canonical content, or progress evidence"
     },
     {
       "path": "05-handoff-qa/public-entry-implementation-desktop-v1.png",

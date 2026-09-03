@@ -26,6 +26,20 @@ open until the immutable candidate exists.
       leave evidence.
 - [x] Reference and implementation screenshots are compared together at matching
       desktop and mobile viewports.
+
+## Dipak identity/media provenance gate
+
+- [ ] Every person-specific source photo has an exact approved Drive ID/URL and
+      verified access record.
+- [ ] Subject/owner consent explicitly covers Authority Closers surfaces and
+      image-generation derivatives.
+- [ ] Rights/license, retention/expiry, takedown, and supersession metadata are
+      recorded for each source and derivative.
+- [ ] Desktop hero/video poster, mobile hero/video poster, course thumbnail
+      pair, and square avatar each have separate crop/identity QA evidence.
+- [x] No new Dipak image was generated while the source/consent gate is blocked;
+      the historical public-site-derived hero remains quarantined.
+
 - [ ] CI passes for the exact commit SHA.
 - [ ] Staging reports the same exact SHA and smoke checks pass.
 - [ ] Only then may the slice be described as deployed; never as the final app.
