@@ -600,7 +600,9 @@ class ActivityMediaBinding(Base):
     asset_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     version_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
     state: Mapped[str] = mapped_column(
-        String(32), nullable=False, default=MediaBindingState.APPROVED.value,
+        String(32),
+        nullable=False,
+        default=MediaBindingState.APPROVED.value,
         server_default=MediaBindingState.APPROVED.value,
     )
     approval_reference: Mapped[str] = mapped_column(String(200), nullable=False)
@@ -689,7 +691,8 @@ def _enforce_activity_media_binding_history(
         new_state = str(instance.state)
         if old_state != new_state and not (
             old_state == MediaBindingState.APPROVED.value
-            and new_state in {
+            and new_state
+            in {
                 MediaBindingState.SUPERSEDED.value,
                 MediaBindingState.REVOKED.value,
             }

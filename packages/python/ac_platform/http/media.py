@@ -263,9 +263,7 @@ def install_media_http(
             resource_id=result.id,
             status_value=result.state,
         )
-        runtime.telemetry.emit(
-            "media.activity_binding.approved", {"outcome": "succeeded"}
-        )
+        runtime.telemetry.emit("media.activity_binding.approved", {"outcome": "succeeded"})
         _no_store(response)
         return result
 
