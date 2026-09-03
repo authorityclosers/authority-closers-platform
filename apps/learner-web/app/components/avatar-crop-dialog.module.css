@@ -100,6 +100,24 @@
     radial-gradient(circle at 30% 20%, rgb(255 255 255 / 16%), transparent 38%),
     var(--theme-action);
   isolation: isolate;
+  cursor: grab;
+  touch-action: none;
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    transform 140ms ease;
+}
+
+.previewFrame:active {
+  cursor: grabbing;
+}
+
+.previewFrameActive {
+  border-color: var(--theme-action);
+  box-shadow:
+    0 0 0 5px color-mix(in srgb, var(--theme-action) 17%, transparent),
+    0 18px 44px rgb(4 10 22 / 18%);
+  transform: scale(1.015);
 }
 
 .previewImage {
@@ -132,6 +150,14 @@
   color: var(--theme-text-muted);
   font-size: 0.68rem;
   font-weight: 750;
+}
+
+.directManipulationHint {
+  max-width: 260px;
+  color: var(--theme-text-muted);
+  font-size: 0.69rem;
+  line-height: 1.45;
+  text-align: center;
 }
 
 .controls {
@@ -198,6 +224,45 @@
   padding: 14px;
   border: 1px solid var(--theme-border);
   border-radius: 9px;
+}
+
+.precisionControls {
+  border: 1px solid var(--theme-border);
+  border-radius: 9px;
+  background: var(--theme-surface-subtle);
+}
+
+.precisionControls summary {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  color: var(--theme-text);
+  font-size: 0.73rem;
+  font-weight: 800;
+  cursor: pointer;
+  list-style: none;
+}
+
+.precisionControls summary::-webkit-details-marker {
+  display: none;
+}
+
+.precisionControls summary::after {
+  content: "+";
+  margin-left: auto;
+  color: var(--theme-action);
+  font-size: 1rem;
+}
+
+.precisionControls[open] summary::after {
+  content: "−";
+}
+
+.precisionControls .cropControls {
+  margin: 0 10px 10px;
+  background: var(--theme-surface);
 }
 
 .cropControls:disabled {
@@ -352,6 +417,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .previewFrame,
   .previewImage {
     transition: none;
   }

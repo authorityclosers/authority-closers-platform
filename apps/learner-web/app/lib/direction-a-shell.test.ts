@@ -8,6 +8,7 @@ import {
   closeAccountMenu,
   closeHelpPopover,
   closeNotificationPopover,
+  initialsForDisplayName,
   LearnerShell,
 } from "../components/site-shell";
 import {
@@ -412,14 +413,15 @@ describe("Direction A & B UI System & Shell", () => {
       expect(html).toContain("Alex Mercer");
     });
 
-    it("renders accessible sidebar collapse control and tooltip titles on navigation links", () => {
+    it("renders one accessible top sidebar control and tooltip titles on navigation links", () => {
       const html = renderToStaticMarkup(
         createElement(LearnerShell, { current: "dashboard" }),
       );
-      expect(html).toContain('class="sidebar-collapse-btn"');
+      expect(html).not.toContain('class="sidebar-collapse-btn"');
       expect(html).toContain('aria-expanded="true"');
       expect(html).toContain('title="Collapse sidebar"');
       expect(html).toContain('class="learner-sidebar-toggle"');
+      expect(html.match(/class="learner-sidebar-toggle"/g)).toHaveLength(1);
       expect(html).toContain('aria-controls="learner-sidebar"');
       expect(html).toContain('title="Dashboard"');
       expect(html).toContain('title="My Learning"');
@@ -429,6 +431,43 @@ describe("Direction A & B UI System & Shell", () => {
       expect(html).toContain('title="Profile"');
       expect(html).toContain('title="Settings"');
       expect(html).toContain('title="Help"');
+    });
+
+    it("uses first and last initials for stable identity fallbacks", () => {
+      expect(initialsForDisplayName("Suyash Rahegaonkar")).toBe("SR");
+      expect(initialsForDisplayName("Dipak Vishwakarma Sharma")).toBe("DS");
+      expect(initialsForDisplayName(" Learner ")).toBe("L");
+      expect(initialsForDisplayName(" ")).toBe("AC");
+    });
+
+    it("keeps routine shell actions free of implementation-status toasts", () => {
+      const shellSource = readFileSync(
+        new URL("../components/site-shell.tsx", import.meta.url),
+        "utf8",
+      );
+
+      expect(shellSource).not.toContain("Sidebar collapsed.");
+      expect(shellSource).not.toContain("Sidebar expanded.");
+      expect(shellSource).not.toContain("Help chat is ready;");
+      expect(shellSource).not.toContain(
+        "Notification history is not connected in this workspace yet.",
+      );
+    });
+
+    it("refreshes short-lived avatar delivery and falls back safely", () => {
+      const shellSource = readFileSync(
+        new URL("../components/site-shell.tsx", import.meta.url),
+        "utf8",
+      );
+
+      expect(shellSource).toContain(
+        "onError={() => setFailedAvatarUrl(avatarUrl)}",
+      );
+      expect(shellSource).toContain("4 * 60 * 1000");
+      expect(shellSource).toContain("avatarUpdateGenerationRef.current += 1");
+      expect(shellSource).toContain(
+        "updateGeneration === avatarUpdateGenerationRef.current",
+      );
     });
 
     it("exports AppShell as the reusable canonical alias for LearnerShell", () => {

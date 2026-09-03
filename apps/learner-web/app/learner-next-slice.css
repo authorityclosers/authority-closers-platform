@@ -38,6 +38,60 @@
   outline-offset: 2px !important;
 }
 
+/* The learner rail scrolls normally without exposing a second, browser-gray
+ * scrollbar inside the application chrome. */
+.site-frame--learner .learner-sidebar__content {
+  scrollbar-width: none;
+  overscroll-behavior: contain;
+}
+
+.site-frame--learner .learner-sidebar__content::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.site-frame--learner .learner-identity-avatar__image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+
+.site-frame--learner,
+.site-frame--learner .learner-main {
+  scrollbar-color: color-mix(
+      in srgb,
+      var(--clarity-blue) 48%,
+      var(--clarity-border)
+    )
+    transparent;
+  scrollbar-width: thin;
+}
+
+.site-frame--learner::-webkit-scrollbar,
+.site-frame--learner .learner-main::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.site-frame--learner::-webkit-scrollbar-thumb,
+.site-frame--learner .learner-main::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+  background-color: color-mix(
+    in srgb,
+    var(--clarity-blue) 48%,
+    var(--clarity-border)
+  );
+}
+
+.site-frame--learner::-webkit-scrollbar-track,
+.site-frame--learner .learner-main::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 .site-frame--learner .notification-popover__close,
 .site-frame--learner .learner-help-chatbox__close {
   display: inline-grid;
