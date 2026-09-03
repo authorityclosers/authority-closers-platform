@@ -126,7 +126,8 @@ export async function loadProfileData(
     onboardingError,
     avatar,
     avatarError,
-    offlineRead: getEarliestOfflineReadMetadata(me, onboarding ?? undefined) ?? undefined,
+    offlineRead:
+      getEarliestOfflineReadMetadata(me, onboarding ?? undefined) ?? undefined,
   };
 }
 
@@ -187,7 +188,9 @@ export function ProfileRuntime({
         avatarPresentationFromResponse(
           result.avatar,
           result.me.display_name || "Learner",
-        ) ?? result.me.avatar ?? null,
+        ) ??
+          result.me.avatar ??
+          null,
       );
       setOnboarding(result.onboarding);
       setOnboardingError(result.onboardingError);

@@ -1,4 +1,8 @@
-import { ApiError, type LearnerApi, type ProfileAvatarResponse } from "./learner-api";
+import {
+  ApiError,
+  type LearnerApi,
+  type ProfileAvatarResponse,
+} from "./learner-api";
 
 export const AVATAR_ACCEPTED_MIME_TYPES = [
   "image/jpeg",
@@ -241,7 +245,10 @@ class DirectUploadError extends Error {
 }
 
 function publicDirectUploadFailure(error: unknown): AvatarUploadResult {
-  if (error instanceof DirectUploadError && [400, 401, 403, 413, 422].includes(error.status)) {
+  if (
+    error instanceof DirectUploadError &&
+    [400, 401, 403, 413, 422].includes(error.status)
+  ) {
     return {
       status: "terminal_error",
       message:
@@ -272,9 +279,7 @@ async function checksumSha256(file: File): Promise<string | undefined> {
 
 type AvatarUploadApi = Pick<
   LearnerApi,
-  | "createProfileAvatarUpload"
-  | "completeProfileAvatarUpload"
-  | "profileAvatar"
+  "createProfileAvatarUpload" | "completeProfileAvatarUpload" | "profileAvatar"
 >;
 
 function asProcessing(
@@ -296,7 +301,9 @@ function asProcessing(
 
 function waitFor(ms: number, signal?: AbortSignal): Promise<void> {
   if (signal?.aborted) {
-    return Promise.reject(new DOMException("The operation was aborted.", "AbortError"));
+    return Promise.reject(
+      new DOMException("The operation was aborted.", "AbortError"),
+    );
   }
   return new Promise((resolve, reject) => {
     const timeout = globalThis.setTimeout(finish, ms);
@@ -355,7 +362,9 @@ export function createApiAvatarUploadPort(
           return publicDirectUploadFailure(error);
         }
         if (!uploadResponse.ok) {
-          return publicDirectUploadFailure(new DirectUploadError(uploadResponse.status));
+          return publicDirectUploadFailure(
+            new DirectUploadError(uploadResponse.status),
+          );
         }
 
         const completed = await api.completeProfileAvatarUpload(
@@ -373,7 +382,10 @@ export function createApiAvatarUploadPort(
           };
         }
         const profile = await api.profileAvatar();
-        const avatar = avatarFromResponse(profile, input.displayName || "Learner");
+        const avatar = avatarFromResponse(
+          profile,
+          input.displayName || "Learner",
+        );
         if (avatar && avatar.versionId === intent.media_version_id) {
           return { status: "success", avatar };
         }

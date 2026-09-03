@@ -32,15 +32,15 @@ describe("avatar upload boundary", () => {
   });
 
   it("serializes the local crop controls to bounded server metadata", () => {
-    expect(toAvatarCropMetadata({ scale: 2, offsetX: 25, offsetY: -25 })).toEqual(
-      {
-        x: 0,
-        y: 0.5,
-        width: 0.5,
-        height: 0.5,
-        rotation_degrees: 0,
-      },
-    );
+    expect(
+      toAvatarCropMetadata({ scale: 2, offsetX: 25, offsetY: -25 }),
+    ).toEqual({
+      x: 0,
+      y: 0.5,
+      width: 0.5,
+      height: 0.5,
+      rotation_degrees: 0,
+    });
   });
 
   it("keeps the default adapter explicitly unavailable", async () => {
