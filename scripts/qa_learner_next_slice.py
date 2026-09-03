@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 from urllib.parse import urlparse
 
-from playwright.sync_api import Page, Route, sync_playwright
+from playwright.sync_api import Page, Route, expect, sync_playwright
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -136,10 +136,17 @@ def mock_learner_api(route: Route) -> None:
 
 
 def wait_for_progress(page: Page) -> None:
-    page.goto(f"{BASE_URL}/progress", wait_until="domcontentloaded")
+    # Turbopack can keep the document-load milestone open while it compiles
+    # client chunks. Commit is sufficient here; the role assertions below wait
+    # for the hydrated learner surface.
+    page.goto(f"{BASE_URL}/progress", wait_until="commit", timeout=120_000)
     page.get_by_role("heading", name="Authority Closers Free Course").wait_for()
     page.get_by_role("heading", name="Learning rhythm").wait_for()
     page.get_by_text("Signals observed").wait_for()
+
+
+def assert_active_label(page: Page, label: str) -> None:
+    assert page.evaluate("document.activeElement?.getAttribute('aria-label')") == label
 
 
 def main() -> None:
@@ -150,12 +157,46 @@ def main() -> None:
         desktop = browser.new_page(viewport={"width": 1440, "height": 1000})
         desktop.route("**/v1/**", mock_learner_api)
         wait_for_progress(desktop)
+
+        sidebar_toggle = desktop.locator(".learner-sidebar-toggle")
+        expect(sidebar_toggle).to_be_visible()
+        expect(sidebar_toggle).to_have_attribute("aria-expanded", "true")
+        sidebar_toggle.click()
+        expect(sidebar_toggle).to_have_attribute("aria-expanded", "false")
+        expect(sidebar_toggle).to_have_attribute("aria-label", "Expand sidebar")
+        sidebar_toggle.click()
+        expect(sidebar_toggle).to_have_attribute("aria-expanded", "true")
+
         desktop.get_by_role("button", name="Notifications").click()
         desktop.get_by_role("dialog", name="Notifications").wait_for()
-        desktop.get_by_role("button", name="Notifications").click()
-        desktop.get_by_role("button", name="Account menu for Learner").click()
+        desktop.locator(".learner-main").dispatch_event("pointerdown")
+        expect(desktop.get_by_role("dialog", name="Notifications")).not_to_be_visible()
+        assert_active_label(desktop, "Notifications")
+
+        help_trigger = desktop.get_by_role("button", name="Open help chatbox")
+        help_trigger.click()
+        help_dialog = desktop.get_by_role("dialog", name="How can we help?")
+        help_dialog.wait_for()
+
+        # Keyboard activation of the profile trigger must close the non-modal
+        # help surface instead of leaving two overlays open at once.
+        account_trigger = desktop.get_by_role("button", name="Account menu for Learner")
+        account_trigger.focus()
+        account_trigger.press("Enter")
         desktop.locator("#learner-account-menu").wait_for()
-        desktop.get_by_role("button", name="Account menu for Learner").click()
+        expect(help_dialog).not_to_be_visible()
+        desktop.keyboard.press("Escape")
+        expect(desktop.locator("#learner-account-menu")).not_to_be_visible()
+        assert_active_label(desktop, "Account menu for Learner")
+
+        # Dismissing a help popover from a non-focusable surface keeps focus on
+        # the invoking trigger rather than dropping it on document.body.
+        help_trigger.click()
+        help_dialog.wait_for()
+        desktop.locator(".learner-main").dispatch_event("pointerdown")
+        expect(help_dialog).not_to_be_visible()
+        assert_active_label(desktop, "Open help chatbox")
+
         desktop.screenshot(
             path=str(SCREENSHOTS / "learner-next-slice-progress-desktop.png"),
             full_page=True,
@@ -170,6 +211,24 @@ def main() -> None:
             path=str(SCREENSHOTS / "learner-next-slice-progress-mobile-help.png"),
             full_page=True,
         )
+
+        mobile.keyboard.press("Escape")
+        expect(mobile.get_by_role("dialog", name="How can we help?")).not_to_be_visible()
+        assert_active_label(mobile, "Open help chatbox")
+
+        more_trigger = mobile.get_by_role("button", name="More navigation options")
+        more_trigger.click()
+        drawer = mobile.get_by_role("dialog", name="Alex Mercer")
+        drawer.wait_for()
+        close_menu = mobile.get_by_role("button", name="Close menu")
+        close_menu.focus()
+        mobile.keyboard.press("Shift+Tab")
+        assert mobile.evaluate("document.activeElement?.closest('#learner-more-drawer') !== null")
+        mobile.keyboard.press("Tab")
+        assert_active_label(mobile, "Close menu")
+        mobile.keyboard.press("Escape")
+        expect(drawer).not_to_be_visible()
+        assert_active_label(mobile, "More navigation options")
 
         desktop.close()
         mobile.close()

@@ -14,6 +14,8 @@ import {
   LayoutDashboard,
   MoreHorizontal,
   MessageCircle,
+  PanelLeftClose,
+  PanelLeftOpen,
   Search,
   Settings,
   User,
@@ -168,6 +170,14 @@ export function closeNotificationPopover(
   trigger?.focus();
 }
 
+export function closeHelpPopover(
+  setOpen: (open: boolean) => void,
+  trigger: Pick<HTMLButtonElement, "focus"> | null,
+): void {
+  setOpen(false);
+  trigger?.focus();
+}
+
 export type LearnerShellProps = {
   children?: React.ReactNode;
   current?: LearnerCurrent;
@@ -214,6 +224,16 @@ export function LearnerShell({
     }, 3400);
   }
 
+  function toggleSidebar(): void {
+    const nextCollapsed = !sidebarCollapsed;
+    setSidebarCollapsed(nextCollapsed);
+    showToast(
+      nextCollapsed
+        ? "Sidebar collapsed. Navigation labels remain available in tooltips."
+        : "Sidebar expanded.",
+    );
+  }
+
   useEffect(
     () => () => {
       if (toastTimerRef.current !== undefined) {
@@ -240,8 +260,7 @@ export function LearnerShell({
           );
         }
         if (helpOpen) {
-          setHelpOpen(false);
-          helpButtonRef.current?.focus();
+          closeHelpPopover(setHelpOpen, helpButtonRef.current);
         }
       } else if (
         (e.metaKey || e.ctrlKey) &&
@@ -339,7 +358,7 @@ export function LearnerShell({
         !accountMenuRef.current?.contains(target) &&
         !accountButtonRef.current?.contains(target)
       ) {
-        setAccountMenuOpen(false);
+        closeAccountMenu(setAccountMenuOpen, accountButtonRef.current);
       }
     };
 
@@ -395,7 +414,10 @@ export function LearnerShell({
         !notificationPopoverRef.current?.contains(target) &&
         !notificationButtonRef.current?.contains(target)
       ) {
-        setNotificationPopoverOpen(false);
+        closeNotificationPopover(
+          setNotificationPopoverOpen,
+          notificationButtonRef.current,
+        );
       }
     };
 
@@ -409,7 +431,7 @@ export function LearnerShell({
     const handlePointerDown = (event: PointerEvent) => {
       const target = event.target;
       if (target instanceof Node && !helpWrapperRef.current?.contains(target)) {
-        setHelpOpen(false);
+        closeHelpPopover(setHelpOpen, helpButtonRef.current);
       }
     };
 
@@ -477,6 +499,7 @@ export function LearnerShell({
 
       {/* Desktop Persistent Sidebar */}
       <aside
+        id="learner-sidebar"
         className="learner-sidebar"
         aria-label="Learner workspace navigation"
       >
@@ -575,15 +598,7 @@ export function LearnerShell({
           <button
             type="button"
             className="sidebar-collapse-btn"
-            onClick={() => {
-              const nextCollapsed = !sidebarCollapsed;
-              setSidebarCollapsed(nextCollapsed);
-              showToast(
-                nextCollapsed
-                  ? "Sidebar collapsed. Navigation labels remain available in tooltips."
-                  : "Sidebar expanded.",
-              );
-            }}
+            onClick={toggleSidebar}
             aria-label={
               sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"
             }
@@ -603,6 +618,23 @@ export function LearnerShell({
       {/* Compact Utility Header */}
       <header className="learner-header">
         <div className="learner-header__inner">
+          <button
+            type="button"
+            className="learner-sidebar-toggle"
+            onClick={toggleSidebar}
+            aria-label={
+              sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"
+            }
+            aria-expanded={!sidebarCollapsed}
+            aria-controls="learner-sidebar"
+            title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {sidebarCollapsed ? (
+              <PanelLeftOpen size={18} aria-hidden="true" />
+            ) : (
+              <PanelLeftClose size={18} aria-hidden="true" />
+            )}
+          </button>
           <div className="learner-header__mobile-brand">
             <Link
               className="mobile-brand-link"
@@ -731,6 +763,7 @@ export function LearnerShell({
                 ref={accountButtonRef}
                 onClick={() => {
                   setNotificationPopoverOpen(false);
+                  setHelpOpen(false);
                   setAccountMenuOpen((open) => !open);
                 }}
                 aria-expanded={accountMenuOpen}
@@ -862,8 +895,7 @@ export function LearnerShell({
                 type="button"
                 className="learner-help-chatbox__close"
                 onClick={() => {
-                  setHelpOpen(false);
-                  helpButtonRef.current?.focus();
+                  closeHelpPopover(setHelpOpen, helpButtonRef.current);
                 }}
                 aria-label="Close help chatbox"
               >
