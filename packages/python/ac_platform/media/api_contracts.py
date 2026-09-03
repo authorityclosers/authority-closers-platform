@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -100,6 +101,57 @@ class UploadCompleteRequest(StrictModel):
 
 class PlaybackRequest(StrictModel):
     preferred_protocol: DeliveryProtocol | None = None
+
+
+class ActivityMediaBindingRequest(StrictModel):
+    """Human approval command for attaching a ready video to an activity."""
+
+    activity_id: UUID
+    module_id: UUID
+    program_version_id: UUID
+    program_id: UUID
+    program_scope: Literal["global", "tenant"]
+    program_owner_key: UUID
+    asset_id: UUID
+    version_id: UUID
+    activity_version: str | None = Field(default=None, max_length=128)
+    approval_reference: str = Field(min_length=1, max_length=200)
+    supersedes_binding_id: UUID | None = None
+
+    @field_validator("activity_version", "approval_reference")
+    @classmethod
+    def nonblank_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("text values must not be blank")
+        return normalized
+
+
+class ActivityMediaBindingResponse(StrictModel):
+    """Durable approval projection with no provider object identifiers."""
+
+    id: UUID
+    tenant_id: UUID
+    activity_id: UUID
+    module_id: UUID
+    program_version_id: UUID
+    program_id: UUID
+    program_scope: Literal["global", "tenant"]
+    program_owner_key: UUID
+    activity_version: str
+    asset_id: UUID
+    version_id: UUID
+    state: Literal["approved", "superseded", "revoked"]
+    approval_reference: str
+    approved_by_person_id: UUID
+    approved_at: datetime
+    supersedes_binding_id: UUID | None
+    superseded_at: datetime | None
+    revoked_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
 
 
 class MediaHeartbeatRequest(StrictModel):
@@ -243,6 +295,31 @@ class MediaDeliveryResponse(StrictModel):
     progressive_url: str | None = None
 
 
+class ActivityMediaDescriptorResponse(StrictModel):
+    """Server-authorized activity media metadata for learner rendering.
+
+    Delivery URLs and playback tokens are intentionally absent until a
+    separately composed delivery/policy capability is valid.  This response
+    may therefore describe an approved binding while truthfully reporting a
+    blocked delivery capability.
+    """
+
+    state: Literal["approved", "blocked", "unavailable"]
+    reason: str
+    binding_id: UUID | None = None
+    media_id: UUID | None = None
+    media_version_id: UUID | None = None
+    activity_version: str | None = None
+    content_type: str | None = None
+    duration_seconds: float | None = None
+    width: int | None = None
+    height: int | None = None
+    renditions: list[RenditionResponse] = Field(default_factory=list)
+    captions: list[CaptionResponse] = Field(default_factory=list)
+    delivery: MediaDeliveryResponse | None = None
+    playback_available: bool = False
+
+
 class ResumeResponse(StrictModel):
     position_seconds: float
     updated_at: datetime | None
@@ -272,6 +349,9 @@ class RetireResponse(StrictModel):
 
 
 __all__ = [
+    "ActivityMediaBindingRequest",
+    "ActivityMediaBindingResponse",
+    "ActivityMediaDescriptorResponse",
     "AvatarVariantResponse",
     "CaptionCreateRequest",
     "CaptionResponse",

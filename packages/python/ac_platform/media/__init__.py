@@ -1,5 +1,11 @@
 """Provider-neutral media delivery contract foundation."""
 
+from ac_platform.media.bindings import (
+    ActivityMediaBindingSnapshot,
+    binding_response,
+    resolve_activity_media_binding,
+    resolve_activity_media_binding_for_learning,
+)
 from ac_platform.media.contracts import (
     AuthorizedMediaVersion,
     CaptionTrackDescriptor,
@@ -41,10 +47,12 @@ from ac_platform.media.errors import (
     MediaUnsupportedError,
 )
 from ac_platform.media.models import (
+    ActivityMediaBinding,
     CaptionKind,
     CaptionState,
     DeliveryProtocol,
     MediaAsset,
+    MediaBindingState,
     MediaCaptionTrack,
     MediaLifecycle,
     MediaPlaybackGrant,
@@ -58,6 +66,8 @@ from ac_platform.media.models import (
 )
 
 __all__ = [
+    "ActivityMediaBinding",
+    "ActivityMediaBindingSnapshot",
     "AuthorizedMediaVersion",
     "CaptionKind",
     "CaptionState",
@@ -71,6 +81,7 @@ __all__ = [
     "MediaAssetId",
     "MediaAssetVersion",
     "MediaAsset",
+    "MediaBindingState",
     "MediaDeliveryDescriptor",
     "MediaDeliveryError",
     "MediaDeliveryKind",
@@ -107,5 +118,8 @@ __all__ = [
     "TranscriptDescriptor",
     "TranscriptFormat",
     "create_media_authorization_context",
+    "binding_response",
+    "resolve_activity_media_binding",
+    "resolve_activity_media_binding_for_learning",
     "resolve_authorized_delivery",
 ]

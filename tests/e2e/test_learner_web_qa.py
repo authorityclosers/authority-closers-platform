@@ -12,12 +12,14 @@ repository's existing browser regression convention.
 
 from __future__ import annotations
 
+import json
 import os
 from collections.abc import Iterator
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
+from urllib.parse import unquote, urlparse
 
 import pytest
 
@@ -26,6 +28,7 @@ from playwright.sync_api import (  # noqa: E402
     Browser,
     BrowserContext,
     Page,
+    Route,
     sync_playwright,
 )
 from playwright.sync_api import (
@@ -47,6 +50,101 @@ class RouteSpec:
     path: str
     shell: str
     state_simulation: bool = True
+    activity_kind: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ActivityFixture:
+    """Read-only API data used to render one activity kind in browser QA.
+
+    This is deliberately a presentation fixture. It contains no completion,
+    evidence, playback, or draft mutation result and is never sent to the
+    application as if it were a canonical server write.
+    """
+
+    screen_id: str
+    activity_id: str
+    kind: str
+    position: int
+    title: str
+    prompt: str
+    allowed_actions: tuple[str, ...]
+
+
+CANONICAL_FREE_COURSE_SLUG: Final = "authority-closers-free-course"
+CANONICAL_PROGRAM_ID: Final = "e2e-canonical-free-course"
+CANONICAL_PROGRAM_VERSION_ID: Final = "e2e-canonical-free-course-v1"
+CANONICAL_MODULE_ID: Final = "e2e-canonical-free-course-module-1"
+CANONICAL_ENROLLMENT_ID: Final = "e2e-canonical-free-course-enrollment"
+FIXTURE_PERSON_ID: Final = "e2e-learner"
+FIXTURE_TENANT_ID: Final = "e2e-tenant"
+
+# These are the distinct activity route IDs recorded by the exact staging
+# journey evidence. The browser fixture below serves deterministic read data
+# for them so local QA does not require an external learner or a write.
+ACTIVITY_FIXTURES: Final[tuple[ActivityFixture, ...]] = (
+    ActivityFixture(
+        "ACT-01",
+        "73dfbbf7-5f2c-5e88-ad27-e5c84c65690f",
+        "VIDEO",
+        1,
+        "Watch the Module 1 shift",
+        "Watch the approved Module 1 content: Why High-Ticket Sales Is A "
+        "Completely Different Game.",
+        ("complete_video",),
+    ),
+    ActivityFixture(
+        "ACT-02",
+        "a6d22402-b606-5987-a9d2-f5d96c8cccba",
+        "REFLECTION",
+        2,
+        "Reflect on the shift",
+        "Record your reflection after watching the Module 1 content. Your "
+        "draft is saved so you can leave and resume.",
+        ("save_draft", "submit_evidence"),
+    ),
+    ActivityFixture(
+        "ACT-03",
+        "00f23259-a74b-5d36-96df-e57ab9584b32",
+        "IMPLEMENTATION_CHALLENGE",
+        3,
+        "Implement in a real situation",
+        "Complete the configured offline or real-world task, then record the "
+        "evidence or reflection you can support.",
+        ("save_draft", "submit_evidence"),
+    ),
+    ActivityFixture(
+        "ACT-04",
+        "2c14f1cc-712c-5c71-9273-c2a68bb1b906",
+        "REVIEW",
+        4,
+        "Review the observed pattern",
+        "Capture the observed pattern after the challenge without claiming "
+        "certainty beyond the evidence you recorded.",
+        ("save_draft", "submit_evidence"),
+    ),
+    ActivityFixture(
+        "ACT-05",
+        "e5de3ba2-52a6-572b-8aad-9b0183035e76",
+        "IMPROVE",
+        5,
+        "Choose the next improvement",
+        "Capture one explicit behavior, correction, or next action to carry "
+        "into your next attempt.",
+        ("save_draft", "submit_evidence"),
+    ),
+)
+ACTIVITY_FIXTURE_BY_ID: Final[dict[str, ActivityFixture]] = {
+    fixture.activity_id: fixture for fixture in ACTIVITY_FIXTURES
+}
+
+ACTIVITY_KIND_LABELS: Final[dict[str, str]] = {
+    "VIDEO": "Watch",
+    "REFLECTION": "Reflect",
+    "IMPLEMENTATION_CHALLENGE": "Implement",
+    "REVIEW": "Review",
+    "IMPROVE": "Improve",
+}
 
 
 REFERENCE_VIEWPORTS: Final[tuple[Viewport, ...]] = (
@@ -98,19 +196,35 @@ ROUTE_SPECS: Final[tuple[RouteSpec, ...]] = (
     RouteSpec("FLOW-SHELL-PLAN-01", "HOME-01", "/home", "learner"),
     RouteSpec("FLOW-LEARNING-01", "LEARN-01", "/learning", "learner"),
     RouteSpec("FLOW-DISCOVER-01", "DISC-01", "/discover", "learner"),
-    RouteSpec("FLOW-DISCOVER-01", "COURSE-01", "/programs/free-course-foundation", "public"),
-    RouteSpec("FLOW-LEARNING-01", "COURSE-02", "/learn/free-course-foundation", "learner"),
+    RouteSpec(
+        "FLOW-DISCOVER-01",
+        "COURSE-01",
+        f"/programs/{CANONICAL_FREE_COURSE_SLUG}",
+        "public",
+    ),
+    RouteSpec(
+        "FLOW-LEARNING-01",
+        "COURSE-02",
+        f"/learn/{CANONICAL_FREE_COURSE_SLUG}",
+        "learner",
+    ),
     RouteSpec(
         "FLOW-LEARNING-01",
         "MOD-01",
-        "/learn/free-course-foundation/module/module-1",
+        f"/learn/{CANONICAL_FREE_COURSE_SLUG}/module/module-1",
         "learner",
     ),
-    RouteSpec("FLOW-ACTIVITY-01", "ACT-01", "/activity/activity-1", "learner"),
-    RouteSpec("FLOW-ACTIVITY-01", "ACT-02", "/activity/activity-1", "learner"),
-    RouteSpec("FLOW-ACTIVITY-01", "ACT-03", "/activity/activity-1", "learner"),
-    RouteSpec("FLOW-ACTIVITY-01", "ACT-04", "/activity/activity-1", "learner"),
-    RouteSpec("FLOW-ACTIVITY-01", "ACT-05", "/activity/activity-1", "learner"),
+    *tuple(
+        RouteSpec(
+            "FLOW-ACTIVITY-01",
+            fixture.screen_id,
+            f"/activity/{fixture.activity_id}",
+            "learner",
+            state_simulation=False,
+            activity_kind=fixture.kind,
+        )
+        for fixture in ACTIVITY_FIXTURES
+    ),
     RouteSpec("FLOW-PROGRESS-01", "PROG-01", "/progress", "learner"),
     RouteSpec("FLOW-NOTIFY-01", "NOTIF-01", "/notifications", "learner"),
     RouteSpec("FLOW-PROFILE-01", "PROF-01", "/profile", "learner"),
@@ -159,6 +273,161 @@ def _new_context(
         color_scheme="light",
         service_workers="block",
     )
+
+
+def _activity_explanation(fixture: ActivityFixture) -> dict[str, object]:
+    return {
+        "activity_id": fixture.activity_id,
+        "state": "available",
+        "required": True,
+        "reason": "Ready in the deterministic browser fixture; no completion is asserted.",
+        "missing_activity_ids": [],
+        "missing_module_ids": [],
+    }
+
+
+def _activity_response(fixture: ActivityFixture) -> dict[str, object]:
+    return {
+        "id": fixture.activity_id,
+        "module_id": CANONICAL_MODULE_ID,
+        "program_id": CANONICAL_PROGRAM_ID,
+        "program_version_id": CANONICAL_PROGRAM_VERSION_ID,
+        "enrollment_id": CANONICAL_ENROLLMENT_ID,
+        "position": fixture.position,
+        "kind": fixture.kind,
+        "title": fixture.title,
+        "prompt": fixture.prompt,
+        # AVAILABLE is the server-shaped ready-to-work state. No fixture
+        # activity is COMPLETED, so browser QA cannot imply progress.
+        "state": "available",
+        "revision": 1,
+        "required": True,
+        "explanation": _activity_explanation(fixture),
+        "allowed_actions": list(fixture.allowed_actions),
+        "draft_revision": 0,
+        "draft_payload": None,
+    }
+
+
+def _learning_response() -> dict[str, object]:
+    activities = [
+        {
+            "id": fixture.activity_id,
+            "module_id": CANONICAL_MODULE_ID,
+            "program_version_id": CANONICAL_PROGRAM_VERSION_ID,
+            "position": fixture.position,
+            "kind": fixture.kind,
+            "title": fixture.title,
+            "prompt": fixture.prompt,
+            # Keep every kind independently openable for renderer coverage;
+            # the projection remains explicitly at zero completions.
+            "state": "available",
+            "revision": 1,
+            "required": True,
+            "explanation": _activity_explanation(fixture),
+            "allowed_actions": list(fixture.allowed_actions),
+        }
+        for fixture in ACTIVITY_FIXTURES
+    ]
+    activity_reasons = [_activity_explanation(fixture) for fixture in ACTIVITY_FIXTURES]
+    return {
+        "program_id": CANONICAL_PROGRAM_ID,
+        "program_version_id": CANONICAL_PROGRAM_VERSION_ID,
+        "program_slug": CANONICAL_FREE_COURSE_SLUG,
+        "program_title": "Authority Closers Free Course",
+        "version_number": 1,
+        "enrollment_id": CANONICAL_ENROLLMENT_ID,
+        "modules": [
+            {
+                "id": CANONICAL_MODULE_ID,
+                "position": 1,
+                "title": "SHIFT 1 — Why High-Ticket Sales Is A Completely Different Game.",
+                "activities": activities,
+            }
+        ],
+        "projection": {
+            "scope_type": "enrollment",
+            "scope_id": CANONICAL_ENROLLMENT_ID,
+            "program_version": CANONICAL_PROGRAM_VERSION_ID,
+            "projection_version": "e2e-activity-ready-v1",
+            "denominator": len(ACTIVITY_FIXTURES),
+            "completed_count": 0,
+            "percentage": 0,
+            "predicate": "fixture-read-only-no-completions",
+            "missing_module_ids": [],
+            "activity_reasons": activity_reasons,
+        },
+    }
+
+
+def _fixture_me_response() -> dict[str, object]:
+    return {
+        "person_id": FIXTURE_PERSON_ID,
+        "email": "learner.e2e@example.test",
+        "display_name": "E2E Learner",
+        "email_verified_at": "2026-09-01T00:00:00Z",
+        "selected_tenant_id": FIXTURE_TENANT_ID,
+        "membership_role": "learner",
+        "permissions": [],
+    }
+
+
+def _fulfill_json(route: Route, payload: object, *, status: int = 200) -> None:
+    route.fulfill(
+        status=status,
+        content_type="application/json",
+        body=json.dumps(payload),
+    )
+
+
+def _install_activity_fixture(context: BrowserContext) -> tuple[list[str], list[str]]:
+    """Serve deterministic activity reads and record any attempted writes.
+
+    The fixture is scoped to the browser context and handles only the learner
+    read endpoints needed by the activity route. Unknown requests continue to
+    the configured server, preserving the distinction between a local test
+    fixture and canonical API state.
+    """
+
+    served_activity_ids: list[str] = []
+    mutation_paths: list[str] = []
+
+    def handle_api(route: Route) -> None:
+        request = route.request
+        parsed = urlparse(request.url)
+        path = parsed.path
+
+        if path == "/v1/me" and request.method == "GET":
+            _fulfill_json(route, _fixture_me_response())
+            return
+
+        if path.startswith("/v1/activities/") and request.method == "GET":
+            activity_id = unquote(path.removeprefix("/v1/activities/"))
+            fixture = ACTIVITY_FIXTURE_BY_ID.get(activity_id)
+            if fixture is not None:
+                served_activity_ids.append(activity_id)
+                _fulfill_json(route, _activity_response(fixture))
+                return
+
+        if path == f"/v1/learning/{CANONICAL_PROGRAM_ID}" and request.method == "GET":
+            _fulfill_json(route, _learning_response())
+            return
+
+        if path.startswith("/v1/") and request.method != "GET":
+            mutation_paths.append(f"{request.method} {path}")
+            _fulfill_json(
+                route,
+                {
+                    "title": "Deterministic browser fixture blocks writes",
+                    "detail": "Activity QA only serves read data.",
+                },
+                status=405,
+            )
+            return
+        route.continue_()
+
+    context.route("**/v1/**", handle_api)
+    return served_activity_ids, mutation_paths
 
 
 def _load(page: Page, base_url: str, path: str) -> None:
@@ -340,16 +609,79 @@ def _state_path(path: str, state: str) -> str:
     return f"{path}{separator}state={state.lower()}"
 
 
-def _unique_route_specs() -> tuple[RouteSpec, ...]:
-    seen: set[tuple[str, str, bool]] = set()
-    unique: list[RouteSpec] = []
-    for spec in ROUTE_SPECS:
-        key = (spec.path, spec.shell, spec.state_simulation)
-        if key in seen:
-            continue
-        seen.add(key)
-        unique.append(spec)
-    return tuple(unique)
+def _activity_fixture_for_spec(spec: RouteSpec) -> ActivityFixture:
+    assert spec.activity_kind is not None, f"{spec.screen_id} is not an activity route"
+    fixture = next(
+        (item for item in ACTIVITY_FIXTURES if item.kind == spec.activity_kind),
+        None,
+    )
+    assert fixture is not None, f"no deterministic fixture for {spec.activity_kind}"
+    return fixture
+
+
+def _assert_activity_ready(
+    page: Page,
+    spec: RouteSpec,
+    fixture: ActivityFixture,
+) -> None:
+    assert spec.activity_kind == fixture.kind
+    workspace = page.locator(".activity-workspace")
+    workspace.wait_for(state="visible")
+    workspace_class = workspace.get_attribute("class") or ""
+    expected_class = f"activity-workspace--{fixture.kind.lower().replace('_', '-')}"
+    assert expected_class in workspace_class
+    assert page.locator(".activity-shell__header h1").inner_text() == fixture.title
+    kind_text = page.locator(".activity-shell__type").inner_text().upper()
+    assert ACTIVITY_KIND_LABELS[fixture.kind].upper() in kind_text
+    assert page.locator(".activity-shell__header .status-pill").inner_text() == "Available"
+    assert fixture.prompt in page.locator(".activity-prompt").inner_text()
+
+    if fixture.kind == "VIDEO":
+        media_stage = page.get_by_role(
+            "status",
+            name="Approved lesson media is unavailable",
+        )
+        assert media_stage.is_visible()
+        body_text = page.locator("body").inner_text()
+        assert "Lesson complete." not in body_text
+        assert "Completion is recorded by the server" not in body_text
+        return
+
+    response = page.locator("#activity-response")
+    assert response.is_visible()
+    assert not response.is_disabled()
+    assert page.get_by_role("button", name="Submit evidence").is_enabled()
+    save_label = "Save reflection" if fixture.kind == "REFLECTION" else "Save draft"
+    assert page.get_by_role("button", name=save_label).is_enabled()
+
+
+@pytest.mark.e2e
+def test_route_specs_use_canonical_slug_and_distinct_activity_ids() -> None:
+    learning_specs = {
+        "COURSE-01": next(spec for spec in ROUTE_SPECS if spec.screen_id == "COURSE-01"),
+        "COURSE-02": next(spec for spec in ROUTE_SPECS if spec.screen_id == "COURSE-02"),
+        "MOD-01": next(spec for spec in ROUTE_SPECS if spec.screen_id == "MOD-01"),
+    }
+    assert all(CANONICAL_FREE_COURSE_SLUG in spec.path for spec in learning_specs.values())
+    assert all("free-course-foundation" not in spec.path for spec in ROUTE_SPECS)
+
+    activity_specs = [spec for spec in ROUTE_SPECS if spec.flow_id == "FLOW-ACTIVITY-01"]
+    assert len(activity_specs) == len(ACTIVITY_FIXTURES) == 5
+    assert {spec.screen_id for spec in activity_specs} == {
+        fixture.screen_id for fixture in ACTIVITY_FIXTURES
+    }
+    assert {spec.activity_kind for spec in activity_specs} == {
+        fixture.kind for fixture in ACTIVITY_FIXTURES
+    }
+    assert len({spec.path for spec in activity_specs}) == len(activity_specs)
+    assert all(spec.path != "/activity/activity-1" for spec in activity_specs)
+
+    learning_fixture = _learning_response()
+    projection = learning_fixture["projection"]
+    assert isinstance(projection, dict)
+    assert projection["denominator"] == 5
+    assert projection["completed_count"] == 0
+    assert projection["percentage"] == 0
 
 
 @pytest.mark.e2e
@@ -361,15 +693,26 @@ def test_learner_routes_reflow_at_reference_viewports(
 
     for viewport in REFERENCE_VIEWPORTS:
         context = _new_context(browser, viewport)
+        served_activity_ids, mutation_paths = _install_activity_fixture(context)
         page = context.new_page()
         issues = _attach_diagnostics(page)
         try:
-            for spec in _unique_route_specs():
+            for spec in ROUTE_SPECS:
                 route = _state_path(spec.path, "LOADING") if spec.state_simulation else spec.path
                 issue_start = len(issues)
                 _load(page, learner_base_url, route)
                 _assert_route_contract(page, spec, viewport)
+                if spec.activity_kind is not None:
+                    _assert_activity_ready(
+                        page,
+                        spec,
+                        _activity_fixture_for_spec(spec),
+                    )
                 _assert_no_browser_errors(issues[issue_start:], f"{spec.screen_id} {route}")
+            assert set(served_activity_ids) == {
+                fixture.activity_id for fixture in ACTIVITY_FIXTURES
+            }
+            assert mutation_paths == []
         finally:
             context.close()
 

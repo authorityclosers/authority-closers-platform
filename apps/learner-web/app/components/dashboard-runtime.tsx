@@ -3,6 +3,7 @@
 import {
   ArrowRight,
   BookOpen,
+  CalendarDays,
   ChevronRight,
   Compass,
   Edit3,
@@ -19,6 +20,7 @@ import {
   isAbortError,
   type LearnerApi,
   type LearningActivityResponse,
+  type CalendarResponse,
   type LearningResponse,
   type MeResponse,
   type ProgramSummaryResponse,
@@ -94,12 +96,25 @@ export function isOpenable(activity: LearningActivityResponse): boolean {
   );
 }
 
+/**
+ * Module titles are authored content. This presentation-only normalisation
+ * keeps the selected shell readable when a title uses a long dash as a
+ * separator; it does not change the server value or route identity.
+ */
+export function presentationModuleTitle(title: string): string {
+  return title.replace(/\s*[—–]\s*/g, " · ").trim();
+}
+
+type DashboardPlanStatus = "available" | "not_configured" | "unavailable";
+
 type LoadResult = "loaded" | "error" | "aborted" | "redirecting";
 
 export type DashboardData = {
   me: MeResponse;
   programs: ProgramSummaryResponse[];
   learning?: LearningResponse;
+  calendar?: CalendarResponse;
+  calendarStatus?: DashboardPlanStatus;
   offlineRead?: OfflineReadMetadata;
 };
 
@@ -131,12 +146,36 @@ export async function loadDashboardData(
       if (!(err instanceof ApiError && err.status === 404)) throw err;
     }
   }
+
+  // Planning is an optional, tenant-scoped projection. Keep the core
+  // dashboard readable when the learner has no active tenant yet or when the
+  // proposal endpoint is unavailable; never fall back to invented dates or
+  // a learning-path order presented as a schedule.
+  let calendar: CalendarResponse | undefined;
+  let calendarStatus: DashboardPlanStatus = "not_configured";
+  if (me.selected_tenant_id && api.calendar) {
+    try {
+      calendar = await api.calendar({ signal });
+      calendarStatus =
+        calendar.periods.today.status === "available" &&
+        calendar.periods.today.items.length > 0
+          ? "available"
+          : "not_configured";
+    } catch (err) {
+      if (isAbortError(err)) throw err;
+      if (err instanceof ApiError && err.status === 401) throw err;
+      calendarStatus = "unavailable";
+    }
+  }
+
   return {
     kind: "ready",
     data: {
       me,
       programs: programsRes.items,
       learning,
+      calendar,
+      calendarStatus,
       offlineRead:
         getEarliestOfflineReadMetadata(me, onboarding, programsRes, learning) ??
         undefined,
@@ -313,6 +352,14 @@ export function DashboardRuntime({ api = defaultApi }: DashboardRuntimeProps) {
   const activities =
     learning?.modules.flatMap((module) => module.activities) ?? [];
   const nextActivities = activities.slice(0, 4);
+  const todayPlan = data.calendar?.periods.today;
+  const planItems = todayPlan?.status === "available" ? todayPlan.items : [];
+  const planStatus = data.calendarStatus ?? "not_configured";
+  const fallbackActivities =
+    planStatus === "unavailable" ? nextActivities.slice(0, 3) : [];
+  const activityById = new Map(
+    activities.map((activity) => [activity.id, activity]),
+  );
   const practiceActivity = nextActivity;
   const canOpenNext = Boolean(
     nextActivity && isOpenable(nextActivity) && !offlineRead,
@@ -412,7 +459,9 @@ export function DashboardRuntime({ api = defaultApi }: DashboardRuntimeProps) {
                       Module {leadModule?.position ?? 1} · presentation artwork
                     </span>
                     <strong>
-                      {leadModule?.title ?? learning.program_title}
+                      {leadModule
+                        ? presentationModuleTitle(leadModule.title)
+                        : learning.program_title}
                     </strong>
                     <span>
                       Approved lesson media is not connected yet. Playback is
@@ -429,7 +478,9 @@ export function DashboardRuntime({ api = defaultApi }: DashboardRuntimeProps) {
                   </p>
                   <h3 className="continue-learning-heading ac-course-heading">
                     {nextActivity?.title ??
-                      leadModule?.title ??
+                      (leadModule
+                        ? presentationModuleTitle(leadModule.title)
+                        : undefined) ??
                       learning.program_title}
                   </h3>
 
@@ -488,7 +539,9 @@ export function DashboardRuntime({ api = defaultApi }: DashboardRuntimeProps) {
                       </strong>
                       <span>
                         {nextActivity?.title ??
-                          leadModule?.title ??
+                          (leadModule
+                            ? presentationModuleTitle(leadModule.title)
+                            : undefined) ??
                           learning.program_title}
                       </span>
                     </div>
@@ -517,7 +570,7 @@ export function DashboardRuntime({ api = defaultApi }: DashboardRuntimeProps) {
               </div>
             </section>
 
-            {/* The learning projection has ordered activities, not a schedule. */}
+            {/* Today is rendered only from the explicit server-owned plan. */}
             <section
               className="card todays-plan-card ac-card"
               aria-labelledby="todays-plan-title"
@@ -527,28 +580,46 @@ export function DashboardRuntime({ api = defaultApi }: DashboardRuntimeProps) {
                   id="todays-plan-title"
                   className="card-header-title ac-card-title"
                 >
-                  <span className="desktop-text">Next activities</span>
-                  <span className="mobile-text">Up next</span>
+                  Today&apos;s plan
                 </h2>
                 <span className="date-badge ac-date-pill desktop-only">
-                  Path version {learning.version_number}
+                  {planStatus === "available"
+                    ? `${planItems.length} ${planItems.length === 1 ? "item" : "items"}`
+                    : planStatus === "unavailable"
+                      ? "Unavailable"
+                      : "Not configured"}
                 </span>
                 <Link
                   className="card-header-link ac-card-link mobile-only"
-                  href={ROUTES.learning}
+                  href={ROUTES.calendar}
                 >
                   View all
                 </Link>
               </div>
 
               <div className="todays-plan-list ac-plan-list">
-                {nextActivities.length > 0 ? (
-                  nextActivities.map((activity, index) => {
-                    const actionable = isOpenable(activity) && !offlineRead;
+                {planItems.length > 0 ? (
+                  planItems.map((item, index) => {
+                    const activity = item.activity_id
+                      ? activityById.get(item.activity_id)
+                      : undefined;
+                    const actionable = Boolean(
+                      activity && isOpenable(activity) && !offlineRead,
+                    );
+                    const kind = activity
+                      ? activity.kind.replaceAll("_", " ")
+                      : "Plan item";
+                    const status = offlineRead
+                      ? "Reconnect to open"
+                      : item.state === "completed"
+                        ? "Completed"
+                        : activity
+                          ? activityStateLabel(activity)
+                          : "Details unavailable";
                     const row = (
                       <>
                         <div className="plan-item-time ac-plan-time">
-                          Step {index + 1}
+                          Item {index + 1}
                         </div>
                         <div
                           className={`plan-item-icon ac-plan-badge plan-item-icon--${
@@ -574,18 +645,12 @@ export function DashboardRuntime({ api = defaultApi }: DashboardRuntimeProps) {
                           )}
                         </div>
                         <div className="plan-item-text ac-plan-details">
-                          <strong className="ac-plan-action">
-                            {activity.kind.replaceAll("_", " ")}
-                          </strong>
-                          <span className="ac-plan-target">
-                            {activity.title}
-                          </span>
+                          <strong className="ac-plan-action">{kind}</strong>
+                          <span className="ac-plan-target">{item.title}</span>
                         </div>
                         <div className="plan-item-meta">
                           <span className="duration-tag ac-plan-dur desktop-only">
-                            {offlineRead
-                              ? "Reconnect to open"
-                              : activityStateLabel(activity)}
+                            {status}
                           </span>
                           <ChevronRight
                             className="ac-plan-arrow"
@@ -597,9 +662,9 @@ export function DashboardRuntime({ api = defaultApi }: DashboardRuntimeProps) {
                     );
                     return actionable ? (
                       <Link
-                        href={ROUTES.activity(activity.id)}
+                        href={ROUTES.activity(activity!.id)}
                         className="plan-schedule-item ac-plan-row"
-                        key={activity.id}
+                        key={item.id}
                       >
                         {row}
                       </Link>
@@ -607,160 +672,112 @@ export function DashboardRuntime({ api = defaultApi }: DashboardRuntimeProps) {
                       <div
                         aria-disabled="true"
                         className="plan-schedule-item ac-plan-row is-disabled"
-                        key={activity.id}
+                        key={item.id}
                       >
                         {row}
                       </div>
                     );
                   })
+                ) : fallbackActivities.length > 0 ? (
+                  <div className="ac-plan-fallback">
+                    <p className="ac-plan-fallback-label" role="status">
+                      Plan unavailable · up next from the published learning
+                      path
+                    </p>
+                    {fallbackActivities.map((activity, index) => {
+                      const actionable = isOpenable(activity) && !offlineRead;
+                      const row = (
+                        <>
+                          <div className="plan-item-time ac-plan-time">
+                            Up next
+                          </div>
+                          <div
+                            className={
+                              "plan-item-icon ac-plan-badge ac-plan-badge--" +
+                              (index === 0
+                                ? "blue"
+                                : index === 1
+                                  ? "green"
+                                  : "amber")
+                            }
+                          >
+                            {index === 0 ? (
+                              <BookOpen size={14} aria-hidden="true" />
+                            ) : index === 1 ? (
+                              <FileText size={14} aria-hidden="true" />
+                            ) : (
+                              <Edit3 size={14} aria-hidden="true" />
+                            )}
+                          </div>
+                          <div className="plan-item-text ac-plan-details">
+                            <strong className="ac-plan-action">
+                              {activity.kind.replaceAll("_", " ")}
+                            </strong>
+                            <span className="ac-plan-target">
+                              {activity.title}
+                            </span>
+                          </div>
+                          <div className="plan-item-meta">
+                            <span className="duration-tag ac-plan-dur desktop-only">
+                              {offlineRead
+                                ? "Reconnect to open"
+                                : activityStateLabel(activity)}
+                            </span>
+                            <ChevronRight
+                              className="ac-plan-arrow"
+                              size={15}
+                              aria-hidden="true"
+                            />
+                          </div>
+                        </>
+                      );
+                      return actionable ? (
+                        <Link
+                          href={ROUTES.activity(activity.id)}
+                          className="plan-schedule-item ac-plan-row ac-plan-fallback-row"
+                          key={activity.id}
+                        >
+                          {row}
+                        </Link>
+                      ) : (
+                        <div
+                          aria-disabled="true"
+                          className="plan-schedule-item ac-plan-row ac-plan-fallback-row is-disabled"
+                          key={activity.id}
+                        >
+                          {row}
+                        </div>
+                      );
+                    })}
+                  </div>
                 ) : (
                   <div className="dashboard-card-empty" role="status">
-                    No activities are published in this learning path yet.
+                    {planStatus === "unavailable"
+                      ? "Today's plan is unavailable right now. Open My Learning for the published path."
+                      : "No explicit plan has been published for today yet."}
                   </div>
                 )}
               </div>
 
               <div className="card-footer-action ac-card-bottom-link desktop-only">
                 <Link
-                  href={ROUTES.learning}
+                  href={ROUTES.calendar}
                   className="footer-plan-link ac-footer-action-link"
                 >
-                  <BookOpen size={14} aria-hidden="true" />
-                  <span>Open full learning path</span>
+                  <CalendarDays size={14} aria-hidden="true" />
+                  <span>View full plan</span>
                   <ChevronRight size={14} aria-hidden="true" />
                 </Link>
               </div>
             </section>
           </div>
 
-          {/* Mobile rails keep the selected media-first hierarchy without
-              inventing enrolled courses, artwork URLs, or progress facts. */}
+          {/* Mobile planning card mirrors the approved Direction A order while
+              keeping its content sourced from the next eligible activity. */}
           <section
-            className="dashboard-collection dashboard-collection--learning mobile-only"
-            aria-labelledby="mobile-my-learning-title"
+            className="mobile-practice-banner mobile-only"
+            aria-labelledby="mobile-upcoming-practice-title"
           >
-            <div className="dashboard-collection__header">
-              <h2 id="mobile-my-learning-title">My Learning</h2>
-              <Link href={ROUTES.learning}>View all</Link>
-            </div>
-            {learning.modules.length > 0 ? (
-              <div className="dashboard-collection__rail" role="list">
-                {learning.modules.slice(0, 4).map((module, index) => {
-                  const completedCount = module.activities.filter(
-                    (moduleActivity) =>
-                      moduleActivity.state.toLowerCase() === "completed",
-                  ).length;
-                  const modulePercentage = module.activities.length
-                    ? Math.round(
-                        (completedCount / module.activities.length) * 100,
-                      )
-                    : 0;
-                  const moduleNext = module.activities.find((moduleActivity) =>
-                    isOpenable(moduleActivity),
-                  );
-                  const moduleActionable = Boolean(moduleNext && !offlineRead);
-                  const content = (
-                    <>
-                      <div className="dashboard-collection-card__art">
-                        <Image
-                          src={presentationArtwork(index + 1)}
-                          alt=""
-                          fill
-                          sizes="(max-width: 520px) 78vw, 280px"
-                        />
-                        <span>Module {module.position}</span>
-                      </div>
-                      <div className="dashboard-collection-card__body">
-                        <strong>{module.title}</strong>
-                        <span>
-                          {completedCount} of {module.activities.length}{" "}
-                          activities complete
-                        </span>
-                        <div
-                          className="dashboard-collection-card__progress"
-                          role="progressbar"
-                          aria-valuenow={modulePercentage}
-                          aria-valuemin={0}
-                          aria-valuemax={100}
-                          aria-label={module.title + " completion"}
-                        >
-                          <span style={{ width: modulePercentage + "%" }} />
-                        </div>
-                      </div>
-                    </>
-                  );
-                  return moduleActionable ? (
-                    <Link
-                      href={ROUTES.activity(moduleNext!.id)}
-                      className="dashboard-collection-card"
-                      role="listitem"
-                      key={module.id}
-                    >
-                      {content}
-                    </Link>
-                  ) : (
-                    <div
-                      className="dashboard-collection-card is-disabled"
-                      role="listitem"
-                      data-disabled="true"
-                      key={module.id}
-                    >
-                      {content}
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className="dashboard-collection__empty" role="status">
-                No modules are published in this learning path yet.
-              </p>
-            )}
-          </section>
-
-          <section
-            className="dashboard-collection dashboard-collection--discover mobile-only"
-            aria-labelledby="mobile-discover-title"
-          >
-            <div className="dashboard-collection__header">
-              <h2 id="mobile-discover-title">Discover</h2>
-              <Link href={ROUTES.discover}>View all</Link>
-            </div>
-            {programs.filter((program) => program.id !== learning.program_id)
-              .length > 0 ? (
-              <div className="dashboard-collection__rail" role="list">
-                {programs
-                  .filter((program) => program.id !== learning.program_id)
-                  .slice(0, 4)
-                  .map((program, index) => (
-                    <Link
-                      href={ROUTES.programDetail(program.slug)}
-                      className="dashboard-discover-card"
-                      role="listitem"
-                      key={program.id}
-                    >
-                      <div className="dashboard-discover-card__art">
-                        <Image
-                          src={presentationArtwork(index + 1)}
-                          alt=""
-                          fill
-                          sizes="(max-width: 520px) 78vw, 280px"
-                        />
-                        <span>Published</span>
-                      </div>
-                      <strong>{program.title}</strong>
-                      <span>Version {program.version_number}</span>
-                    </Link>
-                  ))}
-              </div>
-            ) : (
-              <p className="dashboard-collection__empty" role="status">
-                No additional published programs are available yet.
-              </p>
-            )}
-          </section>
-
-          {/* Mobile projection-backed next-focus summary. */}
-          <div className="mobile-practice-banner mobile-only">
             <Link
               href={
                 canOpenNext && practiceActivity
@@ -770,17 +787,22 @@ export function DashboardRuntime({ api = defaultApi }: DashboardRuntimeProps) {
               className="card upcoming-practice-soft-card"
             >
               <div className="soft-card-icon">
-                <BookOpen size={18} aria-hidden="true" />
+                <CalendarDays size={18} aria-hidden="true" />
               </div>
               <div className="soft-card-content">
-                <span className="soft-card-kicker">Next focus</span>
+                <span
+                  className="soft-card-kicker"
+                  id="mobile-upcoming-practice-title"
+                >
+                  Upcoming practice
+                </span>
                 <strong>
                   {practiceActivity?.title ?? "No next activity is published"}
                 </strong>
                 <span>
                   {practiceActivity
-                    ? activityStateLabel(practiceActivity)
-                    : "Check the learning path for updates"}
+                    ? `${activityStateLabel(practiceActivity)} · next path action`
+                    : "Published practice will appear here when available"}
                 </span>
               </div>
               <ChevronRight
@@ -789,7 +811,7 @@ export function DashboardRuntime({ api = defaultApi }: DashboardRuntimeProps) {
                 className="soft-card-chevron"
               />
             </Link>
-          </div>
+          </section>
 
           {/* Middle Row: 3 Columns on Desktop */}
           <div className="dashboard-row dashboard-row--middle ac-grid-row-middle desktop-only">
@@ -803,7 +825,7 @@ export function DashboardRuntime({ api = defaultApi }: DashboardRuntimeProps) {
                   id="upcoming-practice-title"
                   className="card-header-title ac-card-title"
                 >
-                  Next focus
+                  Upcoming practice
                 </h2>
                 <Link
                   className="card-header-link ac-card-link"
@@ -883,7 +905,7 @@ export function DashboardRuntime({ api = defaultApi }: DashboardRuntimeProps) {
                   id="my-courses-title"
                   className="card-header-title ac-card-title"
                 >
-                  Published programs
+                  Courses
                 </h2>
                 <Link
                   className="card-header-link ac-card-link"
@@ -962,10 +984,10 @@ export function DashboardRuntime({ api = defaultApi }: DashboardRuntimeProps) {
                     id="weekly-activity-title"
                     className="card-header-title ac-card-title"
                   >
-                    Progress snapshot
+                    Your weekly activity
                   </h2>
                   <p className="card-header-subtitle ac-card-subtitle">
-                    Projection {learning.projection.projection_version}
+                    Course projection · server published
                   </p>
                 </div>
                 <Link
@@ -1052,7 +1074,7 @@ export function DashboardRuntime({ api = defaultApi }: DashboardRuntimeProps) {
                   CATALOG
                 </span>
                 <strong className="ac-upcoming-thumb-title">
-                  Published programs
+                  Catalog updates
                 </strong>
                 <span className="upcoming-thumb-pill ac-upcoming-pill">
                   SERVER PUBLISHED
@@ -1061,25 +1083,23 @@ export function DashboardRuntime({ api = defaultApi }: DashboardRuntimeProps) {
 
               <div className="upcoming-banner-content ac-upcoming-body">
                 <span className="upcoming-kicker ac-upcoming-tag">
-                  CATALOG STATUS
+                  UPCOMING LEARNING
                 </span>
                 <h3
                   id="upcoming-banner-title"
                   className="upcoming-title ac-upcoming-heading"
                 >
-                  {programs.length > 1
-                    ? `${programs.length} programs are published`
-                    : "More programs will appear when published"}
+                  Upcoming course details will appear when published
                 </h3>
                 <p className="upcoming-description ac-upcoming-desc">
-                  This workspace never presents launch dates, availability, or
-                  enrollment progress until the server publishes it.
+                  This workspace only presents catalog details returned by the
+                  server. No launch date or reminder is available yet.
                 </p>
 
                 <div className="upcoming-footer-row ac-upcoming-action-row">
                   <div className="upcoming-date-label ac-upcoming-date">
                     <Compass size={14} aria-hidden="true" />
-                    <span>{programs.length} published</span>
+                    <span>{programs.length} published in catalog</span>
                   </div>
                   <Link
                     href={ROUTES.discover}

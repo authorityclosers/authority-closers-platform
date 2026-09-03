@@ -50,6 +50,7 @@ from ac_platform.learning.services import (
     WatchIntervalSnapshot,
     authoritative_progress,
 )
+from ac_platform.media.api_contracts import ActivityMediaDescriptorResponse
 
 MAX_IDEMPOTENCY_KEY_LENGTH = 128
 MAX_PLAYBACK_TOKEN_LENGTH = 512
@@ -63,6 +64,10 @@ ActivityResolver = Callable[[object, object], ActivityDefinition]
 PromptResolver = Callable[[object, object], str | None]
 ReviewerResolver = Callable[[LearningAccessContext], UUID | None]
 PolicyResolver = Callable[[LearningAccessContext], VideoEvidencePolicy]
+ActivityMediaResolver = Callable[[Session, UUID, object, object], object | None]
+MediaDescriptorResolver = Callable[
+    [Session, ActorContext, LearningAccessContext], ActivityMediaDescriptorResponse | None
+]
 
 
 class LearningTenantContextRequired(DomainError):
@@ -229,6 +234,7 @@ class ActivityDetailResponse(ActivityRequest):
     enrollment_id: UUID
     draft_revision: int
     draft_payload: dict[str, Any] | None
+    media: ActivityMediaDescriptorResponse | None = None
 
 
 class DraftRequest(BaseModel):
@@ -408,7 +414,13 @@ def _allowed_actions(
     actions: list[ActivityAllowedAction] = ["save_draft"]
     kind = ActivityKind(_enum_value(access.activity.kind).upper())
     if kind is ActivityKind.VIDEO:
-        if playback_enabled and access.activity.video_duration_seconds is not None:
+        if (
+            playback_enabled
+            and access.activity.video_duration_seconds is not None
+            and getattr(access.activity, "media_binding_id", None) is not None
+            and getattr(access.activity, "media_asset_id", None) is not None
+            and getattr(access.activity, "media_version_id", None) is not None
+        ):
             actions.append("complete_video")
         return actions
     reviewer_id = access.assigned_reviewer_id
@@ -722,11 +734,13 @@ def _bundle(
     activity_resolver: ActivityResolver,
     reviewer_resolver: ReviewerResolver,
     policy_resolver: PolicyResolver,
+    activity_media_resolver: ActivityMediaResolver | None = None,
 ) -> LearningCommandBundle:
     repository = SqlAlchemyLearningRepository(
         database,
         activity_resolver=activity_resolver,
         reviewer_resolver=reviewer_resolver,
+        activity_media_resolver=activity_media_resolver,
     )
     return LearningCommandBundle(
         repository,
@@ -753,6 +767,8 @@ def install_learning_http(
     prompt_resolver: PromptResolver | None = None,
     reviewer_resolver: ReviewerResolver | None = None,
     policy_resolver: PolicyResolver | None = None,
+    activity_media_resolver: ActivityMediaResolver | None = None,
+    media_descriptor_resolver: MediaDescriptorResolver | None = None,
 ) -> None:
     """Install the G1 learning routes around the authenticated transaction.
 
@@ -775,6 +791,7 @@ def install_learning_http(
             activity_resolver=resolved_activity,
             reviewer_resolver=resolved_reviewer,
             policy_resolver=resolved_policy,
+            activity_media_resolver=activity_media_resolver,
         )
 
     @router.get("/learning", response_model=LearningCollectionResponse)
@@ -1027,6 +1044,11 @@ def install_learning_http(
                     activity_id=activity_id,
                 )
             )
+            media = (
+                None
+                if state is ActivityState.LOCKED or media_descriptor_resolver is None
+                else media_descriptor_resolver(database, actor, access)
+            )
             return ActivityDetailResponse(
                 id=access.activity.id,
                 module_id=access.activity.module_id,
@@ -1049,6 +1071,7 @@ def install_learning_http(
                 enrollment_id=enrollment.id,
                 draft_revision=draft.revision if draft is not None else 0,
                 draft_payload=dict(draft.payload) if draft is not None else None,
+                media=media,
             )
 
         result = await _run_in_auth_transaction(auth, read)

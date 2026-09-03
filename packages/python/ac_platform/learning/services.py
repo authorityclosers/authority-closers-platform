@@ -492,6 +492,9 @@ class ActivityDefinition:
     coverage_threshold: float = DEFAULT_VIDEO_COVERAGE_THRESHOLD
     requires_human_review: bool | None = None
     tenant_id: UUID | None = None
+    media_binding_id: UUID | None = None
+    media_asset_id: UUID | None = None
+    media_version_id: UUID | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "kind", _activity_kind(self.kind))
@@ -520,6 +523,13 @@ class ActivityDefinition:
             raise InvalidLearningInput("coverage threshold must be greater than 0 and at most 1")
         object.__setattr__(self, "coverage_threshold", threshold)
         object.__setattr__(self, "prerequisites", tuple(dict.fromkeys(self.prerequisites)))
+        media_ids = (self.media_binding_id, self.media_asset_id, self.media_version_id)
+        if any(value is not None for value in media_ids) and not all(
+            value is not None for value in media_ids
+        ):
+            raise InvalidLearningInput(
+                "activity media binding, asset, and version must be resolved together"
+            )
 
     @property
     def activity_id(self) -> UUID:
@@ -4587,10 +4597,13 @@ class SqlAlchemyLearningRepository:
         *,
         activity_resolver: Callable[[object, object], ActivityDefinition],
         reviewer_resolver: Callable[[LearningAccessContext], UUID | None],
+        activity_media_resolver: Callable[[Session, UUID, object, object], object | None]
+        | None = None,
     ) -> None:
         self._session = session
         self._activity_resolver = activity_resolver
         self._reviewer_resolver = reviewer_resolver
+        self._activity_media_resolver = activity_media_resolver
 
     @contextmanager
     def atomic(self) -> Iterator[None]:
@@ -4598,11 +4611,17 @@ class SqlAlchemyLearningRepository:
 
         yield
 
-    def _resolved_activity(self, catalog_activity: Any, catalog_version: Any) -> ActivityDefinition:
+    def _resolved_activity(
+        self,
+        catalog_activity: Any,
+        catalog_version: Any,
+        *,
+        tenant_id: UUID | None = None,
+    ) -> ActivityDefinition:
         resolved = self._activity_resolver(catalog_activity, catalog_version)
         if resolved.id != catalog_activity.id:
             raise EvidenceVersionMismatch("the activity resolver returned another activity")
-        return replace(
+        resolved = replace(
             resolved,
             id=catalog_activity.id,
             kind=catalog_activity.kind,
@@ -4617,8 +4636,40 @@ class SqlAlchemyLearningRepository:
             tenant_id=catalog_activity.tenant_id,
             version=_text(resolved.version, "activity version", 128),
         )
+        if self._activity_media_resolver is None or tenant_id is None:
+            return resolved
+        media = self._activity_media_resolver(
+            self._session,
+            tenant_id,
+            catalog_activity,
+            catalog_version,
+        )
+        if media is None:
+            return resolved
+        binding_id = getattr(media, "binding_id", None)
+        asset_id = getattr(media, "asset_id", None)
+        version_id = getattr(media, "version_id", None)
+        if not all(isinstance(value, UUID) for value in (binding_id, asset_id, version_id)):
+            raise EvidenceVersionMismatch("the activity media resolver returned invalid identities")
+        duration = getattr(media, "duration_seconds", None)
+        activity_version = getattr(media, "activity_version", resolved.version)
+        if not isinstance(activity_version, str):
+            raise EvidenceVersionMismatch("the activity media resolver returned an invalid version")
+        return replace(
+            resolved,
+            media_binding_id=binding_id,
+            media_asset_id=asset_id,
+            media_version_id=version_id,
+            video_duration_seconds=duration,
+            version=_text(activity_version, "activity version", 128),
+        )
 
-    def _load_program_definition(self, catalog_version: Any) -> ProgramDefinition:
+    def _load_program_definition(
+        self,
+        catalog_version: Any,
+        *,
+        tenant_id: UUID | None = None,
+    ) -> ProgramDefinition:
         from ac_platform.catalog.models import Activity as CatalogActivity
         from ac_platform.catalog.models import Module as CatalogModule
         from ac_platform.catalog.models import ModulePrerequisite
@@ -4667,7 +4718,11 @@ class SqlAlchemyLearningRepository:
         for catalog_activity in activity_rows:
             try:
                 activities_by_module[catalog_activity.module_id].append(
-                    self._resolved_activity(catalog_activity, catalog_version)
+                    self._resolved_activity(
+                        catalog_activity,
+                        catalog_version,
+                        tenant_id=tenant_id,
+                    )
                 )
             except KeyError as exc:
                 raise EvidenceVersionMismatch(
@@ -4803,7 +4858,7 @@ class SqlAlchemyLearningRepository:
                 "active membership, enrollment, entitlement, and catalog access are required"
             )
         _, _, enrollment, entitlement, catalog_activity, _, catalog_version, _ = row
-        program = self._load_program_definition(catalog_version)
+        program = self._load_program_definition(catalog_version, tenant_id=tenant_id)
         activity = next(
             (
                 definition

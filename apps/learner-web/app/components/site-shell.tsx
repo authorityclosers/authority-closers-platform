@@ -461,12 +461,6 @@ export function LearnerShell({
               icon={<BarChart2 size={19} aria-hidden="true" />}
             />
             <LearnerNavLink
-              href={ROUTES.calendar}
-              label="Calendar"
-              current={isCalendar}
-              icon={<CalendarDays size={19} aria-hidden="true" />}
-            />
-            <LearnerNavLink
               href={ROUTES.notifications}
               label="Notifications"
               current={isNotifications}

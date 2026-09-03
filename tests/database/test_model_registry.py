@@ -57,6 +57,7 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "media_resume_states",
         "media_webhook_inbox",
         "media_quota_usage",
+        "activity_media_bindings",
         "learning_plan_items",
         "learning_next_action_projections",
         "analytics_events",
