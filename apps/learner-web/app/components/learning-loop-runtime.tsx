@@ -15,14 +15,20 @@ import {
   CirclePlay,
   FileText,
   Gauge,
+  HelpCircle,
   Maximize2,
   Pause,
   PictureInPicture2,
   Play,
+  RotateCcw,
+  RotateCw,
+  Search,
+  ShieldAlert,
   ShieldCheck,
   VideoOff,
   Volume2,
   VolumeX,
+  X,
 } from "lucide-react";
 
 import {
@@ -31,6 +37,33 @@ import {
   type LearnerApi,
   type PlaybackEventInput,
 } from "../lib/learner-api";
+
+/**
+ * Non-canonical video telemetry events. These are downstream observation hooks
+ * only and never alter canonical progress, evidence, or authorization.
+ */
+export type VideoTelemetryEventType =
+  | "video_loaded"
+  | "video_play"
+  | "video_pause"
+  | "video_seek"
+  | "video_rate_change"
+  | "video_volume_change"
+  | "video_fullscreen_change"
+  | "video_pip_change"
+  | "video_captions_toggle"
+  | "video_transcript_toggle"
+  | "video_transcript_seek"
+  | "video_error";
+
+export interface VideoTelemetryEvent {
+  type: VideoTelemetryEventType;
+  activityId: string;
+  currentTime: number;
+  duration: number;
+  timestamp: string;
+  metadata?: Record<string, unknown>;
+}
 
 /**
  * A media descriptor must be produced by a trusted, server-authorized media
@@ -95,6 +128,7 @@ export interface VideoViewerProps {
   moduleHref: string;
   media?: AuthorizedVideoMedia | null;
   onPlaybackCommitted?: () => void | Promise<void>;
+  onTelemetryEvent?: (event: VideoTelemetryEvent) => void;
 }
 
 export function formatMediaTime(value: number): string {
@@ -114,6 +148,88 @@ export function canStartPlayback(
 
 export function isLearnerOnline(): boolean {
   return typeof navigator === "undefined" || navigator.onLine !== false;
+}
+
+/**
+ * Safely resolves an authorized media descriptor from explicit props or the
+ * activity's bound media descriptor. Preserves fail-closed behavior when media
+ * or provider policy is blocked or unavailable.
+ */
+export function resolveApprovedMedia(
+  activity: ActivityResponse,
+  explicitMedia?: AuthorizedVideoMedia | null,
+): {
+  media: AuthorizedVideoMedia | null;
+  state: "approved" | "blocked" | "unavailable";
+  reason: string;
+} {
+  if (explicitMedia && explicitMedia.src) {
+    return {
+      media: explicitMedia,
+      state: "approved",
+      reason: "Explicit authorized media descriptor provided.",
+    };
+  }
+
+  const descriptor = activity.media;
+  if (!descriptor) {
+    return {
+      media: null,
+      state: "unavailable",
+      reason: "No approved lesson media is connected yet.",
+    };
+  }
+
+  if (descriptor.state === "blocked") {
+    return {
+      media: null,
+      state: "blocked",
+      reason: descriptor.reason || "Lesson media is blocked by content policy.",
+    };
+  }
+
+  if (descriptor.state !== "approved" || !descriptor.playback_available) {
+    return {
+      media: null,
+      state: "unavailable",
+      reason: descriptor.reason || "Approved lesson media is unavailable.",
+    };
+  }
+
+  const streamUrl =
+    descriptor.delivery?.progressive_url || descriptor.delivery?.manifest_url;
+  if (!streamUrl) {
+    return {
+      media: null,
+      state: "unavailable",
+      reason: "No approved media delivery stream is available.",
+    };
+  }
+
+  const captions: AuthorizedCaptionTrack[] = (descriptor.captions || [])
+    .filter(
+      (c) =>
+        (c.kind === "captions" || c.kind === "subtitles") &&
+        c.state === "ready" &&
+        Boolean(c.source_url),
+    )
+    .map((c) => ({
+      src: c.source_url!,
+      srclang: c.language,
+      label: c.language.toUpperCase(),
+      default: c.is_default,
+    }));
+
+  return {
+    media: {
+      src: streamUrl,
+      poster: undefined,
+      captions: captions.length > 0 ? captions : undefined,
+      transcript: undefined,
+    },
+    state: "approved",
+    reason: descriptor.reason || "Media is approved for playback.",
+  };
 }
 
 function clientEventId(sequence: number): string {
@@ -152,10 +268,11 @@ function isPlaybackSessionInvalid(error: unknown): boolean {
   );
 }
 
-function LockedMediaStage({
+export function LockedMediaStage({
   activity,
   moduleHref,
-}: Pick<VideoViewerProps, "activity" | "moduleHref">) {
+  reason,
+}: Pick<VideoViewerProps, "activity" | "moduleHref"> & { reason?: string }) {
   const authorized = canStartPlayback(activity);
 
   return (
@@ -182,8 +299,11 @@ function LockedMediaStage({
         <h3>No approved lesson media is connected yet.</h3>
         <p>
           {authorized
-            ? "The server exposes a completion action, but this activity cannot start playback until approved lesson media is attached."
-            : "Playback and completion remain unavailable for this activity until the server resolves the required capability."}
+            ? reason && reason !== "No approved lesson media is connected yet."
+              ? reason
+              : "The server exposes a completion action, but this activity cannot start playback until approved lesson media is attached."
+            : reason ||
+              "Playback and completion remain unavailable for this activity until the server resolves the required capability."}
         </p>
       </div>
       <div className="momentum-video-stage__footer">
@@ -197,7 +317,50 @@ function LockedMediaStage({
   );
 }
 
-function CompletedMediaStage({
+export function BlockedMediaStage({
+  activity,
+  moduleHref,
+  reason,
+}: Pick<VideoViewerProps, "activity" | "moduleHref"> & { reason?: string }) {
+  return (
+    <div
+      className="momentum-video-stage momentum-video-stage--blocked"
+      role="status"
+      aria-label={`Lesson media for ${activity.title} is blocked by policy`}
+    >
+      <div className="momentum-video-stage__topline">
+        <span className="momentum-video-stage__index">01</span>
+        <span>LESSON PLAYBACK</span>
+        <span className="momentum-video-stage__badge">
+          <ShieldAlert size={14} aria-hidden="true" />
+          Media policy blocked
+        </span>
+      </div>
+      <div className="momentum-video-stage__copy">
+        <div className="momentum-video-stage__icon" aria-hidden="true">
+          <ShieldAlert size={28} />
+        </div>
+        <p className="momentum-video-stage__eyebrow">
+          Server-authorized policy
+        </p>
+        <h3>Lesson media blocked by policy.</h3>
+        <p>
+          {reason ||
+            "Playback is blocked by content and distribution policy for this activity."}
+        </p>
+      </div>
+      <div className="momentum-video-stage__footer">
+        <span>
+          <ShieldCheck size={15} aria-hidden="true" />
+          Watch evidence cannot be submitted while media is blocked.
+        </span>
+        <Link href={moduleHref}>Return to module</Link>
+      </div>
+    </div>
+  );
+}
+
+export function CompletedMediaStage({
   activity,
   moduleHref,
 }: Pick<VideoViewerProps, "activity" | "moduleHref">) {
@@ -237,14 +400,264 @@ function CompletedMediaStage({
   );
 }
 
+export interface CaptionsTranscriptPanelProps {
+  captions?: AuthorizedCaptionTrack[];
+  transcript?: AuthorizedTranscriptSegment[];
+  currentTime: number;
+  onSeek: (seconds: number) => void;
+  captionsEnabled: boolean;
+  onToggleCaptions: () => void;
+  isOpen: boolean;
+  onToggleOpen: () => void;
+  onTelemetry?: (event: VideoTelemetryEvent) => void;
+  activityId?: string;
+  duration?: number;
+}
+
+export function CaptionsTranscriptPanel({
+  captions,
+  transcript,
+  currentTime,
+  onSeek,
+  captionsEnabled,
+  onToggleCaptions,
+  isOpen,
+  onToggleOpen,
+  onTelemetry,
+  activityId = "",
+  duration = 0,
+}: CaptionsTranscriptPanelProps) {
+  const [searchQuery, setSearchQuery] = useState("");
+  const activeSegmentRef = useRef<HTMLButtonElement | null>(null);
+
+  const filteredSegments = useMemo(() => {
+    if (!transcript?.length) return [];
+    if (!searchQuery.trim()) return transcript;
+    const lower = searchQuery.toLowerCase();
+    return transcript.filter((seg) => seg.text.toLowerCase().includes(lower));
+  }, [transcript, searchQuery]);
+
+  useEffect(() => {
+    if (!isOpen || !activeSegmentRef.current) return;
+    const prefersReducedMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (!prefersReducedMotion) {
+      activeSegmentRef.current.scrollIntoView?.({
+        behavior: "smooth",
+        block: "nearest",
+      });
+    }
+  }, [currentTime, isOpen]);
+
+  const hasTranscript = Boolean(transcript?.length);
+  const hasCaptions = Boolean(captions?.length);
+
+  return (
+    <details
+      className="momentum-video-transcript"
+      open={isOpen}
+      onToggle={(event) => {
+        const nextOpen = event.currentTarget.open;
+        if (nextOpen !== isOpen) {
+          onToggleOpen();
+          onTelemetry?.({
+            type: "video_transcript_toggle",
+            activityId,
+            currentTime,
+            duration,
+            timestamp: new Date().toISOString(),
+            metadata: { open: nextOpen },
+          });
+        }
+      }}
+    >
+      <summary>
+        <FileText size={17} aria-hidden="true" />
+        <span>Open transcript</span>
+        <span>
+          {hasTranscript
+            ? `${transcript!.length} segments`
+            : hasCaptions
+              ? "Captions available"
+              : "Not available"}
+        </span>
+      </summary>
+      <div className="momentum-video-transcript__body">
+        {hasTranscript ? (
+          <>
+            <div className="momentum-video-transcript__toolbar">
+              <div className="momentum-video-transcript__search-wrap">
+                <Search size={14} aria-hidden="true" />
+                <input
+                  type="search"
+                  className="momentum-video-transcript__search"
+                  placeholder="Search transcript…"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  aria-label="Filter transcript by keyword"
+                />
+                {searchQuery ? (
+                  <button
+                    type="button"
+                    className="momentum-video-transcript__clear-search"
+                    onClick={() => setSearchQuery("")}
+                    aria-label="Clear transcript search"
+                  >
+                    <X size={12} aria-hidden="true" />
+                  </button>
+                ) : null}
+              </div>
+              {hasCaptions ? (
+                <button
+                  type="button"
+                  className={`momentum-video-transcript__caption-toggle${captionsEnabled ? " is-active" : ""}`}
+                  onClick={() => {
+                    onToggleCaptions();
+                    onTelemetry?.({
+                      type: "video_captions_toggle",
+                      activityId,
+                      currentTime,
+                      duration,
+                      timestamp: new Date().toISOString(),
+                      metadata: { enabled: !captionsEnabled },
+                    });
+                  }}
+                  aria-pressed={captionsEnabled}
+                >
+                  <Captions size={14} aria-hidden="true" />
+                  <span>
+                    {captionsEnabled ? "Captions on" : "Captions off"}
+                  </span>
+                </button>
+              ) : null}
+            </div>
+            <div
+              className="momentum-video-transcript__segments"
+              role="region"
+              aria-label="Transcript text segments"
+              tabIndex={0}
+            >
+              {filteredSegments.length > 0 ? (
+                filteredSegments.map((segment) => {
+                  const isActive =
+                    currentTime >= segment.start && currentTime < segment.end;
+                  return (
+                    <button
+                      type="button"
+                      key={`${segment.start}-${segment.end}-${segment.text}`}
+                      ref={isActive ? activeSegmentRef : null}
+                      className={isActive ? "is-active" : undefined}
+                      aria-current={isActive ? "time" : undefined}
+                      onClick={() => {
+                        onSeek(segment.start);
+                        onTelemetry?.({
+                          type: "video_transcript_seek",
+                          activityId,
+                          currentTime: segment.start,
+                          duration,
+                          timestamp: new Date().toISOString(),
+                          metadata: {
+                            target_seconds: segment.start,
+                            text: segment.text,
+                          },
+                        });
+                      }}
+                    >
+                      <span>{formatMediaTime(segment.start)}</span>
+                      <span>{segment.text}</span>
+                    </button>
+                  );
+                })
+              ) : (
+                <p className="momentum-video-transcript__empty">
+                  No transcript segments match “{searchQuery}”.
+                </p>
+              )}
+            </div>
+          </>
+        ) : (
+          <div className="momentum-video-transcript__empty">
+            <p>Transcript is not available for this lesson.</p>
+            {hasCaptions ? (
+              <p className="momentum-video-transcript__hint">
+                Timed captions are connected and can be viewed directly on the
+                video player.
+              </p>
+            ) : null}
+          </div>
+        )}
+      </div>
+    </details>
+  );
+}
+
+export function VideoKeyboardShortcutsDialog({
+  isOpen,
+  onClose,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+}) {
+  if (!isOpen) return null;
+  const shortcuts = [
+    { key: "Space / K", action: "Play or pause lesson" },
+    { key: "← / →", action: "Seek backward / forward 5 seconds" },
+    { key: "J / L", action: "Skip backward / forward 10 seconds" },
+    { key: "↑ / ↓", action: "Volume up / down 10%" },
+    { key: "M", action: "Mute or unmute audio" },
+    { key: "C", action: "Toggle closed captions" },
+    { key: "T", action: "Toggle transcript panel" },
+    { key: "F", action: "Toggle fullscreen" },
+    { key: "?", action: "Toggle keyboard shortcuts guide" },
+    { key: "Esc", action: "Close shortcut guide or transcript" },
+  ];
+
+  return (
+    <div
+      className="momentum-video-shortcuts"
+      role="dialog"
+      aria-label="Player keyboard shortcuts"
+      aria-modal="false"
+    >
+      <div className="momentum-video-shortcuts__header">
+        <strong>Keyboard shortcuts</strong>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close keyboard shortcuts"
+        >
+          <X size={15} aria-hidden="true" />
+        </button>
+      </div>
+      <ul className="momentum-video-shortcuts__list">
+        {shortcuts.map((s) => (
+          <li key={s.key}>
+            <kbd>{s.key}</kbd>
+            <span>{s.action}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export function VideoViewer({
   activity,
   api,
   moduleHref,
   media = null,
   onPlaybackCommitted,
+  onTelemetryEvent,
 }: VideoViewerProps) {
-  const authorized = Boolean(media?.src) && canStartPlayback(activity);
+  const mediaResolution = useMemo(
+    () => resolveApprovedMedia(activity, media),
+    [activity, media],
+  );
+  const activeMedia = mediaResolution.media;
+  const isBlocked = mediaResolution.state === "blocked";
+  const authorized = Boolean(activeMedia?.src) && canStartPlayback(activity);
+
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const sessionRef = useRef<PlaybackSessionState | null>(null);
   const startRequestRef = useRef<Promise<boolean> | null>(null);
@@ -267,20 +680,38 @@ export function VideoViewer({
   const [duration, setDuration] = useState(0);
   const [captionsEnabled, setCaptionsEnabled] = useState(true);
   const [transcriptOpen, setTranscriptOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [canFullscreen, setCanFullscreen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [canPictureInPicture, setCanPictureInPicture] = useState(false);
   const [hasEnded, setHasEnded] = useState(false);
   const [playbackSessionNeedsRetry, setPlaybackSessionNeedsRetry] =
     useState(false);
   const [mediaState, setMediaState] = useState<MediaState>(
-    authorized ? "loading" : "blocked",
+    authorized ? "loading" : isBlocked ? "blocked" : "blocked",
   );
   const [mediaMessage, setMediaMessage] = useState(
     authorized
       ? "Loading approved lesson media…"
-      : "Approved lesson media is unavailable.",
+      : isBlocked
+        ? "Lesson media is blocked by content policy."
+        : "Approved lesson media is unavailable.",
   );
   const backgroundedRef = useRef(false);
+
+  const emitTelemetry = useCallback(
+    (type: VideoTelemetryEventType, metadata?: Record<string, unknown>) => {
+      onTelemetryEvent?.({
+        type,
+        activityId: activity.id,
+        currentTime: videoRef.current?.currentTime ?? currentTime,
+        duration: duration || (videoRef.current?.duration ?? 0),
+        timestamp: new Date().toISOString(),
+        metadata,
+      });
+    },
+    [activity.id, currentTime, duration, onTelemetryEvent],
+  );
 
   const updateStatus = useCallback((next: PlaybackStatus, message: string) => {
     if (!mountedRef.current) return;
@@ -450,8 +881,6 @@ export function VideoViewer({
         if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
           throw new Error("The server did not return a valid playback expiry.");
         }
-        // Starting playback can move the activity to in_progress. Refresh the
-        // activity before any evidence submission so its revision is current.
         const currentActivity = await api.activity(activity.id);
         sessionRef.current = {
           id: started.session_id,
@@ -526,8 +955,6 @@ export function VideoViewer({
             video.duration || duration || video.currentTime,
           );
           if (!flushed) return;
-          // Once final watch evidence is accepted, a retry must not append a
-          // heartbeat after a successful or unknown-outcome close command.
           finishReadyRef.current = true;
         }
         const activeSession = sessionRef.current;
@@ -612,14 +1039,19 @@ export function VideoViewer({
     const frame = window.requestAnimationFrame(() => {
       if (!authorized) {
         setMediaState("blocked");
-        setMediaMessage("Approved lesson media is unavailable.");
+        setMediaMessage(
+          isBlocked
+            ? mediaResolution.reason ||
+                "Lesson media is blocked by content policy."
+            : "Approved lesson media is unavailable.",
+        );
         return;
       }
       setMediaState("loading");
       setMediaMessage("Loading approved lesson media…");
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [authorized, media?.src]);
+  }, [authorized, isBlocked, mediaResolution.reason]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -644,9 +1076,17 @@ export function VideoViewer({
   }, [authorized]);
 
   useEffect(() => {
-    // React Strict Mode runs an effect's cleanup during its development-only
-    // probe. Re-arm these guards on setup so the live mount still accepts
-    // media events after that probe has completed.
+    function onFullscreenChange() {
+      const isFs = Boolean(document.fullscreenElement);
+      setIsFullscreen(isFs);
+      emitTelemetry("video_fullscreen_change", { fullscreen: isFs });
+    }
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () =>
+      document.removeEventListener("fullscreenchange", onFullscreenChange);
+  }, [emitTelemetry]);
+
+  useEffect(() => {
     mountedRef.current = true;
     unmountingRef.current = false;
     const video = videoRef.current;
@@ -659,11 +1099,11 @@ export function VideoViewer({
 
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || !media?.captions?.length) return;
+    if (!video || !activeMedia?.captions?.length) return;
     for (let index = 0; index < video.textTracks.length; index += 1) {
       video.textTracks[index].mode = captionsEnabled ? "showing" : "hidden";
     }
-  }, [authorized, captionsEnabled, media?.captions?.length]);
+  }, [activeMedia?.captions?.length, captionsEnabled]);
 
   const handlePlay = useCallback(() => {
     if (!sessionRef.current) {
@@ -675,7 +1115,8 @@ export function VideoViewer({
     setIsPlaying(true);
     setMediaState("playing");
     setMediaMessage("Playing approved lesson media.");
-  }, [startPlaybackAndPlay]);
+    emitTelemetry("video_play");
+  }, [emitTelemetry, startPlaybackAndPlay]);
 
   const handlePause = useCallback(() => {
     if (!mountedRef.current) return;
@@ -690,16 +1131,15 @@ export function VideoViewer({
       setMediaState("paused");
       setMediaMessage("Playback paused. Press Play to resume.");
     }
+    emitTelemetry("video_pause");
     if (!unmountingRef.current) void flushWatch();
-  }, [flushWatch, hasEnded, mediaState]);
+  }, [emitTelemetry, flushWatch, hasEnded, mediaState]);
 
   const handleSeeked = useCallback(() => {
     const video = videoRef.current;
     if (!video) return;
     const nextPosition = Math.max(0, video.currentTime);
     const previousPosition = watchCursorRef.current;
-    // A seek is explicitly zero-length evidence. Reset the local cursor so a
-    // later watch interval cannot claim the skipped section.
     watchCursorRef.current = nextPosition;
     if (
       sessionRef.current &&
@@ -707,7 +1147,11 @@ export function VideoViewer({
     ) {
       void sendPlaybackEvent("seek", nextPosition, nextPosition);
     }
-  }, [sendPlaybackEvent]);
+    emitTelemetry("video_seek", {
+      from: previousPosition,
+      to: nextPosition,
+    });
+  }, [emitTelemetry, sendPlaybackEvent]);
 
   const handleTimeUpdate = useCallback(() => {
     const video = videoRef.current;
@@ -743,7 +1187,10 @@ export function VideoViewer({
       setMediaState("ready");
       setMediaMessage("Approved lesson media is ready to play.");
     }
-  }, [isPlaying]);
+    emitTelemetry("video_loaded", {
+      duration: videoRef.current?.duration ?? duration,
+    });
+  }, [duration, emitTelemetry, isPlaying]);
 
   const handleWaiting = useCallback(() => {
     setMediaState("buffering");
@@ -760,8 +1207,11 @@ export function VideoViewer({
       "error",
       "Approved lesson media could not be loaded. Retry when connected.",
     );
+    emitTelemetry("video_error", {
+      message: "Approved lesson media could not be loaded.",
+    });
     videoRef.current?.pause();
-  }, [updateStatus]);
+  }, [emitTelemetry, updateStatus]);
 
   const retryMedia = useCallback(() => {
     const video = videoRef.current;
@@ -810,24 +1260,39 @@ export function VideoViewer({
     if (!video) return;
     video.muted = !video.muted;
     setIsMuted(video.muted);
-  }, []);
+    emitTelemetry("video_volume_change", {
+      muted: video.muted,
+      volume: video.volume,
+    });
+  }, [emitTelemetry]);
 
-  const changeVolume = useCallback((next: number) => {
-    const video = videoRef.current;
-    if (!video) return;
-    const normalized = Math.min(1, Math.max(0, next));
-    video.volume = normalized;
-    video.muted = normalized === 0;
-    setVolume(normalized);
-    setIsMuted(video.muted);
-  }, []);
+  const changeVolume = useCallback(
+    (next: number) => {
+      const video = videoRef.current;
+      if (!video) return;
+      const normalized = Math.min(1, Math.max(0, next));
+      video.volume = normalized;
+      video.muted = normalized === 0;
+      setVolume(normalized);
+      setIsMuted(video.muted);
+      emitTelemetry("video_volume_change", {
+        volume: normalized,
+        muted: video.muted,
+      });
+    },
+    [emitTelemetry],
+  );
 
-  const changeRate = useCallback((next: number) => {
-    const video = videoRef.current;
-    if (!video) return;
-    video.playbackRate = next;
-    setPlaybackRate(next);
-  }, []);
+  const changeRate = useCallback(
+    (next: number) => {
+      const video = videoRef.current;
+      if (!video) return;
+      video.playbackRate = next;
+      setPlaybackRate(next);
+      emitTelemetry("video_rate_change", { rate: next });
+    },
+    [emitTelemetry],
+  );
 
   const seek = useCallback((next: number) => {
     const video = videoRef.current;
@@ -835,6 +1300,20 @@ export function VideoViewer({
     video.currentTime = Math.min(Math.max(0, next), video.duration || next);
     setCurrentTime(video.currentTime);
   }, []);
+
+  const skipTime = useCallback(
+    (delta: number) => {
+      const video = videoRef.current;
+      if (!video) return;
+      const target = Math.min(
+        Math.max(0, video.currentTime + delta),
+        video.duration || duration || video.currentTime + delta,
+      );
+      seek(target);
+      emitTelemetry("video_seek", { delta, target });
+    },
+    [duration, emitTelemetry, seek],
+  );
 
   const toggleFullscreen = useCallback(() => {
     const video = videoRef.current;
@@ -872,10 +1351,128 @@ export function VideoViewer({
   const togglePictureInPicture = useCallback(() => {
     const video = videoRef.current;
     if (!video || typeof video.requestPictureInPicture !== "function") return;
-    void video.requestPictureInPicture().catch((error: unknown) => {
-      updateStatus("error", playbackErrorMessage(error));
-    });
-  }, [updateStatus]);
+    void video
+      .requestPictureInPicture()
+      .then(() => {
+        emitTelemetry("video_pip_change", { pip: true });
+      })
+      .catch((error: unknown) => {
+        updateStatus("error", playbackErrorMessage(error));
+      });
+  }, [emitTelemetry, updateStatus]);
+
+  const handleKeyDown = useCallback(
+    (event: React.KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable)
+      ) {
+        if (event.key === "Escape") {
+          target.blur();
+        }
+        return;
+      }
+
+      switch (event.key) {
+        case " ":
+        case "k":
+        case "K":
+          event.preventDefault();
+          togglePlay();
+          break;
+        case "ArrowLeft":
+          event.preventDefault();
+          seek(currentTime - 5);
+          break;
+        case "ArrowRight":
+          event.preventDefault();
+          seek(currentTime + 5);
+          break;
+        case "j":
+        case "J":
+          event.preventDefault();
+          skipTime(-10);
+          break;
+        case "l":
+        case "L":
+          event.preventDefault();
+          skipTime(10);
+          break;
+        case "ArrowUp":
+          event.preventDefault();
+          changeVolume(volume + 0.1);
+          break;
+        case "ArrowDown":
+          event.preventDefault();
+          changeVolume(volume - 0.1);
+          break;
+        case "m":
+        case "M":
+          event.preventDefault();
+          toggleMute();
+          break;
+        case "f":
+        case "F":
+          event.preventDefault();
+          toggleFullscreen();
+          break;
+        case "c":
+        case "C":
+          if (activeMedia?.captions?.length) {
+            event.preventDefault();
+            const next = !captionsEnabled;
+            setCaptionsEnabled(next);
+            emitTelemetry("video_captions_toggle", { enabled: next });
+          }
+          break;
+        case "t":
+        case "T":
+          if (
+            activeMedia?.transcript?.length ||
+            activeMedia?.captions?.length
+          ) {
+            event.preventDefault();
+            const next = !transcriptOpen;
+            setTranscriptOpen(next);
+            emitTelemetry("video_transcript_toggle", { open: next });
+          }
+          break;
+        case "?":
+          event.preventDefault();
+          setShortcutsOpen((prev) => !prev);
+          break;
+        case "Escape":
+          if (shortcutsOpen) {
+            event.preventDefault();
+            setShortcutsOpen(false);
+          } else if (transcriptOpen) {
+            event.preventDefault();
+            setTranscriptOpen(false);
+          }
+          break;
+      }
+    },
+    [
+      activeMedia?.captions?.length,
+      activeMedia?.transcript?.length,
+      captionsEnabled,
+      changeVolume,
+      currentTime,
+      emitTelemetry,
+      seek,
+      shortcutsOpen,
+      skipTime,
+      toggleFullscreen,
+      toggleMute,
+      togglePlay,
+      transcriptOpen,
+      volume,
+    ],
+  );
 
   const progress = useMemo(
     () =>
@@ -894,7 +1491,7 @@ export function VideoViewer({
     ? mediaMessage
     : statusMessage || mediaMessage;
 
-  if (!authorized || !media) {
+  if (!authorized || !activeMedia) {
     if (activity.state.toLowerCase() === "completed") {
       return (
         <section
@@ -927,6 +1524,48 @@ export function VideoViewer({
         </section>
       );
     }
+
+    if (isBlocked) {
+      return (
+        <section
+          className="momentum-video-viewer"
+          aria-labelledby={`video-title-${activity.id}`}
+        >
+          <div className="momentum-video-viewer__heading">
+            <div>
+              <p className="momentum-video-viewer__eyebrow">
+                <CirclePlay size={16} aria-hidden="true" />
+                Video lesson
+              </p>
+              <h2 id={`video-title-${activity.id}`}>{activity.title}</h2>
+            </div>
+            <span className="momentum-video-viewer__policy">
+              <ShieldAlert size={15} aria-hidden="true" />
+              Policy blocked
+            </span>
+          </div>
+          <BlockedMediaStage
+            activity={activity}
+            moduleHref={moduleHref}
+            reason={mediaResolution.reason}
+          />
+          <div
+            className="momentum-video-viewer__facts"
+            aria-label="Video lesson status"
+          >
+            <span>
+              <CheckCircle2 size={15} aria-hidden="true" />
+              Completion is server-determined
+            </span>
+            <span>
+              <ShieldAlert size={15} aria-hidden="true" />
+              Policy blocked: playback restricted
+            </span>
+          </div>
+        </section>
+      );
+    }
+
     return (
       <section
         className="momentum-video-viewer"
@@ -945,7 +1584,11 @@ export function VideoViewer({
             Server-resolved
           </span>
         </div>
-        <LockedMediaStage activity={activity} moduleHref={moduleHref} />
+        <LockedMediaStage
+          activity={activity}
+          moduleHref={moduleHref}
+          reason={mediaResolution.reason}
+        />
         <div
           className="momentum-video-viewer__facts"
           aria-label="Video lesson status"
@@ -1005,7 +1648,13 @@ export function VideoViewer({
         </span>
       </div>
 
-      <div className="momentum-video-player">
+      <div
+        className="momentum-video-player"
+        tabIndex={0}
+        onKeyDown={handleKeyDown}
+        role="region"
+        aria-label={`Video player for ${activity.title}`}
+      >
         <div
           className="momentum-video-player__stage"
           data-media-state={mediaState}
@@ -1013,8 +1662,8 @@ export function VideoViewer({
           <video
             ref={videoRef}
             className="momentum-video-player__video"
-            src={media.src}
-            poster={media.poster}
+            src={activeMedia.src}
+            poster={activeMedia.poster}
             playsInline
             preload="metadata"
             onLoadStart={handleLoadStart}
@@ -1041,7 +1690,7 @@ export function VideoViewer({
             aria-label={activity.title}
             aria-busy={mediaState === "loading" || mediaState === "buffering"}
           >
-            {media.captions?.map((track) => (
+            {activeMedia.captions?.map((track) => (
               <track
                 key={`${track.srclang}-${track.label}`}
                 kind="captions"
@@ -1059,7 +1708,12 @@ export function VideoViewer({
           >
             {visibleStatusMessage || "Playback has not started."}
           </div>
+          <VideoKeyboardShortcutsDialog
+            isOpen={shortcutsOpen}
+            onClose={() => setShortcutsOpen(false)}
+          />
         </div>
+
         <div
           className="momentum-video-controls"
           role="group"
@@ -1070,6 +1724,7 @@ export function VideoViewer({
             type="button"
             onClick={togglePlay}
             aria-label={isPlaying ? "Pause lesson" : "Play lesson"}
+            aria-keyshortcuts="k Space"
           >
             {isPlaying ? (
               <Pause size={18} aria-hidden="true" />
@@ -1077,6 +1732,24 @@ export function VideoViewer({
               <Play size={18} aria-hidden="true" />
             )}
             <span>{isPlaying ? "Pause" : "Play"}</span>
+          </button>
+          <button
+            className="momentum-video-controls__icon momentum-video-controls__skip"
+            type="button"
+            onClick={() => skipTime(-10)}
+            aria-label="Skip back 10 seconds (J)"
+            aria-keyshortcuts="j"
+          >
+            <RotateCcw size={16} aria-hidden="true" />
+          </button>
+          <button
+            className="momentum-video-controls__icon momentum-video-controls__skip"
+            type="button"
+            onClick={() => skipTime(10)}
+            aria-label="Skip forward 10 seconds (L)"
+            aria-keyshortcuts="l"
+          >
+            <RotateCw size={16} aria-hidden="true" />
           </button>
           <span className="momentum-video-controls__time" aria-live="off">
             {formatMediaTime(currentTime)} / {formatMediaTime(duration)}
@@ -1091,12 +1764,17 @@ export function VideoViewer({
             style={{ "--video-progress": `${progress}%` } as CSSProperties}
             onChange={(event) => seek(Number(event.target.value))}
             aria-label="Lesson position"
+            aria-valuemin={0}
+            aria-valuemax={duration || 0}
+            aria-valuenow={Math.round(currentTime)}
+            aria-valuetext={`${formatMediaTime(currentTime)} of ${formatMediaTime(duration)}`}
           />
           <button
             className="momentum-video-controls__icon"
             type="button"
             onClick={toggleMute}
             aria-label={isMuted ? "Unmute lesson" : "Mute lesson"}
+            aria-keyshortcuts="m"
           >
             {isMuted ? (
               <VolumeX size={18} aria-hidden="true" />
@@ -1113,6 +1791,9 @@ export function VideoViewer({
             value={isMuted ? 0 : volume}
             onChange={(event) => changeVolume(Number(event.target.value))}
             aria-label="Lesson volume"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round((isMuted ? 0 : volume) * 100)}
           />
           <label className="momentum-video-controls__rate">
             <Gauge size={16} aria-hidden="true" />
@@ -1120,6 +1801,7 @@ export function VideoViewer({
             <select
               value={playbackRate}
               onChange={(event) => changeRate(Number(event.target.value))}
+              aria-label="Playback speed"
             >
               {[0.75, 1, 1.25, 1.5, 2].map((rate) => (
                 <option key={rate} value={rate}>
@@ -1128,15 +1810,38 @@ export function VideoViewer({
               ))}
             </select>
           </label>
-          {media.captions?.length ? (
+          {activeMedia.captions?.length ? (
             <button
               className={`momentum-video-controls__icon${captionsEnabled ? " is-active" : ""}`}
               type="button"
-              onClick={() => setCaptionsEnabled((current) => !current)}
+              onClick={() => {
+                const next = !captionsEnabled;
+                setCaptionsEnabled(next);
+                emitTelemetry("video_captions_toggle", { enabled: next });
+              }}
               aria-pressed={captionsEnabled}
               aria-label={captionsEnabled ? "Hide captions" : "Show captions"}
+              aria-keyshortcuts="c"
             >
               <Captions size={18} aria-hidden="true" />
+            </button>
+          ) : null}
+          {activeMedia.transcript?.length || activeMedia.captions?.length ? (
+            <button
+              className={`momentum-video-controls__icon${transcriptOpen ? " is-active" : ""}`}
+              type="button"
+              onClick={() => {
+                const next = !transcriptOpen;
+                setTranscriptOpen(next);
+                emitTelemetry("video_transcript_toggle", { open: next });
+              }}
+              aria-expanded={transcriptOpen}
+              aria-label={
+                transcriptOpen ? "Close transcript" : "Open transcript"
+              }
+              aria-keyshortcuts="t"
+            >
+              <FileText size={18} aria-hidden="true" />
             </button>
           ) : null}
           {canPictureInPicture ? (
@@ -1154,11 +1859,21 @@ export function VideoViewer({
               className="momentum-video-controls__icon"
               type="button"
               onClick={toggleFullscreen}
-              aria-label="Enter fullscreen"
+              aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+              aria-keyshortcuts="f"
             >
               <Maximize2 size={18} aria-hidden="true" />
             </button>
           ) : null}
+          <button
+            className={`momentum-video-controls__icon${shortcutsOpen ? " is-active" : ""}`}
+            type="button"
+            onClick={() => setShortcutsOpen((prev) => !prev)}
+            aria-label="Show keyboard shortcuts"
+            aria-expanded={shortcutsOpen}
+          >
+            <HelpCircle size={17} aria-hidden="true" />
+          </button>
         </div>
       </div>
 
@@ -1200,30 +1915,24 @@ export function VideoViewer({
         </div>
       </div>
 
-      {media.transcript?.length ? (
-        <details
-          className="momentum-video-transcript"
-          open={transcriptOpen}
-          onToggle={(event) => setTranscriptOpen(event.currentTarget.open)}
-        >
-          <summary>
-            <FileText size={17} aria-hidden="true" />
-            <span>Open transcript</span>
-            <span>{media.transcript.length} segments</span>
-          </summary>
-          <div className="momentum-video-transcript__body">
-            {media.transcript.map((segment) => (
-              <button
-                type="button"
-                key={`${segment.start}-${segment.end}-${segment.text}`}
-                onClick={() => seek(segment.start)}
-              >
-                <span>{formatMediaTime(segment.start)}</span>
-                <span>{segment.text}</span>
-              </button>
-            ))}
-          </div>
-        </details>
+      {activeMedia.transcript?.length || activeMedia.captions?.length ? (
+        <CaptionsTranscriptPanel
+          captions={activeMedia.captions}
+          transcript={activeMedia.transcript}
+          currentTime={currentTime}
+          onSeek={seek}
+          captionsEnabled={captionsEnabled}
+          onToggleCaptions={() => {
+            const next = !captionsEnabled;
+            setCaptionsEnabled(next);
+            emitTelemetry("video_captions_toggle", { enabled: next });
+          }}
+          isOpen={transcriptOpen}
+          onToggleOpen={() => setTranscriptOpen((prev) => !prev)}
+          onTelemetry={onTelemetryEvent}
+          activityId={activity.id}
+          duration={duration}
+        />
       ) : null}
     </section>
   );

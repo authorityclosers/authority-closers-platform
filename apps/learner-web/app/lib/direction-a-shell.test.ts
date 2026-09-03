@@ -985,6 +985,20 @@ describe("Direction A & B UI System & Shell", () => {
       expect(unauthorized.onboarding).not.toHaveBeenCalled();
     });
 
+    it("keeps identity and preferences available when avatar delivery is gated", async () => {
+      const api = apiFor({
+        profileAvatar: vi.fn(async () => {
+          throw new ApiError(503, "media storage is unavailable");
+        }),
+      });
+
+      const result = await loadProfileData(api);
+      expect(result.me).toBe(me);
+      expect(result.onboarding).not.toBeNull();
+      expect(result.avatar).toBeNull();
+      expect(result.avatarError).toMatchObject({ status: 503 });
+    });
+
     it("does not fabricate catalog or notification content", () => {
       const discoverHtml = renderToStaticMarkup(
         createElement(DiscoverRuntime, { api: apiFor() }),

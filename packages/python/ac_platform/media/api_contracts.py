@@ -240,6 +240,28 @@ class AvatarVariantResponse(StrictModel):
     content_type: str
 
 
+class ProfileAvatarVersionResponse(StrictModel):
+    """Provider-neutral delivery metadata for the authenticated learner avatar."""
+
+    asset_id: UUID
+    version_id: UUID
+    version_number: int
+    state: MediaLifecycle
+    delivery_url: str | None = None
+    content_type: str
+    size_px: int | None = None
+    avatar_crop: CropMetadata | None = None
+    supersedes_version_id: UUID | None = None
+    updated_at: datetime
+
+
+class ProfileAvatarResponse(StrictModel):
+    """Current self-avatar plus an optional replacement processing state."""
+
+    avatar: ProfileAvatarVersionResponse | None = None
+    pending: ProfileAvatarVersionResponse | None = None
+
+
 class MediaVersionResponse(StrictModel):
     id: UUID
     asset_id: UUID
@@ -363,6 +385,8 @@ __all__ = [
     "MediaVersionResponse",
     "PlaybackRequest",
     "PlaybackResponse",
+    "ProfileAvatarResponse",
+    "ProfileAvatarVersionResponse",
     "RenditionResponse",
     "RenditionWebhook",
     "ResumeResponse",

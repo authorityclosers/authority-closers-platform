@@ -20,6 +20,6 @@ describe("AvatarCropDialog", () => {
     expect(html).toContain("Use the sliders with a keyboard");
     expect(html).toContain("Your current avatar stays in place");
     expect(html).toContain("Current avatar");
-    expect(html).toContain("preview-only");
+    expect(html).toContain("fail-closed");
   });
 });

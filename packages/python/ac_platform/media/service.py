@@ -30,6 +30,8 @@ from ac_platform.media.api_contracts import (
     MediaVersionResponse,
     PlaybackRequest,
     PlaybackResponse,
+    ProfileAvatarResponse,
+    ProfileAvatarVersionResponse,
     RenditionResponse,
     ResumeResponse,
     RetireResponse,
@@ -1031,6 +1033,138 @@ class MediaService:
         asset = self._asset(database, actor, asset_id)
         self._require_read(actor, asset)
         return self._asset_response(database, actor, asset)
+
+    def get_profile_avatar(self, database: Session, actor: ActorContext) -> ProfileAvatarResponse:
+        """Return only the authenticated person's tenant-scoped avatar.
+
+        The current ready version remains the presentation source while a
+        replacement is uploading/processing/failed.  This deliberately keeps
+        the old version usable and exposes no provider object key or provider
+        identifier.  A delivery URL is minted only for a server-confirmed
+        ready variant.
+        """
+
+        tenant_id = self._tenant(actor)
+        asset = database.scalar(
+            select(MediaAsset)
+            .where(
+                MediaAsset.tenant_id == tenant_id,
+                MediaAsset.owner_person_id == actor.person_id,
+                MediaAsset.purpose == MediaPurpose.AVATAR.value,
+                MediaAsset.state != MediaLifecycle.RETIRED.value,
+            )
+            .order_by(MediaAsset.updated_at.desc())
+        )
+        if asset is None:
+            return ProfileAvatarResponse()
+
+        current = (
+            database.scalar(
+                select(MediaVersion).where(
+                    MediaVersion.id == asset.current_version_id,
+                    MediaVersion.tenant_id == tenant_id,
+                    MediaVersion.asset_id == asset.id,
+                    MediaVersion.purpose == MediaPurpose.AVATAR.value,
+                )
+            )
+            if asset.current_version_id
+            else None
+        )
+        avatar = self._profile_avatar_version(database, current)
+
+        pending_versions = database.scalars(
+            select(MediaVersion)
+            .where(
+                MediaVersion.tenant_id == tenant_id,
+                MediaVersion.asset_id == asset.id,
+                MediaVersion.purpose == MediaPurpose.AVATAR.value,
+                MediaVersion.state.in_(
+                    (
+                        MediaLifecycle.UPLOADING.value,
+                        MediaLifecycle.PROCESSING.value,
+                        MediaLifecycle.FAILED.value,
+                    )
+                ),
+            )
+            .order_by(MediaVersion.version_number.desc())
+        ).all()
+        pending = next(
+            (
+                self._profile_avatar_version(database, version)
+                for version in pending_versions
+                if current is None or version.id != current.id
+            ),
+            None,
+        )
+        return ProfileAvatarResponse(avatar=avatar, pending=pending)
+
+    def _profile_avatar_version(
+        self, database: Session, version: MediaVersion | None
+    ) -> ProfileAvatarVersionResponse | None:
+        if version is None:
+            return None
+
+        delivery_url: str | None = None
+        size_px: int | None = None
+        if version.state == MediaLifecycle.READY.value:
+            variants = version.avatar_variants or []
+            valid_variants = [
+                item
+                for item in variants
+                if isinstance(item, dict)
+                and self._avatar_variant_size(item) > 0
+                and isinstance(item.get("content_type"), str)
+                and isinstance(item.get("object_key"), str)
+            ]
+            if not valid_variants:
+                raise MediaConflict("The ready avatar has no verified delivery variant.")
+            selected = max(valid_variants, key=self._avatar_variant_size)
+            object_key = str(selected["object_key"])
+            content_type = str(selected["content_type"]).lower().split(";", 1)[0].strip()
+            if not self._child_key(version, object_key):
+                raise MediaConflict("The ready avatar variant is outside its private namespace.")
+            try:
+                if self.storage.head(object_key) is None:
+                    raise MediaStorageUnavailable("The ready avatar variant is unavailable.")
+                delivery_url = self._secure_media_url(
+                    self.storage.create_read_url(
+                        object_key=object_key,
+                        expires_at=self._now() + timedelta(minutes=5),
+                        content_type=content_type,
+                    ),
+                    description="avatar delivery",
+                )
+            except MediaStorageUnavailable:
+                raise
+            except Exception as error:
+                raise MediaStorageUnavailable(
+                    "The private media storage adapter could not issue an avatar URL."
+                ) from error
+            size_px = self._avatar_variant_size(selected)
+        else:
+            content_type = version.content_type
+
+        return ProfileAvatarVersionResponse(
+            asset_id=version.asset_id,
+            version_id=version.id,
+            version_number=version.version_number,
+            state=MediaLifecycle(version.state),
+            delivery_url=delivery_url,
+            content_type=content_type,
+            size_px=size_px,
+            avatar_crop=version.avatar_crop,
+            supersedes_version_id=version.supersedes_version_id,
+            updated_at=version.updated_at,
+        )
+
+    @staticmethod
+    def _avatar_variant_size(item: object) -> int:
+        if not isinstance(item, dict):
+            return 0
+        size_px = item.get("size_px")
+        if not isinstance(size_px, int) or isinstance(size_px, bool) or size_px <= 0:
+            return 0
+        return size_px
 
     @staticmethod
     def _avatar_variant_response(item: dict[str, object]) -> AvatarVariantResponse:
