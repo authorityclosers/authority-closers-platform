@@ -234,14 +234,20 @@ export function LearnerShell({
     );
   }
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    const handleToastEvent = (e: Event) => {
+      if (e instanceof CustomEvent && typeof e.detail === "string") {
+        showToast(e.detail);
+      }
+    };
+    window.addEventListener("ac-toast", handleToastEvent);
+    return () => {
+      window.removeEventListener("ac-toast", handleToastEvent);
       if (toastTimerRef.current !== undefined) {
         window.clearTimeout(toastTimerRef.current);
       }
-    },
-    [],
-  );
+    };
+  }, []);
 
   // Close mobile drawer on route change or ESC; activate search on Cmd+K
   useEffect(() => {

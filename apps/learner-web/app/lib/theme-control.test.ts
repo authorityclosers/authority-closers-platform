@@ -4,20 +4,33 @@ import { runInNewContext } from "node:vm";
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  NAMED_PRESETS,
+  normalizeAccentPreference,
+  normalizeDensityPreference,
+  normalizeMotionPreference,
   normalizeThemePreference,
+  resolveMotionPreference,
   resolveThemePreference,
   subscribeToThemeChanges,
 } from "../components/theme-control";
 
-describe("learner theme preference", () => {
+describe("learner appearance preference", () => {
   function runPrepaint({
     stored,
+    storedAccent = null,
+    storedDensity = null,
+    storedMotion = null,
     systemPrefersDark,
+    systemPrefersReducedMotion = false,
     storageThrows = false,
     mediaThrows = false,
   }: {
     stored: unknown;
+    storedAccent?: unknown;
+    storedDensity?: unknown;
+    storedMotion?: unknown;
     systemPrefersDark: boolean;
+    systemPrefersReducedMotion?: boolean;
     storageThrows?: boolean;
     mediaThrows?: boolean;
   }) {
@@ -33,11 +46,18 @@ describe("learner theme preference", () => {
         localStorage: {
           getItem: (key: string) => {
             if (storageThrows) throw new Error("storage blocked");
-            return key === "ac-appearance-theme" ? stored : null;
+            if (key === "ac-appearance-theme") return stored;
+            if (key === "ac-appearance-accent") return storedAccent;
+            if (key === "ac-appearance-density") return storedDensity;
+            if (key === "ac-appearance-motion") return storedMotion;
+            return null;
           },
         },
-        matchMedia: () => {
+        matchMedia: (query: string) => {
           if (mediaThrows) throw new Error("media unavailable");
+          if (query.includes("prefers-reduced-motion")) {
+            return { matches: systemPrefersReducedMotion };
+          }
           return { matches: systemPrefersDark };
         },
       },
@@ -46,7 +66,7 @@ describe("learner theme preference", () => {
     return root;
   }
 
-  it("accepts only supported persisted preferences", () => {
+  it("accepts only supported persisted theme preferences", () => {
     expect(normalizeThemePreference("light")).toBe("light");
     expect(normalizeThemePreference("dark")).toBe("dark");
     expect(normalizeThemePreference("system")).toBe("system");
@@ -54,11 +74,53 @@ describe("learner theme preference", () => {
     expect(normalizeThemePreference(null)).toBe("light");
   });
 
-  it("resolves system without changing explicit choices", () => {
+  it("accepts only supported persisted accent preferences", () => {
+    expect(normalizeAccentPreference("cobalt")).toBe("cobalt");
+    expect(normalizeAccentPreference("indigo")).toBe("indigo");
+    expect(normalizeAccentPreference("emerald")).toBe("emerald");
+    expect(normalizeAccentPreference("amber")).toBe("amber");
+    expect(normalizeAccentPreference("slate")).toBe("slate");
+    expect(normalizeAccentPreference("magenta")).toBe("cobalt");
+    expect(normalizeAccentPreference(undefined)).toBe("cobalt");
+  });
+
+  it("accepts only supported persisted density preferences", () => {
+    expect(normalizeDensityPreference("comfortable")).toBe("comfortable");
+    expect(normalizeDensityPreference("compact")).toBe("compact");
+    expect(normalizeDensityPreference("ultra")).toBe("comfortable");
+    expect(normalizeDensityPreference(null)).toBe("comfortable");
+  });
+
+  it("accepts only supported persisted motion preferences", () => {
+    expect(normalizeMotionPreference("system")).toBe("system");
+    expect(normalizeMotionPreference("reduced")).toBe("reduced");
+    expect(normalizeMotionPreference("full")).toBe("full");
+    expect(normalizeMotionPreference("instant")).toBe("system");
+    expect(normalizeMotionPreference(null)).toBe("system");
+  });
+
+  it("resolves system theme without changing explicit choices", () => {
     expect(resolveThemePreference("system", true)).toBe("dark");
     expect(resolveThemePreference("system", false)).toBe("light");
     expect(resolveThemePreference("light", true)).toBe("light");
     expect(resolveThemePreference("dark", false)).toBe("dark");
+  });
+
+  it("resolves motion preferences correctly", () => {
+    expect(resolveMotionPreference("reduced", false)).toBe(true);
+    expect(resolveMotionPreference("full", true)).toBe(false);
+    expect(resolveMotionPreference("system", true)).toBe(true);
+    expect(resolveMotionPreference("system", false)).toBe(false);
+  });
+
+  it("includes all bounded named presets", () => {
+    expect(NAMED_PRESETS).toHaveLength(5);
+    const ids = NAMED_PRESETS.map((p) => p.id);
+    expect(ids).toContain("authority-cobalt");
+    expect(ids).toContain("deep-focus");
+    expect(ids).toContain("signal-emerald");
+    expect(ids).toContain("executive-amber");
+    expect(ids).toContain("precision-slate");
   });
 
   it("applies the persisted theme from an external pre-paint script", () => {
@@ -80,9 +142,32 @@ describe("learner theme preference", () => {
     ).toEqual({ theme: "light", themePreference: "light" });
   });
 
+  it("applies stored accent, density, and motion before paint", () => {
+    const root = runPrepaint({
+      stored: "dark",
+      storedAccent: "emerald",
+      storedDensity: "compact",
+      storedMotion: "reduced",
+      systemPrefersDark: false,
+    });
+
+    expect(root.dataset).toEqual({
+      theme: "dark",
+      themePreference: "dark",
+      accent: "emerald",
+      density: "compact",
+      motion: "reduced",
+      reducedMotion: "true",
+    });
+    expect(root.style).toEqual({ colorScheme: "dark" });
+  });
+
   it("falls back deterministically when storage or media queries are blocked", () => {
     const root = runPrepaint({
       stored: "dark",
+      storedAccent: "indigo",
+      storedDensity: "compact",
+      storedMotion: "reduced",
       systemPrefersDark: true,
       storageThrows: true,
       mediaThrows: true,
@@ -126,9 +211,17 @@ describe("learner theme preference", () => {
       "ac-theme-change",
       refresh,
     );
+    expect(target.addEventListener).toHaveBeenCalledWith(
+      "ac-appearance-change",
+      refresh,
+    );
     expect(target.removeEventListener).toHaveBeenCalledWith("storage", refresh);
     expect(target.removeEventListener).toHaveBeenCalledWith(
       "ac-theme-change",
+      refresh,
+    );
+    expect(target.removeEventListener).toHaveBeenCalledWith(
+      "ac-appearance-change",
       refresh,
     );
   });

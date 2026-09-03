@@ -36,7 +36,7 @@ import {
   type OnboardingRecoveryLockManager,
 } from "../lib/local-drafts";
 import { SignOutControl } from "./sign-out-control";
-import { ThemeControl } from "./theme-control";
+import { AppearanceControl } from "./theme-control";
 import styles from "./settings-clarity.module.css";
 
 const defaultApi = createLearnerApi();
@@ -608,7 +608,7 @@ function AppearanceCard() {
         title="Appearance"
         description="Choose how Authority Closers LMS looks."
       />
-      <ThemeControl />
+      <AppearanceControl />
     </section>
   );
 }
