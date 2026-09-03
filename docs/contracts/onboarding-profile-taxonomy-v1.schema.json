@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://authorityclosers.com/contracts/onboarding-profile-taxonomy-v1.schema.json",
+  "title": "Authority Closers onboarding/profile taxonomy v1",
+  "description": "Contract-only shape for optional, user-declared onboarding/profile attributes. It is not an authorization, entitlement, consent, score, or recommendation schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "country_code": {
+      "type": ["string", "null"],
+      "pattern": "^[A-Z]{2}$",
+      "description": "ISO 3166-1 alpha-2 code. The current requested-country configuration allows IN; the source manifest owns the allowlist. Do not infer from IP, locale, provider, or phone prefix."
+    },
+    "phone_number_e164": {
+      "type": ["string", "null"],
+      "pattern": "^\\+[1-9][0-9]{6,14}$",
+      "maxLength": 16,
+      "description": "User-declared direct phone endpoint in canonical E.164 presentation. A matching number is allowed but phone and WhatsApp remain separate fields."
+    },
+    "whatsapp_number_e164": {
+      "type": ["string", "null"],
+      "pattern": "^\\+[1-9][0-9]{6,14}$",
+      "maxLength": 16,
+      "description": "User-declared WhatsApp endpoint in canonical E.164 presentation. It is not proof of WhatsApp availability, verification, opt-in, or provider delivery."
+    },
+    "education_level_code": {
+      "type": ["string", "null"],
+      "enum": [
+        null,
+        "NOT_STATED",
+        "ISCED_2011_0",
+        "ISCED_2011_1",
+        "ISCED_2011_2",
+        "ISCED_2011_3",
+        "ISCED_2011_4",
+        "ISCED_2011_5",
+        "ISCED_2011_6",
+        "ISCED_2011_7",
+        "ISCED_2011_8"
+      ],
+      "description": "Broad ISCED 2011 attainment-level reference. This does not assert local degree equivalence, recognition, eligibility, or competency."
+    },
+    "degree_name": {
+      "type": ["string", "null"],
+      "maxLength": 120,
+      "description": "Optional exact user-entered name of a degree, diploma, certificate, or other qualification. Do not normalize abbreviations or infer equivalence."
+    },
+    "education_field_code": {
+      "type": ["string", "null"],
+      "enum": [
+        null,
+        "NOT_STATED",
+        "ISCED_F_00",
+        "ISCED_F_01",
+        "ISCED_F_02",
+        "ISCED_F_03",
+        "ISCED_F_04",
+        "ISCED_F_05",
+        "ISCED_F_06",
+        "ISCED_F_07",
+        "ISCED_F_08",
+        "ISCED_F_09",
+        "ISCED_F_10"
+      ],
+      "description": "Broad ISCED-F 2013 field reference. Do not infer it from degree or specialization; NOT_STATED is a valid answer."
+    },
+    "specialization": {
+      "type": ["string", "null"],
+      "maxLength": 120,
+      "description": "Optional exact user-entered specialization or concentration. It is descriptive text, not a verified qualification or controlled equivalence."
+    },
+    "sales_interest_codes": {
+      "type": ["array", "null"],
+      "minItems": 1,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "handle_objections",
+          "discovery_calls",
+          "close_more_consistently",
+          "repeatable_sales_process",
+          "other"
+        ]
+      },
+      "description": "Optional user-selected AC-owned learning-interest labels. The set is descriptive only and has no score, access, ranking, or automatic personalization effect."
+    },
+    "sales_interest_other": {
+      "type": ["string", "null"],
+      "maxLength": 240,
+      "description": "Optional user-entered sales-learning interest, required only when sales_interest_codes contains other."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": ["sales_interest_codes"],
+        "properties": {
+          "sales_interest_codes": {
+            "contains": { "const": "other" }
+          }
+        }
+      },
+      "then": {
+        "required": ["sales_interest_other"]
+      }
+    },
+    {
+      "if": {
+        "required": ["sales_interest_other"]
+      },
+      "then": {
+        "required": ["sales_interest_codes"],
+        "properties": {
+          "sales_interest_codes": {
+            "contains": { "const": "other" }
+          }
+        }
+      }
+    }
+  ]
+}

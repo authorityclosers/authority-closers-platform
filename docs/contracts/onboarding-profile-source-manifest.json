@@ -1,0 +1,117 @@
+{
+  "contract_id": "onboarding-profile-taxonomy-v1",
+  "status": "contract_only_no_vendored_dataset",
+  "retrieved_on": "2026-09-03",
+  "requested_country_assumption": {
+    "country_code": "IN",
+    "display_name": "India",
+    "basis": "The assigned work item references official Indian education taxonomies; the end-user country choice is not present in the repository request context.",
+    "is_inference": true,
+    "requires_user_confirmation_before_activation": true
+  },
+  "current_country_allowlist": ["IN"],
+  "vendored_datasets": [],
+  "sources": [
+    {
+      "source_id": "ISO-3166-COUNTRY-CODES",
+      "authority": "International Organization for Standardization (ISO)",
+      "url": "https://www.iso.org/iso-3166-country-codes.html",
+      "retrieved_on": "2026-09-03",
+      "use": "ISO 3166-1 alpha-2 country-code shape and current-code lookup path for IN.",
+      "license_or_provenance": "ISO states that country codes may be used free of charge; ISO materials and publications remain copyright-protected. Only the two-letter code value is represented by this contract; no ISO export or labels are vendored.",
+      "reuse_decision": "use_code_value_only_fetch_current_labels_at_generation",
+      "revision_or_freshness": "ISO 3166-1:2020 is listed by ISO as current after 2025 review; the Maintenance Agency/OBP is the freshness authority."
+    },
+    {
+      "source_id": "ITU-E164-2026",
+      "authority": "International Telecommunication Union (ITU-T)",
+      "url": "https://www.itu.int/rec/T-REC-E.164-202602-I/en",
+      "retrieved_on": "2026-09-03",
+      "use": "E.164 international-number structure and current recommendation status; canonical profile values use + plus decimal digits and a maximum of 15 digits.",
+      "license_or_provenance": "ITU page marks the recommendation in force and its PDF freely available, while the page carries ITU copyright. No recommendation text or country-code table is copied into the repository.",
+      "reuse_decision": "reference_only_verify_current_revision_before_activation",
+      "revision_or_freshness": "Recommendation E.164 (02/26), approved 2026-02-13; re-check at activation."
+    },
+    {
+      "source_id": "ITU-E164-COUNTRY-CODE-91",
+      "authority": "International Telecommunication Union (ITU-T)",
+      "url": "https://www.itu.int/dms_pub/itu-t/opb/sp/T-SP-OB.717-2000-PDF-E.pdf",
+      "retrieved_on": "2026-09-03",
+      "use": "Historical ITU assigned-code table corroborates 91 for India; current allocation must be re-checked against the in-force numbering resources before activation.",
+      "license_or_provenance": "Official ITU Operational Bulletin PDF; copyright terms are not treated as a dataset licence.",
+      "reuse_decision": "reference_only_no_vendoring"
+    },
+    {
+      "source_id": "INDIA-DOT-NNP-PLUS91",
+      "authority": "Government of India, Department of Telecommunications",
+      "url": "https://www.dot.gov.in/static/uploads/2025/07/64638bb7d6643bd27a863b1909280c21.pdf",
+      "retrieved_on": "2026-09-03",
+      "use": "Official Indian notice uses +91 in the National Numbering Plan context; it is supporting provenance, not a phone-validity oracle.",
+      "license_or_provenance": "Official government publication; a reusable-data licence was not identified.",
+      "reuse_decision": "reference_only_no_vendoring"
+    },
+    {
+      "source_id": "UNESCO-ISCED-2011",
+      "authority": "UNESCO Institute for Statistics (UIS)",
+      "url": "https://www.uis.unesco.org/en/methods-and-tools/isced",
+      "retrieved_on": "2026-09-03",
+      "use": "ISCED 2011 levels/attainment reference; only stable code identifiers are used in the contract.",
+      "license_or_provenance": "UIS is the custodian of ISCED. The official classification/manual pages do not provide a clear commercial dataset licence in the fetched material; no full table or prose is copied.",
+      "reuse_decision": "reference_only_generate_after_legal_review"
+    },
+    {
+      "source_id": "UNESCO-ISCED-F-2013",
+      "authority": "UNESCO Institute for Statistics (UIS)",
+      "url": "https://www.uis.unesco.org/sites/default/files/documents/isced-fields-of-education-and-training-2013-en.pdf",
+      "retrieved_on": "2026-09-03",
+      "use": "Broad field-of-education reference for education_field_code.",
+      "license_or_provenance": "Official UIS manual. No clear commercial reuse licence was identified for the manual; the related 2015 operational manual is CC BY-NC-ND 3.0 IGO, which is not suitable for a commercial derivative dataset. No full table or prose is copied.",
+      "reuse_decision": "reference_only_generate_after_legal_review"
+    },
+    {
+      "source_id": "UGC-DEGREE-NOMENCLATURE",
+      "authority": "University Grants Commission, Government of India",
+      "url": "https://www.ugc.gov.in/regulations/UGC_Regulations_university",
+      "retrieved_on": "2026-09-03",
+      "use": "Current official notification index for Indian degree nomenclature; supports retaining degree_name and specialization separately and re-fetching updates.",
+      "license_or_provenance": "UGC official publication/index. Reuse terms for the full notification/list were not identified; no degree list is copied or asserted as exhaustive.",
+      "reuse_decision": "reference_only_free_text_degree_and_specialization"
+    },
+    {
+      "source_id": "UGC-DEGREE-FAQ",
+      "authority": "University Grants Commission, Government of India",
+      "url": "https://www.ugc.gov.in/Home/faq",
+      "retrieved_on": "2026-09-03",
+      "use": "UGC states that equivalence is not determined by UGC and that diploma/certificate courses are not specified by UGC; prevents the contract from inferring equivalence or verification.",
+      "license_or_provenance": "Official UGC FAQ; no reusable dataset licence identified.",
+      "reuse_decision": "reference_only_no_vendoring"
+    },
+    {
+      "source_id": "W3C-WCAG-2-2",
+      "authority": "World Wide Web Consortium (W3C)",
+      "url": "https://www.w3.org/TR/WCAG22/",
+      "retrieved_on": "2026-09-03",
+      "use": "Accessibility acceptance basis for labels, errors, focus, reflow, target size, authentication, and non-colour status communication.",
+      "license_or_provenance": "W3C Recommendation and W3C document licence; implementation references criteria without copying normative text.",
+      "reuse_decision": "reference_only"
+    }
+  ],
+  "generation_path": {
+    "runtime_fetch": false,
+    "steps": [
+      "At a reviewed release-generation step, fetch the exact official source URL for each required taxonomy and record retrieval date, source revision/date, response SHA-256, and licence review outcome.",
+      "For country labels/codes, use the current ISO Maintenance Agency/OBP or official collection; emit only the explicitly approved country subset and never infer a country from device, IP, provider, or phone.",
+      "For education levels and fields, read the current UIS classification release and emit stable code identifiers only after legal review; do not copy manual prose or third-party components.",
+      "For India, consult the current UGC degree-notification index for research only; keep degree_name and specialization as exact user-entered values rather than generating an exhaustive degree list.",
+      "Run the contract tests before any source artifact is promoted. A missing or stale source must fail generation/release review, not trigger an end-user network fetch."
+    ],
+    "required_artifact_metadata": [
+      "source_id",
+      "url",
+      "retrieved_on",
+      "source_revision_or_date",
+      "sha256",
+      "reuse_decision"
+    ]
+  }
+}
