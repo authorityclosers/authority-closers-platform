@@ -1416,12 +1416,12 @@ a.learning-list-card:hover {
 }
 
 .site-frame--learner .button--ink {
-  color: #fff;
-  background: var(--clarity-blue);
+  color: var(--theme-action-text, #fff);
+  background: var(--theme-action, var(--clarity-blue));
 }
 
 .site-frame--learner .button--ink:hover:not(:disabled) {
-  background: #2449bf;
+  background: var(--theme-action-hover, #2449bf);
 }
 
 .site-frame--learner .button--outline {

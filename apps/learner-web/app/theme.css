@@ -323,16 +323,35 @@ html[data-motion="reduced"] .site-frame--learner *::after {
 html[data-reduced-motion="true"]
   .site-frame--learner
   .learner-help-chatbox__trigger:hover,
+html[data-reduced-motion="true"]
+  .site-frame--learner
+  .button:hover:not(:disabled),
+html[data-reduced-motion="true"]
+  .site-frame--learner
+  .button:active:not(:disabled),
+html[data-reduced-motion="true"] .site-frame--learner .practice-step-card:hover,
 html[data-motion="reduced"]
   .site-frame--learner
-  .learner-help-chatbox__trigger:hover {
+  .learner-help-chatbox__trigger:hover,
+html[data-motion="reduced"] .site-frame--learner .button:hover:not(:disabled),
+html[data-motion="reduced"] .site-frame--learner .button:active:not(:disabled),
+html[data-motion="reduced"] .site-frame--learner .practice-step-card:hover {
   transform: none !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
   html:not([data-motion="full"])
     .site-frame--learner
-    .learner-help-chatbox__trigger:hover {
+    .learner-help-chatbox__trigger:hover,
+  html:not([data-motion="full"])
+    .site-frame--learner
+    .button:hover:not(:disabled),
+  html:not([data-motion="full"])
+    .site-frame--learner
+    .button:active:not(:disabled),
+  html:not([data-motion="full"])
+    .site-frame--learner
+    .practice-step-card:hover {
     transform: none !important;
   }
 }

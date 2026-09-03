@@ -269,6 +269,14 @@ export function readAppearancePreferences(
   };
 }
 
+export function readRuntimeAppearancePreferences(
+  previousPreferences: AppearancePreferences | null,
+): AppearancePreferences {
+  return previousPreferences === null
+    ? readAppearancePreferences()
+    : readAppearancePreferences(previousPreferences);
+}
+
 export function applyAppearancePreferences(
   preferences: AppearancePreferences,
 ): void {
@@ -422,12 +430,7 @@ export function subscribeToThemeChanges(
 }
 
 export function ThemeRuntime() {
-  const fallbackPreferencesRef = useRef<AppearancePreferences>({
-    theme: "light",
-    accent: "cobalt",
-    density: "comfortable",
-    motion: "system",
-  });
+  const fallbackPreferencesRef = useRef<AppearancePreferences | null>(null);
 
   useEffect(() => {
     let colorSchemeMedia: Pick<
@@ -460,7 +463,7 @@ export function ThemeRuntime() {
     }
 
     const refresh = () => {
-      const preferences = readAppearancePreferences(
+      const preferences = readRuntimeAppearancePreferences(
         fallbackPreferencesRef.current,
       );
       fallbackPreferencesRef.current = preferences;

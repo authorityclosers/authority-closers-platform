@@ -11,6 +11,7 @@ import {
   ThemeControl,
   applyAppearancePreferences,
   readAppearancePreferences,
+  readRuntimeAppearancePreferences,
   saveAppearancePreferences,
 } from "./theme-control";
 
@@ -273,6 +274,27 @@ describe("ThemeControl Component and Appearance Runtime", () => {
       accent: "amber",
       density: "compact",
       motion: "reduced",
+    });
+
+    expect(readRuntimeAppearancePreferences(null)).toEqual({
+      theme: "dark",
+      accent: "amber",
+      density: "compact",
+      motion: "reduced",
+    });
+
+    expect(
+      readRuntimeAppearancePreferences({
+        theme: "light",
+        accent: "emerald",
+        density: "comfortable",
+        motion: "full",
+      }),
+    ).toEqual({
+      theme: "light",
+      accent: "emerald",
+      density: "comfortable",
+      motion: "full",
     });
   });
 

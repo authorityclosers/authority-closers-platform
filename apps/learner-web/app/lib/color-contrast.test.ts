@@ -213,6 +213,13 @@ describe("learner color tokens", () => {
     expect(clarity).toContain(
       "background: var(--theme-action-hover, #155eef);",
     );
+    expect(clarity).toContain("color: var(--theme-action-text, #fff);");
+    expect(clarity).toContain(
+      "background: var(--theme-action, var(--clarity-blue));",
+    );
+    expect(clarity).toContain(
+      "background: var(--theme-action-hover, #2449bf);",
+    );
   });
 
   it("disables learner animations without removing layout transforms", () => {
@@ -222,9 +229,11 @@ describe("learner color tokens", () => {
     expect(themeStyles).toContain("animation: none !important;");
     expect(themeStyles).toContain("transition: none !important;");
     expect(themeStyles).toContain("scroll-behavior: auto !important;");
-    expect(themeStyles).toContain(
-      ".learner-help-chatbox__trigger:hover {\n  transform: none !important;",
-    );
+    expect(themeStyles).toContain(".learner-help-chatbox__trigger:hover,");
+    expect(themeStyles).toContain(".button:hover:not(:disabled),");
+    expect(themeStyles).toContain(".button:active:not(:disabled),");
+    expect(themeStyles).toContain(".practice-step-card:hover {");
+    expect(themeStyles).toContain("transform: none !important;");
     expect(themeStyles).not.toContain(
       "*::after {\n  animation: none !important;\n  transition: none !important;\n  transform: none !important;",
     );
