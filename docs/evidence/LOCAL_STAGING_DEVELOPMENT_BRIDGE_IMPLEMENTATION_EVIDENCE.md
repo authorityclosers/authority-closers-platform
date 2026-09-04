@@ -39,6 +39,12 @@ inferred from raw founder evidence.
 - Browser-supplied remote cookies, Access credentials, bearer/API-key/service
   token fields, arbitrary routes, redirects, oversize bodies, and production
   origins are rejected.
+- The combined launcher assigns distinct `learner.localhost` and
+  `admin.localhost` browser hosts. Defense-in-depth filtering removes both local
+  bridge-handle cookies from loopback API forwarding, and each staging adapter
+  recognizes only its own handle if both arrive on a legacy `localhost` session.
+- Incoming mutation bodies are capped at 1 MiB and the read itself now observes
+  the same 12-second abort/timeout budget as the upstream request.
 - The launcher binds both Next servers to `127.0.0.1`, persists no credential,
   health-checks both surfaces, and stops only PID/start-time-verified process
   trees from this worktree.
@@ -90,8 +96,10 @@ Validated with the repository-supported Node 24 runtime and pnpm 11:
 Focused security tests cover exact origin/upstream validation, route matrices,
 wrong/missing Origin, browser credential rejection, redirect rejection,
 host-only cookie attributes, stale/expired/capped mappings, learner rejection
-from admin, identity/context mismatch, Access health semantics, local API mode,
-and production non-activation.
+from admin, explicit person-ID, tenant-ID, selected-tenant and membership-role
+identity/context mismatches, cross-surface handle isolation, bounded incoming
+body reads, Access health semantics, local API mode, and production
+non-activation.
 
 ## Live runtime validation
 

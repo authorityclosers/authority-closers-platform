@@ -5,6 +5,7 @@ import { z } from "zod";
 const DEFAULT_LOCAL_API_ORIGIN = "http://127.0.0.1:8000";
 const STAGING_ADMIN_ORIGIN = "https://admin-staging.authorityclosers.com";
 const LOCAL_SESSION_COOKIE_NAME = "__Host-ac_dev_admin_qa_session";
+const LEARNER_SESSION_COOKIE_NAME = "__Host-ac_dev_qa_session";
 const STAGING_SESSION_COOKIE_NAME = "__Host-ac_session";
 const ACCESS_COOKIE_NAME = "CF_Authorization";
 const PROXY_TIMEOUT_MS = 12_000;
@@ -116,6 +117,7 @@ function isLoopbackHost(hostname: string): boolean {
   return (
     hostname === "127.0.0.1" ||
     hostname === "localhost" ||
+    hostname.endsWith(".localhost") ||
     hostname === "[::1]" ||
     hostname === "::1"
   );
@@ -296,6 +298,27 @@ function cookieValues(request: Request): Map<string, string[]> {
   return values;
 }
 
+function stripDevelopmentBridgeCookies(headers: Headers): void {
+  const raw = headers.get("cookie");
+  if (!raw) return;
+  const retained = raw
+    .split(";")
+    .map((segment) => segment.trim())
+    .filter((pair) => {
+      const separator = pair.indexOf("=");
+      const name = separator < 0 ? pair : pair.slice(0, separator);
+      return (
+        name !== LOCAL_SESSION_COOKIE_NAME &&
+        name !== LEARNER_SESSION_COOKIE_NAME
+      );
+    });
+  if (retained.length === 0) {
+    headers.delete("cookie");
+  } else {
+    headers.set("cookie", retained.join("; "));
+  }
+}
+
 function localSessionFrom(request: Request): string | null {
   const values = cookieValues(request).get(LOCAL_SESSION_COOKIE_NAME) ?? [];
   if (values.length === 0) return null;
@@ -461,8 +484,41 @@ type UpstreamResult = Readonly<{
   cookies: string[];
 }>;
 
+function readStreamChunk(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  signal: AbortSignal,
+): Promise<ReadableStreamReadResult<Uint8Array>> {
+  if (signal.aborted) {
+    return Promise.reject(
+      signal.reason ??
+        new Error("The incoming request body read was cancelled."),
+    );
+  }
+  return new Promise((resolve, reject) => {
+    const abort = () => {
+      void reader.cancel(signal.reason).catch(() => undefined);
+      reject(
+        signal.reason ??
+          new Error("The incoming request body read was cancelled."),
+      );
+    };
+    signal.addEventListener("abort", abort, { once: true });
+    reader.read().then(
+      (result) => {
+        signal.removeEventListener("abort", abort);
+        resolve(result);
+      },
+      (error: unknown) => {
+        signal.removeEventListener("abort", abort);
+        reject(error);
+      },
+    );
+  });
+}
+
 async function readBoundedRequestBody(
   request: Request,
+  signal: AbortSignal,
 ): Promise<{ body: ArrayBuffer | undefined; tooLarge: boolean }> {
   if (request.method === "GET" || request.method === "HEAD") {
     return { body: undefined, tooLarge: false };
@@ -481,7 +537,7 @@ async function readBoundedRequestBody(
   const chunks: Uint8Array[] = [];
   let total = 0;
   while (true) {
-    const { done, value } = await reader.read();
+    const { done, value } = await readStreamChunk(reader, signal);
     if (done) break;
     total += value.byteLength;
     if (total > MAX_REQUEST_BODY_BYTES) {
@@ -514,8 +570,12 @@ async function proxyStagingRequest(
   const timeout = setTimeout(() => controller.abort(), PROXY_TIMEOUT_MS);
   const abort = () => controller.abort(request.signal.reason);
   request.signal.addEventListener("abort", abort, { once: true });
+  if (request.signal.aborted) controller.abort(request.signal.reason);
   try {
-    const boundedBody = await readBoundedRequestBody(request);
+    const boundedBody = await readBoundedRequestBody(
+      request,
+      controller.signal,
+    );
     if (boundedBody.tooLarge) {
       return {
         response: problem(
@@ -867,8 +927,17 @@ async function proxyLocalAdmin(
   ]) {
     headers.delete(name);
   }
+  stripDevelopmentBridgeCookies(headers);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), PROXY_TIMEOUT_MS);
+  const abort = () => controller.abort(request.signal.reason);
+  request.signal.addEventListener("abort", abort, { once: true });
+  if (request.signal.aborted) controller.abort(request.signal.reason);
   try {
-    const boundedBody = await readBoundedRequestBody(request);
+    const boundedBody = await readBoundedRequestBody(
+      request,
+      controller.signal,
+    );
     if (boundedBody.tooLarge) {
       return problem(
         413,
@@ -881,14 +950,24 @@ async function proxyLocalAdmin(
       headers,
       body: boundedBody.body,
       redirect: "manual",
-      signal: AbortSignal.timeout(PROXY_TIMEOUT_MS),
+      signal: controller.signal,
     });
   } catch {
+    if (controller.signal.aborted) {
+      return problem(
+        504,
+        "admin_local_api_timeout",
+        "The loopback admin API request timed out or was cancelled.",
+      );
+    }
     return problem(
       502,
       "admin_local_api_unavailable",
       "The loopback admin API could not be reached.",
     );
+  } finally {
+    clearTimeout(timeout);
+    request.signal.removeEventListener("abort", abort);
   }
 }
 

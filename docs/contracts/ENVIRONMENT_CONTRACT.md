@@ -93,7 +93,7 @@ The authenticated local staging QA bridge is a separate, development-only
 exception for real learner UI testing. It activates only when
 `NODE_ENV=development`, `AC_DEV_AUTH_BRIDGE_ENABLED=true`,
 `AC_DEV_AUTH_BRIDGE_ORIGIN` is an exact loopback origin such as
-`http://localhost:3000`, and `AC_DEV_AUTH_BRIDGE_UPSTREAM_ORIGIN` is exactly
+`http://learner.localhost:3000`, and `AC_DEV_AUTH_BRIDGE_UPSTREAM_ORIGIN` is exactly
 `https://staging.authorityclosers.com`. It is never valid in staging or
 production, never accepts a public/non-loopback bind, and never accepts the API
 host or a production origin as its upstream.
@@ -139,6 +139,11 @@ Node 24, pnpm 11, PowerShell 7.4+, and `cloudflared`; binds both Next servers to
 stores only process IDs, timestamps, and logs under ignored `.tmp` state. It
 does not start Docker, connect to a database, or inject production/provider
 credentials. Use `pnpm dev:staging:down` to stop only the tracked process trees.
+The browser-facing origins are `learner.localhost:3000` and
+`admin.localhost:3001`, so host-only learner and admin bridge cookies are not
+shared across ports. Both local proxy modes also remove both bridge-cookie
+names before forwarding to a loopback API; each authenticated bridge reads only
+its own handle.
 
 This is a tester-owned process boundary, not a production security boundary:
 anyone who can compromise the opted-in local development process could use its

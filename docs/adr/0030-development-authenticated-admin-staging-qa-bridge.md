@@ -49,6 +49,12 @@ mapping is memory-only, capped at four sessions, expires after eight hours, and
 is removed on logout or upstream 401. Malformed, expired, and restart-stale
 local cookies are actively cleared.
 
+The combined launcher uses `admin.localhost` for this surface and
+`learner.localhost` for the learner surface so host-only cookies cannot cross
+the port boundary. As defense in depth for old plain-`localhost` sessions, this
+adapter recognizes only the admin handle, while local API forwarding removes
+both bridge-handle cookie names.
+
 The adapter allowlists only bridge health, password login/logout, `/v1/me`,
 `/v1/context`, and exact current first-slice admin mutation paths for publish,
 correction, grant, job retry, and recovery reconciliation. It rejects arbitrary
@@ -57,6 +63,8 @@ headers, wrong origins, redirects, oversize bodies, malformed upstream session
 cookies, and non-admin identity contexts. Mutations still rely on the staging
 API's canonical tenant, permission, reason, idempotency, audit, and external
 effects-hold checks.
+The 1 MiB incoming-body reader also observes the request timeout and caller
+abort rather than waiting indefinitely for a stalled browser stream.
 
 The admin shell is visible in development only when the complete bridge
 configuration validates (or the pre-existing explicit inert preview flag is

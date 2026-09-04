@@ -72,6 +72,10 @@ function adminContext(
 
 function successfulLoginFetcher(
   role: "owner" | "admin" | "support" | "learner" = "owner",
+  identity: {
+    me?: ReturnType<typeof adminMe>;
+    context?: ReturnType<typeof adminContext>;
+  } = {},
 ) {
   return vi.fn<DevAdminFetch>().mockImplementation((input, init) => {
     const url = new URL(String(input));
@@ -94,10 +98,12 @@ function successfulLoginFetcher(
       expect(String(new Headers(init?.headers).get("cookie"))).toContain(
         `__Host-ac_session=${STAGING_SESSION}`,
       );
-      return Promise.resolve(Response.json(adminMe(role)));
+      return Promise.resolve(Response.json(identity.me ?? adminMe(role)));
     }
     if (url.pathname === "/v1/context") {
-      return Promise.resolve(Response.json(adminContext(role)));
+      return Promise.resolve(
+        Response.json(identity.context ?? adminContext(role)),
+      );
     }
     if (url.pathname === "/v1/auth/logout") {
       return Promise.resolve(new Response(null, { status: 204 }));
@@ -299,6 +305,44 @@ describe("authenticated staging admin bridge", () => {
     );
   });
 
+  it.each([
+    [
+      "person ID mismatch",
+      { context: { ...adminContext(), person_id: TARGET_ID } },
+    ],
+    [
+      "tenant ID mismatch",
+      { context: { ...adminContext(), tenant_id: TARGET_ID } },
+    ],
+    [
+      "selected tenant mismatch",
+      { me: { ...adminMe(), selected_tenant_id: TARGET_ID } },
+    ],
+    [
+      "membership role mismatch",
+      { me: { ...adminMe(), membership_role: "admin" as const } },
+    ],
+  ])("rejects admin identity/context %s", async (_label, identity) => {
+    const fetcher = successfulLoginFetcher("owner", identity);
+    const response = await proxyDevelopmentAdminApi(
+      mutation("/v1/auth/password/login"),
+      fetcher,
+      bridgeEnvironment,
+      "development",
+      new InMemoryDevelopmentAdminSessionStore(),
+    );
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({
+      code: "admin_bridge_authorization_denied",
+    });
+    expect(response.headers.get("set-cookie")).toBeNull();
+    expect(fetcher).toHaveBeenCalledTimes(4);
+    expect(new URL(String(fetcher.mock.calls[3][0])).pathname).toBe(
+      "/v1/auth/logout",
+    );
+  });
+
   it("rejects a login response that drifts to a browser credential contract", async () => {
     const fetcher = vi.fn<DevAdminFetch>().mockImplementation((input) => {
       const path = new URL(String(input)).pathname;
@@ -372,6 +416,88 @@ describe("authenticated staging admin bridge", () => {
       code: "admin_bridge_request_too_large",
     });
     expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("times out a stalled admin request body before any upstream call", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetcher = vi.fn<DevAdminFetch>();
+      const stalled = request("/v1/auth/password/login", {
+        method: "POST",
+        headers: {
+          origin: "http://localhost:3001",
+          "content-type": "application/json",
+        },
+        body: new ReadableStream<Uint8Array>({}),
+        duplex: "half",
+      } as RequestInit);
+      const pending = proxyDevelopmentAdminApi(
+        stalled,
+        fetcher,
+        bridgeEnvironment,
+        "development",
+        new InMemoryDevelopmentAdminSessionStore(),
+      );
+
+      await vi.advanceTimersByTimeAsync(12_001);
+      const response = await pending;
+      expect(response.status).toBe(504);
+      expect(await response.json()).toMatchObject({
+        code: "admin_bridge_upstream_timeout",
+      });
+      expect(fetcher).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not accept the learner bridge handle as admin authentication", async () => {
+    const fetcher = vi.fn<DevAdminFetch>();
+    const response = await proxyDevelopmentAdminApi(
+      request("/v1/me", {
+        headers: { cookie: `__Host-ac_dev_qa_session=${"l".repeat(43)}` },
+      }),
+      fetcher,
+      bridgeEnvironment,
+      "development",
+      new InMemoryDevelopmentAdminSessionStore(),
+    );
+
+    expect(response.status).toBe(401);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("uses only the admin handle when both localhost bridge cookies arrive", async () => {
+    const handle = "h".repeat(43);
+    const store = new InMemoryDevelopmentAdminSessionStore();
+    store.set(handle, STAGING_SESSION);
+    const fetcher = vi
+      .fn<DevAdminFetch>()
+      .mockImplementation((_input, init) => {
+        const cookie = new Headers(init?.headers).get("cookie") ?? "";
+        expect(cookie).toContain(`CF_Authorization=${ACCESS_JWT}`);
+        expect(cookie).toContain(`__Host-ac_session=${STAGING_SESSION}`);
+        expect(cookie).not.toContain("__Host-ac_dev_qa_session");
+        expect(cookie).not.toContain("__Host-ac_dev_admin_qa_session");
+        return Promise.resolve(Response.json(adminMe()));
+      });
+    const response = await proxyDevelopmentAdminApi(
+      request("/v1/me", {
+        headers: {
+          cookie: [
+            `__Host-ac_dev_admin_qa_session=${handle}`,
+            `__Host-ac_dev_qa_session=${"l".repeat(43)}`,
+          ].join("; "),
+        },
+      }),
+      fetcher,
+      bridgeEnvironment,
+      "development",
+      store,
+    );
+
+    expect(response.status).toBe(200);
+    expect(fetcher).toHaveBeenCalledOnce();
   });
 
   it("requires the exact loopback request and unsafe Origin", async () => {
@@ -510,19 +636,29 @@ describe("development admin session store", () => {
 });
 
 describe("loopback admin proxy", () => {
-  it("preserves the normal local API path without accepting a remote origin", async () => {
-    const fetcher = vi
-      .fn<DevAdminFetch>()
-      .mockResolvedValue(Response.json({ ok: true }));
+  it("preserves the normal local API path but strips both bridge handles", async () => {
+    const fetcher = vi.fn<DevAdminFetch>().mockImplementation((input, init) => {
+      expect(String(input)).toBe("http://localhost:8000/v1/me");
+      expect(new Headers(init?.headers).get("cookie")).toBe(
+        "local-admin-session=value",
+      );
+      return Promise.resolve(Response.json({ ok: true }));
+    });
     const response = await proxyDevelopmentAdminApi(
-      request("/v1/me"),
+      request("/v1/me", {
+        headers: {
+          cookie: [
+            "local-admin-session=value",
+            `__Host-ac_dev_admin_qa_session=${"a".repeat(43)}`,
+            `__Host-ac_dev_qa_session=${"l".repeat(43)}`,
+          ].join("; "),
+        },
+      }),
       fetcher,
       { AC_API_URL: "http://localhost:8000" },
       "development",
     );
     expect(response.status).toBe(200);
-    expect(String(fetcher.mock.calls[0][0])).toBe(
-      "http://localhost:8000/v1/me",
-    );
+    expect(fetcher).toHaveBeenCalledOnce();
   });
 });

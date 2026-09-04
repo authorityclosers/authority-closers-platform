@@ -36,11 +36,19 @@ and no `Domain`. The staging cookie is never returned to the browser, written
 to disk, or logged. The mapping is capped at eight sessions, expires after
 eight hours, and disappears on process restart.
 
+The combined launcher uses `learner.localhost` for this surface and
+`admin.localhost` for the admin surface because host-only cookies are scoped by
+host, not port. For defense in depth and compatibility with older plain
+`localhost` sessions, the learner adapter recognizes only its own local handle,
+and local API forwarding strips both learner and admin bridge-handle cookies.
+
 Only the learner routes exercised by the current UI are allowlisted. The bridge
 rejects direct staging cookies, `Authorization`, API-key headers, wrong or
 missing unsafe-request origins, upstream redirects, upstream bearer response
 headers, and a login response that drifts to a bearer-token contract. Logout
 and upstream 401 responses remove the mapping and clear the local cookie.
+The 1 MiB incoming-body reader observes the same bounded timeout and caller
+abort as the upstream request.
 Google, registration, recovery, verification, admin, internal, and arbitrary
 proxy routes remain unavailable. No API, production, database, VPS, payment,
 analytics, or audit authority is changed.

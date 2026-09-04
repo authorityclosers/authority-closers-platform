@@ -628,6 +628,86 @@ describe("development learner API proxy", () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
+  it("times out a stalled learner request body before any upstream call", async () => {
+    vi.useFakeTimers();
+    try {
+      const store = new InMemoryDevelopmentBridgeSessionStore();
+      store.set(LOCAL_SESSION, STAGING_SESSION);
+      const fetcher = vi.fn();
+      const request = bridgeRequest("/v1/activities/activity-1/draft", {
+        method: "PUT",
+        headers: {
+          cookie: `__Host-ac_dev_qa_session=${LOCAL_SESSION}`,
+          "content-type": "application/json",
+        },
+        body: new ReadableStream<Uint8Array>({}),
+        duplex: "half",
+      } as RequestInit);
+      const pending = proxyDevelopmentLearnerApi(
+        request,
+        fetcher,
+        AUTH_BRIDGE_ENV,
+        "development",
+        store,
+      );
+
+      await vi.advanceTimersByTimeAsync(12_001);
+      const response = await pending;
+      expect(response.status).toBe(504);
+      expect(fetcher).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not accept the admin bridge handle as learner authentication", async () => {
+    const fetcher = vi.fn();
+    const response = await proxyDevelopmentLearnerApi(
+      bridgeRequest("/v1/me", {
+        headers: {
+          cookie: `__Host-ac_dev_admin_qa_session=${"a".repeat(43)}`,
+        },
+      }),
+      fetcher,
+      AUTH_BRIDGE_ENV,
+      "development",
+      new InMemoryDevelopmentBridgeSessionStore(),
+    );
+
+    expect(response.status).toBe(401);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("uses only the learner handle when both localhost bridge cookies arrive", async () => {
+    const store = new InMemoryDevelopmentBridgeSessionStore();
+    store.set(LOCAL_SESSION, STAGING_SESSION);
+    const fetcher = vi.fn(
+      async (_input: RequestInfo | URL, init?: RequestInit) => {
+        expect(new Headers(init?.headers).get("cookie")).toBe(
+          `__Host-ac_session=${STAGING_SESSION}`,
+        );
+        return Response.json({ person_id: "learner-1" });
+      },
+    );
+    const response = await proxyDevelopmentLearnerApi(
+      bridgeRequest("/v1/me", {
+        headers: {
+          cookie: [
+            `__Host-ac_dev_qa_session=${LOCAL_SESSION}`,
+            `__Host-ac_dev_admin_qa_session=${"a".repeat(43)}`,
+          ].join("; "),
+        },
+      }),
+      fetcher,
+      AUTH_BRIDGE_ENV,
+      "development",
+      store,
+    );
+
+    expect(response.status).toBe(200);
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
   it("fails closed for wrong origins, direct staging cookies, client credentials, and invalid local sessions", async () => {
     const fetcher = vi.fn();
     const cases = [
@@ -886,7 +966,7 @@ describe("development learner API proxy", () => {
     expect(redirectResponse.headers.get("location")).toBeNull();
   });
 
-  it("preserves the browser Origin and cookies for the loopback API", async () => {
+  it("preserves local API cookies while stripping both bridge handles", async () => {
     const fetcher = vi.fn(
       async (_input: RequestInfo | URL, init?: RequestInit) => {
         const headers = new Headers(init?.headers);
@@ -901,7 +981,11 @@ describe("development learner API proxy", () => {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          cookie: "local-session=value",
+          cookie: [
+            "local-session=value",
+            `__Host-ac_dev_qa_session=${LOCAL_SESSION}`,
+            `__Host-ac_dev_admin_qa_session=${"a".repeat(43)}`,
+          ].join("; "),
           origin: "http://localhost:3000",
         },
         body: JSON.stringify({ program_version_id: "version-1" }),

@@ -11,6 +11,7 @@ const MAX_BRIDGE_CURSOR_LENGTH = 512;
 const BRIDGE_SESSION_MAX_AGE_SECONDS = 8 * 60 * 60;
 const BRIDGE_SESSION_MAX_COUNT = 8;
 const BRIDGE_SESSION_COOKIE_NAME = "__Host-ac_dev_qa_session";
+const ADMIN_BRIDGE_SESSION_COOKIE_NAME = "__Host-ac_dev_admin_qa_session";
 const STAGING_SESSION_COOKIE_NAME = "__Host-ac_session";
 const SESSION_COOKIE_VALUE_PATTERN = /^[A-Za-z0-9_-]{43,512}$/;
 
@@ -133,6 +134,7 @@ function isLoopbackHost(hostname: string): boolean {
   return (
     hostname === "127.0.0.1" ||
     hostname === "localhost" ||
+    hostname.endsWith(".localhost") ||
     hostname === "[::1]" ||
     hostname === "::1"
   );
@@ -526,6 +528,7 @@ function proxyRequestHeaders(
     ]) {
       headers.delete(header);
     }
+    stripDevelopmentBridgeCookies(headers);
     return headers;
   }
 
@@ -545,6 +548,27 @@ function proxyRequestHeaders(
     }
   }
   return headers;
+}
+
+function stripDevelopmentBridgeCookies(headers: Headers): void {
+  const raw = headers.get("cookie");
+  if (!raw) return;
+  const retained = raw
+    .split(";")
+    .map((segment) => segment.trim())
+    .filter((pair) => {
+      const separator = pair.indexOf("=");
+      const name = separator < 0 ? pair : pair.slice(0, separator);
+      return (
+        name !== BRIDGE_SESSION_COOKIE_NAME &&
+        name !== ADMIN_BRIDGE_SESSION_COOKIE_NAME
+      );
+    });
+  if (retained.length === 0) {
+    headers.delete("cookie");
+  } else {
+    headers.set("cookie", retained.join("; "));
+  }
 }
 
 function proxyResponseHeaders(
@@ -751,8 +775,41 @@ async function loginResponseContainsBearerToken(
   return false;
 }
 
+function readStreamChunk(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  signal: AbortSignal,
+): Promise<ReadableStreamReadResult<Uint8Array>> {
+  if (signal.aborted) {
+    return Promise.reject(
+      signal.reason ??
+        new Error("The incoming request body read was cancelled."),
+    );
+  }
+  return new Promise((resolve, reject) => {
+    const abort = () => {
+      void reader.cancel(signal.reason).catch(() => undefined);
+      reject(
+        signal.reason ??
+          new Error("The incoming request body read was cancelled."),
+      );
+    };
+    signal.addEventListener("abort", abort, { once: true });
+    reader.read().then(
+      (result) => {
+        signal.removeEventListener("abort", abort);
+        resolve(result);
+      },
+      (error: unknown) => {
+        signal.removeEventListener("abort", abort);
+        reject(error);
+      },
+    );
+  });
+}
+
 async function readBoundedRequestBody(
   request: Request,
+  signal: AbortSignal,
 ): Promise<{ body: ArrayBuffer | undefined; tooLarge: boolean }> {
   if (request.method === "GET" || request.method === "HEAD") {
     return { body: undefined, tooLarge: false };
@@ -771,7 +828,7 @@ async function readBoundedRequestBody(
   const chunks: Uint8Array[] = [];
   let total = 0;
   while (true) {
-    const { done, value } = await reader.read();
+    const { done, value } = await readStreamChunk(reader, signal);
     if (done) break;
     total += value.byteLength;
     if (total > MAX_BRIDGE_REQUEST_BODY_BYTES) {
@@ -826,7 +883,10 @@ async function proxyUpstream(
         setCookieHeaders: [],
       };
     }
-    const boundedBody = await readBoundedRequestBody(request);
+    const boundedBody = await readBoundedRequestBody(
+      request,
+      controller.signal,
+    );
     if (boundedBody.tooLarge) {
       return {
         response: jsonError(
