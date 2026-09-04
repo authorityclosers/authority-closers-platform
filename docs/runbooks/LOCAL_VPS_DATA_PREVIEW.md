@@ -21,16 +21,16 @@ command line, written to the PID record, or exposed to the learner process.
 
 Startup succeeds only after both probes pass:
 
-- `http://localhost:3000/v1/programs?limit=1` returns the staging public
+- `http://learner.localhost:3000/v1/programs?limit=1` returns the staging public
   catalog with `X-AC-Dev-Data-Mode: staging-public-catalog`.
-- `http://localhost:3001/v1/dev-bridge/health` confirms Cloudflare Access can
+- `http://admin.localhost:3001/v1/dev-bridge/health` confirms Cloudflare Access can
   reach the staging product API boundary while the product session still
   reports sign-in required.
 
-Use `http://localhost:3000/login` for the learner and
-`http://localhost:3001/login` for the admin. Both use the normal staging
-password authentication contract and create separate ephemeral localhost
-cookies. Account creation, Google sign-in, email verification, and password
+Use `http://learner.localhost:3000/login` for the learner and
+`http://admin.localhost:3001/login` for the admin. Both use the normal staging
+password authentication contract and create separate ephemeral cookies on
+distinct local hosts. Account creation, Google sign-in, email verification, and password
 recovery continue on the deployed learner staging origin because their
 provider callbacks and one-time links are origin-bound.
 
@@ -78,7 +78,7 @@ manual setup, use only an uncommitted local process environment:
 
 ```dotenv
 AC_DEV_AUTH_BRIDGE_ENABLED=true
-AC_DEV_AUTH_BRIDGE_ORIGIN=http://localhost:3000
+AC_DEV_AUTH_BRIDGE_ORIGIN=http://learner.localhost:3000
 AC_DEV_AUTH_BRIDGE_UPSTREAM_ORIGIN=https://staging.authorityclosers.com
 ```
 

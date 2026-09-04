@@ -6,7 +6,7 @@
 - Worktree: `C:\Users\Suyash\.codex\worktrees\d2de\authority-closers-platform`
 - Branch: `codex/local-staging-dev-bridge`
 - Base SHA: `a8bfbfcc2aec6d4d9bcece932511f316fa0dc98a`
-- Validated implementation checkpoint SHA: `a5477fe05b4c544270ffb301ad6e26119801c8fa`
+- Validated implementation checkpoint SHA: `a03d5570828a051f62f690a7cf1bd765958ddc4f`
 - Repository migration head: `20260903_0016`
 - Migration-chain tree identity: `d5a91365e593b64392567a2e3c14c3595ed3ce96`
 - Database/migration change in this candidate: none
@@ -78,7 +78,9 @@ gates are satisfied. This bridge does not activate that next media slice.
 
 ## Automated validation
 
-Validated with the repository-supported Node 24 runtime and pnpm 11:
+The complete pre-hardening bridge suite was validated at implementation
+checkpoint `a5477fe05b4c544270ffb301ad6e26119801c8fa` with the
+repository-supported Node 24 runtime and pnpm 11:
 
 | Check                                                       | Result                          |
 | ----------------------------------------------------------- | ------------------------------- |
@@ -92,6 +94,19 @@ Validated with the repository-supported Node 24 runtime and pnpm 11:
 | `pnpm --filter @ac/admin-web build`                         | passed; 9 app routes generated  |
 | `uv run pytest -q tests/infra/test_local_staging_bridge.py` | 6 passed                        |
 | `git diff --check`                                          | passed                          |
+
+The isolation and mismatch hardening at checkpoint
+`a03d5570828a051f62f690a7cf1bd765958ddc4f` was then validated with these
+focused checks. These results supplement rather than overstate a repeat of the
+complete pre-hardening suite:
+
+| Check                                                                                                  | Result    |
+| ------------------------------------------------------------------------------------------------------ | --------- |
+| learner development-proxy focused tests                                                                | 32 passed |
+| admin development-proxy focused tests                                                                  | 43 passed |
+| `uv run pytest -q tests/infra/test_local_staging_bridge.py tests/e2e/test_local_staging_bridge_e2e.py` | 8 passed  |
+| bridge-selected Prettier and Ruff checks                                                               | passed    |
+| bridge-only diff check                                                                                 | passed    |
 
 Focused security tests cover exact origin/upstream validation, route matrices,
 wrong/missing Origin, browser credential rejection, redirect rejection,
@@ -165,7 +180,8 @@ Representative durable screenshots:
 - Production promotion: not run; no artifact is approved for production.
 - Local rollback: `pnpm dev:staging:down` removes only the ephemeral process and
   session boundary; it changes no remote record.
-- Code rollback identity: `git revert a5477fe05b4c544270ffb301ad6e26119801c8fa`.
+- Code rollback identity, in reverse chronological order:
+  `git revert a03d5570828a051f62f690a7cf1bd765958ddc4f 67607b79fabd1f3e73dca460ea5319554ec8e52e a5477fe05b4c544270ffb301ad6e26119801c8fa`.
   There is no database downgrade because the migration identity is unchanged.
 
 A later release task must build one immutable artifact from the recorded
