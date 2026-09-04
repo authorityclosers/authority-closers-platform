@@ -275,3 +275,51 @@ The exact production shell and activity component were rendered with a server-au
 - P3: reconsider a full-width primary Save treatment at the smallest breakpoint only if task evidence supports it; the current dual-action row preserves two distinct server operations.
 
 final result: passed
+
+---
+
+# Learner sidebar and command-palette design QA
+
+## Reference and implementation evidence
+
+The supplied Gemini and ChatGPT sidebar images were inspected as ephemeral conversation attachments. They are not committed repository artifacts, so their temporary operating-system paths are deliberately not recorded as durable evidence. The implementation follows their dark, text-forward hierarchy, compact icon rail, restrained active state, and anchored account footer while retaining the existing light learning canvas and AC product tokens. It does not copy unrelated chat recents, projects, or fabricated counters into the LMS.
+
+Before the correction pass, the authenticated localhost shell was observed in the Codex in-app browser at desktop (`1425 × 891`) and mobile (`414 × 922`) viewports, including expanded sidebar, collapsed rail, command palette, `/home`, and `/progress`. Those observations were not saved as committed screenshots and therefore are not durable release evidence.
+
+After the authorized clean Turbopack recovery, the correction pass was verified in the Codex in-app browser at desktop (`1280 × 720`) and mobile (`430 × 932`). Desktop checks covered the expanded `252px` rail, collapsed `64px` rail, matching header/main offsets, exact palette focus restoration, inert cleanup, and `Ctrl` + `K`. Mobile checks covered a persisted collapsed preference with zero hidden-rail offset, `/calendar` More current-state semantics, overlay ordering above help and bottom navigation, forward/reverse focus trapping, Escape cleanup, and exact More-button focus restoration. The in-app browser surface did not expose screenshot capture, so these are live DOM, accessibility-tree, and computed-layout observations rather than durable image evidence. Authenticated staging screenshots remain required before release.
+
+## Findings corrected during QA
+
+1. The initial identity treatment stacked controls and allowed the collapse action to overlap the wordmark. It is now one horizontal row: tenant mark, `Closers Academy`, `by Authority Closers`, and a far-edge collapse control.
+2. The original collapsed state exposed cramped labels and unreliable hover layering. The rail is now icon-only with bounded tooltips, a clear active rail, and stable expansion behavior.
+3. The redundant header context label was removed. The centered search remains, while notification and learner-profile controls use the quieter borderless shell treatment.
+4. Sidebar search, header search, and `Ctrl`/`Cmd` + `K` now open one real command palette with filtering, arrow-key movement, Enter navigation, Escape dismissal, and route-backed results.
+5. Escape initially restored focus to the header search even when the sidebar opened the palette. The invoking control is now captured dynamically, so focus returns to the exact sidebar, header, or shortcut origin.
+6. Mobile retains the existing bottom navigation, safe-area behavior, and real destinations without inheriting the desktop rail.
+7. Duplicate mobile More modal behavior was removed from the shell. `MobileMoreSheet` is now the single owner of Escape, focus trapping, inert background state, cleanup, and focus restoration.
+8. The command palette now uses a stable hidden dialog title, traps forward and reverse Tab navigation, restores prior inert state, and returns focus to the exact invoking control.
+9. A persisted collapsed preference no longer reserves a hidden 64-pixel rail at or below `1023px`.
+10. `/calendar` now marks More as the current mobile destination.
+11. The mobile More overlay is layered above the fixed help widget and bottom navigation.
+12. The unused header title was removed, clearing zero-warning lint, and the unapproved handcrafted academy SVG was replaced with the approved shared `BrandMark`.
+13. App-agnostic badge and tooltip primitives plus tenant-identity contracts now live in `@ac/ui`; learner routing, labels, sign-out, and business behavior remain in the learner adapter.
+14. The desktop collapse transition could leave the rendered rail and content offsets at `252px` despite the collapsed state. The collapsed selector now resolves immediately to `64px`, while expanded-state motion remains intact.
+15. Dot badges no longer place their screen-reader label inside an `aria-hidden` visual wrapper; the visual dot remains decorative and the label is exposed separately.
+16. Command-palette focus remains in a real combobox whose `aria-controls`, `aria-expanded`, `aria-autocomplete`, and `aria-activedescendant` relationships now announce the selected listbox option as arrow-key navigation changes it.
+17. Multi-tenant switching is not exposed unless the host supplies a real authorized selection handler; the no-op custom-event fallback was removed.
+
+## Verification evidence
+
+- Bundled Node `24.19.0` and pnpm `11.19.0` were used.
+- `@ac/ui` TypeScript passed.
+- Learner ESLint passed with zero warnings and learner TypeScript passed.
+- Full learner suite: 31 files and 461 tests passed, including mounted DOM interaction coverage for both modal surfaces and combobox active-descendant updates.
+- Focused sidebar suites: 35 tests passed.
+- Scoped repository formatting and `git diff --check` passed.
+- Live browser logs contained no application errors; only development-mode React/HMR information was present.
+
+## Final assessment
+
+No open P0, P1, or P2 local interaction defect remains in this sidebar slice. The tenant relationship is explicit: Closers Academy is the learner academy and Authority Closers is the tenant/operator; the reusable LMS itself remains unnamed. Local implementation QA passed; release sign-off remains blocked until authenticated staging supplies fresh durable captures.
+
+final result: passed locally; release blocked pending authenticated staging visual evidence

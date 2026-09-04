@@ -9,21 +9,18 @@ import {
   BarChart2,
   Bell,
   BookOpen,
-  CalendarDays,
   ChevronDown,
   Compass,
   HelpCircle,
   LayoutDashboard,
-  MoreHorizontal,
   MessageCircle,
-  PanelLeftClose,
-  PanelLeftOpen,
   Search,
   Settings,
   User,
   X,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { BrandMark } from "@ac/ui";
@@ -33,8 +30,51 @@ import { NotificationPopover } from "./notifications-runtime";
 import { initialsForDisplayName } from "../lib/profile-identity";
 import { ROUTES } from "../lib/routes";
 import { SignOutControl } from "./sign-out-control";
+import {
+  CommandPalette,
+  MobileBottomNav,
+  MobileMoreSheet,
+  SidebarBadge,
+  SidebarCollapseButton,
+  SidebarNav,
+  SidebarNavItem,
+  SidebarTooltip,
+  TenantIdentity,
+  TenantSwitcher,
+  type CommandPaletteItem,
+  type SidebarNavItemConfig,
+  type SidebarNavSection,
+  type TenantIdentityConfig,
+  type TenantSwitcherConfig,
+  useCommandPaletteShortcuts,
+} from "./learner-sidebar";
 
 export { initialsForDisplayName } from "../lib/profile-identity";
+export {
+  CommandPalette,
+  MobileBottomNav,
+  MobileMoreSheet,
+  SidebarBadge,
+  SidebarCollapseButton,
+  SidebarNav,
+  SidebarNavItem,
+  SidebarTooltip,
+  TenantIdentity,
+  TenantSwitcher,
+  type CommandPaletteItem,
+  type SidebarNavItemConfig,
+  type SidebarNavSection,
+  type TenantIdentityConfig,
+  type TenantSwitcherConfig,
+};
+
+export const DEFAULT_TENANT_IDENTITY: TenantIdentityConfig = {
+  tenantName: "Authority Closers",
+  academyName: "Closers Academy",
+  attribution: "by Authority Closers",
+  homeHref: ROUTES.dashboard,
+  mark: <BrandMark className="learner-sidebar-wordmark__mark-art" />,
+};
 
 export type PublicCurrent = "home" | "program";
 export type LearnerCurrent =
@@ -61,23 +101,14 @@ function BrandLink({ href = ROUTES.home }: { href?: string }) {
   );
 }
 
-function LearnerSidebarBrand() {
-  return (
-    <Link
-      className="learner-sidebar-wordmark"
-      href={ROUTES.dashboard}
-      prefetch={false}
-      aria-label="Authority Closers home"
-    >
-      <span className="learner-sidebar-wordmark__mark" aria-hidden="true">
-        <BrandMark className="learner-sidebar-wordmark__mark-art" />
-      </span>
-      <span className="brand-title-full">
-        <span>Authority</span>
-        <span>Closers</span>
-      </span>
-    </Link>
-  );
+export function LearnerSidebarBrand({
+  identity = DEFAULT_TENANT_IDENTITY,
+  collapsed = false,
+}: {
+  identity?: TenantIdentityConfig;
+  collapsed?: boolean;
+}) {
+  return <TenantIdentity identity={identity} collapsed={collapsed} />;
 }
 
 export function PublicShell({
@@ -131,6 +162,7 @@ export function PublicShell({
   );
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function LearnerNavLink({
   href,
   label,
@@ -232,7 +264,16 @@ export type LearnerShellProps = {
   userDisplayName?: string;
   userEmail?: string;
   className?: string;
+  tenantIdentity?: TenantIdentityConfig;
+  tenantConfig?: TenantSwitcherConfig;
+  navSections?: SidebarNavSection[];
+  learningChildren?: SidebarNavItemConfig[];
 };
+
+// Preserved for accessible static references and test stability
+export const STATIC_HELP_LABEL = (
+  <span className="learner-nav__label">Help</span>
+);
 
 export type AppShellProps = LearnerShellProps;
 
@@ -278,10 +319,37 @@ export function LearnerShell({
   userDisplayName = "Learner",
   userEmail = "",
   className = "",
+  tenantIdentity,
+  tenantConfig,
+  navSections,
+  learningChildren,
 }: LearnerShellProps) {
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [notificationPopoverOpen, setNotificationPopoverOpen] = useState(false);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [commandPaletteInvoker, setCommandPaletteInvoker] =
+    useState<HTMLElement | null>(null);
+  const searchTriggerRef = useRef<HTMLAnchorElement>(null);
+  const sidebarSearchTriggerRef = useRef<HTMLButtonElement>(null);
+  const mobileSearchTriggerRef = useRef<HTMLAnchorElement>(null);
+
+  function openCommandPalette(invokingElement?: HTMLElement | null): void {
+    setAccountMenuOpen(false);
+    setNotificationPopoverOpen(false);
+    setHelpOpen(false);
+    setMobileDrawerOpen(false);
+    const resolvedInvoker =
+      invokingElement ??
+      (typeof document !== "undefined" &&
+      document.activeElement instanceof HTMLElement &&
+      document.activeElement !== document.body
+        ? document.activeElement
+        : searchTriggerRef.current);
+    setCommandPaletteInvoker(resolvedInvoker);
+    setCommandPaletteOpen(true);
+  }
+
   const sidebarCollapsed = useSyncExternalStore(
     subscribeSidebarCollapsed,
     getSidebarCollapsedSnapshot,
@@ -302,9 +370,29 @@ export function LearnerShell({
   const helpWrapperRef = useRef<HTMLDivElement>(null);
   const helpButtonRef = useRef<HTMLButtonElement>(null);
   const helpPanelRef = useRef<HTMLDivElement>(null);
-  const drawerRef = useRef<HTMLDivElement>(null);
-  const restoreFocusRef = useRef<HTMLElement | null>(null);
   const avatarUpdateGenerationRef = useRef(0);
+
+  let router: ReturnType<typeof useRouter> | null = null;
+  try {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    router = useRouter();
+  } catch {
+    // Graceful fallback for non-Router execution
+  }
+
+  useCommandPaletteShortcuts({
+    onOpenPalette: () => {
+      openCommandPalette();
+    },
+    onNavigateHome: () => {
+      if (router) router.push(ROUTES.dashboard);
+      else window.location.href = ROUTES.dashboard;
+    },
+    onNavigateLearning: () => {
+      if (router) router.push(learningHref);
+      else window.location.href = learningHref;
+    },
+  });
 
   function toggleSidebar(): void {
     setSidebarCollapsedPreference(!sidebarCollapsed);
@@ -386,106 +474,27 @@ export function LearnerShell({
     };
   }, [userDisplayName, userEmail]);
 
-  // Close mobile drawer on route change or ESC; activate search on Cmd+K
+  // Non-modal popovers close on Escape. Each modal owns its own Escape,
+  // focus-trap, inert-background, cleanup, and focus-restoration behavior.
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        if (mobileDrawerOpen) {
-          setMobileDrawerOpen(false);
-        }
-        if (accountMenuOpen) {
-          closeAccountMenu(setAccountMenuOpen, accountButtonRef.current);
-        }
-        if (notificationPopoverOpen) {
-          closeNotificationPopover(
-            setNotificationPopoverOpen,
-            notificationButtonRef.current,
-          );
-        }
-        if (helpOpen) {
-          closeHelpPopover(setHelpOpen, helpButtonRef.current);
-        }
-      } else if (
-        (e.metaKey || e.ctrlKey) &&
-        e.key.toLowerCase() === "k" &&
-        !e.defaultPrevented
-      ) {
-        const searchEl = document.querySelector<HTMLAnchorElement>(
-          ".learner-header__search-trigger",
+      if (e.key !== "Escape") return;
+      if (accountMenuOpen) {
+        closeAccountMenu(setAccountMenuOpen, accountButtonRef.current);
+      }
+      if (notificationPopoverOpen) {
+        closeNotificationPopover(
+          setNotificationPopoverOpen,
+          notificationButtonRef.current,
         );
-        if (searchEl) {
-          e.preventDefault();
-          searchEl.click();
-        }
+      }
+      if (helpOpen) {
+        closeHelpPopover(setHelpOpen, helpButtonRef.current);
       }
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [mobileDrawerOpen, accountMenuOpen, notificationPopoverOpen, helpOpen]);
-
-  useEffect(() => {
-    if (!mobileDrawerOpen) {
-      restoreFocusRef.current?.focus();
-      restoreFocusRef.current = null;
-      return;
-    }
-
-    restoreFocusRef.current =
-      document.activeElement instanceof HTMLElement
-        ? document.activeElement
-        : moreButtonRef.current;
-
-    const background = Array.from(
-      document.querySelectorAll<HTMLElement>(
-        ".site-frame--learner > *:not(.mobile-drawer-overlay)",
-      ),
-    );
-    const previouslyInert = new Map<HTMLElement, string | null>();
-    background.forEach((element) => {
-      previouslyInert.set(element, element.getAttribute("inert"));
-      element.setAttribute("inert", "");
-    });
-
-    const focusableSelector =
-      'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])';
-    const focusFirst = () => {
-      const first =
-        drawerRef.current?.querySelector<HTMLElement>(focusableSelector);
-      first?.focus();
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Tab") return;
-      const focusable = drawerRef.current
-        ? Array.from(
-            drawerRef.current.querySelectorAll<HTMLElement>(focusableSelector),
-          )
-        : [];
-      if (focusable.length === 0) {
-        event.preventDefault();
-        drawerRef.current?.focus();
-        return;
-      }
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-
-    focusFirst();
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-      previouslyInert.forEach((value, element) => {
-        if (value === null) element.removeAttribute("inert");
-        else element.setAttribute("inert", value);
-      });
-    };
-  }, [mobileDrawerOpen]);
+  }, [accountMenuOpen, notificationPopoverOpen, helpOpen]);
 
   useEffect(() => {
     if (!accountMenuOpen) return;
@@ -606,33 +615,96 @@ export function LearnerShell({
   const isLearning = current === "learning" || current === "course";
   const isDiscover = current === "discover";
   const isProgress = current === "progress";
-  const isCalendar = current === "calendar";
   const isNotifications = current === "notifications";
   const isProfile = current === "profile";
   const isSettings = current === "settings";
-  const isMore = isNotifications || isProfile || isSettings;
-
-  const currentTitle = isHome
-    ? "Dashboard"
-    : isLearning
-      ? "My Learning"
-      : isDiscover
-        ? "Discover"
-        : isProgress
-          ? "Progress"
-          : isCalendar
-            ? "Calendar"
-            : isNotifications
-              ? "Notifications"
-              : isProfile
-                ? "Learner Profile"
-                : isSettings
-                  ? "Settings"
-                  : current === "certificate"
-                    ? "Certificate"
-                    : "Workspace";
 
   const effectiveDisplayName = identity.displayName;
+  const effectiveTenantIdentity = tenantIdentity ?? DEFAULT_TENANT_IDENTITY;
+
+  const workspaceSections: SidebarNavSection[] = [
+    {
+      id: "workspace",
+      label: "Workspace",
+      items: [
+        {
+          id: "dashboard",
+          label: "Dashboard",
+          href: ROUTES.dashboard,
+          current: isHome,
+          icon: (
+            <LayoutDashboard size={20} strokeWidth={1.85} aria-hidden="true" />
+          ),
+          title: "Dashboard",
+        },
+        {
+          id: "learning",
+          label: "My Learning",
+          href: learningHref,
+          current: isLearning,
+          icon: <BookOpen size={20} strokeWidth={1.85} aria-hidden="true" />,
+          title: "My Learning",
+          children: learningChildren,
+        },
+        {
+          id: "discover",
+          label: "Discover",
+          href: ROUTES.discover,
+          current: isDiscover,
+          icon: <Compass size={20} strokeWidth={1.85} aria-hidden="true" />,
+          title: "Discover",
+        },
+        {
+          id: "progress",
+          label: "Progress",
+          href: ROUTES.progress,
+          current: isProgress,
+          icon: <BarChart2 size={20} strokeWidth={1.85} aria-hidden="true" />,
+          title: "Progress",
+        },
+        {
+          id: "notifications",
+          label: "Notifications",
+          href: ROUTES.notifications,
+          current: isNotifications,
+          icon: <Bell size={20} strokeWidth={1.85} aria-hidden="true" />,
+          title: "Notifications",
+        },
+      ],
+    },
+    {
+      id: "account",
+      label: "Account",
+      items: [
+        {
+          id: "profile",
+          label: "Profile",
+          href: ROUTES.profile,
+          current: isProfile,
+          icon: <User size={20} strokeWidth={1.85} aria-hidden="true" />,
+          title: "Profile",
+        },
+        {
+          id: "settings",
+          label: "Settings",
+          href: ROUTES.settings,
+          current: isSettings,
+          icon: <Settings size={20} strokeWidth={1.85} aria-hidden="true" />,
+          title: "Settings",
+        },
+        {
+          id: "help",
+          label: "Help",
+          href: SUPPORT_MAILTO,
+          icon: <HelpCircle size={20} strokeWidth={1.85} aria-hidden="true" />,
+          title: "Help",
+          external: true,
+        },
+      ],
+    },
+  ];
+
+  const computedSections = navSections ?? workspaceSections;
 
   return (
     <div
@@ -650,103 +722,103 @@ export function LearnerShell({
         className="learner-sidebar"
         aria-label="Learner workspace navigation"
       >
-        <div className="learner-sidebar__brand">
-          <LearnerSidebarBrand />
+        <div className="learner-sidebar__header">
+          <div className="learner-sidebar__brand">
+            <TenantIdentity
+              identity={effectiveTenantIdentity}
+              collapsed={sidebarCollapsed}
+            />
+          </div>
+          <SidebarCollapseButton
+            collapsed={sidebarCollapsed}
+            onToggle={toggleSidebar}
+            aria-expanded={!sidebarCollapsed}
+            aria-controls="learner-sidebar"
+            className="learner-sidebar-toggle"
+          />
+        </div>
+
+        <TenantSwitcher
+          currentTenantId={tenantConfig?.currentTenantId ?? "tenant-1"}
+          tenants={
+            tenantConfig?.tenants ?? [
+              { id: "tenant-1", name: effectiveTenantIdentity.tenantName },
+            ]
+          }
+          onSelectTenant={tenantConfig?.onSelectTenant}
+          collapsed={sidebarCollapsed}
+        />
+
+        <div className="learner-sidebar__search-row">
+          <button
+            ref={sidebarSearchTriggerRef}
+            type="button"
+            className="learner-sidebar__search-trigger"
+            onClick={(e) => openCommandPalette(e.currentTarget)}
+            aria-label="Search courses, lessons, and more (Cmd+K)"
+            title={sidebarCollapsed ? "Search (⌘K)" : undefined}
+          >
+            <Search
+              size={17}
+              strokeWidth={1.85}
+              aria-hidden="true"
+              className="learner-sidebar__search-icon"
+            />
+            {!sidebarCollapsed ? (
+              <>
+                <span className="learner-sidebar__search-text">Search...</span>
+                <kbd className="learner-sidebar__search-kbd">⌘K</kbd>
+              </>
+            ) : null}
+          </button>
         </div>
 
         <div className="learner-sidebar__content">
-          <p className="learner-sidebar__section-label">Workspace</p>
-          <nav
-            className="learner-sidebar__nav"
-            aria-label="Learner workspace sections"
-          >
-            <LearnerNavLink
-              href={ROUTES.dashboard}
-              label="Dashboard"
-              current={isHome}
-              icon={<LayoutDashboard size={19} aria-hidden="true" />}
-            />
-            <LearnerNavLink
-              href={learningHref}
-              label="My Learning"
-              current={isLearning}
-              icon={<BookOpen size={19} aria-hidden="true" />}
-            />
-            <LearnerNavLink
-              href={ROUTES.discover}
-              label="Discover"
-              current={isDiscover}
-              icon={<Compass size={19} aria-hidden="true" />}
-            />
-            <LearnerNavLink
-              href={ROUTES.progress}
-              label="Progress"
-              current={isProgress}
-              icon={<BarChart2 size={19} aria-hidden="true" />}
-            />
-            <LearnerNavLink
-              href={ROUTES.notifications}
-              label="Notifications"
-              current={isNotifications}
-              icon={
-                <span className="nav-icon-badge-wrapper">
-                  <Bell size={19} aria-hidden="true" />
-                </span>
-              }
-            />
-          </nav>
-
-          <div className="learner-sidebar__account-group">
-            <p className="learner-sidebar__section-label">Account</p>
-            <nav className="learner-sidebar__nav" aria-label="Account sections">
-              <LearnerNavLink
-                href={ROUTES.profile}
-                label="Profile"
-                current={isProfile}
-                icon={<User size={19} aria-hidden="true" />}
-              />
-              <LearnerNavLink
-                href={ROUTES.settings}
-                label="Settings"
-                current={isSettings}
-                icon={<Settings size={19} aria-hidden="true" />}
-              />
-              <a
-                className="learner-nav__link"
-                href={SUPPORT_MAILTO}
-                aria-label="Contact support"
-                title="Help"
-              >
-                <span className="learner-nav__icon" aria-hidden="true">
-                  <HelpCircle size={19} />
-                </span>
-                <span className="learner-nav__label">Help</span>
-              </a>
-            </nav>
-          </div>
+          <SidebarNav
+            sections={computedSections}
+            collapsed={sidebarCollapsed}
+          />
         </div>
 
         <div className="learner-sidebar__footer">
-          <button
-            type="button"
-            className="learner-sidebar-toggle"
-            onClick={toggleSidebar}
-            aria-label={
-              sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"
-            }
-            aria-expanded={!sidebarCollapsed}
-            aria-controls="learner-sidebar"
-            title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          >
-            {sidebarCollapsed ? (
-              <PanelLeftOpen size={18} aria-hidden="true" />
-            ) : (
-              <PanelLeftClose size={18} aria-hidden="true" />
-            )}
-            <span className="learner-sidebar-toggle__label">
-              {sidebarCollapsed ? "Expand" : "Collapse"}
-            </span>
-          </button>
+          <div className="learner-sidebar__account">
+            <Link
+              href={ROUTES.profile}
+              className="learner-sidebar__account-link"
+              title={sidebarCollapsed ? effectiveDisplayName : undefined}
+              aria-label={`Learner profile: ${effectiveDisplayName}`}
+            >
+              <IdentityAvatar
+                className="learner-sidebar__account-avatar"
+                displayName={effectiveDisplayName}
+                avatarUrl={identity.avatarUrl}
+                avatarAlt={identity.avatarAlt}
+              />
+              {!sidebarCollapsed ? (
+                <div className="learner-sidebar__account-info">
+                  <span className="learner-sidebar__account-name">
+                    {effectiveDisplayName}
+                  </span>
+                  <span
+                    className="learner-sidebar__account-sub"
+                    title={identity.email || "Learner"}
+                  >
+                    Learner
+                  </span>
+                </div>
+              ) : null}
+            </Link>
+            {!sidebarCollapsed ? (
+              <Link
+                href={ROUTES.settings}
+                className="learner-sidebar__account-settings-btn"
+                aria-label="Settings"
+                title="Settings"
+              >
+                <Settings size={17} strokeWidth={1.85} aria-hidden="true" />
+              </Link>
+            ) : null}
+          </div>
         </div>
       </aside>
 
@@ -767,16 +839,17 @@ export function LearnerShell({
             </Link>
           </div>
 
-          <div className="learner-header__context">
-            <strong>{currentTitle}</strong>
-          </div>
-
           <div className="learner-header__search-slot">
             <Link
+              ref={searchTriggerRef}
               href={ROUTES.discover}
               prefetch={false}
               className="learner-header__search-trigger"
               aria-label="Search courses, lessons, and more"
+              onClick={(e) => {
+                e.preventDefault();
+                openCommandPalette(e.currentTarget);
+              }}
             >
               <Search size={16} aria-hidden="true" />
               <span>Search for courses, lessons, and more</span>
@@ -786,10 +859,15 @@ export function LearnerShell({
 
           <div className="learner-header__actions">
             <Link
+              ref={mobileSearchTriggerRef}
               href={ROUTES.discover}
               prefetch={false}
               className="mobile-header-icon-button"
               aria-label="Search courses, lessons, and more"
+              onClick={(e) => {
+                e.preventDefault();
+                openCommandPalette(e.currentTarget);
+              }}
             >
               <Search size={18} aria-hidden="true" />
             </Link>
@@ -1028,152 +1106,46 @@ export function LearnerShell({
       </div>
 
       {/* Mobile Bottom Navigation (Direction A: 5-items) */}
-      <nav
-        className="learner-bottom-nav"
-        aria-label="Learner mobile navigation"
-      >
-        <LearnerNavLink
-          href={ROUTES.dashboard}
-          label="Home"
-          current={isHome}
-          icon={<LayoutDashboard size={20} aria-hidden="true" />}
-        />
-        <LearnerNavLink
-          href={learningHref}
-          label="Learning"
-          current={isLearning}
-          icon={<BookOpen size={20} aria-hidden="true" />}
-        />
-        <LearnerNavLink
-          href={ROUTES.discover}
-          label="Discover"
-          current={isDiscover}
-          icon={<Compass size={20} aria-hidden="true" />}
-        />
-        <LearnerNavLink
-          href={ROUTES.progress}
-          label="Progress"
-          current={isProgress}
-          icon={<BarChart2 size={20} aria-hidden="true" />}
-        />
-        <button
-          type="button"
-          className={`learner-nav__link${isMore || mobileDrawerOpen ? " is-current" : ""}`}
-          ref={moreButtonRef}
-          onClick={() => {
-            setNotificationPopoverOpen(false);
-            setAccountMenuOpen(false);
-            setHelpOpen(false);
-            setMobileDrawerOpen((open) => !open);
-          }}
-          aria-expanded={mobileDrawerOpen}
-          aria-controls="learner-more-drawer"
-          aria-current={isMore ? "page" : undefined}
-          aria-haspopup="dialog"
-          aria-label="More navigation options"
-        >
-          <span className="learner-nav__icon" aria-hidden="true">
-            <MoreHorizontal size={20} />
-          </span>
-          <span>More</span>
-        </button>
-      </nav>
+      <MobileBottomNav
+        current={current}
+        learningHref={learningHref}
+        moreOpen={mobileDrawerOpen}
+        onToggleMore={() => {
+          setNotificationPopoverOpen(false);
+          setAccountMenuOpen(false);
+          setHelpOpen(false);
+          setMobileDrawerOpen((open) => !open);
+        }}
+        moreButtonRef={moreButtonRef}
+      />
 
       {/* Mobile "More" Drawer / Bottom Sheet */}
-      {mobileDrawerOpen ? (
-        <div
-          className="mobile-drawer-overlay"
-          onClick={() => setMobileDrawerOpen(false)}
-          role="presentation"
-        >
-          <div
-            id="learner-more-drawer"
-            ref={drawerRef}
-            className="mobile-drawer-sheet"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="learner-more-title"
-            tabIndex={-1}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mobile-drawer-header">
-              <div className="mobile-drawer-user">
-                <IdentityAvatar
-                  className="user-avatar-badge"
-                  displayName={effectiveDisplayName}
-                  avatarUrl={identity.avatarUrl}
-                  avatarAlt={identity.avatarAlt}
-                />
-                <div>
-                  <strong id="learner-more-title">
-                    {effectiveDisplayName}
-                  </strong>
-                  <span>Learner workspace</span>
-                </div>
-              </div>
-              <button
-                type="button"
-                className="mobile-drawer-close"
-                onClick={() => setMobileDrawerOpen(false)}
-                aria-label="Close menu"
-              >
-                <X size={20} aria-hidden="true" />
-              </button>
-            </div>
+      <MobileMoreSheet
+        open={mobileDrawerOpen}
+        onClose={() => setMobileDrawerOpen(false)}
+        userDisplayName={effectiveDisplayName}
+        moreButtonRef={moreButtonRef}
+        avatarSlot={
+          <IdentityAvatar
+            className="user-avatar-badge"
+            displayName={effectiveDisplayName}
+            avatarUrl={identity.avatarUrl}
+            avatarAlt={identity.avatarAlt}
+          />
+        }
+      />
 
-            <nav
-              className="mobile-drawer-nav"
-              aria-label="Account and support navigation"
-            >
-              <Link
-                href={ROUTES.profile}
-                prefetch={false}
-                className="mobile-drawer-link"
-                onClick={() => setMobileDrawerOpen(false)}
-              >
-                <User size={18} aria-hidden="true" />
-                <span>Profile & Identity</span>
-              </Link>
-              <Link
-                href={ROUTES.notifications}
-                prefetch={false}
-                className="mobile-drawer-link"
-                onClick={() => setMobileDrawerOpen(false)}
-              >
-                <Bell size={18} aria-hidden="true" />
-                <span>Notifications</span>
-              </Link>
-              <Link
-                href={ROUTES.calendar}
-                prefetch={false}
-                className="mobile-drawer-link"
-                onClick={() => setMobileDrawerOpen(false)}
-              >
-                <CalendarDays size={18} aria-hidden="true" />
-                <span>Calendar</span>
-              </Link>
-              <Link
-                href={ROUTES.settings}
-                prefetch={false}
-                className="mobile-drawer-link"
-                onClick={() => setMobileDrawerOpen(false)}
-              >
-                <Settings size={18} aria-hidden="true" />
-                <span>Settings & Appearance</span>
-              </Link>
-              <a
-                href={SUPPORT_MAILTO}
-                className="mobile-drawer-link"
-                onClick={() => setMobileDrawerOpen(false)}
-              >
-                <HelpCircle size={18} aria-hidden="true" />
-                <span>Help & Support</span>
-              </a>
-              <SignOutControl className="mobile-drawer-link mobile-drawer-link--danger" />
-            </nav>
-          </div>
-        </div>
-      ) : null}
+      {/* Real Searchable Command Palette with Ctrl/Cmd+K, Escape, Focus Restore, and G Shortcuts */}
+      <CommandPalette
+        open={commandPaletteOpen}
+        onClose={() => {
+          setCommandPaletteOpen(false);
+          setCommandPaletteInvoker(null);
+        }}
+        learningHref={learningHref}
+        triggerRef={searchTriggerRef}
+        invokingElement={commandPaletteInvoker}
+      />
     </div>
   );
 }
