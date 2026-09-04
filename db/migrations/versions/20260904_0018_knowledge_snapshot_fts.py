@@ -18,6 +18,78 @@ def _install_postgresql_guards() -> None:
     if op.get_bind().dialect.name != "postgresql":
         return
 
+    # The version digest is intentionally defined in the database as well as
+    # in the Python contract.  Length-prefixing UTF-8 fields makes the digest
+    # unambiguous even when a locator or passage contains separators/newlines.
+    op.execute(
+        """
+        CREATE FUNCTION ac_knowledge_version_digest_material(candidate_version uuid)
+        RETURNS text
+        LANGUAGE plpgsql
+        STABLE
+        STRICT
+        AS $$
+        DECLARE
+            material text := 'ac-knowledge-version-v1' || chr(10);
+            chunk_row record;
+        BEGIN
+            FOR chunk_row IN
+                SELECT ordinal, locator, passage
+                  FROM knowledge_chunks
+                 WHERE source_version_id = candidate_version
+                 ORDER BY ordinal, id
+            LOOP
+                material := material
+                    || 'C|' || chunk_row.ordinal::text
+                    || '|'
+                    || octet_length(convert_to(chunk_row.locator, 'UTF8'))::text
+                    || ':' || chunk_row.locator
+                    || '|'
+                    || octet_length(convert_to(chunk_row.passage, 'UTF8'))::text
+                    || ':' || chunk_row.passage
+                    || chr(10);
+            END LOOP;
+            RETURN material;
+        END;
+        $$
+        """
+    )
+    op.execute(
+        """
+        CREATE FUNCTION ac_knowledge_version_digest(candidate_version uuid)
+        RETURNS text
+        LANGUAGE sql
+        STABLE
+        STRICT
+        AS $$
+            SELECT encode(
+                sha256(convert_to(ac_knowledge_version_digest_material(candidate_version), 'UTF8')),
+                'hex'
+            )
+        $$
+        """
+    )
+    op.execute(
+        """
+        CREATE FUNCTION ac_guard_knowledge_version_digest()
+        RETURNS trigger
+        LANGUAGE plpgsql
+        AS $$
+        DECLARE
+            expected_digest text;
+        BEGIN
+            expected_digest := ac_knowledge_version_digest(NEW.id);
+            IF NEW.content_sha256 IS DISTINCT FROM expected_digest THEN
+                RAISE EXCEPTION
+                    'knowledge source version digest does not match canonical content'
+                    USING ERRCODE = 'integrity_constraint_violation';
+            END IF;
+            RETURN NULL;
+        END;
+        $$
+        """
+    )
+
     op.execute(
         """
         CREATE FUNCTION ac_guard_knowledge_source_immutable()
@@ -43,7 +115,66 @@ def _install_postgresql_guards() -> None:
         """
         CREATE FUNCTION ac_guard_knowledge_version_mutation()
         RETURNS trigger LANGUAGE plpgsql AS $$
+        DECLARE
+            predecessor record;
+            latest_version_no integer;
         BEGIN
+            IF TG_OP = 'INSERT' THEN
+                -- Lock the immutable source row to serialize concurrent
+                -- version append attempts for one tenant/source scope.
+                PERFORM 1
+                  FROM knowledge_sources
+                 WHERE id = NEW.source_id
+                   AND tenant_id = NEW.tenant_id
+                 FOR UPDATE;
+
+                SELECT version.id,
+                       version.version_no,
+                       version.status,
+                       version.valid_until
+                  INTO predecessor
+                  FROM knowledge_source_versions version
+                 WHERE version.source_id = NEW.source_id
+                   AND version.tenant_id = NEW.tenant_id
+                 ORDER BY version.version_no DESC
+                 LIMIT 1
+                 FOR UPDATE;
+
+                IF NOT FOUND THEN
+                    IF NEW.version_no <> 1 OR NEW.supersedes_version_id IS NOT NULL THEN
+                        RAISE EXCEPTION
+                            'knowledge version chain must start at version 1 without a predecessor'
+                            USING ERRCODE = 'integrity_constraint_violation';
+                    END IF;
+                ELSE
+                    latest_version_no := predecessor.version_no;
+                    IF NEW.version_no <> latest_version_no + 1
+                       OR NEW.supersedes_version_id IS DISTINCT FROM predecessor.id THEN
+                        RAISE EXCEPTION
+                            'knowledge version must supersede the exact previous version number'
+                            USING ERRCODE = 'integrity_constraint_violation';
+                    END IF;
+                    IF predecessor.status NOT IN ('superseded', 'withdrawn')
+                       OR predecessor.valid_until IS NULL
+                       OR predecessor.valid_until > CURRENT_TIMESTAMP THEN
+                        RAISE EXCEPTION
+                            'knowledge version predecessor must be terminal before supersession'
+                            USING ERRCODE = 'integrity_constraint_violation';
+                    END IF;
+                END IF;
+
+                IF NEW.status = 'active' AND NEW.valid_until IS NOT NULL THEN
+                    RAISE EXCEPTION 'active knowledge versions cannot have a terminal timestamp'
+                        USING ERRCODE = 'integrity_constraint_violation';
+                END IF;
+                IF NEW.status IN ('superseded', 'withdrawn')
+                   AND (NEW.valid_until IS NULL OR NEW.valid_until > CURRENT_TIMESTAMP) THEN
+                    RAISE EXCEPTION
+                        'terminal knowledge versions require a past terminal timestamp'
+                        USING ERRCODE = 'integrity_constraint_violation';
+                END IF;
+                RETURN NEW;
+            END IF;
             IF TG_OP = 'DELETE' THEN
                 RAISE EXCEPTION 'knowledge source versions cannot be deleted'
                     USING ERRCODE = 'integrity_constraint_violation';
@@ -70,9 +201,6 @@ def _install_postgresql_guards() -> None:
                AND NEW.status IN ('active', 'superseded', 'withdrawn') THEN
                 RETURN NEW;
             END IF;
-            IF TG_OP = 'INSERT' THEN
-                RETURN NEW;
-            END IF;
             RAISE EXCEPTION 'knowledge source version history is immutable'
                 USING ERRCODE = 'integrity_constraint_violation';
         END;
@@ -84,6 +212,22 @@ def _install_postgresql_guards() -> None:
         CREATE TRIGGER trg_knowledge_source_versions_immutable
         BEFORE INSERT OR UPDATE OR DELETE ON knowledge_source_versions
         FOR EACH ROW EXECUTE FUNCTION ac_guard_knowledge_version_mutation()
+        """
+    )
+    op.execute(
+        """
+        CREATE CONSTRAINT TRIGGER trg_knowledge_version_digest
+        AFTER INSERT OR UPDATE ON knowledge_source_versions
+        DEFERRABLE INITIALLY DEFERRED
+        FOR EACH ROW EXECUTE FUNCTION ac_guard_knowledge_version_digest()
+        """
+    )
+    op.execute(
+        """
+        CREATE CONSTRAINT TRIGGER trg_knowledge_chunk_version_digest
+        AFTER INSERT ON knowledge_chunks
+        DEFERRABLE INITIALLY DEFERRED
+        FOR EACH ROW EXECUTE FUNCTION ac_guard_knowledge_version_digest()
         """
     )
     op.execute(
@@ -172,6 +316,11 @@ def upgrade() -> None:
         sa.CheckConstraint(
             "valid_until IS NULL OR valid_until > valid_from",
             name=op.f("ck_knowledge_versions_valid_window"),
+        ),
+        sa.CheckConstraint(
+            "(status = 'active' AND valid_until IS NULL) OR "
+            "(status IN ('superseded', 'withdrawn') AND valid_until IS NOT NULL)",
+            name=op.f("ck_knowledge_versions_terminal_timestamp"),
         ),
         sa.CheckConstraint(
             "length(content_sha256) = 64",
@@ -293,6 +442,20 @@ def upgrade() -> None:
                 f"ALTER TABLE knowledge_source_versions ADD CONSTRAINT "
                 f"{op.f('ck_knowledge_versions_digest_hex')} "
                 "CHECK (content_sha256 ~ '^[0-9a-f]{64}$')"
+            )
+        )
+        op.execute(
+            sa.text(
+                "ALTER TABLE knowledge_chunks ADD CONSTRAINT "
+                f"{op.f('ck_knowledge_chunks_digest_matches_passage')} "
+                "CHECK (content_sha256 = encode(sha256(convert_to(passage, 'UTF8')), 'hex'))"
+            )
+        )
+        op.execute(
+            sa.text(
+                "CREATE UNIQUE INDEX "
+                f"{op.f('uq_knowledge_versions_active_source')} "
+                "ON knowledge_source_versions (tenant_id, source_id) WHERE status = 'active'"
             )
         )
         op.execute(

@@ -19,6 +19,7 @@ MAX_KNOWLEDGE_ACL_SUBJECTS = 64
 MAX_KNOWLEDGE_TOP_K = 12
 MAX_KNOWLEDGE_MIN_SCORE = Decimal("1000000")
 PINNED_MIN_RANK_SCORE = Decimal("0.05")
+KNOWLEDGE_VERSION_DIGEST_VERSION = "ac-knowledge-version-v1"
 
 
 class KnowledgeRetrievalError(ValueError):
@@ -200,15 +201,73 @@ def snapshot_fingerprint(chunks: Sequence[RetrievedChunk]) -> str:
     return hashlib.sha256(material.encode("utf-8")).hexdigest()
 
 
+def canonical_knowledge_version_digest_material(
+    chunks: Sequence[tuple[int, str, str]],
+) -> bytes:
+    """Serialize ordered version passages exactly as the PostgreSQL guard does.
+
+    Each item is ``(ordinal, locator, passage)``. Text lengths are UTF-8 byte
+    lengths, not Python character counts, so this is an exact cross-runtime
+    representation for non-ASCII source content too.
+    """
+
+    payload = bytearray((KNOWLEDGE_VERSION_DIGEST_VERSION + "\n").encode("ascii"))
+    if isinstance(chunks, str | bytes | bytearray) or not isinstance(chunks, Sequence):
+        raise KnowledgeRetrievalError("knowledge version chunks must be a sequence")
+    normalized: list[tuple[int, str, str]] = []
+    for item in chunks:
+        if (
+            not isinstance(item, tuple)
+            or len(item) != 3
+            or not isinstance(item[0], int)
+            or not isinstance(item[1], str)
+            or not isinstance(item[2], str)
+        ):
+            raise KnowledgeRetrievalError("knowledge version chunk material is invalid")
+        normalized.append(item)
+    if len({ordinal for ordinal, _locator, _passage in normalized}) != len(normalized):
+        raise KnowledgeRetrievalError("knowledge version chunk ordinals must be unique")
+    for ordinal, locator, passage in sorted(normalized, key=lambda item: item[0]):
+        if isinstance(ordinal, bool) or not isinstance(ordinal, int) or ordinal < 0:
+            raise KnowledgeRetrievalError("knowledge version chunk ordinal is invalid")
+        _text(locator, "knowledge version chunk locator", MAX_KNOWLEDGE_LOCATOR_CHARS)
+        _text(passage, "knowledge version chunk passage", MAX_KNOWLEDGE_PASSAGE_CHARS)
+        locator_bytes = locator.encode("utf-8")
+        passage_bytes = passage.encode("utf-8")
+        payload.extend(
+            b"C|"
+            + str(ordinal).encode("ascii")
+            + b"|"
+            + str(len(locator_bytes)).encode("ascii")
+            + b":"
+            + locator_bytes
+            + b"|"
+            + str(len(passage_bytes)).encode("ascii")
+            + b":"
+            + passage_bytes
+            + b"\n"
+        )
+    return bytes(payload)
+
+
+def canonical_knowledge_version_digest(chunks: Sequence[tuple[int, str, str]]) -> str:
+    """Hash one deterministic, UTF-8 canonical knowledge version projection."""
+
+    return hashlib.sha256(canonical_knowledge_version_digest_material(chunks)).hexdigest()
+
+
 __all__ = [
     "KnowledgeAccessContext",
     "KnowledgeQuery",
     "KnowledgeRetrievalError",
     "KnowledgeRetrievalTimeoutError",
     "KnowledgeRetrievalUnavailableError",
+    "KNOWLEDGE_VERSION_DIGEST_VERSION",
     "PINNED_MIN_RANK_SCORE",
     "RetrievedChunk",
     "RetrievalOutcome",
     "RetrievalResult",
+    "canonical_knowledge_version_digest",
+    "canonical_knowledge_version_digest_material",
     "snapshot_fingerprint",
 ]

@@ -8,8 +8,9 @@ from typing import Any
 from sqlalchemy import bindparam, text
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
-from sqlalchemy.exc import DBAPIError
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.engine import Engine
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from ac_platform.knowledge.contracts import (
     KnowledgeQuery,
@@ -103,38 +104,90 @@ def _row_value(row: Any, key: str) -> Any:
 
 
 class PostgresKnowledgeRepository:
-    """Execute bounded, read-only lexical queries on a caller-owned session."""
+    """Execute bounded, read-only lexical queries without borrowing caller state.
 
-    def __init__(self, session: AsyncSession) -> None:
+    The supplied session is used only to resolve its configured database bind.
+    Retrieval itself always leases a separate pooled connection, so SQLAlchemy
+    cannot autoflush pending caller ORM objects and the retrieval transaction
+    cannot alter the caller's transaction or session-local settings.
+    """
+
+    def __init__(self, session: AsyncSession, *, engine: AsyncEngine | None = None) -> None:
         self._session = session
+        self._engine = engine
+
+    def _dedicated_engine(self, bind: object) -> AsyncEngine:
+        """Return the async engine behind the caller session's configured bind."""
+
+        if self._engine is not None:
+            return self._engine
+        if isinstance(bind, AsyncEngine):
+            return bind
+        if isinstance(bind, Engine) and bind.dialect.is_async:
+            # AsyncSession.get_bind() intentionally returns the synchronous
+            # proxy. Re-wrapping that proxy reuses the configured async pool
+            # without touching the caller session's checked-out connection.
+            return AsyncEngine(bind)
+        candidate = getattr(bind, "engine", None)
+        if isinstance(candidate, Engine) and candidate.dialect.is_async:
+            # A session may be bound to an AsyncConnection rather than an
+            # engine. Resolve its engine, then still acquire a fresh pooled
+            # connection for this read.
+            return AsyncEngine(candidate)
+        raise KnowledgeRetrievalUnavailableError(
+            "knowledge retrieval requires an async PostgreSQL engine"
+        )
+
+    @staticmethod
+    def _is_statement_timeout(error: SQLAlchemyError) -> bool:
+        """Recognize PostgreSQL's cancellation SQLSTATE without trusting text."""
+
+        original: object = getattr(error, "orig", None)
+        sqlstate = getattr(original, "sqlstate", None)
+        if sqlstate is None:
+            sqlstate = getattr(original, "pgcode", None)
+        return sqlstate == "57014" or "statement timeout" in str(error).lower()
 
     async def search(self, query: KnowledgeQuery) -> RetrievalResult:
-        if self._session.get_bind().dialect.name != "postgresql":
+        try:
+            bind = self._session.get_bind()
+        except SQLAlchemyError as exc:
+            raise KnowledgeRetrievalUnavailableError(
+                "knowledge PostgreSQL bind was unavailable"
+            ) from exc
+        if getattr(getattr(bind, "dialect", None), "name", None) != "postgresql":
             raise KnowledgeRetrievalError("knowledge retrieval requires PostgreSQL")
 
         try:
-            async with self._session.begin_nested():
-                await self._session.execute(
-                    text(f"SET LOCAL statement_timeout = '{STATEMENT_TIMEOUT_MS}ms'")
-                )
-                ranked_result = await self._session.execute(
-                    _RETRIEVAL_QUERY,
-                    {
-                        "tenant_id": query.access.tenant_id,
-                        "purpose": query.access.purpose.value,
-                        "acl_subject_ids": list(query.access.acl_subject_ids),
-                        "snapshot_id": query.snapshot_id,
-                        "question": query.question,
-                        "top_k": query.top_k,
-                    },
-                )
-                rows = list(ranked_result.mappings())
-        except DBAPIError as exc:
-            # The savepoint isolates a timeout from a caller-owned outer
-            # transaction.  SQLAlchemy rolls the savepoint back before this
-            # typed error crosses the repository boundary.
-            sqlstate = getattr(getattr(exc, "orig", None), "sqlstate", None)
-            if sqlstate == "57014" or "statement timeout" in str(exc).lower():
+            engine = self._dedicated_engine(bind)
+            async with engine.connect() as connection:
+                transaction = await connection.begin()
+                try:
+                    # Both settings disappear on the unconditional rollback
+                    # below, before this pooled connection is reused.
+                    await connection.execute(text("SET TRANSACTION READ ONLY"))
+                    await connection.execute(
+                        text(f"SET LOCAL statement_timeout = '{STATEMENT_TIMEOUT_MS}ms'")
+                    )
+                    ranked_result = await connection.execute(
+                        _RETRIEVAL_QUERY,
+                        {
+                            "tenant_id": query.access.tenant_id,
+                            "purpose": query.access.purpose.value,
+                            "acl_subject_ids": list(query.access.acl_subject_ids),
+                            "snapshot_id": query.snapshot_id,
+                            "question": query.question,
+                            "top_k": query.top_k,
+                        },
+                    )
+                    rows = list(ranked_result.mappings())
+                finally:
+                    # Never commit a retrieval transaction. This also keeps
+                    # the caller's transaction and session-local settings
+                    # completely untouched.
+                    await transaction.rollback()
+        except SQLAlchemyError as exc:
+            if self._is_statement_timeout(exc):
                 raise KnowledgeRetrievalTimeoutError(
                     "knowledge retrieval exceeded the statement timeout"
                 ) from exc

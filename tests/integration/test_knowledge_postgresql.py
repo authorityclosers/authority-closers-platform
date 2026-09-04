@@ -26,7 +26,9 @@ from ac_platform.knowledge import (
     KnowledgeQuery,
     PostgresKnowledgeRepository,
     RetrievalOutcome,
+    canonical_knowledge_version_digest,
 )
+from ac_platform.tenancy.models import Tenant
 
 ROOT = Path(__file__).parents[2]
 NOW = datetime.now(UTC).replace(microsecond=0)
@@ -113,6 +115,18 @@ async def _seed(schema_url: URL) -> dict[str, UUID]:
     version_a, version_b = uuid4(), uuid4()
     open_chunk, restricted_chunk, other_tenant_chunk = uuid4(), uuid4(), uuid4()
     acl_subject_a, acl_subject_b = uuid4(), uuid4()
+    open_passage = "Account recovery requires verified support review."
+    restricted_passage = "Support can diagnose access but cannot change the rubric."
+    other_passage = "Tenant B account recovery policy."
+    version_a_digest = canonical_knowledge_version_digest(
+        (
+            (0, "recovery.md#email", open_passage),
+            (1, "support.md#readonly", restricted_passage),
+        )
+    )
+    version_b_digest = canonical_knowledge_version_digest(
+        ((0, "recovery.md#email", other_passage),)
+    )
     async with sessions() as session:
         await session.execute(
             text(
@@ -158,8 +172,8 @@ async def _seed(schema_url: URL) -> dict[str, UUID]:
                 "source_b": source_b,
                 "tenant_b": tenant_b,
                 "now": NOW - timedelta(days=1),
-                "digest_a": "a" * 64,
-                "digest_b": "b" * 64,
+                "digest_a": version_a_digest,
+                "digest_b": version_b_digest,
             },
         )
         await session.execute(
@@ -196,9 +210,11 @@ async def _seed(schema_url: URL) -> dict[str, UUID]:
                 "version_b": version_b,
                 "tenant_a": tenant_a,
                 "tenant_b": tenant_b,
-                "digest_open": hashlib.sha256(b"open").hexdigest(),
-                "digest_restricted": hashlib.sha256(b"restricted").hexdigest(),
-                "digest_other": hashlib.sha256(b"other").hexdigest(),
+                "digest_open": hashlib.sha256(open_passage.encode("utf-8")).hexdigest(),
+                "digest_restricted": hashlib.sha256(
+                    restricted_passage.encode("utf-8")
+                ).hexdigest(),
+                "digest_other": hashlib.sha256(other_passage.encode("utf-8")).hexdigest(),
             },
         )
         await session.execute(
@@ -252,7 +268,9 @@ def test_postgresql_retrieval_is_tenant_acl_safe_and_deterministic(postgres_harn
             assert first.chunks == second.chunks
             assert {chunk.tenant_id for chunk in first.chunks} == {ids["tenant_a"]}
             assert {chunk.locator for chunk in first.chunks} == {"recovery.md#email"}
-            assert first.chunks[0].content_sha256 == hashlib.sha256(b"open").hexdigest()
+            assert first.chunks[0].content_sha256 == hashlib.sha256(
+                b"Account recovery requires verified support review."
+            ).hexdigest()
 
             other = await PostgresKnowledgeRepository(session).search(
                 KnowledgeQuery(
@@ -308,6 +326,110 @@ def test_postgresql_retrieval_is_tenant_acl_safe_and_deterministic(postgres_harn
             assert below.outcome is RetrievalOutcome.BELOW_THRESHOLD
             assert not below.chunks
         await engine.dispose()
+
+    _run(exercise())
+
+
+def test_postgresql_retrieval_does_not_flush_or_break_outer_transaction(
+    postgres_harness: URL,
+) -> None:
+    """A caller's pending ORM write and transaction remain untouched by search."""
+
+    ids = _run(_seed(postgres_harness))
+
+    async def exercise() -> None:
+        engine = create_async_engine(postgres_harness, pool_pre_ping=True)
+        sessions = async_sessionmaker(engine, expire_on_commit=False)
+        pending_id = uuid4()
+        async with sessions() as session:
+            async with session.begin():
+                pending = Tenant(
+                    id=pending_id,
+                    slug=f"pending-{pending_id.hex}",
+                    name="Pending outer transaction tenant",
+                )
+                session.add(pending)
+                result = await PostgresKnowledgeRepository(session).search(
+                    KnowledgeQuery(
+                        access=KnowledgeAccessContext(
+                            tenant_id=ids["tenant_a"],
+                            purpose=IntelligencePurpose.SUPPORT_ASSISTANCE,
+                        ),
+                        question="account recovery",
+                        min_rank_score=PINNED_MIN_RANK_SCORE,
+                    )
+                )
+                assert result.outcome is RetrievalOutcome.FOUND
+                assert pending in session.new
+                await session.flush()
+            assert await session.scalar(
+                text("SELECT slug FROM tenants WHERE id = :id"), {"id": pending_id}
+            ) == f"pending-{pending_id.hex}"
+        await engine.dispose()
+
+    _run(exercise())
+
+
+def test_postgresql_knowledge_active_version_is_concurrent_unique(
+    postgres_harness: URL,
+) -> None:
+    """Concurrent appenders cannot commit two active versions for one source."""
+
+    ids = _run(_seed(postgres_harness))
+
+    async def exercise() -> None:
+        engine = create_async_engine(postgres_harness, pool_pre_ping=True)
+        sessions = async_sessionmaker(engine, expire_on_commit=False)
+        first = sessions()
+        second = sessions()
+        try:
+            await first.execute(
+                text(
+                    "UPDATE knowledge_source_versions SET status = 'superseded', "
+                    "valid_until = :valid_until WHERE id = :id"
+                ),
+                {"id": ids["version_a"], "valid_until": NOW},
+            )
+            await first.commit()
+            await first.begin()
+            await second.begin()
+            first_version, second_version = uuid4(), uuid4()
+            empty_digest = canonical_knowledge_version_digest(())
+            insert = text(
+                "INSERT INTO knowledge_source_versions "
+                "(id, source_id, tenant_id, version_no, status, valid_from, "
+                "content_sha256, supersedes_version_id) VALUES (:id, :source, :tenant, "
+                "2, 'active', :now, :digest, :supersedes)"
+            )
+            params = {
+                "source": ids["source_a"],
+                "tenant": ids["tenant_a"],
+                "now": NOW,
+                "digest": empty_digest,
+                "supersedes": ids["version_a"],
+            }
+            await first.execute(insert, {**params, "id": first_version})
+            blocked = asyncio.create_task(second.execute(insert, {**params, "id": second_version}))
+            await asyncio.sleep(0)
+            await first.commit()
+            with pytest.raises(DBAPIError):
+                await blocked
+            await second.rollback()
+            assert (
+                await first.scalar(
+                    text(
+                        "SELECT count(*) FROM knowledge_source_versions "
+                        "WHERE source_id = :source AND tenant_id = :tenant "
+                        "AND status = 'active'"
+                    ),
+                    {"source": ids["source_a"], "tenant": ids["tenant_a"]},
+                )
+                == 1
+            )
+        finally:
+            await first.close()
+            await second.close()
+            await engine.dispose()
 
     _run(exercise())
 
@@ -430,6 +552,255 @@ def test_postgresql_knowledge_schema_guards_and_fts(postgres_harness: URL) -> No
                 text("SELECT to_regclass('ix_knowledge_chunks_search_vector')")
             )
             assert index.scalar_one() == "ix_knowledge_chunks_search_vector"
+        await engine.dispose()
+
+    _run(exercise())
+
+
+def test_postgresql_knowledge_digest_and_version_chain_guards(postgres_harness: URL) -> None:
+    """Prove passage/version digests and append-only version lifecycle rules."""
+
+    ids = _run(_seed(postgres_harness))
+
+    async def exercise() -> None:
+        engine = create_async_engine(postgres_harness, pool_pre_ping=True)
+        sessions = async_sessionmaker(engine, expire_on_commit=False)
+        async with sessions() as session:
+            with pytest.raises(DBAPIError):
+                await session.execute(
+                    text(
+                        "INSERT INTO knowledge_chunks "
+                        "(id, source_version_id, tenant_id, ordinal, locator, passage, "
+                        "content_sha256) VALUES (:id, :version, :tenant, 99, "
+                        "'digest#wrong', 'Exact UTF-8 passage', :digest)"
+                    ),
+                    {
+                        "id": uuid4(),
+                        "version": ids["version_a"],
+                        "tenant": ids["tenant_a"],
+                        "digest": hashlib.sha256(b"different").hexdigest(),
+                    },
+                )
+            await session.rollback()
+
+            with pytest.raises(DBAPIError):
+                await session.execute(
+                    text(
+                        "INSERT INTO knowledge_source_versions "
+                        "(id, source_id, tenant_id, version_no, status, valid_from, "
+                        "content_sha256) VALUES (:id, :source, :tenant, 2, 'active', "
+                        ":now, :digest)"
+                    ),
+                    {
+                        "id": uuid4(),
+                        "source": ids["source_a"],
+                        "tenant": ids["tenant_a"],
+                        "now": NOW,
+                        "digest": "0" * 64,
+                    },
+                )
+            await session.rollback()
+
+            terminal_source = uuid4()
+            await session.execute(
+                text(
+                    "INSERT INTO knowledge_sources "
+                    "(id, tenant_id, source_key, title, provenance_uri, source_kind) "
+                    "VALUES (:id, :tenant, 'terminal-fixture', 'Terminal fixture', "
+                    "'fixture://terminal', 'fixture')"
+                ),
+                {"id": terminal_source, "tenant": ids["tenant_a"]},
+            )
+            await session.commit()
+            with pytest.raises(DBAPIError):
+                await session.execute(
+                    text(
+                        "INSERT INTO knowledge_source_versions "
+                        "(id, source_id, tenant_id, version_no, status, valid_from, "
+                        "content_sha256) VALUES (:id, :source, :tenant, 1, 'withdrawn', "
+                        ":now, :digest)"
+                    ),
+                    {
+                        "id": uuid4(),
+                        "source": terminal_source,
+                        "tenant": ids["tenant_a"],
+                        "now": NOW,
+                        "digest": canonical_knowledge_version_digest(()),
+                    },
+                )
+            await session.rollback()
+
+            await session.execute(
+                text(
+                    "UPDATE knowledge_source_versions SET status = 'superseded', "
+                    "valid_until = :valid_until WHERE id = :id"
+                ),
+                {"id": ids["version_a"], "valid_until": NOW},
+            )
+            await session.commit()
+
+            version_two = uuid4()
+            with pytest.raises(DBAPIError):
+                await session.execute(
+                    text(
+                        "INSERT INTO knowledge_source_versions "
+                        "(id, source_id, tenant_id, version_no, status, valid_from, "
+                        "content_sha256, supersedes_version_id) VALUES (:id, :source, "
+                        ":tenant, 2, 'active', :now, :digest, :supersedes)"
+                    ),
+                    {
+                        "id": version_two,
+                        "source": ids["source_a"],
+                        "tenant": ids["tenant_a"],
+                        "now": NOW,
+                        "digest": "0" * 64,
+                        "supersedes": ids["version_a"],
+                    },
+                )
+                await session.commit()
+            await session.rollback()
+
+            passage = "Exact UTF-8 passage ✓"
+            version_digest = canonical_knowledge_version_digest(
+                ((0, "digest#exact", passage),)
+            )
+            await session.execute(
+                text(
+                    "INSERT INTO knowledge_source_versions "
+                    "(id, source_id, tenant_id, version_no, status, valid_from, "
+                    "content_sha256, supersedes_version_id) VALUES (:id, :source, :tenant, "
+                    "2, 'active', :now, :digest, :supersedes)"
+                ),
+                {
+                    "id": version_two,
+                    "source": ids["source_a"],
+                    "tenant": ids["tenant_a"],
+                    "now": NOW,
+                    "digest": version_digest,
+                    "supersedes": ids["version_a"],
+                },
+            )
+            await session.execute(
+                text(
+                    "INSERT INTO knowledge_chunks "
+                    "(id, source_version_id, tenant_id, ordinal, locator, passage, "
+                    "content_sha256) VALUES (:id, :version, :tenant, 0, "
+                    "'digest#exact', :passage, :digest)"
+                ),
+                {
+                    "id": uuid4(),
+                    "version": version_two,
+                    "tenant": ids["tenant_a"],
+                    "passage": passage,
+                    "digest": hashlib.sha256(passage.encode("utf-8")).hexdigest(),
+                },
+            )
+            await session.execute(
+                text(
+                    "INSERT INTO knowledge_version_purposes "
+                    "(source_version_id, tenant_id, purpose) VALUES (:version, :tenant, "
+                    "'support_assistance')"
+                ),
+                {"version": version_two, "tenant": ids["tenant_a"]},
+            )
+            await session.commit()
+            assert (
+                await session.scalar(
+                    text(
+                        "SELECT content_sha256 FROM knowledge_source_versions WHERE id = :id"
+                    ),
+                    {"id": version_two},
+                )
+                == version_digest
+            )
+        await engine.dispose()
+
+    _run(exercise())
+
+
+def test_postgresql_retrieval_equal_score_ties_respect_top_k(
+    postgres_harness: URL,
+) -> None:
+    """The UUID/ordinal tie-breakers remain stable while LIMIT is enforced."""
+
+    ids = _run(_seed(postgres_harness))
+
+    async def exercise() -> None:
+        engine = create_async_engine(postgres_harness, pool_pre_ping=True)
+        sessions = async_sessionmaker(engine, expire_on_commit=False)
+        source_id, version_id = uuid4(), uuid4()
+        passages = ("Identical recovery phrase for deterministic ranking.",) * 3
+        locators = tuple(f"tie#{index}" for index in range(3))
+        version_digest = canonical_knowledge_version_digest(
+            tuple((index, locators[index], passages[index]) for index in range(3))
+        )
+        async with sessions() as session:
+            await session.execute(
+                text(
+                    "INSERT INTO knowledge_sources "
+                    "(id, tenant_id, source_key, title, provenance_uri, source_kind) "
+                    "VALUES (:id, :tenant, 'tie-fixture', 'Tie fixture', "
+                    "'fixture://tie', 'fixture')"
+                ),
+                {"id": source_id, "tenant": ids["tenant_a"]},
+            )
+            await session.execute(
+                text(
+                    "INSERT INTO knowledge_source_versions "
+                    "(id, source_id, tenant_id, version_no, status, valid_from, "
+                    "content_sha256) VALUES (:id, :source, :tenant, 1, 'active', :now, :digest)"
+                ),
+                {
+                    "id": version_id,
+                    "source": source_id,
+                    "tenant": ids["tenant_a"],
+                    "now": NOW - timedelta(days=1),
+                    "digest": version_digest,
+                },
+            )
+            for index, (locator, passage) in enumerate(zip(locators, passages, strict=True)):
+                await session.execute(
+                    text(
+                        "INSERT INTO knowledge_chunks "
+                        "(id, source_version_id, tenant_id, ordinal, locator, passage, "
+                        "content_sha256) VALUES (:id, :version, :tenant, :ordinal, "
+                        ":locator, :passage, :digest)"
+                    ),
+                    {
+                        "id": uuid4(),
+                        "version": version_id,
+                        "tenant": ids["tenant_a"],
+                        "ordinal": index,
+                        "locator": locator,
+                        "passage": passage,
+                        "digest": hashlib.sha256(passage.encode("utf-8")).hexdigest(),
+                    },
+                )
+            await session.execute(
+                text(
+                    "INSERT INTO knowledge_version_purposes "
+                    "(source_version_id, tenant_id, purpose) VALUES (:version, :tenant, "
+                    "'support_assistance')"
+                ),
+                {"version": version_id, "tenant": ids["tenant_a"]},
+            )
+            await session.commit()
+
+            query = KnowledgeQuery(
+                access=KnowledgeAccessContext(
+                    tenant_id=ids["tenant_a"],
+                    purpose=IntelligencePurpose.SUPPORT_ASSISTANCE,
+                ),
+                question="identical recovery phrase",
+                min_rank_score=PINNED_MIN_RANK_SCORE,
+                top_k=2,
+            )
+            first = await PostgresKnowledgeRepository(session).search(query)
+            second = await PostgresKnowledgeRepository(session).search(query)
+            assert first.outcome is RetrievalOutcome.FOUND
+            assert len(first.chunks) == 2
+            assert first.chunks == second.chunks
+            assert [chunk.locator for chunk in first.chunks] == ["tie#0", "tie#1"]
         await engine.dispose()
 
     _run(exercise())

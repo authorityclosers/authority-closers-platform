@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from ac_platform.knowledge.contracts import KnowledgeRetrievalError
+from ac_platform.knowledge.contracts import (
+    KnowledgeRetrievalError,
+    RetrievalResult,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,6 +38,51 @@ class GoldEvaluation:
     recall_at_k: float
     abstention_accuracy: float
     leakage_count: int
+
+
+@dataclass(frozen=True, slots=True)
+class GoldPrediction:
+    """One structured retrieval prediction and its evaluated query context.
+
+    ``RetrievalResult`` carries the complete returned provenance.  The query
+    context is optional for callers that already bind cases externally, but
+    when supplied it is checked against the fixture so tenant/purpose/ACL
+    regressions cannot be hidden behind a source/locator-only tuple.
+    """
+
+    result: RetrievalResult
+    tenant_key: str
+    purpose: str
+    acl_subject_ids: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.result, RetrievalResult):
+            raise KnowledgeRetrievalError("gold prediction result must be a RetrievalResult")
+        object.__setattr__(
+            self,
+            "tenant_key",
+            _bounded_fixture_text(self.tenant_key, "prediction tenant_key", 128),
+        )
+        object.__setattr__(
+            self,
+            "purpose",
+            _bounded_fixture_text(self.purpose, "prediction purpose", 64),
+        )
+        if (
+            isinstance(self.acl_subject_ids, str | bytes | bytearray)
+            or not isinstance(self.acl_subject_ids, Sequence)
+        ):
+            raise KnowledgeRetrievalError("gold prediction ACL subject IDs must be a sequence")
+        subjects = tuple(
+            _bounded_fixture_text(subject, "prediction ACL subject_id", 256)
+            for subject in self.acl_subject_ids
+        )
+        if len(set(subjects)) != len(subjects):
+            raise KnowledgeRetrievalError("gold prediction ACL subject IDs must be unique")
+        object.__setattr__(self, "acl_subject_ids", subjects)
+
+
+type StructuredPrediction = RetrievalResult | GoldPrediction
 
 
 def _bounded_fixture_text(value: object, field_name: str, maximum: int) -> str:
@@ -123,9 +172,9 @@ def load_gold_set(path: Path) -> tuple[GoldCase, ...]:
 
 def evaluate_gold_set(
     cases: Iterable[GoldCase],
-    predictions: Mapping[str, Sequence[tuple[str, str]]],
+    predictions: Mapping[str, StructuredPrediction],
 ) -> GoldEvaluation:
-    """Evaluate recall, abstention, and forbidden-source leakage."""
+    """Evaluate structured retrieval results without accepting partial output."""
 
     normalized_cases = tuple(cases)
     if not normalized_cases:
@@ -133,22 +182,64 @@ def evaluate_gold_set(
     if any(case.expected not in {"answerable", "abstain"} for case in normalized_cases):
         raise KnowledgeRetrievalError("gold-set expected must be answerable or abstain")
     case_ids = {case.case_id for case in normalized_cases}
-    if set(predictions) - case_ids:
-        raise KnowledgeRetrievalError("predictions contain unknown gold-set case IDs")
+    if any(not isinstance(case_id, str) for case_id in predictions):
+        raise KnowledgeRetrievalError("prediction case IDs must be text")
+    prediction_ids = set(predictions)
+    if prediction_ids != case_ids:
+        missing = case_ids - prediction_ids
+        unknown = prediction_ids - case_ids
+        details = []
+        if missing:
+            details.append("missing " + ", ".join(sorted(missing)))
+        if unknown:
+            details.append("unknown " + ", ".join(sorted(unknown)))
+        raise KnowledgeRetrievalError(
+            "predictions must contain exactly one structured result per gold-set case ("
+            + "; ".join(details)
+            + ")"
+        )
     answerable = [case for case in normalized_cases if case.expected == "answerable"]
     abstentions = [case for case in normalized_cases if case.expected == "abstain"]
     hits = 0
     abstention_hits = 0
     leakage = 0
     for case in normalized_cases:
-        returned = tuple(predictions.get(case.case_id, ()))
-        if any(
-            not isinstance(prediction, tuple)
-            or len(prediction) != 2
-            or not all(isinstance(value, str) and value.strip() for value in prediction)
-            for prediction in returned
-        ):
-            raise KnowledgeRetrievalError("predictions contain invalid provenance tuples")
+        prediction = predictions[case.case_id]
+        if isinstance(prediction, GoldPrediction):
+            if prediction.tenant_key != case.tenant_key:
+                raise KnowledgeRetrievalError(
+                    f"prediction tenant does not match case {case.case_id}"
+                )
+            if prediction.purpose != case.purpose:
+                raise KnowledgeRetrievalError(
+                    f"prediction purpose does not match case {case.case_id}"
+                )
+            if prediction.acl_subject_ids != case.acl_subject_ids:
+                raise KnowledgeRetrievalError(
+                    f"prediction ACL context does not match case {case.case_id}"
+                )
+            result = prediction.result
+        elif isinstance(prediction, RetrievalResult):
+            result = prediction
+        else:
+            raise KnowledgeRetrievalError(
+                "predictions must contain structured RetrievalResult values"
+            )
+
+        returned_chunks = tuple(result.chunks)
+        if len({chunk.snapshot_id for chunk in returned_chunks}) > 1:
+            raise KnowledgeRetrievalError("predictions contain mixed chunk snapshot IDs")
+        if any(chunk.snapshot_id != result.snapshot_id for chunk in returned_chunks):
+            raise KnowledgeRetrievalError("prediction chunk provenance does not match its snapshot")
+        if len({chunk.tenant_id for chunk in returned_chunks}) > 1:
+            raise KnowledgeRetrievalError("predictions contain cross-tenant provenance")
+        for chunk in returned_chunks:
+            expected_digest = hashlib.sha256(chunk.passage.encode("utf-8")).hexdigest()
+            if chunk.content_sha256 != expected_digest:
+                raise KnowledgeRetrievalError(
+                    "prediction passage digest does not match its UTF-8 provenance"
+                )
+        returned = tuple((chunk.source_id, chunk.locator) for chunk in returned_chunks)
         if len(set(returned)) != len(returned):
             raise KnowledgeRetrievalError("predictions contain duplicate provenance tuples")
         returned_sources = {source_id for source_id, _locator in returned}
@@ -168,4 +259,11 @@ def evaluate_gold_set(
     )
 
 
-__all__ = ["GoldCase", "GoldEvaluation", "evaluate_gold_set", "load_gold_set"]
+__all__ = [
+    "GoldCase",
+    "GoldEvaluation",
+    "GoldPrediction",
+    "StructuredPrediction",
+    "evaluate_gold_set",
+    "load_gold_set",
+]
