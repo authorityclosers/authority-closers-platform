@@ -360,9 +360,7 @@ html[data-motion="reduced"] .site-frame--learner .practice-step-card:hover {
 html:not([data-reduced-motion="true"]):not([data-motion="reduced"])
   .theme-control__option:hover,
 html:not([data-reduced-motion="true"]):not([data-motion="reduced"])
-  .learner-help-chatbox__trigger:hover,
-html:not([data-reduced-motion="true"]):not([data-motion="reduced"])
-  .sidebar-collapse-btn:hover {
+  .learner-help-chatbox__trigger:hover {
   transform: translateY(-1px);
 }
 

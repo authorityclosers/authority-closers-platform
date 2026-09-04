@@ -24,7 +24,7 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { BrandMark } from "@ac/ui";
 
@@ -66,8 +66,12 @@ function LearnerSidebarBrand() {
     <Link
       className="learner-sidebar-wordmark"
       href={ROUTES.dashboard}
+      prefetch={false}
       aria-label="Authority Closers home"
     >
+      <span className="learner-sidebar-wordmark__mark" aria-hidden="true">
+        <BrandMark className="learner-sidebar-wordmark__mark-art" />
+      </span>
       <span className="brand-title-full">
         <span>Authority</span>
         <span>Closers</span>
@@ -146,6 +150,7 @@ function LearnerNavLink({
     <Link
       className={`learner-nav__link${current ? " is-current" : ""}`}
       href={href}
+      prefetch={false}
       aria-current={current ? "page" : undefined}
       onClick={onClick}
       title={title ?? label}
@@ -153,13 +158,48 @@ function LearnerNavLink({
       <span className="learner-nav__icon" aria-hidden="true">
         {icon}
       </span>
-      <span>{label}</span>
+      <span className="learner-nav__label">{label}</span>
     </Link>
   );
 }
 
 const SUPPORT_MAILTO =
   "mailto:admin@authorityclosers.com?subject=Authority%20Closers%20Learner%20Support";
+const SIDEBAR_COLLAPSE_STORAGE_KEY = "ac.learner.sidebar.collapsed.v1";
+const SIDEBAR_COLLAPSE_EVENT = "ac:learner-sidebar-preference";
+let sidebarCollapsedFallback = false;
+
+function getSidebarCollapsedSnapshot(): boolean {
+  try {
+    const stored = window.localStorage.getItem(SIDEBAR_COLLAPSE_STORAGE_KEY);
+    return stored === null ? sidebarCollapsedFallback : stored === "true";
+  } catch {
+    return sidebarCollapsedFallback;
+  }
+}
+
+function subscribeSidebarCollapsed(onStoreChange: () => void): () => void {
+  const handleChange = () => onStoreChange();
+  window.addEventListener("storage", handleChange);
+  window.addEventListener(SIDEBAR_COLLAPSE_EVENT, handleChange);
+  return () => {
+    window.removeEventListener("storage", handleChange);
+    window.removeEventListener(SIDEBAR_COLLAPSE_EVENT, handleChange);
+  };
+}
+
+function setSidebarCollapsedPreference(collapsed: boolean): void {
+  sidebarCollapsedFallback = collapsed;
+  try {
+    window.localStorage.setItem(
+      SIDEBAR_COLLAPSE_STORAGE_KEY,
+      String(collapsed),
+    );
+  } catch {
+    // The in-memory preference still updates in storage-restricted contexts.
+  }
+  window.dispatchEvent(new Event(SIDEBAR_COLLAPSE_EVENT));
+}
 
 export function closeAccountMenu(
   setOpen: (open: boolean) => void,
@@ -242,7 +282,11 @@ export function LearnerShell({
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [notificationPopoverOpen, setNotificationPopoverOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const sidebarCollapsed = useSyncExternalStore(
+    subscribeSidebarCollapsed,
+    getSidebarCollapsedSnapshot,
+    () => false,
+  );
   const [helpOpen, setHelpOpen] = useState(false);
   const [identity, setIdentity] = useState({
     displayName: userDisplayName,
@@ -263,7 +307,7 @@ export function LearnerShell({
   const avatarUpdateGenerationRef = useRef(0);
 
   function toggleSidebar(): void {
-    setSidebarCollapsed((collapsed) => !collapsed);
+    setSidebarCollapsedPreference(!sidebarCollapsed);
   }
 
   useEffect(() => {
@@ -676,36 +720,13 @@ export function LearnerShell({
                 <span className="learner-nav__icon" aria-hidden="true">
                   <HelpCircle size={19} />
                 </span>
-                <span>Help</span>
+                <span className="learner-nav__label">Help</span>
               </a>
             </nav>
           </div>
         </div>
 
         <div className="learner-sidebar__footer">
-          <Link
-            href={ROUTES.profile}
-            className="learner-sidebar__user-pill"
-            aria-label={`Open profile for ${effectiveDisplayName}`}
-            title={effectiveDisplayName}
-          >
-            <IdentityAvatar
-              className="user-avatar-badge"
-              displayName={effectiveDisplayName}
-              avatarUrl={identity.avatarUrl}
-              avatarAlt={identity.avatarAlt}
-            />
-            <div className="user-pill__copy">
-              <span className="user-pill__name">{effectiveDisplayName}</span>
-              <span className="user-pill__role">Learner</span>
-            </div>
-          </Link>
-        </div>
-      </aside>
-
-      {/* Compact Utility Header */}
-      <header className="learner-header">
-        <div className="learner-header__inner">
           <button
             type="button"
             className="learner-sidebar-toggle"
@@ -722,11 +743,21 @@ export function LearnerShell({
             ) : (
               <PanelLeftClose size={18} aria-hidden="true" />
             )}
+            <span className="learner-sidebar-toggle__label">
+              {sidebarCollapsed ? "Expand" : "Collapse"}
+            </span>
           </button>
+        </div>
+      </aside>
+
+      {/* Compact Utility Header */}
+      <header className="learner-header">
+        <div className="learner-header__inner">
           <div className="learner-header__mobile-brand">
             <Link
               className="mobile-brand-link"
               href={ROUTES.dashboard}
+              prefetch={false}
               aria-label="Authority Closers home"
             >
               <div className="mobile-brand-icon" aria-hidden="true">
@@ -743,6 +774,7 @@ export function LearnerShell({
           <div className="learner-header__search-slot">
             <Link
               href={ROUTES.discover}
+              prefetch={false}
               className="learner-header__search-trigger"
               aria-label="Search courses, lessons, and more"
             >
@@ -755,6 +787,7 @@ export function LearnerShell({
           <div className="learner-header__actions">
             <Link
               href={ROUTES.discover}
+              prefetch={false}
               className="mobile-header-icon-button"
               aria-label="Search courses, lessons, and more"
             >
@@ -858,6 +891,7 @@ export function LearnerShell({
                   <div className="account-menu-links">
                     <Link
                       href={ROUTES.profile}
+                      prefetch={false}
                       role="menuitem"
                       tabIndex={-1}
                       onClick={() => setAccountMenuOpen(false)}
@@ -866,6 +900,7 @@ export function LearnerShell({
                     </Link>
                     <Link
                       href={ROUTES.settings}
+                      prefetch={false}
                       role="menuitem"
                       tabIndex={-1}
                       onClick={() => setAccountMenuOpen(false)}
@@ -875,6 +910,7 @@ export function LearnerShell({
                     </Link>
                     <Link
                       href={ROUTES.notifications}
+                      prefetch={false}
                       role="menuitem"
                       tabIndex={-1}
                       onClick={() => setAccountMenuOpen(false)}
@@ -1091,6 +1127,7 @@ export function LearnerShell({
             >
               <Link
                 href={ROUTES.profile}
+                prefetch={false}
                 className="mobile-drawer-link"
                 onClick={() => setMobileDrawerOpen(false)}
               >
@@ -1099,6 +1136,7 @@ export function LearnerShell({
               </Link>
               <Link
                 href={ROUTES.notifications}
+                prefetch={false}
                 className="mobile-drawer-link"
                 onClick={() => setMobileDrawerOpen(false)}
               >
@@ -1107,6 +1145,7 @@ export function LearnerShell({
               </Link>
               <Link
                 href={ROUTES.calendar}
+                prefetch={false}
                 className="mobile-drawer-link"
                 onClick={() => setMobileDrawerOpen(false)}
               >
@@ -1115,6 +1154,7 @@ export function LearnerShell({
               </Link>
               <Link
                 href={ROUTES.settings}
+                prefetch={false}
                 className="mobile-drawer-link"
                 onClick={() => setMobileDrawerOpen(false)}
               >
