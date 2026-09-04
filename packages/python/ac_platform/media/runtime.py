@@ -6,13 +6,33 @@ import hashlib
 import hmac
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import timedelta
+from typing import Any
 
 from ac_platform.application.settings import Settings
-from ac_platform.media.processing import FailClosedProcessor, MediaProcessor
+from ac_platform.media.config import (
+    MediaProviderActivationVerifier,
+    MediaProviderConfig,
+)
+from ac_platform.media.errors import MediaConfigurationError
+from ac_platform.media.lifecycle import (
+    MediaLifecycleHooks,
+    MediaRetentionPolicy,
+    NoopMediaLifecycleHooks,
+)
+from ac_platform.media.policy import (
+    MediaCorsPolicy,
+    SignedMediaDeliveryPort,
+)
+from ac_platform.media.processing import FailClosedProcessor, MediaProcessor, ProcessingQuota
 from ac_platform.media.scanner import ContentScanner, FailClosedScanner
 from ac_platform.media.service import MediaService
 from ac_platform.media.signing import MediaSigner
-from ac_platform.media.storage import PrivateObjectStorage, UnconfiguredPrivateObjectStorage
+from ac_platform.media.storage import (
+    PrivateObjectStorage,
+    compose_private_object_storage,
+)
+from ac_platform.media.telemetry import MediaTelemetryExporter, MediaTelemetryRecorder
 from ac_platform.telemetry import TelemetryEvent, TelemetryRecorder
 
 
@@ -27,6 +47,12 @@ class NullTelemetrySink:
 class MediaRuntime:
     service: MediaService
     telemetry: TelemetryRecorder
+    environment: str = "local"
+    media_config: MediaProviderConfig | None = None
+    activation_verifier: MediaProviderActivationVerifier | None = None
+    media_telemetry: MediaTelemetryRecorder | None = None
+    media_delivery: SignedMediaDeliveryPort | None = None
+    media_cors_policy: MediaCorsPolicy | None = None
     activity_media_resolver: Callable[..., object] | None = None
     media_descriptor_resolver: Callable[..., object] | None = None
     playback_policy_resolver: Callable[..., object] | None = None
@@ -41,34 +67,157 @@ class MediaRuntime:
             and self.playback_policy_resolver is not None
         )
 
+    @property
+    def provider_activation_verified(self) -> bool:
+        """Whether an external verifier currently approves this runtime."""
+
+        return self.media_config is not None and self.media_config.activation_verified(
+            self.activation_verifier
+        )
+
 
 def _derive(secret: str, label: bytes) -> bytes:
     return hmac.new(secret.encode("utf-8"), label, hashlib.sha256).digest()
 
 
-def create_default_media_runtime(settings: Settings) -> MediaRuntime:
-    """Build fail-closed defaults; production credentials are injected by deployment composition."""
+def create_media_runtime(
+    settings: Settings,
+    *,
+    client_factory: Callable[..., Any] | None = None,
+    storage: PrivateObjectStorage | None = None,
+    scanner: ContentScanner | None = None,
+    processor: MediaProcessor | None = None,
+    media_telemetry_exporter: MediaTelemetryExporter | None = None,
+    lifecycle_hooks: MediaLifecycleHooks | None = None,
+    retention_policy: MediaRetentionPolicy | None = None,
+    activation_verifier: MediaProviderActivationVerifier | None = None,
+    media_delivery_handler: SignedMediaDeliveryPort | None = None,
+) -> MediaRuntime:
+    """Compose media dependencies without contacting external providers.
+
+    The application/deployment composition is intentionally inert in this
+    slice.  Local/test callers may exercise explicit seams, but staging and
+    production cannot inject a runtime, enable provider settings, or supply a
+    future activation verifier.  A later slice must provide a separately
+    reviewed immutable attestation and app delivery/worker composition.
+    """
+
+    config = MediaProviderConfig.from_settings(settings)
+
+    activation_verified = config.activation_verified(activation_verifier)
+    injected_dependencies = any(
+        dependency is not None
+        for dependency in (
+            client_factory,
+            storage,
+            scanner,
+            processor,
+            media_telemetry_exporter,
+            lifecycle_hooks,
+            retention_policy,
+            activation_verifier,
+            media_delivery_handler,
+        )
+    )
+    if settings.environment not in {"local", "test"} and (
+        settings.media_provider_enabled or injected_dependencies
+    ):
+        raise MediaConfigurationError(
+            "non-local media composition rejects provider activation and injected dependencies"
+        )
+    if settings.media_provider_enabled and not activation_verified and storage is not None:
+        raise MediaConfigurationError(
+            "an enabled media provider requires an externally verified activation"
+        )
+    # Configuration references are deliberately inert.  Keep composition
+    # fail-closed until the controlled audit integration supplies the
+    # immutable approval bound to this exact configuration.
+
+    if settings.media_provider_enabled and (
+        lifecycle_hooks is None
+        or isinstance(lifecycle_hooks, NoopMediaLifecycleHooks)
+        or retention_policy is None
+    ):
+        raise MediaConfigurationError(
+            "an enabled media runtime requires explicit non-noop retention hooks and policy"
+        )
 
     signer_secret = _derive(settings.session_token_pepper.get_secret_value(), b"media-signing-v1")
     webhook_secret = _derive(
         settings.email_challenge_secret.get_secret_value(), b"media-webhook-v1"
     )
-    storage: PrivateObjectStorage = UnconfiguredPrivateObjectStorage()
-    scanner: ContentScanner = FailClosedScanner()
-    processor: MediaProcessor = FailClosedProcessor()
+    media_signer = MediaSigner(signer_secret)
+    selected_storage = storage or compose_private_object_storage(
+        config,
+        activation_verifier=activation_verifier,
+        client_factory=client_factory,
+    )
+    selected_scanner = scanner or FailClosedScanner()
+    selected_processor = processor or FailClosedProcessor()
+
+    # A signed URL issuer is not an application delivery handler. Do not
+    # expose or attach one until the reviewed app route/session/grant handler
+    # is explicitly composed by the caller.
+    media_delivery = media_delivery_handler if activation_verified else None
+    if media_delivery is not None:
+        if not isinstance(media_delivery, SignedMediaDeliveryPort):
+            raise MediaConfigurationError(
+                "the media delivery dependency must use the reviewed application delivery port"
+            )
+        if (
+            config.delivery_origin is None
+            or media_delivery.delivery_origin != config.delivery_origin.rstrip("/")
+            or media_delivery.playback_ttl != timedelta(seconds=config.playback_ttl_seconds)
+            or media_delivery.range_policy.supports_range != config.allow_range_requests
+        ):
+            raise MediaConfigurationError(
+                "the media delivery dependency does not match the approved configuration"
+            )
+    media_cors_policy = (
+        MediaCorsPolicy(config.allowed_origins) if media_delivery is not None else None
+    )
     service = MediaService(
-        storage=storage,
-        signer=MediaSigner(signer_secret),
+        storage=selected_storage,
+        signer=media_signer,
         webhook_secret=webhook_secret,
-        scanner=scanner,
-        processor=processor,
+        scanner=selected_scanner,
+        processor=selected_processor,
+        upload_ttl=timedelta(seconds=config.upload_ttl_seconds),
+        playback_ttl=timedelta(seconds=config.playback_ttl_seconds),
+        max_upload_bytes=config.max_upload_bytes,
+        quota_window=timedelta(seconds=config.quota_window_seconds),
+        quota_bytes_per_actor=config.quota_bytes_per_actor,
+        quota_uploads_per_actor=config.quota_uploads_per_actor,
+        lifecycle_hooks=lifecycle_hooks,
+        retention_policy=retention_policy,
+        delivery_port=media_delivery,
+        processing_quota=ProcessingQuota(
+            max_source_bytes=config.max_upload_bytes,
+            max_output_bytes=config.max_processing_output_bytes,
+            max_renditions=config.max_renditions,
+            max_caption_bytes=config.max_processing_caption_bytes,
+        ),
+        media_config=config,
+        activation_verifier=activation_verifier,
     )
     return MediaRuntime(
         service=service,
         telemetry=TelemetryRecorder(NullTelemetrySink()),
+        environment=settings.environment,
+        media_config=config,
+        activation_verifier=activation_verifier,
+        media_telemetry=MediaTelemetryRecorder(media_telemetry_exporter),
+        media_delivery=media_delivery,
+        media_cors_policy=media_cors_policy,
         activity_media_resolver=service.resolve_activity_media_binding_for_learning,
         media_descriptor_resolver=service.resolve_activity_media_descriptor_for_learner,
     )
+
+
+def create_default_media_runtime(settings: Settings) -> MediaRuntime:
+    """Build the application runtime with its fail-closed composition defaults."""
+
+    return create_media_runtime(settings)
 
 
 def compose_learning_playback_policy_resolver(
@@ -110,5 +259,6 @@ __all__ = [
     "MediaRuntime",
     "NullTelemetrySink",
     "compose_learning_playback_policy_resolver",
+    "create_media_runtime",
     "create_default_media_runtime",
 ]

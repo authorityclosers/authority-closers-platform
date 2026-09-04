@@ -31,6 +31,34 @@ Production configuration is injected from Infisical at process start. Git contai
 | `AC_API_HOST`                        | edge              |                       yes | canonical public API host and health probe Host         |
 | `AC_INTERNAL_API_HOST`               | release           |                       yes | reserved app-network-only API DNS name                  |
 
+## Media provider foundation
+
+The media provider is disabled by default. The following variables describe a
+private S3/MinIO-compatible composition contract; they do not provision a
+bucket or contact a provider. Setting `AC_MEDIA_PROVIDER_ENABLED=true` is
+validated only when the complete storage, delivery, CORS, quota, and TTL set is
+present and the exact `AC-GOV-AUD-001` and `GAP-MEDIA-001` references are
+supplied. Those strings are evidence labels, not authorization. The shipped
+staging and production composition rejects enabled media settings, and no
+immutable audited activation record or provider transport is currently
+composed; provider activation is therefore blocked in this slice.
+
+| Variable | Purpose |
+| --- | --- |
+| `AC_MEDIA_PROVIDER_ENABLED` | validated provider intent; defaults to `false` and is rejected by shipped staging/production composition |
+| `AC_MEDIA_PROVIDER` | `unconfigured`, `s3`, or `minio` |
+| `AC_MEDIA_STORAGE_ENDPOINT`, `AC_MEDIA_STORAGE_APPROVED_ENDPOINT_HOSTS` | HTTPS S3 API endpoint and exact approved endpoint-host allowlist; loopback, link-local, private, and unapproved targets are rejected |
+| `AC_MEDIA_STORAGE_BUCKET`, `AC_MEDIA_STORAGE_REGION` | bounded bucket and region identifiers |
+| `AC_MEDIA_STORAGE_ACCESS_KEY_ID`, `AC_MEDIA_STORAGE_SECRET_ACCESS_KEY` | reserved provider credentials; no shipped composition currently injects or uses them |
+| `AC_MEDIA_DELIVERY_ORIGIN`, `AC_MEDIA_CORS_ORIGINS` | exact HTTPS playback origin and comma-separated CORS origins (local loopback HTTP is allowed for tests) |
+| `AC_MEDIA_GOVERNANCE_REFERENCE`, `AC_MEDIA_GAP_REFERENCE` | exact evidence references required by the validated config; they do not activate a provider |
+| `AC_MEDIA_UPLOAD_TTL_SECONDS`, `AC_MEDIA_PLAYBACK_TTL_SECONDS` | bounded short-lived upload/playback lifetimes |
+| `AC_MEDIA_MAX_UPLOAD_BYTES`, `AC_MEDIA_QUOTA_*`, `AC_MEDIA_MAX_RENDITIONS`, `AC_MEDIA_MAX_PROCESSING_OUTPUT_BYTES`, `AC_MEDIA_MAX_PROCESSING_CAPTION_BYTES` | upload and worker safety limits, including caption bytes |
+| `AC_MEDIA_ALLOW_RANGE_REQUESTS` | explicit single-range progressive delivery policy |
+
+Credentials must come from the deployment secret mechanism and must never be
+written to Git, logs, telemetry, or this contract.
+
 Canonical staging origins are `https://staging.authorityclosers.com`,
 `https://admin-staging.authorityclosers.com`, and
 `https://api-staging.authorityclosers.com`. Canonical production origins are

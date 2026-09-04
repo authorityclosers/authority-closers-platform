@@ -37,6 +37,7 @@ from ac_platform.media.runtime import MediaRuntime, create_default_media_runtime
 logger = structlog.get_logger()
 settings = get_settings()
 _DEPLOYMENT_ENVIRONMENTS = {"staging", "production"}
+_MEDIA_RUNTIME_INJECTION_ENVIRONMENTS = {"local", "test"}
 
 
 def _google_provider_from_settings(settings: Settings) -> OAuthIdentityProvider:
@@ -68,6 +69,21 @@ def create_app(
     identity_provider: OAuthIdentityProvider | None = None,
     media_runtime: MediaRuntime | None = None,
 ) -> FastAPI:
+    # Provider activation is closed in this slice.  There is no immutable
+    # externally attested activation boundary, inbox-first/quick-ACK webhook
+    # worker, or reviewed app delivery handler in the shipped composition.
+    # Dependency injection therefore remains a local/test seam only.
+    if settings.environment not in _MEDIA_RUNTIME_INJECTION_ENVIRONMENTS:
+        if media_runtime is not None:
+            raise RuntimeError("non-local application composition rejects injected media runtimes")
+        if settings.media_provider_enabled:
+            raise RuntimeError(
+                "non-local application composition rejects enabled media provider settings"
+            )
+    elif media_runtime is not None and media_runtime.environment != settings.environment:
+        raise RuntimeError(
+            "local/test media runtime injection must match the application environment"
+        )
     configured_identity_provider: OAuthIdentityProvider | None
     if settings.environment in _DEPLOYMENT_ENVIRONMENTS:
         if identity_provider is not None:

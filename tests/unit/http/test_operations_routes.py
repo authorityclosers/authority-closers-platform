@@ -211,6 +211,7 @@ def _client(
     job_repository: _JobRepository | None = None,
     recovery_repository: _RecoveryStateRepository | None = None,
     webhook_adapter: TrustedWebhookAdapter | None = None,
+    webhook_provider: str = "test-provider",
     webhook_sessions: Any | None = None,
     marker: Any | None = None,
     operations_tenant_id: UUID | None = None,
@@ -267,7 +268,7 @@ def _client(
         sessions=cast(Any, webhook_sessions or (lambda: _SessionContext(_WebhookDatabase()))),
         require_actor=require_actor,
         webhook_adapters=(
-            {"test-provider": webhook_adapter} if webhook_adapter is not None else None
+            {webhook_provider: webhook_adapter} if webhook_adapter is not None else None
         ),
     )
     return TestClient(application)
@@ -835,6 +836,18 @@ def test_provider_registry_rejects_an_unimplemented_verifier(
             monkeypatch,
             actor=ActorContext(person_id=uuid4(), session_id=uuid4(), tenant_id=uuid4()),
             webhook_adapter=TrustedWebhookAdapter(),
+        )
+
+
+def test_provider_registry_rejects_media_video_route_collision(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with pytest.raises(ValueError, match="video provider webhooks are owned by media composition"):
+        _client(
+            monkeypatch,
+            actor=ActorContext(person_id=uuid4(), session_id=uuid4(), tenant_id=uuid4()),
+            webhook_adapter=_WebhookAdapter(),
+            webhook_provider="video",
         )
 
 

@@ -6,9 +6,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI, Header, Path, Request, Response, status
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from sqlalchemy.orm import Session
 
 from ac_platform.application.settings import Settings
 from ac_platform.audit import AuditRepository
@@ -21,7 +19,6 @@ from ac_platform.media.api_contracts import (
     HeartbeatResponse,
     MediaAssetResponse,
     MediaHeartbeatRequest,
-    MediaVersionResponse,
     PlaybackRequest,
     PlaybackResponse,
     ProfileAvatarResponse,
@@ -30,7 +27,7 @@ from ac_platform.media.api_contracts import (
     UploadIntentRequest,
     UploadIntentResponse,
 )
-from ac_platform.media.models import MediaPurpose, MediaVersion
+from ac_platform.media.models import MediaPurpose
 from ac_platform.media.runtime import MediaRuntime
 from ac_platform.media.service import MediaService
 
@@ -402,71 +399,9 @@ def install_media_http(
 
     application.include_router(router)
 
-    webhook_router = APIRouter(prefix="/internal/v1", tags=["media-provider-webhooks"])
-
-    @webhook_router.post(
-        "/media/providers/{provider}/webhooks",
-        response_model=dict[str, object],
-        status_code=status.HTTP_202_ACCEPTED,
-    )
-    async def receive_provider_webhook(
-        provider: Annotated[
-            str, Path(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
-        ],
-        request: Request,
-        response: Response,
-        signature: Annotated[str | None, Header(alias="X-Media-Signature", max_length=160)] = None,
-        provider_signature: Annotated[
-            str | None, Header(alias="X-Provider-Signature", max_length=160)
-        ] = None,
-    ) -> dict[str, object]:
-        body = await request.body()
-        signature = signature or provider_signature
-        if not signature:
-            from ac_platform.media.errors import MediaForbidden
-
-            raise MediaForbidden("The media provider webhook signature is required.")
-
-        def apply(sync_database: Session) -> tuple[MediaVersionResponse, UUID | None, bool]:
-            applied, replayed = _service(runtime).handle_webhook(
-                sync_database, provider.lower(), body, signature
-            )
-            applied_tenant_id = sync_database.scalar(
-                select(MediaVersion.tenant_id).where(MediaVersion.id == applied.id)
-            )
-            return applied, applied_tenant_id, replayed
-
-        async with sessions() as database, database.begin():
-            result, tenant_id, replayed = await database.run_sync(apply)
-            # The version is looked up by the immutable response id; no
-            # provider payload is placed in the audit record.
-            if tenant_id is None:
-                from ac_platform.media.errors import MediaNotFound
-
-                raise MediaNotFound("The media version was not found.")
-            if not replayed:
-                await AuditRepository(database).append(
-                    tenant_id=tenant_id,
-                    actor_person_id=None,
-                    actor_type="provider",
-                    action="media.provider_webhook_applied",
-                    resource_type="media_version",
-                    resource_id=result.id,
-                    payload={"status": result.state.value},
-                    request_id=_request_id(request),
-                )
-        runtime.telemetry.emit(
-            "media.webhook.applied",
-            {
-                "status": result.state.value,
-                "outcome": "replayed" if replayed else "succeeded",
-            },
-        )
-        response.status_code = status.HTTP_200_OK
-        _no_store(response)
-        return {"media_version_id": result.id, "state": result.state.value}
-
-    application.include_router(webhook_router)
+    # Provider callbacks intentionally remain unmounted.  This slice has no
+    # inbox-first raw-envelope persistence with quick acknowledgement and an
+    # asynchronous worker, so there is no HTTP callback capability to expose.
 
 
 __all__ = ["install_media_http"]

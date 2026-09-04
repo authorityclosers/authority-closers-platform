@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import math
 import re
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
@@ -46,15 +47,30 @@ from ac_platform.media.bindings import (
     resolve_activity_media_binding,
     resolve_activity_media_binding_for_learning,
 )
-from ac_platform.media.contracts import EphemeralMediaUrl
+from ac_platform.media.config import MediaProviderActivationVerifier, MediaProviderConfig
+from ac_platform.media.contracts import (
+    EphemeralMediaUrl,
+    MediaAssetId,
+    MediaAssetVersion,
+    MediaVersionId,
+    create_media_authorization_context,
+)
 from ac_platform.media.errors import (
     MediaBadRequest,
+    MediaConfigurationError,
     MediaConflict,
     MediaForbidden,
     MediaNotFound,
+    MediaProcessingError,
     MediaQuotaExceeded,
     MediaScannerUnavailable,
     MediaStorageUnavailable,
+)
+from ac_platform.media.lifecycle import (
+    MediaLifecycleHooks,
+    MediaObjectReference,
+    MediaRetentionPolicy,
+    NoopMediaLifecycleHooks,
 )
 from ac_platform.media.models import (
     ActivityMediaBinding,
@@ -74,7 +90,14 @@ from ac_platform.media.models import (
     MediaVersion,
     MediaWebhookInbox,
 )
-from ac_platform.media.processing import FailClosedProcessor, MediaProcessor
+from ac_platform.media.policy import SignedMediaDeliveryPort
+from ac_platform.media.processing import (
+    FailClosedProcessor,
+    MediaProcessor,
+    ProcessedCaption,
+    ProcessingQuota,
+    inspect_hls_playlist_inventory,
+)
 from ac_platform.media.scanner import ContentScanner, FailClosedScanner
 from ac_platform.media.signing import MediaSigner
 from ac_platform.media.storage import (
@@ -100,12 +123,55 @@ _RENDITION_CONTENT_TYPES: dict[DeliveryProtocol, frozenset[str]] = {
 }
 MediaPlaybackAuthorizer = Callable[[Session, ActorContext, MediaAsset], bool]
 _FAILURE_CODE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
+_WEBHOOK_TIMESTAMP_TOLERANCE = timedelta(minutes=5)
+_SHA256 = re.compile(r"^[0-9a-fA-F]{64}$")
 
 
 def _as_utc(value: datetime) -> datetime:
     if value.tzinfo is None:
         return value.replace(tzinfo=UTC)
     return value.astimezone(UTC)
+
+
+def _require_measured_duration(value: object | None, *, maximum: int) -> float:
+    """Return a finite bounded duration required by READY video state."""
+
+    if (
+        value is None
+        or isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(value)
+        or value <= 0
+    ):
+        raise MediaConflict("A ready video requires a validated measured duration.")
+    if value > maximum:
+        raise MediaQuotaExceeded("The media duration exceeds the processing quota.")
+    return float(value)
+
+
+class _BoundedMediaHeadReader:
+    """Bound storage metadata reads during one untrusted processing attempt."""
+
+    def __init__(self, storage: PrivateObjectStorage, maximum: int) -> None:
+        self._storage = storage
+        self._maximum = maximum
+        self._used = 0
+        self.seen: dict[str, StoredObjectMetadata | None] = {}
+
+    def head(self, object_key: str) -> StoredObjectMetadata | None:
+        if self._used >= self._maximum:
+            raise MediaQuotaExceeded("The media processing head-operation quota was exceeded.")
+        self._used += 1
+        try:
+            result = self._storage.head(object_key)
+            self.seen[object_key] = result
+            return result
+        except MediaStorageUnavailable:
+            raise
+        except Exception as error:
+            raise MediaStorageUnavailable(
+                "The private media storage adapter could not inspect media output."
+            ) from error
 
 
 class MediaService:
@@ -126,6 +192,12 @@ class MediaService:
         quota_window: timedelta = timedelta(hours=1),
         quota_bytes_per_actor: int = 2 * 1024 * 1024 * 1024,
         quota_uploads_per_actor: int = 100,
+        lifecycle_hooks: MediaLifecycleHooks | None = None,
+        retention_policy: MediaRetentionPolicy | None = None,
+        processing_quota: ProcessingQuota | None = None,
+        delivery_port: SignedMediaDeliveryPort | None = None,
+        media_config: MediaProviderConfig | None = None,
+        activation_verifier: MediaProviderActivationVerifier | None = None,
     ) -> None:
         self.storage = storage
         self.signer = signer
@@ -145,6 +217,28 @@ class MediaService:
         self.quota_window = quota_window
         self.quota_bytes_per_actor = quota_bytes_per_actor
         self.quota_uploads_per_actor = quota_uploads_per_actor
+        self.lifecycle_hooks = lifecycle_hooks or NoopMediaLifecycleHooks()
+        self.retention_policy = retention_policy
+        self.processing_quota = processing_quota or ProcessingQuota()
+        self.media_config = media_config
+        self.activation_verifier = activation_verifier
+        # A signed URL issuer is not an application delivery handler. Keep
+        # playback unavailable unless the caller explicitly composes the
+        # reviewed app route/session/grant/CORS/range boundary.
+        self.delivery_port = delivery_port
+
+    def _provider_activation_verified(self) -> bool:
+        """Permit the legacy verifier seam only for local/test contract tests.
+
+        The deployed application never reaches this branch: provider webhooks
+        are unmounted and non-local composition rejects activation settings.
+        """
+
+        return (
+            self.media_config is not None
+            and self.media_config.environment in {"local", "test"}
+            and self.media_config.activation_verified(self.activation_verifier)
+        )
 
     @staticmethod
     def _now() -> datetime:
@@ -167,6 +261,42 @@ class MediaService:
             raise MediaStorageUnavailable(
                 f"The private media adapter returned an invalid {description} URL."
             ) from error
+
+    def _signed_delivery_url(
+        self,
+        *,
+        actor: ActorContext,
+        asset: MediaAsset,
+        version: MediaVersion,
+        object_key: str,
+        expires_at: datetime,
+        kind: str,
+        supports_range: bool,
+        session_id: UUID | str | None = None,
+    ) -> str:
+        """Issue only an application-route URL, never a provider URL."""
+
+        if self.delivery_port is None:
+            raise MediaConflict("Media delivery is not composed for this runtime.")
+        authorization = create_media_authorization_context(
+            tenant_id=str(self._tenant(actor)),
+            person_id=str(actor.person_id),
+            session_id=str(session_id or actor.session_id),
+        )
+        signed = self.delivery_port.issue(
+            authorization=authorization,
+            activity_id=f"media-asset-{asset.id}",
+            activity_version=f"media-version-{version.id}",
+            media_version=MediaAssetVersion(
+                MediaAssetId(str(asset.id)),
+                MediaVersionId(str(version.id)),
+            ),
+            object_key=object_key,
+            now=expires_at - self.delivery_port.playback_ttl,
+            kind=kind,
+            supports_range=supports_range,
+        )
+        return self._secure_media_url(signed.url.value, description="signed media delivery")
 
     @staticmethod
     def _tenant(actor: ActorContext) -> UUID:
@@ -512,7 +642,168 @@ class MediaService:
             and key.startswith(version.object_key + "/")
             and ".." not in key
             and "\\" not in key
+            and not any(character.isspace() for character in key)
+            and all(ord(character) >= 0x20 and ord(character) != 0x7F for character in key)
         )
+
+    @staticmethod
+    def _object_reference(version: MediaVersion) -> MediaObjectReference:
+        return MediaObjectReference(
+            tenant_id=version.tenant_id,
+            asset_id=version.asset_id,
+            version_id=version.id,
+            object_key=version.object_key,
+        )
+
+    def _version_object_references(
+        self, database: Session, version: MediaVersion
+    ) -> tuple[MediaObjectReference, ...]:
+        """Return every private object owned by a version for retention hooks."""
+
+        keys = [version.object_key]
+        keys.extend(
+            row.object_key
+            for row in database.scalars(
+                select(MediaRendition).where(
+                    MediaRendition.tenant_id == version.tenant_id,
+                    MediaRendition.version_id == version.id,
+                )
+            ).all()
+        )
+        keys.extend(
+            row.object_key
+            for row in database.scalars(
+                select(MediaCaptionTrack).where(
+                    MediaCaptionTrack.tenant_id == version.tenant_id,
+                    MediaCaptionTrack.version_id == version.id,
+                )
+            ).all()
+        )
+        if isinstance(version.avatar_variants, list):
+            keys.extend(
+                str(item.get("object_key"))
+                for item in version.avatar_variants
+                if isinstance(item, dict) and item.get("object_key")
+            )
+        inventory_reader = getattr(self.lifecycle_hooks, "object_references", None)
+        if callable(inventory_reader):
+            try:
+                tracked = inventory_reader(self._object_reference(version))
+            except Exception as error:
+                raise MediaStorageUnavailable(
+                    "The media lifecycle inventory could not be read."
+                ) from error
+            keys.extend(
+                item.object_key for item in tracked if isinstance(item, MediaObjectReference)
+            )
+        references: list[MediaObjectReference] = []
+        seen: set[str] = set()
+        for key in keys:
+            if (
+                not isinstance(key, str)
+                or key in seen
+                or not self._child_key(version, key)
+                and key != version.object_key
+            ):
+                continue
+            seen.add(key)
+            references.append(
+                MediaObjectReference(
+                    tenant_id=version.tenant_id,
+                    asset_id=version.asset_id,
+                    version_id=version.id,
+                    object_key=key,
+                )
+            )
+        return tuple(references)
+
+    def _record_cleanup_failure(
+        self,
+        reference: MediaObjectReference,
+        *,
+        object_keys: tuple[str, ...],
+        reason_code: str,
+    ) -> None:
+        """Require a retryable lifecycle record when orphan cleanup fails."""
+
+        recorder = getattr(self.lifecycle_hooks, "outputs_cleanup_failed", None)
+        if not callable(recorder) or isinstance(self.lifecycle_hooks, NoopMediaLifecycleHooks):
+            raise MediaStorageUnavailable(
+                "The media output cleanup failed and no retryable lifecycle hook is composed."
+            )
+        try:
+            recorder(reference, object_keys=object_keys, reason_code=reason_code)
+        except Exception as error:
+            raise MediaStorageUnavailable(
+                "The media output cleanup failure could not be recorded for retry."
+            ) from error
+
+    def _cleanup_processor_outputs(
+        self,
+        result: object | None,
+        *,
+        version: MediaVersion,
+        reason_code: str = "MEDIA_OUTPUT_CLEANUP_FAILED",
+    ) -> None:
+        """Clean failed output and record any orphan as a retryable event."""
+
+        source_key = version.object_key
+        object_keys = getattr(result, "object_keys", ()) if result is not None else ()
+        known_keys = tuple(object_keys) if isinstance(object_keys, tuple | list) else ()
+        listing_failed = False
+        # A processor can fail after writing an object but before it returns a
+        # ProcessingResult.  The per-version prefix is the only recoverable
+        # inventory available at that point; use a bounded adapter listing so
+        # those partial bytes do not become orphaned private media.
+        try:
+            listed = self.storage.list_prefix(source_key)
+        except Exception:
+            listed = ()
+            listing_failed = True
+        if isinstance(listed, tuple | list):
+            known_keys = (*known_keys, *listed)
+        candidates: list[str] = []
+        for object_key in dict.fromkeys(known_keys):
+            if not isinstance(object_key, str):
+                continue
+            if object_key == source_key:
+                continue
+            if (
+                not object_key.startswith(source_key + "/")
+                or ".." in object_key
+                or "\\" in object_key
+            ):
+                continue
+            candidates.append(object_key)
+        failed_keys: list[str] = []
+        for object_key in candidates:
+            try:
+                self.storage.delete(object_key)
+            except Exception:
+                failed_keys.append(object_key)
+        if listing_failed or failed_keys:
+            self._record_cleanup_failure(
+                self._object_reference(version),
+                object_keys=tuple(failed_keys or candidates),
+                reason_code=("MEDIA_OUTPUT_CLEANUP_LIST_FAILED" if listing_failed else reason_code),
+            )
+
+    def _delete_object_best_effort(
+        self,
+        object_key: str,
+        *,
+        reference: MediaObjectReference,
+    ) -> None:
+        """Remove one new object or record its retryable cleanup event."""
+
+        try:
+            self.storage.delete(object_key)
+        except Exception:
+            self._record_cleanup_failure(
+                reference,
+                object_keys=(object_key,),
+                reason_code="MEDIA_OBJECT_CLEANUP_FAILED",
+            )
 
     def _asset(
         self, database: Session, actor: ActorContext, asset_id: UUID, *, lock: bool = False
@@ -801,6 +1092,11 @@ class MediaService:
             raise MediaConflict("The media upload is not in a completable state.")
         if self._now() >= _as_utc(intent.expires_at):
             raise MediaConflict("The media upload intent has expired.")
+        if request.duration_seconds is not None and (
+            not math.isfinite(request.duration_seconds)
+            or request.duration_seconds > self.processing_quota.max_duration_seconds
+        ):
+            raise MediaQuotaExceeded("The media duration exceeds the processing quota.")
         try:
             head = self.storage.head(intent.object_key)
         except Exception as error:
@@ -856,8 +1152,10 @@ class MediaService:
         version.actual_bytes = head.content_length
         version.checksum_sha256 = expected_checksum
         version.storage_version_id = head.storage_version_id
-        version.provider_asset_id = request.provider_asset_id
-        version.duration_seconds = request.duration_seconds
+        # UploadCompleteRequest.duration_seconds is caller metadata only.  A
+        # video can become READY only after an internal processor/inspector
+        # measures its duration; never persist the client declaration as the
+        # canonical duration used by playback and heartbeat.
         version.width = request.width
         version.height = request.height
         version.state = MediaLifecycle.PROCESSING.value
@@ -923,6 +1221,112 @@ class MediaService:
         database.flush()
         return self._asset_response(database, actor, asset)
 
+    def _persist_processor_caption(
+        self,
+        database: Session,
+        version: MediaVersion,
+        caption: ProcessedCaption,
+        *,
+        head_reader: Callable[[str], StoredObjectMetadata | None] | None = None,
+    ) -> int:
+        """Persist processor-passthrough captions without replacing history."""
+
+        read_head = head_reader or self.storage.head
+        if not self._child_key(version, caption.object_key):
+            raise MediaConflict("The media processor returned an out-of-scope caption.")
+        if caption.source_object_key is None or caption.source_checksum_sha256 is None:
+            raise MediaConflict("The media processor returned caption provenance without proof.")
+        if not self._child_key(version, caption.source_object_key) and not (
+            caption.source_object_key.startswith(f"tenants/{version.tenant_id}/")
+        ):
+            raise MediaConflict("The media caption source is outside the tenant scope.")
+        source_head = read_head(caption.source_object_key)
+        if (
+            source_head is None
+            or not source_head.checksum_sha256
+            or not _SHA256.fullmatch(source_head.checksum_sha256)
+            or source_head.checksum_sha256.lower() != caption.source_checksum_sha256.lower()
+        ):
+            raise MediaConflict("The media caption source checksum is unverified.")
+        head = read_head(caption.object_key)
+        if head is None:
+            raise MediaConflict("The media processor returned an unavailable caption.")
+        if head.content_type.lower().split(";", 1)[0].strip() != caption.content_type:
+            raise MediaConflict("The media processor returned an unverified caption MIME.")
+        if caption.content_length is None or caption.content_length != head.content_length:
+            raise MediaConflict("The media processor returned an unverified caption size.")
+        if (
+            not head.checksum_sha256
+            or not _SHA256.fullmatch(head.checksum_sha256)
+            or head.checksum_sha256.lower() != caption.source_checksum_sha256.lower()
+        ):
+            raise MediaConflict("The media processor returned an unverified caption checksum.")
+        try:
+            scan = self.scanner.scan(
+                storage=self.storage,
+                object_key=caption.object_key,
+                declared_content_type=caption.content_type,
+                content_length=head.content_length,
+                checksum_sha256=head.checksum_sha256,
+            )
+        except MediaScannerUnavailable:
+            raise
+        except Exception as error:
+            raise MediaScannerUnavailable(
+                "The media caption safety scanner could not inspect the output."
+            ) from error
+        if not scan.clean:
+            if scan.reason_code == "SCANNER_NOT_CONFIGURED":
+                raise MediaScannerUnavailable("The media caption safety scanner is not configured.")
+            raise MediaConflict("The media processor returned an unsafe caption.")
+        if (
+            not scan.verified_checksum_sha256
+            or scan.verified_checksum_sha256.lower() != head.checksum_sha256.lower()
+        ):
+            raise MediaConflict("The media caption safety scan did not verify its checksum.")
+        caption_kind = CaptionKind(caption.kind).value
+        existing = database.scalar(
+            select(MediaCaptionTrack).where(
+                MediaCaptionTrack.tenant_id == version.tenant_id,
+                MediaCaptionTrack.version_id == version.id,
+                MediaCaptionTrack.id == caption.id,
+            )
+        )
+        if existing is not None:
+            if existing.object_key != caption.object_key:
+                raise MediaConflict("The media processor reused a caption identity.")
+            return head.content_length
+        prior = database.scalars(
+            select(MediaCaptionTrack)
+            .where(
+                MediaCaptionTrack.tenant_id == version.tenant_id,
+                MediaCaptionTrack.version_id == version.id,
+                MediaCaptionTrack.language == caption.language,
+                MediaCaptionTrack.kind == caption_kind,
+                MediaCaptionTrack.state == CaptionState.READY.value,
+            )
+            .order_by(MediaCaptionTrack.created_at.desc(), MediaCaptionTrack.id.desc())
+            .with_for_update()
+        ).all()
+        for row in prior:
+            row.state = CaptionState.SUPERSEDED.value
+        database.add(
+            MediaCaptionTrack(
+                id=caption.id,
+                tenant_id=version.tenant_id,
+                version_id=version.id,
+                language=caption.language,
+                kind=caption_kind,
+                state=CaptionState.READY.value,
+                content_type=caption.content_type,
+                object_key=caption.object_key,
+                is_default=caption.is_default,
+                supersedes_caption_id=caption.supersedes_caption_id
+                or (prior[0].id if prior else None),
+            )
+        )
+        return head.content_length
+
     def process_version(
         self, database: Session, actor: ActorContext, version_id: UUID
     ) -> MediaAssetResponse:
@@ -931,7 +1335,35 @@ class MediaService:
         self._require_write(actor, purpose=MediaPurpose(version.purpose), asset=asset)
         if version.state != MediaLifecycle.PROCESSING.value:
             raise MediaConflict("The media version is not awaiting processing.")
+        result = None
+        head_budget = _BoundedMediaHeadReader(
+            self.storage, self.processing_quota.max_head_operations
+        )
         try:
+            source_head = head_budget.head(version.object_key)
+            if source_head is None:
+                raise MediaConflict("The media source is unavailable for processing.")
+            if (
+                isinstance(source_head.content_length, bool)
+                or not isinstance(source_head.content_length, int)
+                or source_head.content_length <= 0
+            ):
+                raise MediaConflict("The media source size is unverified.")
+            self.processing_quota.check_source(source_head.content_length)
+            source_content_type = source_head.content_type.lower().split(";", 1)[0].strip()
+            if source_content_type != version.content_type:
+                raise MediaConflict("The media source MIME is unverified.")
+            if (
+                version.actual_bytes is not None
+                and source_head.content_length != version.actual_bytes
+            ):
+                raise MediaConflict("The media source changed after upload completion.")
+            if version.checksum_sha256 is not None and (
+                not source_head.checksum_sha256
+                or not _SHA256.fullmatch(source_head.checksum_sha256)
+                or source_head.checksum_sha256.lower() != version.checksum_sha256.lower()
+            ):
+                raise MediaConflict("The media source checksum is unverified.")
             result = self.processor.process(
                 storage=self.storage,
                 version_id=version.id,
@@ -940,6 +1372,81 @@ class MediaService:
                 content_type=version.content_type,
                 crop=version.avatar_crop,
             )
+            self.processing_quota.check_result(result)
+            inventory = tuple(result.object_keys)
+            required_objects = (
+                {rendition.object_key for rendition in result.renditions}
+                | {caption.object_key for caption in result.captions}
+                | {variant.object_key for variant in result.avatar_variants}
+            )
+            if result.hls_manifest is not None:
+                required_objects.update(result.hls_manifest.object_keys)
+            if not required_objects.issubset(inventory):
+                raise MediaConflict("The media processor returned an incomplete object inventory.")
+            for object_key in inventory:
+                if object_key == version.object_key:
+                    continue
+                if not self._child_key(version, object_key):
+                    raise MediaConflict("The media processor returned an out-of-scope object.")
+                head = head_budget.head(object_key)
+                if head is None:
+                    raise MediaConflict("The media processor returned an unavailable object.")
+                if (
+                    isinstance(head.content_length, bool)
+                    or not isinstance(head.content_length, int)
+                    or head.content_length <= 0
+                ):
+                    raise MediaConflict("The media processor returned an unverified object size.")
+                if not head.checksum_sha256 or not _SHA256.fullmatch(head.checksum_sha256):
+                    raise MediaConflict(
+                        "The media processor returned an unverified object checksum."
+                    )
+                object_mime = head.content_type.lower().split(";", 1)[0].strip()
+                hls_content_types = _RENDITION_CONTENT_TYPES[DeliveryProtocol.HLS]
+                if object_key.lower().endswith(".m3u8") and object_mime not in hls_content_types:
+                    raise MediaConflict("The media processor returned an unverified playlist.")
+                if object_key.lower().endswith(".ts") and object_mime != "video/mp2t":
+                    raise MediaConflict("The media processor returned an unverified segment.")
+            output_bytes = 0
+            for object_key in inventory:
+                if object_key == version.object_key:
+                    continue
+                metadata = head_budget.seen.get(object_key)
+                if metadata is None:
+                    raise MediaConflict("The media processor returned an unverified object.")
+                output_bytes += metadata.content_length
+            if result.output_bytes is not None and result.output_bytes != output_bytes:
+                raise MediaConflict("The media processor output byte count is unverified.")
+            if output_bytes > self.processing_quota.max_output_bytes:
+                raise MediaQuotaExceeded("The media output exceeds the processing quota.")
+            for rendition in result.renditions:
+                if rendition.protocol != DeliveryProtocol.HLS.value:
+                    continue
+                try:
+                    discovered_objects = inspect_hls_playlist_inventory(
+                        self.storage,
+                        root_key=rendition.object_key,
+                        namespace_prefix=version.object_key,
+                        max_duration_seconds=self.processing_quota.max_duration_seconds,
+                        max_head_operations=self.processing_quota.max_head_operations,
+                        head_reader=head_budget.head,
+                    )
+                except MediaProcessingError as error:
+                    raise MediaConflict(
+                        "The media processor returned an invalid HLS object graph."
+                    ) from error
+                if not set(discovered_objects).issubset(inventory):
+                    raise MediaConflict(
+                        "The media processor returned an incomplete HLS object inventory."
+                    )
+            if result.hls_manifest is not None and result.hls_manifest.master_object_key not in {
+                rendition.object_key
+                for rendition in result.renditions
+                if rendition.protocol == DeliveryProtocol.HLS.value
+            }:
+                raise MediaConflict(
+                    "The media processor returned a manifest without a delivery rendition."
+                )
             for rendition in result.renditions:
                 try:
                     protocol = DeliveryProtocol(rendition.protocol)
@@ -952,27 +1459,52 @@ class MediaService:
                     raise MediaConflict(
                         "The media processor returned an unsupported rendition content type."
                     )
-                head = self.storage.head(rendition.object_key)
+                head = head_budget.head(rendition.object_key)
                 if not self._child_key(version, rendition.object_key) or head is None:
                     raise MediaConflict("The media processor returned an unavailable rendition.")
                 if head.content_type.lower().split(";", 1)[0].strip() != content_type:
                     raise MediaConflict(
                         "The media processor returned an unverified rendition content type."
                     )
-                database.add(
-                    MediaRendition(
-                        id=rendition.id,
-                        tenant_id=version.tenant_id,
-                        asset_id=version.asset_id,
-                        version_id=version.id,
-                        protocol=protocol.value,
-                        content_type=content_type,
-                        object_key=rendition.object_key,
-                        width=rendition.width,
-                        height=rendition.height,
-                        bitrate_kbps=rendition.bitrate_kbps,
+                existing_rendition = database.scalar(
+                    select(MediaRendition).where(
+                        MediaRendition.tenant_id == version.tenant_id,
+                        MediaRendition.version_id == version.id,
+                        MediaRendition.object_key == rendition.object_key,
                     )
                 )
+                if existing_rendition is None:
+                    database.add(
+                        MediaRendition(
+                            id=rendition.id,
+                            tenant_id=version.tenant_id,
+                            asset_id=version.asset_id,
+                            version_id=version.id,
+                            protocol=protocol.value,
+                            content_type=content_type,
+                            object_key=rendition.object_key,
+                            width=rendition.width,
+                            height=rendition.height,
+                            bitrate_kbps=rendition.bitrate_kbps,
+                        )
+                    )
+                elif (
+                    existing_rendition.protocol != protocol.value
+                    or existing_rendition.content_type != content_type
+                ):
+                    raise MediaConflict("The media processor reused a rendition identity.")
+            caption_bytes = 0
+            for caption in result.captions:
+                caption_bytes += self._persist_processor_caption(
+                    database,
+                    version,
+                    caption,
+                    head_reader=head_budget.head,
+                )
+            if caption_bytes > self.processing_quota.max_caption_bytes:
+                raise MediaQuotaExceeded("The media caption bytes exceed the processing quota.")
+            if result.output_bytes is not None and result.output_bytes < caption_bytes:
+                raise MediaConflict("The media processor output omits caption bytes.")
             version.avatar_variants = [
                 {
                     "size_px": variant.size_px,
@@ -981,19 +1513,44 @@ class MediaService:
                 }
                 for variant in result.avatar_variants
                 if self._child_key(version, variant.object_key)
-                and self.storage.head(variant.object_key) is not None
+                and head_budget.head(variant.object_key) is not None
             ]
             if len(version.avatar_variants) != len(result.avatar_variants):
                 raise MediaConflict("The media processor returned an unavailable avatar variant.")
-        except MediaStorageUnavailable:
+            if MediaPurpose(version.purpose) is MediaPurpose.VIDEO:
+                # A processor that does not independently measure duration
+                # cannot transition a video to READY.  In particular, do not
+                # fall back to the duration supplied during upload completion.
+                version.duration_seconds = _require_measured_duration(
+                    result.duration_seconds,
+                    maximum=self.processing_quota.max_duration_seconds,
+                )
+            elif result.duration_seconds is not None:
+                version.duration_seconds = _require_measured_duration(
+                    result.duration_seconds,
+                    maximum=self.processing_quota.max_duration_seconds,
+                )
+            if result.width is not None:
+                version.width = result.width
+                version.height = result.height
+            materialized = getattr(self.lifecycle_hooks, "objects_materialized", None)
+            if callable(materialized):
+                materialized(
+                    self._object_reference(version),
+                    tuple(key for key in inventory if key != version.object_key),
+                )
+        except (MediaStorageUnavailable, MediaQuotaExceeded):
+            self._cleanup_processor_outputs(result, version=version)
             raise
         except MediaConflict as error:
+            self._cleanup_processor_outputs(result, version=version)
             version.state = MediaLifecycle.FAILED.value
             version.processing_error = "MEDIA_PROCESSING_OUTPUT_INVALID"
             version.updated_at = self._now()
             database.flush()
             raise MediaConflict("The media processor returned invalid output.") from error
         except Exception as error:
+            self._cleanup_processor_outputs(result, version=version)
             version.state = MediaLifecycle.FAILED.value
             version.processing_error = "MEDIA_PROCESSING_FAILED"
             version.updated_at = self._now()
@@ -1025,6 +1582,21 @@ class MediaService:
             asset.state = MediaLifecycle.READY.value
         asset.updated_at = version.updated_at
         database.flush()
+        if version.supersedes_version_id is not None:
+            superseded = database.scalar(
+                select(MediaVersion).where(
+                    MediaVersion.tenant_id == version.tenant_id,
+                    MediaVersion.asset_id == version.asset_id,
+                    MediaVersion.id == version.supersedes_version_id,
+                )
+            )
+            if superseded is not None:
+                for reference in self._version_object_references(database, superseded):
+                    self.lifecycle_hooks.version_superseded(
+                        reference,
+                        superseded_at=version.updated_at,
+                        policy=self.retention_policy,
+                    )
         return self._asset_response(database, actor, asset)
 
     def get_media(
@@ -1070,7 +1642,7 @@ class MediaService:
             if asset.current_version_id
             else None
         )
-        avatar = self._profile_avatar_version(database, current)
+        avatar = self._profile_avatar_version(database, actor, current)
 
         pending_versions = database.scalars(
             select(MediaVersion)
@@ -1090,7 +1662,7 @@ class MediaService:
         ).all()
         pending = next(
             (
-                self._profile_avatar_version(database, version)
+                self._profile_avatar_version(database, actor, version)
                 for version in pending_versions
                 if current is None or version.id != current.id
             ),
@@ -1099,7 +1671,10 @@ class MediaService:
         return ProfileAvatarResponse(avatar=avatar, pending=pending)
 
     def _profile_avatar_version(
-        self, database: Session, version: MediaVersion | None
+        self,
+        database: Session,
+        actor: ActorContext,
+        version: MediaVersion | None,
     ) -> ProfileAvatarVersionResponse | None:
         if version is None:
             return None
@@ -1123,23 +1698,18 @@ class MediaService:
             content_type = str(selected["content_type"]).lower().split(";", 1)[0].strip()
             if not self._child_key(version, object_key):
                 raise MediaConflict("The ready avatar variant is outside its private namespace.")
-            try:
-                if self.storage.head(object_key) is None:
-                    raise MediaStorageUnavailable("The ready avatar variant is unavailable.")
-                delivery_url = self._secure_media_url(
-                    self.storage.create_read_url(
-                        object_key=object_key,
-                        expires_at=self._now() + timedelta(minutes=5),
-                        content_type=content_type,
-                    ),
-                    description="avatar delivery",
+            if self.storage.head(object_key) is None:
+                raise MediaStorageUnavailable("The ready avatar variant is unavailable.")
+            if self.delivery_port is not None:
+                delivery_url = self._signed_delivery_url(
+                    actor=actor,
+                    asset=self._asset(database, actor, version.asset_id),
+                    version=version,
+                    object_key=object_key,
+                    expires_at=self._now() + timedelta(minutes=5),
+                    kind="read",
+                    supports_range=False,
                 )
-            except MediaStorageUnavailable:
-                raise
-            except Exception as error:
-                raise MediaStorageUnavailable(
-                    "The private media storage adapter could not issue an avatar URL."
-                ) from error
             size_px = self._avatar_variant_size(selected)
         else:
             content_type = version.content_type
@@ -1272,23 +1842,34 @@ class MediaService:
         )
 
     def _caption_response(
-        self, caption: MediaCaptionTrack, *, include_source_url: bool, expires_at: datetime | None
+        self,
+        caption: MediaCaptionTrack,
+        *,
+        include_source_url: bool,
+        expires_at: datetime | None,
+        actor: ActorContext | None = None,
+        asset: MediaAsset | None = None,
+        version: MediaVersion | None = None,
+        session_id: UUID | str | None = None,
     ) -> CaptionResponse:
         source_url = None
-        if include_source_url:
-            try:
-                source_url = self._secure_media_url(
-                    self.storage.create_read_url(
-                        object_key=caption.object_key,
-                        expires_at=expires_at or (self._now() + timedelta(minutes=5)),
-                        content_type=caption.content_type,
-                    ),
-                    description="caption delivery",
-                )
-            except Exception as error:
-                raise MediaStorageUnavailable(
-                    "The private media storage adapter could not issue a caption URL."
-                ) from error
+        if (
+            include_source_url
+            and self.delivery_port is not None
+            and actor is not None
+            and asset is not None
+            and version is not None
+        ):
+            source_url = self._signed_delivery_url(
+                actor=actor,
+                asset=asset,
+                version=version,
+                object_key=caption.object_key,
+                expires_at=expires_at or (self._now() + timedelta(minutes=5)),
+                kind="read",
+                supports_range=False,
+                session_id=session_id,
+            )
         return CaptionResponse(
             id=caption.id,
             media_version_id=caption.version_id,
@@ -1333,10 +1914,24 @@ class MediaService:
             database.flush()
         expires_at = _as_utc(grant.expires_at)
         delivery = self._delivery(
-            database, version, preferred=request.preferred_protocol, expires_at=expires_at
+            database,
+            actor,
+            asset,
+            grant,
+            version,
+            preferred=request.preferred_protocol,
+            expires_at=expires_at,
         )
         captions = [
-            self._caption_response(row, include_source_url=True, expires_at=expires_at)
+            self._caption_response(
+                row,
+                include_source_url=True,
+                expires_at=expires_at,
+                actor=actor,
+                asset=asset,
+                version=version,
+                session_id=grant.session_id,
+            )
             for row in database.scalars(
                 select(MediaCaptionTrack).where(
                     MediaCaptionTrack.tenant_id == asset.tenant_id,
@@ -1367,6 +1962,12 @@ class MediaService:
     ) -> PlaybackResponse:
         if not idempotency_key or len(idempotency_key) > 128:
             raise MediaBadRequest("A bounded Idempotency-Key is required for playback commands.")
+        # Do this before creating or replaying a durable grant.  A runtime
+        # without a reviewed application delivery handler must stay entirely
+        # unavailable; it must not leave an orphaned grant behind and hope a
+        # later route composition can make it usable.
+        if self.delivery_port is None:
+            raise MediaConflict("Media delivery is not composed for this runtime.")
         asset = self._asset(database, actor, asset_id)
         self._require_playback(database, actor, asset)
         if asset.state == MediaLifecycle.RETIRED.value:
@@ -1385,6 +1986,11 @@ class MediaService:
         )
         if version is None:
             raise MediaConflict("The media is not ready for playback.")
+        if MediaPurpose(version.purpose) is MediaPurpose.VIDEO:
+            _require_measured_duration(
+                version.duration_seconds,
+                maximum=self.processing_quota.max_duration_seconds,
+            )
         fingerprint = self._fingerprint(
             {"asset_id": str(asset.id), "request": request.model_dump(mode="json")}
         )
@@ -1460,6 +2066,9 @@ class MediaService:
     def _delivery(
         self,
         database: Session,
+        actor: ActorContext,
+        asset: MediaAsset,
+        grant: MediaPlaybackGrant,
         version: MediaVersion,
         *,
         preferred: DeliveryProtocol | None,
@@ -1481,31 +2090,30 @@ class MediaService:
         )
         if selected is None:
             raise MediaConflict("The media has no approved playback rendition.")
-        try:
-            url = self._secure_media_url(
-                self.storage.create_read_url(
-                    object_key=selected.object_key,
-                    expires_at=expires_at,
-                    content_type=selected.content_type,
-                ),
-                description="playback",
+        url = self._signed_delivery_url(
+            actor=actor,
+            asset=asset,
+            version=version,
+            object_key=selected.object_key,
+            expires_at=expires_at,
+            kind="playback",
+            supports_range=selected.protocol == DeliveryProtocol.PROGRESSIVE.value,
+            session_id=grant.session_id,
+        )
+        progressive_url = (
+            self._signed_delivery_url(
+                actor=actor,
+                asset=asset,
+                version=version,
+                object_key=progressive.object_key,
+                expires_at=expires_at,
+                kind="playback",
+                supports_range=True,
+                session_id=grant.session_id,
             )
-            progressive_url = (
-                self._secure_media_url(
-                    self.storage.create_read_url(
-                        object_key=progressive.object_key,
-                        expires_at=expires_at,
-                        content_type=progressive.content_type,
-                    ),
-                    description="playback",
-                )
-                if progressive and progressive.id != selected.id
-                else None
-            )
-        except Exception as error:
-            raise MediaStorageUnavailable(
-                "The private media storage adapter could not issue playback URLs."
-            ) from error
+            if progressive and progressive.id != selected.id
+            else None
+        )
         return MediaDeliveryResponse(
             protocol=DeliveryProtocol(selected.protocol),
             manifest_url=url if selected.protocol == DeliveryProtocol.HLS.value else None,
@@ -1559,7 +2167,11 @@ class MediaService:
             or version.state != MediaLifecycle.READY.value
         ):
             raise MediaForbidden("The media authorization token is no longer valid.")
-        if version.duration_seconds is None or request.position_seconds > version.duration_seconds:
+        duration_seconds = _require_measured_duration(
+            version.duration_seconds,
+            maximum=self.processing_quota.max_duration_seconds,
+        )
+        if request.position_seconds > duration_seconds:
             raise MediaBadRequest("The playback position is outside the media duration.")
         if request.visibility not in {"visible", "hidden", "background"}:
             raise MediaBadRequest("The playback visibility value is not supported.")
@@ -1601,7 +2213,7 @@ class MediaService:
             if seek
             else None
         )
-        resume.position_seconds = min(request.position_seconds, version.duration_seconds)
+        resume.position_seconds = min(request.position_seconds, duration_seconds)
         resume.last_sequence = request.sequence
         resume.client_event_ids = [
             *(resume.client_event_ids or [])[-1023:],
@@ -1656,7 +2268,12 @@ class MediaService:
             if existing.request_fingerprint != fingerprint:
                 raise MediaConflict("The caption idempotency key was reused with different data.")
             return self._caption_response(
-                existing, include_source_url=True, expires_at=self._now() + timedelta(minutes=5)
+                existing,
+                include_source_url=True,
+                expires_at=self._now() + timedelta(minutes=5),
+                actor=actor,
+                asset=asset,
+                version=version,
             )
         allowed = (
             {"application/json", "text/plain", "text/vtt"}
@@ -1666,7 +2283,7 @@ class MediaService:
         if request.content_type not in allowed:
             raise MediaBadRequest("The caption content type is not allowed for this track kind.")
         content_bytes = request.content.encode("utf-8")
-        if len(content_bytes) > 25 * 1024 * 1024:
+        if len(content_bytes) > self.processing_quota.max_caption_bytes:
             raise MediaQuotaExceeded("The caption content exceeds the configured byte limit.")
         prior = database.scalars(
             select(MediaCaptionTrack)
@@ -1680,6 +2297,32 @@ class MediaService:
             .order_by(MediaCaptionTrack.created_at.desc(), MediaCaptionTrack.id.desc())
             .with_for_update()
         ).all()
+        ready_tracks = database.scalars(
+            select(MediaCaptionTrack)
+            .where(
+                MediaCaptionTrack.tenant_id == asset.tenant_id,
+                MediaCaptionTrack.version_id == version.id,
+                MediaCaptionTrack.state == CaptionState.READY.value,
+            )
+            .with_for_update()
+        ).all()
+        if not prior and len(ready_tracks) >= self.processing_quota.max_caption_tracks:
+            raise MediaQuotaExceeded("The media caption count exceeds the processing quota.")
+        existing_caption_bytes = 0
+        prior_ids = {row.id for row in prior}
+        for row in ready_tracks:
+            try:
+                row_head = self.storage.head(row.object_key)
+            except Exception as error:
+                raise MediaStorageUnavailable(
+                    "The private media storage adapter could not inspect an existing caption."
+                ) from error
+            if row_head is None or row_head.content_length <= 0:
+                raise MediaStorageUnavailable("An existing media caption is unavailable.")
+            if row.id not in prior_ids:
+                existing_caption_bytes += row_head.content_length
+        if existing_caption_bytes + len(content_bytes) > self.processing_quota.max_caption_bytes:
+            raise MediaQuotaExceeded("The media caption bytes exceed the processing quota.")
         caption_id = uuid4()
         object_key = (
             f"{version.object_key}/captions/{request.language}/{request.kind.value}/{caption_id}"
@@ -1688,9 +2331,38 @@ class MediaService:
             self.storage.put(
                 object_key=object_key, body=content_bytes, content_type=request.content_type
             )
+            head = self.storage.head(object_key)
+            expected_checksum = hashlib.sha256(content_bytes).hexdigest()
+            if (
+                head is None
+                or head.content_length != len(content_bytes)
+                or head.checksum_sha256.lower() != expected_checksum
+                or head.content_type.lower().split(";", 1)[0].strip() != request.content_type
+            ):
+                raise MediaConflict("The stored media caption failed integrity verification.")
+            scan = self.scanner.scan(
+                storage=self.storage,
+                object_key=object_key,
+                declared_content_type=request.content_type,
+                content_length=len(content_bytes),
+                checksum_sha256=expected_checksum,
+            )
+            if not scan.clean:
+                if scan.reason_code == "SCANNER_NOT_CONFIGURED":
+                    raise MediaScannerUnavailable("The media safety scanner is not configured.")
+                raise MediaConflict("The media caption failed the safety scan.")
+            if (
+                not scan.verified_checksum_sha256
+                or scan.verified_checksum_sha256.lower() != expected_checksum
+            ):
+                raise MediaConflict("The media caption safety scan did not verify its checksum.")
+        except (MediaConflict, MediaScannerUnavailable) as error:
+            self._delete_object_best_effort(object_key, reference=self._object_reference(version))
+            raise error
         except Exception as error:
+            self._delete_object_best_effort(object_key, reference=self._object_reference(version))
             raise MediaStorageUnavailable(
-                "The private media storage adapter could not persist the caption."
+                "The media caption could not be stored or scanned safely."
             ) from error
         for row in prior:
             row.state = CaptionState.SUPERSEDED.value
@@ -1721,9 +2393,13 @@ class MediaService:
                 ).update({"is_default": False}, synchronize_session=False)
             database.flush()
         except IntegrityError as error:
+            self._delete_object_best_effort(object_key, reference=self._object_reference(version))
             raise MediaConflict(
                 "The caption track changed concurrently; retry the idempotent command."
             ) from error
+        except Exception:
+            self._delete_object_best_effort(object_key, reference=self._object_reference(version))
+            raise
         caption = database.scalar(
             select(MediaCaptionTrack).where(
                 MediaCaptionTrack.tenant_id == asset.tenant_id,
@@ -1737,6 +2413,9 @@ class MediaService:
             caption,
             include_source_url=True,
             expires_at=self._now() + timedelta(minutes=5),
+            actor=actor,
+            asset=asset,
+            version=version,
         )
 
     def list_captions(
@@ -1756,7 +2435,12 @@ class MediaService:
         ).all()
         return [
             self._caption_response(
-                row, include_source_url=True, expires_at=self._now() + timedelta(minutes=5)
+                row,
+                include_source_url=True,
+                expires_at=self._now() + timedelta(minutes=5),
+                actor=actor,
+                asset=asset,
+                version=version,
             )
             for row in rows
         ]
@@ -1764,6 +2448,12 @@ class MediaService:
     def retire(self, database: Session, actor: ActorContext, asset_id: UUID) -> RetireResponse:
         asset = self._asset(database, actor, asset_id, lock=True)
         self._require_write(actor, purpose=MediaPurpose(asset.purpose), asset=asset)
+        if asset.state == MediaLifecycle.RETIRED.value:
+            return RetireResponse(
+                media_id=asset.id,
+                state=MediaLifecycle.RETIRED,
+                retired_at=asset.updated_at,
+            )
         now = self._now()
         asset.state = MediaLifecycle.RETIRED.value
         asset.updated_at = now
@@ -1773,24 +2463,79 @@ class MediaService:
             MediaPlaybackGrant.revoked_at.is_(None),
         ).update({"revoked_at": now}, synchronize_session=False)
         database.flush()
+        for version in database.scalars(
+            select(MediaVersion).where(
+                MediaVersion.tenant_id == asset.tenant_id,
+                MediaVersion.asset_id == asset.id,
+            )
+        ).all():
+            for reference in self._version_object_references(database, version):
+                self.lifecycle_hooks.asset_retired(
+                    reference,
+                    retired_at=now,
+                    policy=self.retention_policy,
+                )
         return RetireResponse(media_id=asset.id, state=MediaLifecycle.RETIRED, retired_at=now)
 
-    def verify_webhook_signature(self, raw_body: bytes, signature: str) -> bool:
-        value = signature.removeprefix("sha256=")
+    def verify_webhook_signature(
+        self,
+        raw_body: bytes,
+        signature: str,
+        *,
+        timestamp: int | None = None,
+        now: datetime | None = None,
+    ) -> bool:
+        """Verify a callback signature, including freshness at the HTTP seam.
+
+        Existing trusted worker callers may continue using the legacy raw-body
+        form while they migrate.  The canonical HTTP route supplies a
+        timestamp, which binds the signature to the body and rejects replayed
+        callbacks outside the five-minute tolerance window.
+        """
+
+        value = signature.strip().removeprefix("sha256=")
         if not re.fullmatch(r"[0-9a-fA-F]{64}", value):
             return False
-        expected = hmac.new(self.webhook_secret, raw_body, hashlib.sha256).hexdigest()
+        signed_body = raw_body
+        if timestamp is not None:
+            if isinstance(timestamp, bool) or not isinstance(timestamp, int) or timestamp <= 0:
+                return False
+            current = _as_utc(now or self._now())
+            if abs(current.timestamp() - timestamp) > _WEBHOOK_TIMESTAMP_TOLERANCE.total_seconds():
+                return False
+            signed_body = f"{timestamp}.".encode("ascii") + raw_body
+        expected = hmac.new(self.webhook_secret, signed_body, hashlib.sha256).hexdigest()
         return hmac.compare_digest(expected, value)
 
     def handle_webhook(
-        self, database: Session, provider: str, raw_body: bytes, signature: str
+        self,
+        database: Session,
+        provider: str,
+        raw_body: bytes,
+        signature: str,
+        *,
+        timestamp: int | None = None,
+        now: datetime | None = None,
     ) -> tuple[MediaVersionResponse, bool]:
-        if provider != "video" or not self.verify_webhook_signature(raw_body, signature):
+        if not self._provider_activation_verified():
+            raise MediaConfigurationError("The media provider webhook is not activated.")
+        if provider != "video" or not self.verify_webhook_signature(
+            raw_body, signature, timestamp=timestamp, now=now
+        ):
             raise MediaForbidden("The media provider webhook signature is invalid.")
         try:
             request = VideoWebhookRequest.model_validate_json(raw_body)
         except ValueError as error:
             raise MediaBadRequest("The media provider webhook payload is invalid.") from error
+        if request.state.value == MediaLifecycle.READY.value:
+            # The callback route is intentionally unmounted: this slice has
+            # no inbox-first raw-envelope persistence, quick ACK, and async
+            # worker.  Keep the direct service seam fail-closed too; a
+            # provider-declared duration is never an internal measurement.
+            raise MediaConflict(
+                "Provider READY is unavailable without an independent internal duration "
+                "measurement."
+            )
         version = database.scalar(
             select(MediaVersion)
             .where(MediaVersion.id == request.media_version_id)
@@ -1846,9 +2591,84 @@ class MediaService:
         if request.event_type.strip().lower() != expected_event_type:
             raise MediaBadRequest("The provider webhook event type does not match its state.")
         if request.state is MediaLifecycle.READY:
+            head_budget = _BoundedMediaHeadReader(
+                self.storage, self.processing_quota.max_head_operations
+            )
             if not request.renditions:
                 raise MediaConflict("A ready provider webhook must include a playback rendition.")
+            if len(request.renditions) > self.processing_quota.max_renditions:
+                raise MediaQuotaExceeded(
+                    "The provider rendition count exceeds the processing quota."
+                )
+            measured_duration = _require_measured_duration(
+                request.duration_seconds
+                if request.duration_seconds is not None
+                else version.duration_seconds,
+                maximum=self.processing_quota.max_duration_seconds,
+            )
+            source_head = head_budget.head(version.object_key)
+            if source_head is None:
+                raise MediaConflict("The provider source object is unavailable.")
+            if (
+                isinstance(source_head.content_length, bool)
+                or not isinstance(source_head.content_length, int)
+                or source_head.content_length <= 0
+            ):
+                raise MediaConflict("The provider source size is unverified.")
+            self.processing_quota.check_source(source_head.content_length)
+            if source_head.content_type.lower().split(";", 1)[0].strip() != version.content_type:
+                raise MediaConflict("The provider source MIME is unverified.")
+            if (
+                version.actual_bytes is not None
+                and source_head.content_length != version.actual_bytes
+            ):
+                raise MediaConflict("The provider source changed after upload completion.")
+            if version.checksum_sha256 is not None and (
+                not source_head.checksum_sha256
+                or not _SHA256.fullmatch(source_head.checksum_sha256)
+                or source_head.checksum_sha256.lower() != version.checksum_sha256.lower()
+            ):
+                raise MediaConflict("The provider source checksum is unverified.")
+            rendition_ids: set[UUID] = set()
+            rendition_keys: set[str] = set()
+            materialized_keys: set[str] = set(request.object_keys)
+            hls_content_types = _RENDITION_CONTENT_TYPES[DeliveryProtocol.HLS]
+            for object_key in materialized_keys:
+                if len(materialized_keys) > self.processing_quota.max_output_files:
+                    raise MediaQuotaExceeded(
+                        "The provider output file count exceeds the processing quota."
+                    )
+                if not self._child_key(version, object_key):
+                    raise MediaBadRequest(
+                        "The provider object inventory is outside the private media namespace."
+                    )
+                object_head = head_budget.head(object_key)
+                if object_head is None:
+                    raise MediaConflict("The provider object inventory is not available.")
+                if (
+                    isinstance(object_head.content_length, bool)
+                    or not isinstance(object_head.content_length, int)
+                    or object_head.content_length <= 0
+                ):
+                    raise MediaConflict("The provider object inventory size is unverified.")
+                if not object_head.checksum_sha256 or not _SHA256.fullmatch(
+                    object_head.checksum_sha256
+                ):
+                    raise MediaConflict("The provider object inventory checksum is unverified.")
+                object_mime = object_head.content_type.lower().split(";", 1)[0].strip()
+                if object_key.lower().endswith(".m3u8") and object_mime not in hls_content_types:
+                    raise MediaConflict(
+                        "The provider object inventory contains an unverified playlist."
+                    )
+                if object_key.lower().endswith(".ts") and object_mime != "video/mp2t":
+                    raise MediaConflict(
+                        "The provider object inventory contains an unverified segment."
+                    )
             for rendition in request.renditions:
+                if rendition.id in rendition_ids or rendition.object_key in rendition_keys:
+                    raise MediaBadRequest("The provider webhook contains duplicate renditions.")
+                rendition_ids.add(rendition.id)
+                rendition_keys.add(rendition.object_key)
                 if not self._child_key(version, rendition.object_key):
                     raise MediaBadRequest(
                         "The provider rendition is outside the private media namespace."
@@ -1856,11 +2676,37 @@ class MediaService:
                 allowed_content_types = _RENDITION_CONTENT_TYPES[rendition.protocol]
                 if rendition.content_type not in allowed_content_types:
                     raise MediaBadRequest("The provider rendition content type is not supported.")
-                head = self.storage.head(rendition.object_key)
+                head = head_budget.head(rendition.object_key)
                 if head is None:
                     raise MediaConflict("The provider rendition is not available.")
+                if not head.checksum_sha256 or not _SHA256.fullmatch(head.checksum_sha256):
+                    raise MediaConflict("The provider rendition checksum is unverified.")
                 if head.content_type.lower().split(";", 1)[0].strip() != rendition.content_type:
                     raise MediaConflict("The provider rendition content type is not verified.")
+                if rendition.protocol is DeliveryProtocol.HLS:
+                    try:
+                        discovered_objects = inspect_hls_playlist_inventory(
+                            self.storage,
+                            root_key=rendition.object_key,
+                            namespace_prefix=version.object_key,
+                            max_duration_seconds=self.processing_quota.max_duration_seconds,
+                            max_head_operations=max(
+                                1,
+                                self.processing_quota.max_head_operations
+                                // max(1, len(request.renditions)),
+                            ),
+                            head_reader=head_budget.head,
+                        )
+                    except MediaProcessingError as error:
+                        raise MediaConflict(
+                            "The provider HLS object graph could not be verified."
+                        ) from error
+                    materialized_keys.update(discovered_objects)
+                    if len(materialized_keys) > self.processing_quota.max_output_files:
+                        raise MediaQuotaExceeded(
+                            "The provider output file count exceeds the processing quota."
+                        )
+                materialized_keys.add(rendition.object_key)
                 database.add(
                     MediaRendition(
                         id=rendition.id,
@@ -1875,7 +2721,18 @@ class MediaService:
                         bitrate_kbps=rendition.bitrate_kbps,
                     )
                 )
-            version.duration_seconds = request.duration_seconds or version.duration_seconds
+            output_bytes = 0
+            for object_key in materialized_keys:
+                metadata = head_budget.seen.get(object_key)
+                if metadata is None:
+                    raise MediaConflict("The provider output inventory is unverified.")
+                output_bytes += metadata.content_length
+            if output_bytes > self.processing_quota.max_output_bytes:
+                raise MediaQuotaExceeded("The provider output exceeds the processing quota.")
+            materialized = getattr(self.lifecycle_hooks, "objects_materialized", None)
+            if callable(materialized):
+                materialized(self._object_reference(version), tuple(sorted(materialized_keys)))
+            version.duration_seconds = measured_duration
             version.state = MediaLifecycle.READY.value
             version.processing_error = None
             intent = database.scalar(
@@ -1906,6 +2763,23 @@ class MediaService:
             if current is None or current.version_number <= version.version_number:
                 asset.current_version_id = version.id
                 asset.state = MediaLifecycle.READY.value
+            version.updated_at = self._now()
+            asset.updated_at = version.updated_at
+            if version.supersedes_version_id is not None:
+                superseded = database.scalar(
+                    select(MediaVersion).where(
+                        MediaVersion.tenant_id == version.tenant_id,
+                        MediaVersion.asset_id == version.asset_id,
+                        MediaVersion.id == version.supersedes_version_id,
+                    )
+                )
+                if superseded is not None:
+                    for reference in self._version_object_references(database, superseded):
+                        self.lifecycle_hooks.version_superseded(
+                            reference,
+                            superseded_at=version.updated_at,
+                            policy=self.retention_policy,
+                        )
         else:
             version.state = MediaLifecycle.FAILED.value
             version.processing_error = self._safe_failure_code(
@@ -1928,6 +2802,11 @@ class MediaService:
             )
             if asset is not None and asset.current_version_id is None:
                 asset.state = MediaLifecycle.FAILED.value
+            # A failed provider attempt has no returned inventory. Discover
+            # and remove only children of this version prefix; failures remain
+            # retryable through the lifecycle/retention worker if listing or
+            # deletion is unavailable.
+            self._cleanup_processor_outputs(None, version=version)
         inbox.claimed_at = None
         inbox.processed_at = self._now()
         inbox.result_version_id = version.id

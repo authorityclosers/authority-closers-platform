@@ -20,7 +20,6 @@ _DRAFT_PATH = re.compile(r"^/v1/activities/[^/]+/draft$")
 _EVIDENCE_PATH = re.compile(r"^/v1/activities/[^/]+/evidence$")
 _WEBHOOK_PATH = re.compile(r"^/internal/v1/providers/[^/]+/webhooks$")
 _MEDIA_CAPTION_PATH = re.compile(r"^/v1/media/[^/]+/captions$")
-_MEDIA_WEBHOOK_PATH = re.compile(r"^/internal/v1/media/providers/[^/]+/webhooks$")
 
 
 def request_body_limit(scope: Scope) -> int:
@@ -30,8 +29,6 @@ def request_body_limit(scope: Scope) -> int:
     if _EVIDENCE_PATH.fullmatch(path):
         return 256 * 1024
     if _WEBHOOK_PATH.fullmatch(path):
-        return MAX_MEDIA_WEBHOOK_BYTES
-    if _MEDIA_WEBHOOK_PATH.fullmatch(path):
         return MAX_MEDIA_WEBHOOK_BYTES
     if _MEDIA_CAPTION_PATH.fullmatch(path):
         return MAX_MEDIA_CAPTION_BYTES

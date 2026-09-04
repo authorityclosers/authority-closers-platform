@@ -86,7 +86,6 @@ class UploadCompleteRequest(StrictModel):
     actual_bytes: int | None = Field(default=None, gt=0)
     checksum_sha256: str | None = None
     storage_version_id: str | None = Field(default=None, max_length=255)
-    provider_asset_id: str | None = Field(default=None, max_length=255)
     duration_seconds: float | None = Field(default=None, gt=0)
     width: int | None = Field(default=None, gt=0)
     height: int | None = Field(default=None, gt=0)
@@ -201,6 +200,26 @@ class RenditionWebhook(StrictModel):
     height: int | None = Field(default=None, gt=0)
     bitrate_kbps: int | None = Field(default=None, gt=0)
 
+    @field_validator("content_type")
+    @classmethod
+    def normalize_content_type(cls, value: str) -> str:
+        return value.split(";", 1)[0].strip().lower()
+
+    @field_validator("object_key")
+    @classmethod
+    def safe_object_key(cls, value: str) -> str:
+        normalized = value.strip()
+        if (
+            normalized != value
+            or ".." in normalized
+            or "\\" in normalized
+            or normalized.startswith("/")
+            or any(character.isspace() for character in normalized)
+            or any(ord(character) < 0x20 or ord(character) == 0x7F for character in normalized)
+        ):
+            raise ValueError("object_key must be a bounded private media key")
+        return normalized
+
 
 class VideoWebhookRequest(StrictModel):
     provider_event_id: str = Field(min_length=1, max_length=255)
@@ -210,7 +229,44 @@ class VideoWebhookRequest(StrictModel):
     state: MediaLifecycle
     duration_seconds: float | None = Field(default=None, gt=0)
     renditions: list[RenditionWebhook] = Field(default_factory=list, max_length=16)
+    # Provider payloads may declare the complete private HLS inventory when
+    # the provider's playlist graph is materialized asynchronously.  The
+    # service still re-derives and verifies playlist references from storage.
+    object_keys: list[str] = Field(default_factory=list, max_length=2048)
     failure_code: str | None = Field(default=None, max_length=128)
+
+    @field_validator("provider_event_id", "provider_asset_id", "event_type")
+    @classmethod
+    def nonblank_integration_text(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized or any(
+            ord(character) < 0x20 or ord(character) == 0x7F for character in normalized
+        ):
+            raise ValueError("provider integration identifiers must be bounded and nonblank")
+        return normalized
+
+    @field_validator("object_keys")
+    @classmethod
+    def safe_object_keys(cls, values: list[str]) -> list[str]:
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for value in values:
+            key = value.strip()
+            if (
+                key != value
+                or not key
+                or ".." in key
+                or "\\" in key
+                or key.startswith("/")
+                or any(character.isspace() for character in key)
+                or any(ord(character) < 0x20 or ord(character) == 0x7F for character in key)
+                or key in seen
+                or len(key) > 512
+            ):
+                raise ValueError("object_keys must be unique bounded private media keys")
+            seen.add(key)
+            normalized.append(key)
+        return normalized
 
 
 class CaptionResponse(StrictModel):
