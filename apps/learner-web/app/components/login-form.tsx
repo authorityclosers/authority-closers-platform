@@ -22,7 +22,14 @@ function errorMessage(error: unknown): string {
 
 type LoginFormProps = {
   sessionExpired?: boolean;
+  stagingBridge?: boolean;
 };
+
+const STAGING_APP_ORIGIN = "https://staging.authorityclosers.com";
+
+function stagingHref(path: string): string {
+  return new URL(path, STAGING_APP_ORIGIN).toString();
+}
 
 export function routeAfterOnboarding(status?: OnboardingStatus): string {
   return status === "completed" || status === "skipped"
@@ -30,13 +37,18 @@ export function routeAfterOnboarding(status?: OnboardingStatus): string {
     : ROUTES.onboarding;
 }
 
-export function LoginForm({ sessionExpired = false }: LoginFormProps) {
+export function LoginForm({
+  sessionExpired = false,
+  stagingBridge = false,
+}: LoginFormProps) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [verificationRequired, setVerificationRequired] = useState(false);
   const [passwordVisible, setPasswordVisible] = useState(false);
   const errorRef = useRef<HTMLDivElement>(null);
-  const authenticateUrl = googleAuthStartUrl("authenticate");
+  const authenticateUrl = stagingBridge
+    ? stagingHref(googleAuthStartUrl("authenticate"))
+    : googleAuthStartUrl("authenticate");
 
   useEffect(() => {
     if (error) errorRef.current?.focus();
@@ -82,7 +94,9 @@ export function LoginForm({ sessionExpired = false }: LoginFormProps) {
       </div>
       <h2>{sessionExpired ? "Sign in to continue." : "Welcome back."}</h2>
       <p className="auth-card__intro">
-        Use your verified email and password, or continue with Google.
+        {stagingBridge
+          ? "Use your verified staging email and password. Account creation, recovery, and Google sign-in continue on the deployed staging surface."
+          : "Use your verified email and password, or continue with Google."}
       </p>
       {sessionExpired ? (
         <div className="auth-notice" role="status">
@@ -143,9 +157,15 @@ export function LoginForm({ sessionExpired = false }: LoginFormProps) {
             <strong>Sign-in could not be completed</strong>
             <p>{error}</p>
             {verificationRequired ? (
-              <Link className="text-link" href={ROUTES.verifyEmail}>
-                Request a fresh verification link
-              </Link>
+              stagingBridge ? (
+                <a className="text-link" href={stagingHref(ROUTES.verifyEmail)}>
+                  Request on deployed staging
+                </a>
+              ) : (
+                <Link className="text-link" href={ROUTES.verifyEmail}>
+                  Request a fresh verification link
+                </Link>
+              )
             ) : null}
           </div>
         ) : null}
@@ -153,19 +173,31 @@ export function LoginForm({ sessionExpired = false }: LoginFormProps) {
           {pending ? "Signing in…" : "Sign in"}
           <ArrowRight size={17} aria-hidden="true" />
         </button>
-        <Link className="text-link" href={ROUTES.forgotPassword}>
-          Forgot your password?
-        </Link>
+        {stagingBridge ? (
+          <a className="text-link" href={stagingHref(ROUTES.forgotPassword)}>
+            Forgot your password? Continue on staging
+          </a>
+        ) : (
+          <Link className="text-link" href={ROUTES.forgotPassword}>
+            Forgot your password?
+          </Link>
+        )}
       </form>
       <div className="auth-divider" aria-hidden="true">
         <span>or</span>
       </div>
       <a className="button button--outline button--full" href={authenticateUrl}>
-        Continue with Google
+        {stagingBridge
+          ? "Continue with Google on staging"
+          : "Continue with Google"}
       </a>
       <div className="auth-card__footer">
         <span>First time here—including with Google?</span>
-        <Link href={ROUTES.register}>Create your free learner account</Link>
+        {stagingBridge ? (
+          <a href={stagingHref(ROUTES.register)}>Create on deployed staging</a>
+        ) : (
+          <Link href={ROUTES.register}>Create your free learner account</Link>
+        )}
       </div>
     </div>
   );

@@ -7,6 +7,7 @@ import {
   parseSurfaceState,
   type QueryValue,
 } from "../lib/surface-state";
+import { isStagingAuthenticatedBridge } from "../lib/dev-api-proxy";
 
 type LoginPageProps = {
   searchParams: Promise<{ state?: QueryValue }>;
@@ -15,6 +16,10 @@ type LoginPageProps = {
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const query = await searchParams;
   const state = parseSurfaceState(query.state);
+  const stagingBridge = isStagingAuthenticatedBridge(
+    process.env,
+    process.env.NODE_ENV,
+  );
 
   return (
     <AuthFlowPage
@@ -37,7 +42,9 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           pageHeadingPresent
         />
       ) : null}
-      {isContentVisible(state) ? <LoginForm /> : null}
+      {isContentVisible(state) ? (
+        <LoginForm stagingBridge={stagingBridge} />
+      ) : null}
     </AuthFlowPage>
   );
 }

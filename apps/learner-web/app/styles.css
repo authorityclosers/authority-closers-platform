@@ -1758,11 +1758,11 @@ svg {
 }
 
 .dev-staging-bridge-notice {
-  position: fixed;
-  right: 14px;
-  bottom: 14px;
+  position: sticky;
+  top: 10px;
   z-index: 120;
   width: min(360px, calc(100vw - 28px));
+  margin: 10px 14px 0 auto;
   border: 1px solid #d8bd61;
   border-radius: 12px;
   background: #fff7d8;
@@ -1796,24 +1796,103 @@ svg {
   background: #f9d96b;
 }
 
+.dev-staging-bridge-notice__heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .dev-staging-bridge-notice strong {
   font-size: 0.72rem;
   letter-spacing: 0.055em;
   text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.dev-staging-bridge-notice__shortcut {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 5px;
+  font-size: 0.65rem;
+  font-family: var(--font-sans, inherit);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #5f4b00;
+  background: rgba(216, 189, 97, 0.35);
+  border: 1px solid rgba(111, 87, 18, 0.25);
+  border-radius: 4px;
+}
+
+.dev-staging-bridge-notice__dismiss {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  margin-left: auto;
+  flex: 0 0 auto;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #6f5712;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.dev-staging-bridge-notice__dismiss:hover {
+  background: rgba(111, 87, 18, 0.12);
+  border-color: rgba(111, 87, 18, 0.25);
+}
+
+.dev-staging-bridge-notice__dismiss:focus-visible {
+  outline: 2px solid #493700;
+  outline-offset: 1px;
+}
+
+.dev-staging-bridge-notice__body {
+  padding: 0 12px 10px 42px;
 }
 
 .dev-staging-bridge-notice p {
-  margin: 0;
-  padding: 0 12px 12px 42px;
+  margin: 0 0 6px;
+  padding: 0;
   line-height: 1.45;
+}
+
+.dev-staging-bridge-notice__hint-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.68rem;
+  color: #6f5712;
+}
+
+.dev-staging-bridge-notice__hint-row kbd {
+  display: inline-block;
+  padding: 1px 4px;
+  font-size: 0.65rem;
+  font-family: var(--font-sans, inherit);
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid #d8bd61;
+  border-radius: 4px;
+}
+
+.dev-staging-bridge-notice__hint-mac {
+  font-size: 0.65rem;
+  opacity: 0.85;
 }
 
 @media (max-width: 720px) {
   .dev-staging-bridge-notice {
-    right: 10px;
-    bottom: calc(76px + env(safe-area-inset-bottom));
+    top: max(8px, env(safe-area-inset-top));
     width: auto;
     max-width: calc(100vw - 20px);
+    margin: 8px 10px 0 auto;
   }
 
   .dev-staging-bridge-notice:not([open]) {

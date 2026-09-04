@@ -176,7 +176,7 @@ export default function CatalogPage() {
           <div className="studio-warning">
             <AlertTriangle size={19} aria-hidden="true" />
             <div>
-              <strong>Media configuration is not connected</strong>
+              <strong>Media configuration remains gated</strong>
               <p>
                 No transcript or playable media is asserted. Learner-facing
                 delivery remains subject to the content/provider gates.

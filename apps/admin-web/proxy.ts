@@ -6,6 +6,7 @@ import {
   normalizeAdminRuntime,
   renderPermissionDeniedDocument,
 } from "./app/lib/admin-access";
+import { isStagingAdminBridge } from "./app/lib/dev-api-proxy";
 import { resolveAdminServerContext } from "./app/lib/server-auth";
 
 const INTERNAL_HEALTH_PATH = "/healthz";
@@ -51,7 +52,9 @@ export async function proxy(request: NextRequest) {
       : null;
   const decision = evaluateAdminAccess({
     runtime,
-    localPreviewEnabled: process.env[LOCAL_PREVIEW_ENV] === "1",
+    localPreviewEnabled:
+      process.env[LOCAL_PREVIEW_ENV] === "1" ||
+      isStagingAdminBridge(process.env, process.env.NODE_ENV),
     serverContext,
   });
 

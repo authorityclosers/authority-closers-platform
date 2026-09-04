@@ -27,7 +27,7 @@ export default function PeoplePage() {
       description="Manage learner visibility and future assignment workflows without guessing at people, groups, progress, or permissions."
     >
       <PreviewNotice
-        title="People data is not connected in this foundation."
+        title="The people read model is outside this foundation release."
         body="The shell is ready for the tenant-scoped people read path. No learner lookup is issued until the API verifies learner_diagnose, active tenant context, redaction, purpose, and audit provenance."
       />
 

@@ -1,8 +1,14 @@
 import { AuthFlowPage } from "../components/auth-flow-page";
 import { RegistrationForm } from "../components/password-auth-forms";
 import { ROUTES } from "../lib/routes";
+import { StagingAuthHandoff } from "../components/staging-auth-handoff";
+import { isStagingAuthenticatedBridge } from "../lib/dev-api-proxy";
 
 export default function RegisterPage() {
+  const stagingBridge = isStagingAuthenticatedBridge(
+    process.env,
+    process.env.NODE_ENV,
+  );
   return (
     <AuthFlowPage
       eyebrow="Create account"
@@ -16,7 +22,11 @@ export default function RegisterPage() {
         { label: "Consent", state: "outline", detail: "On this page" },
       ]}
     >
-      <RegistrationForm />
+      {stagingBridge ? (
+        <StagingAuthHandoff path="/register" action="Account creation" />
+      ) : (
+        <RegistrationForm />
+      )}
     </AuthFlowPage>
   );
 }

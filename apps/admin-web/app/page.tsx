@@ -17,26 +17,26 @@ import {
 const metrics = [
   {
     label: "Active learners",
-    value: "Not connected",
-    detail: "No learner records asserted",
+    value: "Not measured",
+    detail: "No organization read model in this release",
     icon: UsersRound,
   },
   {
     label: "Assigned learning",
-    value: "Not connected",
-    detail: "No assignment records asserted",
+    value: "Not measured",
+    detail: "No assignment read model in this release",
     icon: BookOpenCheck,
   },
   {
     label: "Completion rate",
-    value: "Not connected",
-    detail: "No progress projection asserted",
+    value: "Not measured",
+    detail: "No aggregate read model in this release",
     icon: Activity,
   },
   {
     label: "Evidence awaiting review",
-    value: "Not connected",
-    detail: "No review queue asserted",
+    value: "Not measured",
+    detail: "No review queue read model in this release",
     icon: CircleAlert,
   },
 ];
@@ -106,7 +106,7 @@ export default function AdminHome() {
             eyebrow="Admin foundation / available routes"
             id="surface-panel-title"
             title="A focused workspace for the first release."
-            body="Navigate the available foundation surfaces below. Every privileged action remains server-authorized and visibly locked when its target or API is not connected."
+            body="Navigate the available foundation surfaces below. Every privileged action remains server-authorized and visibly locked when its target or API is outside this release."
           />
           <div className="surface-card-grid">
             {surfaces.map((surface) => (

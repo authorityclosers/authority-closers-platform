@@ -1,7 +1,13 @@
 import { AuthFlowPage } from "../components/auth-flow-page";
 import { VerifyEmailFlow } from "../components/password-auth-forms";
+import { StagingAuthHandoff } from "../components/staging-auth-handoff";
+import { isStagingAuthenticatedBridge } from "../lib/dev-api-proxy";
 
 export default function VerifyEmailPage() {
+  const stagingBridge = isStagingAuthenticatedBridge(
+    process.env,
+    process.env.NODE_ENV,
+  );
   return (
     <AuthFlowPage
       eyebrow="Verify email"
@@ -13,7 +19,11 @@ export default function VerifyEmailPage() {
         { label: "Start learning", state: "upcoming" },
       ]}
     >
-      <VerifyEmailFlow />
+      {stagingBridge ? (
+        <StagingAuthHandoff path="/verify-email" action="Email verification" />
+      ) : (
+        <VerifyEmailFlow />
+      )}
     </AuthFlowPage>
   );
 }

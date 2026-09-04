@@ -1,7 +1,13 @@
 import { AuthFlowPage } from "../components/auth-flow-page";
 import { PasswordResetForm } from "../components/password-auth-forms";
+import { StagingAuthHandoff } from "../components/staging-auth-handoff";
+import { isStagingAuthenticatedBridge } from "../lib/dev-api-proxy";
 
 export default function ResetPasswordPage() {
+  const stagingBridge = isStagingAuthenticatedBridge(
+    process.env,
+    process.env.NODE_ENV,
+  );
   return (
     <AuthFlowPage
       eyebrow="Password reset"
@@ -12,7 +18,11 @@ export default function ResetPasswordPage() {
         { label: "Reset", state: "current" },
       ]}
     >
-      <PasswordResetForm />
+      {stagingBridge ? (
+        <StagingAuthHandoff path="/reset-password" action="Password reset" />
+      ) : (
+        <PasswordResetForm />
+      )}
     </AuthFlowPage>
   );
 }
