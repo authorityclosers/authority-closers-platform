@@ -236,6 +236,171 @@ fi
 secret_environment="$target_environment"
 [[ "$target_environment" == production ]] && secret_environment=prod
 
+profile_file="$release_dir/environments/$target_environment.env"
+declare -a profile_required_keys=()
+declare -A profile_values=()
+declare -A profile_allowed_keys=()
+
+initialize_release_profile_contract() {
+  local profile_key
+  profile_required_keys=(
+    AC_COMPOSE_PROJECT
+    AC_ENVIRONMENT
+    AC_STATE_ROOT
+    AC_PUBLIC_APP_URL
+    AC_ADMIN_APP_URL
+    AC_API_URL
+    AC_API_HOST
+    AC_INTERNAL_API_HOST
+    AC_TRUSTED_PROXY_ADDRESSES
+    AC_EDGE_API_ALIAS
+    AC_EDGE_LEARNER_ALIAS
+    AC_EDGE_ADMIN_ALIAS
+    AC_EXTERNAL_SIDE_EFFECTS_HOLD
+    AC_EMAIL_PROVIDER
+  )
+  if [[ "$target_environment" == staging ]]; then
+    profile_required_keys+=(AC_LEARNER_CONSENT_VERSION)
+  fi
+  profile_allowed_keys=()
+  for profile_key in "${profile_required_keys[@]}"; do
+    profile_allowed_keys["$profile_key"]=1
+  done
+}
+
+initialize_release_profile_contract
+
+load_release_profile() {
+  local line key value
+  [[ -f "$profile_file" && ! -L "$profile_file" && -r "$profile_file" ]] || {
+    printf 'Released environment profile is not a readable regular file.\n' >&2
+    return 1
+  }
+  if LC_ALL=C grep -U -q $'\r' "$profile_file"; then
+    printf 'Released environment profile must use canonical LF line endings.\n' >&2
+    return 1
+  fi
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ -z "$line" || "$line" == \#* ]] && continue
+    [[ "$line" == *=* ]] || {
+      printf 'Released environment profile has a malformed assignment.\n' >&2
+      return 1
+    }
+    key="${line%%=*}"
+    value="${line#*=}"
+    [[ "$key" =~ ^[A-Z][A-Z0-9_]*$ ]] || {
+      printf 'Released environment profile has a malformed key.\n' >&2
+      return 1
+    }
+    [[ -n "${profile_allowed_keys[$key]+present}" ]] || {
+      printf 'Released environment profile has an unexpected key.\n' >&2
+      return 1
+    }
+    [[ -z "${profile_values[$key]+present}" ]] || {
+      printf 'Released environment profile has a duplicate assignment.\n' >&2
+      return 1
+    }
+    [[ -n "$value" && "$value" =~ ^[A-Za-z0-9_./:@+%=-]+$ ]] || {
+      printf 'Released environment profile has an empty or unsafe assignment.\n' >&2
+      return 1
+    }
+    profile_values["$key"]="$value"
+  done < "$profile_file"
+}
+
+profile_value() {
+  local key="$1"
+  [[ -n "${profile_values[$key]+present}" ]] || {
+    printf 'Released environment profile is missing %s.\n' "$key" >&2
+    return 1
+  }
+  printf '%s' "${profile_values[$key]}"
+}
+
+validate_release_profile() {
+  local expected_profile_assignment expected_profile_key expected_profile_value actual_profile_value
+  load_release_profile
+
+  local -a expected_profile_assignments=(
+    "AC_COMPOSE_PROJECT=ac-application-$target_environment"
+    "AC_ENVIRONMENT=$target_environment"
+    "AC_STATE_ROOT=/srv/authority-closers/state/application/$target_environment"
+  )
+  case "$target_environment" in
+    staging)
+      expected_profile_assignments+=(
+        "AC_PUBLIC_APP_URL=https://staging.authorityclosers.com"
+        "AC_ADMIN_APP_URL=https://admin-staging.authorityclosers.com"
+        "AC_API_URL=https://api-staging.authorityclosers.com"
+        "AC_API_HOST=api-staging.authorityclosers.com"
+        "AC_INTERNAL_API_HOST=api.staging.ac.internal.invalid"
+        "AC_TRUSTED_PROXY_ADDRESSES=172.18.0.2"
+        "AC_EDGE_API_ALIAS=ac-staging-api"
+        "AC_EDGE_LEARNER_ALIAS=ac-staging-learner"
+        "AC_EDGE_ADMIN_ALIAS=ac-staging-admin"
+        "AC_EXTERNAL_SIDE_EFFECTS_HOLD=false"
+        "AC_EMAIL_PROVIDER=resend"
+        "AC_LEARNER_CONSENT_VERSION=staging-test-document-v1"
+      )
+      ;;
+    production)
+      expected_profile_assignments+=(
+        "AC_PUBLIC_APP_URL=https://app.authorityclosers.com"
+        "AC_ADMIN_APP_URL=https://admin.authorityclosers.com"
+        "AC_API_URL=https://api.authorityclosers.com"
+        "AC_API_HOST=api.authorityclosers.com"
+        "AC_INTERNAL_API_HOST=api.production.ac.internal.invalid"
+        "AC_TRUSTED_PROXY_ADDRESSES=172.18.0.2"
+        "AC_EDGE_API_ALIAS=ac-production-api"
+        "AC_EDGE_LEARNER_ALIAS=ac-production-learner"
+        "AC_EDGE_ADMIN_ALIAS=ac-production-admin"
+        "AC_EXTERNAL_SIDE_EFFECTS_HOLD=true"
+        "AC_EMAIL_PROVIDER=fake"
+      )
+      ;;
+  esac
+  for expected_profile_assignment in "${expected_profile_assignments[@]}"; do
+    expected_profile_key="${expected_profile_assignment%%=*}"
+    expected_profile_value="${expected_profile_assignment#*=}"
+    actual_profile_value="$(profile_value "$expected_profile_key")"
+    [[ "$actual_profile_value" == "$expected_profile_value" ]] || {
+      printf 'Released environment profile has an unexpected value for %s.\n' \
+        "$expected_profile_key" >&2
+      return 1
+    }
+  done
+
+  compose_project="$(profile_value AC_COMPOSE_PROJECT)"
+  state_root="$(profile_value AC_STATE_ROOT)"
+
+  external_side_effects_hold="$(profile_value AC_EXTERNAL_SIDE_EFFECTS_HOLD)"
+  case "$external_side_effects_hold" in
+    true) external_side_effects_status='held' ;;
+    false) external_side_effects_status='released' ;;
+    *)
+      printf 'Released environment profile has an invalid external-effects hold policy.\n' >&2
+      return 1
+      ;;
+  esac
+
+  email_provider="$(profile_value AC_EMAIL_PROVIDER)"
+  case "$email_provider" in
+    fake|resend) ;;
+    *)
+      printf 'Released environment profile has an unsupported email provider.\n' >&2
+      return 1
+      ;;
+  esac
+
+  learner_host="$(profile_value AC_PUBLIC_APP_URL)"
+  learner_host="${learner_host#https://}"
+  admin_host="$(profile_value AC_ADMIN_APP_URL)"
+  admin_host="${admin_host#https://}"
+  api_host="$(profile_value AC_API_HOST)"
+}
+
+validate_release_profile
+
 with_release_secrets() {
   env \
     -u AC_GOOGLE_OAUTH_CLIENT_ID \
@@ -289,16 +454,6 @@ if [[ "${#loaded_api_migration_heads[@]}" -ne 1 \
 fi
 unset loaded_api_migration_heads
 
-profile_file="$release_dir/environments/$target_environment.env"
-if LC_ALL=C grep -q $'\r' "$profile_file"; then
-  printf 'Released environment profile must use canonical LF line endings.\n' >&2
-  exit 1
-fi
-state_root="$(sed -n 's/^AC_STATE_ROOT=//p' "$profile_file")"
-[[ "$state_root" == "/srv/authority-closers/state/application/$target_environment" ]] || {
-  printf 'Released state root does not match the target environment.\n' >&2
-  exit 1
-}
 install -d -m 0750 -o root -g acops "$state_root"
 install -d -m 0700 -o 999 -g 999 "$state_root/postgres"
 
@@ -307,6 +462,12 @@ compose_for() {
   shift
   with_release_secrets \
     env \
+        -u COMPOSE_PROJECT_NAME \
+        -u COMPOSE_FILE \
+        -u COMPOSE_PROFILES \
+        -u COMPOSE_PATH_SEPARATOR \
+        -u COMPOSE_ENV_FILES \
+        -u COMPOSE_DISABLE_ENV_FILE \
         -u AC_COMPOSE_PROJECT \
         -u AC_ENVIRONMENT \
         -u AC_STATE_ROOT \
@@ -321,11 +482,16 @@ compose_for() {
         -u AC_EDGE_ADMIN_ALIAS \
         -u AC_EXTERNAL_SIDE_EFFECTS_HOLD \
         -u AC_EMAIL_PROVIDER \
+        -u AC_LEARNER_CONSENT_VERSION \
+        -u AC_LOG_LEVEL \
+        -u AC_OTEL_EXPORTER_OTLP_ENDPOINT \
+        -u AC_POSTGRES_IMAGE \
         -u AC_RELEASE_ID \
         -u AC_API_IMAGE \
         -u AC_LEARNER_IMAGE \
         -u AC_ADMIN_IMAGE \
     docker compose \
+      --project-name "$compose_project" \
       --env-file "$target_release/environments/$target_environment.env" \
       --env-file "$target_release/release-images.env" \
       --file "$target_release/compose.yaml" \
@@ -524,15 +690,6 @@ set_database_writer_access runtime
 compose_for "$release_dir" up --detach --remove-orphans --wait --wait-timeout 180 \
   api worker learner-web admin-web
 
-profile_value() {
-  sed -n "s/^$1=//p" "$profile_file"
-}
-learner_host="$(profile_value AC_PUBLIC_APP_URL)"
-learner_host="${learner_host#https://}"
-admin_host="$(profile_value AC_ADMIN_APP_URL)"
-admin_host="${admin_host#https://}"
-api_host="$(profile_value AC_API_HOST)"
-
 check_route() {
   local host="$1" path="$2" expected_status="$3" expected_route="$4"
   local headers body status
@@ -587,5 +744,5 @@ mv --no-target-directory "$evidence_tmp" "$evidence_file"
 evidence_tmp=''
 release_committed=1
 
-printf 'PASS  %s now runs exact release %s with held external side effects.\n' \
-  "$target_environment" "$release_id"
+printf 'PASS  %s now runs exact release %s (external side effects: %s; email provider: %s).\n' \
+  "$target_environment" "$release_id" "$external_side_effects_status" "$email_provider"

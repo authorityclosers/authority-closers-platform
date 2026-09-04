@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import os
 import re
+import shlex
+import shutil
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -38,6 +41,107 @@ INFISICAL_RUNNER = (ROOT / "infra" / "vps-foundation" / "scripts" / "ac-infisica
 WORKFLOW = (ROOT / ".github" / "workflows" / "application.yml").read_text(encoding="utf-8")
 GIT_ATTRIBUTES = (ROOT / ".gitattributes").read_text(encoding="utf-8")
 ENV_EXAMPLE = (ROOT / ".env.example").read_text(encoding="utf-8")
+
+
+def _bash_executable() -> str:
+    git = shutil.which("git")
+    candidates = []
+    if git is not None and sys.platform == "win32":
+        candidates.append(Path(git).parent.parent / "bin" / "bash.exe")
+    discovered = shutil.which("bash")
+    if discovered is not None:
+        candidates.append(Path(discovered))
+    for candidate in candidates:
+        if candidate.is_file():
+            return str(candidate)
+    pytest.fail("Bash is required for application profile tests")
+
+
+def _installer_function(name: str, next_marker: str) -> str:
+    start = INSTALLER.index(f"{name}() {{")
+    return INSTALLER[start : INSTALLER.index(next_marker, start)]
+
+
+def _run_profile_parser(
+    tmp_path: Path,
+    profile_bytes: bytes,
+    *,
+    target_environment: str = "staging",
+) -> subprocess.CompletedProcess[str]:
+    profile_file = tmp_path / f"{target_environment}.env"
+    profile_file.write_bytes(profile_bytes)
+    initialize_profile_contract = _installer_function(
+        "initialize_release_profile_contract", "\n\nload_release_profile() {"
+    )
+    load_profile = _installer_function("load_release_profile", "\n\nprofile_value() {")
+    profile_value = _installer_function("profile_value", "\n\nvalidate_release_profile() {")
+    validate_profile = _installer_function(
+        "validate_release_profile", "\n\nvalidate_release_profile\n"
+    )
+    script = f"""#!/usr/bin/env bash
+set -euo pipefail
+profile_file={shlex.quote(profile_file.as_posix())}
+target_environment={shlex.quote(target_environment)}
+declare -a profile_required_keys=()
+declare -A profile_values=()
+declare -A profile_allowed_keys=()
+{initialize_profile_contract}
+{load_profile}
+{profile_value}
+{validate_profile}
+initialize_release_profile_contract
+validate_release_profile
+printf '%s,%s\n' "$external_side_effects_status" "$email_provider"
+"""
+    return subprocess.run(  # noqa: S603 - executable and profile are test-controlled
+        [_bash_executable(), "-s"],
+        input=script,
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+
+
+def _run_compose_for_probe(tmp_path: Path) -> subprocess.CompletedProcess[str]:
+    release = tmp_path / "release"
+    (release / "environments").mkdir(parents=True)
+    (release / "environments" / "staging.env").write_bytes(
+        (APPLICATION / "environments" / "staging.env").read_bytes()
+    )
+    (release / "release-images.env").write_text("", encoding="utf-8")
+    (release / "compose.yaml").write_text(
+        """name: ${AC_COMPOSE_PROJECT:?AC_COMPOSE_PROJECT is required}
+services:
+  probe:
+    image: busybox
+    environment:
+      hold: ${AC_EXTERNAL_SIDE_EFFECTS_HOLD:-true}
+      provider: ${AC_EMAIL_PROVIDER:-fake}
+""",
+        encoding="utf-8",
+    )
+    compose_for = _installer_function(
+        "compose_for", '\n\ncompose_for "$release_dir" config --quiet'
+    )
+    script = f"""#!/usr/bin/env bash
+set -euo pipefail
+target_environment=staging
+release_dir={shlex.quote(release.as_posix())}
+compose_project=ac-application-staging
+with_release_secrets() {{ "$@"; }}
+export AC_EXTERNAL_SIDE_EFFECTS_HOLD=true
+export AC_EMAIL_PROVIDER=fake
+export COMPOSE_PROJECT_NAME=ac-application-production
+{compose_for}
+compose_for "$release_dir" config
+"""
+    return subprocess.run(  # noqa: S603 - executable and compose fixture are test-controlled
+        [_bash_executable(), "-s"],
+        input=script,
+        capture_output=True,
+        check=False,
+        text=True,
+    )
 
 
 def test_local_database_urls_match_the_ipv4_only_compose_publish_contract() -> None:
@@ -331,6 +435,153 @@ def test_environment_profiles_isolate_state_hosts_and_edge_aliases() -> None:
     assert "AC_EMAIL_PROVIDER=fake" in production
     assert "* text=auto eol=lf" in GIT_ATTRIBUTES
     assert "Released environment profile must use canonical LF line endings" in INSTALLER
+
+
+def test_installer_reports_the_reviewed_profile_policy_without_secrets() -> None:
+    policy_start = INSTALLER.index('external_side_effects_hold="')
+    policy_end = INSTALLER.index("with_release_secrets() {", policy_start)
+    policy = INSTALLER[policy_start:policy_end]
+    final_status = INSTALLER[INSTALLER.index("printf 'PASS  ") :]
+
+    assert "true) external_side_effects_status='held'" in policy
+    assert "false) external_side_effects_status='released'" in policy
+    assert "fake|resend)" in policy
+    assert "with held external side effects" not in INSTALLER
+    assert "external side effects: %s; email provider: %s" in final_status
+    for secret_name in (
+        "AC_RESEND_API_KEY",
+        "AC_RESEND_FROM",
+        "AC_GOOGLE_OAUTH_CLIENT_SECRET",
+    ):
+        assert secret_name not in final_status
+    for compose_control_name in (
+        "COMPOSE_PROJECT_NAME",
+        "COMPOSE_FILE",
+        "COMPOSE_PROFILES",
+        "COMPOSE_PATH_SEPARATOR",
+        "COMPOSE_ENV_FILES",
+        "COMPOSE_DISABLE_ENV_FILE",
+    ):
+        assert f"-u {compose_control_name}" in INSTALLER
+    assert '--project-name "$compose_project"' in INSTALLER
+
+    # Policy classification comes from the exact release profile before any
+    # Docker command or database/service mutation is started.
+    assert INSTALLER.index(
+        'profile_file="$release_dir/environments/$target_environment.env"'
+    ) < INSTALLER.index("docker load")
+    assert INSTALLER.index('external_side_effects_hold="$(profile_value') < INSTALLER.index(
+        "mutation_started=1"
+    )
+
+
+@pytest.mark.parametrize(
+    ("target_environment", "expected_status"),
+    (("staging", "released,resend\n"), ("production", "held,fake\n")),
+)
+def test_installer_profile_parser_reports_effective_profile_policy(
+    tmp_path: Path,
+    target_environment: str,
+    expected_status: str,
+) -> None:
+    profile = (APPLICATION / "environments" / f"{target_environment}.env").read_bytes()
+
+    result = _run_profile_parser(tmp_path, profile, target_environment=target_environment)
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == expected_status
+
+
+@pytest.mark.parametrize(
+    ("mutation", "expected_error"),
+    (
+        (lambda profile: profile.replace(b"AC_EMAIL_PROVIDER=resend\n", b""), "missing"),
+        (lambda profile: profile + b"not-an-assignment\n", "malformed assignment"),
+        (
+            lambda profile: profile.replace(
+                b"AC_EMAIL_PROVIDER=resend\n", b"AC_EMAIL_PROVIDER=resend with-space\n"
+            ),
+            "empty or unsafe assignment",
+        ),
+        (lambda profile: profile + b"AC_EMAIL_PROVIDER=fake\n", "duplicate assignment"),
+        (lambda profile: profile + b"AC_EMAIL_PROVIDER=\n", "duplicate assignment"),
+        (
+            lambda profile: profile.replace(b"AC_EMAIL_PROVIDER=resend\n", b"AC_EMAIL_PROVIDER=\n"),
+            "empty or unsafe assignment",
+        ),
+        (
+            lambda profile: profile.replace(
+                b"AC_EXTERNAL_SIDE_EFFECTS_HOLD=false\n",
+                b"AC_EXTERNAL_SIDE_EFFECTS_HOLD=maybe\n",
+            ),
+            "unexpected value for AC_EXTERNAL_SIDE_EFFECTS_HOLD",
+        ),
+        (
+            lambda profile: profile.replace(
+                b"AC_EMAIL_PROVIDER=resend\n", b"AC_EMAIL_PROVIDER=smtp\n"
+            ),
+            "unexpected value for AC_EMAIL_PROVIDER",
+        ),
+        (
+            lambda profile: profile + b"AC_EXTERNAL_SIDE_EFFECTS_HOLD=\n",
+            "duplicate assignment",
+        ),
+        (
+            lambda profile: profile.replace(
+                b"AC_COMPOSE_PROJECT=ac-application-staging\n",
+                b"AC_COMPOSE_PROJECT=ac-application-production\n",
+            ),
+            "unexpected value for AC_COMPOSE_PROJECT",
+        ),
+        (
+            lambda profile: profile.replace(
+                b"AC_EDGE_LEARNER_ALIAS=ac-staging-learner\n",
+                b"AC_EDGE_LEARNER_ALIAS=ac-production-learner\n",
+            ),
+            "unexpected value for AC_EDGE_LEARNER_ALIAS",
+        ),
+        (
+            lambda profile: profile.replace(
+                b"AC_PUBLIC_APP_URL=https://staging.authorityclosers.com\n",
+                b"AC_PUBLIC_APP_URL=https://app.authorityclosers.com\n",
+            ),
+            "unexpected value for AC_PUBLIC_APP_URL",
+        ),
+        (lambda profile: profile + b"AC_RESEND_API_KEY=secret-like-value\n", "unexpected key"),
+    ),
+)
+def test_installer_profile_parser_rejects_bad_profiles_before_mutation(
+    tmp_path: Path,
+    mutation: Callable[[bytes], bytes],
+    expected_error: str,
+) -> None:
+    profile = (APPLICATION / "environments" / "staging.env").read_bytes()
+    mutated_profile = mutation(profile)
+
+    result = _run_profile_parser(tmp_path, mutated_profile)
+
+    assert result.returncode != 0
+    assert expected_error in result.stderr
+    assert "resend with-space" not in result.stderr
+
+
+def test_installer_profile_parser_rejects_crlf_profiles(tmp_path: Path) -> None:
+    profile = (APPLICATION / "environments" / "staging.env").read_bytes()
+    crlf_profile = profile.replace(b"\n", b"\r\n")
+
+    result = _run_profile_parser(tmp_path, crlf_profile)
+
+    assert result.returncode != 0
+    assert "canonical LF line endings" in result.stderr
+
+
+def test_compose_for_uses_profile_policy_over_ambient_environment(tmp_path: Path) -> None:
+    result = _run_compose_for_probe(tmp_path)
+
+    assert result.returncode == 0, result.stderr
+    assert "name: ac-application-staging" in result.stdout
+    assert 'hold: "false"' in result.stdout
+    assert "provider: resend" in result.stdout
 
 
 def test_release_is_built_off_host_and_installed_with_backup_and_rollback() -> None:
