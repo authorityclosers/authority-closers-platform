@@ -3,6 +3,7 @@ from __future__ import annotations
 import ipaddress
 import re
 from functools import lru_cache
+from pathlib import Path
 from typing import Any, Literal
 from uuid import UUID
 
@@ -107,6 +108,11 @@ class Settings(BaseSettings):
     media_max_processing_output_bytes: int = 4 * 1024 * 1024 * 1024
     media_max_processing_caption_bytes: int = 25 * 1024 * 1024
     media_allow_range_requests: bool = True
+    # Explicitly opt-in test fixtures are separate from provider composition.
+    # They are accepted only by the staging/test fixture seam and never by
+    # production runtime composition.
+    media_stress_fixtures_enabled: bool = False
+    media_stress_fixtures_cache_root: str | None = None
 
     @field_validator("public_learner_tenant_id", "operations_tenant_id", mode="before")
     @classmethod
@@ -151,6 +157,7 @@ class Settings(BaseSettings):
                 "AC_PUBLIC_LEARNER_TENANT_ID and AC_OPERATIONS_TENANT_ID must identify "
                 "different tenants"
             )
+        self._validate_media_stress_fixtures()
         self._validate_media_provider()
         if self.environment not in {"staging", "production"}:
             self._validate_google_oauth_pair()
@@ -240,6 +247,39 @@ class Settings(BaseSettings):
             MediaProviderConfig.from_settings(self)
         except (TypeError, ValueError) as error:
             raise ValueError(f"invalid media provider configuration: {error}") from error
+
+    def _validate_media_stress_fixtures(self) -> None:
+        """Keep local fixture opt-in outside production and normal local mode."""
+
+        if self.media_stress_fixtures_enabled and self.environment == "production":
+            raise ValueError("AC_MEDIA_STRESS_FIXTURES_ENABLED is forbidden in production")
+        if self.media_stress_fixtures_enabled and self.environment not in {
+            "test",
+            "development",
+            "staging",
+        }:
+            raise ValueError(
+                "AC_MEDIA_STRESS_FIXTURES_ENABLED requires test, development, or staging"
+            )
+        if self.media_stress_fixtures_cache_root is not None:
+            cache_root = self.media_stress_fixtures_cache_root.strip()
+            if not cache_root:
+                object.__setattr__(self, "media_stress_fixtures_cache_root", None)
+            elif not self.media_stress_fixtures_enabled:
+                raise ValueError(
+                    "AC_MEDIA_STRESS_FIXTURES_CACHE_ROOT requires explicit fixture opt-in"
+                )
+            else:
+                path = Path(cache_root)
+                if any(part == ".." for part in path.parts):
+                    raise ValueError("AC_MEDIA_STRESS_FIXTURES_CACHE_ROOT must not contain '..'")
+                if "://" in cache_root or any(
+                    ord(character) < 0x20 or ord(character) == 0x7F for character in cache_root
+                ):
+                    raise ValueError("AC_MEDIA_STRESS_FIXTURES_CACHE_ROOT must be a local path")
+                object.__setattr__(self, "media_stress_fixtures_cache_root", cache_root)
+        elif self.media_stress_fixtures_enabled:
+            raise ValueError("AC_MEDIA_STRESS_FIXTURES_ENABLED requires a configured cache root")
 
     def _validate_email_provider(self) -> None:
         if self.email_provider != "resend":

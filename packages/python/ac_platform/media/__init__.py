@@ -114,6 +114,13 @@ from ac_platform.media.processing import (
 )
 from ac_platform.media.scanner import LocalContentScanner, SignatureContentScanner
 from ac_platform.media.storage import compose_private_object_storage
+from ac_platform.media.stress_fixtures import (
+    FixturePlaybackGrantVerifier,
+    FixtureProviderActivationVerifier,
+    MediaStressFixtureDenied,
+    compose_staging_test_fixture_source,
+    compose_staging_test_fixture_source_from_settings,
+)
 from ac_platform.media.telemetry import (
     InMemoryMediaTelemetryExporter,
     JsonlMediaTelemetryExporter,
@@ -168,6 +175,9 @@ __all__ = [
     "MediaStorageUnavailable",
     "MediaUnsupportedError",
     "MediaUnavailableError",
+    "MediaStressFixtureDenied",
+    "FixturePlaybackGrantVerifier",
+    "FixtureProviderActivationVerifier",
     "MediaVersionId",
     "MediaVersion",
     "MediaUploadIntent",
@@ -224,6 +234,8 @@ __all__ = [
     "TestTranscodingProcessor",
     "TranscodeProfile",
     "compose_private_object_storage",
+    "compose_staging_test_fixture_source",
+    "compose_staging_test_fixture_source_from_settings",
     "validate_media_environment",
     "resolve_media_endpoint_addresses",
     "HmacSignedMediaDelivery",

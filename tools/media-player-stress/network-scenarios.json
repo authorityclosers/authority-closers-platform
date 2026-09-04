@@ -1,0 +1,133 @@
+{
+  "schema_version": "ac-media-stress-network-scenarios.v1",
+  "status": "test_only",
+  "course_content": false,
+  "simulation_boundary": {
+    "real_network_calls": false,
+    "external_endpoints": false,
+    "provider_state": false,
+    "canonical_learning_state": false
+  },
+  "scenarios": [
+    {
+      "id": "lan",
+      "label": "Local wired or Wi-Fi",
+      "latency_ms": 5,
+      "jitter_ms": 1,
+      "downlink_kbps": 100000,
+      "packet_loss_percent": 0.0,
+      "offline": false,
+      "startup_failure": false,
+      "range_requests": "allowed",
+      "expected_state": "playing"
+    },
+    {
+      "id": "fast-4g",
+      "label": "Fast 4G",
+      "latency_ms": 80,
+      "jitter_ms": 20,
+      "downlink_kbps": 12000,
+      "packet_loss_percent": 0.2,
+      "offline": false,
+      "startup_failure": false,
+      "range_requests": "allowed",
+      "expected_state": "playing"
+    },
+    {
+      "id": "slow-4g",
+      "label": "Slow 4G",
+      "latency_ms": 180,
+      "jitter_ms": 70,
+      "downlink_kbps": 1500,
+      "packet_loss_percent": 1.0,
+      "offline": false,
+      "startup_failure": false,
+      "range_requests": "allowed",
+      "expected_state": "buffering"
+    },
+    {
+      "id": "fast-3g",
+      "label": "Fast 3G",
+      "latency_ms": 250,
+      "jitter_ms": 100,
+      "downlink_kbps": 750,
+      "packet_loss_percent": 2.0,
+      "offline": false,
+      "startup_failure": false,
+      "range_requests": "allowed",
+      "expected_state": "buffering"
+    },
+    {
+      "id": "startup-timeout",
+      "label": "Manifest request timeout",
+      "latency_ms": 30000,
+      "jitter_ms": 0,
+      "downlink_kbps": 0,
+      "packet_loss_percent": 100.0,
+      "offline": false,
+      "startup_failure": true,
+      "range_requests": "unknown",
+      "expected_state": "error"
+    },
+    {
+      "id": "midstream-loss",
+      "label": "Segment loss after playback starts",
+      "latency_ms": 400,
+      "jitter_ms": 250,
+      "downlink_kbps": 300,
+      "packet_loss_percent": 15.0,
+      "offline": false,
+      "startup_failure": false,
+      "range_requests": "allowed",
+      "expected_state": "recovering"
+    },
+    {
+      "id": "offline",
+      "label": "Offline after manifest load",
+      "latency_ms": 0,
+      "jitter_ms": 0,
+      "downlink_kbps": 0,
+      "packet_loss_percent": 100.0,
+      "offline": true,
+      "startup_failure": false,
+      "range_requests": "denied",
+      "expected_state": "error"
+    },
+    {
+      "id": "range-denied",
+      "label": "Origin rejects byte ranges",
+      "latency_ms": 80,
+      "jitter_ms": 20,
+      "downlink_kbps": 12000,
+      "packet_loss_percent": 0.0,
+      "offline": false,
+      "startup_failure": false,
+      "range_requests": "denied",
+      "expected_state": "error"
+    },
+    {
+      "id": "grant-expired",
+      "label": "Playback grant expires before segment",
+      "latency_ms": 80,
+      "jitter_ms": 20,
+      "downlink_kbps": 12000,
+      "packet_loss_percent": 0.0,
+      "offline": false,
+      "startup_failure": false,
+      "range_requests": "allowed",
+      "expected_state": "authorization_error"
+    },
+    {
+      "id": "provider-unavailable",
+      "label": "Approved provider is unavailable",
+      "latency_ms": 1000,
+      "jitter_ms": 300,
+      "downlink_kbps": 0,
+      "packet_loss_percent": 100.0,
+      "offline": false,
+      "startup_failure": true,
+      "range_requests": "unknown",
+      "expected_state": "provider_error"
+    }
+  ]
+}

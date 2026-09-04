@@ -1,0 +1,89 @@
+{
+  "schema_version": "ac-media-stress-tests.v1",
+  "status": "test_only",
+  "course_content": false,
+  "fixture_manifest": "fixture-manifest.json",
+  "captions_manifest": "captions-manifest.json",
+  "network_manifest": "network-scenarios.json",
+  "fixture_ids": [
+    "bbb-4k-30-normal",
+    "bbb-320x180-24",
+    "generated-16x9-4s",
+    "generated-4x3-6s",
+    "generated-wide-3s"
+  ],
+  "rendition_profile_ids": ["2160p", "1440p", "1080p", "720p", "480p", "360p"],
+  "network_scenario_ids": [
+    "lan",
+    "fast-4g",
+    "slow-4g",
+    "fast-3g",
+    "startup-timeout",
+    "midstream-loss",
+    "offline",
+    "range-denied",
+    "grant-expired",
+    "provider-unavailable"
+  ],
+  "tests": [
+    {
+      "id": "manifest-provenance-checksum",
+      "kind": "fixture_integrity",
+      "fixtures": "all",
+      "assertions": [
+        "source URL is HTTPS and in the checked-in download allowlist",
+        "archive and extracted bytes match the pinned SHA-256",
+        "ffprobe dimensions, frame rate, duration, and codec inventory match metadata",
+        "course_content=false and status=test_only remain true"
+      ]
+    },
+    {
+      "id": "hls-rendition-ladder",
+      "kind": "hls_generation",
+      "fixtures": ["bbb-4k-30-normal", "bbb-320x180-24"],
+      "renditions": "all",
+      "assertions": [
+        "master playlist contains only relative local playlist references",
+        "each VOD playlist ends with ENDLIST and has bounded 4-second segments",
+        "each declared resolution and bitrate is rendered and hashed",
+        "each rendition CODECS value is derived from ffprobe encoded output and matches every segment",
+        "local single-range slices return exact inclusive byte counts",
+        "all six renditions share an aligned segment timeline for quality switching",
+        "the synthetic WebVTT track is linked through an exact EXT-X-MEDIA declaration",
+        "no provider URL or public URL is emitted"
+      ]
+    },
+    {
+      "id": "synthetic-caption-track",
+      "kind": "captions",
+      "captions_manifest": "captions-manifest.json",
+      "assertions": [
+        "WebVTT checksum matches the caption manifest",
+        "cues are ordered, non-overlapping, and end at 12 seconds",
+        "the HLS caption playlist references only the approved WebVTT path",
+        "caption provenance is synthetic and not course content"
+      ]
+    },
+    {
+      "id": "network-state-matrix",
+      "kind": "network_scenario",
+      "scenarios": "all",
+      "assertions": [
+        "scenarios are deterministic metadata, not live network calls",
+        "slow or lossy paths exercise buffering/recovery",
+        "offline, range, grant, and provider failures remain distinct states"
+      ]
+    },
+    {
+      "id": "fixture-composition-fail-closed",
+      "kind": "application_boundary",
+      "assertions": [
+        "production rejects fixture composition even when explicitly enabled",
+        "test/development/staging require explicit opt-in",
+        "provider activation and playback grant checks are required",
+        "only checksummed local paths below the ignored cache are accepted",
+        "fixture composition never creates a provider object or playback grant"
+      ]
+    }
+  ]
+}
