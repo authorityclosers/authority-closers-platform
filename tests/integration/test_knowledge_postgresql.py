@@ -341,7 +341,7 @@ def test_postgresql_retrieval_is_tenant_acl_safe_and_deterministic(postgres_harn
                     purpose=IntelligencePurpose.SUPPORT_ASSISTANCE,
                     acl_subject_ids=(ids["acl_subject_a"],),
                 ),
-                question="account recovery support review",
+                question="How does account recovery work?",
                 min_rank_score=PINNED_MIN_RANK_SCORE,
                 top_k=12,
             )
@@ -561,6 +561,7 @@ def test_postgresql_withdrawn_version_is_not_retrievable(postgres_harness: URL) 
                     ),
                     question="account recovery",
                     min_rank_score=PINNED_MIN_RANK_SCORE,
+                    snapshot_id=ids["version_a"],
                 )
             )
             assert result.outcome is RetrievalOutcome.NO_AUTHORIZED_EVIDENCE
