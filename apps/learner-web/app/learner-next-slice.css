@@ -61,17 +61,6 @@
   outline-offset: 2px !important;
 }
 
-/* Touch-first desktop-class devices do not have hover discovery. Keep the
- * rail control visible and tappable when the desktop shell is still active. */
-@media (min-width: 1024px) and (hover: none),
-  (min-width: 1024px) and (pointer: coarse) {
-  .site-frame--learner .learner-sidebar-toggle,
-  .site-frame--learner.site-frame--collapsed .learner-sidebar-toggle {
-    opacity: 1;
-    pointer-events: auto;
-  }
-}
-
 .learner-sidebar-toggle__label {
   display: none !important;
 }
@@ -155,6 +144,17 @@ html[data-theme="dark"] .site-frame--learner .learner-sidebar-wordmark__mark {
   .learner-sidebar-toggle:focus-visible {
   opacity: 1;
   pointer-events: auto;
+}
+
+/* Touch-first desktop-class devices do not have hover discovery. Keep this
+ * after the collapsed defaults so visibility remains the winning cascade. */
+@media (min-width: 1024px) and (hover: none),
+  (min-width: 1024px) and (pointer: coarse) {
+  .site-frame--learner .learner-sidebar-toggle,
+  .site-frame--learner.site-frame--collapsed .learner-sidebar-toggle {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 /* The learner rail scrolls normally without exposing a second, browser-gray

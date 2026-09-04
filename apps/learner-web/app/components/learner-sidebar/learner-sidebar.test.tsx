@@ -634,6 +634,17 @@ describe("P1 Learner Sidebar & Navigation Architecture", () => {
       expect(css).toContain("transform: translate(-50%, -50%);");
       expect(css).toContain("@media (min-width: 1024px) and (hover: none)");
       expect(css).toContain("(min-width: 1024px) and (pointer: coarse)");
+      const collapsedDefault = css.indexOf(
+        ".site-frame--learner.site-frame--collapsed .learner-sidebar-toggle {",
+      );
+      const coarsePointerOverride = css.indexOf(
+        "@media (min-width: 1024px) and (hover: none)",
+      );
+      expect(collapsedDefault).toBeGreaterThanOrEqual(0);
+      expect(coarsePointerOverride).toBeGreaterThan(collapsedDefault);
+      expect(css.slice(coarsePointerOverride)).toMatch(
+        /\.site-frame--learner\.site-frame--collapsed \.learner-sidebar-toggle \{\s*opacity: 1;\s*pointer-events: auto;/,
+      );
     });
 
     it("ensures mark cutout --ac-mark-cut and tooltips follow semantic theme specifications", () => {

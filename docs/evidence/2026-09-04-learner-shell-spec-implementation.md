@@ -163,7 +163,7 @@ pnpm --filter learner-web build
 ## Guardrails & Non-Negotiable Compliance
 
 - **No Unrelated Code Edits**:
-  - Only `apps/learner-web` shell and sidebar files and focused tests were modified.
+  - Only `apps/learner-web` shell/sidebar files, focused tests, and the shared `packages/typescript/ui/src/sidebar-tooltip.tsx` primitive were modified.
   - Zero Python files, database migrations, or knowledge/FTS code were edited.
   - Pre-existing dirty files in the worktree (`apps/admin-web/app/lib/dev-api-proxy.*`, `apps/learner-web/app/lib/dev-api-proxy.*`, `Authority_Closers_LMS_Learner_Journey_UX_Audit_FINAL.docx`) were preserved untouched.
 - **Release Reconciliation**:
