@@ -4,7 +4,7 @@
 - Worktree: `C:\Users\Suyash\.codex\worktrees\d2de\authority-closers-platform`
 - Branch: `codex/local-staging-dev-bridge`
 - Current base commit: `a0214f9445595e45dccbf96f08de232e6cb62aff`
-- Candidate commit: not created; the UI and bridge changes remain uncommitted for later reconciliation.
+- Candidate commit: `79041eca2941082e7db1ab73c603fe728c39f7a5` (`feat(learner): refine shell sidebar and command palette UI`), pushed to `origin/codex/local-staging-dev-bridge`.
 - Release target under observation: `1fd26f0eabd70c2ea4f2f0f440c8e1179a8dac46` (not claimed as live here).
 - Deployment: none.
 
@@ -38,7 +38,7 @@
 
 ## Validation inventory
 
-- Learner suite: 31 files, 469 tests passed.
+- Learner suite: 31 files, 469 tests passed after candidate preparation.
 - Learner typecheck: passed.
 - Learner ESLint: passed with zero warnings.
 - Learner production build: passed across 25 routes.
@@ -73,4 +73,4 @@ The Chrome extension in the selected profile adds `bis_*` attributes before Reac
 - After confirmation, recapture the learner shell at the exact staging route and authenticated identity, plus the matching admin route; preserve both desktop and mobile captures as real files.
 - Reconcile only the listed UI/bridge files into the release branch. Preserve the user-provided audit DOCX and any unrelated knowledge/database work.
 
-final result: candidate manifest prepared; exact-staging visual evidence pending release-owner confirmation
+final result: candidate committed and pushed; exact-staging visual evidence pending release-owner confirmation
