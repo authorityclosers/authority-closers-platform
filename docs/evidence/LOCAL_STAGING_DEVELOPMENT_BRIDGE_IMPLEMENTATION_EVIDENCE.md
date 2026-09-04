@@ -100,13 +100,13 @@ The isolation and mismatch hardening at checkpoint
 focused checks. These results supplement rather than overstate a repeat of the
 complete pre-hardening suite:
 
-| Check                                                                                                  | Result    |
-| ------------------------------------------------------------------------------------------------------ | --------- |
-| learner development-proxy focused tests                                                                | 32 passed |
-| admin development-proxy focused tests                                                                  | 43 passed |
-| `uv run pytest -q tests/infra/test_local_staging_bridge.py tests/e2e/test_local_staging_bridge_e2e.py` | 8 passed  |
-| bridge-selected Prettier and Ruff checks                                                               | passed    |
-| bridge-only diff check                                                                                 | passed    |
+| Check                                                                                                       | Result    |
+| ----------------------------------------------------------------------------------------------------------- | --------- |
+| learner development-proxy focused tests                                                                     | 32 passed |
+| admin development-proxy focused tests                                                                       | 43 passed |
+| `uv run pytest -q tests/infra/test_local_staging_bridge.py tests/e2e/test_local_bridge_cookie_isolation.py` | 8 passed  |
+| bridge-selected Prettier and Ruff checks                                                                    | passed    |
+| bridge-only diff check                                                                                      | passed    |
 
 Focused security tests cover exact origin/upstream validation, route matrices,
 wrong/missing Origin, browser credential rejection, redirect rejection,
