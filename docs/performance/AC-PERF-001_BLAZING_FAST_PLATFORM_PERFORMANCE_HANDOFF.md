@@ -1,8 +1,10 @@
 # AC-PERF-001 — Blazing-Fast Platform Performance Handoff
 
-**Status:** Proposed execution specification  
-**Date:** 2026-09-04  
-**Audience:** Authority Closers engineering agents, product/UX, QA, DevOps, and leadership  
+**Status:** Proposed execution specification
+
+**Date:** 2026-09-04
+
+**Audience:** Authority Closers engineering agents, product/UX, QA, DevOps, and leadership
 **Scope:** Public learner catalog, authenticated learner navigation/data delivery, admin access boundary, assets, telemetry, and staged performance experiments
 
 ## Executive decision
