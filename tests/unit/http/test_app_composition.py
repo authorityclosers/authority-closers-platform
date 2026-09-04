@@ -70,6 +70,8 @@ def test_shipped_application_mounts_g1_command_and_query_routes() -> None:
     assert "/v1/learning/home" in paths
     assert "/v1/learning/calendar" in paths
     assert "/v1/analytics/taxonomy" in paths
+    assert "/v1/analytics/events" not in paths
+    assert "/v1/telemetry/events" in paths
 
     # Provider callbacks stay fail-closed until a signed adapter is explicitly
     # registered by application composition.

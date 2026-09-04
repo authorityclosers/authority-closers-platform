@@ -37,7 +37,11 @@ from ac_platform.http.identity_provider import (
     OAuthIdentityProvider,
 )
 from ac_platform.http.problem import problem_response
-from ac_platform.identity.application import AsyncIdentityApplication, ResolvedActorContext
+from ac_platform.identity.application import (
+    AccountDeletionPrivacyHook,
+    AsyncIdentityApplication,
+    ResolvedActorContext,
+)
 from ac_platform.identity.models import IdentityCommandIdempotency
 from ac_platform.identity.onboarding import (
     LearnerOnboardingService,
@@ -1123,6 +1127,7 @@ def install_identity_http(
     settings: Settings,
     sessions: async_sessionmaker[AsyncSession],
     provider: OAuthIdentityProvider | None = None,
+    account_deletion_hook: AccountDeletionPrivacyHook | None = None,
 ) -> RequireActor:
     """Install identity routes around one caller-owned database transaction."""
 
@@ -1133,12 +1138,23 @@ def install_identity_http(
     router = APIRouter(prefix="/v1", tags=["identity"])
     application.add_exception_handler(IdentityServiceError, identity_error_handler)  # type: ignore[arg-type]
 
+    def _identity(database: AsyncSession) -> AsyncIdentityApplication:
+        """Construct identity without widening legacy test/provider adapters."""
+
+        if account_deletion_hook is None:
+            return AsyncIdentityApplication(database, token_pepper=token_pepper)
+        return AsyncIdentityApplication(
+            database,
+            token_pepper=token_pepper,
+            account_deletion_hook=account_deletion_hook,
+        )
+
     async def require_actor(request: Request) -> AsyncIterator[AuthenticatedTransaction]:
         token = _session_cookie(request, settings)
         if token is None:  # pragma: no cover - required session cookie narrows this value
             raise AuthenticationRequired("A valid Authority Closers session is required.")
         async with sessions() as database, database.begin():
-            identity = AsyncIdentityApplication(database, token_pepper=token_pepper)
+            identity = _identity(database)
             resolved = _with_role_permissions(await identity.resolve_actor(token))
             yield AuthenticatedTransaction(
                 database=database,
@@ -1243,7 +1259,7 @@ def install_identity_http(
                 person = await PasswordIdentityService(
                     database, token_secret=challenge_secret
                 ).authenticate(email=body.email, password=body.password)
-                identity = AsyncIdentityApplication(database, token_pepper=token_pepper)
+                identity = _identity(database)
                 issued = await identity.issue_authenticated_session(
                     person.id,
                     user_agent=request.headers.get("user-agent"),
@@ -1338,7 +1354,7 @@ def install_identity_http(
                     database, token_secret=challenge_secret
                 ).consume_verification(body.token)
                 tenant_id = await ensure_public_learner(database, person.id)
-                identity = AsyncIdentityApplication(database, token_pepper=token_pepper)
+                identity = _identity(database)
                 issued = await identity.issue_authenticated_session(
                     person.id,
                     user_agent=request.headers.get("user-agent"),
@@ -1502,7 +1518,7 @@ def install_identity_http(
         audience = identity_provider.audience
         person_id: UUID | None = None
         async with sessions() as database, database.begin():
-            identity = AsyncIdentityApplication(database, token_pepper=token_pepper)
+            identity = _identity(database)
             if authorization_type is ProviderAuthorizationType.LINK:
                 token = _session_cookie(request, settings)
                 if token is None:  # pragma: no cover - required session cookie narrows this value
@@ -1675,7 +1691,7 @@ def install_identity_http(
         session_token: str | None = None
         try:
             async with sessions() as database, database.begin():
-                identity = AsyncIdentityApplication(database, token_pepper=token_pepper)
+                identity = _identity(database)
                 if transaction.authorization_type is ProviderAuthorizationType.REGISTER:
                     registered = await identity.register_verified_provider(
                         transaction.transaction_id,
@@ -1864,7 +1880,7 @@ def install_identity_http(
             return response
         try:
             async with sessions() as database, database.begin():
-                identity = AsyncIdentityApplication(database, token_pepper=token_pepper)
+                identity = _identity(database)
                 resolved = await identity.resolve_actor(token)
                 await identity.revoke_self(
                     token,

@@ -22,6 +22,10 @@ from ac_platform.identity.models import (
 )
 
 _LAZY_PUBLIC_IMPORTS = {
+    "AccountDeletionPrivacyHook": (
+        "ac_platform.identity.application",
+        "AccountDeletionPrivacyHook",
+    ),
     "AsyncIdentityApplication": ("ac_platform.identity.application", "AsyncIdentityApplication"),
     "ProductionTransactionRequiredError": (
         "ac_platform.identity.application",
@@ -126,6 +130,7 @@ def __getattr__(name: str) -> object:
 
 __all__ = [
     "AccountUnavailableError",
+    "AccountDeletionPrivacyHook",
     "AccountDeletionRequest",
     "AuthenticationReplay",
     "AmbiguousProviderIdentityError",

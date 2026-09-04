@@ -1,5 +1,19 @@
 """Redacted product and operational telemetry, separate from audit evidence."""
 
+from ac_platform.telemetry.ingest import (
+    LEARNER_PRODUCT_ANALYTICS_EVENTS,
+    MAX_BATCH_BYTES,
+    MAX_BATCH_EVENTS,
+    LearnerAnalyticsEventDefinition,
+    LearnerTelemetryBatch,
+    LearnerTelemetryEvent,
+    TelemetryAdmission,
+    TelemetryBatchRequest,
+    TelemetryConsent,
+    TelemetryConsentResolver,
+    TelemetryConsentStatus,
+    TelemetryEventRequest,
+)
 from ac_platform.telemetry.models import (
     SAFE_ATTRIBUTE_KEYS,
     InMemoryTelemetrySink,
@@ -14,18 +28,50 @@ from ac_platform.telemetry.redaction import (
     redact_attributes,
     sanitize_error,
 )
+from ac_platform.telemetry.retention import (
+    TelemetryAccountDeletionAction,
+    TelemetryAccountDeletionHook,
+    TelemetryAccountDeletionResult,
+    TelemetryRetentionJob,
+    TelemetryRetentionPolicy,
+    TelemetryRetentionPolicyUnavailable,
+    TelemetryRetentionResult,
+    TelemetryRetentionTransactionRequired,
+    run_telemetry_retention_job,
+)
 from ac_platform.telemetry.service import TelemetryRecorder
 
 __all__ = [
     "InMemoryTelemetrySink",
+    "LEARNER_PRODUCT_ANALYTICS_EVENTS",
+    "LearnerAnalyticsEventDefinition",
+    "LearnerTelemetryBatch",
+    "LearnerTelemetryEvent",
+    "MAX_BATCH_BYTES",
+    "MAX_BATCH_EVENTS",
     "REDACTED",
     "SAFE_ATTRIBUTE_KEYS",
     "TelemetryCategory",
+    "TelemetryAccountDeletionAction",
+    "TelemetryAccountDeletionHook",
+    "TelemetryAccountDeletionResult",
+    "TelemetryAdmission",
+    "TelemetryBatchRequest",
+    "TelemetryConsent",
+    "TelemetryConsentResolver",
+    "TelemetryConsentStatus",
+    "TelemetryEventRequest",
     "TelemetryEvent",
     "TelemetryRecorder",
+    "TelemetryRetentionJob",
+    "TelemetryRetentionPolicy",
+    "TelemetryRetentionPolicyUnavailable",
+    "TelemetryRetentionResult",
+    "TelemetryRetentionTransactionRequired",
     "TelemetrySink",
     "freeze_attributes",
     "redact",
     "redact_attributes",
     "sanitize_error",
+    "run_telemetry_retention_job",
 ]

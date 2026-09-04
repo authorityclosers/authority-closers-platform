@@ -27,6 +27,11 @@ from ac_platform.learning.planning_models import (
     LearningNextActionProjection,
     LearningPlanItem,
 )
+from ac_platform.telemetry.retention import (
+    TelemetryAccountDeletionAction,
+    TelemetryRetentionJob,
+    TelemetryRetentionPolicy,
+)
 from ac_platform.tenancy.models import Membership, Tenant
 
 
@@ -96,6 +101,7 @@ def planning_harness() -> tuple[TestClient, Session, ActorContext, _AsyncDatabas
         consent_resolver=lambda _actor, event: event.consent,
         retention_days=30,
         retention_policy_id="product-analytics-proposal-v1",
+        legacy_analytics_enabled=True,
     )
     client = TestClient(application)
     try:
@@ -236,6 +242,23 @@ def test_analytics_ingestion_is_allowlisted_consent_gated_and_idempotent(
     assert rejected.json()["code"] == "planning_event_invalid"
 
 
+def test_legacy_analytics_adapter_is_test_environment_only() -> None:
+    application = FastAPI()
+
+    async def require_actor(_request: Request) -> AsyncIterator[AuthenticatedTransaction]:
+        raise AssertionError("the guarded legacy adapter must fail during composition")
+        yield  # pragma: no cover
+
+    settings = Settings(environment="test").model_copy(update={"environment": "staging"})
+    with pytest.raises(RuntimeError, match="test environment"):
+        install_planning_http(
+            application,
+            settings=settings,
+            require_actor=require_actor,
+            legacy_analytics_enabled=True,
+        )
+
+
 def test_analytics_expiry_is_removed_from_descriptive_projection(
     planning_harness: tuple[TestClient, Session, ActorContext, _AsyncDatabase],
 ) -> None:
@@ -303,10 +326,31 @@ def test_analytics_expiry_is_removed_from_descriptive_projection(
     )
     session.commit()
 
+    # Expiry is hidden from descriptive reads without deleting rows.  Durable
+    # maintenance remains the only mutation path.
     response = client.get("/v1/learning/insights?period=today")
 
     assert response.status_code == 200
     assert response.json()["status"] == "insufficient_signal"
+    assert (
+        session.query(AnalyticsEvent).filter(AnalyticsEvent.tenant_id == actor.tenant_id).count()
+        == 1
+    )
+    assert (
+        session.query(AnalyticsEvent).filter(AnalyticsEvent.tenant_id == other_tenant_id).count()
+        == 1
+    )
+
+    session.rollback()
+    with session.begin():
+        TelemetryRetentionJob(
+            policy=TelemetryRetentionPolicy(
+                policy_id="product-analytics-proposal-v1",
+                retention_days=30,
+                account_deletion_action=TelemetryAccountDeletionAction.PURGE,
+            )
+        ).run_sync(session, now=now, tenant_id=actor.tenant_id)
+
     assert (
         session.query(AnalyticsEvent).filter(AnalyticsEvent.tenant_id == actor.tenant_id).count()
         == 0

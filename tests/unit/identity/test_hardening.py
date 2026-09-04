@@ -6,6 +6,7 @@ import sys
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import cast
 from uuid import UUID, uuid4
 
 import pytest
@@ -17,6 +18,7 @@ from ac_platform.db.base import Base
 from ac_platform.identity.application import (
     AsyncIdentityApplication,
     ProductionTransactionRequiredError,
+    _drain_account_deletion_hook,
 )
 from ac_platform.identity.factories import create_production_identity_services
 from ac_platform.identity.repositories import (
@@ -36,6 +38,10 @@ from ac_platform.identity.services import (
     StoredSession,
     TenantScopeDeniedError,
     VerifiedProviderAssertion,
+)
+from ac_platform.telemetry.retention import (
+    TelemetryAccountDeletionAction,
+    TelemetryAccountDeletionResult,
 )
 from ac_platform.tenancy.models import Membership, Tenant
 from ac_platform.tenancy.services import (
@@ -256,6 +262,85 @@ def test_identity_and_tenancy_model_modules_are_directly_importable() -> None:
 class _DeletionOperator:
     def require_permission(self, permission: str) -> None:
         assert permission == "identity_deletion_process"
+
+
+class _PrivacyBatchHook:
+    def __init__(self, results: list[TelemetryAccountDeletionResult]) -> None:
+        self.results = results
+        self.calls = 0
+
+    async def apply(self, _session: AsyncSession, **_kwargs: object) -> object:
+        self.calls += 1
+        return self.results.pop(0)
+
+
+async def test_account_deletion_drains_available_privacy_batches() -> None:
+    hook = _PrivacyBatchHook(
+        [
+            TelemetryAccountDeletionResult(
+                policy_id="learner-telemetry-v1",
+                action=TelemetryAccountDeletionAction.PURGE,
+                purged=1,
+                has_more=True,
+            ),
+            TelemetryAccountDeletionResult(
+                policy_id="learner-telemetry-v1",
+                action=TelemetryAccountDeletionAction.PURGE,
+                purged=1,
+                has_more=True,
+            ),
+            TelemetryAccountDeletionResult(
+                policy_id="learner-telemetry-v1",
+                action=TelemetryAccountDeletionAction.PURGE,
+                purged=1,
+            ),
+        ]
+    )
+
+    complete = await _drain_account_deletion_hook(
+        hook,
+        cast(AsyncSession, object()),
+        deletion_request_id=uuid4(),
+        person_id=uuid4(),
+        tenant_id=uuid4(),
+        now=NOW,
+    )
+
+    assert complete is True
+    assert hook.calls == 3
+    assert hook.results == []
+
+
+async def test_account_deletion_keeps_processing_when_privacy_batch_is_locked() -> None:
+    hook = _PrivacyBatchHook(
+        [
+            TelemetryAccountDeletionResult(
+                policy_id="learner-telemetry-v1",
+                action=TelemetryAccountDeletionAction.PURGE,
+                purged=1,
+                has_more=True,
+            ),
+            TelemetryAccountDeletionResult(
+                policy_id="learner-telemetry-v1",
+                action=TelemetryAccountDeletionAction.PURGE,
+                already_anonymized=1,
+                has_more=True,
+            ),
+        ]
+    )
+
+    complete = await _drain_account_deletion_hook(
+        hook,
+        cast(AsyncSession, object()),
+        deletion_request_id=uuid4(),
+        person_id=uuid4(),
+        tenant_id=uuid4(),
+        now=NOW,
+    )
+
+    assert complete is False
+    assert hook.calls == 2
+    assert len(hook.results) == 0
 
 
 def test_sqlalchemy_deletion_ends_all_memberships_in_same_transaction() -> None:

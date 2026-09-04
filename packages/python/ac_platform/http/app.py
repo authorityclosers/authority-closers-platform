@@ -32,6 +32,7 @@ from ac_platform.http.problem import problem_response, register_problem_handlers
 from ac_platform.http.rate_limits import RateLimitMiddleware
 from ac_platform.http.request_context import request_context_middleware
 from ac_platform.http.request_limits import RequestBodyLimitMiddleware
+from ac_platform.http.telemetry import install_telemetry_http
 from ac_platform.media.runtime import MediaRuntime, create_default_media_runtime
 
 logger = structlog.get_logger()
@@ -121,6 +122,15 @@ def create_app(
     # Static planning paths are registered before the dynamic
     # /v1/learning/{program_id} route so they cannot be parsed as UUIDs.
     install_planning_http(
+        application,
+        settings=settings,
+        require_actor=require_actor,
+        legacy_analytics_enabled=False,
+    )
+    # Learner telemetry is present as a fail-closed API boundary only.  A
+    # verified server consent resolver and explicit retention policy must be
+    # composed by a later controlled promotion before any row is stored.
+    install_telemetry_http(
         application,
         settings=settings,
         require_actor=require_actor,

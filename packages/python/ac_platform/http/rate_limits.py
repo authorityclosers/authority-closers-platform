@@ -93,6 +93,15 @@ DEFAULT_RATE_LIMIT_RULES = (
         capacity=300,
         refill_seconds=60,
     ),
+    # Coarse per-process abuse shield only.  Telemetry writes still require
+    # an explicit tenant-aware distributed/edge admission seam in the route.
+    RateLimitRule(
+        name="learner-telemetry-batch",
+        method="POST",
+        path=re.compile(r"^/v1/(?:telemetry/events|telemetry/batch|analytics/events/batch)$"),
+        capacity=120,
+        refill_seconds=60,
+    ),
 )
 
 
