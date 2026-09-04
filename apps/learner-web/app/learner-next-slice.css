@@ -7,35 +7,77 @@
  * variables so light and dark appearance remain aligned.
  */
 
-/* Keep the desktop rail control in the utility header, where it is reachable
- * without sending a learner to the bottom of a long navigation rail. */
+/* Keep the desktop rail control in the persistent rail. This matches the
+ * approved shell composition and keeps collapse state visually attached to
+ * the surface it changes. */
 .site-frame--learner .learner-sidebar-toggle {
-  display: inline-grid;
-  width: 40px;
-  height: 40px;
-  flex: 0 0 auto;
-  place-items: center;
-  padding: 0;
-  border: 1px solid var(--clarity-border);
-  border-radius: 10px;
+  display: flex;
+  width: 100%;
+  min-height: 44px;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 8px;
   color: var(--clarity-muted);
-  background: var(--clarity-canvas);
+  background: transparent;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 650;
   cursor: pointer;
   transition:
     color 140ms ease,
-    border-color 140ms ease,
-    background-color 140ms ease;
+    background-color 140ms ease,
+    transform 140ms ease;
 }
 
 .site-frame--learner .learner-sidebar-toggle:hover {
   color: var(--clarity-ink);
-  border-color: var(--clarity-blue);
   background: var(--clarity-soft-blue);
 }
 
 .site-frame--learner .learner-sidebar-toggle:focus-visible {
   outline: 3px solid var(--clarity-blue) !important;
   outline-offset: 2px !important;
+}
+
+.site-frame--learner .learner-sidebar-wordmark__mark {
+  display: none;
+}
+
+.site-frame--learner .learner-sidebar-wordmark__mark-art {
+  display: block;
+  width: 24px;
+  height: 24px;
+}
+
+.site-frame--learner.site-frame--collapsed .learner-sidebar__brand {
+  justify-content: center;
+  padding-inline: 14px;
+}
+
+.site-frame--learner.site-frame--collapsed .learner-sidebar-wordmark__mark {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--clarity-blue) 24%, transparent);
+  border-radius: 11px;
+  color: var(--clarity-blue);
+  background: var(--clarity-soft-blue);
+}
+
+.site-frame--learner.site-frame--collapsed .brand-title-full,
+.site-frame--learner.site-frame--collapsed .learner-sidebar-toggle__label {
+  display: none;
+}
+
+.site-frame--learner.site-frame--collapsed .learner-sidebar-toggle {
+  width: 44px;
+  margin-inline: auto;
+  justify-content: center;
+  padding-inline: 0;
 }
 
 /* The learner rail scrolls normally without exposing a second, browser-gray

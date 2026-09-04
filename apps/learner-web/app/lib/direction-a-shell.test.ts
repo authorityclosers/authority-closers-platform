@@ -413,9 +413,17 @@ describe("Direction A & B UI System & Shell", () => {
       expect(html).toContain("Alex Mercer");
     });
 
-    it("renders one accessible top sidebar control and tooltip titles on navigation links", () => {
+    it("renders one accessible rail control and tooltip titles on navigation links", () => {
       const html = renderToStaticMarkup(
         createElement(LearnerShell, { current: "dashboard" }),
+      );
+      const sidebarHtml = html.slice(
+        html.indexOf('<aside id="learner-sidebar"'),
+        html.indexOf("</aside>") + "</aside>".length,
+      );
+      const headerHtml = html.slice(
+        html.indexOf('<header class="learner-header"'),
+        html.indexOf("</header>") + "</header>".length,
       );
       expect(html).not.toContain('class="sidebar-collapse-btn"');
       expect(html).toContain('aria-expanded="true"');
@@ -423,6 +431,10 @@ describe("Direction A & B UI System & Shell", () => {
       expect(html).toContain('class="learner-sidebar-toggle"');
       expect(html.match(/class="learner-sidebar-toggle"/g)).toHaveLength(1);
       expect(html).toContain('aria-controls="learner-sidebar"');
+      expect(sidebarHtml).toContain('class="learner-sidebar-toggle"');
+      expect(headerHtml).not.toContain('class="learner-sidebar-toggle"');
+      expect(html).toContain('class="learner-sidebar-wordmark__mark"');
+      expect(html).toContain('class="learner-nav__label"');
       expect(html).toContain('title="Dashboard"');
       expect(html).toContain('title="My Learning"');
       expect(html).toContain('title="Discover"');
@@ -431,6 +443,28 @@ describe("Direction A & B UI System & Shell", () => {
       expect(html).toContain('title="Profile"');
       expect(html).toContain('title="Settings"');
       expect(html).toContain('title="Help"');
+    });
+
+    it("disables automatic prefetch for protected learner navigation", () => {
+      const shellSource = readFileSync(
+        new URL("../components/site-shell.tsx", import.meta.url),
+        "utf8",
+      );
+      const learnerNavLink = shellSource.slice(
+        shellSource.indexOf("function LearnerNavLink"),
+        shellSource.indexOf("const SUPPORT_MAILTO"),
+      );
+
+      expect(learnerNavLink).toContain("prefetch={false}");
+      expect(shellSource).toContain(
+        "href={ROUTES.dashboard}\n              prefetch={false}",
+      );
+      expect(shellSource).toContain(
+        "href={ROUTES.discover}\n              prefetch={false}",
+      );
+      expect(shellSource).toContain(
+        "href={ROUTES.settings}\n                      prefetch={false}",
+      );
     });
 
     it("uses first and last initials for stable identity fallbacks", () => {
@@ -525,7 +559,6 @@ describe("Direction A & B UI System & Shell", () => {
       expect(clarityCss).toContain("@media (max-width: 360px)");
 
       // Long copy truncation protection on user affordances
-      expect(clarityCss).toContain(".site-frame--learner .user-pill__name");
       expect(clarityCss).toContain(
         ".site-frame--learner .learner-profile__name",
       );
@@ -574,6 +607,14 @@ describe("Direction A & B UI System & Shell", () => {
         new URL("../learner-next-slice.css", import.meta.url),
         "utf8",
       );
+      const themeCss = readFileSync(
+        new URL("../theme.css", import.meta.url),
+        "utf8",
+      );
+      const courseSurfacesCss = readFileSync(
+        new URL("../course-surfaces.css", import.meta.url),
+        "utf8",
+      );
 
       expect(shellSource).toContain("accountButtonRef.current");
       expect(shellSource).toContain('aria-controls="learner-account-menu"');
@@ -591,6 +632,22 @@ describe("Direction A & B UI System & Shell", () => {
       expect(shellSource).toContain("aria-expanded={!sidebarCollapsed}");
       expect(shellSource).toContain('className="learner-sidebar-toggle"');
       expect(shellSource).toContain('aria-controls="learner-sidebar"');
+      expect(shellSource).toContain(
+        '<span className="learner-nav__label">Help</span>',
+      );
+      expect(shellSource).toContain("SIDEBAR_COLLAPSE_STORAGE_KEY");
+      expect(shellSource).toContain("window.localStorage.setItem(");
+      expect(clarityCss).toContain(".learner-nav__label,");
+      expect(clarityCss).not.toContain("span:not(.learner-nav__icon)");
+      expect(clarityCss).not.toContain(".sidebar-collapse-btn");
+      expect(clarityCss).not.toContain(".learner-sidebar__user-pill");
+      expect(themeCss).not.toContain(".sidebar-collapse-btn");
+      expect(courseSurfacesCss).toContain(
+        "repeat(auto-fit, minmax(min(100%, 300px), 1fr))",
+      );
+      expect(courseSurfacesCss).toMatch(
+        /\.ac-program-grid\s*>\s*\.ac-program-card:only-child\s*\{[\s\S]*?width:\s*min\(100%,\s*380px\);[\s\S]*?justify-self:\s*start;/,
+      );
       expect(shellSource).toContain("closeHelpPopover");
       expect(shellSource).toContain("setHelpOpen(false);");
       expect(shellSource).toContain(

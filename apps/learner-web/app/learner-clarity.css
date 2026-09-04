@@ -1128,16 +1128,6 @@ a.learning-list-card:hover {
   cursor: not-allowed;
 }
 
-.learner-sidebar__collapse {
-  display: inline-flex;
-  min-height: 36px;
-  align-items: center;
-  padding: 0 14px;
-  color: var(--clarity-muted);
-  font-size: 0.72rem;
-  font-weight: 700;
-}
-
 .site-frame--learner .learner-header {
   z-index: 7;
   min-height: 72px;
@@ -3895,13 +3885,8 @@ a.learning-list-card:hover {
   margin-left: 72px;
 }
 
-.site-frame--collapsed
-  .learner-sidebar
-  .learner-nav__link
-  span:not(.learner-nav__icon),
-.site-frame--collapsed .learner-sidebar .learner-sidebar__section-label,
-.site-frame--collapsed .learner-sidebar .user-pill__copy,
-.site-frame--collapsed .learner-sidebar .sidebar-collapse-btn span {
+.site-frame--collapsed .learner-sidebar .learner-nav__link .learner-nav__label,
+.site-frame--collapsed .learner-sidebar .learner-sidebar__section-label {
   display: none;
 }
 
@@ -3912,20 +3897,6 @@ a.learning-list-card:hover {
 .site-frame--collapsed .learner-sidebar .learner-nav__link {
   justify-content: center;
   padding: 10px 0;
-}
-
-.site-frame--collapsed .learner-sidebar .learner-sidebar__user-pill {
-  justify-content: center;
-  padding: 6px;
-}
-
-.site-frame--collapsed .learner-sidebar .sidebar-collapse-btn {
-  justify-content: center;
-  padding: 8px 0;
-}
-
-.site-frame--collapsed .sidebar-collapse-icon {
-  transform: rotate(90deg);
 }
 
 .learner-sidebar__content {
@@ -4057,21 +4028,6 @@ a.learning-list-card:hover {
   gap: 6px;
 }
 
-.learner-sidebar__user-pill {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 8px;
-  border-radius: 8px;
-  text-decoration: none;
-  color: inherit;
-  transition: background-color 140ms ease;
-}
-
-.learner-sidebar__user-pill:hover {
-  background: #f1f5f9;
-}
-
 .user-avatar-badge {
   display: flex;
   align-items: center;
@@ -4084,55 +4040,6 @@ a.learning-list-card:hover {
   font-weight: 700;
   border-radius: 50%;
   flex-shrink: 0;
-}
-
-.user-pill__copy {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.user-pill__name {
-  font-size: 13px;
-  font-weight: 600;
-  color: #0f172a;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.user-pill__role {
-  font-size: 11px;
-  color: #64748b;
-}
-
-.sidebar-collapse-btn {
-  display: flex;
-  align-items: center;
-  min-height: 40px;
-  gap: 8px;
-  padding: 6px 8px;
-  border-radius: 6px;
-  border: none;
-  background: transparent;
-  color: #64748b;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  width: 100%;
-  transition:
-    background-color 140ms ease,
-    color 140ms ease;
-}
-
-.sidebar-collapse-btn:hover {
-  background: #f1f5f9;
-  color: #0f172a;
-}
-
-.sidebar-collapse-icon {
-  transform: rotate(-90deg);
-  transition: transform 0.2s ease;
 }
 
 /* Direction A: Utility Header Upgrades */
@@ -7952,37 +7859,6 @@ a.learning-list-card:hover {
   border-left: 3px solid var(--color-cobalt, #2563eb);
 }
 
-.site-frame--learner .learner-sidebar .learner-sidebar__user-pill {
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 10px;
-  border-radius: 8px;
-  text-decoration: none;
-  color: inherit;
-  transition: background-color 140ms ease;
-}
-
-.site-frame--learner .learner-sidebar .sidebar-collapse-btn {
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  border-radius: 6px;
-  border: none;
-  background: transparent;
-  color: #64748b;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  width: 100%;
-  transition:
-    background-color 140ms ease,
-    color 140ms ease;
-}
-
 /* Account dropdown popover item touch targets */
 .site-frame--learner .account-menu-links a,
 .site-frame--learner .account-menu-footer a,
@@ -8067,8 +7943,7 @@ a.learning-list-card:hover {
 
 /* Visible keyboard focus outline */
 .site-frame--learner .learner-sidebar .learner-nav__link:focus-visible,
-.site-frame--learner .sidebar-collapse-btn:focus-visible,
-.site-frame--learner .learner-sidebar__user-pill:focus-visible,
+.site-frame--learner .learner-sidebar-toggle:focus-visible,
 .site-frame--learner .learner-header__search-trigger:focus-visible,
 .site-frame--learner .header-icon-button:focus-visible,
 .site-frame--learner .mobile-header-icon-button:focus-visible,
@@ -8084,7 +7959,6 @@ a.learning-list-card:hover {
 }
 
 /* Long copy safety across user and navigation affordances */
-.site-frame--learner .user-pill__name,
 .site-frame--learner .learner-profile__name,
 .site-frame--learner .account-menu-header strong,
 .site-frame--learner .mobile-drawer-user strong {
@@ -8092,10 +7966,6 @@ a.learning-list-card:hover {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.site-frame--learner .user-pill__name {
-  max-width: 130px;
 }
 
 .site-frame--learner .account-menu-header strong {

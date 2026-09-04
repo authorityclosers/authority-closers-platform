@@ -234,6 +234,11 @@
   margin-top: 14px;
 }
 
+.site-frame--learner .ac-program-grid > .ac-program-card:only-child {
+  width: min(100%, 380px);
+  justify-self: start;
+}
+
 .site-frame--learner .ac-program-card {
   min-width: 0;
   overflow: hidden;
