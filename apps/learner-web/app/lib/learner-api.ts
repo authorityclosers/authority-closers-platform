@@ -3,6 +3,7 @@ import {
   getOfflineReadPolicy,
   markOfflineRead,
   type OfflineReadCache,
+  type OfflineReadCacheLease,
 } from "./offline-read-cache";
 
 export type JsonRecord = Record<string, unknown>;
@@ -563,6 +564,9 @@ export function createLearnerApi(
     { fingerprint: string; key: string }
   >();
   const inFlightGetRequests = new Map<string, Promise<unknown>>();
+  // Every private offline write carries this cache-issued lease. The cache,
+  // not this API instance, decides whether its owner generation is current.
+  let ownerLease: OfflineReadCacheLease | null = null;
 
   function getGetDedupeKey(path: string, init: RequestInit): string | null {
     // A request with a caller-owned signal must remain independently
@@ -589,6 +593,12 @@ export function createLearnerApi(
   async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     assertV1Path(path);
     const method = (init.method || "GET").toUpperCase();
+    const offlinePolicy = getOfflineReadPolicy(path, method);
+    // Capture the cache-owned lease before any asynchronous work starts. A
+    // later identity response, logout, or concurrent API request may update
+    // the mutable ownerLease, but it must never retag this response.
+    const capturedOwnerLease = offlinePolicy?.requiresOwner ? ownerLease : null;
+    let identityWriteLease: OfflineReadCacheLease | null = null;
     const dedupeKey = method === "GET" ? getGetDedupeKey(path, init) : null;
     if (method === "GET") {
       const active = dedupeKey ? inFlightGetRequests.get(dedupeKey) : undefined;
@@ -617,6 +627,7 @@ export function createLearnerApi(
               (details && typeof details.title === "string" && details.title) ||
               `Learner API request failed (${response.status}).`;
             if (response.status === 401 || response.status === 403) {
+              ownerLease = null;
               try {
                 await offlineReadCache?.purge();
               } catch {
@@ -628,27 +639,48 @@ export function createLearnerApi(
 
           if (
             method === "GET" &&
-            (path === "/v1/me" || path === "/v1/context") &&
-            isRecord(body) &&
-            typeof body.person_id === "string"
+            (path === "/v1/me" || path === "/v1/context")
           ) {
-            try {
-              const tenantId =
-                path === "/v1/me"
-                  ? typeof body.selected_tenant_id === "string"
-                    ? body.selected_tenant_id
-                    : null
-                  : typeof body.tenant_id === "string"
-                    ? body.tenant_id
-                    : null;
-              await offlineReadCache?.activateOwner(body.person_id, tenantId);
-            } catch {
-              // Online identity/context reads must remain available even when
-              // local browser persistence is unavailable.
+            ownerLease = null;
+            identityWriteLease = null;
+            if (isRecord(body) && typeof body.person_id === "string") {
+              try {
+                const tenantId =
+                  path === "/v1/me"
+                    ? typeof body.selected_tenant_id === "string"
+                      ? body.selected_tenant_id
+                      : null
+                    : typeof body.tenant_id === "string"
+                      ? body.tenant_id
+                      : null;
+                const activation = await offlineReadCache?.activateOwner(
+                  body.person_id,
+                  tenantId,
+                );
+                identityWriteLease = activation?.ok ? activation.lease : null;
+                ownerLease = identityWriteLease;
+              } catch {
+                // Online identity/context reads remain available, but a
+                // failed durable owner binding must not issue a private lease.
+                ownerLease = null;
+              }
             }
           }
-          if (method === "GET" && getOfflineReadPolicy(path, method)) {
-            void offlineReadCache?.put(path, body).catch(() => undefined);
+          const writeLease =
+            path === "/v1/me" ? identityWriteLease : capturedOwnerLease;
+          if (
+            method === "GET" &&
+            offlinePolicy &&
+            (!offlinePolicy.requiresOwner || writeLease !== null)
+          ) {
+            const write = offlinePolicy.requiresOwner
+              ? offlineReadCache?.put(
+                  path,
+                  body,
+                  writeLease as OfflineReadCacheLease,
+                )
+              : offlineReadCache?.put(path, body);
+            void write?.catch(() => undefined);
           }
           return body as T;
         } catch (error) {
@@ -740,11 +772,17 @@ export function createLearnerApi(
   }
 
   async function rememberAuthenticatedOwner<T>(body: T): Promise<T> {
+    ownerLease = null;
     if (isRecord(body) && typeof body.person_id === "string") {
       try {
-        await offlineReadCache?.activateOwner(body.person_id);
+        const activation = await offlineReadCache?.activateOwner(
+          body.person_id,
+        );
+        ownerLease = activation?.ok ? activation.lease : null;
       } catch {
-        // Authentication success must not be made dependent on IndexedDB.
+        // Authentication success must not be made dependent on browser
+        // persistence, but a failed binding must not issue a private lease.
+        ownerLease = null;
       }
     }
     return body;
@@ -1026,6 +1064,7 @@ export function createLearnerApi(
         } catch {
           // SignOutControl performs the user-visible cleanup check and retry.
         }
+        ownerLease = null;
         throw error;
       }
       try {
@@ -1033,6 +1072,7 @@ export function createLearnerApi(
       } catch {
         // SignOutControl performs the user-visible cleanup check and retry.
       }
+      ownerLease = null;
     },
   };
 }

@@ -1,15 +1,16 @@
 "use client";
 
-import {
-  ArrowRight,
-  BookOpen,
-  CheckCircle2,
-  LockKeyhole,
-  RotateCcw,
-} from "lucide-react";
+import { ArrowRight, BookOpen, RotateCcw } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ProgramCard, ProgressMeter, RouteHeader, StatusBanner } from "@ac/ui";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
+import { RouteHeader, StatusBanner } from "@ac/ui";
 
 import {
   ApiError,
@@ -32,7 +33,11 @@ import {
   hasMembershipRole,
   MembershipUnavailable,
 } from "./membership-availability";
-import { useInvalidateDraftsWithoutMembership } from "./learner-runtime";
+import {
+  LEARNER_SUPPORT_HREF,
+  useInvalidateDraftsWithoutMembership,
+} from "./learner-runtime";
+import { LearningCourseCard } from "./learning-course-card";
 import { LearningSkeleton } from "./skeletons";
 
 const defaultApi = createLearnerApi();
@@ -41,7 +46,7 @@ const defaultApi = createLearnerApi();
 // itself never uses a slug to select or authorize a course.
 export { FREE_COURSE_SLUG } from "./learner-runtime";
 
-type LearningFilter = "all" | "in_progress" | "completed" | "saved";
+export type LearningFilter = "all" | "in_progress" | "completed" | "saved";
 
 const FILTERS: Array<{ id: LearningFilter; label: string }> = [
   { id: "all", label: "All courses" },
@@ -49,6 +54,107 @@ const FILTERS: Array<{ id: LearningFilter; label: string }> = [
   { id: "completed", label: "Completed" },
   { id: "saved", label: "Saved" },
 ];
+
+export function filterLearningCourses(
+  courses: LearningCourseSummaryResponse[],
+  filter: LearningFilter,
+  savedFilterAvailable: boolean,
+): LearningCourseSummaryResponse[] {
+  if (filter === "all") return courses;
+  if (filter === "saved") {
+    return savedFilterAvailable
+      ? courses.filter((course) => course.saved_state === "saved")
+      : [];
+  }
+  return courses.filter((course) => course.state === filter);
+}
+
+/** Return the next enabled tab for the controlled course filter list. */
+export function getLearningFilterKeyboardTarget(
+  current: LearningFilter,
+  key: string,
+  savedFilterAvailable: boolean,
+): LearningFilter | null {
+  const enabled = FILTERS.filter(
+    (item) => item.id !== "saved" || savedFilterAvailable,
+  );
+  const currentIndex = enabled.findIndex((item) => item.id === current);
+  if (currentIndex === -1) return null;
+  if (key === "Home") return enabled[0]?.id ?? null;
+  if (key === "End") return enabled.at(-1)?.id ?? null;
+
+  const direction =
+    key === "ArrowRight" || key === "ArrowDown"
+      ? 1
+      : key === "ArrowLeft" || key === "ArrowUp"
+        ? -1
+        : 0;
+  if (direction === 0) return null;
+  return (
+    enabled[(currentIndex + direction + enabled.length) % enabled.length]?.id ??
+    null
+  );
+}
+
+export type LearningLoadErrorClass = "retryable" | "terminal";
+
+const RETRYABLE_LEARNING_STATUSES = new Set([408, 425, 429]);
+
+export function getLearningLoadErrorClass(
+  error: unknown,
+): LearningLoadErrorClass {
+  if (
+    error instanceof ApiError &&
+    (RETRYABLE_LEARNING_STATUSES.has(error.status) ||
+      (error.status >= 500 && error.status <= 599))
+  ) {
+    return "retryable";
+  }
+  return error instanceof TypeError ? "retryable" : "terminal";
+}
+
+export type LearningLoadErrorPresentation = {
+  errorClass: LearningLoadErrorClass;
+  title: string;
+  detail: string;
+  requiresSignIn: boolean;
+  requiresSupport: boolean;
+  supportHref: string | null;
+  canRetry: boolean;
+};
+
+export function getLearningLoadErrorPresentation(
+  error: unknown,
+): LearningLoadErrorPresentation {
+  const errorClass = getLearningLoadErrorClass(error);
+  const is401 = error instanceof ApiError && error.status === 401;
+  const is403 = error instanceof ApiError && error.status === 403;
+  const canRetry = errorClass === "retryable";
+  return {
+    errorClass,
+    title: is401
+      ? "Sign in to view your learning"
+      : is403
+        ? "You do not have access to this learner library"
+        : canRetry
+          ? "Learning library is temporarily unavailable"
+          : "Could not load your courses",
+    detail: is401
+      ? "Your session has expired. Sign in again to view your courses."
+      : is403
+        ? "This account is not authorized to view this learner library. If you think this is incorrect, contact support."
+        : canRetry
+          ? "The learning service or network is temporarily unavailable. Retry the read; no learner work was changed."
+          : userFacingRequestError(
+              error,
+              "The learning service could not be reached. Try again.",
+            ),
+    requiresSignIn: is401,
+    requiresSupport: is403,
+    supportHref: is403 ? LEARNER_SUPPORT_HREF : null,
+    canRetry,
+  };
+}
 
 export function isActivityActionable(
   activity: LearningResponse["modules"][number]["activities"][number],
@@ -81,6 +187,7 @@ export async function loadLearningData(
   }
 
   const courses: LearningCourseSummaryResponse[] = [];
+  const offlineReadValues: unknown[] = [me];
   let nextCursor: string | undefined;
   let savedFilterAvailable = false;
   for (let page = 0; ; page += 1) {
@@ -91,6 +198,7 @@ export async function loadLearningData(
       50,
       { signal, cursor: nextCursor },
     );
+    offlineReadValues.push(collection);
     courses.push(...collection.items);
     savedFilterAvailable ||= collection.saved_filter_available;
     const cursor = collection.next_cursor ?? undefined;
@@ -104,138 +212,30 @@ export async function loadLearningData(
     me,
     courses,
     savedFilterAvailable,
-    offlineRead: getEarliestOfflineReadMetadata(me, courses) ?? undefined,
+    offlineRead:
+      getEarliestOfflineReadMetadata(...offlineReadValues, courses) ??
+      undefined,
   };
-}
-
-function formatEnrolledDate(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Enrollment date unavailable";
-  return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  }).format(date);
-}
-
-function stateLabel(state: LearningCourseSummaryResponse["state"]): string {
-  if (state === "in_progress") return "In progress";
-  if (state === "completed") return "Completed";
-  return "Progress unavailable";
-}
-
-function stateClass(state: LearningCourseSummaryResponse["state"]): string {
-  return `learning-course-card--${state.replaceAll("_", "-")}`;
-}
-
-function courseProjection(course: LearningCourseSummaryResponse): {
-  value: number | null;
-  detail: string;
-} {
-  const projection = course.projection;
-  if (
-    projection === null ||
-    projection.denominator <= 0 ||
-    !Number.isFinite(projection.percentage)
-  ) {
-    return {
-      value: null,
-      detail: "Progress is unavailable for this published course version.",
-    };
-  }
-  const percentage = Math.round(
-    Math.min(1, Math.max(0, projection.percentage)) * 100,
-  );
-  return {
-    value: percentage,
-    detail: `${projection.completed_count} of ${projection.denominator} required activities`,
-  };
-}
-
-function LearningCourseCard({
-  course,
-  index,
-}: {
-  course: LearningCourseSummaryResponse;
-  index: number;
-}) {
-  const progress = courseProjection(course);
-  const titleId = `learning-course-${course.program_id}-${course.program_version_id}`;
-  const href = ROUTES.programLearning(course.program_slug);
-
-  return (
-    <ProgramCard
-      className={`learning-course-card ${stateClass(course.state)}`}
-      title={course.program_title}
-      titleId={titleId}
-      titleAs="h2"
-      eyebrow={`Course ${String(index + 1).padStart(2, "0")}`}
-      badges={
-        <span
-          className={`learning-course-state learning-course-state--${course.state.replaceAll("_", "-")}`}
-          data-course-state={course.state}
-        >
-          {course.state === "completed" ? (
-            <CheckCircle2 size={14} aria-hidden="true" />
-          ) : course.state === "unavailable" ? (
-            <LockKeyhole size={14} aria-hidden="true" />
-          ) : null}
-          {stateLabel(course.state)}
-        </span>
-      }
-      media={
-        <div className="learning-course-card__media-content">
-          <div className="learning-course-card__media-icon" aria-hidden="true">
-            <BookOpen size={26} />
-          </div>
-          <div>
-            <span className="learning-course-card__media-kicker">
-              Authority Closers learning
-            </span>
-            <strong>Published version {course.version_number}</strong>
-          </div>
-        </div>
-      }
-      description="Follow the published course path and continue from the next server-authorized activity."
-      meta={
-        <span>
-          Version {course.version_number} · Enrolled{" "}
-          {formatEnrolledDate(course.enrolled_at)}
-        </span>
-      }
-      action={
-        <Link
-          className="button button--cobalt learning-course-card__action-link"
-          href={href}
-          aria-label={`Open course outline for ${course.program_title}`}
-          data-course-href={href}
-        >
-          Open course <ArrowRight size={16} aria-hidden="true" />
-        </Link>
-      }
-    >
-      <ProgressMeter
-        value={progress.value}
-        label="Course progress"
-        detail={progress.detail}
-      />
-    </ProgramCard>
-  );
 }
 
 function EmptyLearningState({
   filter,
   onClearFilter,
+  tabLabelId,
 }: {
   filter: LearningFilter;
   onClearFilter: () => void;
+  tabLabelId: string;
 }) {
   const filtered = filter !== "all";
   return (
     <section
       id="learning-course-list"
       className="card learning-collection-empty"
-      aria-labelledby="learning-empty-title"
+      role="tabpanel"
+      aria-labelledby={tabLabelId}
+      tabIndex={0}
+      aria-describedby="learning-empty-title"
     >
       <div className="learning-collection-empty__icon" aria-hidden="true">
         <BookOpen size={26} />
@@ -268,6 +268,114 @@ function EmptyLearningState({
   );
 }
 
+export function LearningFilterTabs({
+  filter,
+  savedFilterAvailable,
+  onFilterChange,
+}: {
+  filter: LearningFilter;
+  savedFilterAvailable: boolean;
+  onFilterChange: (filter: LearningFilter) => void;
+}) {
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const focusFilter = useCallback(
+    (nextFilter: LearningFilter) => {
+      const index = FILTERS.findIndex((item) => item.id === nextFilter);
+      if (index === -1) return;
+      tabRefs.current[index]?.focus();
+      onFilterChange(nextFilter);
+    },
+    [onFilterChange],
+  );
+
+  return (
+    <div
+      className="learning-collection-tabs"
+      role="tablist"
+      aria-label="Filter courses"
+      aria-orientation="horizontal"
+    >
+      {FILTERS.map((item, index) => {
+        const disabled = item.id === "saved" && !savedFilterAvailable;
+        const selected = filter === item.id;
+        const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+          const target = getLearningFilterKeyboardTarget(
+            item.id,
+            event.key,
+            savedFilterAvailable,
+          );
+          if (!target) return;
+          event.preventDefault();
+          focusFilter(target);
+        };
+        return (
+          <button
+            key={item.id}
+            ref={(element) => {
+              tabRefs.current[index] = element;
+            }}
+            id={`learning-filter-${item.id}`}
+            className={`learning-collection-tab${selected ? " is-active" : ""}`}
+            type="button"
+            role="tab"
+            aria-selected={selected}
+            aria-controls="learning-course-list"
+            aria-disabled={disabled}
+            tabIndex={selected ? 0 : -1}
+            disabled={disabled}
+            onKeyDown={handleKeyDown}
+            onClick={() => onFilterChange(item.id)}
+          >
+            {item.label}
+            {disabled ? " · unavailable" : null}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+export function LearningLoadErrorState({
+  presentation,
+  onRetry,
+}: {
+  presentation: LearningLoadErrorPresentation;
+  onRetry: () => void;
+}) {
+  return (
+    <div
+      className={`surface-state surface-state--error-${presentation.errorClass}`}
+      data-error-class={presentation.errorClass}
+      data-state={
+        presentation.errorClass === "retryable"
+          ? "ERROR_RETRYABLE"
+          : "ERROR_TERMINAL"
+      }
+      role="alert"
+    >
+      <h1>{presentation.title}</h1>
+      <p>{presentation.detail}</p>
+      {presentation.requiresSignIn ? (
+        <Link className="button button--ink" href={ROUTES.sessionExpired}>
+          Sign in again
+        </Link>
+      ) : presentation.requiresSupport && presentation.supportHref ? (
+        <a className="button button--outline" href={presentation.supportHref}>
+          Contact learner support
+        </a>
+      ) : presentation.canRetry ? (
+        <button
+          className="button button--outline"
+          type="button"
+          onClick={onRetry}
+        >
+          <RotateCcw size={16} aria-hidden="true" /> Retry
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 export function LearningViewRuntime({
   api = defaultApi,
 }: {
@@ -292,6 +400,8 @@ export function LearningViewRuntime({
     membershipAvailable,
     me?.person_id ?? null,
   );
+  const activeFilter =
+    filter === "saved" && !savedFilterAvailable ? "all" : filter;
 
   const load = useCallback(async () => {
     abortRef.current?.abort();
@@ -336,53 +446,17 @@ export function LearningViewRuntime({
   }, [load]);
 
   const visibleCourses = useMemo(() => {
-    if (filter === "all") return courses;
-    if (filter === "saved") {
-      return savedFilterAvailable
-        ? courses.filter((course) => course.saved_state === "saved")
-        : [];
-    }
-    return courses.filter((course) => course.state === filter);
-  }, [courses, filter, savedFilterAvailable]);
+    return filterLearningCourses(courses, activeFilter, savedFilterAvailable);
+  }, [activeFilter, courses, savedFilterAvailable]);
 
   if (loading) return <LearningSkeleton />;
 
   if (error) {
-    const is401 = error instanceof ApiError && error.status === 401;
-    const is403 = error instanceof ApiError && error.status === 403;
     return (
-      <div className="surface-state surface-state--error-terminal" role="alert">
-        <h1>
-          {is401
-            ? "Sign in to view your learning"
-            : is403
-              ? "Learner access is unavailable"
-              : "Could not load your courses"}
-        </h1>
-        <p>
-          {is401
-            ? "Your session has expired. Sign in again to view your courses."
-            : is403
-              ? "This account is not authorized to view this learner library."
-              : userFacingRequestError(
-                  error,
-                  "The learning service could not be reached. Try again.",
-                )}
-        </p>
-        {is401 ? (
-          <Link className="button button--ink" href={ROUTES.sessionExpired}>
-            Sign in again
-          </Link>
-        ) : (
-          <button
-            className="button button--outline"
-            type="button"
-            onClick={() => void load()}
-          >
-            <RotateCcw size={16} aria-hidden="true" /> Retry
-          </button>
-        )}
-      </div>
+      <LearningLoadErrorState
+        presentation={getLearningLoadErrorPresentation(error)}
+        onRetry={() => void load()}
+      />
     );
   }
 
@@ -401,7 +475,11 @@ export function LearningViewRuntime({
             Learner library
           </span>
         }
-        description="Your server-authorized courses, organized around the published paths you can access."
+        description={
+          offlineRead
+            ? "Read-only snapshot of your learner library. Reconnect to verify access and enable live actions."
+            : "Your server-authorized courses, organized around the published paths you can access."
+        }
         aside={
           <div
             className="learning-collection-summary"
@@ -434,35 +512,11 @@ export function LearningViewRuntime({
       ) : null}
 
       <div className="learning-collection-toolbar">
-        <div
-          className="learning-collection-tabs"
-          role="tablist"
-          aria-label="Filter courses"
-        >
-          {FILTERS.map((item) => {
-            const disabled = item.id === "saved" && !savedFilterAvailable;
-            const selected = filter === item.id;
-            return (
-              <button
-                key={item.id}
-                id={`learning-filter-${item.id}`}
-                className={`learning-collection-tab${selected ? " is-active" : ""}`}
-                type="button"
-                role="tab"
-                aria-selected={selected}
-                aria-controls="learning-course-list"
-                aria-disabled={disabled}
-                disabled={disabled}
-                onClick={() => setFilter(item.id)}
-              >
-                {item.label}
-                {item.id === "saved" && !savedFilterAvailable
-                  ? " · unavailable"
-                  : null}
-              </button>
-            );
-          })}
-        </div>
+        <LearningFilterTabs
+          filter={activeFilter}
+          savedFilterAvailable={savedFilterAvailable}
+          onFilterChange={setFilter}
+        />
         <span className="learning-collection-count" aria-live="polite">
           {visibleCourses.length} shown
         </span>
@@ -472,6 +526,9 @@ export function LearningViewRuntime({
         <section
           id="learning-course-list"
           className="learning-course-list"
+          role="tabpanel"
+          aria-labelledby={`learning-filter-${activeFilter}`}
+          tabIndex={0}
           aria-label="Courses"
         >
           {visibleCourses.map((course, index) => (
@@ -484,8 +541,9 @@ export function LearningViewRuntime({
         </section>
       ) : (
         <EmptyLearningState
-          filter={filter}
+          filter={activeFilter}
           onClearFilter={() => setFilter("all")}
+          tabLabelId={`learning-filter-${activeFilter}`}
         />
       )}
     </div>
