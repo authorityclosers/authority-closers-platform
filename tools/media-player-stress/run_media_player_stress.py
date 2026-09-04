@@ -40,14 +40,14 @@ from playwright.sync_api import (
 )
 
 ROOT = Path(__file__).resolve().parents[2]
-ARTIFACT_ROOT = ROOT / ".artifacts" / "media-player"
+ARTIFACT_ROOT = ROOT / "tools" / "media-player-stress" / ".artifacts"
 OUTPUT_ROOT = ARTIFACT_ROOT / "evidence"
 
 FIXTURE_PATHS = {
-    "official-bbb.mp4": ARTIFACT_ROOT / "official-bbb" / "BigBuckBunny_320x180.mp4",
-    "tiny-16x9-320x180-4s.mp4": ARTIFACT_ROOT / "tiny-16x9-320x180-4s.mp4",
-    "tiny-4x3-320x240-6s.mp4": ARTIFACT_ROOT / "tiny-4x3-320x240-6s.mp4",
-    "tiny-235x-640x272-3s.mp4": ARTIFACT_ROOT / "tiny-235x-640x272-3s.mp4",
+    "official-bbb.mp4": ARTIFACT_ROOT / "sources/bbb-320x180-24/BigBuckBunny_320x180.mp4",
+    "tiny-16x9-320x180-4s.mp4": ARTIFACT_ROOT / "generated/generated-16x9-4s.mp4",
+    "tiny-4x3-320x240-6s.mp4": ARTIFACT_ROOT / "generated/generated-4x3-6s.mp4",
+    "tiny-235x-640x272-3s.mp4": ARTIFACT_ROOT / "generated/generated-wide-3s.mp4",
 }
 
 CAPTIONS = """WEBVTT
