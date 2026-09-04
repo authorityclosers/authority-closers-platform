@@ -10,6 +10,7 @@ import {
   createLearnerApi,
   isAbortError,
   type LearnerApi,
+  type LearningCollectionResponse,
   type LearningResponse,
 } from "../lib/learner-api";
 import {
@@ -29,6 +30,10 @@ import {
   MembershipUnavailable,
 } from "./membership-availability";
 import { LearnerInsightsRuntime } from "./learner-insights";
+import {
+  ProgressMotivationPanel,
+  ProgressScopePanel,
+} from "./progress-momentum";
 import { ProgressSkeleton } from "./skeletons";
 
 type ProgressState =
@@ -38,27 +43,53 @@ type ProgressState =
       membershipAvailable: boolean;
       personId: string;
       learning?: LearningResponse;
+      learningCollection?: LearningCollectionResponse;
       offlineRead?: OfflineReadMetadata;
     }
   | { status: "error"; error: unknown };
 
 const defaultApi = createLearnerApi();
 
+function isUnsupportedLearningCollectionError(error: unknown): boolean {
+  return error instanceof ApiError && [404, 405, 501].includes(error.status);
+}
+
+export function shouldIgnoreProgressLoadError(error: unknown): boolean {
+  return isAbortError(error);
+}
+
 export async function loadProgressData(
   api: LearnerApi,
   signal?: AbortSignal,
 ): Promise<Extract<ProgressState, { status: "ready" }>> {
   const identity = await identityState(api, undefined, signal);
+
+  let learningCollection: LearningCollectionResponse | undefined;
+
+  if (hasMembershipRole(identity.me)) {
+    try {
+      learningCollection = await api.learningCollection(50, { signal });
+    } catch (error) {
+      if (isAbortError(error)) throw error;
+      // A not-yet-promoted collection route is optional. Authentication,
+      // authorization, service, and network failures remain actionable route
+      // errors so the controlled recovery UI can preserve their meaning.
+      if (!isUnsupportedLearningCollectionError(error)) throw error;
+    }
+  }
+
   return {
     status: "ready",
     membershipAvailable: hasMembershipRole(identity.me),
     personId: identity.me.person_id,
     learning: identity.learning,
+    learningCollection,
     offlineRead:
       getEarliestOfflineReadMetadata(
         identity.me,
         identity.programs,
         identity.learning,
+        learningCollection,
       ) ?? undefined,
   };
 }
@@ -92,7 +123,7 @@ export function ProgressRuntime({ api = defaultApi }: { api?: LearnerApi }) {
         if (isCurrent()) setState(ready);
       },
       (error: unknown) => {
-        if (isCurrent() && !isAbortError(error)) {
+        if (isCurrent() && !shouldIgnoreProgressLoadError(error)) {
           setState({ status: "error", error });
         }
       },
@@ -243,7 +274,12 @@ export function ProgressRuntime({ api = defaultApi }: { api?: LearnerApi }) {
           Open course <ArrowRight size={16} aria-hidden="true" />
         </Link>
       </section>
+      <ProgressScopePanel
+        learning={learning}
+        collection={state.learningCollection}
+      />
       <LearnerInsightsRuntime api={api} />
+      <ProgressMotivationPanel />
       <section
         className="progress-modules"
         aria-labelledby="module-progress-title"
