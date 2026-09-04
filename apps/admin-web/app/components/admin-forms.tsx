@@ -567,7 +567,10 @@ export function ReconciliationForm({
   );
 }
 
-export type PublishVersionTarget = Readonly<{ programVersionId: string }>;
+export type PublishVersionTarget = Readonly<{
+  programVersionId: string;
+  ifMatch: string;
+}>;
 
 export function PublishVersionForm({
   target,
@@ -586,7 +589,11 @@ export function PublishVersionForm({
       onExecute={
         target && reason.trim()
           ? async () => {
-              await publishProgramVersion({ ...target, reason: reason.trim() });
+              await publishProgramVersion({
+                ...target,
+                reason: reason.trim(),
+                idempotencyKey: newIdempotencyKey(),
+              });
               return "Program version accepted by the canonical API.";
             }
           : undefined

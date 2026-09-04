@@ -59,6 +59,9 @@ def test_shipped_application_mounts_g1_command_and_query_routes() -> None:
 
     assert "/v1/certificates/{certificate_id}" in paths
     assert "/v1/admin/program-versions/{program_version_id}/publish" in paths
+    assert "/v1/admin/studio/readiness" in paths
+    assert "/v1/admin/studio/programs" in paths
+    assert "/v1/admin/studio/programs/{program_id}" in paths
     assert "/v1/admin/corrections" in paths
     assert "/v1/admin/enrollment-grants" in paths
     assert "/v1/admin/jobs/{job_id}/retry" in paths

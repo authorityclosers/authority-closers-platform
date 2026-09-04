@@ -97,11 +97,33 @@ external-delivery gate are defined in
 
 ## Admin/studio boundary
 
-The separate admin app remains a fail-closed foundation. Catalog publish,
-learning correction/review, enrollment grant, job retry, and recovery
-reconciliation are server-authorized named commands with tenant, purpose,
-idempotency, and audit requirements. Admin UI action wiring and diagnosis
-responses are not declared complete in v0.1.
+Academy Studio is a role-scoped product area in the existing `admin-web`
+application, not a separate Instructor application, identity system, backend or
+authorization role.
+
+| Browser route                   | Authority                                  | Primary states and actions                                                                                                                   | Activation dependency                                      |
+| ------------------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `/studio`                       | Studio readiness API                       | loading, permission denied, retry, honest empty backlog, canonical draft age/readiness; arrival/service/capacity remain explicitly unavailable | active selected tenant and `catalog_read`                  |
+| `/studio/programs`              | Studio program collection API              | loading, permission denied, retry, honest empty, selected-tenant working versions plus immutable global read-only content                     | active selected tenant and `catalog_read`                  |
+| `/studio/programs/{programId}`  | Studio program detail API                  | version identity, modules, activities, readiness blockers, current ETag, tenant-local publish action when granted                            | visible canonical program and `catalog_read`               |
+| `/catalog`                      | Next.js route redirect                      | permanent application redirect to `/studio/programs`; no second catalog experience                                                           | none beyond the destination route                          |
+
+Studio collection/detail visibility is exact: selected-tenant programs expose
+every working draft plus bounded immutable history; global programs expose
+only bounded immutable published/superseded versions and are read-only;
+other-tenant programs and global drafts are returned as unavailable. The
+browser never supplies tenant or actor scope. A truncation marker refers only
+to older immutable history, never to selected-tenant drafts.
+
+Tenant-local publication uses
+`POST /v1/admin/program-versions/{id}/publish` with `catalog_publish`, a
+non-blank reason, `Idempotency-Key`, and the current `If-Match` ETag returned by
+the read model. Ledger reservation, publication and audit complete atomically.
+The same key and intent replay the stored result; stale preconditions and key
+reuse with different intent fail without mutation. Learning correction/review,
+enrollment grant, job retry, and recovery reconciliation remain separate
+server-authorized commands. Learner diagnosis is not declared complete by this
+Studio slice.
 
 ## Responsive and install behavior
 
