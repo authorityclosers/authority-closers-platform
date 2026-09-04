@@ -233,7 +233,8 @@ describe("learner shell modal interactions", () => {
     });
     await settleEffects();
 
-    const tooltip = document.body.querySelector<HTMLElement>('[role="tooltip"]');
+    const tooltip =
+      document.body.querySelector<HTMLElement>('[role="tooltip"]');
     expect(tooltip).not.toBeNull();
     expect(tooltip?.textContent).toContain("Dashboard");
     expect(trigger?.getAttribute("aria-describedby")).toBe(tooltip?.id);

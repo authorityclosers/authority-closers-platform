@@ -134,9 +134,14 @@ html[data-theme="dark"] .site-frame--learner .learner-sidebar-wordmark__mark {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
 }
 
-.site-frame--learner.site-frame--collapsed .learner-sidebar:hover .learner-sidebar-toggle,
-.site-frame--learner.site-frame--collapsed .learner-sidebar:focus-within .learner-sidebar-toggle,
-.site-frame--learner.site-frame--collapsed .learner-sidebar-toggle:focus-visible {
+.site-frame--learner.site-frame--collapsed
+  .learner-sidebar:hover
+  .learner-sidebar-toggle,
+.site-frame--learner.site-frame--collapsed
+  .learner-sidebar:focus-within
+  .learner-sidebar-toggle,
+.site-frame--learner.site-frame--collapsed
+  .learner-sidebar-toggle:focus-visible {
   opacity: 1;
   pointer-events: auto;
 }

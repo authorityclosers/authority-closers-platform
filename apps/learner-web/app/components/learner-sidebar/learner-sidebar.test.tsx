@@ -592,12 +592,8 @@ describe("P1 Learner Sidebar & Navigation Architecture", () => {
       expect(css).toContain(
         'html[data-theme="dark"] {\n  --sidebar-bg: var(--theme-surface, #101a2b);',
       );
-      expect(css).toContain(
-        "--sidebar-border: var(--theme-border, #34425a);",
-      );
-      expect(css).toContain(
-        "--sidebar-text: var(--theme-text, #edf2fb);",
-      );
+      expect(css).toContain("--sidebar-border: var(--theme-border, #34425a);");
+      expect(css).toContain("--sidebar-text: var(--theme-text, #edf2fb);");
       expect(css).toContain(
         "--sidebar-rail-accent: var(--theme-action, #9bb3ff);",
       );
@@ -640,9 +636,7 @@ describe("P1 Learner Sidebar & Navigation Architecture", () => {
         "utf8",
       );
 
-      expect(css).toContain(
-        "--ac-mark-cut: var(--sidebar-mark-cut, #eef3ff);",
-      );
+      expect(css).toContain("--ac-mark-cut: var(--sidebar-mark-cut, #eef3ff);");
       expect(css).toContain("--ac-mark-cut: #142036;");
       expect(css).toContain("z-index: 99999;");
       expect(css).toContain(".mobile-brand-name");
