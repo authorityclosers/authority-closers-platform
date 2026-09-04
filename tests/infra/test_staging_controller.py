@@ -187,7 +187,9 @@ def test_staging_controller_chunks_and_verifies_the_large_image_bundle() -> None
     assert 'test ! -L "`$part_path"' in deploy
     assert 'partial_path="`$part_path.partial"' not in deploy
     bundle_verification = '(cd "`$bundle_dir" && sha256sum --check --strict SHA256SUMS)'
-    installer_invocation = "'$remoteDirectory/source/infra/application/scripts/install-application-release.sh'"
+    installer_invocation = (
+        "'$remoteDirectory/source/infra/application/scripts/install-application-release.sh'"
+    )
     assert 'rm -rf -- "`$parts_dir"' in deploy
     assert 'rm -- "`$parts_manifest"' in deploy
     assert deploy.index(bundle_verification) < deploy.index('rm -rf -- "`$parts_dir"')
