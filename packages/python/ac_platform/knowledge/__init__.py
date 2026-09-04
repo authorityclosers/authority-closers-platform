@@ -25,6 +25,9 @@ from ac_platform.knowledge.evaluation import (
     GoldEvaluation,
     GoldPrediction,
     evaluate_gold_set,
+    gold_access_context,
+    gold_acl_subject_id,
+    gold_tenant_id,
     load_gold_set,
 )
 from ac_platform.knowledge.repository import PostgresKnowledgeRepository
@@ -50,6 +53,9 @@ __all__ = [
     "RetrievalOutcome",
     "RetrievalResult",
     "evaluate_gold_set",
+    "gold_acl_subject_id",
+    "gold_access_context",
+    "gold_tenant_id",
     "canonical_knowledge_version_digest",
     "canonical_knowledge_version_digest_material",
     "load_gold_set",

@@ -34,6 +34,9 @@ rollback boundary.
   version digest is checked against `ac-knowledge-version-v1` followed by its
   ordinal-ordered, UTF-8 length-prefixed locator and passage material; the
   Python and PostgreSQL serializers are kept byte-for-byte equivalent.
+- Each source has at most one active version. New versions must append the
+  exact terminal predecessor and are inserted active; terminal timestamps are
+  written only by the guarded active-to-terminal transition.
 - `KNOWLEDGE_RETRIEVAL_ENABLED` remains false by default; no route references
   this package.
 

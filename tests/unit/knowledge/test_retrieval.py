@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
 from uuid import uuid4
@@ -27,6 +28,8 @@ from ac_platform.knowledge import (
     canonical_knowledge_version_digest,
     canonical_knowledge_version_digest_material,
     evaluate_gold_set,
+    gold_access_context,
+    gold_tenant_id,
     load_gold_set,
 )
 from ac_platform.knowledge.contracts import snapshot_fingerprint
@@ -414,6 +417,7 @@ def test_gold_set_fixture_has_bounded_schema_and_expected_classes() -> None:
 def _gold_predictions(cases, *, leaked_case_id=None):
     predictions = {}
     for case in cases:
+        access = gold_access_context(case)
         snapshot_id = f"snapshot-{case.case_id}"
         if case.expected == "answerable":
             chunks = tuple(
@@ -421,7 +425,7 @@ def _gold_predictions(cases, *, leaked_case_id=None):
                     chunk_id=uuid4(),
                     source_id=source_id,
                     source_version_id=uuid4(),
-                    tenant_id=uuid4(),
+                    tenant_id=access.tenant_id,
                     locator=locator,
                     passage=f"Evidence for {source_id} at {locator}.",
                     content_sha256=hashlib.sha256(
@@ -437,9 +441,7 @@ def _gold_predictions(cases, *, leaked_case_id=None):
             result = RetrievalResult(RetrievalOutcome.NO_AUTHORIZED_EVIDENCE, snapshot_id)
         predictions[case.case_id] = GoldPrediction(
             result=result,
-            tenant_key=case.tenant_key,
-            purpose=case.purpose,
-            acl_subject_ids=case.acl_subject_ids,
+            access=access,
         )
     if leaked_case_id is not None:
         case = next(case for case in cases if case.case_id == leaked_case_id)
@@ -447,7 +449,7 @@ def _gold_predictions(cases, *, leaked_case_id=None):
             chunk_id=uuid4(),
             source_id=next(iter(case.forbidden_source_ids)),
             source_version_id=uuid4(),
-            tenant_id=uuid4(),
+            tenant_id=gold_tenant_id(case.tenant_key),
             locator="forbidden#1",
             passage="Forbidden evidence.",
             content_sha256=hashlib.sha256(b"Forbidden evidence.").hexdigest(),
@@ -460,9 +462,7 @@ def _gold_predictions(cases, *, leaked_case_id=None):
                 f"snapshot-{case.case_id}",
                 (chunk,),
             ),
-            tenant_key=case.tenant_key,
-            purpose=case.purpose,
-            acl_subject_ids=case.acl_subject_ids,
+            access=gold_access_context(case),
         )
     return predictions
 
@@ -495,8 +495,8 @@ def test_gold_set_evaluation_rejects_unknown_or_malformed_predictions() -> None:
     with pytest.raises(KnowledgeRetrievalError, match="missing"):
         evaluate_gold_set(cases, _gold_predictions(cases[:-1]))
     malformed = _gold_predictions(cases)
-    malformed["ks-0001"] = (("source", "locator"),)  # type: ignore[assignment]
-    with pytest.raises(KnowledgeRetrievalError, match="structured RetrievalResult"):
+    malformed["ks-0001"] = RetrievalResult(RetrievalOutcome.NO_AUTHORIZED_EVIDENCE, "empty")
+    with pytest.raises(KnowledgeRetrievalError, match="structured GoldPrediction"):
         evaluate_gold_set(cases, malformed)
 
 
@@ -509,47 +509,68 @@ def test_gold_set_evaluation_rejects_untruthful_or_mismatched_context() -> None:
         chunk_id=uuid4(),
         source_id="support-policy",
         source_version_id=uuid4(),
-        tenant_id=uuid4(),
+        tenant_id=gold_tenant_id(case.tenant_key),
         locator="recovery.md#email",
         passage="Evidence with a stale digest.",
         content_sha256="a" * 64,
         rank_score=Decimal("1"),
         snapshot_id="snapshot-ks-0001",
     )
-    predictions[case.case_id] = RetrievalResult(
-        RetrievalOutcome.FOUND,
-        "snapshot-ks-0001",
-        (chunk,),
+    predictions[case.case_id] = GoldPrediction(
+        result=RetrievalResult(RetrievalOutcome.FOUND, "snapshot-ks-0001", (chunk,)),
+        access=gold_access_context(case),
     )
     with pytest.raises(KnowledgeRetrievalError, match="digest"):
         evaluate_gold_set(cases, predictions)
 
+    tenant_mismatch_passage = "Evidence from another tenant."
+    tenant_mismatch_chunk = RetrievedChunk(
+        chunk_id=uuid4(),
+        source_id="support-policy",
+        source_version_id=uuid4(),
+        tenant_id=uuid4(),
+        locator="recovery.md#email",
+        passage=tenant_mismatch_passage,
+        content_sha256=hashlib.sha256(tenant_mismatch_passage.encode("utf-8")).hexdigest(),
+        rank_score=Decimal("1"),
+        snapshot_id="snapshot-ks-0001",
+    )
     predictions = _gold_predictions(cases)
     predictions[case.case_id] = GoldPrediction(
-        result=predictions[case.case_id].result,  # type: ignore[union-attr]
-        tenant_key="tenant-b",
-        purpose=case.purpose,
-        acl_subject_ids=case.acl_subject_ids,
+        result=RetrievalResult(
+            RetrievalOutcome.FOUND,
+            "snapshot-ks-0001",
+            (tenant_mismatch_chunk,),
+        ),
+        access=gold_access_context(case),
+    )
+    with pytest.raises(KnowledgeRetrievalError, match="chunk tenant"):
+        evaluate_gold_set(cases, predictions)
+
+    predictions = _gold_predictions(cases)
+    case_access = gold_access_context(case)
+    predictions[case.case_id] = GoldPrediction(
+        result=predictions[case.case_id].result,
+        access=KnowledgeAccessContext(
+            tenant_id=uuid4(),
+            purpose=case_access.purpose,
+            acl_subject_ids=case_access.acl_subject_ids,
+        ),
     )
     with pytest.raises(KnowledgeRetrievalError, match="tenant"):
         evaluate_gold_set(cases, predictions)
 
-    predictions = _gold_predictions(cases)
-    predictions[case.case_id] = GoldPrediction(
-        result=predictions[case.case_id].result,  # type: ignore[union-attr]
-        tenant_key=case.tenant_key,
-        purpose="other_purpose",
-        acl_subject_ids=case.acl_subject_ids,
-    )
     with pytest.raises(KnowledgeRetrievalError, match="purpose"):
-        evaluate_gold_set(cases, predictions)
+        gold_access_context(replace(case, purpose="other_purpose"))
 
     predictions = _gold_predictions(cases)
     predictions[case.case_id] = GoldPrediction(
-        result=predictions[case.case_id].result,  # type: ignore[union-attr]
-        tenant_key=case.tenant_key,
-        purpose=case.purpose,
-        acl_subject_ids=("different-subject",),
+        result=predictions[case.case_id].result,
+        access=KnowledgeAccessContext(
+            tenant_id=gold_tenant_id(case.tenant_key),
+            purpose=IntelligencePurpose.SUPPORT_ASSISTANCE,
+            acl_subject_ids=(uuid4(),),
+        ),
     )
     with pytest.raises(KnowledgeRetrievalError, match="ACL"):
         evaluate_gold_set(cases, predictions)
