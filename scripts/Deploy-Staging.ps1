@@ -40,6 +40,56 @@ function Assert-NativeSuccess {
     }
 }
 
+function Invoke-RetriableNative {
+    param(
+        [Parameter(Mandatory = $true)][string]$FilePath,
+        [Parameter(Mandatory = $true)][string[]]$NativeArguments,
+        [Parameter(Mandatory = $true)][string]$Operation,
+        [ValidateRange(1, 5)][int]$MaxAttempts = 4
+    )
+    for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+        $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+        $startInfo.FileName = $FilePath
+        foreach ($argument in $NativeArguments) {
+            $startInfo.ArgumentList.Add($argument)
+        }
+        $startInfo.UseShellExecute = $false
+        $startInfo.RedirectStandardOutput = $true
+        $startInfo.RedirectStandardError = $true
+        $startInfo.CreateNoWindow = $true
+        $process = [System.Diagnostics.Process]::new()
+        $process.StartInfo = $startInfo
+        try {
+            if (-not $process.Start()) {
+                throw "$Operation could not start."
+            }
+            $standardOutputTask = $process.StandardOutput.ReadToEndAsync()
+            $standardErrorTask = $process.StandardError.ReadToEndAsync()
+            $process.WaitForExit()
+            $standardOutput = $standardOutputTask.GetAwaiter().GetResult()
+            $standardErrorTask.GetAwaiter().GetResult() | Out-Null
+            $exitCode = $process.ExitCode
+        }
+        finally {
+            $process.Dispose()
+        }
+        if ($exitCode -eq 0) {
+            return $standardOutput
+        }
+        if ($exitCode -ne 255 -or $attempt -eq $MaxAttempts) {
+            $attemptSummary = if ($exitCode -eq 255) {
+                " after $attempt transport attempts"
+            }
+            else {
+                ""
+            }
+            throw "$Operation failed with exit code $exitCode$attemptSummary."
+        }
+        Write-Warning "$Operation connection attempt $attempt of $MaxAttempts failed; retrying."
+        Start-Sleep -Seconds 2
+    }
+}
+
 function Invoke-SshScript {
     param([Parameter(Mandatory = $true)][string]$Script)
     $normalized = $Script -replace "`r", ""
@@ -407,8 +457,13 @@ if ($resolvedCommit -ne $ReleaseSha) {
 
 $expectedReleasePath = "/srv/authority-closers/application/releases/$ReleaseSha"
 $currentReleaseCommand = 'readlink -f /srv/authority-closers/application/current-staging 2>/dev/null || true'
-$currentRelease = ([string](& ssh $SshHost $currentReleaseCommand)).Trim()
-Assert-NativeSuccess "Current staging release lookup"
+$sshPath = (Get-Command ssh -ErrorAction Stop).Source
+$currentRelease = ([string](
+        Invoke-RetriableNative `
+            -FilePath $sshPath `
+            -NativeArguments @($SshHost, $currentReleaseCommand) `
+            -Operation "Current staging release lookup"
+    )).Trim()
 if ($currentRelease -eq $expectedReleasePath -and -not $ReapplyConfiguration) {
     Write-Output "SKIP  Staging already targets $ReleaseSha; running read-only proof only."
     Test-Staging
@@ -417,6 +472,7 @@ if ($currentRelease -eq $expectedReleasePath -and -not $ReapplyConfiguration) {
 if ($currentRelease -eq $expectedReleasePath) {
     Write-Output "REAPPLY  Re-running the exact release to load reviewed secret references."
 }
+$scpPath = (Get-Command scp -ErrorAction Stop).Source
 
 $artifactName = "ac-application-$ReleaseSha"
 $artifactResponse = & gh api "repos/$GitHubRepository/actions/artifacts?name=$artifactName"
@@ -520,13 +576,25 @@ try {
     if ($remoteDirectory -notmatch "^/var/tmp/ac-release-$ReleaseSha\.[A-Za-z0-9]+$") {
         throw "Remote staging directory is outside the validated private pattern."
     }
-    & ssh $SshHost "install -d -m 0700 '$remoteDirectory/bundle' '$remoteDirectory/source'"
-    Assert-NativeSuccess "Private remote staging layout creation"
-    & scp $archivePath "${SshHost}:$remoteDirectory/"
-    Assert-NativeSuccess "Release archive transfer"
+    Invoke-RetriableNative `
+        -FilePath $sshPath `
+        -NativeArguments @(
+            $SshHost,
+            "install -d -m 0700 '$remoteDirectory/bundle' '$remoteDirectory/source'"
+        ) `
+        -Operation "Private remote staging layout creation" | Out-Null
+    Invoke-RetriableNative `
+        -FilePath $scpPath `
+        -NativeArguments @($archivePath, "${SshHost}:$remoteDirectory/") `
+        -Operation "Release archive transfer" | Out-Null
     foreach ($name in @("SHA256SUMS", "application-images.tar.gz", "release-images.env")) {
-        & scp (Join-Path $bundleDirectory $name) "${SshHost}:$remoteDirectory/bundle/"
-        Assert-NativeSuccess "Release bundle transfer: $name"
+        Invoke-RetriableNative `
+            -FilePath $scpPath `
+            -NativeArguments @(
+                (Join-Path $bundleDirectory $name),
+                "${SshHost}:$remoteDirectory/bundle/"
+            ) `
+            -Operation "Release bundle transfer: $name" | Out-Null
     }
 
     $deployRemote = @"
@@ -549,8 +617,10 @@ sudo env \
 }
 finally {
     if ($remoteDirectory -match "^/var/tmp/ac-release-$ReleaseSha\.[A-Za-z0-9]+$") {
-        & ssh $SshHost "rm -rf -- '$remoteDirectory'"
-        Assert-NativeSuccess "Private remote staging cleanup"
+        Invoke-RetriableNative `
+            -FilePath $sshPath `
+            -NativeArguments @($SshHost, "rm -rf -- '$remoteDirectory'") `
+            -Operation "Private remote staging cleanup" | Out-Null
     }
     Remove-PrivateStage -StagePath $stageDirectory
 }

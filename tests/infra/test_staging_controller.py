@@ -104,10 +104,33 @@ def test_staging_controller_uses_private_bounded_stages_and_read_only_noop() -> 
     assert "FileShare]::None" in CONTROLLER
     assert "Expand-ExactArtifact -ZipStream $artifactStream" in CONTROLLER
     assert "assert_container ac-application-staging-postgres-1" in CONTROLLER
-    assert "([string](& ssh $SshHost $currentReleaseCommand)).Trim()" in CONTROLLER
+    assert "function Invoke-RetriableNative" in CONTROLLER
+    assert "[ValidateRange(1, 5)][int]$MaxAttempts = 4" in CONTROLLER
+    assert "$exitCode -ne 255" in CONTROLLER
+    assert '" after $attempt transport attempts"' in CONTROLLER
+    assert "$startInfo.RedirectStandardOutput = $true" in CONTROLLER
+    assert "$startInfo.RedirectStandardError = $true" in CONTROLLER
+    assert "return $standardOutput" in CONTROLLER
+    assert "return $output" not in CONTROLLER
+    assert "Current staging release lookup" in CONTROLLER
+    assert "Release archive transfer" in CONTROLLER
+    assert "Release bundle transfer: $name" in CONTROLLER
+    assert "Private remote staging cleanup" in CONTROLLER
+    assert "Invoke-SshScript -Script $deployRemote" in CONTROLLER
+    deploy = CONTROLLER.split('$deployRemote = @"', maxsplit=1)[1].split(
+        "Invoke-SshScript -Script $deployRemote", maxsplit=1
+    )[0]
+    assert "Invoke-RetriableNative" not in deploy
     noop = CONTROLLER.split(
         "if ($currentRelease -eq $expectedReleasePath -and -not $ReapplyConfiguration)",
         maxsplit=1,
     )[1].split("$artifactName", maxsplit=1)[0]
     assert "Test-Staging" in noop
     assert "ProbeOAuth" not in noop
+    assert (
+        "Get-Command scp"
+        not in CONTROLLER.split(
+            "if ($currentRelease -eq $expectedReleasePath -and -not $ReapplyConfiguration)",
+            maxsplit=1,
+        )[0]
+    )
