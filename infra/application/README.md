@@ -183,8 +183,11 @@ stops the live API and worker, revokes database `CONNECT` from the runtime and
 migrator roles, terminates any remaining sessions, and proves the writer count
 is zero. Only the migrator regains access for the forward migration; the
 runtime role regains access only after migration succeeds. The installer then
-starts the hardened services with provider effects held, proves the loopback
-Caddy route identity, and atomically advances `current-<environment>`.
+starts the hardened services according to the exact environment profile: the
+reviewed staging profile uses Resend with external effects released, while the
+reviewed production profile uses the fake provider with effects held. It then
+proves the loopback Caddy route identity and atomically advances
+`current-<environment>`.
 
 A catchable command failure or `HUP`/`INT`/`TERM` stops the candidate and fences
 database writers again before restoring the backup. It reopens runtime access,
