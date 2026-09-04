@@ -25,6 +25,7 @@ import {
   Search,
   ShieldAlert,
   ShieldCheck,
+  Settings2,
   VideoOff,
   Volume2,
   VolumeX,
@@ -83,11 +84,33 @@ export interface AuthorizedTranscriptSegment {
   text: string;
 }
 
+/**
+ * A quality option is only renderable when an upstream approved media adapter
+ * supplies its already-authorized delivery URL. The learner client never
+ * derives a rendition URL from IDs, object keys, or provider metadata.
+ */
+export interface AuthorizedVideoQuality {
+  id: string;
+  label: string;
+  protocol: "progressive";
+  contentType: string;
+  src: string;
+  width?: number;
+  height?: number;
+  bitrateKbps?: number;
+}
+
 export interface AuthorizedVideoMedia {
+  protocol: "progressive";
+  contentType: string;
   src: string;
   poster?: string;
   captions?: AuthorizedCaptionTrack[];
   transcript?: AuthorizedTranscriptSegment[];
+  /** Playback rates authorized by the server/media policy. */
+  playbackRates?: readonly number[];
+  /** Renditions with server-issued, already-authorized delivery URLs. */
+  qualities?: readonly AuthorizedVideoQuality[];
 }
 
 type PlaybackStatus =
@@ -107,7 +130,8 @@ type MediaState =
   | "processing"
   | "error"
   | "blocked"
-  | "backgrounded";
+  | "backgrounded"
+  | "offline";
 
 interface PlaybackSessionState {
   id: string;
@@ -150,6 +174,102 @@ export function isLearnerOnline(): boolean {
   return typeof navigator === "undefined" || navigator.onLine !== false;
 }
 
+const manifestLikeMediaUrlPattern =
+  /(?:^|[/?._-])(?:manifest|master|playlist)(?:[/?._?#-]|$)|\.(?:m3u8|mpd)(?:[?#]|$)|(?:[?&#=_-])(?:m3u8|mpd)(?:[&#/?._-]|$)/i;
+
+const shortcutInteractiveSelector =
+  'button, a, input, textarea, select, summary, video, label, [contenteditable="true"], [role="button"], [role="link"], [role="slider"], [role="tab"], [role="menuitem"]';
+
+export function isApprovedProgressiveMediaSource(
+  source:
+    | Pick<AuthorizedVideoMedia, "protocol" | "contentType" | "src">
+    | Pick<AuthorizedVideoQuality, "protocol" | "contentType" | "src">,
+): boolean {
+  if (
+    typeof source.protocol !== "string" ||
+    typeof source.contentType !== "string" ||
+    typeof source.src !== "string"
+  ) {
+    return false;
+  }
+  const contentType = source.contentType.split(";", 1)[0].trim().toLowerCase();
+  return (
+    source.protocol === "progressive" &&
+    (contentType === "video/mp4" || contentType === "video/webm") &&
+    Boolean(source.src.trim()) &&
+    !manifestLikeMediaUrlPattern.test(source.src)
+  );
+}
+
+export function isInteractiveShortcutTarget(
+  target: EventTarget | null,
+): boolean {
+  const element = target as
+    | (EventTarget & {
+        closest?: (selector: string) => Element | null;
+        isContentEditable?: boolean;
+      })
+    | null;
+  if (!element || typeof element.closest !== "function") return false;
+  return Boolean(
+    element.isContentEditable || element.closest(shortcutInteractiveSelector),
+  );
+}
+
+export function isPlaybackConnectionCurrent(
+  expectedEpoch: number,
+  currentEpoch: number,
+  online: boolean,
+  refreshPending: boolean,
+): boolean {
+  return expectedEpoch === currentEpoch && online && !refreshPending;
+}
+
+export function supportsPlayerFullscreen(
+  player: Pick<HTMLElement, "requestFullscreen"> | null,
+): boolean {
+  return Boolean(player && typeof player.requestFullscreen === "function");
+}
+
+/**
+ * Keep media settings strictly capability-driven. Empty/invalid server data
+ * produces no settings control, rather than a guessed browser feature list.
+ */
+export function normalizePlaybackRates(
+  rates?: readonly number[] | null,
+): number[] {
+  return Array.from(
+    new Set(
+      (rates ?? []).filter(
+        (rate): rate is number => Number.isFinite(rate) && rate > 0,
+      ),
+    ),
+  ).sort((left, right) => left - right);
+}
+
+export function normalizeQualityOptions(
+  qualities?: readonly AuthorizedVideoQuality[] | null,
+): AuthorizedVideoQuality[] {
+  const seen = new Set<string>();
+  return (qualities ?? []).filter((quality) => {
+    if (
+      !quality ||
+      typeof quality.id !== "string" ||
+      !quality.id.trim() ||
+      typeof quality.label !== "string" ||
+      !quality.label.trim() ||
+      !isApprovedProgressiveMediaSource(quality) ||
+      typeof quality.src !== "string" ||
+      !quality.src.trim() ||
+      seen.has(quality.id)
+    ) {
+      return false;
+    }
+    seen.add(quality.id);
+    return true;
+  });
+}
+
 /**
  * Safely resolves an authorized media descriptor from explicit props or the
  * activity's bound media descriptor. Preserves fail-closed behavior when media
@@ -163,7 +283,15 @@ export function resolveApprovedMedia(
   state: "approved" | "blocked" | "unavailable";
   reason: string;
 } {
-  if (explicitMedia && explicitMedia.src) {
+  if (explicitMedia !== undefined && explicitMedia !== null) {
+    if (!isApprovedProgressiveMediaSource(explicitMedia)) {
+      return {
+        media: null,
+        state: "unavailable",
+        reason:
+          "Explicit media must use an approved progressive video/mp4 or video/webm source.",
+      };
+    }
     return {
       media: explicitMedia,
       state: "approved",
@@ -196,13 +324,33 @@ export function resolveApprovedMedia(
     };
   }
 
+  // The Phase 1 learner surface intentionally consumes only a server-issued
+  // progressive URL. A manifest URL is not a player implementation: using it
+  // here would silently activate an HLS/provider path before its capability,
+  // CORS, session, and retention gates are promoted.
   const streamUrl =
-    descriptor.delivery?.progressive_url || descriptor.delivery?.manifest_url;
+    descriptor.delivery?.protocol === "progressive"
+      ? descriptor.delivery.progressive_url
+      : null;
   if (!streamUrl) {
     return {
       media: null,
       state: "unavailable",
-      reason: "No approved media delivery stream is available.",
+      reason: "No approved progressive media delivery is available yet.",
+    };
+  }
+
+  const source = {
+    protocol: "progressive" as const,
+    contentType: descriptor.content_type || "",
+    src: streamUrl,
+  };
+  if (!isApprovedProgressiveMediaSource(source)) {
+    return {
+      media: null,
+      state: "unavailable",
+      reason:
+        "Approved media must use a progressive video/mp4 or video/webm source.",
     };
   }
 
@@ -222,6 +370,8 @@ export function resolveApprovedMedia(
 
   return {
     media: {
+      protocol: source.protocol,
+      contentType: source.contentType,
       src: streamUrl,
       poster: undefined,
       captions: captions.length > 0 ? captions : undefined,
@@ -429,6 +579,8 @@ export function CaptionsTranscriptPanel({
 }: CaptionsTranscriptPanelProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const activeSegmentRef = useRef<HTMLButtonElement | null>(null);
+  const summaryRef = useRef<HTMLElement | null>(null);
+  const wasOpenRef = useRef(isOpen);
 
   const filteredSegments = useMemo(() => {
     if (!transcript?.length) return [];
@@ -450,11 +602,19 @@ export function CaptionsTranscriptPanel({
     }
   }, [currentTime, isOpen]);
 
+  useEffect(() => {
+    if (!isOpen && wasOpenRef.current) {
+      summaryRef.current?.focus();
+    }
+    wasOpenRef.current = isOpen;
+  }, [isOpen]);
+
   const hasTranscript = Boolean(transcript?.length);
   const hasCaptions = Boolean(captions?.length);
 
   return (
     <details
+      id="momentum-video-transcript"
       className="momentum-video-transcript"
       open={isOpen}
       onToggle={(event) => {
@@ -472,9 +632,11 @@ export function CaptionsTranscriptPanel({
         }
       }}
     >
-      <summary>
+      <summary ref={summaryRef}>
         <FileText size={17} aria-hidden="true" />
-        <span>Open transcript</span>
+        <span>
+          {hasTranscript ? "Open transcript" : "Captions & transcript"}
+        </span>
         <span>
           {hasTranscript
             ? `${transcript!.length} segments`
@@ -584,11 +746,116 @@ export function CaptionsTranscriptPanel({
                 Timed captions are connected and can be viewed directly on the
                 video player.
               </p>
-            ) : null}
+            ) : (
+              <p className="momentum-video-transcript__hint">
+                Captions and transcript are not available for this lesson yet.
+              </p>
+            )}
           </div>
         )}
       </div>
     </details>
+  );
+}
+
+export interface PlaybackSettingsPanelProps {
+  playbackRates: readonly number[];
+  playbackRate: number;
+  onChangeRate: (rate: number) => void;
+  qualities: readonly AuthorizedVideoQuality[];
+  qualityId: string;
+  onChangeQuality: (qualityId: string) => void;
+  onClose: () => void;
+}
+
+/**
+ * Presentation-only media settings. The panel is deliberately omitted when
+ * the authorized descriptor does not include a supported capability.
+ */
+export function PlaybackSettingsPanel({
+  playbackRates,
+  playbackRate,
+  onChangeRate,
+  qualities,
+  qualityId,
+  onChangeQuality,
+  onClose,
+}: PlaybackSettingsPanelProps) {
+  const closeRef = useRef<HTMLButtonElement | null>(null);
+  const hasRates = playbackRates.length > 0;
+  const hasQualities = qualities.length > 0;
+
+  useEffect(() => {
+    closeRef.current?.focus();
+  }, []);
+
+  if (!hasRates && !hasQualities) return null;
+
+  return (
+    <section
+      id="momentum-video-settings"
+      className="momentum-video-settings"
+      aria-labelledby="momentum-video-settings-title"
+    >
+      <div className="momentum-video-settings__header">
+        <div>
+          <p className="momentum-video-settings__eyebrow">Player settings</p>
+          <h3 id="momentum-video-settings-title">Playback settings</h3>
+        </div>
+        <button
+          ref={closeRef}
+          className="momentum-video-settings__close"
+          type="button"
+          onClick={onClose}
+          aria-label="Close playback settings"
+        >
+          <X size={17} aria-hidden="true" />
+        </button>
+      </div>
+      <div className="momentum-video-settings__fields">
+        {hasRates ? (
+          <label className="momentum-video-settings__field">
+            <span>Playback speed</span>
+            <select
+              value={
+                playbackRates.includes(playbackRate)
+                  ? playbackRate
+                  : (playbackRates[0] ?? 1)
+              }
+              onChange={(event) => onChangeRate(Number(event.target.value))}
+              aria-label="Playback speed"
+            >
+              {playbackRates.map((rate) => (
+                <option key={rate} value={rate}>
+                  {rate}×
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+        {hasQualities ? (
+          <label className="momentum-video-settings__field">
+            <span>Quality</span>
+            <select
+              value={qualityId}
+              onChange={(event) => onChangeQuality(event.target.value)}
+              aria-label="Video quality"
+            >
+              <option value="auto">Auto</option>
+              {qualities.map((quality) => (
+                <option key={quality.id} value={quality.id}>
+                  {quality.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+      </div>
+      <p className="momentum-video-settings__note">
+        These settings change presentation only. Watch coverage and completion
+        remain server-determined.
+      </p>
+    </section>
   );
 }
 
@@ -599,6 +866,12 @@ export function VideoKeyboardShortcutsDialog({
   isOpen: boolean;
   onClose: () => void;
 }) {
+  const closeRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    if (isOpen) closeRef.current?.focus();
+  }, [isOpen]);
+
   if (!isOpen) return null;
   const shortcuts = [
     { key: "Space / K", action: "Play or pause lesson" },
@@ -610,11 +883,12 @@ export function VideoKeyboardShortcutsDialog({
     { key: "T", action: "Toggle transcript panel" },
     { key: "F", action: "Toggle fullscreen" },
     { key: "?", action: "Toggle keyboard shortcuts guide" },
-    { key: "Esc", action: "Close shortcut guide or transcript" },
+    { key: "Esc", action: "Close an open player panel" },
   ];
 
   return (
     <div
+      id="momentum-video-shortcuts"
       className="momentum-video-shortcuts"
       role="dialog"
       aria-label="Player keyboard shortcuts"
@@ -623,6 +897,7 @@ export function VideoKeyboardShortcutsDialog({
       <div className="momentum-video-shortcuts__header">
         <strong>Keyboard shortcuts</strong>
         <button
+          ref={closeRef}
           type="button"
           onClick={onClose}
           aria-label="Close keyboard shortcuts"
@@ -657,6 +932,16 @@ export function VideoViewer({
   const activeMedia = mediaResolution.media;
   const isBlocked = mediaResolution.state === "blocked";
   const authorized = Boolean(activeMedia?.src) && canStartPlayback(activity);
+  const playbackRates = useMemo(
+    () => normalizePlaybackRates(activeMedia?.playbackRates),
+    [activeMedia?.playbackRates],
+  );
+  const qualityOptions = useMemo(
+    () => normalizeQualityOptions(activeMedia?.qualities),
+    [activeMedia?.qualities],
+  );
+  const hasPlaybackSettings =
+    playbackRates.length > 0 || qualityOptions.length > 0;
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const sessionRef = useRef<PlaybackSessionState | null>(null);
@@ -676,15 +961,18 @@ export function VideoViewer({
   const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(1);
   const [playbackRate, setPlaybackRate] = useState(1);
+  const [selectedQualityId, setSelectedQualityId] = useState("auto");
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [captionsEnabled, setCaptionsEnabled] = useState(true);
   const [transcriptOpen, setTranscriptOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [canFullscreen, setCanFullscreen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [canPictureInPicture, setCanPictureInPicture] = useState(false);
   const [hasEnded, setHasEnded] = useState(false);
+  const [isOffline, setIsOffline] = useState(false);
   const [playbackSessionNeedsRetry, setPlaybackSessionNeedsRetry] =
     useState(false);
   const [mediaState, setMediaState] = useState<MediaState>(
@@ -698,6 +986,27 @@ export function VideoViewer({
         : "Approved lesson media is unavailable.",
   );
   const backgroundedRef = useRef(false);
+  const offlineRef = useRef(false);
+  const connectionEpochRef = useRef(0);
+  const reconnectRefreshRequiredRef = useRef(false);
+  const reconnectRefreshRequestRef = useRef<Promise<boolean> | null>(null);
+  const activityRevisionRef = useRef(activity.revision);
+  const playerRef = useRef<HTMLDivElement | null>(null);
+  const settingsTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const shortcutsTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const fullscreenTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const pictureInPictureTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const qualitySwitchRef = useRef(0);
+  const settingsWasOpenRef = useRef(false);
+  const shortcutsWasOpenRef = useRef(false);
+  const effectivePlaybackRate = playbackRates.includes(playbackRate)
+    ? playbackRate
+    : (playbackRates[0] ?? 1);
+  const effectiveQualityId = qualityOptions.some(
+    (quality) => quality.id === selectedQualityId,
+  )
+    ? selectedQualityId
+    : "auto";
 
   const emitTelemetry = useCallback(
     (type: VideoTelemetryEventType, metadata?: Record<string, unknown>) => {
@@ -720,6 +1029,24 @@ export function VideoViewer({
     setStatusMessage(message);
   }, []);
 
+  const isConnectionEpochCurrent = useCallback((epoch: number) => {
+    return isPlaybackConnectionCurrent(
+      epoch,
+      connectionEpochRef.current,
+      isLearnerOnline(),
+      false,
+    );
+  }, []);
+
+  const isCanonicalWriteAllowed = useCallback((epoch: number) => {
+    return isPlaybackConnectionCurrent(
+      epoch,
+      connectionEpochRef.current,
+      isLearnerOnline(),
+      reconnectRefreshRequiredRef.current,
+    );
+  }, []);
+
   const resetPlaybackSession = useCallback((needsRetry = false) => {
     sessionRef.current = null;
     pendingHeartbeatRef.current = null;
@@ -737,6 +1064,14 @@ export function VideoViewer({
       startSeconds: number,
       endSeconds: number,
     ): Promise<boolean> => {
+      const writeEpoch = connectionEpochRef.current;
+      if (!isCanonicalWriteAllowed(writeEpoch)) {
+        updateStatus(
+          "error",
+          "Offline or reconnecting — watch progress was not submitted.",
+        );
+        return false;
+      }
       const session = sessionRef.current;
       if (!session) {
         updateStatus(
@@ -746,21 +1081,15 @@ export function VideoViewer({
         return false;
       }
       if (session.closed) return true;
-      if (!isLearnerOnline()) {
-        updateStatus(
-          "error",
-          "Offline — watch progress was not submitted. Reconnect to continue.",
-        );
-        return false;
-      }
       if (kind === "watch" && endSeconds <= startSeconds + 0.05) return true;
 
       if (heartbeatRequestRef.current) {
         const previousHeartbeatSucceeded = await heartbeatRequestRef.current;
         if (!previousHeartbeatSucceeded) return false;
+        if (!isCanonicalWriteAllowed(writeEpoch)) return false;
       }
       const activeSession = sessionRef.current;
-      if (!activeSession || !isLearnerOnline()) return false;
+      if (!activeSession || !isCanonicalWriteAllowed(writeEpoch)) return false;
 
       const pending = pendingHeartbeatRef.current;
       const input =
@@ -775,9 +1104,11 @@ export function VideoViewer({
               kind,
             };
       pendingHeartbeatRef.current = { input };
+      if (!isCanonicalWriteAllowed(writeEpoch)) return false;
       const request = api
         .heartbeatPlayback(activity.id, input, activeSession.token)
         .then((result) => {
+          if (!isCanonicalWriteAllowed(writeEpoch)) return false;
           const currentSession = sessionRef.current;
           if (currentSession?.id === result.session_id) {
             sessionRef.current = {
@@ -802,6 +1133,7 @@ export function VideoViewer({
           return true;
         })
         .catch((error: unknown) => {
+          if (!isConnectionEpochCurrent(writeEpoch)) return false;
           if (isPlaybackSessionInvalid(error)) {
             resetPlaybackSession(true);
           }
@@ -818,11 +1150,20 @@ export function VideoViewer({
         }
       }
     },
-    [activity.id, api, resetPlaybackSession, updateStatus],
+    [
+      activity.id,
+      api,
+      isCanonicalWriteAllowed,
+      isConnectionEpochCurrent,
+      resetPlaybackSession,
+      updateStatus,
+    ],
   );
 
   const flushWatch = useCallback(
     async (position?: number): Promise<boolean> => {
+      const writeEpoch = connectionEpochRef.current;
+      if (!isCanonicalWriteAllowed(writeEpoch)) return false;
       if (
         !sessionRef.current ||
         sessionRef.current.closed ||
@@ -833,16 +1174,107 @@ export function VideoViewer({
       if (heartbeatRequestRef.current) {
         const previousHeartbeatSucceeded = await heartbeatRequestRef.current;
         if (!previousHeartbeatSucceeded) return false;
+        if (!isCanonicalWriteAllowed(writeEpoch)) return false;
       }
       const target = position ?? videoRef.current?.currentTime ?? 0;
       const start = watchCursorRef.current;
       if (target <= start + 0.05) return true;
+      if (!isCanonicalWriteAllowed(writeEpoch)) return false;
       return sendPlaybackEvent("watch", start, target);
     },
-    [sendPlaybackEvent],
+    [isCanonicalWriteAllowed, sendPlaybackEvent],
   );
 
+  const refreshPlaybackAuthorization =
+    useCallback(async (): Promise<boolean> => {
+      if (!reconnectRefreshRequiredRef.current) return true;
+      const refreshEpoch = connectionEpochRef.current;
+      if (!isConnectionEpochCurrent(refreshEpoch)) return false;
+      if (reconnectRefreshRequestRef.current) {
+        return reconnectRefreshRequestRef.current;
+      }
+
+      const requestHolder: { promise: Promise<boolean> | null } = {
+        promise: null,
+      };
+      const request = (async () => {
+        updateStatus("starting", "Refreshing playback authorization…");
+        setMediaState("loading");
+        setMediaMessage("Refreshing playback authorization…");
+        try {
+          const refreshedActivity = await api.activity(activity.id);
+          if (!isConnectionEpochCurrent(refreshEpoch)) return false;
+          activityRevisionRef.current = refreshedActivity.revision;
+
+          const refreshedResolution = resolveApprovedMedia(
+            refreshedActivity,
+            media,
+          );
+          const mediaStillAuthorized =
+            canStartPlayback(refreshedActivity) &&
+            refreshedResolution.state === "approved" &&
+            Boolean(refreshedResolution.media?.src) &&
+            refreshedResolution.media?.src === activeMedia?.src;
+          if (!mediaStillAuthorized) {
+            setPlaybackSessionNeedsRetry(true);
+            setMediaState("blocked");
+            setMediaMessage(
+              "Playback authorization changed. Reopen the lesson to continue.",
+            );
+            updateStatus(
+              "error",
+              "Playback authorization changed. Reopen the lesson to continue.",
+            );
+            return false;
+          }
+
+          reconnectRefreshRequiredRef.current = false;
+          setPlaybackSessionNeedsRetry(false);
+          const video = videoRef.current;
+          const canResume = Boolean(video && video.readyState >= 3);
+          setMediaState(canResume ? "paused" : "loading");
+          setMediaMessage(
+            canResume
+              ? "Playback authorization refreshed. Press Play to resume."
+              : "Playback authorization refreshed. Loading approved lesson media…",
+          );
+          updateStatus(
+            "idle",
+            "Playback authorization refreshed. Press Play to resume.",
+          );
+          return true;
+        } catch (error) {
+          if (!isConnectionEpochCurrent(refreshEpoch)) return false;
+          setPlaybackSessionNeedsRetry(true);
+          setMediaState("error");
+          setMediaMessage(
+            "Playback authorization could not be refreshed. Reconnect and try again.",
+          );
+          updateStatus("error", playbackErrorMessage(error));
+          return false;
+        } finally {
+          if (reconnectRefreshRequestRef.current === requestHolder.promise) {
+            reconnectRefreshRequestRef.current = null;
+          }
+        }
+      })();
+      requestHolder.promise = request;
+      reconnectRefreshRequestRef.current = request;
+      return request;
+    }, [
+      activeMedia,
+      activity.id,
+      api,
+      isConnectionEpochCurrent,
+      media,
+      updateStatus,
+    ]);
+
   const ensurePlaybackSession = useCallback(async (): Promise<boolean> => {
+    if (reconnectRefreshRequiredRef.current) {
+      const refreshed = await refreshPlaybackAuthorization();
+      if (!refreshed) return false;
+    }
     if (sessionRef.current?.closed) {
       updateStatus("submitted", "Watch progress has already been submitted.");
       return false;
@@ -857,10 +1289,11 @@ export function VideoViewer({
         return true;
       }
     }
-    if (!authorized || !isLearnerOnline()) {
+    const startEpoch = connectionEpochRef.current;
+    if (!authorized || !isCanonicalWriteAllowed(startEpoch)) {
       updateStatus(
         "error",
-        !isLearnerOnline()
+        !isLearnerOnline() || offlineRef.current
           ? "Offline — watch progress was not submitted. Reconnect to continue."
           : "Playback is not currently authorized for this activity.",
       );
@@ -871,7 +1304,12 @@ export function VideoViewer({
     const request = (async () => {
       updateStatus("starting", "Requesting a server playback session…");
       try {
-        const started = await api.startPlayback(activity.id, activity.revision);
+        if (!isCanonicalWriteAllowed(startEpoch)) return false;
+        const started = await api.startPlayback(
+          activity.id,
+          activityRevisionRef.current,
+        );
+        if (!isConnectionEpochCurrent(startEpoch)) return false;
         if (!started.session_token) {
           throw new Error(
             "The server did not return a playback authorization token.",
@@ -881,7 +1319,10 @@ export function VideoViewer({
         if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
           throw new Error("The server did not return a valid playback expiry.");
         }
+        if (!isConnectionEpochCurrent(startEpoch)) return false;
         const currentActivity = await api.activity(activity.id);
+        if (!isCanonicalWriteAllowed(startEpoch)) return false;
+        activityRevisionRef.current = currentActivity.revision;
         sessionRef.current = {
           id: started.session_id,
           token: started.session_token,
@@ -902,6 +1343,7 @@ export function VideoViewer({
         );
         return true;
       } catch (error) {
+        if (!isConnectionEpochCurrent(startEpoch)) return false;
         updateStatus("error", playbackErrorMessage(error));
         return false;
       } finally {
@@ -912,9 +1354,11 @@ export function VideoViewer({
     return request;
   }, [
     activity.id,
-    activity.revision,
     api,
     authorized,
+    isCanonicalWriteAllowed,
+    isConnectionEpochCurrent,
+    refreshPlaybackAuthorization,
     resetPlaybackSession,
     updateStatus,
   ]);
@@ -922,8 +1366,9 @@ export function VideoViewer({
   const startPlaybackAndPlay = useCallback(async () => {
     const video = videoRef.current;
     if (!video) return;
+    const playEpoch = connectionEpochRef.current;
     const ok = await ensurePlaybackSession();
-    if (!ok) {
+    if (!ok || !isCanonicalWriteAllowed(playEpoch)) {
       video.pause();
       return;
     }
@@ -932,22 +1377,24 @@ export function VideoViewer({
     } catch (error) {
       updateStatus("error", playbackErrorMessage(error));
     }
-  }, [ensurePlaybackSession, updateStatus]);
+  }, [ensurePlaybackSession, isCanonicalWriteAllowed, updateStatus]);
 
   const completePlayback = useCallback(async () => {
     if (completionRequestRef.current) return completionRequestRef.current;
+    const completionEpoch = connectionEpochRef.current;
     const session = sessionRef.current;
     const video = videoRef.current;
     if (!session || !video) return;
-    if (!isLearnerOnline()) {
+    if (!isCanonicalWriteAllowed(completionEpoch)) {
       updateStatus(
         "error",
-        "Offline — watch progress was not submitted. Reconnect to continue.",
+        "Offline or reconnecting — watch progress was not submitted.",
       );
       return;
     }
 
     const request = (async () => {
+      if (!isCanonicalWriteAllowed(completionEpoch)) return;
       updateStatus("saving", "Saving the final watch interval…");
       try {
         if (!session.closed && !finishReadyRef.current) {
@@ -955,17 +1402,21 @@ export function VideoViewer({
             video.duration || duration || video.currentTime,
           );
           if (!flushed) return;
+          if (!isCanonicalWriteAllowed(completionEpoch)) return;
           finishReadyRef.current = true;
         }
+        if (!isCanonicalWriteAllowed(completionEpoch)) return;
         const activeSession = sessionRef.current;
         if (!activeSession) return;
         if (!activeSession.closed) {
+          if (!isCanonicalWriteAllowed(completionEpoch)) return;
           const finished = await api.finishPlayback(
             activity.id,
             activeSession.id,
             activeSession.revision,
             activeSession.token,
           );
+          if (!isCanonicalWriteAllowed(completionEpoch)) return;
           const latestSession = sessionRef.current;
           if (latestSession?.id === finished.session_id) {
             sessionRef.current = {
@@ -977,7 +1428,11 @@ export function VideoViewer({
         }
         const finishedSession = sessionRef.current;
         if (!finishedSession) return;
+        if (!isConnectionEpochCurrent(completionEpoch)) return;
         const currentActivity = await api.activity(activity.id);
+        if (!isCanonicalWriteAllowed(completionEpoch)) return;
+        activityRevisionRef.current = currentActivity.revision;
+        if (!isCanonicalWriteAllowed(completionEpoch)) return;
         await api.submitEvidence(
           activity.id,
           "video_watch",
@@ -986,12 +1441,15 @@ export function VideoViewer({
           finishedSession.id,
           finishedSession.token,
         );
+        if (!isCanonicalWriteAllowed(completionEpoch)) return;
         updateStatus(
           "submitted",
           "Watch progress submitted. The server will determine completion.",
         );
+        if (!isCanonicalWriteAllowed(completionEpoch)) return;
         await onPlaybackCommitted?.();
       } catch (error) {
+        if (!isConnectionEpochCurrent(completionEpoch)) return;
         if (isPlaybackSessionInvalid(error)) {
           resetPlaybackSession(true);
         }
@@ -1007,6 +1465,8 @@ export function VideoViewer({
     api,
     duration,
     flushWatch,
+    isCanonicalWriteAllowed,
+    isConnectionEpochCurrent,
     onPlaybackCommitted,
     resetPlaybackSession,
     updateStatus,
@@ -1055,14 +1515,16 @@ export function VideoViewer({
 
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || !authorized) return;
+    const player = playerRef.current;
+    if (!video || !player || !authorized) return;
     const safariVideo = video as HTMLVideoElement & {
       webkitEnterFullscreen?: () => void;
       webkitSupportsFullscreen?: boolean;
     };
     setCanFullscreen(
       typeof document !== "undefined" &&
-        (Boolean(document.fullscreenEnabled) ||
+        ((Boolean(document.fullscreenEnabled) &&
+          supportsPlayerFullscreen(player)) ||
           Boolean(
             safariVideo.webkitSupportsFullscreen ||
               safariVideo.webkitEnterFullscreen,
@@ -1077,13 +1539,65 @@ export function VideoViewer({
 
   useEffect(() => {
     function onFullscreenChange() {
-      const isFs = Boolean(document.fullscreenElement);
+      const isFs = document.fullscreenElement === playerRef.current;
       setIsFullscreen(isFs);
       emitTelemetry("video_fullscreen_change", { fullscreen: isFs });
+      if (!isFs) {
+        window.requestAnimationFrame(() =>
+          fullscreenTriggerRef.current?.focus(),
+        );
+      }
     }
     document.addEventListener("fullscreenchange", onFullscreenChange);
     return () =>
       document.removeEventListener("fullscreenchange", onFullscreenChange);
+  }, [emitTelemetry]);
+
+  useEffect(() => {
+    if (!settingsOpen && settingsWasOpenRef.current) {
+      settingsTriggerRef.current?.focus();
+    }
+    settingsWasOpenRef.current = settingsOpen;
+  }, [settingsOpen]);
+
+  useEffect(() => {
+    if (!shortcutsOpen && shortcutsWasOpenRef.current) {
+      shortcutsTriggerRef.current?.focus();
+    }
+    shortcutsWasOpenRef.current = shortcutsOpen;
+  }, [shortcutsOpen]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const onPictureInPictureChange = (event: Event) => {
+      const inPictureInPicture = event.type === "enterpictureinpicture";
+      emitTelemetry("video_pip_change", { pip: inPictureInPicture });
+      if (!inPictureInPicture) {
+        window.requestAnimationFrame(() =>
+          pictureInPictureTriggerRef.current?.focus(),
+        );
+      }
+    };
+    const onWebkitEndFullscreen = () => {
+      video.controls = false;
+      emitTelemetry("video_fullscreen_change", { fullscreen: false });
+      window.requestAnimationFrame(() => fullscreenTriggerRef.current?.focus());
+    };
+    video.addEventListener("enterpictureinpicture", onPictureInPictureChange);
+    video.addEventListener("leavepictureinpicture", onPictureInPictureChange);
+    video.addEventListener("webkitendfullscreen", onWebkitEndFullscreen);
+    return () => {
+      video.removeEventListener(
+        "enterpictureinpicture",
+        onPictureInPictureChange,
+      );
+      video.removeEventListener(
+        "leavepictureinpicture",
+        onPictureInPictureChange,
+      );
+      video.removeEventListener("webkitendfullscreen", onWebkitEndFullscreen);
+    };
   }, [emitTelemetry]);
 
   useEffect(() => {
@@ -1098,6 +1612,66 @@ export function VideoViewer({
   }, []);
 
   useEffect(() => {
+    activityRevisionRef.current = activity.revision;
+  }, [activity.revision]);
+
+  useEffect(() => {
+    function updateConnectionState() {
+      if (!authorized) {
+        offlineRef.current = false;
+        setIsOffline(false);
+        return;
+      }
+
+      const nextOffline = !isLearnerOnline();
+      if (nextOffline) {
+        if (!offlineRef.current) connectionEpochRef.current += 1;
+        offlineRef.current = true;
+        reconnectRefreshRequiredRef.current = true;
+        reconnectRefreshRequestRef.current = null;
+        resetPlaybackSession(false);
+        setIsOffline(true);
+        const video = videoRef.current;
+        if (video && !video.paused) video.pause();
+        setMediaState("offline");
+        setMediaMessage(
+          "Offline — playback is paused. Reconnect to resume; no watch progress was submitted.",
+        );
+        updateStatus(
+          "error",
+          "Offline — watch progress was not submitted. Reconnect to continue.",
+        );
+        return;
+      }
+
+      if (!offlineRef.current) return;
+      connectionEpochRef.current += 1;
+      offlineRef.current = false;
+      setIsOffline(false);
+      reconnectRefreshRequiredRef.current = true;
+      const video = videoRef.current;
+      video?.pause();
+      setMediaState("loading");
+      setMediaMessage("Back online. Refreshing playback authorization…");
+      updateStatus("starting", "Refreshing playback authorization…");
+      void refreshPlaybackAuthorization();
+    }
+
+    updateConnectionState();
+    window.addEventListener("online", updateConnectionState);
+    window.addEventListener("offline", updateConnectionState);
+    return () => {
+      window.removeEventListener("online", updateConnectionState);
+      window.removeEventListener("offline", updateConnectionState);
+    };
+  }, [
+    authorized,
+    refreshPlaybackAuthorization,
+    resetPlaybackSession,
+    updateStatus,
+  ]);
+
+  useEffect(() => {
     const video = videoRef.current;
     if (!video || !activeMedia?.captions?.length) return;
     for (let index = 0; index < video.textTracks.length; index += 1) {
@@ -1105,7 +1679,32 @@ export function VideoViewer({
     }
   }, [activeMedia?.captions?.length, captionsEnabled]);
 
+  useEffect(() => {
+    if (videoRef.current && playbackRates.length > 0) {
+      videoRef.current.playbackRate = effectivePlaybackRate;
+    }
+  }, [effectivePlaybackRate, playbackRates]);
+
   const handlePlay = useCallback(() => {
+    if (offlineRef.current || !isLearnerOnline()) {
+      videoRef.current?.pause();
+      setIsPlaying(false);
+      setMediaState("offline");
+      setMediaMessage(
+        "Offline — playback is paused. Reconnect to resume; no watch progress was submitted.",
+      );
+      updateStatus(
+        "error",
+        "Offline — watch progress was not submitted. Reconnect to continue.",
+      );
+      return;
+    }
+    if (reconnectRefreshRequiredRef.current) {
+      videoRef.current?.pause();
+      setIsPlaying(false);
+      void startPlaybackAndPlay();
+      return;
+    }
     if (!sessionRef.current) {
       videoRef.current?.pause();
       setIsPlaying(false);
@@ -1116,12 +1715,17 @@ export function VideoViewer({
     setMediaState("playing");
     setMediaMessage("Playing approved lesson media.");
     emitTelemetry("video_play");
-  }, [emitTelemetry, startPlaybackAndPlay]);
+  }, [emitTelemetry, startPlaybackAndPlay, updateStatus]);
 
   const handlePause = useCallback(() => {
     if (!mountedRef.current) return;
     setIsPlaying(false);
-    if (backgroundedRef.current) {
+    if (offlineRef.current || !isLearnerOnline()) {
+      setMediaState("offline");
+      setMediaMessage(
+        "Offline — playback is paused. Reconnect to resume; no watch progress was submitted.",
+      );
+    } else if (backgroundedRef.current) {
       setMediaState("backgrounded");
       setMediaMessage("Playback paused while this tab is in the background.");
     } else if (videoRef.current?.ended || hasEnded) {
@@ -1157,6 +1761,7 @@ export function VideoViewer({
     const video = videoRef.current;
     if (!video) return;
     setCurrentTime(video.currentTime);
+    if (offlineRef.current || !isLearnerOnline()) return;
     const start = watchCursorRef.current;
     if (
       sessionRef.current &&
@@ -1171,6 +1776,13 @@ export function VideoViewer({
     const video = videoRef.current;
     if (!video || !Number.isFinite(video.duration)) return;
     setDuration(video.duration);
+    if (offlineRef.current || !isLearnerOnline()) {
+      setMediaState("offline");
+      setMediaMessage(
+        "Offline — playback is paused. Reconnect to resume; no watch progress was submitted.",
+      );
+      return;
+    }
     if (!backgroundedRef.current && !isPlaying) {
       setMediaState("ready");
       setMediaMessage("Approved lesson media is ready to play.");
@@ -1178,11 +1790,25 @@ export function VideoViewer({
   }, [isPlaying]);
 
   const handleLoadStart = useCallback(() => {
+    if (offlineRef.current || !isLearnerOnline()) {
+      setMediaState("offline");
+      setMediaMessage(
+        "Offline — playback is paused. Reconnect to retry approved lesson media.",
+      );
+      return;
+    }
     setMediaState("loading");
     setMediaMessage("Loading approved lesson media…");
   }, []);
 
   const handleCanPlay = useCallback(() => {
+    if (offlineRef.current || !isLearnerOnline()) {
+      setMediaState("offline");
+      setMediaMessage(
+        "Offline — playback is paused. Reconnect to resume; no watch progress was submitted.",
+      );
+      return;
+    }
     if (!backgroundedRef.current && !isPlaying) {
       setMediaState("ready");
       setMediaMessage("Approved lesson media is ready to play.");
@@ -1193,12 +1819,31 @@ export function VideoViewer({
   }, [duration, emitTelemetry, isPlaying]);
 
   const handleWaiting = useCallback(() => {
+    if (offlineRef.current || !isLearnerOnline()) {
+      setMediaState("offline");
+      setMediaMessage(
+        "Offline — playback is paused. Reconnect to resume; no watch progress was submitted.",
+      );
+      return;
+    }
     setMediaState("buffering");
     setMediaMessage("Playback is buffering. Watch evidence remains paused.");
   }, []);
 
   const handleMediaError = useCallback(() => {
     setIsPlaying(false);
+    if (offlineRef.current || !isLearnerOnline()) {
+      setMediaState("offline");
+      setMediaMessage(
+        "Offline — playback is paused. Reconnect to resume; no watch progress was submitted.",
+      );
+      updateStatus(
+        "error",
+        "Offline — watch progress was not submitted. Reconnect to continue.",
+      );
+      videoRef.current?.pause();
+      return;
+    }
     setMediaState("error");
     setMediaMessage(
       "Approved lesson media could not be loaded. Retry when connected.",
@@ -1216,6 +1861,17 @@ export function VideoViewer({
   const retryMedia = useCallback(() => {
     const video = videoRef.current;
     if (!video) return;
+    if (offlineRef.current || !isLearnerOnline()) {
+      setMediaState("offline");
+      setMediaMessage(
+        "Offline — playback is paused. Reconnect to retry approved lesson media.",
+      );
+      updateStatus(
+        "error",
+        "Offline — watch progress was not submitted. Reconnect to continue.",
+      );
+      return;
+    }
     updateStatus("idle", "Loading approved lesson media…");
     setMediaState("loading");
     setMediaMessage("Retrying approved lesson media…");
@@ -1229,12 +1885,34 @@ export function VideoViewer({
       if (document.hidden) {
         backgroundedRef.current = true;
         if (!video.paused) video.pause();
+        if (offlineRef.current || !isLearnerOnline()) {
+          setMediaState("offline");
+          setMediaMessage(
+            "Offline — playback is paused. Reconnect to resume; no watch progress was submitted.",
+          );
+          updateStatus(
+            "error",
+            "Offline — watch progress was not submitted. Reconnect to continue.",
+          );
+          return;
+        }
         setMediaState("backgrounded");
         setMediaMessage("Playback paused while this tab is in the background.");
         return;
       }
       if (backgroundedRef.current) {
         backgroundedRef.current = false;
+        if (offlineRef.current || !isLearnerOnline()) {
+          setMediaState("offline");
+          setMediaMessage(
+            "Offline — playback is paused. Reconnect to resume; no watch progress was submitted.",
+          );
+          updateStatus(
+            "error",
+            "Offline — watch progress was not submitted. Reconnect to continue.",
+          );
+          return;
+        }
         setMediaState("paused");
         setMediaMessage("Playback paused. Press Play to resume.");
       }
@@ -1243,17 +1921,28 @@ export function VideoViewer({
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () =>
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-  }, []);
+  }, [updateStatus]);
 
   const togglePlay = useCallback(() => {
     const video = videoRef.current;
     if (!video) return;
+    if (offlineRef.current || !isLearnerOnline()) {
+      setMediaState("offline");
+      setMediaMessage(
+        "Offline — playback is paused. Reconnect to resume; no watch progress was submitted.",
+      );
+      updateStatus(
+        "error",
+        "Offline — watch progress was not submitted. Reconnect to continue.",
+      );
+      return;
+    }
     if (video.paused) {
       void startPlaybackAndPlay();
     } else {
       video.pause();
     }
-  }, [startPlaybackAndPlay]);
+  }, [startPlaybackAndPlay, updateStatus]);
 
   const toggleMute = useCallback(() => {
     const video = videoRef.current;
@@ -1286,12 +1975,70 @@ export function VideoViewer({
   const changeRate = useCallback(
     (next: number) => {
       const video = videoRef.current;
-      if (!video) return;
+      if (!video || !playbackRates.includes(next)) return;
       video.playbackRate = next;
       setPlaybackRate(next);
       emitTelemetry("video_rate_change", { rate: next });
     },
-    [emitTelemetry],
+    [emitTelemetry, playbackRates],
+  );
+
+  const changeQuality = useCallback(
+    (nextQualityId: string) => {
+      const video = videoRef.current;
+      const isAuthorizedQuality =
+        nextQualityId === "auto" ||
+        qualityOptions.some((quality) => quality.id === nextQualityId);
+      if (!isAuthorizedQuality) return;
+      if (!video || !isLearnerOnline()) {
+        if (!isLearnerOnline()) {
+          setMediaState("offline");
+          setMediaMessage(
+            "Offline — playback is paused. Reconnect to change presentation settings.",
+          );
+          updateStatus(
+            "error",
+            "Offline — watch progress was not submitted. Reconnect to continue.",
+          );
+        }
+        return;
+      }
+      const targetSrc =
+        nextQualityId === "auto"
+          ? activeMedia?.src
+          : qualityOptions.find((quality) => quality.id === nextQualityId)?.src;
+      if (!targetSrc || targetSrc === video.currentSrc) {
+        setSelectedQualityId(nextQualityId);
+        return;
+      }
+
+      const restorePosition = Math.max(0, video.currentTime);
+      const resumeAfterLoad = !video.paused;
+      const switchId = ++qualitySwitchRef.current;
+      const restorePlayback = () => {
+        if (qualitySwitchRef.current !== switchId) return;
+        if (Number.isFinite(video.duration) && video.duration > 0) {
+          video.currentTime = Math.min(restorePosition, video.duration);
+          setCurrentTime(video.currentTime);
+        } else {
+          video.currentTime = restorePosition;
+          setCurrentTime(restorePosition);
+        }
+        if (resumeAfterLoad) {
+          void video.play().catch((error: unknown) => {
+            updateStatus("error", playbackErrorMessage(error));
+          });
+        }
+      };
+
+      video.addEventListener("loadedmetadata", restorePlayback, { once: true });
+      video.src = targetSrc;
+      setSelectedQualityId(nextQualityId);
+      setMediaState("loading");
+      setMediaMessage("Loading the selected approved quality…");
+      video.load();
+    },
+    [activeMedia?.src, qualityOptions, updateStatus],
   );
 
   const seek = useCallback((next: number) => {
@@ -1317,7 +2064,8 @@ export function VideoViewer({
 
   const toggleFullscreen = useCallback(() => {
     const video = videoRef.current;
-    if (!video || typeof document === "undefined") return;
+    const player = playerRef.current;
+    if (!video || !player || typeof document === "undefined") return;
     if (document.fullscreenElement) {
       void document.exitFullscreen().catch(() => {
         updateStatus("error", "Fullscreen could not be closed. Try again.");
@@ -1328,17 +2076,20 @@ export function VideoViewer({
     const safariVideo = video as HTMLVideoElement & {
       webkitEnterFullscreen?: () => void;
     };
-    if (typeof video.requestFullscreen === "function") {
-      void video.requestFullscreen().catch(() => {
+    fullscreenTriggerRef.current?.focus();
+    if (document.fullscreenEnabled && supportsPlayerFullscreen(player)) {
+      void player.requestFullscreen().catch(() => {
         updateStatus("error", "Fullscreen could not be opened. Try again.");
         setMediaMessage("Fullscreen could not be opened. Try again.");
       });
       return;
     }
     if (typeof safariVideo.webkitEnterFullscreen === "function") {
+      video.controls = true;
       try {
         safariVideo.webkitEnterFullscreen();
       } catch {
+        video.controls = false;
         updateStatus("error", "Fullscreen could not be opened. Try again.");
         setMediaMessage("Fullscreen could not be opened. Try again.");
       }
@@ -1351,27 +2102,23 @@ export function VideoViewer({
   const togglePictureInPicture = useCallback(() => {
     const video = videoRef.current;
     if (!video || typeof video.requestPictureInPicture !== "function") return;
+    pictureInPictureTriggerRef.current?.focus();
     void video
       .requestPictureInPicture()
       .then(() => {
-        emitTelemetry("video_pip_change", { pip: true });
+        // The enter/leave events are the source of truth for this
+        // presentation-only observation.
       })
       .catch((error: unknown) => {
         updateStatus("error", playbackErrorMessage(error));
       });
-  }, [emitTelemetry, updateStatus]);
+  }, [updateStatus]);
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
-      if (
-        target &&
-        (target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA" ||
-          target.tagName === "SELECT" ||
-          target.isContentEditable)
-      ) {
-        if (event.key === "Escape") {
+      if (isInteractiveShortcutTarget(event.target)) {
+        if (event.key === "Escape" && typeof target?.blur === "function") {
           target.blur();
         }
         return;
@@ -1452,6 +2199,9 @@ export function VideoViewer({
           } else if (transcriptOpen) {
             event.preventDefault();
             setTranscriptOpen(false);
+          } else if (settingsOpen) {
+            event.preventDefault();
+            setSettingsOpen(false);
           }
           break;
       }
@@ -1464,6 +2214,7 @@ export function VideoViewer({
       currentTime,
       emitTelemetry,
       seek,
+      settingsOpen,
       shortcutsOpen,
       skipTime,
       toggleFullscreen,
@@ -1487,6 +2238,7 @@ export function VideoViewer({
     "buffering",
     "backgrounded",
     "error",
+    "offline",
   ].includes(mediaState)
     ? mediaMessage
     : statusMessage || mediaMessage;
@@ -1607,27 +2359,29 @@ export function VideoViewer({
   }
 
   const statusLabel =
-    status === "starting"
-      ? "Starting"
-      : status === "saving"
-        ? "Saving"
-        : status === "submitted"
-          ? "Submitted"
-          : status === "error"
-            ? "Needs attention"
-            : mediaState === "loading"
-              ? "Loading"
-              : mediaState === "buffering"
-                ? "Buffering"
-                : mediaState === "backgrounded"
-                  ? "Paused in background"
-                  : mediaState === "processing"
-                    ? "Processing"
-                    : mediaState === "playing"
-                      ? "Playing"
-                      : mediaState === "paused"
-                        ? "Paused"
-                        : "Ready";
+    mediaState === "offline"
+      ? "Offline"
+      : status === "starting"
+        ? "Starting"
+        : status === "saving"
+          ? "Saving"
+          : status === "submitted"
+            ? "Submitted"
+            : status === "error"
+              ? "Needs attention"
+              : mediaState === "loading"
+                ? "Loading"
+                : mediaState === "buffering"
+                  ? "Buffering"
+                  : mediaState === "backgrounded"
+                    ? "Paused in background"
+                    : mediaState === "processing"
+                      ? "Processing"
+                      : mediaState === "playing"
+                        ? "Playing"
+                        : mediaState === "paused"
+                          ? "Paused"
+                          : "Ready";
 
   return (
     <section
@@ -1649,15 +2403,20 @@ export function VideoViewer({
       </div>
 
       <div
+        ref={playerRef}
         className="momentum-video-player"
         tabIndex={0}
         onKeyDown={handleKeyDown}
         role="region"
         aria-label={`Video player for ${activity.title}`}
+        data-fullscreen-target="player"
       >
         <div
           className="momentum-video-player__stage"
           data-media-state={mediaState}
+          data-connection-state={
+            isOffline || mediaState === "offline" ? "offline" : "online"
+          }
         >
           <video
             ref={videoRef}
@@ -1795,21 +2554,23 @@ export function VideoViewer({
             aria-valuemax={100}
             aria-valuenow={Math.round((isMuted ? 0 : volume) * 100)}
           />
-          <label className="momentum-video-controls__rate">
-            <Gauge size={16} aria-hidden="true" />
-            <span className="sr-only">Playback speed</span>
-            <select
-              value={playbackRate}
-              onChange={(event) => changeRate(Number(event.target.value))}
-              aria-label="Playback speed"
-            >
-              {[0.75, 1, 1.25, 1.5, 2].map((rate) => (
-                <option key={rate} value={rate}>
-                  {rate}×
-                </option>
-              ))}
-            </select>
-          </label>
+          {playbackRates.length > 0 ? (
+            <label className="momentum-video-controls__rate">
+              <Gauge size={16} aria-hidden="true" />
+              <span className="sr-only">Playback speed</span>
+              <select
+                value={effectivePlaybackRate}
+                onChange={(event) => changeRate(Number(event.target.value))}
+                aria-label="Playback speed"
+              >
+                {playbackRates.map((rate) => (
+                  <option key={rate} value={rate}>
+                    {rate}×
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           {activeMedia.captions?.length ? (
             <button
               className={`momentum-video-controls__icon${captionsEnabled ? " is-active" : ""}`}
@@ -1824,6 +2585,9 @@ export function VideoViewer({
               aria-keyshortcuts="c"
             >
               <Captions size={18} aria-hidden="true" />
+              <span className="sr-only">
+                {captionsEnabled ? "Captions on" : "Captions off"}
+              </span>
             </button>
           ) : null}
           {activeMedia.transcript?.length || activeMedia.captions?.length ? (
@@ -1836,6 +2600,7 @@ export function VideoViewer({
                 emitTelemetry("video_transcript_toggle", { open: next });
               }}
               aria-expanded={transcriptOpen}
+              aria-controls="momentum-video-transcript"
               aria-label={
                 transcriptOpen ? "Close transcript" : "Open transcript"
               }
@@ -1846,6 +2611,7 @@ export function VideoViewer({
           ) : null}
           {canPictureInPicture ? (
             <button
+              ref={pictureInPictureTriggerRef}
               className="momentum-video-controls__icon"
               type="button"
               onClick={togglePictureInPicture}
@@ -1856,6 +2622,7 @@ export function VideoViewer({
           ) : null}
           {canFullscreen ? (
             <button
+              ref={fullscreenTriggerRef}
               className="momentum-video-controls__icon"
               type="button"
               onClick={toggleFullscreen}
@@ -1865,22 +2632,54 @@ export function VideoViewer({
               <Maximize2 size={18} aria-hidden="true" />
             </button>
           ) : null}
+          {hasPlaybackSettings ? (
+            <button
+              ref={settingsTriggerRef}
+              className={`momentum-video-controls__settings${settingsOpen ? " is-active" : ""}`}
+              type="button"
+              onClick={() => setSettingsOpen((prev) => !prev)}
+              aria-expanded={settingsOpen}
+              aria-controls="momentum-video-settings"
+              aria-label={
+                settingsOpen
+                  ? "Close playback settings"
+                  : "Open playback settings"
+              }
+            >
+              <Settings2 size={17} aria-hidden="true" />
+              <span>Settings</span>
+            </button>
+          ) : null}
           <button
+            ref={shortcutsTriggerRef}
             className={`momentum-video-controls__icon${shortcutsOpen ? " is-active" : ""}`}
             type="button"
             onClick={() => setShortcutsOpen((prev) => !prev)}
             aria-label="Show keyboard shortcuts"
             aria-expanded={shortcutsOpen}
+            aria-controls="momentum-video-shortcuts"
           >
             <HelpCircle size={17} aria-hidden="true" />
           </button>
         </div>
+
+        {settingsOpen && hasPlaybackSettings ? (
+          <PlaybackSettingsPanel
+            playbackRates={playbackRates}
+            playbackRate={effectivePlaybackRate}
+            onChangeRate={changeRate}
+            qualities={qualityOptions}
+            qualityId={effectiveQualityId}
+            onChangeQuality={changeQuality}
+            onClose={() => setSettingsOpen(false)}
+          />
+        ) : null}
       </div>
 
       <div className="momentum-video-viewer__status-row">
         <div>
           <span
-            className={`momentum-video-viewer__status momentum-video-viewer__status--${status}`}
+            className={`momentum-video-viewer__status momentum-video-viewer__status--${mediaState === "offline" ? "offline" : status}`}
           >
             <span
               className="momentum-video-viewer__status-dot"
@@ -1915,25 +2714,23 @@ export function VideoViewer({
         </div>
       </div>
 
-      {activeMedia.transcript?.length || activeMedia.captions?.length ? (
-        <CaptionsTranscriptPanel
-          captions={activeMedia.captions}
-          transcript={activeMedia.transcript}
-          currentTime={currentTime}
-          onSeek={seek}
-          captionsEnabled={captionsEnabled}
-          onToggleCaptions={() => {
-            const next = !captionsEnabled;
-            setCaptionsEnabled(next);
-            emitTelemetry("video_captions_toggle", { enabled: next });
-          }}
-          isOpen={transcriptOpen}
-          onToggleOpen={() => setTranscriptOpen((prev) => !prev)}
-          onTelemetry={onTelemetryEvent}
-          activityId={activity.id}
-          duration={duration}
-        />
-      ) : null}
+      <CaptionsTranscriptPanel
+        captions={activeMedia.captions}
+        transcript={activeMedia.transcript}
+        currentTime={currentTime}
+        onSeek={seek}
+        captionsEnabled={captionsEnabled}
+        onToggleCaptions={() => {
+          const next = !captionsEnabled;
+          setCaptionsEnabled(next);
+          emitTelemetry("video_captions_toggle", { enabled: next });
+        }}
+        isOpen={transcriptOpen}
+        onToggleOpen={() => setTranscriptOpen((prev) => !prev)}
+        onTelemetry={onTelemetryEvent}
+        activityId={activity.id}
+        duration={duration}
+      />
     </section>
   );
 }

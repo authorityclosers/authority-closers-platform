@@ -8,7 +8,14 @@ import {
   canStartPlayback,
   CaptionsTranscriptPanel,
   formatMediaTime,
+  isApprovedProgressiveMediaSource,
+  isInteractiveShortcutTarget,
+  isPlaybackConnectionCurrent,
+  normalizePlaybackRates,
+  normalizeQualityOptions,
+  PlaybackSettingsPanel,
   resolveApprovedMedia,
+  supportsPlayerFullscreen,
   VideoKeyboardShortcutsDialog,
   VideoViewer,
 } from "./learning-loop-runtime";
@@ -130,8 +137,98 @@ describe("learning loop video runtime", () => {
     expect(canStartPlayback({ ...activity, state: "locked" })).toBe(false);
   });
 
+  it("guards canonical writes across offline and reconnect epochs", () => {
+    expect(isPlaybackConnectionCurrent(4, 4, true, false)).toBe(true);
+    expect(isPlaybackConnectionCurrent(4, 5, true, false)).toBe(false);
+    expect(isPlaybackConnectionCurrent(4, 4, false, false)).toBe(false);
+    expect(isPlaybackConnectionCurrent(4, 4, true, true)).toBe(false);
+    expect(isPlaybackConnectionCurrent(5, 4, true, false)).toBe(false);
+  });
+
+  it("does not hijack keyboard shortcuts from interactive targets", () => {
+    const buttonTarget = {
+      closest: (selector: string) =>
+        selector.includes("button") ? ({} as Element) : null,
+    } as unknown as EventTarget;
+    const contentEditableTarget = {
+      closest: () => null,
+      isContentEditable: true,
+    } as unknown as EventTarget;
+    const playerRegionTarget = {
+      closest: () => null,
+    } as unknown as EventTarget;
+
+    expect(isInteractiveShortcutTarget(buttonTarget)).toBe(true);
+    expect(isInteractiveShortcutTarget(contentEditableTarget)).toBe(true);
+    expect(isInteractiveShortcutTarget(playerRegionTarget)).toBe(false);
+  });
+
+  it("uses the player container as the fullscreen target", () => {
+    const player = { requestFullscreen: vi.fn() } as unknown as HTMLElement;
+    expect(supportsPlayerFullscreen(player)).toBe(true);
+    expect(supportsPlayerFullscreen(null)).toBe(false);
+
+    const html = renderToStaticMarkup(
+      createElement(VideoViewer, {
+        activity,
+        api,
+        moduleHref: "/learn/module-1",
+        media: {
+          protocol: "progressive",
+          contentType: "video/mp4",
+          src: "https://media.example.test/lesson.mp4",
+        },
+      }),
+    );
+    expect(html).toContain('data-fullscreen-target="player"');
+  });
+
+  it("requires explicit progressive video sources for media and quality", () => {
+    expect(
+      isApprovedProgressiveMediaSource({
+        protocol: "progressive",
+        contentType: "video/mp4",
+        src: "https://media.test/lesson.mp4",
+      }),
+    ).toBe(true);
+    expect(
+      isApprovedProgressiveMediaSource({
+        protocol: "progressive",
+        contentType: "video/mp4",
+        src: "https://media.test/lesson.m3u8",
+      }),
+    ).toBe(false);
+    expect(
+      isApprovedProgressiveMediaSource({
+        protocol: "progressive",
+        contentType: "video/mp4",
+        src: "https://media.test/lesson.mp4?format=m3u8",
+      }),
+    ).toBe(false);
+    expect(
+      isApprovedProgressiveMediaSource({
+        protocol: "hls" as unknown as "progressive",
+        contentType: "application/vnd.apple.mpegurl",
+        src: "https://media.test/lesson.m3u8",
+      }),
+    ).toBe(false);
+
+    const rejected = resolveApprovedMedia(activity, {
+      protocol: "progressive",
+      contentType: "application/vnd.apple.mpegurl",
+      src: "https://media.test/manifest.m3u8",
+    });
+    expect(rejected.state).toBe("unavailable");
+    expect(rejected.media).toBeNull();
+    expect(rejected.reason).toContain("video/mp4 or video/webm");
+  });
+
   it("resolves approved media descriptors safely", () => {
-    const explicit = { src: "https://explicit.example.test/video.mp4" };
+    const explicit = {
+      protocol: "progressive" as const,
+      contentType: "video/mp4",
+      src: "https://explicit.example.test/video.mp4",
+    };
     const resolvedExplicit = resolveApprovedMedia(activity, explicit);
     expect(resolvedExplicit.state).toBe("approved");
     expect(resolvedExplicit.media?.src).toBe(
@@ -156,6 +253,117 @@ describe("learning loop video runtime", () => {
     expect(resolvedApproved.media?.captions?.[0].src).toBe(
       "https://media.example.test/approved-captions.vtt",
     );
+  });
+
+  it("keeps playback settings capability-driven", () => {
+    expect(normalizePlaybackRates([1.5, 1, 1.5, Number.NaN, -1])).toEqual([
+      1, 1.5,
+    ]);
+    expect(normalizePlaybackRates()).toEqual([]);
+    expect(
+      normalizeQualityOptions([
+        {
+          id: "720",
+          label: "720p",
+          protocol: "progressive",
+          contentType: "video/mp4",
+          src: "https://media.test/720.mp4",
+        },
+        {
+          id: "720",
+          label: "Duplicate",
+          protocol: "progressive",
+          contentType: "video/mp4",
+          src: "https://media.test/dup.mp4",
+        },
+        {
+          id: "",
+          label: "Missing id",
+          protocol: "progressive",
+          contentType: "video/mp4",
+          src: "https://media.test/missing.mp4",
+        },
+      ]),
+    ).toEqual([
+      {
+        id: "720",
+        label: "720p",
+        protocol: "progressive",
+        contentType: "video/mp4",
+        src: "https://media.test/720.mp4",
+      },
+    ]);
+
+    const withoutCapabilities = renderToStaticMarkup(
+      createElement(VideoViewer, {
+        activity,
+        api,
+        moduleHref: "/learn/module-1",
+        media: {
+          protocol: "progressive",
+          contentType: "video/mp4",
+          src: "https://media.example.test/lesson.mp4",
+        },
+      }),
+    );
+    expect(withoutCapabilities).not.toContain("Playback settings");
+    expect(withoutCapabilities).not.toContain("Playback speed");
+    expect(withoutCapabilities).not.toContain("Video quality");
+
+    const withCapabilities = renderToStaticMarkup(
+      createElement(PlaybackSettingsPanel, {
+        playbackRates: [1, 1.25],
+        playbackRate: 1,
+        onChangeRate: vi.fn(),
+        qualities: [
+          {
+            id: "720",
+            label: "720p",
+            protocol: "progressive",
+            contentType: "video/mp4",
+            src: "https://media.test/720.mp4",
+          },
+        ],
+        qualityId: "auto",
+        onChangeQuality: vi.fn(),
+        onClose: vi.fn(),
+      }),
+    );
+    expect(withCapabilities).toContain("Playback settings");
+    expect(withCapabilities).toContain("Playback speed");
+    expect(withCapabilities).toContain("Video quality");
+    expect(withCapabilities).toContain("720p");
+    expect(withCapabilities).toContain(
+      "Watch coverage and completion remain server-determined.",
+    );
+  });
+
+  it("does not activate a manifest-only delivery path", () => {
+    const hlsOnlyActivity: ActivityResponse = {
+      ...approvedActivityWithMedia,
+      media: {
+        ...approvedActivityWithMedia.media!,
+        delivery: {
+          protocol: "hls",
+          manifest_url: "https://media.example.test/lesson.m3u8",
+          progressive_url: null,
+        },
+      },
+    };
+    const resolved = resolveApprovedMedia(hlsOnlyActivity);
+    expect(resolved.state).toBe("unavailable");
+    expect(resolved.media).toBeNull();
+    expect(resolved.reason).toContain("progressive media delivery");
+
+    const html = renderToStaticMarkup(
+      createElement(VideoViewer, {
+        activity: hlsOnlyActivity,
+        api,
+        moduleHref: "/learn/module-1",
+      }),
+    );
+    expect(html).not.toContain("<video");
+    expect(html).toContain("No approved progressive media delivery");
   });
 
   it("renders an honest unavailable state when no authorized media descriptor exists", () => {
@@ -185,6 +393,8 @@ describe("learning loop video runtime", () => {
         api,
         moduleHref: "/learn/module-1",
         media: {
+          protocol: "progressive",
+          contentType: "video/mp4",
           src: "https://media.example.test/lesson.mp4",
           captions: [
             {
@@ -289,6 +499,27 @@ describe("learning loop video runtime", () => {
     expect(html).toContain("Focus entirely on diagnostic discovery.");
     expect(html).toContain('aria-current="time"');
     expect(html).toContain('placeholder="Search transcript…"');
+  });
+
+  it("renders an explicit unavailable captions/transcript state", () => {
+    const html = renderToStaticMarkup(
+      createElement(CaptionsTranscriptPanel, {
+        transcript: [],
+        captions: [],
+        currentTime: 0,
+        onSeek: vi.fn(),
+        captionsEnabled: false,
+        onToggleCaptions: vi.fn(),
+        isOpen: true,
+        onToggleOpen: vi.fn(),
+      }),
+    );
+
+    expect(html).toContain("Captions &amp; transcript");
+    expect(html).toContain("Transcript is not available for this lesson.");
+    expect(html).toContain(
+      "Captions and transcript are not available for this lesson yet.",
+    );
   });
 
   it("renders keyboard shortcuts guide with standard video navigation keys", () => {
