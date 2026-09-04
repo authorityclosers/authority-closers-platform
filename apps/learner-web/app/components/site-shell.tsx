@@ -625,7 +625,6 @@ export function LearnerShell({
   const workspaceSections: SidebarNavSection[] = [
     {
       id: "workspace",
-      label: "Workspace",
       items: [
         {
           id: "dashboard",
@@ -766,7 +765,7 @@ export function LearnerShell({
             />
             {!sidebarCollapsed ? (
               <>
-                <span className="learner-sidebar__search-text">Search...</span>
+                <span className="learner-sidebar__search-text">Search</span>
                 <kbd className="learner-sidebar__search-kbd">⌘K</kbd>
               </>
             ) : null}
@@ -782,32 +781,37 @@ export function LearnerShell({
 
         <div className="learner-sidebar__footer">
           <div className="learner-sidebar__account">
-            <Link
-              href={ROUTES.profile}
-              className="learner-sidebar__account-link"
-              title={sidebarCollapsed ? effectiveDisplayName : undefined}
-              aria-label={`Learner profile: ${effectiveDisplayName}`}
+            <SidebarTooltip
+              active={sidebarCollapsed}
+              content={`Profile: ${effectiveDisplayName}`}
             >
-              <IdentityAvatar
-                className="learner-sidebar__account-avatar"
-                displayName={effectiveDisplayName}
-                avatarUrl={identity.avatarUrl}
-                avatarAlt={identity.avatarAlt}
-              />
-              {!sidebarCollapsed ? (
-                <div className="learner-sidebar__account-info">
-                  <span className="learner-sidebar__account-name">
-                    {effectiveDisplayName}
-                  </span>
-                  <span
-                    className="learner-sidebar__account-sub"
-                    title={identity.email || "Learner"}
-                  >
-                    Learner
-                  </span>
-                </div>
-              ) : null}
-            </Link>
+              <Link
+                href={ROUTES.profile}
+                className="learner-sidebar__account-link"
+                title="Profile"
+                aria-label={`Learner profile: ${effectiveDisplayName}`}
+              >
+                <IdentityAvatar
+                  className="learner-sidebar__account-avatar"
+                  displayName={effectiveDisplayName}
+                  avatarUrl={identity.avatarUrl}
+                  avatarAlt={identity.avatarAlt}
+                />
+                {!sidebarCollapsed ? (
+                  <div className="learner-sidebar__account-info">
+                    <span className="learner-sidebar__account-name">
+                      {effectiveDisplayName}
+                    </span>
+                    <span
+                      className="learner-sidebar__account-sub"
+                      title={identity.email || "Learner"}
+                    >
+                      Learner
+                    </span>
+                  </div>
+                ) : null}
+              </Link>
+            </SidebarTooltip>
             {!sidebarCollapsed ? (
               <Link
                 href={ROUTES.settings}
@@ -815,7 +819,7 @@ export function LearnerShell({
                 aria-label="Settings"
                 title="Settings"
               >
-                <Settings size={17} strokeWidth={1.85} aria-hidden="true" />
+                <Settings size={18} strokeWidth={1.85} aria-hidden="true" />
               </Link>
             ) : null}
           </div>
@@ -830,12 +834,17 @@ export function LearnerShell({
               className="mobile-brand-link"
               href={ROUTES.dashboard}
               prefetch={false}
-              aria-label="Authority Closers home"
+              aria-label="Closers Academy — by Authority Closers"
             >
               <div className="mobile-brand-icon" aria-hidden="true">
                 <BrandMark className="mobile-brand-mark" />
               </div>
-              <span className="mobile-brand-name">Authority Closers</span>
+              <div className="mobile-brand-text">
+                <span className="mobile-brand-name">Closers Academy</span>
+                <span className="mobile-brand-tenant">
+                  by Authority Closers
+                </span>
+              </div>
             </Link>
           </div>
 
@@ -845,7 +854,7 @@ export function LearnerShell({
               href={ROUTES.discover}
               prefetch={false}
               className="learner-header__search-trigger"
-              aria-label="Search courses, lessons, and more"
+              aria-label="Search courses, lessons, and more (Cmd+K)"
               onClick={(e) => {
                 e.preventDefault();
                 openCommandPalette(e.currentTarget);
@@ -1038,6 +1047,7 @@ export function LearnerShell({
           aria-controls="learner-help-chatbox"
           aria-haspopup="dialog"
           aria-label="Open help chatbox"
+          title="Help"
         >
           <MessageCircle size={19} aria-hidden="true" />
           <span>Help</span>

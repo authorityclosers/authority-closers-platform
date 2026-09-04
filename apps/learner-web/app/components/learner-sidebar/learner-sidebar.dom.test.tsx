@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { CommandPalette } from "./command-palette";
 import { MobileBottomNav, MobileMoreSheet } from "./mobile-navigation";
+import { SidebarTooltip } from "./sidebar-tooltip";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -202,5 +203,48 @@ describe("learner shell modal interactions", () => {
       ),
     ).toHaveLength(0);
     expect(document.activeElement).toBe(trigger);
+  });
+
+  it("renders tooltip in document.body via portal with role=tooltip and aria-describedby when active in collapsed mode", async () => {
+    function TooltipHarness() {
+      return (
+        <div className="site-frame--learner site-frame--collapsed">
+          <aside className="learner-sidebar">
+            <SidebarTooltip content="Dashboard" active={true}>
+              <a href="/home" id="dashboard-nav-item">
+                Dashboard icon
+              </a>
+            </SidebarTooltip>
+          </aside>
+        </div>
+      );
+    }
+
+    await act(async () => root.render(<TooltipHarness />));
+    const trigger = container.querySelector<HTMLAnchorElement>(
+      "#dashboard-nav-item",
+    );
+    expect(trigger).not.toBeNull();
+
+    // Trigger hover or focus
+    await act(async () => {
+      trigger?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+      trigger?.focus();
+    });
+    await settleEffects();
+
+    const tooltip = document.body.querySelector<HTMLElement>('[role="tooltip"]');
+    expect(tooltip).not.toBeNull();
+    expect(tooltip?.textContent).toContain("Dashboard");
+    expect(trigger?.getAttribute("aria-describedby")).toBe(tooltip?.id);
+
+    // Blur cleans up
+    await act(async () => {
+      trigger?.blur();
+      trigger?.dispatchEvent(new MouseEvent("mouseout", { bubbles: true }));
+    });
+    await settleEffects();
+
+    expect(document.body.querySelector('[role="tooltip"]')).toBeNull();
   });
 });
