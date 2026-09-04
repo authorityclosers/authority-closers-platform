@@ -2,7 +2,6 @@ import json
 from pathlib import Path
 from urllib.parse import urlparse
 
-
 ROOT = Path(__file__).resolve().parents[2]
 START = (ROOT / "scripts" / "Start-LocalStagingBridge.ps1").read_text(encoding="utf-8")
 STOP = (ROOT / "scripts" / "Stop-LocalStagingBridge.ps1").read_text(encoding="utf-8")
