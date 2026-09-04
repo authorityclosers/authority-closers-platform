@@ -779,6 +779,32 @@ def inspect_hls_playlist_inventory(
     return tuple(inventory)
 
 
+def resolve_hls_child_object_key(
+    *,
+    playlist_key: str,
+    uri: str,
+    namespace_prefix: str,
+) -> str:
+    """Resolve one already-validated HLS URI to its private object key.
+
+    The delivery front door uses the same traversal/namespace rules as the
+    processing validator when it rewrites playlist references with fresh
+    child tokens.  Keeping this operation next to the inventory inspector
+    prevents the serving path from growing a second, weaker URI parser.
+    """
+
+    try:
+        return _hls_uri_to_child_key(
+            playlist_key=playlist_key,
+            uri=uri,
+            namespace_prefix=namespace_prefix,
+        )
+    except MediaProcessingError:
+        raise
+    except Exception as error:  # pragma: no cover - defensive adapter boundary
+        raise MediaProcessingError("The HLS playlist contains an invalid URI.") from error
+
+
 def _read_bounded_source(
     storage: PrivateObjectStorage,
     *,
@@ -1831,6 +1857,7 @@ __all__ = [
     "FFmpegMediaProcessor",
     "HlsManifestMetadata",
     "inspect_hls_playlist_inventory",
+    "resolve_hls_child_object_key",
     "LocalFFmpegProcessor",
     "MediaProcessor",
     "ProcessedAvatarVariant",

@@ -234,7 +234,10 @@ class SignedMediaDeliveryPort:
             raise ValueError("signed delivery kind must be read or playback")
         if supports_range is not None and not isinstance(supports_range, bool):
             raise TypeError("signed media URL supports_range must be a boolean")
-        if supports_range is True and not self.range_policy.supports_range:
+        effective_supports_range = (
+            self.range_policy.supports_range if supports_range is None else supports_range
+        )
+        if effective_supports_range and not self.range_policy.supports_range:
             raise MediaRangeError("byte ranges are not allowed for this delivery")
         if not object_key or ".." in object_key or "\\" in object_key or object_key.startswith("/"):
             raise ValueError("signed delivery object key is invalid")
@@ -253,6 +256,7 @@ class SignedMediaDeliveryPort:
                 "asset_id": str(media_version.asset_id),
                 "version_id": str(media_version.version_id),
                 "key": object_key,
+                "supports_range": effective_supports_range,
             },
             now=issued_at,
             lifetime=self.playback_ttl,
@@ -268,9 +272,7 @@ class SignedMediaDeliveryPort:
             expires_at=expires_at,
             media_version=media_version,
             kind=kind,
-            supports_range=self.range_policy.supports_range
-            if supports_range is None
-            else supports_range,
+            supports_range=effective_supports_range,
             token=token,
         )
 
@@ -303,6 +305,14 @@ class SignedMediaDeliveryPort:
             or claim_key.startswith("/")
         ):
             raise MediaForbidden("the signed media URL is outside the media version scope")
+        claimed_supports_range = claims.get("supports_range")
+        if (
+            not isinstance(claimed_supports_range, bool)
+            or claimed_supports_range != signed.supports_range
+            or claimed_supports_range
+            and not self.range_policy.supports_range
+        ):
+            raise MediaForbidden("the signed media URL range policy is invalid")
         parsed_url = urlsplit(signed.url.value)
         expected_path_prefix = f"/v1/media/{signed.kind}/"
         query = parse_qs(parsed_url.query, keep_blank_values=True)
