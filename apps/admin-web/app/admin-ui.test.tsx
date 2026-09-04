@@ -25,6 +25,7 @@ import {
   ReconciliationForm,
 } from "./components/admin-forms";
 import { AuditPanel, CapabilityBoundary } from "./components/ops-primitives";
+import { DevAdminLoginForm } from "./components/dev-admin-login-form";
 
 const previewForms = [
   createElement(LearnerLookupForm),
@@ -210,6 +211,17 @@ describe("G1 admin inert form seams", () => {
 });
 
 describe("G1 admin permissions and semantic boundaries", () => {
+  it("renders a password-only local bridge login without embedding credentials", () => {
+    const markup = renderToStaticMarkup(createElement(DevAdminLoginForm));
+
+    expect(markup).toContain("Sign in to the local admin workspace");
+    expect(markup).toContain('name="email"');
+    expect(markup).toContain('name="password"');
+    expect(markup).toContain("Cloudflare Access stays server-side");
+    expect(markup).not.toContain("admin@authorityclosers.com");
+    expect(markup).not.toContain("CF_Authorization");
+  });
+
   it("renders the Clarity Grid organization shell without asserting metrics", () => {
     const markup = renderToStaticMarkup(createElement(AdminHome));
 
@@ -218,7 +230,7 @@ describe("G1 admin permissions and semantic boundaries", () => {
     expect(markup).toContain("Tenant pending");
     expect(markup).toContain("Waiting for session verification");
     expect(markup).toContain("Active learners");
-    expect(markup).toContain("Not connected");
+    expect(markup).toContain("Not measured");
     expect(markup).toContain(
       "No learner, catalog, job, or audit record is seeded here",
     );
@@ -244,7 +256,7 @@ describe("G1 admin permissions and semantic boundaries", () => {
     expect(markup).toContain("clarity-shell surface-studio");
     expect(markup).toContain('aria-label="Course studio preview"');
     expect(markup).toContain("Approved lesson asset pending");
-    expect(markup).toContain("Media configuration is not connected");
+    expect(markup).toContain("Media configuration remains gated");
     expect(markup).toContain("Learner visibility is determined by publication");
   });
 

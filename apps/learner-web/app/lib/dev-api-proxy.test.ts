@@ -243,6 +243,11 @@ describe("development learner API proxy", () => {
       ["GET", "/v1/onboarding"],
       ["PUT", "/v1/onboarding"],
       ["POST", "/v1/enrollments/free"],
+      ["GET", "/v1/profile/avatar"],
+      ["POST", "/v1/profile/avatar"],
+      ["POST", "/v1/profile/avatar/upload-1/complete"],
+      ["GET", "/v1/learning?limit=50"],
+      ["GET", "/v1/learning?limit=50&cursor=cursor-2"],
       ["GET", "/v1/learning/lesson-1"],
       ["GET", "/v1/learning/insights"],
       ["GET", "/v1/learning/insights?period=week"],
@@ -270,6 +275,12 @@ describe("development learner API proxy", () => {
       ["POST", "/v1/auth/password/recovery"],
       ["POST", "/v1/auth/password/register"],
       ["GET", "/v1/activities/activity-1/draft/"],
+      ["DELETE", "/v1/profile/avatar"],
+      ["POST", "/v1/profile/avatar/upload-1/complete/extra"],
+      ["GET", "/v1/learning"],
+      ["GET", "/v1/learning?limit=49"],
+      ["GET", "/v1/learning?limit=50&cursor="],
+      ["GET", "/v1/learning?limit=50&cursor=one&cursor=two"],
       ["POST", "/v1/activities/activity-1/evidence/extra"],
       ["GET", "/v1/learning/lesson-1?enrollment_id=one"],
       ["GET", "/v1/learning/insights?period=year"],
@@ -533,6 +544,25 @@ describe("development learner API proxy", () => {
     });
   });
 
+  it("clears a stale local session without blocking the public catalog", async () => {
+    const fetcher = vi.fn(async () =>
+      Response.json({ items: [], next_cursor: null }),
+    );
+    const response = await proxyDevelopmentLearnerApi(
+      bridgeRequest("/v1/programs?limit=50", {
+        headers: { cookie: `__Host-ac_dev_qa_session=${LOCAL_SESSION}` },
+      }),
+      fetcher,
+      AUTH_BRIDGE_ENV,
+      "development",
+      new InMemoryDevelopmentBridgeSessionStore(),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("set-cookie")).toContain("Max-Age=0");
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
   it("forwards only the learner mutation contract and keeps browser credentials out", async () => {
     const store = new InMemoryDevelopmentBridgeSessionStore();
     store.set(LOCAL_SESSION, STAGING_SESSION);
@@ -575,6 +605,29 @@ describe("development learner API proxy", () => {
     );
   });
 
+  it("rejects an oversized learner mutation before buffering it upstream", async () => {
+    const store = new InMemoryDevelopmentBridgeSessionStore();
+    store.set(LOCAL_SESSION, STAGING_SESSION);
+    const fetcher = vi.fn();
+    const response = await proxyDevelopmentLearnerApi(
+      bridgeRequest("/v1/activities/activity-1/draft", {
+        method: "PUT",
+        headers: {
+          cookie: `__Host-ac_dev_qa_session=${LOCAL_SESSION}`,
+          "content-type": "application/json",
+        },
+        body: "x".repeat(1024 * 1024 + 1),
+      }),
+      fetcher,
+      AUTH_BRIDGE_ENV,
+      "development",
+      store,
+    );
+
+    expect(response.status).toBe(413);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
   it("fails closed for wrong origins, direct staging cookies, client credentials, and invalid local sessions", async () => {
     const fetcher = vi.fn();
     const cases = [
@@ -609,6 +662,23 @@ describe("development learner API proxy", () => {
     }
     expect(statuses).toEqual([403, 403, 401, 403, 400, 401]);
     expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("clears malformed and expired local bridge cookies before asking for sign-in", async () => {
+    for (const cookie of [
+      "__Host-ac_dev_qa_session=malformed",
+      `__Host-ac_dev_qa_session=${LOCAL_SESSION}`,
+    ]) {
+      const response = await proxyDevelopmentLearnerApi(
+        bridgeRequest("/v1/me", { headers: { cookie } }),
+        vi.fn(),
+        AUTH_BRIDGE_ENV,
+        "development",
+        new InMemoryDevelopmentBridgeSessionStore(),
+      );
+      expect(response.status).toBe(401);
+      expect(response.headers.get("set-cookie")).toContain("Max-Age=0");
+    }
   });
 
   it("expires the server-side mapping after upstream 401 and clears the local cookie", async () => {

@@ -102,6 +102,99 @@ button:disabled {
   opacity: 0.56;
 }
 
+.development-bridge-notice {
+  position: relative;
+  z-index: 10;
+  padding: 8px 16px;
+  border-bottom: 1px solid rgba(217, 255, 86, 0.45);
+  background: #d9ff56;
+  color: #11140f;
+  font-family: var(--font-mono), monospace;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.dev-admin-login-shell {
+  min-height: calc(100vh - 34px);
+  display: grid;
+  place-items: center;
+  padding: 32px 18px;
+}
+
+.dev-admin-login-card {
+  width: min(100%, 31rem);
+  display: grid;
+  gap: 14px;
+  padding: clamp(24px, 5vw, 42px);
+  border: 1px solid var(--line-strong);
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.dev-admin-login-card h1,
+.dev-admin-login-card p {
+  margin: 0;
+}
+
+.dev-admin-login-card p {
+  color: var(--quiet);
+  line-height: 1.6;
+}
+
+.dev-admin-login-card label {
+  margin-top: 5px;
+  color: var(--quiet);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.dev-admin-login-card input {
+  width: 100%;
+  min-height: 46px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 0;
+  background: var(--panel-soft);
+  color: var(--text);
+}
+
+.dev-admin-login-kicker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--signal);
+  font-family: var(--font-mono), monospace;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dev-admin-login-error {
+  padding: 11px 12px;
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.dev-admin-login-submit {
+  min-height: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 4px;
+  border: 1px solid var(--signal);
+  background: var(--signal);
+  color: var(--signal-ink);
+  cursor: pointer;
+  font-weight: 800;
+}
+
 .admin-shell {
   min-height: 100vh;
   display: grid;

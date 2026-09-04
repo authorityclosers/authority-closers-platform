@@ -574,6 +574,25 @@ describe("honest preview controls", () => {
     expect(onboarding).not.toContain("Choose the context");
   });
 
+  it("hands unsupported localhost auth callbacks to canonical staging", () => {
+    const login = renderToStaticMarkup(
+      createElement(LoginForm, { stagingBridge: true }),
+    );
+
+    expect(login).toContain("Use your verified staging email and password");
+    expect(login).toContain(
+      'href="https://staging.authorityclosers.com/forgot-password"',
+    );
+    expect(login).toContain(
+      'href="https://staging.authorityclosers.com/register"',
+    );
+    expect(login).toContain(
+      "https://staging.authorityclosers.com/v1/auth/google/start",
+    );
+    expect(login).not.toContain('href="/forgot-password"');
+    expect(login).not.toContain('href="/register"');
+  });
+
   it("routes password sessions through canonical onboarding status", () => {
     expect(routeAfterOnboarding("not_started")).toBe("/onboarding");
     expect(routeAfterOnboarding("in_progress")).toBe("/onboarding");

@@ -76,7 +76,8 @@ session after suspected exposure.
 - Restarting the local server invalidates all bridge sessions. Upstream 401 and
   logout also invalidate the mapping.
 - The bridge is not a substitute for deployed staging tests and does not cover
-  unsupported auth surfaces or admin behavior.
+  unsupported auth surfaces. ADR-030 separately governs the later, explicitly
+  reviewed admin bridge; it does not broaden this learner adapter.
 - The local process temporarily holds an opaque staging session in memory, so
   testers must use dedicated accounts, keep the port private, and revoke access
   after a suspected compromise.

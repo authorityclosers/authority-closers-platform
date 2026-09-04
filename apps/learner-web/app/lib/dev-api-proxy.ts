@@ -4,8 +4,10 @@ const DEFAULT_LOCAL_API_ORIGIN = "http://127.0.0.1:8000";
 const STAGING_API_ORIGIN = "https://api-staging.authorityclosers.com";
 const STAGING_PUBLIC_APP_ORIGIN = "https://staging.authorityclosers.com";
 const PROXY_TIMEOUT_MS = 12_000;
+const MAX_BRIDGE_REQUEST_BODY_BYTES = 1024 * 1024;
 const MAX_CATALOG_SLUG_LENGTH = 120;
 const MAX_BRIDGE_QUERY_VALUE_LENGTH = 200;
+const MAX_BRIDGE_CURSOR_LENGTH = 512;
 const BRIDGE_SESSION_MAX_AGE_SECONDS = 8 * 60 * 60;
 const BRIDGE_SESSION_MAX_COUNT = 8;
 const BRIDGE_SESSION_COOKIE_NAME = "__Host-ac_dev_qa_session";
@@ -379,6 +381,29 @@ function hasLearningQuery(url: URL): boolean {
   });
 }
 
+function hasLearningCollectionQuery(url: URL): boolean {
+  const keys = [...url.searchParams.keys()];
+  const uniqueKeys = new Set(keys);
+  if (
+    keys.length < 1 ||
+    keys.length > 2 ||
+    uniqueKeys.size !== keys.length ||
+    !uniqueKeys.has("limit") ||
+    [...uniqueKeys].some((key) => key !== "limit" && key !== "cursor") ||
+    url.searchParams.get("limit") !== "50"
+  ) {
+    return false;
+  }
+  if (!uniqueKeys.has("cursor")) return true;
+  const cursor = url.searchParams.get("cursor");
+  return (
+    cursor !== null &&
+    cursor.length > 0 &&
+    cursor.length <= MAX_BRIDGE_CURSOR_LENGTH &&
+    !/[\u0000-\u001f\u007f]/.test(cursor)
+  );
+}
+
 function hasAnalyticsQuery(url: URL): boolean {
   if (url.search === "") return true;
   const keys = [...url.searchParams.keys()];
@@ -423,6 +448,26 @@ export function isStagingAuthenticatedLearnerRequest(
   }
   if (pathname === "/v1/programs" || pathname.startsWith("/v1/programs/")) {
     return normalizedMethod === "GET" && isStagingPublicCatalogRequest(url);
+  }
+  if (pathname === "/v1/profile/avatar") {
+    return (
+      (normalizedMethod === "GET" || normalizedMethod === "POST") &&
+      hasNoQuery(url)
+    );
+  }
+  const avatarPrefix = "/v1/profile/avatar/";
+  if (pathname.startsWith(avatarPrefix)) {
+    const parts = pathname.slice(avatarPrefix.length).split("/");
+    return (
+      normalizedMethod === "POST" &&
+      parts.length === 2 &&
+      isCanonicalEncodedPathSegment(parts[0]) &&
+      parts[1] === "complete" &&
+      hasNoQuery(url)
+    );
+  }
+  if (pathname === "/v1/learning") {
+    return normalizedMethod === "GET" && hasLearningCollectionQuery(url);
   }
 
   const learningPrefix = "/v1/learning/";
@@ -685,10 +730,12 @@ function extractUpstreamSessionCookie(
 }
 
 function localBridgeCookieFailure(): Response {
-  return jsonError(
+  const response = jsonError(
     401,
     "The local development session is invalid or expired. Sign in again through the local bridge.",
   );
+  clearLocalBridgeCookie(response);
+  return response;
 }
 
 async function loginResponseContainsBearerToken(
@@ -702,6 +749,44 @@ async function loginResponseContainsBearerToken(
     );
   }
   return false;
+}
+
+async function readBoundedRequestBody(
+  request: Request,
+): Promise<{ body: ArrayBuffer | undefined; tooLarge: boolean }> {
+  if (request.method === "GET" || request.method === "HEAD") {
+    return { body: undefined, tooLarge: false };
+  }
+  const declaredLength = request.headers.get("content-length");
+  if (
+    declaredLength !== null &&
+    (!/^\d+$/.test(declaredLength) ||
+      Number(declaredLength) > MAX_BRIDGE_REQUEST_BODY_BYTES)
+  ) {
+    return { body: undefined, tooLarge: true };
+  }
+  if (!request.body) return { body: undefined, tooLarge: false };
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > MAX_BRIDGE_REQUEST_BODY_BYTES) {
+      await reader.cancel();
+      return { body: undefined, tooLarge: true };
+    }
+    chunks.push(value);
+  }
+  const combined = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    combined.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return { body: combined.buffer, tooLarge: false };
 }
 
 async function proxyUpstream(
@@ -741,14 +826,20 @@ async function proxyUpstream(
         setCookieHeaders: [],
       };
     }
-    const body =
-      request.method === "GET" || request.method === "HEAD"
-        ? undefined
-        : await request.arrayBuffer();
+    const boundedBody = await readBoundedRequestBody(request);
+    if (boundedBody.tooLarge) {
+      return {
+        response: jsonError(
+          413,
+          "The development bridge request body exceeds the 1 MiB limit.",
+        ),
+        setCookieHeaders: [],
+      };
+    }
     const response = await fetcher(upstreamUrl, {
       method: request.method,
       headers: proxyRequestHeaders(request, target.mode, stagingSession),
-      body,
+      body: boundedBody.body,
       redirect: "manual",
       signal: controller.signal,
     });
@@ -847,17 +938,24 @@ async function proxyAuthenticatedStaging(
   let stagingSession: string | null = null;
   if (!isLogin) {
     if (
-      localSession === null &&
       request.method.toUpperCase() === "GET" &&
       isStagingPublicCatalogRequest(incomingUrl)
     ) {
-      const publicCatalog = await proxyUpstream(
-        request,
-        { mode: "staging-public-catalog", origin: STAGING_API_ORIGIN },
-        fetcher,
-        null,
-      );
-      return publicCatalog.response;
+      const hasStaleLocalSession =
+        localSession !== null && sessionStore.get(localSession) === null;
+      if (localSession !== null && !hasStaleLocalSession) {
+        stagingSession = sessionStore.get(localSession);
+      } else {
+        const publicCatalog = await proxyUpstream(
+          request,
+          { mode: "staging-public-catalog", origin: STAGING_API_ORIGIN },
+          fetcher,
+          null,
+        );
+        if (hasStaleLocalSession)
+          clearLocalBridgeCookie(publicCatalog.response);
+        return publicCatalog.response;
+      }
     }
     if (localSession === null) return localBridgeCookieFailure();
     stagingSession = sessionStore.get(localSession);

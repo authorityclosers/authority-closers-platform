@@ -10,6 +10,7 @@ import {
 } from "./admin-access";
 
 const DEPLOYMENT_SESSION_TOKEN = "s".repeat(43);
+const ACCESS_JWT = `${"a".repeat(32)}.${"b".repeat(64)}.${"c".repeat(32)}`;
 
 describe("admin route access policy", () => {
   afterEach(() => {
@@ -141,6 +142,25 @@ describe("admin route access policy", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("x-middleware-next")).toBe("1");
+  });
+
+  it("opens the development shell only when the complete staging bridge contract is valid", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("AC_DEV_ADMIN_AUTH_BRIDGE_ENABLED", "true");
+    vi.stubEnv("AC_DEV_ADMIN_AUTH_BRIDGE_ORIGIN", "http://localhost:3001");
+    vi.stubEnv(
+      "AC_DEV_ADMIN_AUTH_BRIDGE_UPSTREAM_ORIGIN",
+      "https://admin-staging.authorityclosers.com",
+    );
+    vi.stubEnv("AC_DEV_ADMIN_ACCESS_JWT", ACCESS_JWT);
+
+    const valid = await proxy(new NextRequest("http://localhost:3001/"));
+    expect(valid.status).toBe(200);
+    expect(valid.headers.get("x-middleware-next")).toBe("1");
+
+    vi.stubEnv("AC_DEV_ADMIN_ACCESS_JWT", "malformed");
+    const malformed = await proxy(new NextRequest("http://localhost:3001/"));
+    expect(malformed.status).toBe(403);
   });
 
   it("allows production only after the internal API verifies session and admin context", async () => {

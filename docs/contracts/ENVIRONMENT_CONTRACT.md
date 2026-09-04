@@ -2,34 +2,39 @@
 
 Production configuration is injected from Infisical at process start. Git contains names and safe local defaults only.
 
-| Variable                             | Owner             |    Required outside local | Purpose                                                 |
-| ------------------------------------ | ----------------- | ------------------------: | ------------------------------------------------------- |
-| `AC_ENVIRONMENT`                     | release           |                       yes | `development`, `staging`, or `production` behavior gate |
-| `AC_RELEASE_ID`                      | release           |                       yes | immutable Git-derived release identity                  |
-| `AC_DATABASE_URL`                    | runtime identity  |                       yes | least-privilege application connection                  |
-| `AC_DATABASE_MIGRATOR_URL`           | deploy identity   |               deploy only | schema migration connection                             |
-| `AC_SESSION_TOKEN_PEPPER`            | identity security |                       yes | opaque session lookup hashing                           |
-| `AC_OAUTH_TRANSACTION_SECRET`        | identity security |                       yes | browser OAuth transaction authentication                |
-| `AC_EMAIL_CHALLENGE_SECRET`          | identity security |                       yes | email challenge lookup/encryption key material          |
-| `AC_GOOGLE_OAUTH_CLIENT_ID`          | identity provider |                       yes | Google web OAuth client identifier                      |
-| `AC_GOOGLE_OAUTH_CLIENT_SECRET`      | identity provider |                       yes | Google web OAuth client secret                          |
-| `AC_LEARNER_CONSENT_VERSION`         | legal/product     | learner registration only | exact accepted invitation/consent document version      |
-| `AC_PUBLIC_LEARNER_TENANT_ID`        | tenancy operator  | learner registration only | exact active tenant receiving self-directed learners    |
-| `AC_OPERATIONS_TENANT_ID`            | security/operator |    before effects release | exact control tenant for audited global job recovery    |
-| `AC_EXTERNAL_SIDE_EFFECTS_HOLD`      | recovery operator |                       yes | blocks provider effects after restore                   |
-| `AC_EMAIL_PROVIDER`                  | provider policy   |               worker only | `fake` until Resend is explicitly enabled               |
-| `AC_RESEND_API_KEY`                  | email provider    |        worker when Resend | worker-only Resend credential                           |
-| `AC_RESEND_FROM`                     | email/provider    |        worker when Resend | reviewed transactional sender identity                  |
-| `AC_OTEL_EXPORTER_OTLP_ENDPOINT`     | telemetry         |                       yes | trace/metric collector endpoint                         |
-| `AC_PUBLIC_APP_URL`                  | edge              |                       yes | learner origin and redirect allowlist source            |
-| `AC_ADMIN_APP_URL`                   | edge              |                       yes | admin origin and redirect allowlist source              |
-| `AC_API_URL`                         | edge              |                       yes | canonical API origin                                    |
-| `AC_DEV_API_ORIGIN`                  | local development |                        no | loopback API or exact staging public-catalog preview    |
-| `AC_DEV_AUTH_BRIDGE_ENABLED`         | local development |                        no | explicit opt-in for the authenticated staging QA bridge |
-| `AC_DEV_AUTH_BRIDGE_ORIGIN`          | local development |                        no | exact loopback browser origin for the QA bridge         |
-| `AC_DEV_AUTH_BRIDGE_UPSTREAM_ORIGIN` | local development |                        no | exact staging learner origin for the QA bridge          |
-| `AC_API_HOST`                        | edge              |                       yes | canonical public API host and health probe Host         |
-| `AC_INTERNAL_API_HOST`               | release           |                       yes | reserved app-network-only API DNS name                  |
+| Variable                                   | Owner             |    Required outside local | Purpose                                                 |
+| ------------------------------------------ | ----------------- | ------------------------: | ------------------------------------------------------- |
+| `AC_ENVIRONMENT`                           | release           |                       yes | `development`, `staging`, or `production` behavior gate |
+| `AC_RELEASE_ID`                            | release           |                       yes | immutable Git-derived release identity                  |
+| `AC_DATABASE_URL`                          | runtime identity  |                       yes | least-privilege application connection                  |
+| `AC_DATABASE_MIGRATOR_URL`                 | deploy identity   |               deploy only | schema migration connection                             |
+| `AC_SESSION_TOKEN_PEPPER`                  | identity security |                       yes | opaque session lookup hashing                           |
+| `AC_OAUTH_TRANSACTION_SECRET`              | identity security |                       yes | browser OAuth transaction authentication                |
+| `AC_EMAIL_CHALLENGE_SECRET`                | identity security |                       yes | email challenge lookup/encryption key material          |
+| `AC_GOOGLE_OAUTH_CLIENT_ID`                | identity provider |                       yes | Google web OAuth client identifier                      |
+| `AC_GOOGLE_OAUTH_CLIENT_SECRET`            | identity provider |                       yes | Google web OAuth client secret                          |
+| `AC_LEARNER_CONSENT_VERSION`               | legal/product     | learner registration only | exact accepted invitation/consent document version      |
+| `AC_PUBLIC_LEARNER_TENANT_ID`              | tenancy operator  | learner registration only | exact active tenant receiving self-directed learners    |
+| `AC_OPERATIONS_TENANT_ID`                  | security/operator |    before effects release | exact control tenant for audited global job recovery    |
+| `AC_EXTERNAL_SIDE_EFFECTS_HOLD`            | recovery operator |                       yes | blocks provider effects after restore                   |
+| `AC_EMAIL_PROVIDER`                        | provider policy   |               worker only | `fake` until Resend is explicitly enabled               |
+| `AC_RESEND_API_KEY`                        | email provider    |        worker when Resend | worker-only Resend credential                           |
+| `AC_RESEND_FROM`                           | email/provider    |        worker when Resend | reviewed transactional sender identity                  |
+| `AC_OTEL_EXPORTER_OTLP_ENDPOINT`           | telemetry         |                       yes | trace/metric collector endpoint                         |
+| `AC_PUBLIC_APP_URL`                        | edge              |                       yes | learner origin and redirect allowlist source            |
+| `AC_ADMIN_APP_URL`                         | edge              |                       yes | admin origin and redirect allowlist source              |
+| `AC_API_URL`                               | edge              |                       yes | canonical API origin                                    |
+| `AC_DEV_API_ORIGIN`                        | local development |                        no | loopback API or exact staging public-catalog preview    |
+| `AC_DEV_AUTH_BRIDGE_ENABLED`               | local development |                        no | explicit opt-in for the authenticated staging QA bridge |
+| `AC_DEV_AUTH_BRIDGE_ORIGIN`                | local development |                        no | exact loopback browser origin for the QA bridge         |
+| `AC_DEV_AUTH_BRIDGE_UPSTREAM_ORIGIN`       | local development |                        no | exact staging learner origin for the QA bridge          |
+| `AC_DEV_ADMIN_API_ORIGIN`                  | local development |                        no | loopback API for ordinary admin development             |
+| `AC_DEV_ADMIN_AUTH_BRIDGE_ENABLED`         | local development |                        no | explicit opt-in for the admin staging QA bridge         |
+| `AC_DEV_ADMIN_AUTH_BRIDGE_ORIGIN`          | local development |                        no | exact loopback admin browser origin                     |
+| `AC_DEV_ADMIN_AUTH_BRIDGE_UPSTREAM_ORIGIN` | local development |                        no | exact Access-protected staging admin origin             |
+| `AC_DEV_ADMIN_ACCESS_JWT`                  | local process     |                        no | ephemeral Cloudflare Access user JWT; never file-backed |
+| `AC_API_HOST`                              | edge              |                       yes | canonical public API host and health probe Host         |
+| `AC_INTERNAL_API_HOST`                     | release           |                       yes | reserved app-network-only API DNS name                  |
 
 ## Media provider foundation
 
@@ -43,18 +48,18 @@ staging and production composition rejects enabled media settings, and no
 immutable audited activation record or provider transport is currently
 composed; provider activation is therefore blocked in this slice.
 
-| Variable | Purpose |
-| --- | --- |
-| `AC_MEDIA_PROVIDER_ENABLED` | validated provider intent; defaults to `false` and is rejected by shipped staging/production composition |
-| `AC_MEDIA_PROVIDER` | `unconfigured`, `s3`, or `minio` |
-| `AC_MEDIA_STORAGE_ENDPOINT`, `AC_MEDIA_STORAGE_APPROVED_ENDPOINT_HOSTS` | HTTPS S3 API endpoint and exact approved endpoint-host allowlist; loopback, link-local, private, and unapproved targets are rejected |
-| `AC_MEDIA_STORAGE_BUCKET`, `AC_MEDIA_STORAGE_REGION` | bounded bucket and region identifiers |
-| `AC_MEDIA_STORAGE_ACCESS_KEY_ID`, `AC_MEDIA_STORAGE_SECRET_ACCESS_KEY` | reserved provider credentials; no shipped composition currently injects or uses them |
-| `AC_MEDIA_DELIVERY_ORIGIN`, `AC_MEDIA_CORS_ORIGINS` | exact HTTPS playback origin and comma-separated CORS origins (local loopback HTTP is allowed for tests) |
-| `AC_MEDIA_GOVERNANCE_REFERENCE`, `AC_MEDIA_GAP_REFERENCE` | exact evidence references required by the validated config; they do not activate a provider |
-| `AC_MEDIA_UPLOAD_TTL_SECONDS`, `AC_MEDIA_PLAYBACK_TTL_SECONDS` | bounded short-lived upload/playback lifetimes |
-| `AC_MEDIA_MAX_UPLOAD_BYTES`, `AC_MEDIA_QUOTA_*`, `AC_MEDIA_MAX_RENDITIONS`, `AC_MEDIA_MAX_PROCESSING_OUTPUT_BYTES`, `AC_MEDIA_MAX_PROCESSING_CAPTION_BYTES` | upload and worker safety limits, including caption bytes |
-| `AC_MEDIA_ALLOW_RANGE_REQUESTS` | explicit single-range progressive delivery policy |
+| Variable                                                                                                                                                    | Purpose                                                                                                                              |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `AC_MEDIA_PROVIDER_ENABLED`                                                                                                                                 | validated provider intent; defaults to `false` and is rejected by shipped staging/production composition                             |
+| `AC_MEDIA_PROVIDER`                                                                                                                                         | `unconfigured`, `s3`, or `minio`                                                                                                     |
+| `AC_MEDIA_STORAGE_ENDPOINT`, `AC_MEDIA_STORAGE_APPROVED_ENDPOINT_HOSTS`                                                                                     | HTTPS S3 API endpoint and exact approved endpoint-host allowlist; loopback, link-local, private, and unapproved targets are rejected |
+| `AC_MEDIA_STORAGE_BUCKET`, `AC_MEDIA_STORAGE_REGION`                                                                                                        | bounded bucket and region identifiers                                                                                                |
+| `AC_MEDIA_STORAGE_ACCESS_KEY_ID`, `AC_MEDIA_STORAGE_SECRET_ACCESS_KEY`                                                                                      | reserved provider credentials; no shipped composition currently injects or uses them                                                 |
+| `AC_MEDIA_DELIVERY_ORIGIN`, `AC_MEDIA_CORS_ORIGINS`                                                                                                         | exact HTTPS playback origin and comma-separated CORS origins (local loopback HTTP is allowed for tests)                              |
+| `AC_MEDIA_GOVERNANCE_REFERENCE`, `AC_MEDIA_GAP_REFERENCE`                                                                                                   | exact evidence references required by the validated config; they do not activate a provider                                          |
+| `AC_MEDIA_UPLOAD_TTL_SECONDS`, `AC_MEDIA_PLAYBACK_TTL_SECONDS`                                                                                              | bounded short-lived upload/playback lifetimes                                                                                        |
+| `AC_MEDIA_MAX_UPLOAD_BYTES`, `AC_MEDIA_QUOTA_*`, `AC_MEDIA_MAX_RENDITIONS`, `AC_MEDIA_MAX_PROCESSING_OUTPUT_BYTES`, `AC_MEDIA_MAX_PROCESSING_CAPTION_BYTES` | upload and worker safety limits, including caption bytes                                                                             |
+| `AC_MEDIA_ALLOW_RANGE_REQUESTS`                                                                                                                             | explicit single-range progressive delivery policy                                                                                    |
 
 Credentials must come from the deployment secret mechanism and must never be
 written to Git, logs, telemetry, or this contract.
@@ -107,12 +112,40 @@ browser origin for unsafe methods, and marks responses with
 `X-AC-Dev-Data-Mode: staging-authenticated`. Google, registration, recovery,
 verification, admin, internal, and arbitrary proxy routes remain unavailable.
 
+The admin local staging bridge is a separate development-only adapter governed
+by ADR-030. It activates only when `NODE_ENV=development`, the explicit admin
+bridge flag is true, its browser origin is an exact loopback origin, its
+upstream is exactly `https://admin-staging.authorityclosers.com`, and the local
+process has a current Cloudflare Access user JWT. The launcher obtains that JWT
+from `cloudflared` after the already-approved human Access login and passes it
+only in the admin child process environment. It is never checked into an env
+file, placed in a command argument, returned to the browser, written to the PID
+record, or shared with the learner process.
+
+Cloudflare Access transport does not grant product access. The tester must also
+complete the normal staging password login, after which the bridge verifies
+`/v1/me` and `/v1/context` for the same person, a selected tenant, an
+owner/admin/support role, and `admin_surface` permission before it creates an
+ephemeral localhost handle. The remote host-only product session and Access JWT
+remain inside the admin dev process. The mapping is capped at four sessions,
+expires after eight hours, and is cleared on logout, upstream 401, or process
+restart. Only the current first-slice admin endpoints are allowlisted; browser
+credentials, arbitrary routes, production origins, and direct API/DB/VPS paths
+remain rejected.
+
+`pnpm dev:staging` is the supported combined learner/admin launcher. It requires
+Node 24, pnpm 11, PowerShell 7.4+, and `cloudflared`; binds both Next servers to
+`127.0.0.1`; performs public-catalog and Access-transport health checks; and
+stores only process IDs, timestamps, and logs under ignored `.tmp` state. It
+does not start Docker, connect to a database, or inject production/provider
+credentials. Use `pnpm dev:staging:down` to stop only the tracked process trees.
+
 This is a tester-owned process boundary, not a production security boundary:
 anyone who can compromise the opted-in local development process could use its
 in-memory staging session mappings. Keep the bridge default-off, bind only to
 loopback, use a dedicated staging test account, do not expose the dev port,
 and revoke the staging account/session if the local process is suspected to be
-compromised. See ADR-029 and the local QA runbook for the threat model and
+compromised. See ADR-029, ADR-030, and the local QA runbook for the threat model and
 operational procedure.
 
 Compose assigns only the environment's reserved `AC_INTERNAL_API_HOST` to the
