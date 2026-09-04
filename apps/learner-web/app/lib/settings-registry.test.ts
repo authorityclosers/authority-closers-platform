@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  SETTINGS_SECTION_GROUPS,
   SETTINGS_SECTION_IDS,
   SETTINGS_SECTION_REGISTRY,
   SETTINGS_SECTIONS,
@@ -39,6 +40,31 @@ describe("learner settings registry", () => {
       SETTINGS_SECTIONS.map((section) => [section.screenId, section.anchor]),
     ).toEqual(expectedScreenAnchors);
     expect(SETTINGS_SECTION_REGISTRY).toBe(SETTINGS_SECTIONS);
+  });
+
+  it("groups the same contracted sections for index presentation only", () => {
+    expect(SETTINGS_SECTION_GROUPS.map((group) => group.id)).toEqual([
+      "account",
+      "setup",
+      "security",
+    ]);
+    expect(SETTINGS_SECTION_GROUPS.map((group) => group.label)).toEqual([
+      "Account",
+      "Setup & preferences",
+      "Security & access",
+    ]);
+    expect(SETTINGS_SECTIONS.map((section) => section.groupId)).toEqual([
+      "account",
+      "setup",
+      "setup",
+      "security",
+      "security",
+    ]);
+    expect(
+      SETTINGS_SECTION_GROUPS.every((group) =>
+        SETTINGS_SECTIONS.some((section) => section.groupId === group.id),
+      ),
+    ).toBe(true);
   });
 
   it("gives every section a unique stable anchor and heading target", () => {

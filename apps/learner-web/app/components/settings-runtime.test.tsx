@@ -1,9 +1,11 @@
 import { createElement } from "react";
+import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "../lib/learner-api";
 import type { OnboardingRecoveryLockManager } from "../lib/local-drafts";
+import { markOfflineRead } from "../lib/offline-read-cache";
 import { SETTINGS_SECTIONS } from "../lib/settings-registry";
 import {
   SettingsView,
@@ -73,6 +75,20 @@ describe("Settings Direction B runtime", () => {
 
     expect(html.match(/<h1(?:\s|>)/g)).toHaveLength(1);
     expect(html).toContain("Settings");
+    expect(html).toContain("5 areas");
+    expect(html).toContain("Browser-local appearance");
+    expect(html).toContain(
+      "Appearance choices change presentation only. They are stored on this browser when available",
+    );
+    expect(html).toContain(
+      "This first-slice panel includes password recovery and policy links only.",
+    );
+    expect(html).toContain("Setup &amp; preferences");
+    expect(html).toContain("Security &amp; access");
+    expect(html.match(/<h2 id="settings-group-/g)).toHaveLength(3);
+    expect(
+      html.match(/<section[^>]*aria-labelledby="settings-group-/g),
+    ).toHaveLength(3);
     expect(html).toContain('id="settings-title"');
     expect(html).toContain('tabindex="-1"');
     expect(html).toContain("Alex Morgan");
@@ -85,6 +101,7 @@ describe("Settings Direction B runtime", () => {
     expect(html).toContain('href="/terms"');
     expect(html).toContain('href="/privacy"');
     expect(html).toContain('aria-pressed="true"');
+    expect(html.match(/class="[^"]*indexLinkNumber/g)).toHaveLength(5);
     expect(html).not.toContain("indexLinkCurrent");
     expect(html).not.toContain('aria-current="page"');
     expect(html).toMatch(/<nav[^>]*aria-label="Settings sections"/);
@@ -118,6 +135,47 @@ describe("Settings Direction B runtime", () => {
           html.includes(`aria-labelledby="${section.headingId}"`),
       ),
     ).toBe(true);
+  });
+
+  it("places an offline read notice across the full settings ledger", () => {
+    const offlineMe = markOfflineRead({ ...me }, 7_000);
+    const html = renderToStaticMarkup(
+      createElement(SettingsView, {
+        resources: {
+          me: { status: "ready", data: offlineMe },
+          onboarding: { status: "ready", data: onboarding },
+        },
+        api,
+        onRetry: vi.fn(),
+      }),
+    );
+    const ledgerStart = html.indexOf("settingsLedger");
+    const noticeStart = html.indexOf('id="settings-offline-read"');
+    const indexStart = html.indexOf("<aside", ledgerStart);
+    const settingsStyles = readFileSync(
+      new URL("./settings-clarity.module.css", import.meta.url),
+      "utf8",
+    );
+
+    expect(ledgerStart).toBeGreaterThanOrEqual(0);
+    expect(noticeStart).toBeGreaterThan(ledgerStart);
+    expect(noticeStart).toBeLessThan(indexStart);
+    expect(html).toContain("offline-read-notice");
+    expect(html).toMatch(/class="[^"]*settingsOfflineNotice/);
+    expect(settingsStyles).toMatch(
+      /\.settingsOfflineNotice\s*\{\s*grid-column:\s*1\s*\/\s*-1;/s,
+    );
+  });
+
+  it("collapses medium appearance groups before the two-column rail gets narrow", () => {
+    const settingsStyles = readFileSync(
+      new URL("./settings-clarity.module.css", import.meta.url),
+      "utf8",
+    );
+
+    expect(settingsStyles).toMatch(
+      /@media \(max-width: 950px\) and \(min-width: 761px\)[\s\S]*?\.appearanceGrid\s*\{\s*grid-template-columns:\s*1fr;[\s\S]*?\.motionGrid\s*\{\s*grid-template-columns:\s*1fr;/,
+    );
   });
 
   it("keeps identity and appearance usable when learning setup fails", () => {

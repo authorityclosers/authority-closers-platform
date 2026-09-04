@@ -12,6 +12,7 @@ import {
   RefreshCw,
   ShieldCheck,
   UserRound,
+  Info,
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState, type RefObject } from "react";
@@ -30,6 +31,7 @@ import {
 import { ROUTES } from "../lib/routes";
 import {
   getSettingsSectionByAnchor,
+  SETTINGS_SECTION_GROUPS,
   SETTINGS_SECTIONS,
   type SettingsSection,
   type SettingsSectionIconName,
@@ -566,6 +568,17 @@ function AppearanceCard({
       aria-labelledby={section.headingId}
     >
       <SectionHeader section={section} />
+      <div className={styles.localScopeNote} role="note">
+        <Info size={17} aria-hidden="true" />
+        <div>
+          <strong>Browser-local appearance</strong>
+          <p>
+            Appearance choices change presentation only. They are stored on this
+            browser when available and never change your account, access, or
+            learning progress.
+          </p>
+        </div>
+      </div>
       <AppearanceControl />
     </section>
   );
@@ -589,6 +602,9 @@ function SecurityPrivacyCard({
       aria-labelledby={section.headingId}
     >
       <SectionHeader section={section} />
+      <p className={styles.boundaryNote}>
+        This first-slice panel includes password recovery and policy links only.
+      </p>
       <nav
         className={styles.policyLinks}
         aria-label="Security and privacy links"
@@ -726,7 +742,7 @@ export function SettingsView({
     <div className={styles.settingsLedger}>
       {offlineRead ? (
         <div
-          className="offline-read-notice"
+          className={`${styles.settingsOfflineNotice} offline-read-notice`}
           id="settings-offline-read"
           role="status"
         >
@@ -735,35 +751,64 @@ export function SettingsView({
       ) : null}
       <aside className={styles.settingsIndex} aria-label="Settings sections">
         <p className={styles.indexEyebrow}>Account control surface</p>
-        <h1
-          className={styles.routeEntryHeading}
-          ref={focusTargets?.routeEntry}
-          id="settings-title"
-          tabIndex={-1}
-        >
-          Settings
-        </h1>
+        <div className={styles.indexHeadingRow}>
+          <h1
+            className={styles.routeEntryHeading}
+            ref={focusTargets?.routeEntry}
+            id="settings-title"
+            tabIndex={-1}
+          >
+            Settings
+          </h1>
+          <span className={styles.indexCount}>
+            {SETTINGS_SECTIONS.length} areas
+          </span>
+        </div>
         <p className={styles.indexDescription}>
           Manage your account, learning setup, and preferences.
         </p>
         <nav className={styles.indexNav} aria-label="Settings sections">
-          {SETTINGS_SECTIONS.map((section) => {
-            const Icon = settingsSectionIcons[section.icon];
-            return (
-              <a
-                className={styles.indexLink}
-                href={`#${section.anchor}`}
-                key={section.id}
-                onClick={() => focusSettingsHeading(section.headingId)}
+          <div className={styles.indexGroups}>
+            {SETTINGS_SECTION_GROUPS.map((group) => (
+              <section
+                className={styles.indexGroup}
+                key={group.id}
+                aria-labelledby={`settings-group-${group.id}`}
               >
-                <Icon size={20} strokeWidth={1.8} aria-hidden="true" />
-                <span>
-                  <strong>{section.label}</strong>
-                  <small>{section.detail}</small>
-                </span>
-              </a>
-            );
-          })}
+                <div className={styles.indexGroupHeader}>
+                  <h2 id={`settings-group-${group.id}`}>{group.label}</h2>
+                  <small>{group.detail}</small>
+                </div>
+                <div className={styles.indexGroupLinks}>
+                  {SETTINGS_SECTIONS.filter(
+                    (section) => section.groupId === group.id,
+                  ).map((section) => {
+                    const Icon = settingsSectionIcons[section.icon];
+                    return (
+                      <a
+                        className={styles.indexLink}
+                        href={`#${section.anchor}`}
+                        key={section.id}
+                        onClick={() => focusSettingsHeading(section.headingId)}
+                      >
+                        <span
+                          className={styles.indexLinkNumber}
+                          aria-hidden="true"
+                        >
+                          {section.screenId.replace("SET-", "")}
+                        </span>
+                        <Icon size={19} strokeWidth={1.8} aria-hidden="true" />
+                        <span className={styles.indexLinkCopy}>
+                          <strong>{section.label}</strong>
+                          <small>{section.detail}</small>
+                        </span>
+                      </a>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
+          </div>
         </nav>
       </aside>
 
