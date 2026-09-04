@@ -15,7 +15,7 @@ The candidate must be represented by an immutable commit and release bundle
 before its behavior can be called staging-proven. The earlier bounded
 controller smoke for release `5c7333c5a588f5209acd5ca9b5ce0e03e20e16a4` remains
 recorded; the latest bounded controller smoke for release
-`65ea3e1094ae462c071a70ef2463f5a8c7754196` is also recorded, while the full
+`a23c93e6acebb7c6a0d31de1c3d5d7374f53be92` is also recorded, while the full
 gate remains open for the required checks below:
 
 - exact SHA/archive/image identity and migrations;
@@ -31,10 +31,12 @@ gate remains open for the required checks below:
 - prior exact-release evidence: [[EVD-005-exact-staging-5c7333c5]] remains valid
   only for its named `5c7333c5` release and records a text-only authenticated
   `/learning` accessibility observation.
-- current exact-release evidence: [[EVD-006-exact-staging-65ea3e1]] records
+- current exact-release evidence: [[EVD-007-exact-staging-a23c93e]] records
   GitHub CI/package identity and trusted-controller staging smoke for
-  `65ea3e1`; it contains no authenticated learner-route or visual acceptance
+  `a23c93e`; it contains no complete authenticated learner-route or visual acceptance
   proof.
+- prior exact-release evidence: [[EVD-006-exact-staging-65ea3e1]] remains valid
+  only for its named `65ea3e1` release.
 - current candidate visual evidence: [[EVD-003-current-candidate-design-qa]]
   remains local/reference evidence; it is not visual proof for this gate.
 - source: [workflow QA checklist](../../workflows/v0.1-alpha-experience/05-handoff-qa/qa-release-checklist.md).
