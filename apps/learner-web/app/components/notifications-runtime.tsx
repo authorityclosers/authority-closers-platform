@@ -8,11 +8,14 @@ import {
   LoaderCircle,
   RefreshCw,
   WifiOff,
+  X,
 } from "lucide-react";
 import Link from "next/link";
+import type { RefObject } from "react";
 
 import {
   formatNotificationTime,
+  NOTIFICATION_SOURCE_UNAVAILABLE_COPY,
   notificationKindLabel,
   type NotificationItem,
   type NotificationResource,
@@ -25,11 +28,94 @@ type NotificationsRuntimeProps = {
   onRetry?: () => void;
 };
 
+export type NotificationPopoverProps = {
+  panelRef?: RefObject<HTMLDivElement | null>;
+  onClose: () => void;
+};
+
 const defaultResource: NotificationResource = {
   status: "empty",
   reason: "source_not_connected",
   items: [],
 };
+
+/**
+ * The compact bell surface mirrors the route's unavailable state until a
+ * server-backed notification/read-state port is activated. It owns no unread
+ * count and performs no read mutation.
+ */
+export function NotificationPopover({
+  panelRef,
+  onClose,
+}: NotificationPopoverProps) {
+  return (
+    <div
+      id="learner-notifications-popover"
+      ref={panelRef}
+      className="notification-popover"
+      role="dialog"
+      aria-modal="false"
+      aria-labelledby="learner-notifications-popover-title"
+      aria-describedby="learner-notifications-popover-description"
+    >
+      <div className="notification-popover__header">
+        <div className="notification-popover__title-row">
+          <div>
+            <p className="notification-popover__eyebrow">Workspace updates</p>
+            <h2
+              id="learner-notifications-popover-title"
+              className="notification-popover__title"
+            >
+              Notifications
+            </h2>
+          </div>
+          <button
+            type="button"
+            className="notification-popover__close"
+            onClick={onClose}
+            aria-label="Close notifications"
+          >
+            <X size={16} aria-hidden="true" />
+          </button>
+        </div>
+        <div className="notification-popover__status-row">
+          <span className="notification-popover__status-badge" role="status">
+            Unavailable
+          </span>
+          <p
+            id="learner-notifications-popover-description"
+            className="notification-popover__subhead"
+          >
+            Notification history is unavailable in this first-slice workspace.
+          </p>
+        </div>
+      </div>
+
+      <div className="notification-popover__body">
+        <div className="notification-popover__empty-icon" aria-hidden="true">
+          <Bell size={24} />
+        </div>
+        <p className="notification-popover__empty-title">
+          {NOTIFICATION_SOURCE_UNAVAILABLE_COPY.heading}
+        </p>
+        <p className="notification-popover__empty-copy">
+          {NOTIFICATION_SOURCE_UNAVAILABLE_COPY.message}
+        </p>
+      </div>
+
+      <div className="notification-popover__footer">
+        <Link
+          href={ROUTES.notifications}
+          className="notification-popover__action-link"
+          onClick={onClose}
+        >
+          View full notifications page{" "}
+          <ArrowRight size={14} aria-hidden="true" />
+        </Link>
+      </div>
+    </div>
+  );
+}
 
 function StateIcon({ tone = "info" }: { tone?: "info" | "warning" | "error" }) {
   const Icon =
@@ -126,12 +212,12 @@ function NotificationsState({
         <StateIcon />
         <h2 id="notifications-state-title">
           {sourceNotConnected
-            ? "Notifications are not connected yet"
+            ? NOTIFICATION_SOURCE_UNAVAILABLE_COPY.heading
             : "No notifications yet"}
         </h2>
         <p>
           {sourceNotConnected
-            ? "This first slice does not have a server-backed notification source. Learning, access, and progress state remain available on their own screens."
+            ? NOTIFICATION_SOURCE_UNAVAILABLE_COPY.message
             : "There are no updates to show right now."}
         </p>
         <div className={styles.stateActions}>

@@ -13,7 +13,6 @@ import {
   ChevronDown,
   Compass,
   HelpCircle,
-  Info,
   LayoutDashboard,
   MoreHorizontal,
   MessageCircle,
@@ -30,6 +29,7 @@ import { useEffect, useRef, useState } from "react";
 import { BrandMark } from "@ac/ui";
 
 import { createLearnerApi } from "../lib/learner-api";
+import { NotificationPopover } from "./notifications-runtime";
 import { initialsForDisplayName } from "../lib/profile-identity";
 import { ROUTES } from "../lib/routes";
 import { SignOutControl } from "./sign-out-control";
@@ -190,6 +190,7 @@ export type LearnerShellProps = {
   current?: LearnerCurrent;
   learningHref?: string;
   userDisplayName?: string;
+  userEmail?: string;
   className?: string;
 };
 
@@ -207,15 +208,21 @@ function IdentityAvatar({
   avatarAlt: string;
 }) {
   const [failedAvatarUrl, setFailedAvatarUrl] = useState<string | null>(null);
+  const imageUrl =
+    avatarUrl && avatarUrl !== failedAvatarUrl ? avatarUrl : null;
 
   return (
-    <span className={className} aria-hidden="true">
-      {avatarUrl && avatarUrl !== failedAvatarUrl ? (
+    <span
+      className={className}
+      data-avatar-state={imageUrl ? "image" : "initials"}
+      aria-hidden="true"
+    >
+      {imageUrl ? (
         <img
           className="learner-identity-avatar__image"
-          src={avatarUrl}
+          src={imageUrl}
           alt={avatarAlt}
-          onError={() => setFailedAvatarUrl(avatarUrl)}
+          onError={() => setFailedAvatarUrl(imageUrl)}
         />
       ) : (
         initialsForDisplayName(displayName)
@@ -229,6 +236,7 @@ export function LearnerShell({
   current = "dashboard",
   learningHref = ROUTES.learning,
   userDisplayName = "Learner",
+  userEmail = "",
   className = "",
 }: LearnerShellProps) {
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
@@ -236,9 +244,9 @@ export function LearnerShell({
   const [notificationPopoverOpen, setNotificationPopoverOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
   const [identity, setIdentity] = useState({
     displayName: userDisplayName,
+    email: userEmail,
     avatarUrl: null as string | null,
     avatarAlt: `${userDisplayName}'s profile photo`,
   });
@@ -252,19 +260,7 @@ export function LearnerShell({
   const helpPanelRef = useRef<HTMLDivElement>(null);
   const drawerRef = useRef<HTMLDivElement>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
-  const toastTimerRef = useRef<number | undefined>(undefined);
   const avatarUpdateGenerationRef = useRef(0);
-
-  function showToast(message: string): void {
-    setToast(message);
-    if (toastTimerRef.current !== undefined) {
-      window.clearTimeout(toastTimerRef.current);
-    }
-    toastTimerRef.current = window.setTimeout(() => {
-      setToast(null);
-      toastTimerRef.current = undefined;
-    }, 3400);
-  }
 
   function toggleSidebar(): void {
     setSidebarCollapsed((collapsed) => !collapsed);
@@ -284,6 +280,7 @@ export function LearnerShell({
 
       const displayName =
         meResult.value.display_name?.trim() || userDisplayName;
+      const email = meResult.value.email?.trim() || userEmail.trim();
       const meAvatar = meResult.value.avatar;
       const profileAvatar =
         avatarResult.status === "fulfilled" &&
@@ -296,6 +293,7 @@ export function LearnerShell({
 
       setIdentity((current) => ({
         displayName,
+        email,
         avatarUrl: avatarReadIsCurrent
           ? (profileAvatar?.delivery_url ?? meAvatar?.deliveryUrl ?? null)
           : current.avatarUrl,
@@ -342,22 +340,7 @@ export function LearnerShell({
         handleAvatarUpdated,
       );
     };
-  }, [userDisplayName]);
-
-  useEffect(() => {
-    const handleToastEvent = (e: Event) => {
-      if (e instanceof CustomEvent && typeof e.detail === "string") {
-        showToast(e.detail);
-      }
-    };
-    window.addEventListener("ac-toast", handleToastEvent);
-    return () => {
-      window.removeEventListener("ac-toast", handleToastEvent);
-      if (toastTimerRef.current !== undefined) {
-        window.clearTimeout(toastTimerRef.current);
-      }
-    };
-  }, []);
+  }, [userDisplayName, userEmail]);
 
   // Close mobile drawer on route change or ESC; activate search on Cmd+K
   useEffect(() => {
@@ -497,6 +480,12 @@ export function LearnerShell({
       closeAccountMenu(setAccountMenuOpen, accountButtonRef.current);
       return;
     }
+    if (event.key === "Tab") {
+      // Let the browser continue through the document's tab order. Closing
+      // without restoring the trigger prevents the menu from trapping focus.
+      setAccountMenuOpen(false);
+      return;
+    }
     if (
       !menuItems.length ||
       !["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)
@@ -522,6 +511,12 @@ export function LearnerShell({
 
   useEffect(() => {
     if (!notificationPopoverOpen) return;
+
+    const firstControl =
+      notificationPopoverRef.current?.querySelector<HTMLElement>(
+        'button, a[href], [tabindex]:not([tabindex="-1"])',
+      );
+    firstControl?.focus();
 
     const handlePointerDown = (event: PointerEvent) => {
       const target = event.target;
@@ -785,62 +780,15 @@ export function LearnerShell({
               </button>
 
               {notificationPopoverOpen ? (
-                <div
-                  id="learner-notifications-popover"
-                  ref={notificationPopoverRef}
-                  className="notification-popover"
-                  role="dialog"
-                  aria-modal="false"
-                  aria-labelledby="learner-notifications-popover-title"
-                >
-                  <div className="notification-popover__header">
-                    <div className="notification-popover__title-row">
-                      <h2
-                        id="learner-notifications-popover-title"
-                        className="notification-popover__title"
-                      >
-                        Notifications
-                      </h2>
-                      <span
-                        className="notification-popover__status-badge"
-                        role="status"
-                      >
-                        Unavailable
-                      </span>
-                    </div>
-                    <p className="notification-popover__subhead">
-                      Notification history is not available in this first-slice
-                      workspace.
-                    </p>
-                  </div>
-
-                  <div className="notification-popover__body">
-                    <div
-                      className="notification-popover__empty-icon"
-                      aria-hidden="true"
-                    >
-                      <Bell size={24} />
-                    </div>
-                    <p className="notification-popover__empty-title">
-                      No notifications to show
-                    </p>
-                    <p className="notification-popover__empty-copy">
-                      This surface does not yet have a server-backed
-                      notification source, so no alerts or read-state changes
-                      are being presented here.
-                    </p>
-                  </div>
-
-                  <div className="notification-popover__footer">
-                    <Link
-                      href={ROUTES.notifications}
-                      className="notification-popover__action-link"
-                      onClick={() => setNotificationPopoverOpen(false)}
-                    >
-                      View full notifications page
-                    </Link>
-                  </div>
-                </div>
+                <NotificationPopover
+                  panelRef={notificationPopoverRef}
+                  onClose={() =>
+                    closeNotificationPopover(
+                      setNotificationPopoverOpen,
+                      notificationButtonRef.current,
+                    )
+                  }
+                />
               ) : null}
             </div>
 
@@ -887,10 +835,25 @@ export function LearnerShell({
                   onKeyDown={handleAccountMenuKeyDown}
                 >
                   <div className="account-menu-header">
-                    <strong id="learner-account-menu-title">
-                      {effectiveDisplayName}
-                    </strong>
-                    <span>Learner account</span>
+                    <div className="account-menu-identity">
+                      <IdentityAvatar
+                        className="account-menu-avatar"
+                        displayName={effectiveDisplayName}
+                        avatarUrl={identity.avatarUrl}
+                        avatarAlt={identity.avatarAlt}
+                      />
+                      <div className="account-menu-header__copy">
+                        <strong id="learner-account-menu-title">
+                          {effectiveDisplayName}
+                        </strong>
+                        {identity.email ? (
+                          <span className="account-menu-email">
+                            {identity.email}
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                    <span className="account-menu-scope">Learner account</span>
                   </div>
                   <div className="account-menu-links">
                     <Link
@@ -993,22 +956,32 @@ export function LearnerShell({
               </button>
             </div>
             <div className="learner-help-chatbox__body">
+              <div className="learner-help-chatbox__availability" role="status">
+                <span
+                  className="learner-help-chatbox__availability-dot"
+                  aria-hidden="true"
+                />
+                <span>Email support is available</span>
+              </div>
               <div className="learner-help-chatbox__message">
                 <span
                   className="learner-help-chatbox__avatar"
                   aria-hidden="true"
                 >
-                  AC
+                  <BrandMark className="learner-help-chatbox__brand-mark" />
                 </span>
                 <p>
-                  Live chat is not connected in this workspace yet. Send the
-                  learner support team a note and include the page you were on.
+                  In-app chat is not connected in this workspace yet. Email the
+                  learner support team when you need a human response, and
+                  include the page you were on.
                 </p>
               </div>
               <a
                 className="learner-help-chatbox__email"
                 href={SUPPORT_MAILTO}
-                onClick={() => setHelpOpen(false)}
+                onClick={() =>
+                  closeHelpPopover(setHelpOpen, helpButtonRef.current)
+                }
               >
                 Email learner support{" "}
                 <ArrowUpRight size={14} aria-hidden="true" />
@@ -1017,19 +990,6 @@ export function LearnerShell({
           </div>
         ) : null}
       </div>
-
-      {toast ? (
-        <div
-          className="learner-toast-region"
-          aria-live="polite"
-          aria-atomic="true"
-        >
-          <div className="learner-toast" role="status">
-            <Info size={16} aria-hidden="true" />
-            <span>{toast}</span>
-          </div>
-        </div>
-      ) : null}
 
       {/* Mobile Bottom Navigation (Direction A: 5-items) */}
       <nav

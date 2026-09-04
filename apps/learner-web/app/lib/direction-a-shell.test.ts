@@ -445,13 +445,21 @@ describe("Direction A & B UI System & Shell", () => {
         new URL("../components/site-shell.tsx", import.meta.url),
         "utf8",
       );
-
       expect(shellSource).not.toContain("Sidebar collapsed.");
       expect(shellSource).not.toContain("Sidebar expanded.");
       expect(shellSource).not.toContain("Help chat is ready;");
       expect(shellSource).not.toContain(
         "Notification history is not connected in this workspace yet.",
       );
+      expect(shellSource).not.toContain("ac-toast");
+      expect(shellSource).not.toContain("learner-toast");
+      expect(shellSource).toContain("Email support is available");
+      expect(shellSource).toContain(
+        "In-app chat is not connected in this workspace yet.",
+      );
+      expect(shellSource).toContain("Email learner support");
+      expect(shellSource).not.toContain("live agent");
+      expect(shellSource).not.toContain("connected LLM");
     });
 
     it("refreshes short-lived avatar delivery and falls back safely", () => {
@@ -459,10 +467,12 @@ describe("Direction A & B UI System & Shell", () => {
         new URL("../components/site-shell.tsx", import.meta.url),
         "utf8",
       );
-
       expect(shellSource).toContain(
-        "onError={() => setFailedAvatarUrl(avatarUrl)}",
+        "onError={() => setFailedAvatarUrl(imageUrl)}",
       );
+      expect(shellSource).toContain("data-avatar-state={imageUrl ?");
+      expect(shellSource).toContain("identity.email");
+      expect(shellSource).toContain("account-menu-email");
       expect(shellSource).toContain("4 * 60 * 1000");
       expect(shellSource).toContain("avatarUpdateGenerationRef.current += 1");
       expect(shellSource).toContain(
@@ -489,7 +499,6 @@ describe("Direction A & B UI System & Shell", () => {
         new URL("../learner-clarity.css", import.meta.url),
         "utf8",
       );
-
       // Skip link elevated above shell chrome with visible focus
       expect(clarityCss).toContain(".site-frame--learner .skip-link");
       expect(clarityCss).toContain("z-index: 100;");
@@ -529,6 +538,10 @@ describe("Direction A & B UI System & Shell", () => {
         new URL("../components/site-shell.tsx", import.meta.url),
         "utf8",
       );
+      const notificationSource = readFileSync(
+        new URL("../components/notifications-runtime.tsx", import.meta.url),
+        "utf8",
+      );
       const dashboardSource = readFileSync(
         new URL("../components/dashboard-runtime.tsx", import.meta.url),
         "utf8",
@@ -557,6 +570,10 @@ describe("Direction A & B UI System & Shell", () => {
         new URL("../learner-clarity.css", import.meta.url),
         "utf8",
       );
+      const shellSliceCss = readFileSync(
+        new URL("../learner-next-slice.css", import.meta.url),
+        "utf8",
+      );
 
       expect(shellSource).toContain("accountButtonRef.current");
       expect(shellSource).toContain('aria-controls="learner-account-menu"');
@@ -564,7 +581,9 @@ describe("Direction A & B UI System & Shell", () => {
       expect(shellSource).toContain('role="menuitem"');
       expect(shellSource).toContain("notificationPopoverOpen");
       expect(shellSource).toContain("closeNotificationPopover");
-      expect(shellSource).toContain('id="learner-notifications-popover"');
+      expect(notificationSource).toContain(
+        'id="learner-notifications-popover"',
+      );
       expect(shellSource).toContain("href={ROUTES.notifications}");
       expect(shellSource).not.toContain('userDisplayName = "Suyash"');
       expect(shellSource).not.toContain('className="header-badge-dot"');
@@ -574,6 +593,16 @@ describe("Direction A & B UI System & Shell", () => {
       expect(shellSource).toContain('aria-controls="learner-sidebar"');
       expect(shellSource).toContain("closeHelpPopover");
       expect(shellSource).toContain("setHelpOpen(false);");
+      expect(shellSource).toContain(
+        "closeHelpPopover(setHelpOpen, helpButtonRef.current)",
+      );
+      expect(shellSource).not.toContain("onClick={() => setHelpOpen(false)}");
+      expect(shellSource).toContain(
+        'if (event.key === "Tab") {\n      // Let the browser continue through the document\'s tab order.',
+      );
+      expect(shellSource).not.toContain(
+        'if (event.key === "Tab") {\n      event.preventDefault();\n      closeAccountMenu',
+      );
       expect(shellSource).toContain("handlePointerDown");
       expect(shellSource).toContain(
         "!accountButtonRef.current?.contains(target)",
@@ -627,6 +656,11 @@ describe("Direction A & B UI System & Shell", () => {
       );
       expect(clarityCss).toContain(
         ".site-frame--learner .notification-popover__action-link",
+      );
+      expect(shellSliceCss).toContain("--ac-mark-cut: var(--theme-action);");
+      expect(shellSliceCss).toContain("@media (max-width: 1023px)");
+      expect(shellSliceCss).toMatch(
+        /@media \(max-width: 1023px\)[\s\S]*?\.site-frame--learner \.learner-help-widget \{[\s\S]*?bottom: calc\(88px \+ env\(safe-area-inset-bottom\)\);/,
       );
       expect(clarityCss).toContain(
         ".site-frame--learner .progress-summary__number::after",
