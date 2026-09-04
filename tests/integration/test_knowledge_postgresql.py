@@ -22,11 +22,17 @@ from sqlalchemy.schema import CreateSchema, DropSchema
 from ac_platform.intelligence import IntelligencePurpose
 from ac_platform.knowledge import (
     PINNED_MIN_RANK_SCORE,
+    GoldPrediction,
     KnowledgeAccessContext,
     KnowledgeQuery,
     PostgresKnowledgeRepository,
     RetrievalOutcome,
     canonical_knowledge_version_digest,
+    evaluate_gold_set,
+    gold_access_context,
+    gold_acl_subject_id,
+    gold_tenant_id,
+    load_gold_set,
 )
 from ac_platform.tenancy.models import Tenant
 
@@ -110,19 +116,41 @@ def _run(coroutine):
 async def _seed(schema_url: URL) -> dict[str, UUID]:
     engine = create_async_engine(schema_url, pool_pre_ping=True)
     sessions = async_sessionmaker(engine, expire_on_commit=False)
-    tenant_a, tenant_b = uuid4(), uuid4()
-    source_a, source_b = uuid4(), uuid4()
-    version_a, version_b = uuid4(), uuid4()
-    open_chunk, restricted_chunk, other_tenant_chunk = uuid4(), uuid4(), uuid4()
-    acl_subject_a, acl_subject_b = uuid4(), uuid4()
-    open_passage = "Account recovery requires verified support review."
-    restricted_passage = "Support can diagnose access but cannot change the rubric."
-    other_passage = "Tenant B account recovery policy."
+    tenant_a, tenant_b = gold_tenant_id("tenant-a"), gold_tenant_id("tenant-b")
+    source_a, source_b, withdrawn_source, state_source = uuid4(), uuid4(), uuid4(), uuid4()
+    version_a, version_b, withdrawn_version, state_version = (
+        uuid4(),
+        uuid4(),
+        uuid4(),
+        uuid4(),
+    )
+    open_chunk, restricted_chunk = uuid4(), uuid4()
+    access_chunk, state_chunk, other_tenant_chunk = uuid4(), uuid4(), uuid4()
+    acl_subject_a, acl_subject_b = gold_acl_subject_id("subject-support"), uuid4()
+    open_passage = (
+        "How does account recovery work? Account recovery requires verified support review."
+    )
+    restricted_passage = (
+        "Can support change the rubric? Support can diagnose access but cannot change the rubric."
+    )
+    access_passage = (
+        "Where can a learner read the access policy? Learners can read the access policy "
+        "in the support handbook."
+    )
+    state_passage = (
+        "What is the canonical learner progress source? Learner progress source is canonical "
+        "in the enrollment state ledger."
+    )
+    other_passage = "How does account recovery work? Tenant B account recovery policy."
     version_a_digest = canonical_knowledge_version_digest(
         (
             (0, "recovery.md#email", open_passage),
             (1, "support.md#readonly", restricted_passage),
+            (2, "access.md#overview", access_passage),
         )
+    )
+    state_version_digest = canonical_knowledge_version_digest(
+        ((0, "state.md#canonical", state_passage),)
     )
     version_b_digest = canonical_knowledge_version_digest(
         ((0, "recovery.md#email", other_passage),)
@@ -148,13 +176,19 @@ async def _seed(schema_url: URL) -> dict[str, UUID]:
                 "(:source_a, :tenant_a, 'support-policy', 'Support policy', "
                 "'fixture://support', 'fixture'), "
                 "(:source_b, :tenant_b, 'tenant-b-policy', 'Tenant B policy', "
-                "'fixture://tenant-b', 'fixture')"
+                "'fixture://tenant-b', 'fixture'), "
+                "(:withdrawn_source, :tenant_a, 'withdrawn-policy', 'Withdrawn policy', "
+                "'fixture://withdrawn', 'fixture'), "
+                "(:state_source, :tenant_a, 'platform-contract', 'Platform contract', "
+                "'fixture://platform-contract', 'fixture')"
             ),
             {
                 "source_a": source_a,
                 "tenant_a": tenant_a,
                 "source_b": source_b,
                 "tenant_b": tenant_b,
+                "withdrawn_source": withdrawn_source,
+                "state_source": state_source,
             },
         )
         await session.execute(
@@ -162,7 +196,11 @@ async def _seed(schema_url: URL) -> dict[str, UUID]:
                 "INSERT INTO knowledge_source_versions "
                 "(id, source_id, tenant_id, version_no, status, valid_from, content_sha256) VALUES "
                 "(:version_a, :source_a, :tenant_a, 1, 'active', :now, :digest_a), "
-                "(:version_b, :source_b, :tenant_b, 1, 'active', :now, :digest_b)"
+                "(:version_b, :source_b, :tenant_b, 1, 'active', :now, :digest_b), "
+                "(:withdrawn_version, :withdrawn_source, :tenant_a, 1, 'active', "
+                ":withdrawn_now, :withdrawn_digest), "
+                "(:state_version, :state_source, :tenant_a, 1, 'active', "
+                ":state_now, :state_digest)"
             ),
             {
                 "version_a": version_a,
@@ -174,6 +212,14 @@ async def _seed(schema_url: URL) -> dict[str, UUID]:
                 "now": NOW - timedelta(days=1),
                 "digest_a": version_a_digest,
                 "digest_b": version_b_digest,
+                "withdrawn_version": withdrawn_version,
+                "withdrawn_source": withdrawn_source,
+                "withdrawn_now": NOW - timedelta(days=2),
+                "withdrawn_digest": canonical_knowledge_version_digest(()),
+                "state_version": state_version,
+                "state_source": state_source,
+                "state_now": NOW - timedelta(days=1),
+                "state_digest": state_version_digest,
             },
         )
         await session.execute(
@@ -181,13 +227,17 @@ async def _seed(schema_url: URL) -> dict[str, UUID]:
                 "INSERT INTO knowledge_version_purposes "
                 "(source_version_id, tenant_id, purpose) VALUES "
                 "(:version_a, :tenant_a, 'support_assistance'), "
-                "(:version_b, :tenant_b, 'support_assistance')"
+                "(:version_b, :tenant_b, 'support_assistance'), "
+                "(:withdrawn_version, :tenant_a, 'support_assistance'), "
+                "(:state_version, :tenant_a, 'support_assistance')"
             ),
             {
                 "version_a": version_a,
                 "tenant_a": tenant_a,
                 "version_b": version_b,
                 "tenant_b": tenant_b,
+                "withdrawn_version": withdrawn_version,
+                "state_version": state_version,
             },
         )
         await session.execute(
@@ -196,24 +246,42 @@ async def _seed(schema_url: URL) -> dict[str, UUID]:
                 "(id, source_version_id, tenant_id, ordinal, locator, passage, "
                 "content_sha256) VALUES "
                 "(:open, :version_a, :tenant_a, 0, 'recovery.md#email', "
-                "'Account recovery requires verified support review.', :digest_open), "
+                "'How does account recovery work? Account recovery requires verified support "
+                "review.', "
+                ":digest_open), "
                 "(:restricted, :version_a, :tenant_a, 1, 'support.md#readonly', "
-                "'Support can diagnose access but cannot change the rubric.', :digest_restricted), "
+                "'Can support change the rubric? Support can diagnose access but cannot change the "
+                "rubric.', "
+                ":digest_restricted), "
+                "(:access, :version_a, :tenant_a, 2, 'access.md#overview', "
+                "'Where can a learner read the access policy? Learners can read the access policy "
+                "in the support handbook.', :digest_access), "
+                "(:state, :state_version, :tenant_a, 0, 'state.md#canonical', "
+                "'What is the canonical learner progress source? Learner progress source is "
+                "canonical "
+                "in the enrollment state ledger.', "
+                ":digest_state), "
                 "(:other, :version_b, :tenant_b, 0, 'recovery.md#email', "
-                "'Tenant B account recovery policy.', :digest_other)"
+                "'How does account recovery work? Tenant B account recovery policy.', "
+                ":digest_other)"
             ),
             {
                 "open": open_chunk,
                 "restricted": restricted_chunk,
+                "access": access_chunk,
+                "state": state_chunk,
                 "other": other_tenant_chunk,
                 "version_a": version_a,
                 "version_b": version_b,
+                "state_version": state_version,
                 "tenant_a": tenant_a,
                 "tenant_b": tenant_b,
                 "digest_open": hashlib.sha256(open_passage.encode("utf-8")).hexdigest(),
                 "digest_restricted": hashlib.sha256(
                     restricted_passage.encode("utf-8")
                 ).hexdigest(),
+                "digest_access": hashlib.sha256(access_passage.encode("utf-8")).hexdigest(),
+                "digest_state": hashlib.sha256(state_passage.encode("utf-8")).hexdigest(),
                 "digest_other": hashlib.sha256(other_passage.encode("utf-8")).hexdigest(),
             },
         )
@@ -230,11 +298,20 @@ async def _seed(schema_url: URL) -> dict[str, UUID]:
             },
         )
         await session.commit()
+        await session.execute(
+            text(
+                "UPDATE knowledge_source_versions SET status = 'withdrawn', "
+                "valid_until = :valid_until WHERE id = :id"
+            ),
+            {"id": withdrawn_version, "valid_until": NOW},
+        )
+        await session.commit()
     await engine.dispose()
     return {
         "tenant_a": tenant_a,
         "tenant_b": tenant_b,
         "version_a": version_a,
+        "withdrawn_version": withdrawn_version,
         "open_chunk": open_chunk,
         "restricted_chunk": restricted_chunk,
         "other_tenant_chunk": other_tenant_chunk,
@@ -269,6 +346,7 @@ def test_postgresql_retrieval_is_tenant_acl_safe_and_deterministic(postgres_harn
             assert {chunk.tenant_id for chunk in first.chunks} == {ids["tenant_a"]}
             assert {chunk.locator for chunk in first.chunks} == {"recovery.md#email"}
             assert first.chunks[0].content_sha256 == hashlib.sha256(
+                b"How does account recovery work? "
                 b"Account recovery requires verified support review."
             ).hexdigest()
 
@@ -319,7 +397,7 @@ def test_postgresql_retrieval_is_tenant_acl_safe_and_deterministic(postgres_harn
                         tenant_id=ids["tenant_a"],
                         purpose=IntelligencePurpose.SUPPORT_ASSISTANCE,
                     ),
-                    question="account recovery",
+                    question="unrelated billing escalation",
                     min_rank_score=PINNED_MIN_RANK_SCORE,
                 )
             )
@@ -617,14 +695,15 @@ def test_postgresql_knowledge_digest_and_version_chain_guards(postgres_harness: 
                     text(
                         "INSERT INTO knowledge_source_versions "
                         "(id, source_id, tenant_id, version_no, status, valid_from, "
-                        "content_sha256) VALUES (:id, :source, :tenant, 1, 'withdrawn', "
-                        ":now, :digest)"
+                        "valid_until, content_sha256) VALUES (:id, :source, :tenant, "
+                        "1, 'withdrawn', :now, :valid_until, :digest)"
                     ),
                     {
                         "id": uuid4(),
                         "source": terminal_source,
                         "tenant": ids["tenant_a"],
-                        "now": NOW,
+                        "now": NOW - timedelta(days=1),
+                        "valid_until": NOW,
                         "digest": canonical_knowledge_version_digest(()),
                     },
                 )
@@ -801,6 +880,75 @@ def test_postgresql_retrieval_equal_score_ties_respect_top_k(
             assert len(first.chunks) == 2
             assert first.chunks == second.chunks
             assert [chunk.locator for chunk in first.chunks] == ["tie#0", "tie#1"]
+        await engine.dispose()
+
+    _run(exercise())
+
+
+def test_postgresql_gold_set_runner_enforces_context_acl_and_withdrawal(
+    postgres_harness: URL,
+) -> None:
+    """Run the complete gold fixture through PostgreSQL and typed evaluation."""
+
+    ids = _run(_seed(postgres_harness))
+    cases = load_gold_set(ROOT / "tests" / "fixtures" / "knowledge_gold_set.jsonl")
+
+    async def exercise() -> None:
+        engine = create_async_engine(postgres_harness, pool_pre_ping=True)
+        sessions = async_sessionmaker(engine, expire_on_commit=False)
+        async with sessions() as session:
+            repository = PostgresKnowledgeRepository(session)
+            predictions: dict[str, GoldPrediction] = {}
+            for case in cases:
+                access = gold_access_context(case)
+                snapshot_id = (
+                    ids["withdrawn_version"] if case.case_id == "ks-0007" else None
+                )
+                result = await repository.search(
+                    KnowledgeQuery(
+                        access=access,
+                        question=case.question,
+                        min_rank_score=PINNED_MIN_RANK_SCORE,
+                        top_k=10,
+                        snapshot_id=snapshot_id,
+                    )
+                )
+                predictions[case.case_id] = GoldPrediction(result=result, access=access)
+
+            evaluation = evaluate_gold_set(cases, predictions)
+            assert evaluation.answerable_cases == 5
+            assert evaluation.abstention_cases == 3
+            assert evaluation.recall_at_k == 1.0
+            assert evaluation.abstention_accuracy == 1.0
+            assert evaluation.leakage_count == 0
+
+            withdrawn = await repository.search(
+                KnowledgeQuery(
+                    access=KnowledgeAccessContext(
+                        tenant_id=ids["tenant_a"],
+                        purpose=IntelligencePurpose.SUPPORT_ASSISTANCE,
+                    ),
+                    question="withdrawn policy",
+                    min_rank_score=PINNED_MIN_RANK_SCORE,
+                    snapshot_id=ids["withdrawn_version"],
+                )
+            )
+            assert withdrawn.outcome is RetrievalOutcome.NO_AUTHORIZED_EVIDENCE
+            assert not withdrawn.chunks
+
+            acl_denied = await repository.search(
+                KnowledgeQuery(
+                    access=KnowledgeAccessContext(
+                        tenant_id=ids["tenant_a"],
+                        purpose=IntelligencePurpose.SUPPORT_ASSISTANCE,
+                        acl_subject_ids=(ids["acl_subject_unlisted"],),
+                    ),
+                    question="support change rubric",
+                    min_rank_score=PINNED_MIN_RANK_SCORE,
+                )
+            )
+            assert acl_denied.outcome is RetrievalOutcome.BELOW_THRESHOLD
+            assert not acl_denied.chunks
         await engine.dispose()
 
     _run(exercise())

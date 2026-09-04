@@ -89,6 +89,32 @@ def _install_postgresql_guards() -> None:
         $$
         """
     )
+    op.execute(
+        """
+        CREATE FUNCTION ac_guard_knowledge_chunk_version_digest()
+        RETURNS trigger
+        LANGUAGE plpgsql
+        AS $$
+        DECLARE
+            recorded_digest text;
+            expected_digest text;
+        BEGIN
+            SELECT version.content_sha256
+              INTO recorded_digest
+              FROM knowledge_source_versions version
+             WHERE version.id = NEW.source_version_id
+               AND version.tenant_id = NEW.tenant_id;
+            expected_digest := ac_knowledge_version_digest(NEW.source_version_id);
+            IF recorded_digest IS NULL OR recorded_digest IS DISTINCT FROM expected_digest THEN
+                RAISE EXCEPTION
+                    'knowledge source version digest does not match canonical content'
+                    USING ERRCODE = 'integrity_constraint_violation';
+            END IF;
+            RETURN NULL;
+        END;
+        $$
+        """
+    )
 
     op.execute(
         """
@@ -163,14 +189,9 @@ def _install_postgresql_guards() -> None:
                     END IF;
                 END IF;
 
-                IF NEW.status = 'active' AND NEW.valid_until IS NOT NULL THEN
-                    RAISE EXCEPTION 'active knowledge versions cannot have a terminal timestamp'
-                        USING ERRCODE = 'integrity_constraint_violation';
-                END IF;
-                IF NEW.status IN ('superseded', 'withdrawn')
-                   AND (NEW.valid_until IS NULL OR NEW.valid_until > CURRENT_TIMESTAMP) THEN
+                IF NEW.status <> 'active' OR NEW.valid_until IS NOT NULL THEN
                     RAISE EXCEPTION
-                        'terminal knowledge versions require a past terminal timestamp'
+                        'knowledge versions must be inserted active and terminalized by transition'
                         USING ERRCODE = 'integrity_constraint_violation';
                 END IF;
                 RETURN NEW;
@@ -227,7 +248,7 @@ def _install_postgresql_guards() -> None:
         CREATE CONSTRAINT TRIGGER trg_knowledge_chunk_version_digest
         AFTER INSERT ON knowledge_chunks
         DEFERRABLE INITIALLY DEFERRED
-        FOR EACH ROW EXECUTE FUNCTION ac_guard_knowledge_version_digest()
+        FOR EACH ROW EXECUTE FUNCTION ac_guard_knowledge_chunk_version_digest()
         """
     )
     op.execute(

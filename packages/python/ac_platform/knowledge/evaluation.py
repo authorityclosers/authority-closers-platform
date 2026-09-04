@@ -4,14 +4,19 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from uuid import NAMESPACE_URL, UUID, uuid5
 
+from ac_platform.intelligence import IntelligencePurpose
 from ac_platform.knowledge.contracts import (
+    KnowledgeAccessContext,
     KnowledgeRetrievalError,
     RetrievalResult,
 )
+
+_GOLD_FIXTURE_NAMESPACE = uuid5(NAMESPACE_URL, "authority-closers:knowledge-gold:v1")
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,51 +49,59 @@ class GoldEvaluation:
 class GoldPrediction:
     """One structured retrieval prediction and its evaluated query context.
 
-    ``RetrievalResult`` carries the complete returned provenance.  The query
-    context is optional for callers that already bind cases externally, but
-    when supplied it is checked against the fixture so tenant/purpose/ACL
-    regressions cannot be hidden behind a source/locator-only tuple.
+    ``RetrievalResult`` carries the complete returned provenance.  The typed
+    access context is required and checked against deterministic fixture alias
+    mappings so tenant/purpose/ACL regressions cannot be hidden behind a
+    source/locator-only tuple.
     """
 
     result: RetrievalResult
-    tenant_key: str
-    purpose: str
-    acl_subject_ids: tuple[str, ...] = ()
+    access: KnowledgeAccessContext
 
     def __post_init__(self) -> None:
         if not isinstance(self.result, RetrievalResult):
             raise KnowledgeRetrievalError("gold prediction result must be a RetrievalResult")
-        object.__setattr__(
-            self,
-            "tenant_key",
-            _bounded_fixture_text(self.tenant_key, "prediction tenant_key", 128),
-        )
-        object.__setattr__(
-            self,
-            "purpose",
-            _bounded_fixture_text(self.purpose, "prediction purpose", 64),
-        )
-        if (
-            isinstance(self.acl_subject_ids, str | bytes | bytearray)
-            or not isinstance(self.acl_subject_ids, Sequence)
-        ):
-            raise KnowledgeRetrievalError("gold prediction ACL subject IDs must be a sequence")
-        subjects = tuple(
-            _bounded_fixture_text(subject, "prediction ACL subject_id", 256)
-            for subject in self.acl_subject_ids
-        )
-        if len(set(subjects)) != len(subjects):
-            raise KnowledgeRetrievalError("gold prediction ACL subject IDs must be unique")
-        object.__setattr__(self, "acl_subject_ids", subjects)
+        if not isinstance(self.access, KnowledgeAccessContext):
+            raise KnowledgeRetrievalError("gold prediction access must be a KnowledgeAccessContext")
 
 
-type StructuredPrediction = RetrievalResult | GoldPrediction
+type StructuredPrediction = GoldPrediction
 
 
 def _bounded_fixture_text(value: object, field_name: str, maximum: int) -> str:
     if not isinstance(value, str) or not value.strip() or len(value) > maximum:
         raise KnowledgeRetrievalError(f"gold-set {field_name} is invalid")
     return value.strip()
+
+
+def gold_tenant_id(tenant_key: str) -> UUID:
+    """Map one fixture tenant alias to a stable UUID without external state."""
+
+    alias = _bounded_fixture_text(tenant_key, "tenant_key", 128)
+    return uuid5(_GOLD_FIXTURE_NAMESPACE, f"tenant:{alias}")
+
+
+def gold_acl_subject_id(subject_alias: str) -> UUID:
+    """Map one fixture ACL alias to a stable UUID without external state."""
+
+    alias = _bounded_fixture_text(subject_alias, "ACL subject_id", 256)
+    return uuid5(_GOLD_FIXTURE_NAMESPACE, f"acl-subject:{alias}")
+
+
+def gold_access_context(case: GoldCase) -> KnowledgeAccessContext:
+    """Build the typed query access context represented by a gold-set case."""
+
+    try:
+        purpose = IntelligencePurpose(case.purpose)
+    except (TypeError, ValueError) as exc:
+        raise KnowledgeRetrievalError(
+            "gold-set purpose is not an admitted intelligence purpose"
+        ) from exc
+    return KnowledgeAccessContext(
+        tenant_id=gold_tenant_id(case.tenant_key),
+        purpose=purpose,
+        acl_subject_ids=tuple(gold_acl_subject_id(alias) for alias in case.acl_subject_ids),
+    )
 
 
 def load_gold_set(path: Path) -> tuple[GoldCase, ...]:
@@ -181,6 +194,8 @@ def evaluate_gold_set(
         raise KnowledgeRetrievalError("evaluation requires at least one case")
     if any(case.expected not in {"answerable", "abstain"} for case in normalized_cases):
         raise KnowledgeRetrievalError("gold-set expected must be answerable or abstain")
+    if any(case.poisoned_document and case.expected != "abstain" for case in normalized_cases):
+        raise KnowledgeRetrievalError("poisoned gold-set cases must expect abstention")
     case_ids = {case.case_id for case in normalized_cases}
     if any(not isinstance(case_id, str) for case_id in predictions):
         raise KnowledgeRetrievalError("prediction case IDs must be text")
@@ -205,26 +220,20 @@ def evaluate_gold_set(
     leakage = 0
     for case in normalized_cases:
         prediction = predictions[case.case_id]
-        if isinstance(prediction, GoldPrediction):
-            if prediction.tenant_key != case.tenant_key:
-                raise KnowledgeRetrievalError(
-                    f"prediction tenant does not match case {case.case_id}"
-                )
-            if prediction.purpose != case.purpose:
-                raise KnowledgeRetrievalError(
-                    f"prediction purpose does not match case {case.case_id}"
-                )
-            if prediction.acl_subject_ids != case.acl_subject_ids:
-                raise KnowledgeRetrievalError(
-                    f"prediction ACL context does not match case {case.case_id}"
-                )
-            result = prediction.result
-        elif isinstance(prediction, RetrievalResult):
-            result = prediction
-        else:
+        if not isinstance(prediction, GoldPrediction):
             raise KnowledgeRetrievalError(
-                "predictions must contain structured RetrievalResult values"
+                "predictions must contain structured GoldPrediction values"
             )
+        expected_access = gold_access_context(case)
+        if prediction.access.tenant_id != expected_access.tenant_id:
+            raise KnowledgeRetrievalError(f"prediction tenant does not match case {case.case_id}")
+        if prediction.access.purpose is not expected_access.purpose:
+            raise KnowledgeRetrievalError(f"prediction purpose does not match case {case.case_id}")
+        if prediction.access.acl_subject_ids != expected_access.acl_subject_ids:
+            raise KnowledgeRetrievalError(
+                f"prediction ACL context does not match case {case.case_id}"
+            )
+        result = prediction.result
 
         returned_chunks = tuple(result.chunks)
         if len({chunk.snapshot_id for chunk in returned_chunks}) > 1:
@@ -233,6 +242,10 @@ def evaluate_gold_set(
             raise KnowledgeRetrievalError("prediction chunk provenance does not match its snapshot")
         if len({chunk.tenant_id for chunk in returned_chunks}) > 1:
             raise KnowledgeRetrievalError("predictions contain cross-tenant provenance")
+        if any(chunk.tenant_id != prediction.access.tenant_id for chunk in returned_chunks):
+            raise KnowledgeRetrievalError(
+                "prediction chunk tenant does not match its access context"
+            )
         for chunk in returned_chunks:
             expected_digest = hashlib.sha256(chunk.passage.encode("utf-8")).hexdigest()
             if chunk.content_sha256 != expected_digest:
@@ -265,5 +278,8 @@ __all__ = [
     "GoldPrediction",
     "StructuredPrediction",
     "evaluate_gold_set",
+    "gold_acl_subject_id",
+    "gold_access_context",
+    "gold_tenant_id",
     "load_gold_set",
 ]
