@@ -6,7 +6,7 @@
 - Worktree: `C:\Users\Suyash\.codex\worktrees\d2de\authority-closers-platform`
 - Branch: `codex/local-staging-dev-bridge`
 - Base SHA: `a8bfbfcc2aec6d4d9bcece932511f316fa0dc98a`
-- Validated implementation checkpoint SHA: assigned after review and recorded below
+- Validated implementation checkpoint SHA: `a5477fe05b4c544270ffb301ad6e26119801c8fa`
 - Repository migration head: `20260903_0016`
 - Migration-chain tree identity: `d5a91365e593b64392567a2e3c14c3595ed3ce96`
 - Database/migration change in this candidate: none
@@ -157,9 +157,8 @@ Representative durable screenshots:
 - Production promotion: not run; no artifact is approved for production.
 - Local rollback: `pnpm dev:staging:down` removes only the ephemeral process and
   session boundary; it changes no remote record.
-- Code rollback identity: the reviewed implementation checkpoint will be
-  reverted as one explicit Git commit if rejected. There is no database
-  downgrade because the migration identity is unchanged.
+- Code rollback identity: `git revert a5477fe05b4c544270ffb301ad6e26119801c8fa`.
+  There is no database downgrade because the migration identity is unchanged.
 
 A later release task must build one immutable artifact from the recorded
 candidate SHA, deploy and prove it on staging, record that artifact/digest and
