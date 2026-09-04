@@ -186,6 +186,15 @@ def test_staging_controller_chunks_and_verifies_the_large_image_bundle() -> None
     )[0]
     assert 'test ! -L "`$part_path"' in deploy
     assert 'partial_path="`$part_path.partial"' not in deploy
+    bundle_verification = '(cd "`$bundle_dir" && sha256sum --check --strict SHA256SUMS)'
+    installer_invocation = (
+        "'$remoteDirectory/source/infra/application/scripts/install-application-release.sh'"
+    )
+    assert 'rm -rf -- "`$parts_dir"' in deploy
+    assert 'rm -- "`$parts_manifest"' in deploy
+    assert deploy.index(bundle_verification) < deploy.index('rm -rf -- "`$parts_dir"')
+    assert deploy.index('rm -rf -- "`$parts_dir"') < deploy.index(installer_invocation)
+    assert deploy.index('rm -- "`$parts_manifest"') < deploy.index(installer_invocation)
     assert "function Invoke-RetriableImagePartTransfer" in CONTROLLER
     assert "-RemoteVerificationScript $verifyPartRemote" in CONTROLLER
     part_helper = CONTROLLER.split("function Invoke-RetriableImagePartTransfer", maxsplit=1)[

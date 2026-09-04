@@ -985,6 +985,12 @@ expected_image_digest="`$(grep -E '^[0-9a-f]{64}[[:space:]]+\*?application-image
 printf '%s  %s\n' "`$expected_image_digest" "`$reassembled" | sha256sum --check --status
 mv -f -- "`$reassembled" "`$image_archive"
 (cd "`$bundle_dir" && sha256sum --check --strict SHA256SUMS)
+# The installer stages an exact three-file image-bundle contract. The chunk
+# transport metadata is private transfer state, not part of that reviewed
+# bundle, so remove it only after the reassembled archive has passed its
+# digest and manifest checks.
+rm -rf -- "`$parts_dir"
+rm -- "`$parts_manifest"
 printf '%s  %s\n' '$archiveDigest' "`$release_archive" | sha256sum --check --status
 tar --extract --file "`$release_archive" --directory '$remoteDirectory/source' infra/application
 sudo env \
