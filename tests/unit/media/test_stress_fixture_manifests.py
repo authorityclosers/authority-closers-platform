@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sys
+import urllib.request
 import warnings
 import zipfile
 from copy import deepcopy
@@ -17,11 +18,18 @@ if str(TOOLS) not in sys.path:
 import build_hls_ladder as hls  # noqa: E402
 from fixture_harness import (  # noqa: E402
     _ALLOWED_DOWNLOAD_HOSTS,
+    EXPECTED_CAPTIONS_MANIFEST_SHA256,
+    EXPECTED_FIXTURE_MANIFEST_SHA256,
+    EXPECTED_NETWORK_SCENARIOS_SHA256,
+    EXPECTED_TEST_MANIFEST_SHA256,
     FixtureHarnessError,
     FixtureManifestError,
+    _AllowlistedRedirectHandler,
     _validate_url,
     _validate_zip_archive,
+    acquire_external_fixture,
     canonicalize_cache_root,
+    generate_fixture,
     load_manifest,
     load_network_scenarios,
     load_test_manifest,
@@ -37,6 +45,7 @@ def _json(name: str) -> dict[str, object]:
 def test_fixture_manifest_is_bounded_and_allowlisted() -> None:
     registry = load_manifest()
 
+    assert registry.manifest_sha256 == EXPECTED_FIXTURE_MANIFEST_SHA256
     assert registry.source_policy["arbitrary_public_urls"] is False
     assert set(registry.source_policy["allowed_download_hosts"]) == {"download.blender.org"}
     assert all(fixture["course_content"] is False for fixture in registry.fixtures.values())
@@ -85,6 +94,63 @@ def test_manifest_path_and_nonstandard_https_port_are_rejected(tmp_path: Path) -
             field_name="source_url",
             allowed_hosts=_ALLOWED_DOWNLOAD_HOSTS,
         )
+
+
+def test_all_checked_in_manifest_authorities_have_pinned_digests() -> None:
+    assert hashlib.sha256((TOOLS / "fixture-manifest.json").read_bytes()).hexdigest() == (
+        EXPECTED_FIXTURE_MANIFEST_SHA256
+    )
+    assert hashlib.sha256((TOOLS / "captions-manifest.json").read_bytes()).hexdigest() == (
+        EXPECTED_CAPTIONS_MANIFEST_SHA256
+    )
+    assert hashlib.sha256((TOOLS / "network-scenarios.json").read_bytes()).hexdigest() == (
+        EXPECTED_NETWORK_SCENARIOS_SHA256
+    )
+    assert hashlib.sha256((TOOLS / "test-manifest.json").read_bytes()).hexdigest() == (
+        EXPECTED_TEST_MANIFEST_SHA256
+    )
+
+
+def test_generated_ffmpeg_args_are_an_exact_allowlist(tmp_path: Path) -> None:
+    mutated = deepcopy(_json("fixture-manifest.json"))
+    fixtures = mutated["fixtures"]
+    assert isinstance(fixtures, list)
+    generated = next(item for item in fixtures if item["kind"] == "generated_lavfi")
+    args = generated["ffmpeg_args"]
+    assert isinstance(args, list)
+    args.extend(["-vf", "drawtext=textfile=/outside/secret.txt"])
+    path = tmp_path / "fixture-manifest.json"
+    path.write_text(json.dumps(mutated), encoding="utf-8")
+
+    with pytest.raises(FixtureManifestError, match="exact approved lavfi allowlist"):
+        load_manifest(path, allow_test_copy=True)
+
+
+def test_redirect_target_is_rejected_before_urllib_can_contact_it() -> None:
+    handler = _AllowlistedRedirectHandler(
+        expected_path="/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4.zip"
+    )
+    request = urllib.request.Request(
+        "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4.zip"
+    )
+
+    with pytest.raises(FixtureHarnessError, match="redirected outside"):
+        handler.redirect_request(
+            request,
+            object(),
+            302,
+            "found",
+            {},
+            "https://127.0.0.1/fixture.zip",
+        )
+
+
+def test_invalid_fixture_timeouts_are_bounded_harness_errors() -> None:
+    registry = load_manifest()
+    with pytest.raises(FixtureHarnessError, match="timeout_seconds"):
+        acquire_external_fixture(registry, "bbb-320x180-24", timeout_seconds=1)
+    with pytest.raises(FixtureHarnessError, match="timeout_seconds"):
+        generate_fixture(registry, "generated-16x9-4s", timeout_seconds=1)
 
 
 def test_cli_cache_root_is_bounded_to_the_ignored_repository_boundary(tmp_path: Path) -> None:
@@ -137,6 +203,41 @@ def test_webvtt_runtime_parser_rejects_overlap_and_bad_timing(tmp_path: Path) ->
     )
     with pytest.raises(FixtureHarnessError, match="overlap"):
         hls._parse_webvtt(path)
+
+
+def test_hls_playlist_rejects_discontinuities_and_unbounded_target_duration(
+    tmp_path: Path,
+) -> None:
+    segment = tmp_path / "segment-00000.ts"
+    segment.write_bytes(b"ts")
+    playlist = tmp_path / "index.m3u8"
+    playlist.write_text(
+        "\n".join(
+            [
+                "#EXTM3U",
+                "#EXT-X-TARGETDURATION:5",
+                "#EXT-X-MEDIA-SEQUENCE:0",
+                "#EXT-X-PLAYLIST-TYPE:VOD",
+                "#EXT-X-INDEPENDENT-SEGMENTS",
+                "#EXT-X-DISCONTINUITY",
+                "#EXTINF:4.000,",
+                "segment-00000.ts",
+                "#EXT-X-ENDLIST",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(FixtureHarnessError, match="missing required terminators"):
+        hls._playlist_segments(playlist, stage_root=tmp_path, segment_duration=4)
+
+    playlist.write_text(
+        playlist.read_text(encoding="utf-8").replace("#EXT-X-DISCONTINUITY\n", ""),
+        encoding="utf-8",
+    )
+    with pytest.raises(FixtureHarnessError, match="target duration"):
+        hls._playlist_segments(playlist, stage_root=tmp_path, segment_duration=4)
 
 
 def test_network_and_test_manifests_cover_the_same_checked_in_ids() -> None:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -9,6 +10,14 @@ from pydantic import ValidationError
 
 from ac_platform.application.settings import Settings
 from ac_platform.media import stress_fixtures
+from ac_platform.media.contracts import (
+    MediaAssetId,
+    MediaAssetVersion,
+    MediaAuthorizationContext,
+    MediaVersionId,
+    PlaybackGrantDescriptor,
+    create_media_authorization_context,
+)
 from ac_platform.media.stress_fixtures import (
     FixturePlaybackGrantVerifier,
     FixtureProviderActivationVerifier,
@@ -23,9 +32,15 @@ class _ProviderGate:
     verified: bool = True
 
     def verify_fixture_provider_activation(
-        self, *, environment: str, fixture_id: str, manifest_sha256: str
+        self,
+        *,
+        authorization_context: MediaAuthorizationContext,
+        playback_grant: PlaybackGrantDescriptor,
+        environment: str,
+        fixture_id: str,
+        manifest_sha256: str,
     ) -> bool:
-        return self.verified
+        return self.verified and playback_grant.authorization == authorization_context
 
 
 @dataclass
@@ -35,6 +50,8 @@ class _GrantGate:
     def verify_fixture_playback_grant(
         self,
         *,
+        authorization_context: MediaAuthorizationContext,
+        playback_grant: PlaybackGrantDescriptor,
         fixture_id: str,
         source_sha256: str,
         manifest_sha256: str,
@@ -43,7 +60,26 @@ class _GrantGate:
         height: int,
         duration_seconds: float,
     ) -> bool:
-        return self.verified
+        return self.verified and playback_grant.authorization == authorization_context
+
+
+AUTHORIZATION_CONTEXT = create_media_authorization_context(
+    tenant_id="tenant-fixture",
+    person_id="person-fixture",
+    session_id="session-fixture",
+)
+PLAYBACK_GRANT = PlaybackGrantDescriptor(
+    grant_id="grant-fixture",
+    authorization=AUTHORIZATION_CONTEXT,
+    activity_id="activity-fixture",
+    activity_version="activity-v1",
+    media_version=MediaAssetVersion(
+        asset_id=MediaAssetId("asset-fixture"),
+        version_id=MediaVersionId("asset-v1"),
+    ),
+    issued_at=datetime(2026, 1, 1, tzinfo=UTC),
+    expires_at=datetime(2026, 1, 1, tzinfo=UTC) + timedelta(hours=1),
+)
 
 
 def _stub_approved_registry(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
@@ -85,6 +121,8 @@ def _compose(
     grant: object | None = None,
     environment: str = "test",
     enabled: bool = True,
+    authorization_context: MediaAuthorizationContext = AUTHORIZATION_CONTEXT,
+    playback_grant: PlaybackGrantDescriptor = PLAYBACK_GRANT,
 ):
     return compose_staging_test_fixture_source(
         environment=environment,
@@ -93,6 +131,8 @@ def _compose(
         cache_root=cache_root,
         provider_activation_verifier=(provider or _ProviderGate()),
         playback_grant_verifier=(grant or _GrantGate()),
+        authorization_context=authorization_context,
+        playback_grant=playback_grant,
     )
 
 
@@ -158,8 +198,39 @@ def test_bare_gate_booleans_and_caller_metadata_are_not_accepted(
             cache_root=cache_root,
             provider_activation_verifier=_ProviderGate(),
             playback_grant_verifier=_GrantGate(),
+            authorization_context=AUTHORIZATION_CONTEXT,
+            playback_grant=PLAYBACK_GRANT,
             width=320,
         )
+
+
+def test_composition_requires_matching_server_created_scope(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    cache_root = _stub_approved_registry(monkeypatch, tmp_path)
+    other_context = create_media_authorization_context(
+        tenant_id="other-tenant",
+        person_id="other-person",
+        session_id="other-session",
+    )
+    other_grant = PlaybackGrantDescriptor(
+        grant_id="other-grant",
+        authorization=other_context,
+        activity_id="other-activity",
+        activity_version="other-v1",
+        media_version=PLAYBACK_GRANT.media_version,
+        issued_at=PLAYBACK_GRANT.issued_at,
+        expires_at=PLAYBACK_GRANT.expires_at,
+    )
+
+    with pytest.raises(MediaStressFixtureDenied, match="does not match"):
+        _compose(
+            cache_root=cache_root,
+            authorization_context=AUTHORIZATION_CONTEXT,
+            playback_grant=other_grant,
+        )
+    with pytest.raises(MediaStressFixtureDenied, match="server-created"):
+        _compose(cache_root=cache_root, authorization_context=object())  # type: ignore[arg-type]
 
 
 def test_composition_rejects_outside_cache_and_parent_traversal(
@@ -219,6 +290,8 @@ def test_settings_wrapper_uses_only_configured_cache_root(
         fixture_id="generated-16x9-4s",
         provider_activation_verifier=_ProviderGate(),
         playback_grant_verifier=_GrantGate(),
+        authorization_context=AUTHORIZATION_CONTEXT,
+        playback_grant=PLAYBACK_GRANT,
     )
 
     assert source.local_path == cache_root / "generated-16x9-4s.mp4"

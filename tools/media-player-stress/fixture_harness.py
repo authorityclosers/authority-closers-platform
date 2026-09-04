@@ -128,6 +128,84 @@ _EXPECTED_NETWORK_SCENARIO_IDS = (
     "grant-expired",
     "provider-unavailable",
 )
+# These are release-controlled authority fingerprints.  A sidecar is not an
+# authority merely because it is present next to this script: changing one
+# must require an intentional code change which updates this pin as well.
+EXPECTED_FIXTURE_MANIFEST_SHA256 = (
+    "ee4da2e4039d458ecaf933aaa9a019fee29eb813addbe85b61ef7d78254859ae"
+)
+EXPECTED_CAPTIONS_MANIFEST_SHA256 = (
+    "02d5e104a3a0c2cf760a1132b09e02cd8f45c95fa3b0861d891faedd492e8185"
+)
+EXPECTED_NETWORK_SCENARIOS_SHA256 = (
+    "ac8d59e2209d6b3090b5499d89f8b689809f1b467e6a3ea3c47a4d43ad0cdc1f"
+)
+EXPECTED_TEST_MANIFEST_SHA256 = "88b29bfbea077200a522ff85179785a2efbdc8dcdb076cf2c71ce321f96eb0f6"
+_EXPECTED_SIDECAR_DIGESTS = {
+    DEFAULT_MANIFEST_PATH.resolve(): EXPECTED_FIXTURE_MANIFEST_SHA256,
+    Path(__file__).with_name("captions-manifest.json").resolve(): EXPECTED_CAPTIONS_MANIFEST_SHA256,
+    NETWORK_SCENARIOS_PATH.resolve(): EXPECTED_NETWORK_SCENARIOS_SHA256,
+    TEST_MANIFEST_PATH.resolve(): EXPECTED_TEST_MANIFEST_SHA256,
+}
+_EXPECTED_GENERATED_FFMPEG_ARGS = {
+    "generated-16x9-4s": (
+        "-nostdin",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc2=size=320x180:rate=30",
+        "-t",
+        "4",
+        "-an",
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
+    ),
+    "generated-4x3-6s": (
+        "-nostdin",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc2=size=320x240:rate=30",
+        "-t",
+        "6",
+        "-an",
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
+    ),
+    "generated-wide-3s": (
+        "-nostdin",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc2=size=640x272:rate=30",
+        "-t",
+        "3",
+        "-an",
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
+    ),
+}
 
 
 class FixtureHarnessError(RuntimeError):
@@ -172,6 +250,15 @@ def sha256_file(path: Path) -> str:
     except OSError as error:
         raise FixtureHarnessError(f"fixture file cannot be read: {path.name}") from error
     return digest.hexdigest()
+
+
+def _verify_approved_manifest_digest(path: Path, approved: Path, *, allow_test_copy: bool) -> str:
+    digest = sha256_file(path)
+    if not allow_test_copy:
+        expected = _EXPECTED_SIDECAR_DIGESTS.get(approved.resolve())
+        if expected is None or digest != expected:
+            raise FixtureManifestError("approved manifest checksum is not pinned")
+    return digest
 
 
 def _read_json(path: Path) -> Mapping[str, Any]:
@@ -435,7 +522,7 @@ def _validate_metadata(fixture: Mapping[str, Any]) -> None:
         raise FixtureManifestError("fixture container does not match its content type and path")
 
 
-def _validate_generated_args(fixture: Mapping[str, Any]) -> None:
+def _validate_generated_args(fixture_id: str, fixture: Mapping[str, Any]) -> None:
     args = fixture.get("ffmpeg_args")
     if (
         not isinstance(args, list)
@@ -446,6 +533,11 @@ def _validate_generated_args(fixture: Mapping[str, Any]) -> None:
         )
     ):
         raise FixtureManifestError("generated fixture ffmpeg_args must be a bounded string list")
+    expected_args = _EXPECTED_GENERATED_FFMPEG_ARGS.get(fixture_id)
+    if expected_args is None or tuple(args) != expected_args:
+        raise FixtureManifestError(
+            "generated fixture ffmpeg_args are not the exact approved lavfi allowlist"
+        )
     if args[:2] != ["-nostdin", "-hide_banner"] or args.count("-f") != 1:
         raise FixtureManifestError("generated fixture must use the lavfi FFmpeg source")
     try:
@@ -636,7 +728,7 @@ def _validate_fixture(
             or fixture.get("attribution") != "FFmpeg testsrc2 filter"
         ):
             raise FixtureManifestError("generated fixture license/provenance is not exact")
-        _validate_generated_args(fixture)
+        _validate_generated_args(fixture_id, fixture)
     normalized = dict(fixture)
     normalized["id"] = fixture_id
     normalized["cache_path"] = _safe_relative(normalized["cache_path"], field_name="cache_path")
@@ -749,7 +841,9 @@ def load_manifest(
         fixtures[fixture_id] = normalized
     return FixtureRegistry(
         path=path,
-        manifest_sha256=sha256_file(path),
+        manifest_sha256=_verify_approved_manifest_digest(
+            path, DEFAULT_MANIFEST_PATH, allow_test_copy=allow_test_copy
+        ),
         fixtures=fixtures,
         rendition_profiles=tuple(validated_profiles),
         segment_duration_seconds=segment_duration,
@@ -886,6 +980,7 @@ def load_network_scenarios(
         )
     if tuple(str(scenario["id"]) for scenario in validated) != _EXPECTED_NETWORK_SCENARIO_IDS:
         raise FixtureManifestError("network scenario ids are not the approved matrix")
+    _verify_approved_manifest_digest(path, NETWORK_SCENARIOS_PATH, allow_test_copy=allow_test_copy)
     return tuple(validated)
 
 
@@ -996,6 +1091,7 @@ def load_test_manifest(
         raise FixtureManifestError("test manifest cases are not the approved schema")
     if {str(test["id"]) for test in tests} != expected_test_ids:
         raise FixtureManifestError("test manifest case ids are not complete")
+    _verify_approved_manifest_digest(path, TEST_MANIFEST_PATH, allow_test_copy=allow_test_copy)
     return payload
 
 
@@ -1044,6 +1140,35 @@ def _assert_source_url(url: str) -> None:
     )
 
 
+class _AllowlistedRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Validate each redirect target before urllib opens it."""
+
+    def __init__(self, *, expected_path: str) -> None:
+        self._expected_path = expected_path
+
+    def redirect_request(
+        self,
+        request: urllib.request.Request,
+        fp: Any,
+        code: int,
+        msg: str,
+        headers: Any,
+        newurl: str,
+    ) -> urllib.request.Request | None:
+        try:
+            _validate_url(
+                newurl,
+                field_name="redirect target",
+                allowed_hosts=_ALLOWED_DOWNLOAD_HOSTS,
+                exact_path=self._expected_path,
+            )
+        except FixtureManifestError as error:
+            raise FixtureHarnessError(
+                "fixture download redirected outside its HTTPS allowlist"
+            ) from error
+        raise FixtureHarnessError("fixture download redirects are not allowed")
+
+
 def acquire_external_fixture(
     registry: FixtureRegistry,
     fixture_id: str,
@@ -1062,7 +1187,7 @@ def acquire_external_fixture(
         or not isinstance(timeout_seconds, int)
         or not 5 <= timeout_seconds <= 600
     ):
-        raise ValueError("timeout_seconds must be between five seconds and ten minutes")
+        raise FixtureHarnessError("timeout_seconds must be between five seconds and ten minutes")
     source_url = str(fixture["source_url"])
     _assert_source_url(source_url)
     archive_path = fixture_archive_cache_path(registry, fixture_id, cache_root)
@@ -1082,7 +1207,10 @@ def acquire_external_fixture(
             headers={"User-Agent": "authority-closers-media-fixture-harness/1.0"},
         )
         try:
-            with urllib.request.urlopen(request, timeout=timeout_seconds) as response:  # noqa: S310 - allowlist checked above
+            opener = urllib.request.build_opener(
+                _AllowlistedRedirectHandler(expected_path=urlsplit(source_url).path)
+            )
+            with opener.open(request, timeout=timeout_seconds) as response:  # noqa: S310 - allowlist checked above
                 final_url = response.geturl()
                 try:
                     _validate_url(
@@ -1289,6 +1417,12 @@ def generate_fixture(
     fixture = registry.fixture(fixture_id)
     if fixture.get("kind") != "generated_lavfi":
         raise FixtureHarnessError("generate only accepts generated_lavfi fixtures")
+    if (
+        isinstance(timeout_seconds, bool)
+        or not isinstance(timeout_seconds, int)
+        or not 5 <= timeout_seconds <= 600
+    ):
+        raise FixtureHarnessError("timeout_seconds must be between five seconds and ten minutes")
     generator = _read_json(registry.path).get("generator")
     if not isinstance(generator, Mapping):
         raise FixtureManifestError("fixture generator is missing")

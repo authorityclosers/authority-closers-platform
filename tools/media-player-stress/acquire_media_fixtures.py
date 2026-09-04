@@ -116,7 +116,7 @@ def main(argv: list[str] | None = None) -> int:
         ]
         print(json.dumps(evidence, indent=2, sort_keys=True))
         return 0
-    except FixtureHarnessError as error:
+    except (FixtureHarnessError, ValueError) as error:
         print(f"fixture harness refused the request: {error}", file=sys.stderr)
         return 2
 

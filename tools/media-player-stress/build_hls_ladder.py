@@ -28,6 +28,7 @@ if str(SCRIPT_DIR) not in sys.path:
 from fixture_harness import (  # noqa: E402
     DEFAULT_CACHE_ROOT,
     DEFAULT_MANIFEST_PATH,
+    EXPECTED_CAPTIONS_MANIFEST_SHA256,
     FixtureHarnessError,
     FixtureRegistry,
     _reject_reparse_components,
@@ -75,7 +76,13 @@ def _read_json(path: Path) -> dict[str, Any]:
 
 
 def _safe_relative(value: Any, *, field_name: str) -> str:
-    if not isinstance(value, str) or not value.strip() or "\\" in value or ":" in value:
+    if (
+        not isinstance(value, str)
+        or not value.strip()
+        or "\\" in value
+        or ":" in value
+        or any(ord(character) < 0x20 or ord(character) == 0x7F for character in value)
+    ):
         raise FixtureHarnessError(f"{field_name} is not a safe relative path")
     normalized = value.strip()
     parts = normalized.split("/")
@@ -181,6 +188,8 @@ def _load_captions_manifest() -> tuple[Path, dict[str, Any], list[dict[str, Any]
     }
     if set(manifest) != expected_keys:
         raise FixtureHarnessError("caption manifest fields are not the approved schema")
+    if sha256_file(manifest_path) != EXPECTED_CAPTIONS_MANIFEST_SHA256:
+        raise FixtureHarnessError("caption manifest checksum is not the pinned authority")
     relative_path = _safe_relative(manifest.get("path"), field_name="caption path")
     if relative_path != "captions/stress-en.vtt":
         raise FixtureHarnessError("caption path is not the exact approved synthetic track")
@@ -507,7 +516,9 @@ def _render_profile(
     return command
 
 
-def _playlist_segments(playlist: Path, *, stage_root: Path, segment_duration: int) -> list[Path]:
+def _playlist_segments(
+    playlist: Path, *, stage_root: Path, segment_duration: int
+) -> tuple[list[Path], list[float]]:
     _reject_reparse_components(playlist)
     if not playlist.is_file() or playlist.is_symlink():
         raise FixtureHarnessError("HLS playlist must be a regular file")
@@ -515,7 +526,15 @@ def _playlist_segments(playlist: Path, *, stage_root: Path, segment_duration: in
         lines = playlist.read_text(encoding="utf-8").splitlines()
     except (OSError, UnicodeError) as error:
         raise FixtureHarnessError("HLS playlist cannot be read") from error
-    if "#EXTM3U" not in lines or "#EXT-X-ENDLIST" not in lines:
+    if (
+        not lines
+        or lines[0] != "#EXTM3U"
+        or "#EXT-X-ENDLIST" not in lines
+        or "#EXT-X-PLAYLIST-TYPE:VOD" not in lines
+        or "#EXT-X-INDEPENDENT-SEGMENTS" not in lines
+        or "#EXT-X-MEDIA-SEQUENCE:0" not in lines
+        or "#EXT-X-DISCONTINUITY" in lines
+    ):
         raise FixtureHarnessError("HLS VOD playlist is missing required terminators")
     try:
         target_duration = next(
@@ -525,9 +544,10 @@ def _playlist_segments(playlist: Path, *, stage_root: Path, segment_duration: in
         )
     except (StopIteration, ValueError) as error:
         raise FixtureHarnessError("HLS playlist has no valid target duration") from error
-    if target_duration > segment_duration + 1:
+    if target_duration <= 0 or target_duration > segment_duration:
         raise FixtureHarnessError("HLS playlist target duration exceeds the configured bound")
     segments: list[Path] = []
+    durations: list[float] = []
     seen_segments: set[str] = set()
     for index, line in enumerate(lines):
         if line.startswith("#EXTINF:"):
@@ -535,8 +555,9 @@ def _playlist_segments(playlist: Path, *, stage_root: Path, segment_duration: in
                 seconds = float(line.split(":", 1)[1].split(",", 1)[0])
             except (ValueError, IndexError) as error:
                 raise FixtureHarnessError("HLS playlist has an invalid segment duration") from error
-            if not 0 < seconds <= segment_duration + 1.0:
+            if not math.isfinite(seconds) or not 0 < seconds <= segment_duration:
                 raise FixtureHarnessError("HLS segment duration is outside its bound")
+            durations.append(seconds)
             try:
                 segment_name = lines[index + 1]
             except IndexError as error:
@@ -561,9 +582,86 @@ def _playlist_segments(playlist: Path, *, stage_root: Path, segment_duration: in
             if segment.stat().st_size <= 0 or segment.stat().st_size > _MAX_SEGMENT_BYTES:
                 raise FixtureHarnessError("HLS segment is outside its byte bound")
             segments.append(segment)
-    if not segments:
+        elif line and not line.startswith("#"):
+            if index == 0 or not lines[index - 1].startswith("#EXTINF:"):
+                raise FixtureHarnessError("HLS playlist contains an unexpected URI")
+    if not segments or len(durations) != len(segments):
         raise FixtureHarnessError("HLS playlist contains no segments")
-    return segments
+    if math.ceil(max(durations)) > target_duration:
+        raise FixtureHarnessError("HLS playlist target duration is shorter than a segment")
+    return segments, durations
+
+
+def _probe_segment_timeline(segment: Path) -> tuple[float, float]:
+    """Read bounded MPEG-TS PTS/DTS metadata for one independent segment."""
+
+    ffprobe = shutil.which("ffprobe")
+    if not ffprobe:
+        raise FixtureHarnessError("ffprobe is required to verify HLS timestamps")
+    try:
+        result = subprocess.run(  # noqa: S603 - fixed ffprobe argv and local path
+            [
+                ffprobe,
+                "-v",
+                "error",
+                "-print_format",
+                "json",
+                "-select_streams",
+                "v:0",
+                "-show_streams",
+                "-show_packets",
+                "-show_entries",
+                "stream=start_time,duration:packet=pts_time,dts_time,duration_time,flags",
+                str(segment),
+            ],
+            check=True,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            timeout=60,
+            text=True,
+        )
+        if len(result.stdout.encode("utf-8")) > 8 * 1024 * 1024:
+            raise FixtureHarnessError("HLS timestamp metadata exceeds its bound")
+        metadata = json.loads(result.stdout)
+    except FixtureHarnessError:
+        raise
+    except (OSError, subprocess.SubprocessError, UnicodeError, json.JSONDecodeError) as error:
+        raise FixtureHarnessError("ffprobe could not inspect HLS timestamps") from error
+    streams = metadata.get("streams") if isinstance(metadata, dict) else None
+    packets = metadata.get("packets") if isinstance(metadata, dict) else None
+    if not isinstance(streams, list) or len(streams) != 1 or not isinstance(packets, list):
+        raise FixtureHarnessError("HLS segment timestamp metadata is incomplete")
+    stream = streams[0]
+    if not isinstance(stream, dict) or not packets:
+        raise FixtureHarnessError("HLS segment has no video timestamp inventory")
+    try:
+        start = float(stream["start_time"])
+        duration = float(stream["duration"])
+    except (KeyError, TypeError, ValueError) as error:
+        raise FixtureHarnessError("HLS segment stream timestamps are invalid") from error
+    if not math.isfinite(start) or not math.isfinite(duration) or duration <= 0:
+        raise FixtureHarnessError("HLS segment stream timestamps are outside their bounds")
+    pts_values: list[float] = []
+    dts_values: list[float] = []
+    for packet in packets:
+        if not isinstance(packet, dict):
+            raise FixtureHarnessError("HLS segment packet metadata is invalid")
+        try:
+            pts = float(packet["pts_time"])
+            dts = float(packet["dts_time"])
+        except (KeyError, TypeError, ValueError) as error:
+            raise FixtureHarnessError("HLS segment packet timestamps are invalid") from error
+        if not math.isfinite(pts) or not math.isfinite(dts):
+            raise FixtureHarnessError("HLS segment packet timestamps are not finite")
+        pts_values.append(pts)
+        dts_values.append(dts)
+    if "K" not in str(packets[0].get("flags", "")):
+        raise FixtureHarnessError("HLS segment does not begin with an independent keyframe")
+    if any(right + 0.001 < left for left, right in zip(dts_values, dts_values[1:], strict=False)):
+        raise FixtureHarnessError("HLS segment DTS timeline moves backwards")
+    if min(pts_values) < start - 0.1 or max(pts_values) > start + duration + 0.1:
+        raise FixtureHarnessError("HLS segment PTS values cross its declared boundary")
+    return start, start + duration
 
 
 def _attribute(line: str, name: str) -> str | None:
@@ -701,37 +799,37 @@ def validate_range_and_quality_switching(
     profile_ids: set[str],
     *,
     segment_duration: int,
+    requested_duration: float,
 ) -> dict[str, Any]:
     """Validate local range slices and aligned rendition switch points."""
 
     _reject_reparse_components(stage_root)
     if not stage_root.is_dir() or stage_root.is_symlink():
         raise FixtureHarnessError("range/quality harness requires a regular HLS directory")
-    timelines: dict[str, tuple[list[Path], list[float]]] = {}
+    timelines: dict[str, tuple[list[Path], list[float], list[tuple[float, float]]]] = {}
     range_evidence: dict[str, list[dict[str, Any]]] = {}
     for profile_id in _sort_profile_ids(profile_ids):
         playlist = stage_root / profile_id / "index.m3u8"
-        segments = _playlist_segments(
+        segments, durations = _playlist_segments(
             playlist,
             stage_root=stage_root,
             segment_duration=segment_duration,
         )
-        try:
-            lines = playlist.read_text(encoding="utf-8").splitlines()
-        except (OSError, UnicodeError) as error:
-            raise FixtureHarnessError("quality-switching playlist cannot be read") from error
-        durations: list[float] = []
-        for line in lines:
-            if line.startswith("#EXTINF:"):
-                try:
-                    durations.append(float(line.split(":", 1)[1].split(",", 1)[0]))
-                except (ValueError, IndexError) as error:
-                    raise FixtureHarnessError(
-                        "quality-switching playlist duration is invalid"
-                    ) from error
-        if len(durations) != len(segments):
-            raise FixtureHarnessError("quality-switching playlist segment timeline is incomplete")
-        timelines[profile_id] = (segments, durations)
+        if not math.isclose(sum(durations), requested_duration, rel_tol=0, abs_tol=0.1):
+            raise FixtureHarnessError("HLS playlist duration does not match the requested duration")
+        segment_timelines: list[tuple[float, float]] = []
+        previous_end: float | None = None
+        for segment, declared_duration in zip(segments, durations, strict=True):
+            start, end = _probe_segment_timeline(segment)
+            if not math.isclose(end - start, declared_duration, rel_tol=0, abs_tol=0.1):
+                raise FixtureHarnessError("HLS PTS duration differs from EXTINF")
+            if previous_end is not None and not math.isclose(
+                start, previous_end, rel_tol=0, abs_tol=0.1
+            ):
+                raise FixtureHarnessError("HLS segment PTS boundaries are not contiguous")
+            segment_timelines.append((start, end))
+            previous_end = end
+        timelines[profile_id] = (segments, durations, segment_timelines)
         first = segments[0]
         size = first.stat().st_size
         ranges = [(0, min(1023, size - 1))]
@@ -741,22 +839,30 @@ def validate_range_and_quality_switching(
         range_evidence[profile_id] = [
             _simulate_single_range(first, start, end) for start, end in ranges
         ]
-    counts = {len(segments) for segments, _ in timelines.values()}
+    counts = {len(segments) for segments, _, _ in timelines.values()}
     if len(counts) != 1:
         raise FixtureHarnessError("quality-switching renditions have different segment counts")
     reference_durations = next(iter(timelines.values()))[1]
-    for _, (_, durations) in timelines.items():
+    reference_pts = next(iter(timelines.values()))[2]
+    for _, (_, durations, segment_pts) in timelines.items():
         if len(durations) != len(reference_durations) or any(
             not math.isclose(left, right, rel_tol=0, abs_tol=0.05)
             for left, right in zip(durations, reference_durations, strict=True)
         ):
             raise FixtureHarnessError("quality-switching rendition timelines are not aligned")
+        if len(segment_pts) != len(reference_pts) or any(
+            not math.isclose(left, right, rel_tol=0, abs_tol=0.1)
+            for pair, reference_pair in zip(segment_pts, reference_pts, strict=True)
+            for left, right in zip(pair, reference_pair, strict=True)
+        ):
+            raise FixtureHarnessError("quality-switching rendition PTS boundaries are not aligned")
     return {
         "status": "test_only",
         "transport": "local_byte_slice_simulation",
         "http_requests_performed": False,
         "range_policy": "single_inclusive_range",
         "quality_switch_policy": "aligned_segment_timeline",
+        "pts_boundary_validation": True,
         "profile_ids": _sort_profile_ids(profile_ids),
         "segment_count": next(iter(counts)),
         "range_samples": range_evidence,
@@ -789,8 +895,12 @@ def build_ladder(
 ) -> Path:
     if not 0 < duration_seconds <= _MAX_DURATION_SECONDS:
         raise ValueError(f"duration_seconds must be between zero and {_MAX_DURATION_SECONDS}")
-    if not 30 <= timeout_seconds <= 3600:
-        raise ValueError("timeout_seconds must be between thirty seconds and one hour")
+    if (
+        isinstance(timeout_seconds, bool)
+        or not isinstance(timeout_seconds, int)
+        or not 30 <= timeout_seconds <= 3600
+    ):
+        raise FixtureHarnessError("timeout_seconds must be between thirty seconds and one hour")
     approved_registry = load_manifest()
     if (
         registry.path.resolve() != approved_registry.path
@@ -840,7 +950,7 @@ def build_ladder(
                 timeout_seconds=timeout_seconds,
             )
             playlist = profile_dir / "index.m3u8"
-            segments = _playlist_segments(
+            segments, _ = _playlist_segments(
                 playlist,
                 stage_root=stage_root,
                 segment_duration=registry.segment_duration_seconds,
@@ -948,6 +1058,7 @@ def build_ladder(
             stage_root,
             profile_ids,
             segment_duration=registry.segment_duration_seconds,
+            requested_duration=duration_seconds,
         )
         output_manifest = {
             "schema_version": "ac-media-stress-hls-output.v1",
