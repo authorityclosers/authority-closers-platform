@@ -1,0 +1,6 @@
+scenario_id,tenants,learners_per_tenant,enrollment_days,course_days,activities,activation_probability,activity_continuation_probability,human_review_fraction,intervention_probability,review_minutes_mean,review_minutes_sigma,intervention_minutes_mean,coaches,coach_hours_per_day,workdays_per_week,sla_hours,telemetry_events_per_activity,runs,seed
+ac_dipak_pilot_25,1,25,14,42,12,0.85,0.95,0.20,0.35,12,0.35,8,1,2,6,24,18,5000,2026090401
+ac_cohort_100,1,100,21,56,16,0.82,0.96,0.25,0.40,14,0.40,8,1,2,6,24,18,3000,2026090402
+ac_launch_250,1,250,30,56,16,0.82,0.96,0.30,0.40,14,0.40,8,2,3,6,24,18,2000,2026090403
+future_5_tenants_supported,5,250,30,56,16,0.82,0.96,0.30,0.40,14,0.40,8,8,4,6,24,18,1000,2026090404
+future_5_tenants_understaffed,5,250,30,56,16,0.82,0.96,0.30,0.40,14,0.40,8,4,3,6,24,18,1000,2026090405

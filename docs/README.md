@@ -20,3 +20,7 @@ Current v0.1 implementation artifacts:
 - [`contracts/V0_1_ROUTE_SCREEN_CONTRACTS.md`](contracts/V0_1_ROUTE_SCREEN_CONTRACTS.md)
 - [`runbooks/LOCAL_V0_1_ALPHA.md`](runbooks/LOCAL_V0_1_ALPHA.md)
 - [`evidence/V0_1_ALPHA_HANDOFF.md`](evidence/V0_1_ALPHA_HANDOFF.md)
+
+Performance evidence and execution handoff:
+
+- [`performance/AC-PERF-001_BLAZING_FAST_PLATFORM_PERFORMANCE_HANDOFF.md`](performance/AC-PERF-001_BLAZING_FAST_PLATFORM_PERFORMANCE_HANDOFF.md)
