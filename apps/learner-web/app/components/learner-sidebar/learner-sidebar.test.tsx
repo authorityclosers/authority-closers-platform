@@ -560,6 +560,9 @@ describe("P1 Learner Sidebar & Navigation Architecture", () => {
       expect(css).toContain("--sidebar-duration-normal: 180ms;");
       expect(css).toContain("--sidebar-duration-slow: 320ms;");
       expect(css).toContain("--sidebar-active-rail-width: 3px;");
+      expect(css).toMatch(
+        /@media \(min-width: 1024px\) \{\s*\.site-frame--learner \.learner-header \{\s*height: 76px !important;\s*min-height: 76px !important;\s*max-height: 76px !important;/,
+      );
       expect(css).toContain(
         ".site-frame--learner.site-frame--collapsed .learner-header",
       );
@@ -587,6 +590,7 @@ describe("P1 Learner Sidebar & Navigation Architecture", () => {
       expect(css).toContain(
         "--sidebar-rail-accent: var(--theme-action, #3157d8);",
       );
+      expect(css).toContain("color: var(--theme-action-text, #ffffff);");
 
       // Dark mode overrides with matching dark theme tokens
       expect(css).toContain(
@@ -628,6 +632,8 @@ describe("P1 Learner Sidebar & Navigation Architecture", () => {
       );
       expect(css).toContain("left: 50%;");
       expect(css).toContain("transform: translate(-50%, -50%);");
+      expect(css).toContain("@media (min-width: 1024px) and (hover: none)");
+      expect(css).toContain("(min-width: 1024px) and (pointer: coarse)");
     });
 
     it("ensures mark cutout --ac-mark-cut and tooltips follow semantic theme specifications", () => {
@@ -660,7 +666,7 @@ describe("P1 Learner Sidebar & Navigation Architecture", () => {
       );
     });
 
-    it("enforces subtle active tint + 2px rail, neutral hover, scale .985 press, and 2px focus ring", () => {
+    it("enforces subtle active tint + 3px rail, neutral hover, scale .985 press, and 2px focus ring", () => {
       const css = readFileSync(
         new URL("../../learner-next-slice.css", import.meta.url),
         "utf8",
@@ -689,6 +695,19 @@ describe("P1 Learner Sidebar & Navigation Architecture", () => {
       expect(css).toContain("transition: none !important;");
       expect(css).toContain("animation: none !important;");
       expect(css).toContain("transform: none !important;");
+      expect(css).toContain("transform: translateY(-50%) !important;");
+      expect(css).toContain("transform: translate(-50%, -50%) !important;");
+      const reducedMotion = css.slice(
+        css.indexOf("@media (prefers-reduced-motion: reduce)"),
+      );
+      const positionedToggleRule = reducedMotion.indexOf(
+        ".site-frame--learner .learner-sidebar-toggle {",
+      );
+      expect(positionedToggleRule).toBeGreaterThan(0);
+      expect(reducedMotion.slice(0, positionedToggleRule)).not.toContain(
+        ".learner-sidebar-toggle,",
+      );
+      expect(css).toContain(".sidebar-tooltip-panel {");
     });
   });
 

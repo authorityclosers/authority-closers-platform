@@ -226,26 +226,49 @@ describe("learner shell modal interactions", () => {
     );
     expect(trigger).not.toBeNull();
 
-    // Trigger hover or focus
+    // Focus alone opens the tooltip.
     await act(async () => {
-      trigger?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
       trigger?.focus();
     });
     await settleEffects();
 
-    const tooltip =
-      document.body.querySelector<HTMLElement>('[role="tooltip"]');
+    let tooltip = document.body.querySelector<HTMLElement>('[role="tooltip"]');
     expect(tooltip).not.toBeNull();
     expect(tooltip?.textContent).toContain("Dashboard");
     expect(trigger?.getAttribute("aria-describedby")).toBe(tooltip?.id);
 
-    // Blur cleans up
+    // Leaving hover must not hide a tooltip while the trigger remains focused.
     await act(async () => {
-      trigger?.blur();
+      trigger?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
       trigger?.dispatchEvent(new MouseEvent("mouseout", { bubbles: true }));
     });
     await settleEffects();
+    expect(document.body.querySelector('[role="tooltip"]')).not.toBeNull();
 
+    await act(async () => trigger?.blur());
+    await settleEffects();
+    expect(document.body.querySelector('[role="tooltip"]')).toBeNull();
+
+    // Hover alone opens the tooltip.
+    await act(async () => {
+      trigger?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+    });
+    await settleEffects();
+    tooltip = document.body.querySelector<HTMLElement>('[role="tooltip"]');
+    expect(tooltip).not.toBeNull();
+
+    // Losing focus must not hide a tooltip while the trigger remains hovered.
+    await act(async () => {
+      trigger?.focus();
+      trigger?.blur();
+    });
+    await settleEffects();
+    expect(document.body.querySelector('[role="tooltip"]')).not.toBeNull();
+
+    await act(async () => {
+      trigger?.dispatchEvent(new MouseEvent("mouseout", { bubbles: true }));
+    });
+    await settleEffects();
     expect(document.body.querySelector('[role="tooltip"]')).toBeNull();
   });
 });
