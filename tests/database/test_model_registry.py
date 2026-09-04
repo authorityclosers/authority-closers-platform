@@ -20,6 +20,7 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "memberships",
         "programs",
         "program_versions",
+        "catalog_publish_commands",
         "modules",
         "module_prerequisites",
         "activities",
