@@ -35,6 +35,12 @@ from ac_platform.media.contracts import (
     create_media_authorization_context,
     resolve_authorized_delivery,
 )
+from ac_platform.media.delivery import (
+    MediaDeliveryAuthorizer,
+    MediaDeliveryResult,
+    MediaTokenType,
+    PrivateMediaDeliveryHandler,
+)
 from ac_platform.media.errors import (
     MediaAuthorizationMismatchError,
     MediaBadRequest,
@@ -136,10 +142,12 @@ __all__ = [
     "MediaAsset",
     "MediaBindingState",
     "MediaDeliveryDescriptor",
+    "MediaDeliveryAuthorizer",
     "MediaDeliveryError",
     "MediaDeliveryKind",
     "MediaDeliveryMetadata",
     "MediaDeliveryPort",
+    "MediaDeliveryResult",
     "MediaCaptionTrack",
     "MediaLifecycle",
     "MediaPlaybackGrant",
@@ -200,10 +208,12 @@ __all__ = [
     "MediaTelemetryEvent",
     "MediaTelemetryExporter",
     "MediaTelemetryRecorder",
+    "MediaTokenType",
     "NoopMediaLifecycleHooks",
     "NoopMediaRetentionHooks",
     "NullMediaTelemetryExporter",
     "ProcessedCaption",
+    "PrivateMediaDeliveryHandler",
     "ProcessingQuota",
     "inspect_hls_playlist_inventory",
     "RangeMode",

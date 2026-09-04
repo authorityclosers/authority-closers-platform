@@ -7,10 +7,10 @@ import hashlib
 import ipaddress
 import mimetypes
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import Any, NoReturn, Protocol
+from typing import Any, NoReturn, Protocol, runtime_checkable
 from urllib.parse import parse_qsl, quote, urlsplit
 
 from ac_platform.media.contracts import EphemeralMediaUrl
@@ -248,6 +248,7 @@ def _secure_url(value: str) -> str:
         ) from error
 
 
+@runtime_checkable
 class PrivateObjectStorage(Protocol):
     def create_upload_intent(
         self,
@@ -264,6 +265,15 @@ class PrivateObjectStorage(Protocol):
     def read_prefix(self, object_key: str, *, max_bytes: int = 512) -> bytes: ...
 
     def read(self, object_key: str) -> bytes: ...
+
+    def iter_range(
+        self,
+        object_key: str,
+        *,
+        start: int = 0,
+        end: int | None = None,
+        chunk_size: int = 1024 * 1024,
+    ) -> Iterator[bytes]: ...
 
     def put(
         self,
@@ -303,6 +313,17 @@ class UnconfiguredPrivateObjectStorage:
 
     def read(self, object_key: str) -> bytes:
         del object_key
+        self._unavailable()
+
+    def iter_range(
+        self,
+        object_key: str,
+        *,
+        start: int = 0,
+        end: int | None = None,
+        chunk_size: int = 1024 * 1024,
+    ) -> Iterator[bytes]:
+        del object_key, start, end, chunk_size
         self._unavailable()
 
     def put(self, **kwargs: Any) -> StoredObjectMetadata:
@@ -380,6 +401,44 @@ class InMemoryPrivateObjectStorage:
         if item is None:
             raise MediaStorageUnavailable("The private media object is unavailable.")
         return bytes(item[0])
+
+    def iter_range(
+        self,
+        object_key: str,
+        *,
+        start: int = 0,
+        end: int | None = None,
+        chunk_size: int = 1024 * 1024,
+    ) -> Iterator[bytes]:
+        """Yield one bounded object range without making a second copy.
+
+        The delivery layer validates the range against a verified ``head``
+        before calling this primitive.  Keeping the validation here as well
+        prevents a future caller from accidentally creating an unbounded or
+        negative slice through the test adapter.
+        """
+
+        if (
+            isinstance(start, bool)
+            or not isinstance(start, int)
+            or start < 0
+            or end is not None
+            and (isinstance(end, bool) or not isinstance(end, int) or end < start)
+            or isinstance(chunk_size, bool)
+            or not isinstance(chunk_size, int)
+            or chunk_size <= 0
+            or chunk_size > 16 * 1024 * 1024
+        ):
+            raise MediaStorageUnavailable("The private media range is invalid.")
+        item = self._objects.get(object_key)
+        if item is None:
+            raise MediaStorageUnavailable("The private media object is unavailable.")
+        body = item[0]
+        bounded_end = len(body) - 1 if end is None else min(end, len(body) - 1)
+        if start >= len(body) or bounded_end < start:
+            raise MediaStorageUnavailable("The private media range is unavailable.")
+        for offset in range(start, bounded_end + 1, chunk_size):
+            yield bytes(body[offset : min(offset + chunk_size, bounded_end + 1)])
 
     def put(
         self,
@@ -831,14 +890,107 @@ class S3CompatiblePrivateObjectStorage:
         result = self._client.get_object(
             Bucket=self._bucket, Key=object_key, Range=f"bytes=0-{max(0, max_bytes - 1)}"
         )
-        body = result["Body"]
-        return bytes(body.read(max_bytes))
+        body = result.get("Body") if isinstance(result, Mapping) else None
+        if body is None or not callable(getattr(body, "read", None)):
+            raise MediaStorageUnavailable("The private media object prefix is unavailable.")
+        try:
+            return bytes(body.read(max_bytes))
+        finally:
+            close = getattr(body, "close", None)
+            if callable(close):
+                close()
 
     def read(self, object_key: str) -> bytes:
         self._assert_endpoint_safe()
         result = self._client.get_object(Bucket=self._bucket, Key=object_key)
-        body = result["Body"]
-        return bytes(body.read())
+        body = result.get("Body") if isinstance(result, Mapping) else None
+        if body is None or not callable(getattr(body, "read", None)):
+            raise MediaStorageUnavailable("The private media object is unavailable.")
+        try:
+            return bytes(body.read())
+        finally:
+            close = getattr(body, "close", None)
+            if callable(close):
+                close()
+
+    def iter_range(
+        self,
+        object_key: str,
+        *,
+        start: int = 0,
+        end: int | None = None,
+        chunk_size: int = 1024 * 1024,
+    ) -> Iterator[bytes]:
+        """Stream one object range from the peer-bound S3-compatible client.
+
+        The adapter remains impossible to compose in this repository.  This
+        method defines the reviewed transport contract so a future S3/MinIO
+        implementation can stream bounded ranges instead of allocating an
+        entire video in the API process.
+        """
+
+        if (
+            isinstance(start, bool)
+            or not isinstance(start, int)
+            or start < 0
+            or end is not None
+            and (isinstance(end, bool) or not isinstance(end, int) or end < start)
+            or isinstance(chunk_size, bool)
+            or not isinstance(chunk_size, int)
+            or chunk_size <= 0
+            or chunk_size > 16 * 1024 * 1024
+        ):
+            raise MediaStorageUnavailable("The private media range is invalid.")
+        self._assert_endpoint_safe()
+        range_value = f"bytes={start}-{end if end is not None else ''}"
+        try:
+            result = self._client.get_object(
+                Bucket=self._bucket,
+                Key=object_key,
+                Range=range_value,
+            )
+        except Exception as error:
+            raise MediaStorageUnavailable(
+                "The private media object range is unavailable."
+            ) from error
+        body = result.get("Body") if isinstance(result, Mapping) else None
+        if body is None or not callable(getattr(body, "read", None)):
+            raise MediaStorageUnavailable("The private media object range is unavailable.")
+
+        def chunks() -> Iterator[bytes]:
+            consumed = 0
+            expected = None if end is None else end - start + 1
+            try:
+                while True:
+                    requested = chunk_size
+                    if expected is not None:
+                        remaining = expected - consumed
+                        if remaining <= 0:
+                            break
+                        requested = min(requested, remaining)
+                    piece = body.read(requested)
+                    if not piece:
+                        break
+                    if not isinstance(piece, bytes):
+                        raise MediaStorageUnavailable(
+                            "The private media adapter returned a non-byte range."
+                        )
+                    consumed += len(piece)
+                    if expected is not None and consumed > expected:
+                        raise MediaStorageUnavailable(
+                            "The private media adapter returned an oversized range."
+                        )
+                    yield piece
+                if expected is not None and consumed != expected:
+                    raise MediaStorageUnavailable(
+                        "The private media adapter returned a truncated range."
+                    )
+            finally:
+                close = getattr(body, "close", None)
+                if callable(close):
+                    close()
+
+        return chunks()
 
     def put(
         self,
