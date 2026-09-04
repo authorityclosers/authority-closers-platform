@@ -603,9 +603,18 @@ def install_planning_http(
     consent_resolver: ConsentResolver | None = None,
     retention_days: int | None = None,
     retention_policy_id: str | None = None,
+    legacy_analytics_enabled: bool = False,
 ) -> None:
-    """Install the bounded proposal routes around the existing auth boundary."""
+    """Install bounded planning reads and explicitly opted-in proposal writes.
 
+    The legacy single-event ``/v1/analytics/events`` route is disabled by
+    default.  Phase 2 composition uses ``/v1/telemetry/events``; callers that
+    intentionally exercise the older proposal adapter must opt in explicitly
+    and must not use it as a production activation path.
+    """
+
+    if legacy_analytics_enabled and settings.environment != "test":
+        raise RuntimeError("the legacy analytics adapter is restricted to the test environment")
     if retention_days is not None and retention_days <= 0:
         retention_days = None
     if retention_policy_id is not None:
@@ -813,11 +822,6 @@ def install_planning_http(
         response.headers["cache-control"] = "private, no-store"
         return result
 
-    @router.post(
-        "/analytics/events",
-        response_model=AnalyticsIngestResult,
-        status_code=status.HTTP_202_ACCEPTED,
-    )
     async def ingest_analytics_event(
         body: AnalyticsEventRequest,
         request: Request,
@@ -909,6 +913,15 @@ def install_planning_http(
             reason=None if stored else "duplicate_event_id",
             trace_id=event.trace_id,
             retention_expires_at=retention_expires_at,
+        )
+
+    if legacy_analytics_enabled:
+        router.add_api_route(
+            "/analytics/events",
+            ingest_analytics_event,
+            methods=["POST"],
+            response_model=AnalyticsIngestResult,
+            status_code=status.HTTP_202_ACCEPTED,
         )
 
     application.include_router(router)

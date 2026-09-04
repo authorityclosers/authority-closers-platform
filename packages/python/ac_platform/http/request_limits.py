@@ -10,6 +10,7 @@ from starlette.types import Message, Receive, Scope, Send
 from ac_platform.http.request_context import REQUEST_ID_PATTERN
 
 MAX_REQUEST_BODY_BYTES = 1 * 1024 * 1024
+MAX_TELEMETRY_BODY_BYTES = 64 * 1024
 MAX_MEDIA_CAPTION_BYTES = 25 * 1024 * 1024
 MAX_MEDIA_WEBHOOK_BYTES = 512 * 1024
 MAX_DECLARED_BODY_BYTES = MAX_MEDIA_CAPTION_BYTES
@@ -20,10 +21,13 @@ _DRAFT_PATH = re.compile(r"^/v1/activities/[^/]+/draft$")
 _EVIDENCE_PATH = re.compile(r"^/v1/activities/[^/]+/evidence$")
 _WEBHOOK_PATH = re.compile(r"^/internal/v1/providers/[^/]+/webhooks$")
 _MEDIA_CAPTION_PATH = re.compile(r"^/v1/media/[^/]+/captions$")
+_TELEMETRY_PATH = re.compile(r"^/v1/(?:telemetry/events|telemetry/batch|analytics/events/batch)$")
 
 
 def request_body_limit(scope: Scope) -> int:
     path = scope.get("path", "")
+    if _TELEMETRY_PATH.fullmatch(path):
+        return MAX_TELEMETRY_BODY_BYTES
     if _DRAFT_PATH.fullmatch(path):
         return 64 * 1024
     if _EVIDENCE_PATH.fullmatch(path):

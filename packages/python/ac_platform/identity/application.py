@@ -14,6 +14,7 @@ import hmac
 import secrets
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
+from typing import Protocol
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
@@ -90,6 +91,60 @@ class ProductionTransactionRequiredError(IdentityServiceError):
     """A production command was called without an explicit outer transaction."""
 
 
+class AccountDeletionPrivacyHook(Protocol):
+    """Optional same-transaction privacy hook for disposable data planes."""
+
+    async def apply(
+        self,
+        session: AsyncSession,
+        *,
+        deletion_request_id: UUID,
+        person_id: UUID,
+        tenant_id: UUID | None,
+        now: datetime,
+    ) -> object:
+        """Apply an explicitly composed account-deletion privacy action."""
+
+
+async def _drain_account_deletion_hook(
+    hook: AccountDeletionPrivacyHook,
+    session: AsyncSession,
+    *,
+    deletion_request_id: UUID,
+    person_id: UUID,
+    tenant_id: UUID | None,
+    now: datetime,
+) -> bool:
+    """Drain available privacy batches, or report a durable continuation."""
+
+    result = await hook.apply(
+        session,
+        deletion_request_id=deletion_request_id,
+        person_id=person_id,
+        tenant_id=tenant_id,
+        now=now,
+    )
+    while bool(getattr(result, "has_more", False)):
+        next_result = await hook.apply(
+            session,
+            deletion_request_id=deletion_request_id,
+            person_id=person_id,
+            tenant_id=tenant_id,
+            now=now,
+        )
+        if not bool(getattr(next_result, "has_more", False)):
+            return True
+        # ``already_anonymized`` is not progress.  A zero-mutating pass with
+        # more pending rows is the locked/unavailable continuation case.
+        progress = int(getattr(next_result, "purged", 0)) + int(
+            getattr(next_result, "anonymized", 0)
+        )
+        if progress == 0:
+            return False
+        result = next_result
+    return True
+
+
 @dataclass(frozen=True, slots=True)
 class ResolvedActorContext:
     """Server-owned actor plus the revisions used to authorize this transaction."""
@@ -120,6 +175,7 @@ class AsyncIdentityApplication:
         token_pepper: bytes | str,
         session_ttl: timedelta = timedelta(days=30),
         token_length_bytes: int = 32,
+        account_deletion_hook: AccountDeletionPrivacyHook | None = None,
     ) -> None:
         if isinstance(token_pepper, str):
             token_pepper = token_pepper.encode("utf-8")
@@ -134,6 +190,7 @@ class AsyncIdentityApplication:
         self._token_pepper = token_pepper
         self._session_ttl = session_ttl
         self._token_length_bytes = token_length_bytes
+        self._account_deletion_hook = account_deletion_hook
 
     async def begin_provider_authorization(
         self,
@@ -863,7 +920,14 @@ class AsyncIdentityApplication:
         *,
         now: datetime | None = None,
     ) -> DeletionRequestSnapshot:
-        """Disable the person, revoke every session, and complete the request."""
+        """Disable the person, revoke sessions, and finish privacy work first.
+
+        A disposable-data hook may return a continuation signal when a
+        bounded pass encounters more rows.  Available batches are drained in
+        this transaction.  If a later pass makes no progress (for example,
+        because another worker still holds a ``SKIP LOCKED`` row), the
+        request remains ``processing`` so a durable retry can continue it.
+        """
 
         self._require_transaction()
         actor.require_permission("identity_deletion_process")
@@ -884,6 +948,17 @@ class AsyncIdentityApplication:
             return request
         if request.status != DeletionRequestStatus.PROCESSING.value:
             raise DeletionRequestStateError("only a processing deletion can be completed")
+        if self._account_deletion_hook is not None:
+            privacy_complete = await _drain_account_deletion_hook(
+                self._account_deletion_hook,
+                self._session,
+                deletion_request_id=request.id,
+                person_id=person.id,
+                tenant_id=request.tenant_id,
+                now=current_time,
+            )
+            if not privacy_complete:
+                return request
         if person.status != PersonStatus.DELETED.value:
             await self._repository.save_person(
                 replace(
@@ -915,6 +990,7 @@ class AsyncIdentityApplication:
 
 
 __all__ = [
+    "AccountDeletionPrivacyHook",
     "AsyncIdentityApplication",
     "ProductionTransactionRequiredError",
     "RegisteredIdentity",
