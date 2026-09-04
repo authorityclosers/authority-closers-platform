@@ -71,7 +71,10 @@ _RETRIEVAL_QUERY = text(
                     AND acl.acl_subject_id = ANY(:acl_subject_ids)
               )
           )
-          AND (:snapshot_id IS NULL OR v.id = :snapshot_id)
+          AND (
+              CAST(:snapshot_id AS uuid) IS NULL
+              OR v.id = CAST(:snapshot_id AS uuid)
+          )
     ), ranked AS (
         SELECT
             authorized.*,

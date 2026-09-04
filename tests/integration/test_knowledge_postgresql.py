@@ -113,10 +113,18 @@ def _run(coroutine):
         return runner.run(coroutine)
 
 
-async def _seed(schema_url: URL) -> dict[str, UUID]:
+async def _seed(
+    schema_url: URL,
+    *,
+    deterministic_gold_tenants: bool = False,
+) -> dict[str, UUID]:
     engine = create_async_engine(schema_url, pool_pre_ping=True)
     sessions = async_sessionmaker(engine, expire_on_commit=False)
-    tenant_a, tenant_b = gold_tenant_id("tenant-a"), gold_tenant_id("tenant-b")
+    tenant_a, tenant_b = (
+        (gold_tenant_id("tenant-a"), gold_tenant_id("tenant-b"))
+        if deterministic_gold_tenants
+        else (uuid4(), uuid4())
+    )
     source_a, source_b, withdrawn_source, state_source = uuid4(), uuid4(), uuid4(), uuid4()
     version_a, version_b, withdrawn_version, state_version = (
         uuid4(),
@@ -890,7 +898,7 @@ def test_postgresql_gold_set_runner_enforces_context_acl_and_withdrawal(
 ) -> None:
     """Run the complete gold fixture through PostgreSQL and typed evaluation."""
 
-    ids = _run(_seed(postgres_harness))
+    ids = _run(_seed(postgres_harness, deterministic_gold_tenants=True))
     cases = load_gold_set(ROOT / "tests" / "fixtures" / "knowledge_gold_set.jsonl")
 
     async def exercise() -> None:
