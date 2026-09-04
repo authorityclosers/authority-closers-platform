@@ -545,21 +545,24 @@ describe("P1 Learner Sidebar & Navigation Architecture", () => {
   });
 
   describe("CSS layout tokens & reduced-motion fidelity", () => {
-    it("contains 252px/64px sidebar dimensions, 44px/38px row heights, and 80/140/220/320ms timing tokens", () => {
+    it("contains 280px/76px sidebar dimensions, 44px/38px row heights, and 80/140/180/320ms timing tokens", () => {
       const css = readFileSync(
         new URL("../../learner-next-slice.css", import.meta.url),
         "utf8",
       );
 
-      expect(css).toContain("--sidebar-width-expanded: 252px;");
-      expect(css).toContain("--sidebar-width-collapsed: 64px;");
+      expect(css).toContain("--sidebar-width-expanded: 280px;");
+      expect(css).toContain("--sidebar-width-collapsed: 76px;");
       expect(css).toContain("--sidebar-row-comfortable: 44px;");
       expect(css).toContain("--sidebar-row-compact: 38px;");
       expect(css).toContain("--sidebar-duration-instant: 80ms;");
       expect(css).toContain("--sidebar-duration-fast: 140ms;");
-      expect(css).toContain("--sidebar-duration-normal: 220ms;");
+      expect(css).toContain("--sidebar-duration-normal: 180ms;");
       expect(css).toContain("--sidebar-duration-slow: 320ms;");
-      expect(css).toContain("--sidebar-active-rail-width: 2px;");
+      expect(css).toContain("--sidebar-active-rail-width: 3px;");
+      expect(css).toMatch(
+        /@media \(min-width: 1024px\) \{\s*\.site-frame--learner \.learner-header \{\s*height: 76px !important;\s*min-height: 76px !important;\s*max-height: 76px !important;/,
+      );
       expect(css).toContain(
         ".site-frame--learner.site-frame--collapsed .learner-header",
       );
@@ -569,6 +572,92 @@ describe("P1 Learner Sidebar & Navigation Architecture", () => {
       expect(css).toContain("margin-left: 0 !important;");
       expect(css).toContain(".site-frame--learner .mobile-drawer-overlay");
       expect(css).toContain("z-index: 160;");
+    });
+
+    it("synchronizes sidebar colors with semantic theme tokens in light and dark modes", () => {
+      const css = readFileSync(
+        new URL("../../learner-next-slice.css", import.meta.url),
+        "utf8",
+      );
+
+      // Light mode uses semantic tokens, never hardcoded dark values
+      expect(css).toContain("--sidebar-bg: var(--theme-surface, #ffffff);");
+      expect(css).toContain("--sidebar-border: var(--theme-border, #d7deea);");
+      expect(css).toContain("--sidebar-text: var(--theme-text, #0f1b33);");
+      expect(css).toContain(
+        "--sidebar-text-muted: var(--theme-text-muted, #596579);",
+      );
+      expect(css).toContain(
+        "--sidebar-rail-accent: var(--theme-action, #3157d8);",
+      );
+      expect(css).toContain("color: var(--theme-action-text, #ffffff);");
+
+      // Dark mode overrides with matching dark theme tokens
+      expect(css).toContain(
+        'html[data-theme="dark"] {\n  --sidebar-bg: var(--theme-surface, #101a2b);',
+      );
+      expect(css).toContain("--sidebar-border: var(--theme-border, #34425a);");
+      expect(css).toContain("--sidebar-text: var(--theme-text, #edf2fb);");
+      expect(css).toContain(
+        "--sidebar-rail-accent: var(--theme-action, #9bb3ff);",
+      );
+    });
+
+    it("implements overlay collapse toggle hidden at rest and revealed on hover or focus", () => {
+      const css = readFileSync(
+        new URL("../../learner-next-slice.css", import.meta.url),
+        "utf8",
+      );
+
+      // Hidden at rest as an overlay
+      expect(css).toContain(".site-frame--learner .learner-sidebar-toggle {");
+      expect(css).toContain("opacity: 0;");
+      expect(css).toContain("pointer-events: none;");
+      expect(css).toContain("position: absolute;");
+
+      // Revealed on hover or focus-visible
+      expect(css).toContain(
+        ".site-frame--learner .learner-sidebar:hover .learner-sidebar-toggle",
+      );
+      expect(css).toContain(
+        ".site-frame--learner .learner-sidebar:focus-within .learner-sidebar-toggle",
+      );
+      expect(css).toContain(
+        ".site-frame--learner .learner-sidebar-toggle:focus-visible",
+      );
+
+      // Collapsed mode: positioned directly over centered mark
+      expect(css).toContain(
+        ".site-frame--learner.site-frame--collapsed .learner-sidebar-toggle",
+      );
+      expect(css).toContain("left: 50%;");
+      expect(css).toContain("transform: translate(-50%, -50%);");
+      expect(css).toContain("@media (min-width: 1024px) and (hover: none)");
+      expect(css).toContain("(min-width: 1024px) and (pointer: coarse)");
+      const collapsedDefault = css.indexOf(
+        ".site-frame--learner.site-frame--collapsed .learner-sidebar-toggle {",
+      );
+      const coarsePointerOverride = css.indexOf(
+        "@media (min-width: 1024px) and (hover: none)",
+      );
+      expect(collapsedDefault).toBeGreaterThanOrEqual(0);
+      expect(coarsePointerOverride).toBeGreaterThan(collapsedDefault);
+      expect(css.slice(coarsePointerOverride)).toMatch(
+        /\.site-frame--learner\.site-frame--collapsed \.learner-sidebar-toggle \{\s*opacity: 1;\s*pointer-events: auto;/,
+      );
+    });
+
+    it("ensures mark cutout --ac-mark-cut and tooltips follow semantic theme specifications", () => {
+      const css = readFileSync(
+        new URL("../../learner-next-slice.css", import.meta.url),
+        "utf8",
+      );
+
+      expect(css).toContain("--ac-mark-cut: var(--sidebar-mark-cut, #eef3ff);");
+      expect(css).toContain("--ac-mark-cut: #142036;");
+      expect(css).toContain("z-index: 99999;");
+      expect(css).toContain(".mobile-brand-name");
+      expect(css).toContain(".mobile-brand-tenant");
     });
 
     it("uses the approved shared BrandMark instead of a handcrafted academy SVG", () => {
@@ -588,7 +677,7 @@ describe("P1 Learner Sidebar & Navigation Architecture", () => {
       );
     });
 
-    it("enforces subtle active tint + 2px rail, neutral hover, scale .985 press, and 2px focus ring", () => {
+    it("enforces subtle active tint + 3px rail, neutral hover, scale .985 press, and 2px focus ring", () => {
       const css = readFileSync(
         new URL("../../learner-next-slice.css", import.meta.url),
         "utf8",
@@ -617,6 +706,19 @@ describe("P1 Learner Sidebar & Navigation Architecture", () => {
       expect(css).toContain("transition: none !important;");
       expect(css).toContain("animation: none !important;");
       expect(css).toContain("transform: none !important;");
+      expect(css).toContain("transform: translateY(-50%) !important;");
+      expect(css).toContain("transform: translate(-50%, -50%) !important;");
+      const reducedMotion = css.slice(
+        css.indexOf("@media (prefers-reduced-motion: reduce)"),
+      );
+      const positionedToggleRule = reducedMotion.indexOf(
+        ".site-frame--learner .learner-sidebar-toggle {",
+      );
+      expect(positionedToggleRule).toBeGreaterThan(0);
+      expect(reducedMotion.slice(0, positionedToggleRule)).not.toContain(
+        ".learner-sidebar-toggle,",
+      );
+      expect(css).toContain(".sidebar-tooltip-panel {");
     });
   });
 

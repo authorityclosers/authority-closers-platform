@@ -22,11 +22,13 @@ export function SidebarTooltip({
   active = false,
   children,
 }: SidebarTooltipProps) {
-  const [visible, setVisible] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
   const [coords, setCoords] = useState<{ top: number; left: number } | null>(
     null,
   );
   const tooltipId = useId();
+  const visible = hovered || focused;
 
   if (!children) {
     return null;
@@ -52,12 +54,12 @@ export function SidebarTooltip({
     if (e.currentTarget instanceof HTMLElement) {
       updatePosition(e.currentTarget);
     }
-    setVisible(true);
+    setHovered(true);
     children.props.onMouseEnter?.(e);
   };
 
   const handleMouseLeave = (e: React.MouseEvent) => {
-    setVisible(false);
+    setHovered(false);
     children.props.onMouseLeave?.(e);
   };
 
@@ -65,12 +67,12 @@ export function SidebarTooltip({
     if (e.currentTarget instanceof HTMLElement) {
       updatePosition(e.currentTarget);
     }
-    setVisible(true);
+    setFocused(true);
     children.props.onFocus?.(e);
   };
 
   const handleBlur = (e: React.FocusEvent) => {
-    setVisible(false);
+    setFocused(false);
     children.props.onBlur?.(e);
   };
 
