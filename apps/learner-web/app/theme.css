@@ -383,10 +383,6 @@ html:not([data-reduced-motion="true"]):not([data-motion="reduced"])
   padding-right: max(16px, env(safe-area-inset-right));
 }
 
-.learner-toast-region {
-  bottom: max(24px, calc(env(safe-area-inset-bottom) + 20px));
-}
-
 html[data-theme="dark"] body {
   color: var(--theme-text);
   background: var(--theme-canvas);

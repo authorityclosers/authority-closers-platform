@@ -3,7 +3,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import type { NotificationResource } from "../lib/notifications";
-import { NotificationsRuntime, ownedTargetHref } from "./notifications-runtime";
+import {
+  NotificationPopover,
+  NotificationsRuntime,
+  ownedTargetHref,
+} from "./notifications-runtime";
 
 const items = [
   {
@@ -27,6 +31,27 @@ const items = [
 ];
 
 describe("NotificationsRuntime", () => {
+  it("keeps the bell surface honest and routes to the same unavailable page state", () => {
+    const onClose = vi.fn();
+    const html = renderToStaticMarkup(
+      createElement(NotificationPopover, { onClose }),
+    );
+
+    expect(html).toContain('role="dialog"');
+    expect(html).toContain(
+      'aria-labelledby="learner-notifications-popover-title"',
+    );
+    expect(html).toContain(
+      'aria-describedby="learner-notifications-popover-description"',
+    );
+    expect(html).toContain("Notifications are not connected yet");
+    expect(html).toContain("server-backed notification source");
+    expect(html).toContain('href="/notifications"');
+    expect(html).toContain("View full notifications page");
+    expect(html).not.toContain("Mark all read");
+    expect(html).not.toContain("unread");
+  });
+
   it("states the unconnected first-slice boundary without fabricating alerts", () => {
     const html = renderToStaticMarkup(createElement(NotificationsRuntime));
 

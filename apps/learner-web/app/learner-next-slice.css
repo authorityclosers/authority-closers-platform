@@ -613,49 +613,6 @@
   background: var(--clarity-soft-blue);
 }
 
-.site-frame--learner .learner-toast-region {
-  position: fixed;
-  top: calc(82px + env(safe-area-inset-top));
-  right: max(24px, env(safe-area-inset-right));
-  z-index: 100;
-  width: min(360px, calc(100vw - 32px));
-  pointer-events: none;
-}
-
-.site-frame--learner .learner-toast {
-  display: flex;
-  min-width: 0;
-  align-items: flex-start;
-  gap: 9px;
-  padding: 12px 14px;
-  border: 1px solid
-    color-mix(in srgb, var(--clarity-blue) 30%, var(--clarity-border));
-  border-radius: 12px;
-  color: var(--clarity-ink);
-  background: var(--clarity-surface);
-  box-shadow: 0 14px 34px rgba(15, 27, 51, 0.13);
-  font-size: 0.75rem;
-  line-height: 1.45;
-  animation: learnerToastIn 180ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.site-frame--learner .learner-toast svg {
-  flex: 0 0 auto;
-  margin-top: 1px;
-  color: var(--clarity-blue);
-}
-
-@keyframes learnerToastIn {
-  from {
-    opacity: 0;
-    transform: translateY(-5px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
 @media (max-width: 900px) {
   .site-frame--learner .analytics-insight-panel__overview {
     grid-template-columns: 1fr;
@@ -738,17 +695,10 @@
     right: -2px;
     width: min(360px, calc(100vw - 28px));
   }
-
-  .site-frame--learner .learner-toast-region {
-    top: calc(74px + env(safe-area-inset-top));
-    right: max(14px, env(safe-area-inset-right));
-    width: min(360px, calc(100vw - 28px));
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .site-frame--learner .learner-help-chatbox,
-  .site-frame--learner .learner-toast {
+  .site-frame--learner .learner-help-chatbox {
     animation: none;
   }
 
@@ -756,5 +706,343 @@
   .site-frame--learner .learner-help-chatbox__trigger:hover {
     transform: none;
     transition: none;
+  }
+}
+
+/* ========================================================================
+   Phase 1 shell interaction polish
+   ======================================================================== */
+
+/* Keep account, notification, and support surfaces on the same semantic
+ * token rail as the rest of the learner shell in every appearance mode. */
+.site-frame--learner .learner-profile-button,
+.site-frame--learner .header-icon-button,
+.site-frame--learner .notification-popover,
+.site-frame--learner .account-menu-popover,
+.site-frame--learner .learner-help-chatbox {
+  color: var(--theme-text);
+  border-color: var(--theme-border);
+  background: var(--theme-surface);
+}
+
+.site-frame--learner .learner-profile-button:hover,
+.site-frame--learner .header-icon-button:hover {
+  color: var(--theme-text);
+  border-color: var(--theme-border-strong);
+  background: var(--theme-surface-subtle);
+}
+
+.site-frame--learner .learner-profile-button[aria-expanded="true"],
+.site-frame--learner .notification-bell-button[aria-expanded="true"] {
+  color: var(--theme-action);
+  border-color: var(--theme-action);
+  background: var(--theme-info-surface);
+}
+
+.site-frame--learner .learner-profile__avatar,
+.site-frame--learner .account-menu-avatar {
+  color: var(--theme-action-text);
+  background: var(--theme-action);
+}
+
+.site-frame--learner .account-menu-popover {
+  width: min(292px, calc(100vw - 24px));
+  padding: 8px;
+  border-radius: 16px;
+  box-shadow: var(--theme-shadow);
+}
+
+.site-frame--learner .account-menu-header {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 5px;
+  padding: 8px 8px 12px;
+  border-color: var(--theme-border);
+}
+
+.site-frame--learner .account-menu-identity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.site-frame--learner .account-menu-avatar {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 12px;
+  font-size: 0.72rem;
+  font-weight: 850;
+}
+
+.site-frame--learner .account-menu-header__copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.site-frame--learner .account-menu-header strong,
+.site-frame--learner .account-menu-header .account-menu-email {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.site-frame--learner .account-menu-header strong {
+  color: var(--theme-text);
+}
+
+.site-frame--learner .account-menu-email,
+.site-frame--learner .account-menu-scope {
+  color: var(--theme-text-muted);
+}
+
+.site-frame--learner .account-menu-email {
+  font-size: 0.72rem;
+}
+
+.site-frame--learner .account-menu-scope {
+  width: fit-content;
+  padding: 4px 8px;
+  border: 1px solid var(--theme-border);
+  border-radius: 999px;
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.site-frame--learner .account-menu-links a,
+.site-frame--learner .account-menu-footer button {
+  min-height: 44px;
+  border-radius: 10px;
+  color: var(--theme-text);
+}
+
+.site-frame--learner .account-menu-links a:hover,
+.site-frame--learner .account-menu-footer button:hover {
+  color: var(--theme-text);
+  background: var(--theme-surface-subtle);
+}
+
+.site-frame--learner .account-menu-footer {
+  border-color: var(--theme-border);
+}
+
+.site-frame--learner .notification-popover {
+  width: min(380px, calc(100vw - 24px));
+  border-radius: 18px;
+  box-shadow: var(--theme-shadow);
+}
+
+.site-frame--learner .notification-popover__header {
+  border-color: var(--theme-border);
+}
+
+.site-frame--learner .notification-popover__title-row {
+  align-items: flex-start;
+}
+
+.site-frame--learner .notification-popover__eyebrow {
+  margin: 0 0 3px;
+  color: var(--theme-text-muted);
+  font-size: 0.62rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.site-frame--learner .notification-popover__status-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.site-frame--learner .notification-popover__status-badge {
+  color: var(--theme-warning-text);
+  border-color: var(--theme-border);
+  background: var(--theme-warning-surface);
+}
+
+.site-frame--learner .notification-popover__subhead {
+  min-width: 0;
+  color: var(--theme-text-muted);
+}
+
+.site-frame--learner .notification-popover__close,
+.site-frame--learner .learner-help-chatbox__close {
+  width: 40px;
+  height: 40px;
+  color: var(--theme-text-muted);
+  border-color: var(--theme-border);
+  background: var(--theme-surface-subtle);
+}
+
+.site-frame--learner .notification-popover__close:hover,
+.site-frame--learner .learner-help-chatbox__close:hover {
+  color: var(--theme-text);
+  border-color: var(--theme-border-strong);
+  background: var(--theme-info-surface);
+}
+
+.site-frame--learner .notification-popover__body {
+  background: var(--theme-surface);
+}
+
+.site-frame--learner .notification-popover__empty-icon {
+  color: var(--theme-action);
+  border-color: var(--theme-border);
+  background: var(--theme-info-surface);
+}
+
+.site-frame--learner .notification-popover__empty-title {
+  color: var(--theme-text);
+}
+
+.site-frame--learner .notification-popover__empty-copy {
+  color: var(--theme-text-muted);
+}
+
+.site-frame--learner .notification-popover__footer {
+  border-color: var(--theme-border);
+}
+
+.site-frame--learner .notification-popover__action-link {
+  min-height: 44px;
+  color: var(--theme-action);
+}
+
+.site-frame--learner .notification-popover__action-link:hover {
+  color: var(--theme-action-hover);
+  background: var(--theme-info-surface);
+}
+
+.site-frame--learner .learner-help-widget {
+  right: max(20px, env(safe-area-inset-right));
+  bottom: max(24px, env(safe-area-inset-bottom));
+}
+
+.site-frame--learner .learner-help-chatbox__trigger {
+  min-height: 50px;
+  color: var(--theme-action-text);
+  border-color: var(--theme-action);
+  background: var(--theme-action);
+  box-shadow: var(--theme-shadow);
+}
+
+.site-frame--learner .learner-help-chatbox__trigger:hover {
+  color: var(--theme-action-text);
+  border-color: var(--theme-action-hover);
+  background: var(--theme-action-hover);
+}
+
+.site-frame--learner .learner-help-chatbox {
+  width: min(390px, calc(100vw - 32px));
+  border-radius: 18px;
+  box-shadow: var(--theme-shadow);
+}
+
+.site-frame--learner .learner-help-chatbox__header {
+  border-color: var(--theme-border);
+}
+
+.site-frame--learner .learner-help-chatbox__header h2 {
+  color: var(--theme-text);
+}
+
+.site-frame--learner .learner-help-chatbox__availability {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 1px solid var(--theme-border);
+  border-radius: 10px;
+  color: var(--theme-success-text);
+  background: var(--theme-success-surface);
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.site-frame--learner .learner-help-chatbox__availability-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.site-frame--learner .learner-help-chatbox__message p {
+  color: var(--theme-text-muted);
+}
+
+.site-frame--learner .learner-help-chatbox__avatar {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 11px;
+  color: var(--theme-action-text);
+  background: var(--theme-action);
+}
+
+.site-frame--learner .learner-help-chatbox__brand-mark {
+  width: 19px;
+  height: 19px;
+  /* BrandMark's inner cutout must match its colored tile in every theme. */
+  --ac-mark-cut: var(--theme-action);
+}
+
+.site-frame--learner .learner-help-chatbox__email {
+  min-height: 46px;
+  color: var(--theme-action);
+  border-color: var(--theme-border);
+  background: var(--theme-surface-subtle);
+}
+
+.site-frame--learner .learner-help-chatbox__email:hover {
+  color: var(--theme-action-hover);
+  border-color: var(--theme-action);
+  background: var(--theme-info-surface);
+}
+
+@media (max-width: 560px) {
+  .site-frame--learner .notification-popover {
+    width: min(380px, calc(100vw - 24px));
+  }
+
+  .site-frame--learner .notification-popover__status-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .site-frame--learner .learner-help-widget {
+    right: max(14px, env(safe-area-inset-right));
+    bottom: calc(88px + env(safe-area-inset-bottom));
+  }
+
+  .site-frame--learner .learner-help-chatbox {
+    right: -2px;
+    width: min(390px, calc(100vw - 28px));
+  }
+}
+
+/* The fixed bottom navigation is present through 1023px; keep the support
+ * trigger clear of it at tablet widths as well as narrow mobile widths. */
+@media (max-width: 1023px) {
+  .site-frame--learner .learner-help-widget {
+    bottom: calc(88px + env(safe-area-inset-bottom));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .site-frame--learner .notification-popover,
+  .site-frame--learner .account-menu-popover,
+  .site-frame--learner .learner-help-chatbox {
+    animation: none;
   }
 }

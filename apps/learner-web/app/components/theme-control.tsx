@@ -581,9 +581,6 @@ export function ThemeControl({
 
   function announce(message: string): void {
     setFeedback(message);
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("ac-toast", { detail: message }));
-    }
     if (feedbackTimerRef.current !== undefined) {
       window.clearTimeout(feedbackTimerRef.current);
     }

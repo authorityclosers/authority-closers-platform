@@ -1,5 +1,16 @@
 export type NotificationKind = "learning" | "account" | "system";
 
+/**
+ * Shared first-slice copy for the shell popover and full notification route.
+ * Keeping the boundary in one contract prevents the two entry points from
+ * drifting into different claims while notification history is unavailable.
+ */
+export const NOTIFICATION_SOURCE_UNAVAILABLE_COPY = {
+  heading: "Notifications are not connected yet",
+  message:
+    "This first slice does not have a server-backed notification source. Learning, access, and progress state remain available on their own screens.",
+} as const;
+
 export type NotificationItem = {
   id: string;
   title: string;
