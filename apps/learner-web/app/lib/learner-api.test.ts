@@ -38,6 +38,88 @@ function offlineCache(
 }
 
 describe("learner API adapter", () => {
+  it("matches the profile-avatar checksum upload-intent and completion schema", async () => {
+    const checksum =
+      "9f64a747e1b97f131fabb6b447296c9b6f0201e79fb3c5356e6c77e89b6a806a";
+    const crop = {
+      x: 0.21875,
+      y: 0,
+      width: 0.5625,
+      height: 1,
+      rotation_degrees: 0,
+    };
+    const controller = new AbortController();
+    const fetcher = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const path = String(input);
+        const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        expect(init?.credentials).toBe("include");
+        expect(init?.signal).toBe(controller.signal);
+        if (path === "/v1/profile/avatar") {
+          expect(init?.method).toBe("POST");
+          expect(body).toEqual({
+            purpose: "avatar",
+            filename: "headshot.jpg",
+            content_type: "image/jpeg",
+            content_length: 4,
+            checksum_sha256: checksum,
+            asset_id: "asset-1",
+            supersedes_version_id: "version-1",
+            crop,
+          });
+          expect(Object.keys(body).sort()).toEqual([
+            "asset_id",
+            "checksum_sha256",
+            "content_length",
+            "content_type",
+            "crop",
+            "filename",
+            "purpose",
+            "supersedes_version_id",
+          ]);
+          return response({ upload_id: "upload-1" });
+        }
+        expect(path).toBe("/v1/profile/avatar/upload-1/complete");
+        expect(init?.method).toBe("POST");
+        expect(body).toEqual({
+          actual_bytes: 4,
+          checksum_sha256: checksum,
+        });
+        expect(Object.keys(body).sort()).toEqual([
+          "actual_bytes",
+          "checksum_sha256",
+        ]);
+        return response({ state: "processing" });
+      },
+    );
+    const api = createLearnerApi(fetcher, {
+      idempotencyKey: () => "avatar-contract-1",
+    });
+
+    await expect(
+      api.createProfileAvatarUpload(
+        {
+          filename: "headshot.jpg",
+          content_type: "image/jpeg",
+          content_length: 4,
+          checksum_sha256: checksum,
+          asset_id: "asset-1",
+          supersedes_version_id: "version-1",
+          crop,
+        },
+        controller.signal,
+      ),
+    ).resolves.toMatchObject({ upload_id: "upload-1" });
+    await expect(
+      api.completeProfileAvatarUpload(
+        "upload-1",
+        { actual_bytes: 4, checksum_sha256: checksum },
+        controller.signal,
+      ),
+    ).resolves.toEqual({ state: "processing" });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
   it("uses injectable same-origin fetch for public catalog reads", async () => {
     const fetcher = vi.fn(
       async (input: RequestInfo | URL, init?: RequestInit) => {

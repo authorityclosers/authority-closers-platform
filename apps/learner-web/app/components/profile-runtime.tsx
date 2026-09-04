@@ -27,6 +27,7 @@ import {
   offlineReadNotice,
   type OfflineReadMetadata,
 } from "../lib/offline-read-cache";
+import { initialsForDisplayName } from "../lib/profile-identity";
 import { ROUTES } from "../lib/routes";
 import { userFacingRequestError } from "../lib/user-facing-error";
 import {
@@ -44,6 +45,7 @@ import { SignOutControl } from "./sign-out-control";
 import { ProfileSkeleton } from "./skeletons";
 
 const defaultApi = createLearnerApi();
+export const PROFILE_AVATAR_REFRESH_INTERVAL_MS = 4 * 60 * 1000;
 
 function contextLabel(value: string | null): string {
   if (!value) return "Not set";
@@ -151,10 +153,16 @@ export function ProfileRuntime({
   const [currentAvatar, setCurrentAvatar] = useState<AvatarPresentation | null>(
     null,
   );
+  const [failedAvatarUrl, setFailedAvatarUrl] = useState<string | null>(null);
+  const [avatarSuccessMessage, setAvatarSuccessMessage] = useState<
+    string | null
+  >(null);
   const avatarButtonRef = useRef<HTMLButtonElement>(null);
   const generationRef = useRef(0);
   const mountedRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
+  const avatarRefreshGenerationRef = useRef(0);
+  const avatarRefreshAbortRef = useRef<AbortController | null>(null);
   const effectiveAvatarUpload = avatarUpload ?? createApiAvatarUploadPort(api);
   const membershipKnown = me !== null;
   const membershipAvailable = me !== null && hasMembershipRole(me);
@@ -164,7 +172,59 @@ export function ProfileRuntime({
     me?.person_id ?? null,
   );
 
+  const refreshAvatar = useCallback(async () => {
+    avatarRefreshAbortRef.current?.abort();
+    const controller = new AbortController();
+    avatarRefreshAbortRef.current = controller;
+    const generation = ++avatarRefreshGenerationRef.current;
+
+    try {
+      const response = await api.profileAvatar({ signal: controller.signal });
+      if (
+        controller.signal.aborted ||
+        !mountedRef.current ||
+        generation !== avatarRefreshGenerationRef.current
+      ) {
+        return;
+      }
+
+      const refreshedAvatar = avatarPresentationFromResponse(
+        response,
+        me?.display_name?.trim() || "Learner",
+      );
+      if (refreshedAvatar) {
+        setCurrentAvatar(refreshedAvatar);
+        setFailedAvatarUrl((failedUrl) =>
+          failedUrl === refreshedAvatar.deliveryUrl ? failedUrl : null,
+        );
+        setAvatarError(null);
+      } else if (!response.avatar) {
+        setCurrentAvatar(null);
+        setFailedAvatarUrl(null);
+        setAvatarError(null);
+      } else if (response.avatar.state === "ready") {
+        setAvatarError(new Error("avatar_delivery_unavailable"));
+      }
+    } catch (error) {
+      if (
+        isAbortError(error) ||
+        controller.signal.aborted ||
+        !mountedRef.current ||
+        generation !== avatarRefreshGenerationRef.current
+      ) {
+        return;
+      }
+      setAvatarError(error);
+    } finally {
+      if (avatarRefreshAbortRef.current === controller) {
+        avatarRefreshAbortRef.current = null;
+      }
+    }
+  }, [api, me]);
+
   const load = useCallback(async () => {
+    avatarRefreshGenerationRef.current += 1;
+    avatarRefreshAbortRef.current?.abort();
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -184,13 +244,16 @@ export function ProfileRuntime({
       const result = await loadProfileData(api, controller.signal);
       if (!isCurrent()) return;
       setMe(result.me);
-      setCurrentAvatar(
+      const nextAvatar =
         avatarPresentationFromResponse(
           result.avatar,
-          result.me.display_name || "Learner",
+          result.me.display_name?.trim() || "Learner",
         ) ??
-          result.me.avatar ??
-          null,
+        result.me.avatar ??
+        null;
+      setCurrentAvatar(nextAvatar);
+      setFailedAvatarUrl((failedUrl) =>
+        failedUrl === nextAvatar?.deliveryUrl ? failedUrl : null,
       );
       setOnboarding(result.onboarding);
       setOnboardingError(result.onboardingError);
@@ -213,8 +276,23 @@ export function ProfileRuntime({
       mountedRef.current = false;
       generationRef.current += 1;
       abortRef.current?.abort();
+      avatarRefreshGenerationRef.current += 1;
+      avatarRefreshAbortRef.current?.abort();
     };
   }, [load]);
+
+  useEffect(() => {
+    if (!me || !hasMembershipRole(me)) return;
+    const refreshTimer = window.setInterval(
+      () => void refreshAvatar(),
+      PROFILE_AVATAR_REFRESH_INTERVAL_MS,
+    );
+    return () => {
+      window.clearInterval(refreshTimer);
+      avatarRefreshGenerationRef.current += 1;
+      avatarRefreshAbortRef.current?.abort();
+    };
+  }, [me, refreshAvatar]);
 
   if (loading) {
     return <ProfileSkeleton />;
@@ -264,14 +342,11 @@ export function ProfileRuntime({
   }
 
   const displayName = me.display_name || "Learner";
-  const initials =
-    displayName
-      .split(" ")
-      .map((p) => p[0])
-      .filter(Boolean)
-      .slice(0, 2)
-      .join("")
-      .toUpperCase() || "AC";
+  const initials = initialsForDisplayName(displayName);
+  const displayAvatar =
+    currentAvatar && currentAvatar.deliveryUrl !== failedAvatarUrl
+      ? currentAvatar
+      : null;
 
   return (
     <div className="profile-view">
@@ -308,11 +383,15 @@ export function ProfileRuntime({
           <div className="profile-card__hero profile-card__hero--avatar">
             <div className="profile-avatar-panel">
               <div className="profile-avatar-large">
-                {currentAvatar ? (
+                {displayAvatar ? (
                   <img
                     className="profile-avatar-large__image"
-                    src={currentAvatar.deliveryUrl}
-                    alt={currentAvatar.alt || `${displayName}'s profile photo`}
+                    src={displayAvatar.deliveryUrl}
+                    alt={displayAvatar.alt || `${displayName}'s profile photo`}
+                    onError={() => {
+                      setFailedAvatarUrl(displayAvatar.deliveryUrl);
+                      void refreshAvatar();
+                    }}
                   />
                 ) : (
                   <span aria-hidden="true">{initials}</span>
@@ -330,12 +409,26 @@ export function ProfileRuntime({
                   ref={avatarButtonRef}
                   className="button button--small button--outline profile-avatar-panel__button"
                   type="button"
-                  onClick={() => setAvatarDialogOpen(true)}
+                  onClick={() => {
+                    setAvatarSuccessMessage(null);
+                    setAvatarDialogOpen(true);
+                  }}
                   aria-haspopup="dialog"
                 >
                   <PencilLine size={15} aria-hidden="true" />
                   Change photo
                 </button>
+                {avatarSuccessMessage ? (
+                  <div
+                    className="profile-avatar-status profile-avatar-status--success"
+                    role="status"
+                    aria-live="polite"
+                    aria-atomic="true"
+                  >
+                    <CheckCircle2 size={14} aria-hidden="true" />
+                    {avatarSuccessMessage}
+                  </div>
+                ) : null}
                 {avatarError ? (
                   <div className="profile-avatar-status" role="status">
                     Profile photo delivery is unavailable right now; your
@@ -533,6 +626,8 @@ export function ProfileRuntime({
           }}
           onSuccess={(avatar) => {
             setCurrentAvatar(avatar);
+            setFailedAvatarUrl(null);
+            setAvatarSuccessMessage("Profile photo updated.");
             window.dispatchEvent(
               new CustomEvent("ac-profile-avatar-updated", {
                 detail: {

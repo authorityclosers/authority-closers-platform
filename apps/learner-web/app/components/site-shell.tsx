@@ -30,8 +30,11 @@ import { useEffect, useRef, useState } from "react";
 import { BrandMark } from "@ac/ui";
 
 import { createLearnerApi } from "../lib/learner-api";
+import { initialsForDisplayName } from "../lib/profile-identity";
 import { ROUTES } from "../lib/routes";
 import { SignOutControl } from "./sign-out-control";
+
+export { initialsForDisplayName } from "../lib/profile-identity";
 
 export type PublicCurrent = "home" | "program";
 export type LearnerCurrent =
@@ -191,14 +194,6 @@ export type LearnerShellProps = {
 };
 
 export type AppShellProps = LearnerShellProps;
-
-export function initialsForDisplayName(displayName: string): string {
-  const parts = displayName.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "AC";
-  const first = parts[0]?.[0] ?? "";
-  const last = parts.length > 1 ? (parts.at(-1)?.[0] ?? "") : "";
-  return `${first}${last}`.toUpperCase() || "AC";
-}
 
 function IdentityAvatar({
   className,

@@ -7,22 +7,32 @@ import {
   Camera,
   CheckCircle2,
   CircleAlert,
-  Crop,
   LoaderCircle,
+  Move,
+  RotateCcw,
   Upload,
   X,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 
 import {
   clampAvatarCrop,
   unavailableAvatarUploadPort,
   validateAvatarFile,
   type AvatarCrop,
+  type AvatarImageDimensions,
   type AvatarPresentation,
   type AvatarUploadPort,
   type AvatarUploadResult,
+  type AvatarUploadTerminalResult,
 } from "../lib/avatar-upload";
+import { initialsForDisplayName } from "../lib/profile-identity";
 import styles from "./avatar-crop-dialog.module.css";
 
 export type AvatarCropDialogProps = {
@@ -30,6 +40,7 @@ export type AvatarCropDialogProps = {
   profileRevision?: string | number | null;
   currentAvatar?: AvatarPresentation | null;
   adapter?: AvatarUploadPort;
+  cropShape?: "circle" | "square";
   onClose: () => void;
   onSuccess?: (avatar: AvatarPresentation) => void;
 };
@@ -42,13 +53,25 @@ type DialogStatus =
   | { status: "success" }
   | { status: "error"; message: string };
 
-function initialsFor(displayName: string): string {
-  const parts = displayName.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "AC";
-  const first = parts[0]?.[0] ?? "";
-  const last = parts.length > 1 ? (parts.at(-1)?.[0] ?? "") : "";
-  return `${first}${last}`.toUpperCase() || "AC";
+/**
+ * An adapter result is only allowed to commit while the request and dialog
+ * are still live. This keeps custom/provider adapters fail-closed even when
+ * they resolve after their caller's AbortSignal has fired.
+ */
+export function canCommitAvatarResult(
+  signal: Pick<AbortSignal, "aborted">,
+  mounted: boolean,
+): boolean {
+  return mounted && !signal.aborted;
 }
+
+export const initialsFor = initialsForDisplayName;
+
+export const DEFAULT_AVATAR_CROP: AvatarCrop = {
+  scale: 1,
+  offsetX: 0,
+  offsetY: 0,
+};
 
 function describeStage(stage: string): string {
   return stage === "validating"
@@ -70,6 +93,7 @@ function resultMessage(result: AvatarUploadResult): string {
 function previewStyle(crop: AvatarCrop): React.CSSProperties {
   return {
     transform: `translate(${crop.offsetX}%, ${crop.offsetY}%) scale(${crop.scale})`,
+    transformOrigin: "center",
   };
 }
 
@@ -78,12 +102,59 @@ export function applyAvatarGesture(
   deltaXPercent: number,
   deltaYPercent: number,
   scaleRatio = 1,
+  sourceDimensions?: AvatarImageDimensions,
 ): AvatarCrop {
-  return clampAvatarCrop({
-    scale: crop.scale * scaleRatio,
-    offsetX: crop.offsetX + deltaXPercent,
-    offsetY: crop.offsetY + deltaYPercent,
-  });
+  return clampAvatarCrop(
+    {
+      scale: crop.scale * scaleRatio,
+      offsetX: crop.offsetX + deltaXPercent,
+      offsetY: crop.offsetY + deltaYPercent,
+    },
+    sourceDimensions,
+  );
+}
+
+/**
+ * Keyboard fallback for the direct-manipulation stage. Arrow keys move the
+ * image, +/- zoom it, and Home restores the neutral framing. Returning null
+ * keeps unrelated keys available to the dialog and assistive technology.
+ */
+export function applyAvatarKeyboard(
+  crop: AvatarCrop,
+  key: string,
+  accelerated = false,
+  sourceDimensions?: AvatarImageDimensions,
+): AvatarCrop | null {
+  const movement = accelerated ? 5 : 2;
+  switch (key) {
+    case "ArrowLeft":
+      return applyAvatarGesture(crop, -movement, 0, 1, sourceDimensions);
+    case "ArrowRight":
+      return applyAvatarGesture(crop, movement, 0, 1, sourceDimensions);
+    case "ArrowUp":
+      return applyAvatarGesture(crop, 0, -movement, 1, sourceDimensions);
+    case "ArrowDown":
+      return applyAvatarGesture(crop, 0, movement, 1, sourceDimensions);
+    case "+":
+    case "=":
+      return applyAvatarGesture(crop, 0, 0, 1.06, sourceDimensions);
+    case "-":
+    case "_":
+      return applyAvatarGesture(crop, 0, 0, 0.94, sourceDimensions);
+    case "Home":
+    case "0":
+      return { ...DEFAULT_AVATAR_CROP };
+    default:
+      return null;
+  }
+}
+
+function isDefaultAvatarCrop(crop: AvatarCrop): boolean {
+  return (
+    crop.scale === DEFAULT_AVATAR_CROP.scale &&
+    crop.offsetX === DEFAULT_AVATAR_CROP.offsetX &&
+    crop.offsetY === DEFAULT_AVATAR_CROP.offsetY
+  );
 }
 
 type PointerPoint = { x: number; y: number };
@@ -124,33 +195,106 @@ function readImageDimensions(
   });
 }
 
+function subscribeOnline(listener: () => void): () => void {
+  if (typeof window === "undefined") return () => undefined;
+  window.addEventListener("online", listener);
+  window.addEventListener("offline", listener);
+  return () => {
+    window.removeEventListener("online", listener);
+    window.removeEventListener("offline", listener);
+  };
+}
+
+function getOnlineSnapshot(): boolean {
+  return typeof navigator === "undefined" ? true : navigator.onLine !== false;
+}
+
+function getServerOnlineSnapshot(): boolean {
+  return true;
+}
+
+async function withBoundedSignal<T>(
+  parentSignal: AbortSignal,
+  timeoutMs: number,
+  action: (signal: AbortSignal) => Promise<T>,
+): Promise<T> {
+  const requestController = new AbortController();
+  let timedOut = false;
+  let rejectCancellation: ((reason?: unknown) => void) | undefined;
+  const cancellation = new Promise<T>((_, reject) => {
+    rejectCancellation = reject;
+  });
+  const onParentAbort = () => requestController.abort();
+  const onRequestAbort = () => {
+    rejectCancellation?.(
+      timedOut
+        ? new Error("avatar_request_timeout")
+        : new DOMException("The operation was aborted.", "AbortError"),
+    );
+  };
+  const timeout = globalThis.setTimeout(() => {
+    timedOut = true;
+    requestController.abort();
+  }, timeoutMs);
+  parentSignal.addEventListener("abort", onParentAbort, { once: true });
+  requestController.signal.addEventListener("abort", onRequestAbort, {
+    once: true,
+  });
+  try {
+    if (parentSignal.aborted) {
+      throw new DOMException("The operation was aborted.", "AbortError");
+    }
+    const result = await Promise.race([
+      action(requestController.signal),
+      cancellation,
+    ]);
+    if (parentSignal.aborted) {
+      throw new DOMException("The operation was aborted.", "AbortError");
+    }
+    if (timedOut) throw new Error("avatar_request_timeout");
+    return result;
+  } finally {
+    globalThis.clearTimeout(timeout);
+    parentSignal.removeEventListener("abort", onParentAbort);
+    requestController.signal.removeEventListener("abort", onRequestAbort);
+  }
+}
+
 export function AvatarCropDialog({
   displayName,
   profileRevision,
   currentAvatar,
   adapter = unavailableAvatarUploadPort,
+  cropShape = "circle",
   onClose,
   onSuccess,
 }: AvatarCropDialogProps) {
   const [file, setFile] = useState<File | null>(null);
+  const [imageDimensions, setImageDimensions] =
+    useState<AvatarImageDimensions | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
-  const [crop, setCrop] = useState<AvatarCrop>({
-    scale: 1,
-    offsetX: 0,
-    offsetY: 0,
-  });
+  const [crop, setCrop] = useState<AvatarCrop>({ ...DEFAULT_AVATAR_CROP });
   const [status, setStatus] = useState<DialogStatus>({ status: "idle" });
   const [dragActive, setDragActive] = useState(false);
+  const isOnline = useSyncExternalStore(
+    subscribeOnline,
+    getOnlineSnapshot,
+    getServerOnlineSnapshot,
+  );
   const dialogRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mountedRef = useRef(true);
   const selectionRef = useRef(0);
   const statusRef = useRef<DialogStatus>(status);
+  const onSuccessRef = useRef(onSuccess);
   const focusOriginRef = useRef<HTMLElement | null>(null);
   const cropRef = useRef(crop);
   const pointersRef = useRef(new Map<number, PointerPoint>());
   const gestureRef = useRef<GestureSnapshot | null>(null);
+  const activeAbortRef = useRef<AbortController | null>(null);
+  const onCloseRef = useRef(onClose);
+  const onlineRef = useRef(isOnline);
 
   useEffect(() => {
     cropRef.current = crop;
@@ -159,6 +303,24 @@ export function AvatarCropDialog({
   useEffect(() => {
     statusRef.current = status;
   }, [status]);
+
+  useEffect(() => {
+    onSuccessRef.current = onSuccess;
+  }, [onSuccess]);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    onlineRef.current = isOnline;
+  }, [isOnline]);
+
+  const closeDialog = useCallback(() => {
+    activeAbortRef.current?.abort();
+    activeAbortRef.current = null;
+    onCloseRef.current();
+  }, []);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -191,9 +353,8 @@ export function AvatarCropDialog({
 
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        if (statusRef.current.status === "uploading") return;
         event.preventDefault();
-        onClose();
+        closeDialog();
         return;
       }
       if (event.key !== "Tab" || !dialog) return;
@@ -232,14 +393,33 @@ export function AvatarCropDialog({
       focusOriginRef.current?.focus();
       focusOriginRef.current = null;
     };
-  }, [onClose]);
+  }, [closeDialog]);
 
   useEffect(() => {
     return () => {
       mountedRef.current = false;
       selectionRef.current += 1;
+      activeAbortRef.current?.abort();
     };
   }, []);
+
+  useEffect(() => {
+    if (isOnline) return;
+    activeAbortRef.current?.abort();
+    queueMicrotask(() => {
+      if (!mountedRef.current || onlineRef.current) return;
+      if (
+        statusRef.current.status === "uploading" ||
+        statusRef.current.status === "processing"
+      ) {
+        setStatus({
+          status: "error",
+          message:
+            "You’re offline. Reconnect before uploading; your current avatar is unchanged.",
+        });
+      }
+    });
+  }, [isOnline]);
 
   useEffect(() => {
     return () => {
@@ -253,6 +433,7 @@ export function AvatarCropDialog({
     if (!nextFile || !validation.ok) {
       if (previewUrl) URL.revokeObjectURL(previewUrl);
       setFile(null);
+      setImageDimensions(null);
       setPreviewUrl(null);
       setFileError(
         validation.ok
@@ -268,6 +449,7 @@ export function AvatarCropDialog({
       nextPreviewUrl = URL.createObjectURL(nextFile);
     } catch {
       setFile(null);
+      setImageDimensions(null);
       setPreviewUrl(null);
       setFileError("This image could not be previewed. Choose another image.");
       setStatus({ status: "idle" });
@@ -275,9 +457,10 @@ export function AvatarCropDialog({
     }
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setFile(nextFile);
+    setImageDimensions(null);
     setPreviewUrl(nextPreviewUrl);
     setFileError(null);
-    setCrop({ scale: 1, offsetX: 0, offsetY: 0 });
+    setCrop({ ...DEFAULT_AVATAR_CROP });
     setStatus({ status: "validating" });
 
     try {
@@ -290,10 +473,12 @@ export function AvatarCropDialog({
       if (!dimensionValidation.ok) {
         URL.revokeObjectURL(nextPreviewUrl);
         setFile(null);
+        setImageDimensions(null);
         setPreviewUrl(null);
         setFileError(dimensionValidation.message);
         setStatus({ status: "idle" });
       } else {
+        setImageDimensions(dimensions);
         setStatus({ status: "idle" });
       }
     } catch {
@@ -303,6 +488,7 @@ export function AvatarCropDialog({
       }
       URL.revokeObjectURL(nextPreviewUrl);
       setFile(null);
+      setImageDimensions(null);
       setPreviewUrl(null);
       setFileError(
         "The image dimensions could not be read. Choose another image.",
@@ -314,6 +500,33 @@ export function AvatarCropDialog({
   function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     void chooseFile(event.target.files?.[0] ?? null);
     event.target.value = "";
+  }
+
+  function resetCrop() {
+    if (!previewUrl || isBusy) return;
+    setCrop({ ...DEFAULT_AVATAR_CROP });
+  }
+
+  function handlePreviewKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.key === "Enter" || event.key === " ") {
+      if (!previewUrl && !isBusy) {
+        event.preventDefault();
+        fileInputRef.current?.click();
+      } else if (event.key === " ") {
+        event.preventDefault();
+      }
+      return;
+    }
+    if (!previewUrl || isBusy) return;
+    const nextCrop = applyAvatarKeyboard(
+      cropRef.current,
+      event.key,
+      event.shiftKey,
+      imageDimensions ?? undefined,
+    );
+    if (!nextCrop) return;
+    event.preventDefault();
+    setCrop(nextCrop);
   }
 
   function beginPointerGesture(event: React.PointerEvent<HTMLDivElement>) {
@@ -348,6 +561,7 @@ export function AvatarCropDialog({
         ((current.centroid.x - start.centroid.x) / rect.width) * 100,
         ((current.centroid.y - start.centroid.y) / rect.height) * 100,
         scaleRatio,
+        imageDimensions ?? undefined,
       ),
     );
   }
@@ -363,35 +577,70 @@ export function AvatarCropDialog({
   async function submitAvatar() {
     if (
       !file ||
+      !imageDimensions ||
+      !isOnline ||
       status.status === "validating" ||
       status.status === "uploading" ||
       status.status === "processing"
     ) {
       if (!file) setFileError("Choose an image before uploading.");
+      else if (!imageDimensions) {
+        setFileError(
+          "The image dimensions could not be confirmed. Choose another image.",
+        );
+      } else if (!isOnline) {
+        setStatus({
+          status: "error",
+          message:
+            "You’re offline. Reconnect before uploading; your current avatar is unchanged.",
+        });
+      }
       return;
     }
 
     setStatus({ status: "uploading" });
+    const controller = new AbortController();
+    activeAbortRef.current = controller;
     let result: AvatarUploadResult;
     try {
-      result = await adapter.upload({
-        file,
-        crop: clampAvatarCrop(crop),
-        displayName,
-        currentAvatar,
-        profileRevision,
-      });
+      result = await adapter.upload(
+        {
+          file,
+          crop: clampAvatarCrop(crop, imageDimensions),
+          sourceDimensions: imageDimensions,
+          displayName,
+          currentAvatar,
+          profileRevision,
+        },
+        controller.signal,
+      );
     } catch {
       if (!mountedRef.current) return;
+      if (controller.signal.aborted) {
+        setStatus(
+          !onlineRef.current
+            ? {
+                status: "error",
+                message:
+                  "You’re offline. Reconnect before uploading; your current avatar is unchanged.",
+              }
+            : { status: "idle" },
+        );
+        return;
+      }
       setStatus({
         status: "error",
         message:
           "The avatar service could not finish this request. Your current avatar is unchanged.",
       });
       return;
+    } finally {
+      if (activeAbortRef.current === controller) {
+        activeAbortRef.current = null;
+      }
     }
 
-    if (!mountedRef.current) return;
+    if (!canCommitAvatarResult(controller.signal, mountedRef.current)) return;
 
     if (result.status === "processing") {
       setStatus({
@@ -403,7 +652,7 @@ export function AvatarCropDialog({
     }
     if (result.status === "success") {
       setStatus({ status: "success" });
-      onSuccess?.(result.avatar);
+      onSuccessRef.current?.(result.avatar);
       return;
     }
     setStatus({ status: "error", message: resultMessage(result) });
@@ -413,45 +662,171 @@ export function AvatarCropDialog({
     status.status === "processing" ? status.operationId : null;
 
   useEffect(() => {
-    if (!processingOperationId || !adapter.getStatus) return;
-    const getStatus = adapter.getStatus;
+    if (!processingOperationId) return;
+    const operationId = processingOperationId;
     const controller = new AbortController();
+    activeAbortRef.current = controller;
     let active = true;
-    let delay = 1000;
+    let attempts = 0;
+    let delay = 750;
     let timer: ReturnType<typeof setTimeout> | null = null;
+    const deadline = Date.now() + 45_000;
+
+    function finish(result: AvatarUploadResult | AvatarUploadTerminalResult) {
+      if (
+        !active ||
+        !canCommitAvatarResult(controller.signal, mountedRef.current)
+      )
+        return;
+      if (result.status === "processing") {
+        setStatus({
+          status: "processing",
+          operationId,
+          stage: describeStage(result.stage),
+        });
+        return;
+      }
+      if (result.status === "success") {
+        setStatus({ status: "success" });
+        onSuccessRef.current?.(result.avatar);
+        return;
+      }
+      setStatus({ status: "error", message: resultMessage(result) });
+    }
+
+    const awaitProcessing = adapter.awaitProcessing;
+    if (awaitProcessing) {
+      void withBoundedSignal(controller.signal, 45_000, (signal) =>
+        awaitProcessing(operationId, signal, displayName),
+      )
+        .then(finish)
+        .catch(() => {
+          if (!active || controller.signal.aborted || !mountedRef.current)
+            return;
+          setStatus({
+            status: "error",
+            message:
+              "Avatar processing could not be confirmed. Your current avatar is unchanged; try again later.",
+          });
+        })
+        .finally(() => {
+          if (activeAbortRef.current === controller) {
+            activeAbortRef.current = null;
+          }
+        });
+      return () => {
+        active = false;
+        controller.abort();
+        if (timer) clearTimeout(timer);
+        if (activeAbortRef.current === controller) {
+          activeAbortRef.current = null;
+        }
+      };
+    }
+
+    const getStatus = adapter.getStatus;
+    if (!getStatus) {
+      queueMicrotask(() => {
+        if (
+          !active ||
+          !canCommitAvatarResult(controller.signal, mountedRef.current)
+        )
+          return;
+        setStatus({
+          status: "error",
+          message:
+            "Avatar processing status is unavailable. Your current avatar is unchanged.",
+        });
+      });
+      return () => {
+        active = false;
+        controller.abort();
+        if (activeAbortRef.current === controller) {
+          activeAbortRef.current = null;
+        }
+      };
+    }
+
+    function terminalStatusError(error: unknown): boolean {
+      if (!error || typeof error !== "object" || !("status" in error)) {
+        return false;
+      }
+      const status = (error as { status?: unknown }).status;
+      return (
+        typeof status === "number" &&
+        [400, 401, 403, 404, 409, 413, 422].includes(status)
+      );
+    }
+
+    function scheduleRetry() {
+      if (!active || controller.signal.aborted || !mountedRef.current) return;
+      const remaining = deadline - Date.now();
+      if (attempts >= 12 || remaining <= 0) {
+        setStatus({
+          status: "error",
+          message:
+            "Avatar processing could not be confirmed in time. Your current avatar is unchanged; try again later.",
+        });
+        return;
+      }
+      timer = setTimeout(() => void poll(), Math.min(delay, remaining));
+      delay = Math.min(5_000, delay * 2);
+    }
 
     const poll = async () => {
+      if (!active || controller.signal.aborted || !mountedRef.current) return;
+      attempts += 1;
       try {
-        const result = await getStatus(
-          processingOperationId,
+        const result = await withBoundedSignal(
           controller.signal,
+          8_000,
+          (signal) => getStatus(operationId, signal, displayName),
         );
-        if (!active || !mountedRef.current) return;
+        if (
+          !active ||
+          !canCommitAvatarResult(controller.signal, mountedRef.current)
+        )
+          return;
         if (result.status === "processing") {
           setStatus({
             status: "processing",
-            operationId: processingOperationId,
+            operationId,
             stage: describeStage(result.stage),
           });
-          timer = setTimeout(() => void poll(), delay);
-          delay = Math.min(10000, delay * 2);
+          scheduleRetry();
           return;
         }
         if (result.status === "success") {
           setStatus({ status: "success" });
-          onSuccess?.(result.avatar);
+          onSuccessRef.current?.(result.avatar);
+          return;
+        }
+        if (result.status === "retryable_error") {
+          setStatus({
+            status: "processing",
+            operationId,
+            stage: "Status check unavailable; retrying safely",
+          });
+          scheduleRetry();
           return;
         }
         setStatus({ status: "error", message: resultMessage(result) });
-      } catch {
+      } catch (error) {
         if (!active || controller.signal.aborted || !mountedRef.current) return;
+        if (terminalStatusError(error)) {
+          setStatus({
+            status: "error",
+            message:
+              "Avatar processing could not be confirmed for this profile. Your current avatar is unchanged.",
+          });
+          return;
+        }
         setStatus({
           status: "processing",
-          operationId: processingOperationId,
+          operationId,
           stage: "Status check unavailable; retrying safely",
         });
-        timer = setTimeout(() => void poll(), delay);
-        delay = Math.min(10000, delay * 2);
+        scheduleRetry();
       }
     };
 
@@ -460,8 +835,11 @@ export function AvatarCropDialog({
       active = false;
       controller.abort();
       if (timer) clearTimeout(timer);
+      if (activeAbortRef.current === controller) {
+        activeAbortRef.current = null;
+      }
     };
-  }, [adapter, onSuccess, processingOperationId]);
+  }, [adapter, displayName, processingOperationId]);
 
   const isBusy =
     status.status === "validating" ||
@@ -474,12 +852,7 @@ export function AvatarCropDialog({
       className={styles.overlay}
       role="presentation"
       onMouseDown={(event) => {
-        if (
-          event.target === event.currentTarget &&
-          statusRef.current.status !== "uploading"
-        ) {
-          onClose();
-        }
+        if (event.target === event.currentTarget) closeDialog();
       }}
     >
       <div
@@ -498,16 +871,16 @@ export function AvatarCropDialog({
             <p className={styles.eyebrow}>Profile photo</p>
             <h2 id="avatar-dialog-title">Adjust your avatar</h2>
             <p className={styles.description} id="avatar-dialog-description">
-              Preview a square crop. Your current avatar stays in place until
-              the server confirms a new revision.
+              Preview a {cropShape === "square" ? "square" : "circular"} crop.
+              Your current avatar stays in place until the server confirms a new
+              revision.
             </p>
           </div>
           <button
             className={styles.closeButton}
             type="button"
-            onClick={onClose}
+            onClick={closeDialog}
             aria-label="Close avatar editor"
-            disabled={status.status === "uploading"}
           >
             <X size={19} aria-hidden="true" />
           </button>
@@ -516,9 +889,12 @@ export function AvatarCropDialog({
         <div className={styles.body}>
           <div className={styles.previewColumn}>
             <div
-              className={`${styles.previewFrame}${dragActive ? ` ${styles.previewFrameActive}` : ""}`}
-              aria-label="Avatar image drop zone and crop preview"
-              aria-describedby="avatar-direct-manipulation-hint"
+              className={`${styles.previewFrame} ${cropShape === "square" ? styles.previewFrameSquare : ""}${dragActive ? ` ${styles.previewFrameActive}` : ""}`}
+              role="group"
+              tabIndex={0}
+              aria-label={`${cropShape === "square" ? "Square" : "Circular"} avatar crop preview`}
+              aria-describedby="avatar-direct-manipulation-hint avatar-keyboard-hint"
+              aria-disabled={isBusy}
               onDragEnter={(event) => {
                 event.preventDefault();
                 if (!isBusy) setDragActive(true);
@@ -544,6 +920,7 @@ export function AvatarCropDialog({
               onPointerMove={updatePointerGesture}
               onPointerUp={endPointerGesture}
               onPointerCancel={endPointerGesture}
+              onKeyDown={handlePreviewKeyDown}
               onWheel={(event) => {
                 if (!previewUrl || isBusy) return;
                 event.preventDefault();
@@ -553,6 +930,7 @@ export function AvatarCropDialog({
                     0,
                     0,
                     event.deltaY < 0 ? 1.06 : 0.94,
+                    imageDimensions ?? undefined,
                   ),
                 );
               }}
@@ -586,13 +964,17 @@ export function AvatarCropDialog({
             >
               Drop a photo here. Drag to frame it; scroll or pinch to zoom.
             </span>
+            <span className={styles.keyboardHint} id="avatar-keyboard-hint">
+              Keyboard: focus the preview, then use arrow keys to move, +/− to
+              zoom, or Home to reset.
+            </span>
           </div>
 
           <div className={styles.controls}>
             <div className={styles.filePicker}>
               <label className={styles.fileButton}>
                 <Camera size={17} aria-hidden="true" />
-                Choose an image
+                {previewUrl ? "Choose a different image" : "Choose an image"}
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -608,8 +990,8 @@ export function AvatarCropDialog({
                 />
               </label>
               <p className={styles.hint} id="avatar-file-hint">
-                JPEG, PNG, or WebP. Final size and security checks belong to the
-                profile service.
+                JPEG, PNG, or WebP. The profile service validates type, size,
+                and content before accepting it.
               </p>
             </div>
 
@@ -620,76 +1002,48 @@ export function AvatarCropDialog({
               </p>
             ) : null}
 
-            <details className={styles.precisionControls}>
-              <summary>
-                <Crop size={15} aria-hidden="true" /> Fine-tune with keyboard
-              </summary>
-              <fieldset className={styles.cropControls} disabled={!previewUrl}>
-                <legend>Crop controls</legend>
-                <label>
-                  <span>Zoom</span>
-                  <output>{crop.scale.toFixed(2)}×</output>
-                  <input
-                    type="range"
-                    min="1"
-                    max="2"
-                    step="0.05"
-                    value={crop.scale}
-                    onChange={(event) =>
-                      setCrop((current) => ({
-                        ...current,
-                        scale: Number(event.target.value),
-                      }))
-                    }
-                    aria-describedby="avatar-crop-hint"
-                  />
-                </label>
-                <label>
-                  <span>Horizontal position</span>
-                  <output>{crop.offsetX}%</output>
-                  <input
-                    type="range"
-                    min="-25"
-                    max="25"
-                    step="1"
-                    value={crop.offsetX}
-                    onChange={(event) =>
-                      setCrop((current) => ({
-                        ...current,
-                        offsetX: Number(event.target.value),
-                      }))
-                    }
-                    aria-describedby="avatar-crop-hint"
-                  />
-                </label>
-                <label>
-                  <span>Vertical position</span>
-                  <output>{crop.offsetY}%</output>
-                  <input
-                    type="range"
-                    min="-25"
-                    max="25"
-                    step="1"
-                    value={crop.offsetY}
-                    onChange={(event) =>
-                      setCrop((current) => ({
-                        ...current,
-                        offsetY: Number(event.target.value),
-                      }))
-                    }
-                    aria-describedby="avatar-crop-hint"
-                  />
-                </label>
-                <p className={styles.hint} id="avatar-crop-hint">
-                  Use the sliders with a keyboard when direct manipulation is
-                  not comfortable.
-                </p>
-              </fieldset>
-            </details>
+            <div
+              className={styles.cropTools}
+              role="group"
+              aria-label="Avatar framing tools"
+            >
+              <div className={styles.cropToolHeader}>
+                <span className={styles.cropToolTitle}>
+                  <Move size={15} aria-hidden="true" /> Frame your photo
+                </span>
+                <span
+                  className={styles.cropReadout}
+                  aria-live="polite"
+                  aria-atomic="true"
+                >
+                  {crop.scale.toFixed(2)}× · {crop.offsetX}% / {crop.offsetY}%
+                </span>
+              </div>
+              <button
+                className={styles.resetButton}
+                type="button"
+                onClick={resetCrop}
+                disabled={!previewUrl || isBusy || isDefaultAvatarCrop(crop)}
+              >
+                <RotateCcw size={15} aria-hidden="true" />
+                Reset framing
+              </button>
+              <p className={styles.hint}>
+                The crop stays local until you choose Upload avatar. Reset
+                framing restores the original crop without changing the image.
+              </p>
+            </div>
 
             {previewUrl && status.status === "idle" ? (
               <p className={styles.localOnly} role="status">
                 Local preview only. Nothing has been uploaded.
+              </p>
+            ) : null}
+            {!isOnline ? (
+              <p className={styles.offline} role="status" aria-live="polite">
+                <CircleAlert size={16} aria-hidden="true" /> You’re offline.
+                Your preview is retained; reconnect before uploading. Your
+                current avatar is unchanged.
               </p>
             ) : null}
             {status.status === "processing" ? (
@@ -713,8 +1067,7 @@ export function AvatarCropDialog({
               <button
                 className={styles.cancelButton}
                 type="button"
-                onClick={onClose}
-                disabled={status.status === "uploading"}
+                onClick={closeDialog}
               >
                 Cancel
               </button>
@@ -722,7 +1075,13 @@ export function AvatarCropDialog({
                 className={styles.submitButton}
                 type="button"
                 onClick={() => void submitAvatar()}
-                disabled={!file || isBusy || status.status === "success"}
+                disabled={
+                  !file ||
+                  !imageDimensions ||
+                  !isOnline ||
+                  isBusy ||
+                  status.status === "success"
+                }
                 aria-describedby="avatar-upload-note"
               >
                 <Upload size={16} aria-hidden="true" />

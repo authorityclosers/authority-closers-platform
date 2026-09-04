@@ -5503,6 +5503,19 @@ a.learning-list-card:hover {
    Profile View Styles
    ========================================================================== */
 
+.site-frame--learner .profile-view {
+  --color-card-surface: var(--theme-surface);
+  --color-card-border: var(--theme-border);
+  --color-card-border-hover: var(--theme-border-strong);
+  --color-cobalt: var(--theme-action);
+  --color-cobalt-hover: var(--theme-action-hover);
+  --color-cobalt-subtle: var(--theme-info-surface);
+  --color-navy: var(--theme-text);
+  --color-navy-muted: var(--theme-text-muted);
+  --color-warm-white: var(--theme-canvas);
+  --shadow-sm: var(--theme-shadow);
+}
+
 .profile-header {
   margin-bottom: 24px;
 }
@@ -5510,15 +5523,24 @@ a.learning-list-card:hover {
 .profile-title {
   font-size: clamp(1.6rem, 2.5vw, 2.2rem);
   font-weight: 800;
-  color: #0f172a;
+  color: var(--theme-text);
   letter-spacing: -0.03em;
   margin: 6px 0;
 }
 
 .profile-subhead {
   font-size: 0.94rem;
-  color: #64748b;
+  color: var(--theme-text-muted);
   margin: 0;
+}
+
+.profile-view .learning-breadcrumbs a {
+  color: var(--theme-text-muted);
+}
+
+.profile-view .learning-breadcrumbs a:hover,
+.profile-view .learning-breadcrumbs a:focus-visible {
+  color: var(--theme-action);
 }
 
 .profile-grid {
@@ -5542,8 +5564,8 @@ a.learning-list-card:hover {
   justify-content: center;
   width: 64px;
   height: 64px;
-  background: #0f172a;
-  color: #ffffff;
+  background: var(--theme-action);
+  color: var(--theme-action-text);
   font-size: 1.4rem;
   font-weight: 800;
   border-radius: 50%;
@@ -5592,9 +5614,15 @@ a.learning-list-card:hover {
   display: grid;
   gap: 4px;
   margin-top: 4px;
-  color: var(--theme-warning-text, #92400e);
+  color: var(--theme-warning-text);
   font-size: 0.68rem;
   line-height: 1.35;
+}
+
+.profile-avatar-status--success {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  color: var(--theme-success-text);
 }
 
 .profile-avatar-status .text-button {
@@ -5603,7 +5631,7 @@ a.learning-list-card:hover {
 
 .profile-avatar-panel__button {
   align-self: start;
-  min-height: 40px;
+  min-height: 44px;
   color: var(--theme-action);
   border-color: var(--theme-action);
   background: var(--theme-surface);
@@ -5624,19 +5652,46 @@ a.learning-list-card:hover {
 .profile-name {
   font-size: 1.25rem;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--theme-text);
   margin: 0 0 2px 0;
 }
 
 .profile-email {
   font-size: 0.84rem;
-  color: #64748b;
+  color: var(--theme-text-muted);
   margin-bottom: 8px;
 }
 
 .profile-badges {
   display: flex;
   gap: 6px;
+}
+
+.profile-view .button--outline {
+  border-color: var(--theme-border-strong);
+  color: var(--theme-text);
+  background: var(--theme-surface);
+}
+
+.profile-view .button--outline:hover:not(:disabled),
+.profile-view .button--outline:focus-visible {
+  border-color: var(--theme-action);
+  color: var(--theme-action);
+  background: var(--theme-surface-subtle);
+}
+
+.profile-view .text-button {
+  color: var(--theme-action);
+}
+
+.profile-view .card-badge--primary {
+  background: var(--theme-info-surface);
+  color: var(--theme-info-text);
+}
+
+.profile-view .card-badge--success {
+  background: var(--theme-success-surface);
+  color: var(--theme-success-text);
 }
 
 .profile-facts-list {
@@ -5651,7 +5706,7 @@ a.learning-list-card:hover {
   justify-content: space-between;
   font-size: 0.86rem;
   padding: 6px 0;
-  border-bottom: 1px dashed #f1f5f9;
+  border-bottom: 1px dashed var(--theme-border);
 }
 
 .fact-row:last-child {
@@ -5659,11 +5714,11 @@ a.learning-list-card:hover {
 }
 
 .fact-label {
-  color: #64748b;
+  color: var(--theme-text-muted);
 }
 
 .fact-value {
-  color: #0f172a;
+  color: var(--theme-text);
   font-weight: 600;
 }
 
@@ -5680,8 +5735,8 @@ a.learning-list-card:hover {
   justify-content: center;
   width: 36px;
   height: 36px;
-  background: #eff6ff;
-  color: #2563eb;
+  background: var(--theme-info-surface);
+  color: var(--theme-info-text);
   border-radius: var(--radius-md);
   flex-shrink: 0;
 }
@@ -5689,13 +5744,13 @@ a.learning-list-card:hover {
 .card-title {
   font-size: 1.1rem;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--theme-text);
   margin: 0 0 2px 0;
 }
 
 .card-description {
   font-size: 0.82rem;
-  color: #64748b;
+  color: var(--theme-text-muted);
   margin: 0;
 }
 
@@ -5717,7 +5772,7 @@ a.learning-list-card:hover {
   align-items: center;
   justify-content: space-between;
   padding: 12px 14px;
-  background: #f8fafc;
+  background: var(--theme-surface-subtle);
   border: 1px solid var(--color-card-border);
   border-radius: var(--radius-md);
   text-decoration: none;
@@ -5726,18 +5781,18 @@ a.learning-list-card:hover {
 }
 
 .quick-action-row:hover {
-  background: #f1f5f9;
+  background: var(--theme-surface-raised);
 }
 
 .quick-action-row strong {
   display: block;
   font-size: 0.88rem;
-  color: #0f172a;
+  color: var(--theme-text);
 }
 
 .quick-action-row span {
   font-size: 0.76rem;
-  color: #64748b;
+  color: var(--theme-text-muted);
 }
 
 /* ==========================================================================

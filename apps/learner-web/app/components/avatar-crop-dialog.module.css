@@ -13,6 +13,7 @@
   width: min(720px, 100%);
   max-height: min(720px, calc(100dvh - 48px));
   overflow: auto;
+  overscroll-behavior: contain;
   border: 1px solid var(--theme-border-strong);
   border-radius: 14px;
   color: var(--theme-text);
@@ -89,7 +90,7 @@
 .previewFrame {
   position: relative;
   display: grid;
-  width: min(260px, 100%);
+  width: min(280px, 100%);
   aspect-ratio: 1;
   overflow: hidden;
   place-items: center;
@@ -102,14 +103,24 @@
   isolation: isolate;
   cursor: grab;
   touch-action: none;
+  user-select: none;
   transition:
     border-color 140ms ease,
     box-shadow 140ms ease,
     transform 140ms ease;
 }
 
+.previewFrameSquare {
+  border-radius: 14px;
+}
+
 .previewFrame:active {
   cursor: grabbing;
+}
+
+.previewFrame:focus-visible {
+  outline: 3px solid var(--theme-focus);
+  outline-offset: 5px;
 }
 
 .previewFrameActive {
@@ -125,6 +136,9 @@
   height: 100%;
   flex: 0 0 100%;
   object-fit: cover;
+  pointer-events: none;
+  user-select: none;
+  will-change: transform;
   transition: transform 160ms ease;
 }
 
@@ -146,6 +160,10 @@
   pointer-events: none;
 }
 
+.previewFrameSquare .cropGuide {
+  border-radius: 10px;
+}
+
 .previewCaption {
   color: var(--theme-text-muted);
   font-size: 0.68rem;
@@ -156,6 +174,14 @@
   max-width: 260px;
   color: var(--theme-text-muted);
   font-size: 0.69rem;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.keyboardHint {
+  max-width: 280px;
+  color: var(--theme-text-muted);
+  font-size: 0.67rem;
   line-height: 1.45;
   text-align: center;
 }
@@ -217,92 +243,73 @@
   line-height: 1.4;
 }
 
-.cropControls {
+.cropTools {
   display: grid;
-  gap: 13px;
+  gap: 10px;
   margin: 0;
   padding: 14px;
-  border: 1px solid var(--theme-border);
-  border-radius: 9px;
-}
-
-.precisionControls {
   border: 1px solid var(--theme-border);
   border-radius: 9px;
   background: var(--theme-surface-subtle);
 }
 
-.precisionControls summary {
+.cropToolHeader {
   display: flex;
-  min-height: 44px;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
-  padding: 0 14px;
   color: var(--theme-text);
-  font-size: 0.73rem;
-  font-weight: 800;
-  cursor: pointer;
-  list-style: none;
 }
 
-.precisionControls summary::-webkit-details-marker {
-  display: none;
-}
-
-.precisionControls summary::after {
-  content: "+";
-  margin-left: auto;
-  color: var(--theme-action);
-  font-size: 1rem;
-}
-
-.precisionControls[open] summary::after {
-  content: "−";
-}
-
-.precisionControls .cropControls {
-  margin: 0 10px 10px;
-  background: var(--theme-surface);
-}
-
-.cropControls:disabled {
-  opacity: 0.65;
-}
-
-.cropControls legend {
+.cropToolTitle {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  padding: 0 4px;
-  color: var(--theme-text);
   font-size: 0.73rem;
   font-weight: 800;
 }
 
-.cropControls label {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 6px 12px;
+.cropReadout {
   color: var(--theme-text-muted);
-  font-size: 0.69rem;
-  font-weight: 700;
-}
-
-.cropControls output {
-  color: var(--theme-text);
+  font-size: 0.66rem;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
-.cropControls input[type="range"] {
-  grid-column: 1 / -1;
-  width: 100%;
-  accent-color: var(--theme-action);
+.resetButton {
+  display: inline-flex;
+  min-height: 44px;
+  width: fit-content;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 12px;
+  border: 1px solid var(--theme-border-strong);
+  border-radius: 7px;
+  color: var(--theme-text);
+  background: var(--theme-surface);
+  font-size: 0.72rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.resetButton:hover:not(:disabled),
+.resetButton:focus-visible {
+  border-color: var(--theme-action);
+  color: var(--theme-action);
+  background: var(--theme-surface);
+}
+
+.resetButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .error,
 .processing,
 .success,
-.localOnly {
+.localOnly,
+.offline {
   display: flex;
   align-items: flex-start;
   gap: 8px;
@@ -322,6 +329,11 @@
 .localOnly {
   color: var(--theme-info-text);
   background: var(--theme-info-surface);
+}
+
+.offline {
+  color: var(--theme-warning-text);
+  background: var(--theme-warning-surface);
 }
 
 .success {
@@ -402,6 +414,11 @@
     width: min(190px, 60vw);
   }
 
+  .cropToolHeader {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
   .actions {
     justify-content: stretch;
   }
@@ -420,5 +437,9 @@
   .previewFrame,
   .previewImage {
     transition: none;
+  }
+
+  .previewFrameActive {
+    transform: none;
   }
 }
