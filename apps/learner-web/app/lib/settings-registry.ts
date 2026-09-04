@@ -28,6 +28,8 @@ export type SettingsSectionIconName =
   | "security"
   | "session";
 
+export type SettingsSectionGroupId = "account" | "setup" | "security";
+
 export type SettingsSectionOwner =
   | "identity"
   | "frontend/settings"
@@ -40,6 +42,7 @@ export type SettingsSectionDefinition = {
   anchor: SettingsSectionId;
   headingId: `${SettingsSectionId}-title`;
   icon: SettingsSectionIconName;
+  groupId: SettingsSectionGroupId;
   label: string;
   detail: string;
   title: string;
@@ -60,6 +63,7 @@ export const SETTINGS_SECTIONS = [
     anchor: "verified-account",
     headingId: "verified-account-title",
     icon: "account",
+    groupId: "account",
     label: "Verified account",
     detail: "Your identity and verification",
     title: "Verified account",
@@ -73,6 +77,7 @@ export const SETTINGS_SECTIONS = [
     anchor: "appearance",
     headingId: "appearance-title",
     icon: "appearance",
+    groupId: "setup",
     label: "Appearance",
     detail: "Theme and display",
     title: "Appearance",
@@ -87,6 +92,7 @@ export const SETTINGS_SECTIONS = [
     anchor: "learning-setup",
     headingId: "learning-setup-title",
     icon: "learning",
+    groupId: "setup",
     label: "Learning setup",
     detail: "Your learning preferences",
     title: "Learning setup",
@@ -100,6 +106,7 @@ export const SETTINGS_SECTIONS = [
     anchor: "security-privacy",
     headingId: "security-privacy-title",
     icon: "security",
+    groupId: "security",
     label: "Security & privacy",
     detail: "Account and privacy",
     title: "Security & privacy",
@@ -113,6 +120,7 @@ export const SETTINGS_SECTIONS = [
     anchor: "session",
     headingId: "session-title",
     icon: "session",
+    groupId: "security",
     label: "Session",
     detail: "Sign out",
     title: "Session",
@@ -121,6 +129,32 @@ export const SETTINGS_SECTIONS = [
     source: "same-origin logout",
   },
 ] as const satisfies readonly SettingsSectionDefinition[];
+
+/**
+ * Presentation-only group labels keep the index scannable without widening
+ * the contracted SET-01..SET-05 vocabulary or changing card order.
+ */
+export const SETTINGS_SECTION_GROUPS = [
+  {
+    id: "account",
+    label: "Account",
+    detail: "Identity and verification",
+  },
+  {
+    id: "setup",
+    label: "Setup & preferences",
+    detail: "Presentation and learning context",
+  },
+  {
+    id: "security",
+    label: "Security & access",
+    detail: "Policies and current session",
+  },
+] as const satisfies ReadonlyArray<{
+  id: SettingsSectionGroupId;
+  label: string;
+  detail: string;
+}>;
 
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
 

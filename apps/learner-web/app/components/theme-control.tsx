@@ -814,195 +814,201 @@ export function ThemeControl({
         </div>
       </div>
 
-      {/* 2. Color Mode (Theme) */}
-      <div
-        className={styles.appearanceGroup}
-        role="group"
-        aria-labelledby="appearance-theme-label"
-      >
-        <div className={styles.appearanceGroupHeader}>
-          <Sun size={17} aria-hidden="true" />
-          <h3
-            id="appearance-theme-label"
-            className={styles.appearanceGroupTitle}
-          >
-            Theme mode
-          </h3>
-        </div>
+      <div className={styles.appearanceGrid}>
+        {/* 2. Color Mode (Theme) */}
         <div
-          className={`theme-control ${styles.themeControl}`}
+          className={styles.appearanceGroup}
           role="group"
-          aria-label="Appearance theme"
+          aria-labelledby="appearance-theme-label"
         >
-          {themeOptions.map((option) => {
-            const Icon = option.icon;
-            const isSelected = preferences.theme === option.value;
-            return (
-              <button
-                className="theme-control__option"
-                type="button"
-                key={option.value}
-                aria-pressed={isSelected}
-                onClick={() =>
-                  handleUpdate({ theme: option.value }, `${option.label} theme`)
-                }
-              >
-                <Icon size={18} aria-hidden="true" />
-                <span>{option.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 3. Named Accent Palette */}
-      <div
-        className={styles.appearanceGroup}
-        role="group"
-        aria-labelledby="appearance-accent-label"
-      >
-        <div className={styles.appearanceGroupHeader}>
-          <Palette size={17} aria-hidden="true" />
-          <h3
-            id="appearance-accent-label"
-            className={styles.appearanceGroupTitle}
+          <div className={styles.appearanceGroupHeader}>
+            <Sun size={17} aria-hidden="true" />
+            <h3
+              id="appearance-theme-label"
+              className={styles.appearanceGroupTitle}
+            >
+              Theme mode
+            </h3>
+          </div>
+          <div
+            className={`theme-control ${styles.themeControl}`}
+            role="group"
+            aria-label="Appearance theme"
           >
-            Accent color
-          </h3>
-        </div>
-        <p className={styles.appearanceGroupDetail}>
-          Sets the primary brand highlight, button tint, link color, and player
-          accent.
-        </p>
-        <div
-          className={styles.accentGrid}
-          role="group"
-          aria-label="Accent palette"
-        >
-          {accentOptions.map((accent) => {
-            const isSelected = preferences.accent === accent.value;
-            return (
-              <button
-                type="button"
-                key={accent.value}
-                className={`${styles.accentButton}${isSelected ? ` ${styles.accentButtonActive}` : ""}`}
-                aria-pressed={isSelected}
-                onClick={() =>
-                  handleUpdate(
-                    { accent: accent.value },
-                    `${accent.label} accent`,
-                  )
-                }
-              >
-                <span
-                  className={styles.accentSwatchPreview}
-                  style={{ backgroundColor: accent.color }}
-                  aria-hidden="true"
-                />
-                <span className={styles.accentCopy}>
-                  <strong>{accent.label}</strong>
-                  <small>{accent.description}</small>
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 4. Display Density */}
-      <div
-        className={styles.appearanceGroup}
-        role="group"
-        aria-labelledby="appearance-density-label"
-      >
-        <div className={styles.appearanceGroupHeader}>
-          <Sliders size={17} aria-hidden="true" />
-          <h3
-            id="appearance-density-label"
-            className={styles.appearanceGroupTitle}
-          >
-            Display density
-          </h3>
-        </div>
-        <div
-          className={styles.densityGrid}
-          role="group"
-          aria-label="Display density"
-        >
-          {densityOptions.map((density) => {
-            const Icon = density.icon;
-            const isSelected = preferences.density === density.value;
-            return (
-              <button
-                type="button"
-                key={density.value}
-                className={`${styles.densityButton}${isSelected ? ` ${styles.densityButtonActive}` : ""}`}
-                aria-pressed={isSelected}
-                onClick={() =>
-                  handleUpdate(
-                    { density: density.value },
-                    `${density.label} density`,
-                  )
-                }
-              >
-                <div className={styles.densityButtonHeader}>
+            {themeOptions.map((option) => {
+              const Icon = option.icon;
+              const isSelected = preferences.theme === option.value;
+              return (
+                <button
+                  className="theme-control__option"
+                  type="button"
+                  key={option.value}
+                  aria-pressed={isSelected}
+                  onClick={() =>
+                    handleUpdate(
+                      { theme: option.value },
+                      `${option.label} theme`,
+                    )
+                  }
+                >
                   <Icon size={18} aria-hidden="true" />
-                  <strong>{density.label}</strong>
-                </div>
-                <span className={styles.densityDetail}>{density.detail}</span>
-              </button>
-            );
-          })}
+                  <span>{option.label}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
-      </div>
 
-      {/* 5. Motion Preferences */}
-      <div
-        className={styles.appearanceGroup}
-        role="group"
-        aria-labelledby="appearance-motion-label"
-      >
-        <div className={styles.appearanceGroupHeader}>
-          <Zap size={17} aria-hidden="true" />
-          <h3
-            id="appearance-motion-label"
-            className={styles.appearanceGroupTitle}
-          >
-            Motion &amp; microinteractions
-          </h3>
-        </div>
-        <p className={styles.appearanceGroupDetail}>
-          Controls animations, player timelines, drawers, and transition speed.
-        </p>
+        {/* 3. Named Accent Palette */}
         <div
-          className={styles.motionGrid}
+          className={styles.appearanceGroup}
           role="group"
-          aria-label="Motion preference"
+          aria-labelledby="appearance-accent-label"
         >
-          {motionOptions.map((motion) => {
-            const Icon = motion.icon;
-            const isSelected = preferences.motion === motion.value;
-            return (
-              <button
-                type="button"
-                key={motion.value}
-                className={`${styles.motionButton}${isSelected ? ` ${styles.motionButtonActive}` : ""}`}
-                aria-pressed={isSelected}
-                onClick={() =>
-                  handleUpdate(
-                    { motion: motion.value },
-                    `${motion.label} motion`,
-                  )
-                }
-              >
-                <div className={styles.motionButtonHeader}>
-                  <Icon size={18} aria-hidden="true" />
-                  <strong>{motion.label}</strong>
-                </div>
-                <span className={styles.motionDetail}>{motion.detail}</span>
-              </button>
-            );
-          })}
+          <div className={styles.appearanceGroupHeader}>
+            <Palette size={17} aria-hidden="true" />
+            <h3
+              id="appearance-accent-label"
+              className={styles.appearanceGroupTitle}
+            >
+              Accent color
+            </h3>
+          </div>
+          <p className={styles.appearanceGroupDetail}>
+            Sets the primary brand highlight, button tint, link color, and
+            player accent.
+          </p>
+          <div
+            className={styles.accentGrid}
+            role="group"
+            aria-label="Accent palette"
+          >
+            {accentOptions.map((accent) => {
+              const isSelected = preferences.accent === accent.value;
+              return (
+                <button
+                  type="button"
+                  key={accent.value}
+                  className={`${styles.accentButton}${isSelected ? ` ${styles.accentButtonActive}` : ""}`}
+                  aria-pressed={isSelected}
+                  onClick={() =>
+                    handleUpdate(
+                      { accent: accent.value },
+                      `${accent.label} accent`,
+                    )
+                  }
+                >
+                  <span
+                    className={styles.accentSwatchPreview}
+                    style={{ backgroundColor: accent.color }}
+                    aria-hidden="true"
+                  />
+                  <span className={styles.accentCopy}>
+                    <strong>{accent.label}</strong>
+                    <small>{accent.description}</small>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* 4. Display Density */}
+        <div
+          className={styles.appearanceGroup}
+          role="group"
+          aria-labelledby="appearance-density-label"
+        >
+          <div className={styles.appearanceGroupHeader}>
+            <Sliders size={17} aria-hidden="true" />
+            <h3
+              id="appearance-density-label"
+              className={styles.appearanceGroupTitle}
+            >
+              Display density
+            </h3>
+          </div>
+          <div
+            className={styles.densityGrid}
+            role="group"
+            aria-label="Display density"
+          >
+            {densityOptions.map((density) => {
+              const Icon = density.icon;
+              const isSelected = preferences.density === density.value;
+              return (
+                <button
+                  type="button"
+                  key={density.value}
+                  className={`${styles.densityButton}${isSelected ? ` ${styles.densityButtonActive}` : ""}`}
+                  aria-pressed={isSelected}
+                  onClick={() =>
+                    handleUpdate(
+                      { density: density.value },
+                      `${density.label} density`,
+                    )
+                  }
+                >
+                  <div className={styles.densityButtonHeader}>
+                    <Icon size={18} aria-hidden="true" />
+                    <strong>{density.label}</strong>
+                  </div>
+                  <span className={styles.densityDetail}>{density.detail}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* 5. Motion Preferences */}
+        <div
+          className={styles.appearanceGroup}
+          role="group"
+          aria-labelledby="appearance-motion-label"
+        >
+          <div className={styles.appearanceGroupHeader}>
+            <Zap size={17} aria-hidden="true" />
+            <h3
+              id="appearance-motion-label"
+              className={styles.appearanceGroupTitle}
+            >
+              Motion &amp; microinteractions
+            </h3>
+          </div>
+          <p className={styles.appearanceGroupDetail}>
+            Controls animations, player timelines, drawers, and transition
+            speed.
+          </p>
+          <div
+            className={styles.motionGrid}
+            role="group"
+            aria-label="Motion preference"
+          >
+            {motionOptions.map((motion) => {
+              const Icon = motion.icon;
+              const isSelected = preferences.motion === motion.value;
+              return (
+                <button
+                  type="button"
+                  key={motion.value}
+                  className={`${styles.motionButton}${isSelected ? ` ${styles.motionButtonActive}` : ""}`}
+                  aria-pressed={isSelected}
+                  onClick={() =>
+                    handleUpdate(
+                      { motion: motion.value },
+                      `${motion.label} motion`,
+                    )
+                  }
+                >
+                  <div className={styles.motionButtonHeader}>
+                    <Icon size={18} aria-hidden="true" />
+                    <strong>{motion.label}</strong>
+                  </div>
+                  <span className={styles.motionDetail}>{motion.detail}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
