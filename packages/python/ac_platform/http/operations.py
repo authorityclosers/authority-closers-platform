@@ -647,6 +647,8 @@ def install_operations_http(
         provider = configured_provider.strip().lower()
         if _PROVIDER_NAME_PATTERN.fullmatch(provider) is None:
             raise ValueError("webhook registry contains an invalid provider name")
+        if provider == "video":
+            raise ValueError("video provider webhooks are owned by media composition")
         if not isinstance(adapter, TrustedWebhookAdapter):
             raise TypeError("webhook registry entries must be TrustedWebhookAdapter instances")
         if (

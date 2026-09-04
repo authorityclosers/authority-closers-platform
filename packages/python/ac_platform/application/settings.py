@@ -79,6 +79,35 @@ class Settings(BaseSettings):
     operations_tenant_id: UUID | None = None
     trusted_proxy_addresses: str = ""
 
+    # Media provider configuration is deliberately disabled by default.  The
+    # The media boundary validates the complete storage/delivery contract as
+    # input data only. References are evidence labels, not authorization; the
+    # shipped staging/production composition rejects enabled media until a
+    # later immutable external approval and safe transport exist. Keeping these
+    # values here makes environment loading explicit without provider contact.
+    media_provider_enabled: bool = False
+    media_provider: Literal["unconfigured", "s3", "minio"] = "unconfigured"
+    media_storage_endpoint: str | None = None
+    media_storage_bucket: str | None = None
+    media_storage_region: str | None = None
+    media_storage_approved_endpoint_hosts: str = ""
+    media_storage_access_key_id: str | None = None
+    media_storage_secret_access_key: SecretStr | None = None
+    media_delivery_origin: str | None = None
+    media_cors_origins: str = ""
+    media_governance_reference: str | None = None
+    media_gap_reference: str | None = None
+    media_upload_ttl_seconds: int = 900
+    media_playback_ttl_seconds: int = 900
+    media_max_upload_bytes: int = 512 * 1024 * 1024
+    media_quota_window_seconds: int = 3600
+    media_quota_bytes_per_actor: int = 2 * 1024 * 1024 * 1024
+    media_quota_uploads_per_actor: int = 100
+    media_max_renditions: int = 6
+    media_max_processing_output_bytes: int = 4 * 1024 * 1024 * 1024
+    media_max_processing_caption_bytes: int = 25 * 1024 * 1024
+    media_allow_range_requests: bool = True
+
     @field_validator("public_learner_tenant_id", "operations_tenant_id", mode="before")
     @classmethod
     def blank_optional_tenant_is_unconfigured(cls, value: Any) -> Any:
@@ -122,6 +151,7 @@ class Settings(BaseSettings):
                 "AC_PUBLIC_LEARNER_TENANT_ID and AC_OPERATIONS_TENANT_ID must identify "
                 "different tenants"
             )
+        self._validate_media_provider()
         if self.environment not in {"staging", "production"}:
             self._validate_google_oauth_pair()
             self._validate_email_provider()
@@ -193,6 +223,23 @@ class Settings(BaseSettings):
         self._validate_google_oauth_pair(require_configured=True)
         self._validate_email_provider()
         return self
+
+    def _validate_media_provider(self) -> None:
+        """Validate media provider settings before runtime composition.
+
+        The import is local to keep application settings independent from the
+        media service module while still sharing one strict config contract.
+        Disabled media remains inert and does not require any provider fields.
+        """
+
+        if not self.media_provider_enabled:
+            return
+        from ac_platform.media.config import MediaProviderConfig
+
+        try:
+            MediaProviderConfig.from_settings(self)
+        except (TypeError, ValueError) as error:
+            raise ValueError(f"invalid media provider configuration: {error}") from error
 
     def _validate_email_provider(self) -> None:
         if self.email_provider != "resend":

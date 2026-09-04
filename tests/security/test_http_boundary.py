@@ -28,8 +28,12 @@ class ChunkedBody(AsyncByteStream):
 def test_media_routes_use_explicit_bounded_body_limits() -> None:
     assert request_body_limit({"path": "/v1/media/asset/captions"}) == MAX_MEDIA_CAPTION_BYTES
     assert (
-        request_body_limit({"path": "/internal/v1/media/providers/video/webhooks"})
+        request_body_limit({"path": "/internal/v1/providers/video/webhooks"})
         == MAX_MEDIA_WEBHOOK_BYTES
+    )
+    assert (
+        request_body_limit({"path": "/internal/v1/media/providers/video/webhooks"})
+        == MAX_REQUEST_BODY_BYTES
     )
     assert request_body_limit({"path": "/v1/media/asset/playback-token"}) == MAX_REQUEST_BODY_BYTES
 

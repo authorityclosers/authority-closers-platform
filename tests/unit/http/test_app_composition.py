@@ -10,6 +10,7 @@ import ac_platform.http.app as app_module
 from ac_platform.application.settings import Settings
 from ac_platform.http.app import create_app
 from ac_platform.http.identity_provider import DisabledIdentityProvider, OAuthIdentityProvider
+from ac_platform.media.runtime import create_media_runtime
 
 
 def _deployment_settings(environment: str) -> Settings:
@@ -65,14 +66,15 @@ def test_shipped_application_mounts_g1_command_and_query_routes() -> None:
     assert "/v1/media/uploads" in paths
     assert "/v1/profile/avatar" in paths
     assert "/v1/media/{asset_id}/playback-token" in paths
-    assert "/internal/v1/media/providers/{provider}/webhooks" in paths
+    assert "/internal/v1/providers/{provider}/webhooks" not in paths
     assert "/v1/learning/home" in paths
     assert "/v1/learning/calendar" in paths
     assert "/v1/analytics/taxonomy" in paths
 
     # Provider callbacks stay fail-closed until a signed adapter is explicitly
     # registered by application composition.
-    assert "/internal/v1/providers/{provider}/webhooks" not in paths
+    assert "/internal/v1/providers/video/webhooks" not in paths
+    assert "/internal/v1/media/providers/{provider}/webhooks" not in paths
 
 
 @pytest.mark.parametrize("environment", ["staging", "production"])
@@ -87,6 +89,33 @@ def test_deployment_composition_omits_unconfigured_playback_routes(
     assert "/v1/activities/{activity_id}/playback/start" not in paths
     assert "/v1/activities/{activity_id}/playback/heartbeat" not in paths
     assert "/v1/activities/{activity_id}/playback/finish" not in paths
+
+
+@pytest.mark.parametrize("environment", ["staging", "production"])
+def test_deployment_composition_rejects_injected_unverified_media_runtime(
+    environment: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(app_module, "settings", _deployment_settings(environment))
+    injected = create_media_runtime(Settings(environment="test"))
+
+    with pytest.raises(RuntimeError, match="injected media runtimes"):
+        create_app(media_runtime=injected)
+
+
+@pytest.mark.parametrize("environment", ["staging", "production"])
+def test_non_local_composition_rejects_enabled_media_settings(
+    environment: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        app_module,
+        "settings",
+        _deployment_settings(environment).model_copy(update={"media_provider_enabled": True}),
+    )
+
+    with pytest.raises(RuntimeError, match="enabled media provider settings"):
+        create_app()
 
 
 def test_public_api_documentation_is_available_outside_deployments() -> None:

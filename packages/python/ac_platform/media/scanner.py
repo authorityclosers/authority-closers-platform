@@ -51,16 +51,24 @@ class SignatureContentScanner:
         if content_length <= 0:
             return ScanResult(False, "EMPTY_OBJECT")
         try:
+            metadata = storage.head(object_key)
             prefix = storage.read_prefix(object_key)
         except Exception as error:
             raise MediaScannerUnavailable(
                 "The media scanner could not read the quarantined object."
             ) from error
+        if metadata is None or metadata.content_length != content_length:
+            return ScanResult(False, "OBJECT_METADATA_MISMATCH")
+        provider_checksum = metadata.checksum_sha256.lower()
+        if checksum_sha256 and provider_checksum and checksum_sha256.lower() != provider_checksum:
+            return ScanResult(False, "CHECKSUM_MISMATCH")
         detected = self._detect(prefix, declared_content_type)
         if detected != declared_content_type:
             return ScanResult(False, "MIME_SNIFF_MISMATCH")
         if checksum_sha256:
             digest = checksum_sha256
+        elif provider_checksum:
+            digest = provider_checksum
         elif content_length == len(prefix):
             digest = hashlib.sha256(prefix).hexdigest()
         else:
@@ -96,4 +104,13 @@ class SignatureContentScanner:
         return None
 
 
-__all__ = ["ContentScanner", "FailClosedScanner", "ScanResult", "SignatureContentScanner"]
+LocalContentScanner = SignatureContentScanner
+
+
+__all__ = [
+    "ContentScanner",
+    "FailClosedScanner",
+    "LocalContentScanner",
+    "ScanResult",
+    "SignatureContentScanner",
+]

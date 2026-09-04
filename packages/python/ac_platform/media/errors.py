@@ -111,6 +111,14 @@ class MediaStorageUnavailable(MediaCommandError):
     status = 503
 
 
+class MediaConfigurationError(MediaCommandError):
+    """A provider was requested without a complete, approved configuration."""
+
+    code = "media_configuration_invalid"
+    title = "Media provider configuration is invalid"
+    status = 503
+
+
 class MediaScannerUnavailable(MediaCommandError):
     code = "media_scanner_unavailable"
     title = "Media safety scanning is temporarily unavailable"
@@ -136,6 +144,7 @@ __all__ = [
     "MediaUnavailableError",
     "MediaBadRequest",
     "MediaCommandError",
+    "MediaConfigurationError",
     "MediaConflict",
     "MediaForbidden",
     "MediaNotFound",
