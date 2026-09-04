@@ -799,7 +799,7 @@
 }
 
 .site-frame--learner .learning-collection-tab {
-  min-height: 42px;
+  min-height: 44px;
   flex: 0 0 auto;
   padding: 9px 14px;
   border: 1px solid transparent;
@@ -953,14 +953,28 @@
   line-height: 1;
 }
 
+.site-frame--learner .learning-course-card__badges {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .site-frame--learner .learning-course-state--completed {
   background: var(--course-success-surface);
   color: var(--course-success-text);
 }
 
 .site-frame--learner .learning-course-state--unavailable {
-  background: var(--course-warning-surface);
-  color: var(--course-warning-text);
+  background: var(--course-info-surface);
+  color: var(--course-info-text);
+}
+
+.site-frame--learner .learning-course-state--saved {
+  border: 1px solid
+    color-mix(in srgb, var(--course-action) 24%, var(--course-border));
+  background: var(--course-surface);
+  color: var(--course-info-text);
 }
 
 .site-frame--learner .learning-course-card .ac-program-card__title {
@@ -995,6 +1009,36 @@
 
 .site-frame--learner .learning-course-card .progress-meter__track > span {
   background: var(--course-action);
+}
+
+.site-frame--learner .learning-course-card__next-action {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+  margin-top: 14px;
+  padding: 11px 12px 12px;
+  border-left: 3px solid var(--course-action);
+  border-radius: 0 10px 10px 0;
+  background: var(--course-info-surface);
+  color: var(--course-ink);
+}
+
+.site-frame--learner .learning-course-card__next-action-label {
+  color: var(--course-info-text);
+  font-size: 0.66rem;
+  font-weight: 850;
+  letter-spacing: 0.07em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.site-frame--learner .learning-course-card__next-action strong {
+  max-width: 42ch;
+  color: var(--course-ink);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .site-frame--learner .learning-course-card__action-link {
@@ -1052,7 +1096,8 @@
 }
 
 .site-frame--learner .learning-collection-skeleton__toolbar .skeleton-line {
-  height: 40px;
+  min-height: 44px;
+  height: 44px;
   flex: 0 0 auto;
   border-radius: 10px;
 }

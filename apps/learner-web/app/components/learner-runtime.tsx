@@ -72,7 +72,7 @@ import { VideoViewer } from "./learning-loop-runtime";
 
 const defaultApi = createLearnerApi();
 export const FREE_COURSE_SLUG = "authority-closers-free-course";
-const LEARNER_SUPPORT_HREF =
+export const LEARNER_SUPPORT_HREF =
   "mailto:admin@authorityclosers.com?subject=Authority%20Closers%20learner%20access";
 
 export function isFreeEnrollmentProgram(program: { slug: string }): boolean {

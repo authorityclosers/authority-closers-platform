@@ -26,6 +26,7 @@ const ACTIVE_OWNER_STORAGE_KEY = "ac.learner.offline.active-owner.v1";
 const PUBLIC_OWNER_SCOPE = "public";
 const AES_GCM_KEY_BYTES = 32;
 const AES_GCM_IV_BYTES = 12;
+const MAX_LEARNING_CURSOR_LENGTH = 512;
 const OWNER_HASH_PREFIX = "ac-owner-v1:";
 const CACHE_KEY_PREFIX = "ac-cache-key-v1:";
 
@@ -38,17 +39,37 @@ export type OfflineReadCacheEntry<T = unknown> = {
   savedAt: number;
 };
 
+/**
+ * A cache-owned lease binds a private write to one owner generation. The
+ * hashes are opaque scope identifiers; the cache remains the authority that
+ * decides whether a lease is current.
+ */
+export type OfflineReadCacheLease = Readonly<{
+  ownerHash: string;
+  sessionKey: string;
+  generation: number;
+}>;
+
+export type OfflineReadCacheActivation =
+  | { ok: true; lease: OfflineReadCacheLease }
+  | { ok: false; reason: "unavailable" | "failed" };
+
 export type OfflineReadCache = {
   get(path: string): Promise<OfflineReadCacheEntry | null>;
-  put(path: string, data: unknown): Promise<OfflineReadCacheResult>;
+  put(
+    path: string,
+    data: unknown,
+    lease?: OfflineReadCacheLease,
+  ): Promise<OfflineReadCacheResult>;
   activateOwner(
     personId: string,
     tenantId?: string | null,
-  ): Promise<OfflineReadCacheResult>;
+  ): Promise<OfflineReadCacheActivation>;
   purge(): Promise<OfflineReadCacheResult>;
 };
 
 export type OfflineReadPolicyKind =
+  | "me"
   | "onboarding"
   | "program-list"
   | "program-detail"
@@ -83,6 +104,16 @@ export function getOfflineReadPolicy(
   const query = queryIndex === -1 ? "" : path.slice(queryIndex + 1);
   if (query.includes("?")) return null;
 
+  if (pathname === "/v1/me") {
+    return !hasQuery
+      ? {
+          kind: "me",
+          requiresOwner: true,
+          allowsPublicFallback: false,
+        }
+      : null;
+  }
+
   if (pathname === "/v1/onboarding") {
     return !hasQuery
       ? {
@@ -116,6 +147,35 @@ export function getOfflineReadPolicy(
           allowsPublicFallback: true,
         }
       : null;
+  }
+
+  if (pathname === "/v1/learning") {
+    // The collection is private and intentionally limited to the exact
+    // bounded read shape used by LearnerApi. A cursor is an opaque server
+    // value; it is validated as a single safe query value and remains part of
+    // the cache key so each authorized page is scoped independently.
+    const params = new URLSearchParams(query);
+    const keys = [...params.keys()];
+    const hasOnlyExpectedKeys =
+      keys.length === params.size &&
+      new Set(keys).size === keys.length &&
+      keys.every((key) => key === "limit" || key === "cursor");
+    if (!hasOnlyExpectedKeys || params.get("limit") !== "50") return null;
+
+    const cursor = params.get("cursor");
+    if (
+      params.size === 2 &&
+      !isSafeQueryValue(cursor, MAX_LEARNING_CURSOR_LENGTH)
+    ) {
+      return null;
+    }
+    if (params.size !== 1 && params.size !== 2) return null;
+
+    return {
+      kind: "learning",
+      requiresOwner: true,
+      allowsPublicFallback: false,
+    };
   }
 
   if (pathname.startsWith("/v1/learning/")) {
@@ -185,10 +245,13 @@ function hasSingleEncodedSegment(pathname: string, prefix: string): boolean {
   return encodeURIComponent(decoded) === segment;
 }
 
-function isSafeQueryValue(value: string | null): value is string {
+function isSafeQueryValue(
+  value: string | null,
+  maxLength = 200,
+): value is string {
   return Boolean(
     value &&
-      value.length <= 200 &&
+      value.length <= maxLength &&
       !/[\u0000-\u001f\u007f/\\]/.test(value) &&
       value.trim() === value,
   );
@@ -235,7 +298,13 @@ export type CreateOfflineReadCacheOptions = {
 type ActiveOwner = {
   ownerHash: string;
   sessionKey: string;
+  generation: number;
 };
+
+type OwnerBinding =
+  | { kind: "uninitialized" }
+  | { kind: "invalidated"; generation: number }
+  | { kind: "active"; lease: OfflineReadCacheLease };
 
 function runtimeCrypto(): Crypto | null {
   return typeof globalThis.crypto === "undefined" ? null : globalThis.crypto;
@@ -299,8 +368,12 @@ function additionalDataFor(
 function resultFailure(error: unknown): OfflineReadCacheResult {
   return {
     ok: false,
-    reason: error instanceof Error ? "failed" : "unavailable",
+    reason: failureReason(error),
   };
+}
+
+function failureReason(error: unknown): "unavailable" | "failed" {
+  return error instanceof Error ? "failed" : "unavailable";
 }
 
 function validStoredRecord(record: OfflineReadCacheRecord): boolean {
@@ -322,13 +395,30 @@ function validStoredRecord(record: OfflineReadCacheRecord): boolean {
 }
 
 function activeOwnerValue(owner: ActiveOwner): string {
-  return `v1:${owner.ownerHash}:${owner.sessionKey}`;
+  return `v2:${owner.ownerHash}:${owner.sessionKey}:${owner.generation}`;
 }
 
 function parseActiveOwner(value: string | null): ActiveOwner | null {
   if (!value) return null;
-  const match = /^v1:([0-9a-f]{64}):([A-Za-z0-9_-]{22})$/.exec(value);
-  return match ? { ownerHash: match[1], sessionKey: match[2] } : null;
+  const currentMatch =
+    /^v2:([0-9a-f]{64}):([A-Za-z0-9_-]{22}):([1-9]\d{0,15})$/.exec(value);
+  if (currentMatch) {
+    const generation = Number(currentMatch[3]);
+    return Number.isSafeInteger(generation)
+      ? {
+          ownerHash: currentMatch[1],
+          sessionKey: currentMatch[2],
+          generation,
+        }
+      : null;
+  }
+
+  // v1 owner bindings predate leases. They can be read once and are upgraded
+  // on the next activation; generation zero keeps their first read scoped.
+  const legacyMatch = /^v1:([0-9a-f]{64}):([A-Za-z0-9_-]{22})$/.exec(value);
+  return legacyMatch
+    ? { ownerHash: legacyMatch[1], sessionKey: legacyMatch[2], generation: 0 }
+    : null;
 }
 
 class IndexedDbOfflineReadCacheStore implements OfflineReadCacheStore {
@@ -530,31 +620,83 @@ export function createOfflineReadCache(
         })()
       : options.store;
   const now = options.now ?? (() => Date.now());
-  let memoryOwner: ActiveOwner | null = null;
+  let ownerGeneration = 0;
+  let ownerBinding: OwnerBinding = { kind: "uninitialized" };
   let cryptoKeyPromise: Promise<CryptoKey | null> | null = null;
 
+  function nextOwnerGeneration(): number {
+    ownerGeneration =
+      ownerGeneration >= Number.MAX_SAFE_INTEGER ? 1 : ownerGeneration + 1;
+    return ownerGeneration;
+  }
+
+  function invalidateOwnerBinding(generation = ownerGeneration): void {
+    ownerBinding = { kind: "invalidated", generation };
+  }
+
+  function activeLease(): OfflineReadCacheLease | null {
+    return ownerBinding.kind === "active" ? ownerBinding.lease : null;
+  }
+
+  function sameOwner(left: ActiveOwner, right: ActiveOwner): boolean {
+    return (
+      left.ownerHash === right.ownerHash &&
+      left.sessionKey === right.sessionKey &&
+      left.generation === right.generation
+    );
+  }
+
   function readOwner(): ActiveOwner | null {
-    if (sessionStorage) {
-      try {
-        const owner = parseActiveOwner(
-          sessionStorage.getItem(ACTIVE_OWNER_STORAGE_KEY),
-        );
-        if (owner) {
-          memoryOwner = owner;
-          return owner;
-        }
-      } catch {
-        // The in-memory session owner remains a safe same-page fallback.
+    // Private scope binding must survive the current JS context. The cache
+    // never falls back to an old owner after an invalidation or storage error.
+    if (ownerBinding.kind === "invalidated" || !sessionStorage) return null;
+    try {
+      const owner = parseActiveOwner(
+        sessionStorage.getItem(ACTIVE_OWNER_STORAGE_KEY),
+      );
+      if (!owner) {
+        invalidateOwnerBinding(nextOwnerGeneration());
+        return null;
       }
+      if (ownerBinding.kind === "uninitialized") {
+        ownerGeneration = Math.max(ownerGeneration, owner.generation);
+        const lease = Object.freeze({ ...owner });
+        ownerBinding = { kind: "active", lease };
+        return owner;
+      }
+      if (
+        ownerBinding.kind === "active" &&
+        !sameOwner(owner, ownerBinding.lease)
+      ) {
+        invalidateOwnerBinding(nextOwnerGeneration());
+        return null;
+      }
+      return owner;
+    } catch {
+      invalidateOwnerBinding(nextOwnerGeneration());
+      return null;
     }
-    return memoryOwner;
   }
 
   function writeOwner(owner: ActiveOwner): boolean {
-    memoryOwner = owner;
-    if (!sessionStorage) return true;
+    // sessionStorage is the durable same-tab owner binding. The active lease
+    // is established only after the write (and read-back verification) works.
+    if (!sessionStorage) {
+      return false;
+    }
     try {
       sessionStorage.setItem(ACTIVE_OWNER_STORAGE_KEY, activeOwnerValue(owner));
+      const persisted = parseActiveOwner(
+        sessionStorage.getItem(ACTIVE_OWNER_STORAGE_KEY),
+      );
+      if (
+        !persisted ||
+        persisted.ownerHash !== owner.ownerHash ||
+        persisted.sessionKey !== owner.sessionKey ||
+        persisted.generation !== owner.generation
+      ) {
+        throw new Error("Offline cache owner binding was not persisted.");
+      }
       return true;
     } catch {
       return false;
@@ -562,7 +704,6 @@ export function createOfflineReadCache(
   }
 
   function clearOwner(): boolean {
-    memoryOwner = null;
     if (!sessionStorage) return true;
     try {
       sessionStorage.removeItem(ACTIVE_OWNER_STORAGE_KEY);
@@ -570,6 +711,26 @@ export function createOfflineReadCache(
     } catch {
       return false;
     }
+  }
+
+  async function invalidatePrivateCache(): Promise<OfflineReadCacheResult> {
+    // Keep the invalidated binding in place before asynchronous cleanup so
+    // concurrent reads/writes fail closed even if cleanup is slow or fails.
+    invalidateOwnerBinding();
+    let cacheCleared = false;
+    try {
+      if (store) {
+        await store.clear();
+        cacheCleared = true;
+        cryptoKeyPromise = null;
+      }
+    } catch {
+      // The invalidated binding still blocks access to any records left behind.
+    }
+    const ownerCleared = clearOwner();
+    return cacheCleared && ownerCleared
+      ? { ok: true }
+      : { ok: false, reason: "unavailable" };
   }
 
   async function getCryptoKey(): Promise<CryptoKey | null> {
@@ -601,10 +762,11 @@ export function createOfflineReadCache(
     path: string,
     ownerHash: string | null,
     sessionKey: string | null,
+    generation: number | null,
   ): Promise<string> {
     if (!crypto) throw new Error("Web Crypto is unavailable.");
     const scope = ownerHash
-      ? `owner:${ownerHash}:session:${sessionKey ?? ""}`
+      ? `owner:${ownerHash}:session:${sessionKey ?? ""}:generation:${generation ?? ""}`
       : PUBLIC_OWNER_SCOPE;
     return sha256Hex(crypto, `${CACHE_KEY_PREFIX}${scope}\u0000${path}`);
   }
@@ -621,16 +783,19 @@ export function createOfflineReadCache(
     path: string,
     ownerHash: string | null,
     sessionKey: string | null,
+    generation: number | null,
     key: CryptoKey,
+    privateReadLease: OfflineReadCacheLease | null,
   ): Promise<OfflineReadCacheEntry | null> {
     if (!crypto || !store) return null;
-    const cacheKey = await cacheKeyFor(path, ownerHash, sessionKey);
+    const cacheKey = await cacheKeyFor(path, ownerHash, sessionKey, generation);
     let record: OfflineReadCacheRecord | null;
     try {
       record = await store.read(cacheKey);
     } catch {
       return null;
     }
+    if (privateReadLease && !isCurrentLease(privateReadLease)) return null;
     if (!record) return null;
     if (
       !validStoredRecord(record) ||
@@ -664,7 +829,12 @@ export function createOfflineReadCache(
         record.ciphertext,
       );
       const decoded = new TextDecoder().decode(plaintext);
-      return { data: JSON.parse(decoded) as unknown, savedAt: record.savedAt };
+      const entry = {
+        data: JSON.parse(decoded) as unknown,
+        savedAt: record.savedAt,
+      };
+      if (privateReadLease && !isCurrentLease(privateReadLease)) return null;
+      return entry;
     } catch {
       await removeBestEffort(cacheKey);
       return null;
@@ -677,9 +847,12 @@ export function createOfflineReadCache(
 
     const owner = readOwner();
     if (policy.requiresOwner && !owner) return null;
+    const privateReadLease = policy.requiresOwner ? activeLease() : null;
+    if (policy.requiresOwner && !privateReadLease) return null;
 
     const key = await getCryptoKey();
     if (!key) return null;
+    if (privateReadLease && !isCurrentLease(privateReadLease)) return null;
 
     const candidates = policy.requiresOwner
       ? [owner as ActiveOwner]
@@ -691,25 +864,69 @@ export function createOfflineReadCache(
         path,
         candidate ? candidate.ownerHash : null,
         candidate ? candidate.sessionKey : null,
+        candidate ? candidate.generation : null,
         key,
+        privateReadLease,
       );
-      if (result) return result;
+      if (result) {
+        if (privateReadLease && !isCurrentLease(privateReadLease)) return null;
+        return result;
+      }
     }
     return null;
+  }
+
+  function sameLease(
+    left: OfflineReadCacheLease,
+    right: OfflineReadCacheLease,
+  ): boolean {
+    return (
+      left.ownerHash === right.ownerHash &&
+      left.sessionKey === right.sessionKey &&
+      left.generation === right.generation
+    );
+  }
+
+  function capturePrivateWriteLease(
+    requestedLease?: OfflineReadCacheLease,
+  ): { lease: OfflineReadCacheLease; owner: ActiveOwner } | null {
+    const owner = readOwner();
+    const current = activeLease();
+    const lease = requestedLease ?? current;
+    if (!owner || !current || !lease || !sameLease(lease, current)) {
+      return null;
+    }
+    return { lease, owner };
+  }
+
+  function isCurrentLease(lease: OfflineReadCacheLease): boolean {
+    const owner = readOwner();
+    const current = activeLease();
+    return Boolean(
+      owner &&
+        current &&
+        sameLease(lease, current) &&
+        owner.ownerHash === lease.ownerHash &&
+        owner.sessionKey === lease.sessionKey &&
+        owner.generation === lease.generation,
+    );
   }
 
   async function put(
     path: string,
     data: unknown,
+    requestedLease?: OfflineReadCacheLease,
   ): Promise<OfflineReadCacheResult> {
     const policy = getOfflineReadPolicy(path);
     if (!policy || !store || !crypto)
       return { ok: false, reason: "unavailable" };
-
-    const owner = readOwner();
-    if (policy.requiresOwner && !owner) {
+    const privateWriteLease = policy.requiresOwner
+      ? capturePrivateWriteLease(requestedLease)
+      : null;
+    if (policy.requiresOwner && !privateWriteLease) {
       return { ok: false, reason: "unavailable" };
     }
+    const owner = privateWriteLease?.owner ?? readOwner();
 
     let serialized: string;
     try {
@@ -725,6 +942,7 @@ export function createOfflineReadCache(
     }
     const ownerHash = owner?.ownerHash ?? null;
     const sessionKey = owner?.sessionKey ?? null;
+    const generation = owner?.generation ?? null;
     const key = await getCryptoKey();
     if (!key) return { ok: false, reason: "unavailable" };
 
@@ -732,7 +950,12 @@ export function createOfflineReadCache(
     if (!Number.isSafeInteger(savedAt)) return { ok: false, reason: "failed" };
 
     try {
-      const cacheKey = await cacheKeyFor(path, ownerHash, sessionKey);
+      const cacheKey = await cacheKeyFor(
+        path,
+        ownerHash,
+        sessionKey,
+        generation,
+      );
       const iv: Uint8Array<ArrayBuffer> = new Uint8Array(
         new ArrayBuffer(AES_GCM_IV_BYTES),
       );
@@ -760,7 +983,13 @@ export function createOfflineReadCache(
         ciphertext,
       };
 
+      if (privateWriteLease && !isCurrentLease(privateWriteLease.lease)) {
+        return { ok: false, reason: "unavailable" };
+      }
       const existing = await store.list();
+      if (privateWriteLease && !isCurrentLease(privateWriteLease.lease)) {
+        return { ok: false, reason: "unavailable" };
+      }
       const live = existing.filter(
         (candidate) =>
           validStoredRecord(candidate) &&
@@ -788,13 +1017,28 @@ export function createOfflineReadCache(
       );
       for (const candidate of existing) {
         if (!retainedKeys.has(candidate.cacheKey)) {
+          if (privateWriteLease && !isCurrentLease(privateWriteLease.lease)) {
+            return { ok: false, reason: "unavailable" };
+          }
           await store.remove(candidate.cacheKey);
         }
       }
       if (!retainedKeys.has(record.cacheKey)) {
         return { ok: false, reason: "failed" };
       }
+      // The lease is checked immediately before the asynchronous store write
+      // so an owner switch or purge cannot commit the old response.
+      if (privateWriteLease && !isCurrentLease(privateWriteLease.lease)) {
+        return { ok: false, reason: "unavailable" };
+      }
       await store.write(record);
+      // A deferred IndexedDB write may resolve after a rebind/purge. The
+      // generation is part of the cache key, so removing this stale key
+      // cannot delete the new owner's record.
+      if (privateWriteLease && !isCurrentLease(privateWriteLease.lease)) {
+        await removeBestEffort(record.cacheKey);
+        return { ok: false, reason: "unavailable" };
+      }
       return { ok: true };
     } catch (error) {
       return resultFailure(error);
@@ -804,10 +1048,18 @@ export function createOfflineReadCache(
   async function activateOwner(
     personId: string,
     tenantId: string | null = null,
-  ): Promise<OfflineReadCacheResult> {
-    if (!personId || !store || !crypto) {
+  ): Promise<OfflineReadCacheActivation> {
+    if (!personId || !store || !crypto || !sessionStorage) {
       return { ok: false, reason: "unavailable" };
     }
+
+    const wasInvalidated = ownerBinding.kind === "invalidated";
+    const previous = readOwner();
+    // Block concurrent private reads/writes while the owner is being
+    // rebound. The old owner is only restored as active after the new durable
+    // sessionStorage value has been written and verified.
+    const generation = nextOwnerGeneration();
+    invalidateOwnerBinding(generation);
 
     let ownerHash: string;
     try {
@@ -816,17 +1068,26 @@ export function createOfflineReadCache(
         `${OWNER_HASH_PREFIX}${personId}\u0000tenant:${tenantId ?? "none"}`,
       );
     } catch (error) {
-      return resultFailure(error);
+      const invalidated = await invalidatePrivateCache();
+      return {
+        ok: false,
+        reason: invalidated.ok ? failureReason(error) : invalidated.reason,
+      };
     }
 
-    const previous = readOwner();
+    if (wasInvalidated && !(await invalidatePrivateCache()).ok) {
+      return { ok: false, reason: "unavailable" };
+    }
     if (previous && previous.ownerHash !== ownerHash) {
       try {
         await store.clear();
       } catch (error) {
         // Do not leave the old owner active if the private purge failed.
-        clearOwner();
-        return resultFailure(error);
+        const invalidated = await invalidatePrivateCache();
+        return {
+          ok: false,
+          reason: invalidated.ok ? failureReason(error) : invalidated.reason,
+        };
       }
       cryptoKeyPromise = null;
     }
@@ -836,32 +1097,25 @@ export function createOfflineReadCache(
         ? previous.sessionKey
         : await createSessionKey(crypto);
     if (!sessionKey) {
-      clearOwner();
+      await invalidatePrivateCache();
       return { ok: false, reason: "unavailable" };
     }
-    if (!writeOwner({ ownerHash, sessionKey })) {
-      // The in-memory owner is safe for the current page; returning a failure
-      // keeps callers honest about persistence across a reload.
+    const owner = { ownerHash, sessionKey, generation };
+    if (!writeOwner(owner)) {
+      // A failed write must invalidate the old private scope. In particular,
+      // do not let a previous durable owner or a memory mirror authorize a
+      // subsequent /v1/me or /v1/learning cache write.
+      await invalidatePrivateCache();
       return { ok: false, reason: "unavailable" };
     }
-    return { ok: true };
+    const lease = Object.freeze({ ...owner });
+    ownerBinding = { kind: "active", lease };
+    return { ok: true, lease };
   }
 
   async function purge(): Promise<OfflineReadCacheResult> {
-    let cacheCleared = false;
-    try {
-      if (store) {
-        await store.clear();
-        cacheCleared = true;
-        cryptoKeyPromise = null;
-      }
-    } catch {
-      // Keep going so the session owner is not accidentally retained.
-    }
-    const ownerCleared = clearOwner();
-    return cacheCleared && ownerCleared
-      ? { ok: true }
-      : { ok: false, reason: "unavailable" };
+    invalidateOwnerBinding(nextOwnerGeneration());
+    return invalidatePrivateCache();
   }
 
   return { get, put, activateOwner, purge };

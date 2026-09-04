@@ -9,7 +9,14 @@ import {
 import {
   getOfflineReadMetadata,
   type OfflineReadCache,
+  type OfflineReadCacheLease,
 } from "./offline-read-cache";
+
+const TEST_LEASE: OfflineReadCacheLease = Object.freeze({
+  ownerHash: "a".repeat(64),
+  sessionKey: "A".repeat(22),
+  generation: 1,
+});
 
 function response(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -24,7 +31,7 @@ function offlineCache(
   return {
     get: vi.fn().mockResolvedValue(null),
     put: vi.fn().mockResolvedValue({ ok: true }),
-    activateOwner: vi.fn().mockResolvedValue({ ok: true }),
+    activateOwner: vi.fn().mockResolvedValue({ ok: true, lease: TEST_LEASE }),
     purge: vi.fn().mockResolvedValue({ ok: true }),
     ...overrides,
   };
@@ -80,6 +87,118 @@ describe("learner API adapter", () => {
 
     await expect(api.learningCollection()).resolves.toEqual(collection);
     expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it("caches and recovers authenticated self plus each bounded learning page", async () => {
+    const me = {
+      person_id: "person-1",
+      email: "learner@example.com",
+      display_name: "Learner",
+      email_verified_at: "2026-09-01T00:00:00Z",
+      selected_tenant_id: "tenant-1",
+      membership_role: "learner",
+      permissions: ["learner:read"],
+    };
+    const firstPage = {
+      items: [],
+      next_cursor: "cursor-2",
+      saved_filter_available: true,
+    };
+    const secondPage = {
+      items: [],
+      next_cursor: null,
+      saved_filter_available: true,
+    };
+    const cachedByPath = new Map([
+      ["/v1/me", { data: me, savedAt: 1_000 }],
+      ["/v1/learning?limit=50", { data: firstPage, savedAt: 1_100 }],
+      [
+        "/v1/learning?limit=50&cursor=cursor-2",
+        { data: secondPage, savedAt: 1_200 },
+      ],
+    ]);
+    const cache = offlineCache({
+      get: vi.fn((path: string) =>
+        Promise.resolve(cachedByPath.get(path) ?? null),
+      ),
+    });
+    const onlineFetcher = vi
+      .fn()
+      .mockResolvedValueOnce(response(me))
+      .mockResolvedValueOnce(response(firstPage))
+      .mockResolvedValueOnce(response(secondPage));
+    const onlineApi = createLearnerApi(onlineFetcher, {
+      offlineReadCache: cache,
+    });
+
+    await expect(onlineApi.me()).resolves.toEqual(me);
+    await expect(onlineApi.learningCollection()).resolves.toEqual(firstPage);
+    await expect(
+      onlineApi.learningCollection(50, { cursor: "cursor-2" }),
+    ).resolves.toEqual(secondPage);
+    expect(cache.put).toHaveBeenCalledWith("/v1/me", me, TEST_LEASE);
+    expect(cache.put).toHaveBeenCalledWith(
+      "/v1/learning?limit=50",
+      firstPage,
+      TEST_LEASE,
+    );
+    expect(cache.put).toHaveBeenCalledWith(
+      "/v1/learning?limit=50&cursor=cursor-2",
+      secondPage,
+      TEST_LEASE,
+    );
+
+    const offlineApi = createLearnerApi(
+      vi.fn().mockRejectedValue(new TypeError("offline")),
+      { offlineReadCache: cache },
+    );
+    const recoveredMe = await offlineApi.me();
+    const recoveredPage = await offlineApi.learningCollection(50, {
+      cursor: "cursor-2",
+    });
+    expect(recoveredMe).toEqual(me);
+    expect(recoveredPage).toEqual(secondPage);
+    expect(getOfflineReadMetadata(recoveredMe)).toEqual({
+      isOfflineCopy: true,
+      savedAt: 1_000,
+    });
+    expect(getOfflineReadMetadata(recoveredPage)).toEqual({
+      isOfflineCopy: true,
+      savedAt: 1_200,
+    });
+    expect(cache.get).toHaveBeenCalledWith("/v1/me");
+    expect(cache.get).toHaveBeenCalledWith(
+      "/v1/learning?limit=50&cursor=cursor-2",
+    );
+  });
+
+  it("preserves a network failure when an allowlisted learner read has no cache", async () => {
+    const cache = offlineCache();
+    const networkFailure = new TypeError("offline");
+    const api = createLearnerApi(vi.fn().mockRejectedValue(networkFailure), {
+      offlineReadCache: cache,
+    });
+
+    await expect(api.learningCollection()).rejects.toBe(networkFailure);
+    expect(cache.get).toHaveBeenCalledWith("/v1/learning?limit=50");
+  });
+
+  it("does not replace retryable 5xx responses with stale learner reads", async () => {
+    const cache = offlineCache({
+      get: vi.fn().mockResolvedValue({
+        data: { items: [], next_cursor: null, saved_filter_available: true },
+        savedAt: 1_000,
+      }),
+    });
+    const api = createLearnerApi(
+      vi.fn().mockResolvedValue(response({ title: "temporary outage" }, 503)),
+      { offlineReadCache: cache },
+    );
+
+    await expect(api.learningCollection()).rejects.toMatchObject({
+      status: 503,
+    });
+    expect(cache.get).not.toHaveBeenCalled();
   });
 
   it("writes allowlisted successful GETs and returns encrypted-cache copies only after a network TypeError", async () => {
@@ -184,7 +303,7 @@ describe("learner API adapter", () => {
 
     await expect(api.me()).resolves.toEqual(me);
     expect(cache.activateOwner).toHaveBeenCalledWith("person-1", "tenant-1");
-    expect(cache.put).not.toHaveBeenCalled();
+    expect(cache.put).toHaveBeenCalledWith("/v1/me", me, TEST_LEASE);
 
     const offlineCacheCopy = offlineCache({
       get: vi.fn().mockResolvedValue({ data: me, savedAt: 1_000 }),
@@ -193,8 +312,92 @@ describe("learner API adapter", () => {
       vi.fn().mockRejectedValue(new TypeError("offline")),
       { offlineReadCache: offlineCacheCopy },
     );
-    await expect(offlineApi.me()).rejects.toThrow("offline");
-    expect(offlineCacheCopy.get).not.toHaveBeenCalled();
+    await expect(offlineApi.me()).resolves.toEqual(me);
+    expect(offlineCacheCopy.get).toHaveBeenCalledWith("/v1/me");
+    expect(getOfflineReadMetadata(me)).toEqual({
+      isOfflineCopy: true,
+      savedAt: 1_000,
+    });
+  });
+
+  it("does not write private reads when durable owner activation fails", async () => {
+    const me = {
+      person_id: "person-1",
+      email: "learner@example.com",
+      display_name: "Learner",
+      email_verified_at: "2026-09-01T00:00:00Z",
+      selected_tenant_id: "tenant-1",
+      membership_role: "learner",
+      permissions: ["learner:read"],
+    };
+    const collection = {
+      items: [],
+      next_cursor: null,
+      saved_filter_available: false,
+    };
+    const cache = offlineCache({
+      activateOwner: vi.fn().mockResolvedValue({
+        ok: false,
+        reason: "unavailable",
+      }),
+    });
+    const api = createLearnerApi(
+      vi
+        .fn()
+        .mockResolvedValueOnce(response(me))
+        .mockResolvedValueOnce(response(collection)),
+      { offlineReadCache: cache },
+    );
+
+    await expect(api.me()).resolves.toEqual(me);
+    await expect(api.learningCollection()).resolves.toEqual(collection);
+    expect(cache.activateOwner).toHaveBeenCalledWith("person-1", "tenant-1");
+    expect(cache.put).not.toHaveBeenCalled();
+  });
+
+  it("binds private writes from separate API instances to their cache-issued leases", async () => {
+    const firstMe = {
+      person_id: "person-1",
+      email: "first@example.com",
+      display_name: "First learner",
+      email_verified_at: "2026-09-01T00:00:00Z",
+      selected_tenant_id: "tenant-1",
+      membership_role: "learner",
+      permissions: ["learner:read"],
+    };
+    const secondMe = {
+      ...firstMe,
+      person_id: "person-2",
+      email: "second@example.com",
+      display_name: "Second learner",
+    };
+    const firstLease = Object.freeze({ ...TEST_LEASE, generation: 11 });
+    const secondLease = Object.freeze({ ...TEST_LEASE, generation: 12 });
+    const cache = offlineCache({
+      activateOwner: vi
+        .fn()
+        .mockResolvedValueOnce({ ok: true, lease: firstLease })
+        .mockResolvedValueOnce({ ok: true, lease: secondLease }),
+    });
+    const firstApi = createLearnerApi(
+      vi.fn().mockResolvedValue(response(firstMe)),
+      { offlineReadCache: cache },
+    );
+    const secondApi = createLearnerApi(
+      vi.fn().mockResolvedValue(response(secondMe)),
+      { offlineReadCache: cache },
+    );
+
+    await firstApi.me();
+    await secondApi.me();
+
+    expect(cache.put).toHaveBeenNthCalledWith(1, "/v1/me", firstMe, firstLease);
+    expect(cache.put).toHaveBeenNthCalledWith(
+      2,
+      "/v1/me",
+      secondMe,
+      secondLease,
+    );
   });
 
   it("rotates private offline scope from the online tenant context without caching the context", async () => {
