@@ -14,6 +14,7 @@ from typing import Any, cast
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     CheckConstraint,
     DateTime,
@@ -65,6 +66,10 @@ class ActivityKind(StrEnum):
     IMPLEMENTATION_CHALLENGE = "IMPLEMENTATION_CHALLENGE"
     REVIEW = "REVIEW"
     IMPROVE = "IMPROVE"
+
+
+class CatalogPublishCommandMutationError(RuntimeError):
+    """A completed publication-command ledger row was changed or deleted."""
 
 
 # Compatibility aliases keep the domain vocabulary discoverable without
@@ -330,6 +335,145 @@ class ProgramVersion(Base):
     @property
     def is_published(self) -> bool:
         return self.status in IMMUTABLE_VERSION_STATUSES
+
+
+class CatalogPublishCommand(Base):
+    """Replay-safe tenant-local publication command ledger.
+
+    Rows are reserved as ``pending`` and may transition once to ``completed``
+    in the same caller-owned transaction as the catalog transition and audit
+    event. A failed transaction therefore leaves no authoritative command row.
+    """
+
+    __tablename__ = "catalog_publish_commands"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "actor_person_id",
+            "idempotency_key_digest",
+            name="uq_catalog_publish_commands_actor_key",
+        ),
+        CheckConstraint(
+            "state IN ('pending', 'completed')",
+            name="state_supported",
+        ),
+        CheckConstraint(
+            "length(idempotency_key_digest) = 64 AND length(request_fingerprint) = 64",
+            name="digest_lengths",
+        ),
+        CheckConstraint(
+            "(state = 'pending' AND response_payload IS NULL "
+            "AND audit_event_id IS NULL AND completed_at IS NULL) OR "
+            "(state = 'completed' AND response_payload IS NOT NULL "
+            "AND audit_event_id IS NOT NULL AND completed_at IS NOT NULL)",
+            name="completion_shape",
+        ),
+        Index(
+            "ix_catalog_publish_commands_version",
+            "tenant_id",
+            "program_version_id",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    tenant_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("tenants.id", name="fk_catalog_publish_commands_tenant_id_tenants"),
+        nullable=False,
+    )
+    actor_person_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("persons.id", name="fk_catalog_publish_commands_actor_person_id_persons"),
+        nullable=False,
+    )
+    program_version_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey(
+            "program_versions.id",
+            name="fk_catalog_publish_commands_program_version_id_program_versions",
+        ),
+        nullable=False,
+    )
+    idempotency_key_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    request_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    state: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="pending", server_default="pending"
+    )
+    response_payload: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    audit_event_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey(
+            "audit_events.id",
+            name="fk_catalog_publish_commands_audit_event_id_audit_events",
+        ),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, server_default=func.now()
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+@event.listens_for(CatalogPublishCommand, "before_insert")
+def _guard_catalog_publish_command_insert(
+    _mapper: Any,
+    _connection: Any,
+    target: CatalogPublishCommand,
+) -> None:
+    if target.state is None:
+        target.state = "pending"
+    if (
+        target.state == "pending"
+        and target.response_payload is None
+        and target.audit_event_id is None
+        and target.completed_at is None
+    ):
+        return
+    raise CatalogPublishCommandMutationError(
+        "catalog publication commands must be reserved as pending"
+    )
+
+
+@event.listens_for(CatalogPublishCommand, "before_update")
+def _guard_catalog_publish_command_update(
+    _mapper: Any,
+    _connection: Any,
+    target: CatalogPublishCommand,
+) -> None:
+    history = sa_inspect(target)
+    state_history = history.attrs.state.history
+    if (
+        state_history.deleted == ["pending"]
+        and state_history.added == ["completed"]
+        and target.response_payload is not None
+        and target.audit_event_id is not None
+        and target.completed_at is not None
+    ):
+        immutable = (
+            "id",
+            "tenant_id",
+            "actor_person_id",
+            "program_version_id",
+            "idempotency_key_digest",
+            "request_fingerprint",
+            "created_at",
+        )
+        if not any(history.attrs[name].history.has_changes() for name in immutable):
+            return
+    raise CatalogPublishCommandMutationError(
+        "catalog publication command history is immutable after completion"
+    )
+
+
+@event.listens_for(CatalogPublishCommand, "before_delete")
+def _guard_catalog_publish_command_delete(
+    _mapper: Any,
+    _connection: Any,
+    _target: CatalogPublishCommand,
+) -> None:
+    raise CatalogPublishCommandMutationError(
+        "catalog publication command history cannot be deleted"
+    )
 
 
 class Module(Base):

@@ -26,6 +26,7 @@ const contextSchema = z
 
 export type AdminPermission =
   | "admin_surface"
+  | "catalog_read"
   | "catalog_publish"
   | "learner_diagnose"
   | "learning_correct"
@@ -251,6 +252,8 @@ function uuidPath(value: string, label: string): string {
 export type PublishProgramVersionInput = Readonly<{
   programVersionId: string;
   reason: string;
+  ifMatch: string;
+  idempotencyKey: string;
   origin?: string;
   fetcher?: Fetcher;
 }>;
@@ -299,6 +302,130 @@ const publishProgramVersionResponseSchema = z
     status: z.literal("published"),
     supersedes_version_id: z.uuid().nullable(),
     published_at: z.string().min(1),
+    replayed: z.boolean(),
+  })
+  .strict();
+
+const unavailableMetricSchema = z
+  .object({
+    status: z.literal("unavailable"),
+    value: z.null(),
+    reason: z.string().min(1),
+  })
+  .strict();
+
+const draftReadinessSchema = z
+  .object({
+    program_id: z.uuid(),
+    program_title: z.string().min(1),
+    program_version_id: z.uuid(),
+    version_number: z.number().int().positive(),
+    created_at: z.string().min(1),
+    age_seconds: z.number().int().nonnegative(),
+    etag: z.string().regex(/^"program-version-[0-9a-f]{64}"$/),
+    ready: z.boolean(),
+    blockers: z.array(z.string().min(1)),
+  })
+  .strict();
+
+const studioReadinessSchema = z
+  .object({
+    tenant_id: z.uuid(),
+    draft_backlog_count: z.number().int().nonnegative(),
+    as_of: z.string().min(1),
+    oldest_draft_created_at: z.string().min(1).nullable(),
+    oldest_draft_age_seconds: z.number().int().nonnegative().nullable(),
+    drafts: z.array(draftReadinessSchema),
+    truncated: z.boolean(),
+    arrival_rate: unavailableMetricSchema,
+    service_rate: unavailableMetricSchema,
+    planned_capacity: unavailableMetricSchema,
+  })
+  .strict();
+
+const programVersionSummarySchema = z
+  .object({
+    id: z.uuid(),
+    version_number: z.number().int().positive(),
+    status: z.enum(["draft", "published", "superseded"]),
+    created_at: z.string().min(1),
+    published_at: z.string().min(1).nullable(),
+  })
+  .strict();
+
+const programSummarySchema = z
+  .object({
+    id: z.uuid(),
+    slug: z.string().min(1),
+    title: z.string().min(1),
+    scope: z.enum(["tenant", "global"]),
+    access: z.enum(["selected_tenant", "global_read_only"]),
+    version_count: z.number().int().nonnegative(),
+    draft_count: z.number().int().nonnegative(),
+    current_published_version_id: z.uuid().nullable(),
+    latest_version: programVersionSummarySchema.nullable(),
+  })
+  .strict();
+
+const studioProgramsSchema = z
+  .object({
+    tenant_id: z.uuid(),
+    programs: z.array(programSummarySchema),
+    truncated: z.boolean(),
+  })
+  .strict();
+
+const activitySchema = z
+  .object({
+    id: z.uuid(),
+    position: z.number().int().nonnegative(),
+    kind: z.string().min(1),
+    title: z.string().min(1),
+    prompt: z.string().nullable(),
+    is_required: z.boolean(),
+  })
+  .strict();
+
+const moduleSchema = z
+  .object({
+    id: z.uuid(),
+    position: z.number().int().nonnegative(),
+    title: z.string().min(1),
+    prerequisite_module_ids: z.array(z.uuid()),
+    activities: z.array(activitySchema),
+  })
+  .strict();
+
+const programVersionSchema = programVersionSummarySchema.extend({
+  supersedes_version_id: z.uuid().nullable(),
+  content_source_ref: z.string().nullable(),
+  content_reviewed_by: z.string().nullable(),
+  content_reviewed_at: z.string().min(1).nullable(),
+  release_id: z.string().nullable(),
+  content_seed_kind: z.string().nullable(),
+  content_digest: z
+    .string()
+    .regex(/^[0-9a-f]{64}$/)
+    .nullable(),
+  etag: z
+    .string()
+    .regex(/^"program-version-[0-9a-f]{64}"$/)
+    .nullable(),
+  readiness: z.enum(["ready", "blocked", "immutable", "global_read_only"]),
+  blockers: z.array(z.string().min(1)),
+  modules: z.array(moduleSchema),
+});
+
+const studioProgramDetailSchema = z
+  .object({
+    tenant_id: z.uuid(),
+    id: z.uuid(),
+    slug: z.string().min(1),
+    title: z.string().min(1),
+    scope: z.enum(["tenant", "global"]),
+    access: z.enum(["selected_tenant", "global_read_only"]),
+    versions: z.array(programVersionSchema),
+    versions_truncated: z.boolean(),
   })
   .strict();
 
@@ -347,6 +474,9 @@ const recoveryReconcileResponseSchema = z
 export type ProgramVersionPublishResponse = z.infer<
   typeof publishProgramVersionResponseSchema
 >;
+export type StudioReadiness = z.infer<typeof studioReadinessSchema>;
+export type StudioPrograms = z.infer<typeof studioProgramsSchema>;
+export type StudioProgramDetail = z.infer<typeof studioProgramDetailSchema>;
 export type CorrectionResponse = z.infer<typeof correctionResponseSchema>;
 export type EnrollmentGrantResponse = z.infer<
   typeof enrollmentGrantResponseSchema
@@ -366,6 +496,8 @@ export function newIdempotencyKey(): string {
 export function publishProgramVersion({
   programVersionId,
   reason,
+  ifMatch,
+  idempotencyKey,
   origin = currentOrigin(),
   fetcher = fetch,
 }: PublishProgramVersionInput) {
@@ -375,10 +507,42 @@ export function publishProgramVersion({
       "/publish",
     {
       method: "POST",
-      headers: mutationHeaders({ origin, hasBody: true }),
+      headers: mutationHeaders({
+        origin,
+        ifMatch,
+        idempotencyKey,
+        hasBody: true,
+      }),
       body: body({ reason }),
     },
     publishProgramVersionResponseSchema,
+    fetcher,
+  );
+}
+
+export function loadStudioReadiness(fetcher: Fetcher = fetch) {
+  return requestJson(
+    "/v1/admin/studio/readiness",
+    { method: "GET", headers: { accept: "application/json" } },
+    studioReadinessSchema,
+    fetcher,
+  );
+}
+
+export function loadStudioPrograms(fetcher: Fetcher = fetch) {
+  return requestJson(
+    "/v1/admin/studio/programs",
+    { method: "GET", headers: { accept: "application/json" } },
+    studioProgramsSchema,
+    fetcher,
+  );
+}
+
+export function loadStudioProgram(programId: string, fetcher: Fetcher = fetch) {
+  return requestJson(
+    "/v1/admin/studio/programs/" + uuidPath(programId, "programId"),
+    { method: "GET", headers: { accept: "application/json" } },
+    studioProgramDetailSchema,
     fetcher,
   );
 }

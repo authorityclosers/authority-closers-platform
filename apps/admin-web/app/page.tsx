@@ -50,11 +50,11 @@ const surfaces = [
     href: "/people",
   },
   {
-    eyebrow: "02 / CATALOG",
-    title: "Preview a version publish",
-    body: "Review the immutable Program → Module → Activity boundary before a named admin can publish.",
-    permission: "catalog_publish",
-    href: "/catalog",
+    eyebrow: "02 / ACADEMY STUDIO",
+    title: "Work the content backlog",
+    body: "Inspect tenant-scoped drafts, exact publication readiness, and immutable global reference content.",
+    permission: "catalog_read · catalog_publish",
+    href: "/studio",
   },
   {
     eyebrow: "03 / OPERATIONS",

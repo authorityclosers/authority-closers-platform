@@ -13,6 +13,8 @@ import re
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
+from hashlib import sha256
+from json import dumps
 from typing import Any, Protocol, Self, TypeVar, cast
 from uuid import UUID, uuid4
 
@@ -45,6 +47,7 @@ from ac_platform.tenancy.models import Membership, MembershipStatus, Tenant, Ten
 
 CATALOG_WRITE_PERMISSION = "catalog_write"
 CATALOG_PUBLISH_PERMISSION = "catalog_publish"
+CATALOG_READ_PERMISSION = "catalog_read"
 _CONTENT_DIGEST = re.compile(r"^[0-9a-f]{64}$")
 _RELEASE_ID = re.compile(r"^[0-9a-f]{40}$")
 _REVIEWED_CONTENT_KIND = "reviewed"
@@ -179,6 +182,10 @@ class SupersessionRequiredError(CatalogServiceError):
     """A second publication must explicitly identify the prior version."""
 
 
+class CatalogPublicationPreconditionError(CatalogConflictError):
+    """Publication addressed a stale canonical version representation."""
+
+
 class InvalidActivityKindError(CatalogValidationError):
     """The activity kind is outside the exact G1 activity taxonomy."""
 
@@ -246,6 +253,15 @@ class ProgramVersionSnapshot:
     @property
     def scope_owner_key(self) -> UUID:
         return self.owner_key
+
+
+@dataclass(frozen=True, slots=True)
+class CatalogPublicationReadiness:
+    """Source-backed result of the exact rules used by publication."""
+
+    etag: str
+    ready: bool
+    blockers: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -1350,6 +1366,7 @@ class CatalogService:
         program_version_id: UUID,
         *,
         tenant_id: UUID | None,
+        expected_etag: str | None = None,
         now: datetime | None = None,
     ) -> ProgramVersionSnapshot:
         lock_for_publication = getattr(self._store, "lock_for_publication", None)
@@ -1359,6 +1376,10 @@ class CatalogService:
         else:
             version = self._require_version(program_version_id, tenant_id=tenant_id, writing=True)
         self._require_draft(version)
+        if expected_etag is not None and expected_etag != self.publication_etag(version):
+            raise CatalogPublicationPreconditionError(
+                "the program version changed after it was reviewed"
+            )
         self._validate_structure(version)
         self._validate_publication_provenance(version)
         canonical_digest = self._canonical_content_digest(version)
@@ -1410,6 +1431,89 @@ class CatalogService:
             )
         self._store.replace_version(published)
         return published
+
+    def publication_etag(self, version: ProgramVersionSnapshot) -> str:
+        """Return a strong ETag covering lifecycle, provenance and child content."""
+
+        canonical_digest = self._canonical_content_digest(version)
+        material = dumps(
+            {
+                "canonical_content_digest": canonical_digest,
+                "content_digest": version.content_digest,
+                "content_reviewed_at": (
+                    version.content_reviewed_at.isoformat()
+                    if version.content_reviewed_at is not None
+                    else None
+                ),
+                "content_reviewed_by": version.content_reviewed_by,
+                "content_seed_kind": version.content_seed_kind,
+                "content_source_ref": version.content_source_ref,
+                "created_at": version.created_at.isoformat(),
+                "program_id": str(version.program_id),
+                "release_id": version.release_id,
+                "status": version.status,
+                "supersedes_version_id": (
+                    str(version.supersedes_version_id)
+                    if version.supersedes_version_id is not None
+                    else None
+                ),
+                "version_id": str(version.id),
+                "version_number": version.version_number,
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+        return f'"program-version-{sha256(material.encode("utf-8")).hexdigest()}"'
+
+    def assess_publication_readiness(
+        self,
+        program_version_id: UUID,
+        *,
+        tenant_id: UUID,
+    ) -> CatalogPublicationReadiness:
+        """Evaluate only the catalog rules enforced by ``publish_version``."""
+
+        version = self._require_version(program_version_id, tenant_id=tenant_id, writing=True)
+        etag = self.publication_etag(version)
+        blockers: list[str] = []
+        if version.status != ProgramVersionStatus.DRAFT.value:
+            blockers.append("version_not_draft")
+            return CatalogPublicationReadiness(etag=etag, ready=False, blockers=tuple(blockers))
+        try:
+            self._validate_structure(version)
+        except (CatalogConflictError, OrderingConflictError, PrerequisiteConflictError):
+            blockers.append("structure_invalid")
+        try:
+            self._validate_publication_provenance(version)
+        except CatalogPublicationProvenanceError:
+            blockers.append("provenance_incomplete")
+        try:
+            canonical_digest = self._canonical_content_digest(version)
+        except CatalogServiceError:
+            if "structure_invalid" not in blockers:
+                blockers.append("structure_invalid")
+        else:
+            if version.content_digest != canonical_digest:
+                blockers.append("content_digest_mismatch")
+        current = max(
+            (
+                candidate
+                for candidate in self._store.list_versions(version.program_id)
+                if candidate.status == ProgramVersionStatus.PUBLISHED.value
+            ),
+            key=lambda candidate: candidate.version_number,
+            default=None,
+        )
+        if (current is not None and version.supersedes_version_id != current.id) or (
+            current is None and version.supersedes_version_id is not None
+        ):
+            blockers.append("supersession_required")
+        return CatalogPublicationReadiness(
+            etag=etag,
+            ready=not blockers,
+            blockers=tuple(blockers),
+        )
 
     def publish(self, *args: object, **kwargs: object) -> ProgramVersionSnapshot:
         """Vocabulary alias for :meth:`publish_version`."""
@@ -1999,6 +2103,7 @@ class AsyncCatalogApplication:
         *,
         actor: ActorContext,
         tenant_id: UUID | None,
+        expected_etag: str | None = None,
         now: datetime | None = None,
     ) -> ProgramVersionSnapshot:
         await self._authorize_admin(
@@ -2010,6 +2115,7 @@ class AsyncCatalogApplication:
             lambda catalog: catalog.publish_version(
                 program_version_id,
                 tenant_id=tenant_id,
+                expected_etag=expected_etag,
                 now=now,
             )
         )
@@ -2179,12 +2285,15 @@ __all__ = [
     "ActivitySnapshot",
     "AsyncCatalogApplication",
     "CATALOG_PUBLISH_PERMISSION",
+    "CATALOG_READ_PERMISSION",
     "CATALOG_WRITE_PERMISSION",
     "CatalogAccessDeniedError",
     "CatalogApplicationService",
     "CatalogConflictError",
     "CatalogContentDigestMismatchError",
     "CatalogNotFoundError",
+    "CatalogPublicationPreconditionError",
+    "CatalogPublicationReadiness",
     "CatalogPublicationProvenanceError",
     "CatalogService",
     "CatalogServiceError",

@@ -249,6 +249,18 @@ export function isStagingAdminRequest(url: URL, method: string): boolean {
     return normalizedMethod === "GET";
   }
   if (
+    pathname === "/v1/admin/studio/readiness" ||
+    pathname === "/v1/admin/studio/programs"
+  ) {
+    return normalizedMethod === "GET";
+  }
+  const studioProgramMatch = /^\/v1\/admin\/studio\/programs\/([^/]+)$/.exec(
+    pathname,
+  );
+  if (studioProgramMatch) {
+    return normalizedMethod === "GET" && isUuid(studioProgramMatch[1]);
+  }
+  if (
     pathname === "/v1/admin/corrections" ||
     pathname === "/v1/admin/enrollment-grants" ||
     pathname === "/v1/admin/recovery/reconcile"

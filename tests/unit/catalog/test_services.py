@@ -10,6 +10,7 @@ from ac_platform.catalog.models import ActivityKind, CatalogScope, ProgramVersio
 from ac_platform.catalog.services import (
     CatalogAccessDeniedError,
     CatalogContentDigestMismatchError,
+    CatalogPublicationPreconditionError,
     CatalogPublicationProvenanceError,
     CatalogService,
     CatalogValidationError,
@@ -329,6 +330,48 @@ def test_publication_rejects_naive_review_timestamp() -> None:
 
     with pytest.raises(CatalogPublicationProvenanceError, match="timezone-aware"):
         service.publish_version(version.id, tenant_id=tenant_id, now=NOW)
+
+
+def test_publication_readiness_and_etag_use_the_exact_publish_rules() -> None:
+    service, store, tenants, program = _catalog()
+    tenant_id, _ = tenants
+    version = service.create_version(program.id, tenant_id=tenant_id)
+    module = service.add_module(version.id, tenant_id=tenant_id, title="Reviewed module")
+    service.add_activity(
+        module.id,
+        tenant_id=tenant_id,
+        kind=ActivityKind.REFLECTION,
+        title="Reviewed activity",
+    )
+
+    initial = service.assess_publication_readiness(version.id, tenant_id=tenant_id)
+    assert initial.ready is False
+    assert initial.blockers == ("provenance_incomplete", "content_digest_mismatch")
+
+    _review_for_publication(service, store, version.id)
+    reviewed = service.assess_publication_readiness(version.id, tenant_id=tenant_id)
+    assert reviewed.ready is True
+    assert reviewed.blockers == ()
+
+    service.add_activity(
+        module.id,
+        tenant_id=tenant_id,
+        kind=ActivityKind.VIDEO,
+        title="Changed after review",
+        position=2,
+    )
+    changed = service.assess_publication_readiness(version.id, tenant_id=tenant_id)
+    assert changed.etag != reviewed.etag
+    assert changed.ready is False
+    assert changed.blockers == ("content_digest_mismatch",)
+
+    with pytest.raises(CatalogPublicationPreconditionError):
+        service.publish_version(
+            version.id,
+            tenant_id=tenant_id,
+            expected_etag=reviewed.etag,
+            now=NOW,
+        )
 
 
 def test_technical_validation_publication_requires_explicit_nonproduction_policy() -> None:

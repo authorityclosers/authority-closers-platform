@@ -27,6 +27,7 @@ from ac_platform.audit.models import AuditEvent
 from ac_platform.catalog.models import (
     Activity,
     ActivityKind,
+    CatalogPublishCommand,
     CatalogScope,
     Module,
     Program,
@@ -331,6 +332,62 @@ def _seed_review_submission(engine: Engine, seed: _Seed, enrollment_id: UUID) ->
     return submission_id
 
 
+def _publication_etag(engine: Engine, seed: _Seed) -> str:
+    with Session(engine) as database:
+        service = CatalogService(SqlAlchemyCatalogStore(database))
+        return service.assess_publication_readiness(
+            seed.version_id,
+            tenant_id=seed.tenant_id,
+        ).etag
+
+
+def _seed_studio_visibility(engine: Engine) -> tuple[UUID, UUID, UUID]:
+    other_tenant_id = uuid4()
+    with Session(engine) as database:
+        database.add(
+            Tenant(
+                id=other_tenant_id,
+                slug=f"other-{uuid4().hex[:12]}",
+                name="Other Studio Tenant",
+            )
+        )
+        database.flush()
+        store = SqlAlchemyCatalogStore(database)
+        service = CatalogService(store, clock=lambda: NOW)
+        global_program = service.create_program(
+            tenant_id=None,
+            scope=CatalogScope.GLOBAL,
+            slug=f"global-{uuid4().hex[:12]}",
+            title="Published global reference",
+        )
+        global_version = service.create_version(global_program.id, tenant_id=None)
+        global_row = database.get(ProgramVersion, global_version.id)
+        assert global_row is not None
+        global_row.content_digest = service._canonical_content_digest(  # noqa: SLF001
+            global_version
+        )
+        global_row.content_source_ref = __file__
+        global_row.content_reviewed_by = "global-reviewer@example.test"
+        global_row.content_reviewed_at = NOW
+        global_row.release_id = "e" * 40
+        global_row.content_seed_kind = "reviewed"
+        database.flush()
+        service.publish_version(global_version.id, tenant_id=None, now=NOW)
+        global_draft = service.create_version(
+            global_program.id,
+            tenant_id=None,
+            supersedes_version_id=global_version.id,
+        )
+        other_program = service.create_program(
+            tenant_id=other_tenant_id,
+            slug=f"private-{uuid4().hex[:12]}",
+            title="Other tenant private draft",
+        )
+        service.create_version(other_program.id, tenant_id=other_tenant_id)
+        database.commit()
+    return global_program.id, global_draft.id, other_program.id
+
+
 def _settings() -> Settings:
     return Settings(
         environment="test",
@@ -402,6 +459,7 @@ def test_admin_commands_persist_audit_outbox_and_learning_supersession(
         permissions=frozenset(
             {
                 "admin_surface",
+                "catalog_read",
                 "catalog_publish",
                 "learning_correct",
                 "learning_review",
@@ -419,14 +477,33 @@ def test_admin_commands_persist_audit_outbox_and_learning_supersession(
                 base_url="https://admin.authorityclosers.test",
             ) as client:
                 origin = {"Origin": "https://admin.authorityclosers.test"}
+                publish_headers = origin | {
+                    "If-Match": _publication_etag(postgres_harness.engine, seed),
+                    "Idempotency-Key": "admin-publish-1",
+                }
                 publish = await client.post(
                     f"/v1/admin/program-versions/{seed.version_id}/publish",
                     json={"reason": "the tenant catalog review is complete"},
-                    headers=origin,
+                    headers=publish_headers,
                 )
                 assert publish.status_code == 200
                 assert publish.headers["cache-control"] == "no-store"
                 assert publish.json()["status"] == "published"
+                assert publish.json()["replayed"] is False
+                publish_replay = await client.post(
+                    f"/v1/admin/program-versions/{seed.version_id}/publish",
+                    json={"reason": "the tenant catalog review is complete"},
+                    headers=publish_headers,
+                )
+                assert publish_replay.status_code == 200
+                assert publish_replay.json() == publish.json() | {"replayed": True}
+                publish_conflict = await client.post(
+                    f"/v1/admin/program-versions/{seed.version_id}/publish",
+                    json={"reason": "different intent under the same command key"},
+                    headers=publish_headers,
+                )
+                assert publish_conflict.status_code == 409
+                assert publish_conflict.json()["code"] == "catalog_publication_idempotency_conflict"
 
                 grant_headers = origin | {"Idempotency-Key": "admin-grant-1"}
                 grant = await client.post(
@@ -515,6 +592,14 @@ def test_admin_commands_persist_audit_outbox_and_learning_supersession(
             "audit.admin.enrollment.granted.v1",
             "audit.learning.correction.appended.v1",
         ]
+        publish_command = database.scalar(
+            select(CatalogPublishCommand).where(CatalogPublishCommand.tenant_id == seed.tenant_id)
+        )
+        assert publish_command is not None
+        assert publish_command.state == "completed"
+        assert publish_command.audit_event_id is not None
+        assert publish_command.response_payload is not None
+        assert publish_command.response_payload["replayed"] is False
         progress = database.scalar(
             select(ActivityProgress).where(
                 ActivityProgress.tenant_id == seed.tenant_id,
@@ -525,6 +610,68 @@ def test_admin_commands_persist_audit_outbox_and_learning_supersession(
         assert progress is not None
         assert progress.state == "completed"
         assert progress.revision == 2
+
+
+def test_studio_reads_enforce_tenant_and_global_visibility(
+    postgres_harness: _Harness,
+) -> None:
+    seed = _seed(postgres_harness.engine)
+    global_program_id, global_draft_id, other_program_id = _seed_studio_visibility(
+        postgres_harness.engine
+    )
+    application, _actor = _application(
+        postgres_harness.schema_url,
+        person_id=seed.admin_id,
+        tenant_id=seed.tenant_id,
+        session_id=seed.admin_session_id,
+        permissions=frozenset({"admin_surface", "catalog_read"}),
+        reviewer_id=None,
+    )
+
+    async def scenario() -> None:
+        try:
+            transport = httpx.ASGITransport(app=application)
+            async with httpx.AsyncClient(
+                transport=transport,
+                base_url="https://admin.authorityclosers.test",
+            ) as client:
+                readiness = await client.get("/v1/admin/studio/readiness")
+                assert readiness.status_code == 200
+                readiness_body = readiness.json()
+                assert readiness_body["tenant_id"] == str(seed.tenant_id)
+                assert readiness_body["draft_backlog_count"] == 1
+                assert readiness_body["oldest_draft_age_seconds"] >= 0
+                assert [item["program_id"] for item in readiness_body["drafts"]] == [
+                    str(seed.program_id)
+                ]
+                assert readiness_body["arrival_rate"]["status"] == "unavailable"
+                assert readiness_body["service_rate"]["value"] is None
+                assert readiness_body["planned_capacity"]["status"] == "unavailable"
+
+                programs = await client.get("/v1/admin/studio/programs")
+                assert programs.status_code == 200
+                program_rows = {row["id"]: row for row in programs.json()["programs"]}
+                assert set(program_rows) == {str(seed.program_id), str(global_program_id)}
+                assert program_rows[str(seed.program_id)]["access"] == "selected_tenant"
+                assert program_rows[str(global_program_id)]["access"] == "global_read_only"
+                assert program_rows[str(global_program_id)]["version_count"] == 1
+                assert program_rows[str(global_program_id)]["draft_count"] == 0
+
+                global_detail = await client.get(f"/v1/admin/studio/programs/{global_program_id}")
+                assert global_detail.status_code == 200
+                assert global_detail.json()["access"] == "global_read_only"
+                assert global_detail.json()["versions"][0]["readiness"] == "global_read_only"
+                assert all(
+                    version["id"] != str(global_draft_id)
+                    for version in global_detail.json()["versions"]
+                )
+
+                hidden = await client.get(f"/v1/admin/studio/programs/{other_program_id}")
+                assert hidden.status_code == 404
+        finally:
+            await application.state.async_engine.dispose()
+
+    _run_async(scenario())
 
 
 def test_admin_reason_alone_cannot_publish_unreviewed_catalog_content(
@@ -547,10 +694,26 @@ def test_admin_reason_alone_cannot_publish_unreviewed_catalog_content(
                 transport=transport,
                 base_url="https://admin.authorityclosers.test",
             ) as client:
+                unknown = await client.post(
+                    f"/v1/admin/program-versions/{uuid4()}/publish",
+                    json={"reason": "an unknown version is unavailable"},
+                    headers={
+                        "Origin": "https://admin.authorityclosers.test",
+                        "If-Match": '"program-version-' + ("a" * 64) + '"',
+                        "Idempotency-Key": "admin-unknown-publish",
+                    },
+                )
+                assert unknown.status_code == 404
+                assert unknown.json()["code"] == "resource_not_found"
+
                 response = await client.post(
                     f"/v1/admin/program-versions/{seed.version_id}/publish",
                     json={"reason": "an operator reason is not content provenance"},
-                    headers={"Origin": "https://admin.authorityclosers.test"},
+                    headers={
+                        "Origin": "https://admin.authorityclosers.test",
+                        "If-Match": _publication_etag(postgres_harness.engine, seed),
+                        "Idempotency-Key": "admin-unreviewed-publish",
+                    },
                 )
                 assert response.status_code == 422
                 assert response.json()["code"] == "catalog_publication_rejected"
@@ -568,6 +731,14 @@ def test_admin_reason_alone_cannot_publish_unreviewed_catalog_content(
                 select(func.count())
                 .select_from(AuditEvent)
                 .where(AuditEvent.tenant_id == seed.tenant_id)
+            )
+            == 0
+        )
+        assert (
+            database.scalar(
+                select(func.count())
+                .select_from(CatalogPublishCommand)
+                .where(CatalogPublishCommand.tenant_id == seed.tenant_id)
             )
             == 0
         )

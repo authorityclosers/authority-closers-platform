@@ -4,6 +4,9 @@ import {
   appendCorrection,
   grantEnrollment,
   loadAdminSession,
+  loadStudioProgram,
+  loadStudioPrograms,
+  loadStudioReadiness,
   publishProgramVersion,
   reconcileRecovery,
   retryJob,
@@ -24,7 +27,95 @@ const publishResponse = {
   status: "published",
   supersedes_version_id: null,
   published_at: "2026-08-30T00:00:00Z",
+  replayed: false,
 };
+const versionEtag = '"program-version-' + "a".repeat(64) + '"';
+const publishCommandKey = "publish-command-1";
+const programId = "88888888-8888-4888-8888-888888888888";
+const studioReadinessResponse = {
+  tenant_id: tenantId,
+  draft_backlog_count: 1,
+  as_of: "2026-08-31T00:00:00Z",
+  oldest_draft_created_at: "2026-08-30T00:00:00Z",
+  oldest_draft_age_seconds: 86_400,
+  drafts: [
+    {
+      program_id: programId,
+      program_title: "Authority Closers Academy",
+      program_version_id: versionId,
+      version_number: 2,
+      created_at: "2026-08-30T00:00:00Z",
+      age_seconds: 86_400,
+      etag: versionEtag,
+      ready: true,
+      blockers: [],
+    },
+  ],
+  truncated: false,
+  arrival_rate: {
+    status: "unavailable",
+    value: null,
+    reason: "No canonical rate.",
+  },
+  service_rate: {
+    status: "unavailable",
+    value: null,
+    reason: "No canonical rate.",
+  },
+  planned_capacity: {
+    status: "unavailable",
+    value: null,
+    reason: "No capacity plan.",
+  },
+} as const;
+const studioProgramsResponse = {
+  tenant_id: tenantId,
+  programs: [
+    {
+      id: programId,
+      slug: "authority-closers-academy",
+      title: "Authority Closers Academy",
+      scope: "tenant",
+      access: "selected_tenant",
+      version_count: 1,
+      draft_count: 1,
+      current_published_version_id: null,
+      latest_version: {
+        id: versionId,
+        version_number: 2,
+        status: "draft",
+        created_at: "2026-08-30T00:00:00Z",
+        published_at: null,
+      },
+    },
+  ],
+  truncated: false,
+} as const;
+const studioProgramResponse = {
+  tenant_id: tenantId,
+  id: programId,
+  slug: "authority-closers-academy",
+  title: "Authority Closers Academy",
+  scope: "tenant",
+  access: "selected_tenant",
+  versions: [
+    {
+      ...studioProgramsResponse.programs[0].latest_version,
+      supersedes_version_id: null,
+      content_source_ref: "controlled-doc",
+      content_reviewed_by: "reviewer@example.test",
+      content_reviewed_at: "2026-08-30T00:00:00Z",
+      release_id: "a".repeat(40),
+      content_seed_kind: "reviewed",
+      content_digest: "b".repeat(64),
+      etag: versionEtag,
+      readiness: "ready",
+      blockers: [],
+      modules: [],
+    },
+  ],
+  versions_truncated: false,
+} as const;
 const correctionResponse = {
   correction_id: "99999999-9999-4999-8999-999999999999",
   submission_id: submissionId,
@@ -83,6 +174,8 @@ const mutationAdapters: ReadonlyArray<readonly [string, MutationAdapter]> = [
       publishProgramVersion({
         programVersionId: versionId,
         reason: "approved release",
+        ifMatch: versionEtag,
+        idempotencyKey: publishCommandKey,
         origin: "https://admin-staging.authorityclosers.com",
         fetcher,
       }),
@@ -192,6 +285,41 @@ describe("same-origin admin API composition", () => {
     });
   });
 
+  it("reads and validates the three tenant-derived Studio resources", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json(studioReadinessResponse))
+      .mockResolvedValueOnce(Response.json(studioProgramsResponse))
+      .mockResolvedValueOnce(Response.json(studioProgramResponse));
+
+    await expect(loadStudioReadiness(fetcher)).resolves.toMatchObject({
+      tenant_id: tenantId,
+      draft_backlog_count: 1,
+      arrival_rate: { status: "unavailable", value: null },
+    });
+    await expect(loadStudioPrograms(fetcher)).resolves.toMatchObject({
+      tenant_id: tenantId,
+      programs: [{ id: programId, access: "selected_tenant" }],
+    });
+    await expect(loadStudioProgram(programId, fetcher)).resolves.toMatchObject({
+      tenant_id: tenantId,
+      id: programId,
+      versions: [{ id: versionId, etag: versionEtag }],
+    });
+
+    expect(fetcher.mock.calls.map(([url]) => String(url))).toEqual([
+      "/v1/admin/studio/readiness",
+      "/v1/admin/studio/programs",
+      `/v1/admin/studio/programs/${programId}`,
+    ]);
+    expect(
+      fetcher.mock.calls.every(
+        ([, init]) =>
+          new Headers(init?.headers).get("idempotency-key") === null,
+      ),
+    ).toBe(true);
+  });
+
   it("does not accept caller-provided role or tenant headers", async () => {
     const fetcher = vi
       .fn<typeof fetch>()
@@ -199,6 +327,8 @@ describe("same-origin admin API composition", () => {
     await publishProgramVersion({
       programVersionId: versionId,
       reason: "approved release",
+      ifMatch: versionEtag,
+      idempotencyKey: publishCommandKey,
       origin: "https://admin-staging.authorityclosers.com",
       fetcher,
     });
@@ -216,6 +346,8 @@ describe("same-origin admin API composition", () => {
     await publishProgramVersion({
       programVersionId: versionId,
       reason: "approved release",
+      ifMatch: versionEtag,
+      idempotencyKey: publishCommandKey,
       origin: "https://admin-staging.authorityclosers.com",
       fetcher,
     });
@@ -232,7 +364,8 @@ describe("same-origin admin API composition", () => {
     expect(JSON.parse(String(init?.body))).toEqual({
       reason: "approved release",
     });
-    expect(new Headers(init?.headers).get("idempotency-key")).toBeNull();
+    expect(headers.get("idempotency-key")).toBe(publishCommandKey);
+    expect(headers.get("if-match")).toBe(versionEtag);
   });
 
   it("sends idempotency and If-Match only where the contracts require them", async () => {
@@ -341,6 +474,8 @@ describe("same-origin admin API composition", () => {
       publishProgramVersion({
         programVersionId: versionId,
         reason: "approved release",
+        ifMatch: versionEtag,
+        idempotencyKey: publishCommandKey,
         origin: "https://admin-staging.authorityclosers.com",
         fetcher,
       }),
@@ -368,6 +503,8 @@ describe("same-origin admin API composition", () => {
       publishProgramVersion({
         programVersionId: versionId,
         reason: "approved release",
+        ifMatch: versionEtag,
+        idempotencyKey: publishCommandKey,
         origin: "https://admin-staging.authorityclosers.com",
         fetcher,
       }),

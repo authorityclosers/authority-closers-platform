@@ -3,7 +3,6 @@ import { createElement, Fragment } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-import CatalogPage from "./catalog/page";
 import AdminHome from "./page";
 import ErrorBoundary from "./error";
 import LearningOperationsPage from "./learning-operations/page";
@@ -12,6 +11,8 @@ import NotFound from "./not-found";
 import PeoplePage from "./people/page";
 import CorrectionPage from "./people/corrections/page";
 import GrantsPage from "./people/grants/page";
+import StudioPage from "./studio/page";
+import StudioProgramsPage from "./studio/programs/page";
 import {
   CorrectionForm,
   DIAGNOSIS_PURPOSES,
@@ -250,14 +251,26 @@ describe("G1 admin permissions and semantic boundaries", () => {
     expect(markup).toMatch(/<button[^>]*disabled[^>]*>Create assignment/);
   });
 
-  it("renders the studio outline as a truthful contract preview", () => {
-    const markup = renderToStaticMarkup(createElement(CatalogPage));
+  it("renders the Academy Studio shell without requesting before session verification", () => {
+    const markup = renderToStaticMarkup(createElement(StudioPage));
+    const programs = renderToStaticMarkup(createElement(StudioProgramsPage));
 
     expect(markup).toContain("clarity-shell surface-studio");
-    expect(markup).toContain('aria-label="Course studio preview"');
-    expect(markup).toContain("Approved lesson asset pending");
-    expect(markup).toContain("Media configuration remains gated");
-    expect(markup).toContain("Learner visibility is determined by publication");
+    expect(markup).toContain("Today’s content work");
+    expect(markup).toContain("Checking Academy Studio access");
+    expect(markup).toContain("No catalog data is requested");
+    expect(programs).toContain("Programs and versions");
+    expect(programs).toContain("another tenant’s drafts");
+  });
+
+  it("keeps the former catalog URL as one permanent Studio redirect", () => {
+    const redirectRoute = readFileSync(
+      new URL("./catalog/page.tsx", import.meta.url),
+      "utf8",
+    );
+
+    expect(redirectRoute).toContain('permanentRedirect("/studio/programs")');
+    expect(redirectRoute).not.toContain("Course studio preview");
   });
 
   it("locks effectful controls and names permission, reason, and audit behavior", () => {
@@ -280,7 +293,6 @@ describe("G1 admin permissions and semantic boundaries", () => {
 
   it("keeps all scoped route action buttons disabled", () => {
     const routes = [
-      { Page: CatalogPage, permission: "catalog_publish" },
       { Page: CorrectionPage, permission: "learning_correct" },
       { Page: GrantsPage, permission: "enrollment_grant" },
       { Page: LearningOperationsPage, permission: "recovery_reconcile" },
@@ -320,11 +332,15 @@ describe("G1 admin permissions and semantic boundaries", () => {
     expect(notFound).toContain('href="/"');
   });
 
-  it("uses one content landmark, a skip link, and exact support aria-current", () => {
+  it("uses one content landmark, a skip link, and hides nav until permissions resolve", () => {
     const people = renderToStaticMarkup(createElement(PeoplePage));
     const correction = renderToStaticMarkup(createElement(CorrectionPage));
     const layout = readFileSync(
       new URL("./layout.tsx", import.meta.url),
+      "utf8",
+    );
+    const shell = readFileSync(
+      new URL("./components/admin-shell.tsx", import.meta.url),
       "utf8",
     );
 
@@ -334,22 +350,24 @@ describe("G1 admin permissions and semantic boundaries", () => {
     );
     expect(layout).toContain('className="skip-link"');
     expect(layout).toContain('href="#admin-content"');
-    expect(correction.match(/aria-current="page"/g)).toHaveLength(1);
-    expect(correction).toMatch(
-      /<a(?=[^>]*class="active")(?=[^>]*aria-current="page")(?=[^>]*href="\/people\/corrections")[^>]*>/,
-    );
+    expect(correction).not.toContain('href="/people/corrections"');
+    expect(shell).toContain('permissions: ["catalog_read"]');
+    expect(shell).toContain('permission: "learning_correct"');
+    expect(shell).toContain('permission: "enrollment_grant"');
   });
 
-  it("labels the keyboard-scrollable publish table region", () => {
-    const markup = renderToStaticMarkup(createElement(CatalogPage));
-
-    expect(markup).toContain('role="region"');
-    expect(markup).toContain('tabindex="0"');
-    expect(markup).toContain('aria-labelledby="publish-gate-caption"');
-    expect(markup).toContain('aria-describedby="publish-gate-table-help"');
-    expect(markup).toContain(
-      '<caption id="publish-gate-caption">Publish transition gate contract</caption>',
+  it("keeps Studio capacity metrics explicitly unavailable", () => {
+    const runtime = readFileSync(
+      new URL("./components/studio/studio-runtime.tsx", import.meta.url),
+      "utf8",
     );
+
+    expect(runtime).toContain(
+      '"Arrival rate", "Service rate", "Planned capacity"',
+    );
+    expect(runtime).toContain("metric.reason");
+    expect(runtime).not.toContain("432");
+    expect(runtime).not.toContain("99.7");
   });
 
   it("keeps audit heading IDs unique", () => {
