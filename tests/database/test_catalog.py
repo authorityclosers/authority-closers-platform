@@ -10,9 +10,13 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+import ac_platform.http.admin_learning as admin_module
+from ac_platform.audit.models import AuditEvent
 from ac_platform.catalog.models import (
     Activity,
     ActivityKind,
+    CatalogPublishCommand,
+    CatalogPublishCommandMutationError,
     CatalogScope,
     LearnerVersionPin,
     Module,
@@ -21,6 +25,7 @@ from ac_platform.catalog.models import (
     ProgramVersion,
     ProgramVersionStatus,
 )
+from ac_platform.catalog.services import CatalogService, SqlAlchemyCatalogStore
 from ac_platform.db.base import Base
 from ac_platform.identity.models import Person
 from ac_platform.tenancy.models import Membership, Tenant
@@ -109,6 +114,7 @@ def test_catalog_tables_and_migration_revision_are_present(database: Session) ->
         "module_prerequisites",
         "activities",
         "learner_version_pins",
+        "catalog_publish_commands",
     }
     assert expected <= set(Base.metadata.tables)
 
@@ -123,6 +129,213 @@ def test_catalog_tables_and_migration_revision_are_present(database: Session) ->
     assert migration.down_revision == "20260830_0001"
     with pytest.raises(RuntimeError, match="forward-only"):
         migration.downgrade()
+
+    ledger_path = (
+        Path(__file__).parents[2]
+        / "db"
+        / "migrations"
+        / "versions"
+        / "20260904_0017_catalog_publish_command_ledger.py"
+    )
+    ledger_spec = spec_from_file_location("catalog_publish_ledger_migration", ledger_path)
+    assert ledger_spec is not None and ledger_spec.loader is not None
+    ledger_migration = module_from_spec(ledger_spec)
+    ledger_spec.loader.exec_module(ledger_migration)
+    assert ledger_migration.revision == "20260904_0017"
+    assert ledger_migration.down_revision == "20260903_0016"
+    with pytest.raises(RuntimeError, match="forward-only"):
+        ledger_migration.downgrade()
+
+
+def test_publish_command_allows_one_completion_then_is_immutable(database: Session) -> None:
+    tenant, _, _, version, _, _ = _tenant_catalog(database)
+    actor = database.query(Person).one()
+    audit = AuditEvent(
+        id=uuid4(),
+        tenant_id=tenant.id,
+        sequence_no=1,
+        actor_person_id=actor.id,
+        actor_type="person",
+        action="audit.catalog.version.published.v1",
+        resource_type="program_version",
+        resource_id=str(version.id),
+        payload={"status": "published"},
+        reason="reviewed publication",
+        previous_hash="0" * 64,
+        event_hash="1" * 64,
+    )
+    command = CatalogPublishCommand(
+        id=uuid4(),
+        tenant_id=tenant.id,
+        actor_person_id=actor.id,
+        program_version_id=version.id,
+        idempotency_key_digest="2" * 64,
+        request_fingerprint="3" * 64,
+    )
+    database.add_all([audit, command])
+    database.flush()
+
+    command.state = "completed"
+    command.response_payload = {"id": str(version.id), "status": "published"}
+    command.audit_event_id = audit.id
+    command.completed_at = datetime.now(UTC)
+    database.commit()
+
+    database.add(
+        CatalogPublishCommand(
+            id=uuid4(),
+            tenant_id=tenant.id,
+            actor_person_id=actor.id,
+            program_version_id=version.id,
+            idempotency_key_digest="5" * 64,
+            request_fingerprint="6" * 64,
+            state="completed",
+            response_payload={"id": str(version.id), "status": "published"},
+            audit_event_id=audit.id,
+            completed_at=datetime.now(UTC),
+        )
+    )
+    with pytest.raises(CatalogPublishCommandMutationError, match="reserved as pending"):
+        database.flush()
+    database.rollback()
+    database.refresh(command)
+
+    command.request_fingerprint = "4" * 64
+    with pytest.raises(CatalogPublishCommandMutationError, match="immutable"):
+        database.flush()
+    database.rollback()
+    database.refresh(command)
+
+    database.delete(command)
+    with pytest.raises(CatalogPublishCommandMutationError, match="cannot be deleted"):
+        database.flush()
+
+
+def test_studio_queries_are_tenant_scoped_bounded_and_truthful(database: Session) -> None:
+    tenant, other_tenant, program, version, _, _ = _tenant_catalog(database)
+    other_program = Program(
+        id=uuid4(),
+        scope=CatalogScope.TENANT.value,
+        tenant_id=other_tenant.id,
+        slug="other-private-program",
+        title="Other private program",
+    )
+    database.add(other_program)
+    database.flush()
+    database.add(
+        ProgramVersion(
+            id=uuid4(),
+            program_id=other_program.id,
+            scope=CatalogScope.TENANT.value,
+            tenant_id=other_tenant.id,
+            version_number=1,
+        )
+    )
+    store = SqlAlchemyCatalogStore(database)
+    service = CatalogService(store, clock=lambda: datetime.now(UTC))
+    global_program = service.create_program(
+        tenant_id=None,
+        scope=CatalogScope.GLOBAL,
+        slug="shared-global-program",
+        title="Shared global program",
+    )
+    global_version = service.create_version(global_program.id, tenant_id=None)
+    global_row = database.get(ProgramVersion, global_version.id)
+    assert global_row is not None
+    global_row.content_digest = service._canonical_content_digest(global_version)  # noqa: SLF001
+    global_row.content_source_ref = __file__
+    global_row.content_reviewed_by = "global-reviewer@example.test"
+    global_row.content_reviewed_at = datetime.now(UTC)
+    global_row.release_id = "a" * 40
+    global_row.content_seed_kind = "reviewed"
+    database.flush()
+    service.publish_version(global_version.id, tenant_id=None)
+    global_draft = service.create_version(
+        global_program.id,
+        tenant_id=None,
+        supersedes_version_id=global_version.id,
+    )
+    database.commit()
+
+    programs = admin_module._studio_programs_response(database, tenant.id)
+    programs_by_id = {row.id: row for row in programs.programs}
+    assert set(programs_by_id) == {program.id, global_program.id}
+    assert programs_by_id[program.id].version_count == 1
+    assert programs_by_id[program.id].draft_count == 1
+    assert programs_by_id[global_program.id].version_count == 1
+    assert programs_by_id[global_program.id].draft_count == 0
+    assert programs_by_id[global_program.id].access == "global_read_only"
+
+    detail = admin_module._studio_program_detail_response(
+        database,
+        tenant.id,
+        program.id,
+        allow_technical_validation_publication=False,
+    )
+    assert [row.id for row in detail.versions] == [version.id]
+    assert detail.versions[0].readiness == "blocked"
+    assert detail.versions[0].content_digest is None
+
+    global_detail = admin_module._studio_program_detail_response(
+        database,
+        tenant.id,
+        global_program.id,
+        allow_technical_validation_publication=False,
+    )
+    assert [row.id for row in global_detail.versions] == [global_version.id]
+    assert global_detail.access == "global_read_only"
+    assert all(row.id != global_draft.id for row in global_detail.versions)
+
+    with pytest.raises(admin_module.ResourceNotFound):
+        admin_module._studio_program_detail_response(
+            database,
+            tenant.id,
+            other_program.id,
+            allow_technical_validation_publication=False,
+        )
+
+    readiness = admin_module._studio_readiness_response(
+        database,
+        tenant.id,
+        allow_technical_validation_publication=False,
+    )
+    assert readiness.draft_backlog_count == 1
+    assert [row.program_version_id for row in readiness.drafts] == [version.id]
+    assert readiness.oldest_draft_age_seconds is not None
+    assert readiness.oldest_draft_age_seconds >= 0
+    assert readiness.arrival_rate.status == "unavailable"
+    assert readiness.arrival_rate.value is None
+
+
+def test_studio_detail_keeps_every_tenant_draft_beyond_history_limit(
+    database: Session,
+) -> None:
+    tenant, _other_tenant, program, first_version, _module, _activity = _tenant_catalog(database)
+    later_versions = [
+        ProgramVersion(
+            id=uuid4(),
+            program_id=program.id,
+            scope=CatalogScope.TENANT.value,
+            tenant_id=tenant.id,
+            version_number=version_number,
+        )
+        for version_number in range(2, 57)
+    ]
+    database.add_all(later_versions)
+    database.commit()
+
+    detail = admin_module._studio_program_detail_response(
+        database,
+        tenant.id,
+        program.id,
+        allow_technical_validation_publication=False,
+    )
+
+    assert len(detail.versions) == 56
+    assert detail.versions[0].version_number == 56
+    assert detail.versions[-1].id == first_version.id
+    assert {version.readiness for version in detail.versions} == {"blocked"}
+    assert detail.versions_truncated is False
 
 
 def test_scope_constraints_reject_cross_tenant_parent_and_child_rows(database: Session) -> None:

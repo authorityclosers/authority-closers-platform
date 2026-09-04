@@ -12,10 +12,14 @@ from uuid import UUID, uuid4
 import pytest
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
+from sqlalchemy.exc import IntegrityError
 
 import ac_platform.http.admin_learning as admin_module
 from ac_platform.application.settings import Settings
-from ac_platform.catalog.services import CatalogPublicationProvenanceError
+from ac_platform.catalog.services import (
+    CatalogPublicationPreconditionError,
+    CatalogPublicationProvenanceError,
+)
 from ac_platform.enrollment.services import EnrollmentResult, ManualEnrollmentGrantCommand
 from ac_platform.http.admin_learning import install_admin_learning_http
 from ac_platform.http.auth import AuthenticatedTransaction
@@ -75,11 +79,13 @@ class _CatalogApplication:
         *,
         actor: ActorContext,
         tenant_id: UUID,
+        expected_etag: str,
     ) -> Any:
         type(self).call = {
             "program_version_id": program_version_id,
             "actor": actor,
             "tenant_id": tenant_id,
+            "expected_etag": expected_etag,
         }
         if type(self).error is not None:
             raise type(self).error
@@ -176,6 +182,7 @@ def harness(monkeypatch: pytest.MonkeyPatch) -> tuple[TestClient, ActorContext, 
         permissions=frozenset(
             {
                 "admin_surface",
+                "catalog_read",
                 "catalog_publish",
                 "learning_correct",
                 "enrollment_grant",
@@ -186,8 +193,16 @@ def harness(monkeypatch: pytest.MonkeyPatch) -> tuple[TestClient, ActorContext, 
     database = _Database(_membership_row(actor))
     audit_calls: list[dict[str, Any]] = []
 
-    async def record_audit(*_args: Any, **kwargs: Any) -> None:
+    async def record_audit(*_args: Any, **kwargs: Any) -> object:
         audit_calls.append(kwargs)
+        return SimpleNamespace(id=uuid4())
+
+    async def reserve_publish(*_args: Any, **kwargs: Any) -> tuple[object, bool]:
+        application.state.publish_reservations.append(kwargs)
+        return SimpleNamespace(response_payload=None), False
+
+    async def complete_publish(*_args: Any, **kwargs: Any) -> None:
+        application.state.publish_completions.append(kwargs)
 
     monkeypatch.setattr(admin_module, "AsyncCatalogApplication", _CatalogApplication)
     monkeypatch.setattr(admin_module, "AsyncEnrollmentApplication", _EnrollmentApplication)
@@ -203,6 +218,10 @@ def harness(monkeypatch: pytest.MonkeyPatch) -> tuple[TestClient, ActorContext, 
     application = FastAPI()
     application.state.actor_calls = []
     application.state.membership_role = "admin"
+    application.state.publish_reservations = []
+    application.state.publish_completions = []
+    monkeypatch.setattr(admin_module, "_reserve_catalog_publish_command", reserve_publish)
+    monkeypatch.setattr(admin_module, "_complete_catalog_publish_command", complete_publish)
 
     async def require_actor(_request: Request) -> AsyncIterator[AuthenticatedTransaction]:
         application.state.actor_calls.append(application.state.membership_role)
@@ -239,8 +258,78 @@ def _origin() -> dict[str, str]:
     }
 
 
+def _publish_headers() -> dict[str, str]:
+    return _origin() | {
+        "If-Match": '"program-version-' + ("a" * 64) + '"',
+        "Idempotency-Key": "publish-program-version-1",
+    }
+
+
 def _app(client: TestClient) -> FastAPI:
     return cast(FastAPI, client.app)
+
+
+def test_publish_ledger_maps_unknown_version_foreign_key_to_not_found() -> None:
+    class NestedTransaction:
+        async def __aenter__(self) -> None:
+            return None
+
+        async def __aexit__(
+            self,
+            _error_type: type[BaseException] | None,
+            _error: BaseException | None,
+            _traceback: object | None,
+        ) -> bool:
+            return False
+
+    class ForeignKeyViolation(Exception):
+        def __init__(self) -> None:
+            self.diag = SimpleNamespace(
+                constraint_name=("fk_catalog_publish_commands_program_version_id_program_versions")
+            )
+
+    class ForeignKeyDatabase:
+        def __init__(self) -> None:
+            self.scalar_calls = 0
+            self.added: list[object] = []
+
+        async def scalar(self, _statement: object) -> None:
+            self.scalar_calls += 1
+            return None
+
+        def begin_nested(self) -> NestedTransaction:
+            return NestedTransaction()
+
+        def add(self, value: object) -> None:
+            self.added.append(value)
+
+        async def flush(self, _values: list[object]) -> None:
+            raise IntegrityError("insert", {}, ForeignKeyViolation())
+
+    tenant_id = uuid4()
+    actor = ActorContext(
+        person_id=uuid4(),
+        session_id=uuid4(),
+        tenant_id=tenant_id,
+        permissions=frozenset({"admin_surface", "catalog_publish"}),
+    )
+    database = ForeignKeyDatabase()
+    auth = cast(AuthenticatedTransaction, SimpleNamespace(database=database))
+
+    with pytest.raises(admin_module.ResourceNotFound, match="program version is unavailable"):
+        asyncio.run(
+            admin_module._reserve_catalog_publish_command(
+                auth,
+                actor=actor,
+                tenant_id=tenant_id,
+                program_version_id=uuid4(),
+                idempotency_key="unknown-version",
+                request_fingerprint="f" * 64,
+            )
+        )
+
+    assert database.scalar_calls == 1
+    assert len(database.added) == 1
 
 
 def test_publish_uses_trusted_admin_context_and_appends_audit(
@@ -252,7 +341,7 @@ def test_publish_uses_trusted_admin_context_and_appends_audit(
     response = client.post(
         f"/v1/admin/program-versions/{version_id}/publish",
         json={"reason": "release reviewed by the curriculum owner"},
-        headers=_origin(),
+        headers=_publish_headers(),
     )
 
     assert response.status_code == 200
@@ -263,6 +352,7 @@ def test_publish_uses_trusted_admin_context_and_appends_audit(
         "program_version_id": version_id,
         "actor": actor,
         "tenant_id": actor.tenant_id,
+        "expected_etag": '"program-version-' + ("a" * 64) + '"',
     }
     assert _CatalogApplication.allow_technical_validation_publication is False
     assert database.run_sync_calls == 0
@@ -282,13 +372,168 @@ def test_admin_reason_cannot_publish_without_complete_content_provenance(
     response = client.post(
         f"/v1/admin/program-versions/{uuid4()}/publish",
         json={"reason": "an operator reason is not a content review record"},
-        headers=_origin(),
+        headers=_publish_headers(),
     )
 
     assert response.status_code == 422
     assert response.json()["code"] == "catalog_publication_rejected"
     assert response.json()["detail"] == "The program version failed catalog validation."
     assert cast(list[dict[str, Any]], _app(client).state.audit_calls) == []
+
+
+def test_publish_requires_etag_and_idempotency_before_mutation(
+    harness: tuple[TestClient, ActorContext, _Database],
+) -> None:
+    client, _actor, _database = harness
+    version_id = uuid4()
+
+    missing_both = client.post(
+        f"/v1/admin/program-versions/{version_id}/publish",
+        json={"reason": "reviewed publish"},
+        headers=_origin(),
+    )
+    missing_key = client.post(
+        f"/v1/admin/program-versions/{version_id}/publish",
+        json={"reason": "reviewed publish"},
+        headers=_origin() | {"If-Match": '"program-version-' + ("a" * 64) + '"'},
+    )
+
+    assert missing_both.status_code == 428
+    assert missing_both.json()["code"] == "admin_if_match_required"
+    assert missing_key.status_code == 428
+    assert missing_key.json()["code"] == "admin_idempotency_key_required"
+    assert _CatalogApplication.call is None
+    assert _app(client).state.publish_reservations == []
+    assert cast(list[dict[str, Any]], _app(client).state.audit_calls) == []
+
+
+def test_publish_replay_returns_stored_result_without_duplicate_effects(
+    harness: tuple[TestClient, ActorContext, _Database],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, _actor, _database = harness
+    version_id = uuid4()
+    program_id = uuid4()
+
+    async def replay(*_args: Any, **_kwargs: Any) -> tuple[object, bool]:
+        return (
+            SimpleNamespace(
+                response_payload={
+                    "id": str(version_id),
+                    "program_id": str(program_id),
+                    "version_number": 3,
+                    "status": "published",
+                    "supersedes_version_id": None,
+                    "published_at": NOW.isoformat(),
+                    "replayed": False,
+                }
+            ),
+            True,
+        )
+
+    monkeypatch.setattr(admin_module, "_reserve_catalog_publish_command", replay)
+    response = client.post(
+        f"/v1/admin/program-versions/{version_id}/publish",
+        json={"reason": "reviewed publish"},
+        headers=_publish_headers(),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["id"] == str(version_id)
+    assert response.json()["replayed"] is True
+    assert _CatalogApplication.call is None
+    assert _app(client).state.publish_completions == []
+    assert cast(list[dict[str, Any]], _app(client).state.audit_calls) == []
+
+
+def test_stale_publish_etag_fails_without_audit_or_ledger_completion(
+    harness: tuple[TestClient, ActorContext, _Database],
+) -> None:
+    client, _actor, _database = harness
+    _CatalogApplication.error = CatalogPublicationPreconditionError(
+        "the program version changed after it was reviewed"
+    )
+
+    response = client.post(
+        f"/v1/admin/program-versions/{uuid4()}/publish",
+        json={"reason": "reviewed publish"},
+        headers=_publish_headers(),
+    )
+
+    assert response.status_code == 412
+    assert response.json()["code"] == "catalog_publication_precondition_failed"
+    assert _app(client).state.publish_completions == []
+    assert cast(list[dict[str, Any]], _app(client).state.audit_calls) == []
+
+
+def test_studio_get_routes_use_tenant_derived_catalog_read_and_no_store(
+    harness: tuple[TestClient, ActorContext, _Database],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, actor, database = harness
+    program_id = uuid4()
+    calls: list[tuple[str, UUID]] = []
+
+    def readiness(_database: object, tenant_id: UUID, **_kwargs: Any) -> object:
+        calls.append(("readiness", tenant_id))
+        unavailable = admin_module.StudioUnavailableMetric(reason="No canonical queue data.")
+        return admin_module.StudioReadinessResponse(
+            tenant_id=tenant_id,
+            draft_backlog_count=0,
+            as_of=NOW,
+            oldest_draft_created_at=None,
+            oldest_draft_age_seconds=None,
+            drafts=[],
+            truncated=False,
+            arrival_rate=unavailable,
+            service_rate=unavailable,
+            planned_capacity=unavailable,
+        )
+
+    def programs(_database: object, tenant_id: UUID) -> object:
+        calls.append(("programs", tenant_id))
+        return admin_module.StudioProgramsResponse(
+            tenant_id=tenant_id,
+            programs=[],
+            truncated=False,
+        )
+
+    def detail(
+        _database: object,
+        tenant_id: UUID,
+        requested_program_id: UUID,
+        **_kwargs: Any,
+    ) -> object:
+        calls.append(("detail", tenant_id))
+        return admin_module.StudioProgramDetailResponse(
+            tenant_id=tenant_id,
+            id=requested_program_id,
+            slug="tenant-program",
+            title="Tenant program",
+            scope="tenant",
+            access="selected_tenant",
+            versions=[],
+            versions_truncated=False,
+        )
+
+    monkeypatch.setattr(admin_module, "_studio_readiness_response", readiness)
+    monkeypatch.setattr(admin_module, "_studio_programs_response", programs)
+    monkeypatch.setattr(admin_module, "_studio_program_detail_response", detail)
+
+    responses = [
+        client.get("/v1/admin/studio/readiness", headers=_origin()),
+        client.get("/v1/admin/studio/programs", headers=_origin()),
+        client.get(f"/v1/admin/studio/programs/{program_id}", headers=_origin()),
+    ]
+
+    assert [response.status_code for response in responses] == [200, 200, 200]
+    assert all(response.headers["cache-control"] == "no-store" for response in responses)
+    assert calls == [
+        ("readiness", actor.tenant_id),
+        ("programs", actor.tenant_id),
+        ("detail", actor.tenant_id),
+    ]
+    assert database.run_sync_calls == 3
 
 
 def test_missing_named_permission_is_denied_before_domain_service(
@@ -340,6 +585,7 @@ def test_inactive_or_non_admin_canonical_membership_is_denied(
     [
         ("learning_correct", True),
         ("enrollment_grant", True),
+        ("catalog_read", False),
         ("catalog_publish", False),
     ],
 )

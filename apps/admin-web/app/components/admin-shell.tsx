@@ -33,17 +33,37 @@ type NavigationItem = {
   href: string;
   label: string;
   icon: LucideIcon;
+  permissions: readonly string[];
 };
 
 const navigation: NavigationItem[] = [
-  { area: "overview", href: "/", label: "Overview", icon: LayoutDashboard },
-  { area: "people", href: "/people", label: "People", icon: CircleAlert },
-  { area: "catalog", href: "/catalog", label: "Catalog", icon: BookOpenCheck },
+  {
+    area: "overview",
+    href: "/",
+    label: "Overview",
+    icon: LayoutDashboard,
+    permissions: ["admin_surface"],
+  },
+  {
+    area: "people",
+    href: "/people",
+    label: "People",
+    icon: CircleAlert,
+    permissions: ["learner_diagnose"],
+  },
+  {
+    area: "catalog",
+    href: "/studio",
+    label: "Academy Studio",
+    icon: BookOpenCheck,
+    permissions: ["catalog_read"],
+  },
   {
     area: "operations",
     href: "/learning-operations",
     label: "Learning operations",
     icon: Activity,
+    permissions: ["job_retry", "recovery_reconcile"],
   },
 ];
 
@@ -51,14 +71,83 @@ const supportNavigation: Array<{
   area: AdminSupportArea;
   href: string;
   label: string;
+  permission: string;
 }> = [
   {
     area: "correction",
     href: "/people/corrections",
     label: "Append correction",
+    permission: "learning_correct",
   },
-  { area: "grant", href: "/people/grants", label: "Manual grant" },
+  {
+    area: "grant",
+    href: "/people/grants",
+    label: "Manual grant",
+    permission: "enrollment_grant",
+  },
 ];
+
+function AdminNavigation({
+  active,
+  activeSupport,
+}: {
+  active: AdminArea;
+  activeSupport?: AdminSupportArea;
+}) {
+  const state = useAdminSession();
+  const permissions = new Set(
+    state.status === "ready" ? state.session.permissions : [],
+  );
+  const visibleNavigation = navigation.filter(({ permissions: required }) =>
+    required.some((permission) => permissions.has(permission)),
+  );
+  const visibleSupport = supportNavigation.filter(({ permission }) =>
+    permissions.has(permission),
+  );
+
+  return (
+    <>
+      <p className="sidebar-label">Workspace</p>
+      <nav className="sidebar-nav" aria-label="Operations">
+        {visibleNavigation.map(({ area, href, label, icon: Icon }) => {
+          const isActive = active === area;
+          const isCurrent = isActive && activeSupport === undefined;
+
+          return (
+            <Link
+              className={isActive ? "active" : undefined}
+              href={href}
+              key={area}
+              aria-current={isCurrent ? "page" : undefined}
+            >
+              <Icon size={16} strokeWidth={1.8} aria-hidden="true" />
+              <span>{label}</span>
+            </Link>
+          );
+        })}
+      </nav>
+
+      {visibleSupport.length > 0 ? (
+        <div className="sidebar-subnav">
+          <p className="sidebar-label">Support seams</p>
+          <nav aria-label="Support actions">
+            {visibleSupport.map(({ area, href, label }) => (
+              <Link
+                className={activeSupport === area ? "active" : undefined}
+                href={href}
+                key={href}
+                aria-current={activeSupport === area ? "page" : undefined}
+              >
+                <span>{label}</span>
+                <span aria-hidden="true">↗</span>
+              </Link>
+            ))}
+          </nav>
+        </div>
+      ) : null}
+    </>
+  );
+}
 
 function AdminTenantContext() {
   const state = useAdminSession();
@@ -121,25 +210,7 @@ export function AdminShell({
 
           <AdminTenantContext />
 
-          <p className="sidebar-label">Workspace</p>
-          <nav className="sidebar-nav" aria-label="Operations">
-            {navigation.map(({ area, href, label, icon: Icon }) => {
-              const isActive = active === area;
-              const isCurrent = isActive && activeSupport === undefined;
-
-              return (
-                <Link
-                  className={isActive ? "active" : undefined}
-                  href={href}
-                  key={area}
-                  aria-current={isCurrent ? "page" : undefined}
-                >
-                  <Icon size={16} strokeWidth={1.8} aria-hidden="true" />
-                  <span>{label}</span>
-                </Link>
-              );
-            })}
-          </nav>
+          <AdminNavigation active={active} activeSupport={activeSupport} />
 
           <p className="sidebar-label sidebar-label-secondary">Coming next</p>
           <div
@@ -158,23 +229,6 @@ export function AdminShell({
             <span>
               <Settings size={16} aria-hidden="true" /> Settings
             </span>
-          </div>
-
-          <div className="sidebar-subnav">
-            <p className="sidebar-label">Support seams</p>
-            <nav aria-label="Support actions">
-              {supportNavigation.map(({ area, href, label }) => (
-                <Link
-                  className={activeSupport === area ? "active" : undefined}
-                  href={href}
-                  key={href}
-                  aria-current={activeSupport === area ? "page" : undefined}
-                >
-                  <span>{label}</span>
-                  <span aria-hidden="true">↗</span>
-                </Link>
-              ))}
-            </nav>
           </div>
 
           <div className="sidebar-footer" role="note">
@@ -200,7 +254,7 @@ export function AdminShell({
                 <span aria-hidden="true">›</span>
                 <span>
                   {surface === "studio"
-                    ? "Course studio"
+                    ? "Academy Studio"
                     : surface === "people"
                       ? "People"
                       : surface === "operations"
@@ -229,7 +283,11 @@ export function AdminShell({
 
           <footer className="admin-footer">
             <span>AUTHORITY LMS / ADMIN FOUNDATION</span>
-            <span>PREVIEW DATA · NO RECORDS ASSERTED</span>
+            <span>
+              {surface === "studio"
+                ? "TENANT-SCOPED · SERVER-AUTHORIZED · NO STORE"
+                : "PREVIEW DATA · NO RECORDS ASSERTED"}
+            </span>
           </footer>
         </main>
       </div>

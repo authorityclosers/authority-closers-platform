@@ -12,25 +12,43 @@ from __future__ import annotations
 import re
 from collections.abc import Callable
 from datetime import UTC, datetime
+from hashlib import sha256
+from json import dumps
 from typing import Annotated, Any, Literal, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI, Header, Path, Request, Response, status
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select
+from sqlalchemy import and_, exists, func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ac_platform.application.settings import Settings
 from ac_platform.audit.service import AuditRepository
+from ac_platform.catalog.models import (
+    IMMUTABLE_VERSION_STATUSES,
+    Activity,
+    CatalogPublishCommand,
+    CatalogScope,
+    Module,
+    ModulePrerequisite,
+    Program,
+    ProgramVersion,
+    ProgramVersionStatus,
+)
 from ac_platform.catalog.services import (
     AsyncCatalogApplication,
     CatalogAccessDeniedError,
     CatalogConflictError,
     CatalogNotFoundError,
+    CatalogPublicationPreconditionError,
+    CatalogPublicationReadiness,
+    CatalogService,
     CatalogServiceError,
     CatalogValidationError,
     DraftRequiredError,
     ProgramVersionSnapshot,
+    SqlAlchemyCatalogStore,
     SupersessionRequiredError,
 )
 from ac_platform.enrollment.services import (
@@ -68,6 +86,13 @@ from ac_platform.tenancy.models import Membership, MembershipStatus, Tenant, Ten
 MAX_IDEMPOTENCY_KEY_LENGTH = 128
 MAX_AUDIT_REASON_LENGTH = 500
 _SUBMISSION_ETAG_PATTERN = re.compile(r'^"submission-revision-(?P<revision>0|[1-9][0-9]*)"$')
+_PROGRAM_VERSION_ETAG_PATTERN = re.compile(r'^"program-version-[0-9a-f]{64}"$')
+STUDIO_COLLECTION_LIMIT = 100
+STUDIO_IMMUTABLE_VERSION_LIMIT = 50
+_CATALOG_PUBLISH_COMMAND_UNIQUE_CONSTRAINT = "uq_catalog_publish_commands_actor_key"
+_CATALOG_PUBLISH_COMMAND_VERSION_FK = (
+    "fk_catalog_publish_commands_program_version_id_program_versions"
+)
 
 ActivityResolver = Callable[[object, object], ActivityDefinition]
 ReviewerResolver = Callable[[LearningAccessContext], UUID | None]
@@ -118,6 +143,22 @@ class CatalogPublicationRejected(DomainError):
     title = "The program version could not be published"
 
 
+class CatalogPublicationPreconditionFailed(DomainError):
+    """The reviewed draft representation changed before publication."""
+
+    code = "catalog_publication_precondition_failed"
+    title = "The program version changed"
+    status = 412
+
+
+class CatalogPublicationIdempotencyConflict(DomainError):
+    """A publication command key was reused for different intent."""
+
+    code = "catalog_publication_idempotency_conflict"
+    title = "The idempotency key is already in use"
+    status = 409
+
+
 class PublishRequest(BaseModel):
     """Human reason captured alongside the immutable publication fact."""
 
@@ -155,6 +196,131 @@ class ProgramVersionPublishResponse(BaseModel):
     status: Literal["published"]
     supersedes_version_id: UUID | None
     published_at: datetime
+    replayed: bool
+
+
+class StudioUnavailableMetric(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["unavailable"] = "unavailable"
+    value: None = None
+    reason: str
+
+
+class StudioDraftReadinessResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    program_id: UUID
+    program_title: str
+    program_version_id: UUID
+    version_number: int
+    created_at: datetime
+    age_seconds: int
+    etag: str
+    ready: bool
+    blockers: list[str]
+
+
+class StudioReadinessResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tenant_id: UUID
+    draft_backlog_count: int
+    as_of: datetime
+    oldest_draft_created_at: datetime | None
+    oldest_draft_age_seconds: int | None
+    drafts: list[StudioDraftReadinessResponse]
+    truncated: bool
+    arrival_rate: StudioUnavailableMetric
+    service_rate: StudioUnavailableMetric
+    planned_capacity: StudioUnavailableMetric
+
+
+class StudioProgramVersionSummaryResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: UUID
+    version_number: int
+    status: Literal["draft", "published", "superseded"]
+    created_at: datetime
+    published_at: datetime | None
+
+
+class StudioProgramSummaryResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: UUID
+    slug: str
+    title: str
+    scope: Literal["tenant", "global"]
+    access: Literal["selected_tenant", "global_read_only"]
+    version_count: int
+    draft_count: int
+    current_published_version_id: UUID | None
+    latest_version: StudioProgramVersionSummaryResponse | None
+
+
+class StudioProgramsResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tenant_id: UUID
+    programs: list[StudioProgramSummaryResponse]
+    truncated: bool
+
+
+class StudioActivityResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: UUID
+    position: int
+    kind: str
+    title: str
+    prompt: str | None
+    is_required: bool
+
+
+class StudioModuleResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: UUID
+    position: int
+    title: str
+    prerequisite_module_ids: list[UUID]
+    activities: list[StudioActivityResponse]
+
+
+class StudioProgramVersionResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: UUID
+    version_number: int
+    status: Literal["draft", "published", "superseded"]
+    supersedes_version_id: UUID | None
+    created_at: datetime
+    published_at: datetime | None
+    content_source_ref: str | None
+    content_reviewed_by: str | None
+    content_reviewed_at: datetime | None
+    release_id: str | None
+    content_seed_kind: str | None
+    content_digest: str | None
+    etag: str | None
+    readiness: Literal["ready", "blocked", "immutable", "global_read_only"]
+    blockers: list[str]
+    modules: list[StudioModuleResponse]
+
+
+class StudioProgramDetailResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tenant_id: UUID
+    id: UUID
+    slug: str
+    title: str
+    scope: Literal["tenant", "global"]
+    access: Literal["selected_tenant", "global_read_only"]
+    versions: list[StudioProgramVersionResponse]
+    versions_truncated: bool
 
 
 class CorrectionResponse(BaseModel):
@@ -232,6 +398,7 @@ async def _require_named_admin(
     auth: AuthenticatedTransaction,
     *,
     permission: str,
+    lock: bool = True,
 ) -> tuple[ActorContext, UUID]:
     """Revalidate the selected tenant and canonical membership under row locks."""
 
@@ -242,7 +409,7 @@ async def _require_named_admin(
     if "admin_surface" not in actor.permissions or permission not in actor.permissions:
         raise AdminAuthorizationDenied(f"The actor lacks the {permission} permission.")
 
-    result = await auth.database.execute(
+    statement = (
         select(Person, Tenant, Membership)
         .select_from(Membership)
         .join(Person, Person.id == Membership.person_id)
@@ -251,8 +418,10 @@ async def _require_named_admin(
             Membership.tenant_id == tenant_id,
             Membership.person_id == actor.person_id,
         )
-        .with_for_update()
     )
+    if lock:
+        statement = statement.with_for_update()
+    result = await auth.database.execute(statement)
     row = result.one_or_none()
     if row is None:
         raise AdminAuthorizationDenied("The actor has no active admin membership in this tenant.")
@@ -302,11 +471,24 @@ def _submission_revision(if_match: str | None) -> int:
     return int(match.group("revision"))
 
 
+def _program_version_etag(if_match: str | None) -> str:
+    if if_match is None:
+        raise MissingAdminETag("Catalog publication requires If-Match.")
+    value = if_match.strip()
+    if _PROGRAM_VERSION_ETAG_PATTERN.fullmatch(value) is None:
+        raise InvalidAdminETag("If-Match must be the canonical program-version ETag.")
+    return value
+
+
 def _catalog_problem(error: CatalogServiceError) -> DomainError:
     if isinstance(error, CatalogNotFoundError):
         return ResourceNotFound("The program version is unavailable.")
     if isinstance(error, CatalogAccessDeniedError):
         return AdminAuthorizationDenied("The program version is outside the selected tenant scope.")
+    if isinstance(error, CatalogPublicationPreconditionError):
+        return CatalogPublicationPreconditionFailed(
+            "Refresh the program version and review the current readiness state before retrying."
+        )
     if isinstance(error, CatalogConflictError | DraftRequiredError | SupersessionRequiredError):
         return ResourceConflict("The program version cannot be published in its current state.")
     if isinstance(error, CatalogValidationError):
@@ -314,7 +496,11 @@ def _catalog_problem(error: CatalogServiceError) -> DomainError:
     return CatalogPublicationRejected("The program version could not be published.")
 
 
-def _publish_response(version: ProgramVersionSnapshot) -> ProgramVersionPublishResponse:
+def _publish_response(
+    version: ProgramVersionSnapshot,
+    *,
+    replayed: bool,
+) -> ProgramVersionPublishResponse:
     if version.status != "published" or version.published_at is None:
         raise CatalogPublicationRejected("The catalog service returned a non-published version.")
     return ProgramVersionPublishResponse(
@@ -324,6 +510,7 @@ def _publish_response(version: ProgramVersionSnapshot) -> ProgramVersionPublishR
         status="published",
         supersedes_version_id=version.supersedes_version_id,
         published_at=version.published_at,
+        replayed=replayed,
     )
 
 
@@ -366,8 +553,8 @@ async def _append_admin_audit(
     payload: dict[str, Any],
     reason: str,
     request: Request,
-) -> None:
-    await AuditRepository(auth.database).append_for_actor(
+) -> Any:
+    return await AuditRepository(auth.database).append_for_actor(
         actor,
         action=action,
         resource_type=resource_type,
@@ -376,6 +563,450 @@ async def _append_admin_audit(
         reason=reason,
         request_id=_request_id(request),
     )
+
+
+def _studio_visibility(tenant_id: UUID) -> Any:
+    immutable_global_version = exists().where(
+        ProgramVersion.program_id == Program.id,
+        ProgramVersion.status.in_(IMMUTABLE_VERSION_STATUSES),
+    )
+    return or_(
+        and_(
+            Program.scope == CatalogScope.TENANT.value,
+            Program.tenant_id == tenant_id,
+        ),
+        and_(
+            Program.scope == CatalogScope.GLOBAL.value,
+            Program.tenant_id.is_(None),
+            immutable_global_version,
+        ),
+    )
+
+
+def _visible_versions(
+    database: Session,
+    program: Program,
+    *,
+    limit: int,
+) -> tuple[ProgramVersion, ...]:
+    statement = (
+        select(ProgramVersion)
+        .where(ProgramVersion.program_id == program.id)
+        .order_by(ProgramVersion.version_number.desc(), ProgramVersion.id.asc())
+    )
+    if program.scope == CatalogScope.GLOBAL.value:
+        statement = statement.where(ProgramVersion.status.in_(IMMUTABLE_VERSION_STATUSES))
+    return tuple(database.scalars(statement.limit(limit)).all())
+
+
+def _visible_version_counts(database: Session, program: Program) -> tuple[int, int]:
+    statement = select(
+        func.count(ProgramVersion.id),
+        func.count(ProgramVersion.id).filter(
+            ProgramVersion.status == ProgramVersionStatus.DRAFT.value
+        ),
+    ).where(ProgramVersion.program_id == program.id)
+    if program.scope == CatalogScope.GLOBAL.value:
+        statement = statement.where(ProgramVersion.status.in_(IMMUTABLE_VERSION_STATUSES))
+    version_count, draft_count = database.execute(statement).one()
+    return int(version_count), int(draft_count)
+
+
+def _studio_detail_versions(
+    database: Session,
+    program: Program,
+) -> tuple[tuple[ProgramVersion, ...], bool]:
+    """Return every tenant draft and only a bounded immutable history."""
+
+    immutable_statement = (
+        select(ProgramVersion)
+        .where(
+            ProgramVersion.program_id == program.id,
+            ProgramVersion.status.in_(IMMUTABLE_VERSION_STATUSES),
+        )
+        .order_by(ProgramVersion.version_number.desc(), ProgramVersion.id.asc())
+        .limit(STUDIO_IMMUTABLE_VERSION_LIMIT + 1)
+    )
+    immutable_versions = tuple(database.scalars(immutable_statement).all())
+    retained_immutable = immutable_versions[:STUDIO_IMMUTABLE_VERSION_LIMIT]
+    immutable_truncated = len(immutable_versions) > STUDIO_IMMUTABLE_VERSION_LIMIT
+    if program.scope == CatalogScope.GLOBAL.value:
+        return retained_immutable, immutable_truncated
+
+    drafts = tuple(
+        database.scalars(
+            select(ProgramVersion)
+            .where(
+                ProgramVersion.program_id == program.id,
+                ProgramVersion.status == ProgramVersionStatus.DRAFT.value,
+            )
+            .order_by(ProgramVersion.version_number.desc(), ProgramVersion.id.asc())
+        ).all()
+    )
+    visible_versions = tuple(
+        sorted(
+            (*drafts, *retained_immutable),
+            key=lambda version: (-version.version_number, version.id.hex),
+        )
+    )
+    return visible_versions, immutable_truncated
+
+
+def _studio_programs_response(database: Session, tenant_id: UUID) -> StudioProgramsResponse:
+    rows = tuple(
+        database.scalars(
+            select(Program)
+            .where(_studio_visibility(tenant_id))
+            .order_by(Program.scope.desc(), Program.title.asc(), Program.id.asc())
+            .limit(STUDIO_COLLECTION_LIMIT + 1)
+        ).all()
+    )
+    programs: list[StudioProgramSummaryResponse] = []
+    for program in rows[:STUDIO_COLLECTION_LIMIT]:
+        versions = _visible_versions(database, program, limit=1)
+        version_count, draft_count = _visible_version_counts(database, program)
+        latest = versions[0] if versions else None
+        current = database.scalar(
+            select(ProgramVersion)
+            .where(
+                ProgramVersion.program_id == program.id,
+                ProgramVersion.status == ProgramVersionStatus.PUBLISHED.value,
+            )
+            .order_by(ProgramVersion.version_number.desc(), ProgramVersion.id.asc())
+            .limit(1)
+        )
+        programs.append(
+            StudioProgramSummaryResponse(
+                id=program.id,
+                slug=program.slug,
+                title=program.title,
+                scope=cast(Literal["tenant", "global"], program.scope),
+                access=(
+                    "global_read_only"
+                    if program.scope == CatalogScope.GLOBAL.value
+                    else "selected_tenant"
+                ),
+                version_count=version_count,
+                draft_count=draft_count,
+                current_published_version_id=current.id if current is not None else None,
+                latest_version=(
+                    StudioProgramVersionSummaryResponse(
+                        id=latest.id,
+                        version_number=latest.version_number,
+                        status=cast(Literal["draft", "published", "superseded"], latest.status),
+                        created_at=latest.created_at,
+                        published_at=latest.published_at,
+                    )
+                    if latest is not None
+                    else None
+                ),
+            )
+        )
+    return StudioProgramsResponse(
+        tenant_id=tenant_id,
+        programs=programs,
+        truncated=len(rows) > STUDIO_COLLECTION_LIMIT,
+    )
+
+
+def _version_modules(
+    database: Session,
+    version: ProgramVersion,
+) -> list[StudioModuleResponse]:
+    modules = tuple(
+        database.scalars(
+            select(Module)
+            .where(Module.program_version_id == version.id)
+            .order_by(Module.position.asc(), Module.id.asc())
+        ).all()
+    )
+    edges = tuple(
+        database.scalars(
+            select(ModulePrerequisite).where(ModulePrerequisite.program_version_id == version.id)
+        ).all()
+    )
+    prerequisites = {
+        module.id: sorted(
+            (edge.prerequisite_module_id for edge in edges if edge.module_id == module.id),
+            key=lambda value: value.hex,
+        )
+        for module in modules
+    }
+    response: list[StudioModuleResponse] = []
+    for module in modules:
+        activities = tuple(
+            database.scalars(
+                select(Activity)
+                .where(Activity.module_id == module.id)
+                .order_by(Activity.position.asc(), Activity.id.asc())
+            ).all()
+        )
+        response.append(
+            StudioModuleResponse(
+                id=module.id,
+                position=module.position,
+                title=module.title,
+                prerequisite_module_ids=prerequisites[module.id],
+                activities=[
+                    StudioActivityResponse(
+                        id=activity.id,
+                        position=activity.position,
+                        kind=activity.kind,
+                        title=activity.title,
+                        prompt=activity.prompt,
+                        is_required=activity.is_required,
+                    )
+                    for activity in activities
+                ],
+            )
+        )
+    return response
+
+
+def _studio_program_detail_response(
+    database: Session,
+    tenant_id: UUID,
+    program_id: UUID,
+    *,
+    allow_technical_validation_publication: bool,
+) -> StudioProgramDetailResponse:
+    program = database.scalar(
+        select(Program).where(
+            Program.id == program_id,
+            _studio_visibility(tenant_id),
+        )
+    )
+    if program is None:
+        raise ResourceNotFound("The Studio program is unavailable.")
+    versions, immutable_versions_truncated = _studio_detail_versions(database, program)
+    catalog = CatalogService(
+        SqlAlchemyCatalogStore(database),
+        allow_technical_validation_publication=allow_technical_validation_publication,
+    )
+    version_responses: list[StudioProgramVersionResponse] = []
+    for version in versions:
+        if program.scope == CatalogScope.GLOBAL.value:
+            readiness_state: Literal["ready", "blocked", "immutable", "global_read_only"] = (
+                "global_read_only"
+            )
+            readiness: CatalogPublicationReadiness | None = None
+        elif version.status == ProgramVersionStatus.DRAFT.value:
+            readiness = catalog.assess_publication_readiness(
+                version.id,
+                tenant_id=tenant_id,
+            )
+            readiness_state = "ready" if readiness.ready else "blocked"
+        else:
+            readiness = None
+            readiness_state = "immutable"
+        version_responses.append(
+            StudioProgramVersionResponse(
+                id=version.id,
+                version_number=version.version_number,
+                status=cast(Literal["draft", "published", "superseded"], version.status),
+                supersedes_version_id=version.supersedes_version_id,
+                created_at=version.created_at,
+                published_at=version.published_at,
+                content_source_ref=version.content_source_ref,
+                content_reviewed_by=version.content_reviewed_by,
+                content_reviewed_at=version.content_reviewed_at,
+                release_id=version.release_id,
+                content_seed_kind=version.content_seed_kind,
+                content_digest=version.content_digest,
+                etag=readiness.etag if readiness is not None else None,
+                readiness=readiness_state,
+                blockers=list(readiness.blockers) if readiness is not None else [],
+                modules=_version_modules(database, version),
+            )
+        )
+    return StudioProgramDetailResponse(
+        tenant_id=tenant_id,
+        id=program.id,
+        slug=program.slug,
+        title=program.title,
+        scope=cast(Literal["tenant", "global"], program.scope),
+        access=(
+            "global_read_only" if program.scope == CatalogScope.GLOBAL.value else "selected_tenant"
+        ),
+        versions=version_responses,
+        versions_truncated=immutable_versions_truncated,
+    )
+
+
+def _studio_readiness_response(
+    database: Session,
+    tenant_id: UUID,
+    *,
+    allow_technical_validation_publication: bool,
+) -> StudioReadinessResponse:
+    as_of = datetime.now(UTC)
+
+    def age_seconds(created_at: datetime) -> int:
+        normalized = created_at if created_at.tzinfo is not None else created_at.replace(tzinfo=UTC)
+        return max(0, int((as_of - normalized.astimezone(UTC)).total_seconds()))
+
+    filters = (
+        Program.scope == CatalogScope.TENANT.value,
+        Program.tenant_id == tenant_id,
+        ProgramVersion.status == ProgramVersionStatus.DRAFT.value,
+    )
+    total = database.scalar(
+        select(func.count())
+        .select_from(ProgramVersion)
+        .join(Program, Program.id == ProgramVersion.program_id)
+        .where(*filters)
+    )
+    rows = tuple(
+        database.execute(
+            select(Program, ProgramVersion)
+            .join(ProgramVersion, ProgramVersion.program_id == Program.id)
+            .where(*filters)
+            .order_by(ProgramVersion.created_at.asc(), ProgramVersion.id.asc())
+            .limit(STUDIO_COLLECTION_LIMIT)
+        ).all()
+    )
+    catalog = CatalogService(
+        SqlAlchemyCatalogStore(database),
+        allow_technical_validation_publication=allow_technical_validation_publication,
+    )
+    drafts = [
+        StudioDraftReadinessResponse(
+            program_id=program.id,
+            program_title=program.title,
+            program_version_id=version.id,
+            version_number=version.version_number,
+            created_at=version.created_at,
+            age_seconds=age_seconds(version.created_at),
+            etag=(
+                readiness := catalog.assess_publication_readiness(
+                    version.id,
+                    tenant_id=tenant_id,
+                )
+            ).etag,
+            ready=readiness.ready,
+            blockers=list(readiness.blockers),
+        )
+        for program, version in rows
+    ]
+    unavailable_reason = (
+        "No canonical operational work-item timestamps or capacity plan exist in this slice."
+    )
+    total_count = int(total or 0)
+    return StudioReadinessResponse(
+        tenant_id=tenant_id,
+        draft_backlog_count=total_count,
+        as_of=as_of,
+        oldest_draft_created_at=drafts[0].created_at if drafts else None,
+        oldest_draft_age_seconds=drafts[0].age_seconds if drafts else None,
+        drafts=drafts,
+        truncated=total_count > STUDIO_COLLECTION_LIMIT,
+        arrival_rate=StudioUnavailableMetric(reason=unavailable_reason),
+        service_rate=StudioUnavailableMetric(reason=unavailable_reason),
+        planned_capacity=StudioUnavailableMetric(reason=unavailable_reason),
+    )
+
+
+def _catalog_publish_key_digest(value: str) -> str:
+    return sha256(value.encode("utf-8")).hexdigest()
+
+
+def _catalog_publish_fingerprint(
+    *,
+    actor: ActorContext,
+    tenant_id: UUID,
+    program_version_id: UUID,
+    expected_etag: str,
+    reason: str,
+) -> str:
+    material = dumps(
+        {
+            "actor_person_id": str(actor.person_id),
+            "tenant_id": str(tenant_id),
+            "program_version_id": str(program_version_id),
+            "expected_etag": expected_etag,
+            "reason": reason,
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    return sha256(material.encode("utf-8")).hexdigest()
+
+
+def _integrity_constraint_name(error: IntegrityError) -> str | None:
+    diagnostic = getattr(error.orig, "diag", None)
+    value = getattr(diagnostic, "constraint_name", None)
+    return value if isinstance(value, str) else None
+
+
+async def _reserve_catalog_publish_command(
+    auth: AuthenticatedTransaction,
+    *,
+    actor: ActorContext,
+    tenant_id: UUID,
+    program_version_id: UUID,
+    idempotency_key: str,
+    request_fingerprint: str,
+) -> tuple[CatalogPublishCommand, bool]:
+    key_digest = _catalog_publish_key_digest(idempotency_key)
+    statement = select(CatalogPublishCommand).where(
+        CatalogPublishCommand.tenant_id == tenant_id,
+        CatalogPublishCommand.actor_person_id == actor.person_id,
+        CatalogPublishCommand.idempotency_key_digest == key_digest,
+    )
+    existing = await auth.database.scalar(statement.with_for_update())
+    if existing is not None:
+        if existing.request_fingerprint != request_fingerprint:
+            raise CatalogPublicationIdempotencyConflict(
+                "Use a new Idempotency-Key for a different publication request."
+            )
+        if existing.state != "completed" or existing.response_payload is None:
+            raise ResourceConflict("The prior publication command has not completed.")
+        return existing, True
+
+    command = CatalogPublishCommand(
+        tenant_id=tenant_id,
+        actor_person_id=actor.person_id,
+        program_version_id=program_version_id,
+        idempotency_key_digest=key_digest,
+        request_fingerprint=request_fingerprint,
+        state="pending",
+    )
+    try:
+        async with auth.database.begin_nested():
+            auth.database.add(command)
+            await auth.database.flush([command])
+    except IntegrityError as exc:
+        constraint_name = _integrity_constraint_name(exc)
+        if constraint_name == _CATALOG_PUBLISH_COMMAND_VERSION_FK:
+            raise ResourceNotFound("The program version is unavailable.") from None
+        if constraint_name != _CATALOG_PUBLISH_COMMAND_UNIQUE_CONSTRAINT:
+            raise
+        existing = await auth.database.scalar(statement.with_for_update())
+        if existing is None:
+            raise
+        if existing.request_fingerprint != request_fingerprint:
+            raise CatalogPublicationIdempotencyConflict(
+                "Use a new Idempotency-Key for a different publication request."
+            ) from None
+        if existing.state != "completed" or existing.response_payload is None:
+            raise ResourceConflict("The prior publication command has not completed.") from None
+        return existing, True
+    return command, False
+
+
+async def _complete_catalog_publish_command(
+    auth: AuthenticatedTransaction,
+    command: CatalogPublishCommand,
+    *,
+    response: ProgramVersionPublishResponse,
+    audit_event_id: UUID,
+) -> None:
+    command.state = "completed"
+    command.response_payload = response.model_dump(mode="json")
+    command.audit_event_id = audit_event_id
+    command.completed_at = datetime.now(UTC)
+    await auth.database.flush([command])
 
 
 def install_admin_learning_http(
@@ -404,6 +1035,73 @@ def install_admin_learning_http(
     resolved_activity = activity_resolver or _default_activity_resolver
     resolved_reviewer = reviewer_resolver or (lambda _access: None)
 
+    @router.get(
+        "/admin/studio/readiness",
+        response_model=StudioReadinessResponse,
+    )
+    async def studio_readiness(
+        response: Response,
+        auth: AuthenticatedTransaction = actor_dependency,
+    ) -> StudioReadinessResponse:
+        _actor, tenant_id = await _require_named_admin(
+            auth,
+            permission="catalog_read",
+            lock=False,
+        )
+        result = await auth.database.run_sync(
+            lambda database: _studio_readiness_response(
+                database,
+                tenant_id,
+                allow_technical_validation_publication=settings.environment == "staging",
+            )
+        )
+        _no_store(response)
+        return result
+
+    @router.get(
+        "/admin/studio/programs",
+        response_model=StudioProgramsResponse,
+    )
+    async def studio_programs(
+        response: Response,
+        auth: AuthenticatedTransaction = actor_dependency,
+    ) -> StudioProgramsResponse:
+        _actor, tenant_id = await _require_named_admin(
+            auth,
+            permission="catalog_read",
+            lock=False,
+        )
+        result = await auth.database.run_sync(
+            lambda database: _studio_programs_response(database, tenant_id)
+        )
+        _no_store(response)
+        return result
+
+    @router.get(
+        "/admin/studio/programs/{program_id}",
+        response_model=StudioProgramDetailResponse,
+    )
+    async def studio_program_detail(
+        program_id: Annotated[UUID, Path()],
+        response: Response,
+        auth: AuthenticatedTransaction = actor_dependency,
+    ) -> StudioProgramDetailResponse:
+        _actor, tenant_id = await _require_named_admin(
+            auth,
+            permission="catalog_read",
+            lock=False,
+        )
+        result = await auth.database.run_sync(
+            lambda database: _studio_program_detail_response(
+                database,
+                tenant_id,
+                program_id,
+                allow_technical_validation_publication=settings.environment == "staging",
+            )
+        )
+        _no_store(response)
+        return result
+
     @router.post(
         "/admin/program-versions/{program_version_id}/publish",
         response_model=ProgramVersionPublishResponse,
@@ -413,6 +1111,10 @@ def install_admin_learning_http(
         request: Request,
         response: Response,
         body: PublishRequest,
+        if_match: Annotated[str | None, Header(alias="If-Match", max_length=96)] = None,
+        idempotency_key: Annotated[
+            str | None, Header(alias="Idempotency-Key", max_length=MAX_IDEMPOTENCY_KEY_LENGTH)
+        ] = None,
         auth: AuthenticatedTransaction = actor_dependency,
     ) -> ProgramVersionPublishResponse:
         require_safe_origin(request, settings)
@@ -420,6 +1122,27 @@ def install_admin_learning_http(
             auth,
             permission="catalog_publish",
         )
+        expected_etag = _program_version_etag(if_match)
+        command_key = _idempotency_key(idempotency_key)
+        request_fingerprint = _catalog_publish_fingerprint(
+            actor=actor,
+            tenant_id=tenant_id,
+            program_version_id=program_version_id,
+            expected_etag=expected_etag,
+            reason=body.reason,
+        )
+        command, replayed = await _reserve_catalog_publish_command(
+            auth,
+            actor=actor,
+            tenant_id=tenant_id,
+            program_version_id=program_version_id,
+            idempotency_key=command_key,
+            request_fingerprint=request_fingerprint,
+        )
+        if replayed:
+            stored = ProgramVersionPublishResponse.model_validate(command.response_payload)
+            _no_store(response)
+            return stored.model_copy(update={"replayed": True})
         try:
             version = await AsyncCatalogApplication(
                 auth.database,
@@ -428,10 +1151,12 @@ def install_admin_learning_http(
                 program_version_id,
                 actor=actor,
                 tenant_id=tenant_id,
+                expected_etag=expected_etag,
             )
         except CatalogServiceError as exc:
             raise _catalog_problem(exc) from exc
-        await _append_admin_audit(
+        publication = _publish_response(version, replayed=False)
+        audit_event = await _append_admin_audit(
             auth,
             actor=actor,
             action="audit.catalog.version.published.v1",
@@ -450,8 +1175,14 @@ def install_admin_learning_http(
             reason=body.reason,
             request=request,
         )
+        await _complete_catalog_publish_command(
+            auth,
+            command,
+            response=publication,
+            audit_event_id=audit_event.id,
+        )
         _no_store(response)
-        return _publish_response(version)
+        return publication
 
     @router.post("/admin/corrections", response_model=CorrectionResponse)
     async def append_correction(

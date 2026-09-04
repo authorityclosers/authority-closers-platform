@@ -96,6 +96,7 @@ ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
     "owner": frozenset(
         {
             "admin_surface",
+            "catalog_read",
             "catalog_write",
             "catalog_publish",
             "learner_diagnose",
@@ -113,6 +114,7 @@ ROLE_PERMISSIONS: dict[str, frozenset[str]] = {
     "admin": frozenset(
         {
             "admin_surface",
+            "catalog_read",
             "catalog_write",
             "catalog_publish",
             "learner_diagnose",
