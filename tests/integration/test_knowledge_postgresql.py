@@ -277,9 +277,7 @@ async def _seed(schema_url: URL) -> dict[str, UUID]:
                 "tenant_a": tenant_a,
                 "tenant_b": tenant_b,
                 "digest_open": hashlib.sha256(open_passage.encode("utf-8")).hexdigest(),
-                "digest_restricted": hashlib.sha256(
-                    restricted_passage.encode("utf-8")
-                ).hexdigest(),
+                "digest_restricted": hashlib.sha256(restricted_passage.encode("utf-8")).hexdigest(),
                 "digest_access": hashlib.sha256(access_passage.encode("utf-8")).hexdigest(),
                 "digest_state": hashlib.sha256(state_passage.encode("utf-8")).hexdigest(),
                 "digest_other": hashlib.sha256(other_passage.encode("utf-8")).hexdigest(),
@@ -345,10 +343,13 @@ def test_postgresql_retrieval_is_tenant_acl_safe_and_deterministic(postgres_harn
             assert first.chunks == second.chunks
             assert {chunk.tenant_id for chunk in first.chunks} == {ids["tenant_a"]}
             assert {chunk.locator for chunk in first.chunks} == {"recovery.md#email"}
-            assert first.chunks[0].content_sha256 == hashlib.sha256(
-                b"How does account recovery work? "
-                b"Account recovery requires verified support review."
-            ).hexdigest()
+            assert (
+                first.chunks[0].content_sha256
+                == hashlib.sha256(
+                    b"How does account recovery work? "
+                    b"Account recovery requires verified support review."
+                ).hexdigest()
+            )
 
             other = await PostgresKnowledgeRepository(session).search(
                 KnowledgeQuery(
@@ -440,9 +441,12 @@ def test_postgresql_retrieval_does_not_flush_or_break_outer_transaction(
                 assert result.outcome is RetrievalOutcome.FOUND
                 assert pending in session.new
                 await session.flush()
-            assert await session.scalar(
-                text("SELECT slug FROM tenants WHERE id = :id"), {"id": pending_id}
-            ) == f"pending-{pending_id.hex}"
+            assert (
+                await session.scalar(
+                    text("SELECT slug FROM tenants WHERE id = :id"), {"id": pending_id}
+                )
+                == f"pending-{pending_id.hex}"
+            )
         await engine.dispose()
 
     _run(exercise())
@@ -740,9 +744,7 @@ def test_postgresql_knowledge_digest_and_version_chain_guards(postgres_harness: 
             await session.rollback()
 
             passage = "Exact UTF-8 passage ✓"
-            version_digest = canonical_knowledge_version_digest(
-                ((0, "digest#exact", passage),)
-            )
+            version_digest = canonical_knowledge_version_digest(((0, "digest#exact", passage),))
             await session.execute(
                 text(
                     "INSERT INTO knowledge_source_versions "
@@ -785,9 +787,7 @@ def test_postgresql_knowledge_digest_and_version_chain_guards(postgres_harness: 
             await session.commit()
             assert (
                 await session.scalar(
-                    text(
-                        "SELECT content_sha256 FROM knowledge_source_versions WHERE id = :id"
-                    ),
+                    text("SELECT content_sha256 FROM knowledge_source_versions WHERE id = :id"),
                     {"id": version_two},
                 )
                 == version_digest
@@ -901,9 +901,7 @@ def test_postgresql_gold_set_runner_enforces_context_acl_and_withdrawal(
             predictions: dict[str, GoldPrediction] = {}
             for case in cases:
                 access = gold_access_context(case)
-                snapshot_id = (
-                    ids["withdrawn_version"] if case.case_id == "ks-0007" else None
-                )
+                snapshot_id = ids["withdrawn_version"] if case.case_id == "ks-0007" else None
                 result = await repository.search(
                     KnowledgeQuery(
                         access=access,
