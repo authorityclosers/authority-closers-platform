@@ -301,6 +301,8 @@ export function MediaPlayerStressHarness({
     FIXTURES.find((entry) => entry.value === fixture) ?? FIXTURES[1];
   const media = useMemo<AuthorizedVideoMedia>(
     () => ({
+      protocol: "progressive",
+      contentType: "video/mp4",
       src: `/dev-harness/media-player/fixtures/${fixture}.mp4`,
       poster: "/icon.svg",
       captions: [
