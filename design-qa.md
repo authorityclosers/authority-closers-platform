@@ -323,3 +323,47 @@ After the authorized clean Turbopack recovery, the correction pass was verified 
 No open P0, P1, or P2 local interaction defect remains in this sidebar slice. The tenant relationship is explicit: Closers Academy is the learner academy and Authority Closers is the tenant/operator; the reusable LMS itself remains unnamed. Local implementation QA passed; release sign-off remains blocked until authenticated staging supplies fresh durable captures.
 
 final result: passed locally; release blocked pending authenticated staging visual evidence
+
+---
+
+# Approved learner shell specification — final local QA
+
+## Source truth and implementation evidence
+
+- Approved visual specification: `C:/Users/Suyash/.codex/visualizations/2026/09/04/01a06c32-45d7-7d80-baee-77e1a80a88f4/closers-academy-learner-shell-spec.png` (`1590 × 1840`).
+- Vector companion: `C:/Users/Suyash/.codex/visualizations/2026/09/04/01a06c32-45d7-7d80-baee-77e1a80a88f4/closers-academy-learner-shell-spec.svg`.
+- Supplied composition references: Gemini and ChatGPT sidebar screenshots attached to this Codex task.
+- Live implementation: `http://learner.localhost:3000/home`, inspected in Codex's in-app browser at `1265 × 711` CSS pixels.
+- Live authentication recovery: `http://learner.localhost:3000/login`, inspected in the same browser after the local staging bridge repair.
+
+The Codex browser capture is retained inline with this task but does not expose a stable filesystem path. The approved board and live browser were therefore compared as a focused shell-region review: the board's light expanded, light collapsed, hover/focus, dark-theme, and mobile panels against the corresponding implementation states. The source is a multi-state specification board rather than a single route screenshot, so density normalization was limited to component geometry and CSS-pixel measurements; application content below the shell was not treated as a pixel-match target.
+
+## Final comparison
+
+- The light theme renders a light sidebar; the dark sidebar palette is limited to `html[data-theme="dark"]`.
+- The expanded rail is `280px`, the collapsed rail is `76px`, and the header is aligned to `76px`.
+- The tenant hierarchy is explicit: `Closers Academy` is the academy, `by Authority Closers` is the tenant attribution, and the LMS itself remains unnamed.
+- The shared `BrandMark` and Lucide icons are used; no handcrafted SVG, CSS drawing, emoji, or substitute font was introduced.
+- The collapse control is hidden at rest and overlays the brand region on sidebar hover or keyboard focus in both expanded and collapsed states.
+- Collapsed navigation labels render through a body portal above the page rather than clipping behind the content layer.
+- The header no longer repeats the active page label. Its centered search and quiet notification/profile actions remain, on a transparent, borderless shell surface.
+- Desktop and mobile navigation preserve the existing real routes and responsive shell behavior.
+
+## Interaction and runtime checks
+
+- `Ctrl`/`Cmd` + `K` opens the functional command palette.
+- Arrow navigation, Enter routing, Escape dismissal, and invoker-focus restoration are covered by the mounted component suites; Escape and exact focus restoration were also exercised in the live browser.
+- Collapse and expand were exercised in the live browser.
+- A focused collapsed navigation item displayed its tooltip over the content without clipping.
+- The login page remained stable and showed the sign-in form after the bridge repair; the previous offline/reload flicker did not recur.
+- Final browser console check returned no application warnings or errors.
+- Learner proxy health returned HTTP `200` with `X-AC-Dev-Data-Mode: staging-public-catalog`.
+- Admin bridge health returned HTTP `200`, `status: ok`, `transport: connected`.
+
+## Comparison history and severity assessment
+
+Iteration 1: the approved board and live implementation were compared after the Antigravity implementation and localhost bridge repair. No actionable P0, P1, or P2 visual or interaction defect remained, so no post-comparison visual correction was required. The unauthenticated home content is an honest local session state and was excluded from shell-fidelity scoring; authenticated staging content remains a release-environment check, not a local shell blocker.
+
+Automated verification passed under the repository Node 24 runtime: 31 learner test files and 469 tests, TypeScript, zero-warning ESLint, production build across 25 routes, focused learner/admin proxy suites, seven local-bridge infrastructure tests, and `git diff --check`.
+
+final result: passed
