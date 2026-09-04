@@ -16,6 +16,7 @@ from ac_platform.certificates import models as certificate_models
 from ac_platform.db.base import Base
 from ac_platform.enrollment import models as enrollment_models
 from ac_platform.identity import models as identity_models
+from ac_platform.knowledge import models as knowledge_models
 from ac_platform.learning import models as learning_models
 from ac_platform.learning import planning_models
 from ac_platform.media import models as media_models
@@ -26,6 +27,7 @@ from ac_platform.tenancy import models as tenancy_models
 MODEL_MODULES = (
     identity_models,
     tenancy_models,
+    knowledge_models,
     catalog_models,
     enrollment_models,
     learning_models,
