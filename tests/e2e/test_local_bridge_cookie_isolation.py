@@ -1,6 +1,7 @@
 """Browser proof that the combined local bridge uses separate cookie hosts."""
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from threading import Thread
 
 import pytest
@@ -41,6 +42,8 @@ def test_distinct_loopback_hosts_isolate_host_only_bridge_cookies() -> None:
     admin_origin = f"http://admin.localhost:{admin_server.server_port}"
     try:
         with playwright.sync_playwright() as runtime:
+            if not Path(runtime.chromium.executable_path).is_file():
+                pytest.skip("Playwright Chromium is not installed")
             browser = runtime.chromium.launch(headless=True)
             context = browser.new_context()
             try:
