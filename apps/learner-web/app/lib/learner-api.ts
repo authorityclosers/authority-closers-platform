@@ -150,6 +150,7 @@ export interface ProfileAvatarUploadInput {
   filename: string;
   content_type: string;
   content_length: number;
+  checksum_sha256: string;
   asset_id?: string | null;
   supersedes_version_id?: string | null;
   crop?: AvatarCropMetadata | null;
@@ -726,6 +727,7 @@ export function createLearnerApi(
     extraHeaders: Record<string, string> = {},
     method: "POST" | "PUT" = "POST",
     idempotencyKey = makeKey(),
+    signal?: AbortSignal,
   ): Promise<T> {
     return request<T>(path, {
       method,
@@ -736,6 +738,7 @@ export function createLearnerApi(
         ...extraHeaders,
       },
       body: JSON.stringify(body),
+      signal,
     });
   }
 
@@ -758,13 +761,21 @@ export function createLearnerApi(
     body: JsonRecord,
     extraHeaders: Record<string, string> = {},
     method: "POST" | "PUT" = "POST",
+    signal?: AbortSignal,
   ): Promise<T> {
     const fingerprint = stableFingerprint({ body, extraHeaders, method, path });
     const pending = pendingOperationKeys.get(operationScope);
     const key = pending?.fingerprint === fingerprint ? pending.key : makeKey();
     pendingOperationKeys.set(operationScope, { fingerprint, key });
 
-    const result = await jsonMutation<T>(path, body, extraHeaders, method, key);
+    const result = await jsonMutation<T>(
+      path,
+      body,
+      extraHeaders,
+      method,
+      key,
+      signal,
+    );
     if (pendingOperationKeys.get(operationScope)?.key === key) {
       pendingOperationKeys.delete(operationScope);
     }
@@ -857,7 +868,10 @@ export function createLearnerApi(
         ...options,
         cache: "no-store",
       }),
-    createProfileAvatarUpload: (input: ProfileAvatarUploadInput) =>
+    createProfileAvatarUpload: (
+      input: ProfileAvatarUploadInput,
+      signal?: AbortSignal,
+    ) =>
       logicalJsonMutation<AvatarUploadIntentResponse>(
         "profile-avatar-upload",
         "/v1/profile/avatar",
@@ -866,12 +880,16 @@ export function createLearnerApi(
           filename: input.filename,
           content_type: input.content_type,
           content_length: input.content_length,
+          checksum_sha256: input.checksum_sha256,
           ...(input.asset_id ? { asset_id: input.asset_id } : {}),
           ...(input.supersedes_version_id
             ? { supersedes_version_id: input.supersedes_version_id }
             : {}),
           ...(input.crop ? { crop: input.crop } : {}),
         },
+        {},
+        "POST",
+        signal,
       ),
     completeProfileAvatarUpload: (
       uploadId: string,
@@ -882,6 +900,7 @@ export function createLearnerApi(
         width?: number;
         height?: number;
       } = {},
+      signal?: AbortSignal,
     ) =>
       logicalJsonMutation<MediaAssetResponse>(
         `profile-avatar-complete:${uploadId}`,
@@ -897,6 +916,9 @@ export function createLearnerApi(
           ...(input.width ? { width: input.width } : {}),
           ...(input.height ? { height: input.height } : {}),
         },
+        {},
+        "POST",
+        signal,
       ),
     context: (options: LearnerReadOptions = {}) =>
       request<ContextResponse>("/v1/context", {

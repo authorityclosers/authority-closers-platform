@@ -487,4 +487,30 @@ describe("learner Clarity Grid slice", () => {
     );
     expect(learnerStyles).toContain(".activity-mobile-path__summary-meta svg");
   });
+
+  it("keeps the profile surface on theme tokens in both appearance modes", () => {
+    const learnerStyles = readFileSync(
+      new URL("../learner-clarity.css", import.meta.url),
+      "utf8",
+    );
+    const themeStyles = readFileSync(
+      new URL("../theme.css", import.meta.url),
+      "utf8",
+    );
+    const profileStart = learnerStyles.indexOf("Profile View Styles");
+    const profileEnd = learnerStyles.indexOf("Notifications View Styles");
+    const profileStyles = learnerStyles.slice(profileStart, profileEnd);
+
+    expect(profileStyles).toContain(
+      "--color-card-surface: var(--theme-surface);",
+    );
+    expect(profileStyles).toContain("color: var(--theme-text);");
+    expect(profileStyles).not.toMatch(
+      /#(?:0f172a|64748b|ffffff|f1f5f9|eff6ff|2563eb|f8fafc)/i,
+    );
+    expect(themeStyles).toContain('html[data-theme="dark"] {');
+    expect(themeStyles).toContain("--theme-surface: #101a2b;");
+    expect(themeStyles).toContain("--theme-text: #edf2fb;");
+    expect(themeStyles).toContain("--theme-border: #34425a;");
+  });
 });
