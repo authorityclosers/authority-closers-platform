@@ -132,3 +132,4 @@ Write-Output "compiler: MSVC $compilerVersion"
 Write-Output "binary: $binary"
 Write-Output "results: $csvOutput"
 Write-Output "published-sha256: $((Get-FileHash -LiteralPath $publishedCsv -Algorithm SHA256).Hash.ToLowerInvariant())"
+exit 0
