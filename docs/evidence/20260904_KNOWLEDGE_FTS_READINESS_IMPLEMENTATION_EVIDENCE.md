@@ -30,6 +30,10 @@ rollback boundary.
   `BELOW_THRESHOLD`.
 - No generated citation may bypass Phase-1 `validate_answer_grounding`.
 - PostgreSQL stores only lowercase hexadecimal SHA-256 digests.
+- Every chunk digest is checked against the exact UTF-8 passage bytes. Each
+  version digest is checked against `ac-knowledge-version-v1` followed by its
+  ordinal-ordered, UTF-8 length-prefixed locator and passage material; the
+  Python and PostgreSQL serializers are kept byte-for-byte equivalent.
 - `KNOWLEDGE_RETRIEVAL_ENABLED` remains false by default; no route references
   this package.
 
