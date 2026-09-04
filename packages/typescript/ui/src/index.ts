@@ -18,3 +18,16 @@ export type {
   StatusBannerProps,
   StatusBannerState,
 } from "./learning-primitives";
+export { SidebarBadge } from "./sidebar-badge";
+export type {
+  BadgeVariant,
+  SidebarBadgeConfig,
+  SidebarBadgeProps,
+} from "./sidebar-badge";
+export { SidebarTooltip } from "./sidebar-tooltip";
+export type { SidebarTooltipProps } from "./sidebar-tooltip";
+export type {
+  TenantIdentityConfig,
+  TenantInfo,
+  TenantSwitcherConfig,
+} from "./tenant-contracts";
