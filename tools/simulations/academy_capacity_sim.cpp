@@ -9,6 +9,7 @@
 #include <numeric>
 #include <queue>
 #include <random>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -20,6 +21,16 @@ namespace {
 
 constexpr double kMinutesPerDay = 1440.0;
 constexpr double kWorkdayStartMinutes = 9.0 * 60.0;
+constexpr int kMaxScenarios = 32;
+constexpr int kMaxTenants = 1000;
+constexpr int kMaxLearnersPerTenant = 100000;
+constexpr int kMaxDurationDays = 3650;
+constexpr int kMaxActivities = 1000;
+constexpr int kMaxCoaches = 10000;
+constexpr int kMaxTelemetryEventsPerActivity = 1000000;
+constexpr int kMaxRuns = 100000;
+constexpr std::uint64_t kMaxLearnerActivityTrials = 25000000ULL;
+constexpr std::uint64_t kMaxPotentialJobs = 50000000ULL;
 
 struct Scenario {
     std::string id;
@@ -102,7 +113,7 @@ std::vector<std::string> split_csv_line(const std::string& line) {
 double parse_double(const std::string& value, const std::string& field) {
     std::size_t consumed = 0;
     const double parsed = std::stod(value, &consumed);
-    if (consumed != value.size()) {
+    if (consumed != value.size() || !std::isfinite(parsed)) {
         throw std::runtime_error("invalid numeric value for " + field + ": " + value);
     }
     return parsed;
@@ -129,12 +140,12 @@ std::uint64_t parse_uint64(const std::string& value, const std::string& field) {
 
 void validate_scenario(const Scenario& scenario) {
     const auto probability = [&](double value, const std::string& name) {
-        if (value < 0.0 || value > 1.0) {
+        if (!std::isfinite(value) || value < 0.0 || value > 1.0) {
             throw std::runtime_error(scenario.id + ": " + name + " must be between 0 and 1");
         }
     };
-    if (scenario.id.empty()) {
-        throw std::runtime_error("scenario_id must not be blank");
+    if (scenario.id.empty() || scenario.id.size() > 128) {
+        throw std::runtime_error("scenario_id must contain between 1 and 128 characters");
     }
     if (scenario.tenants <= 0 || scenario.learners_per_tenant <= 0 ||
         scenario.enrollment_days <= 0 || scenario.course_days <= 0 || scenario.activities <= 0 ||
@@ -144,9 +155,24 @@ void validate_scenario(const Scenario& scenario) {
     if (scenario.workdays_per_week <= 0 || scenario.workdays_per_week > 7) {
         throw std::runtime_error(scenario.id + ": workdays_per_week must be in [1, 7]");
     }
-    if (scenario.coach_hours_per_day <= 0.0 || scenario.coach_hours_per_day > 15.0 ||
-        scenario.review_minutes_mean <= 0.0 || scenario.review_minutes_sigma < 0.0 ||
-        scenario.intervention_minutes_mean <= 0.0 || scenario.sla_hours <= 0.0 ||
+    if (scenario.tenants > kMaxTenants ||
+        scenario.learners_per_tenant > kMaxLearnersPerTenant ||
+        scenario.enrollment_days > kMaxDurationDays ||
+        scenario.course_days > kMaxDurationDays || scenario.activities > kMaxActivities ||
+        scenario.coaches > kMaxCoaches || scenario.runs > kMaxRuns ||
+        scenario.telemetry_events_per_activity > kMaxTelemetryEventsPerActivity) {
+        throw std::runtime_error(scenario.id + ": count or duration field exceeds the simulator cap");
+    }
+    if (!std::isfinite(scenario.coach_hours_per_day) ||
+        !std::isfinite(scenario.review_minutes_mean) ||
+        !std::isfinite(scenario.review_minutes_sigma) ||
+        !std::isfinite(scenario.intervention_minutes_mean) ||
+        !std::isfinite(scenario.sla_hours) || scenario.coach_hours_per_day <= 0.0 ||
+        scenario.coach_hours_per_day > 15.0 || scenario.review_minutes_mean <= 0.0 ||
+        scenario.review_minutes_mean > kMinutesPerDay || scenario.review_minutes_sigma < 0.0 ||
+        scenario.review_minutes_sigma > 5.0 || scenario.intervention_minutes_mean <= 0.0 ||
+        scenario.intervention_minutes_mean > kMinutesPerDay || scenario.sla_hours <= 0.0 ||
+        scenario.sla_hours > 24.0 * 365.0 ||
         scenario.telemetry_events_per_activity < 0) {
         throw std::runtime_error(scenario.id + ": workload fields are outside supported bounds");
     }
@@ -155,6 +181,36 @@ void validate_scenario(const Scenario& scenario) {
                 "activity_continuation_probability");
     probability(scenario.human_review_fraction, "human_review_fraction");
     probability(scenario.intervention_probability, "intervention_probability");
+
+    const auto multiply_checked = [&](std::uint64_t left, std::uint64_t right,
+                                      const std::string& label) {
+        if (right != 0 && left > std::numeric_limits<std::uint64_t>::max() / right) {
+            throw std::runtime_error(scenario.id + ": " + label + " overflows");
+        }
+        return left * right;
+    };
+    const auto learners = multiply_checked(static_cast<std::uint64_t>(scenario.tenants),
+                                           static_cast<std::uint64_t>(scenario.learners_per_tenant),
+                                           "learner count");
+    const auto trajectories = multiply_checked(learners, static_cast<std::uint64_t>(scenario.runs),
+                                                "learner trajectories");
+    const auto activity_trials =
+        multiply_checked(trajectories, static_cast<std::uint64_t>(scenario.activities),
+                         "learner activity trials");
+    if (activity_trials > kMaxLearnerActivityTrials) {
+        throw std::runtime_error(scenario.id + ": learner activity trials exceed the simulator cap");
+    }
+    if (multiply_checked(activity_trials, 2ULL, "potential jobs") > kMaxPotentialJobs) {
+        throw std::runtime_error(scenario.id + ": potential jobs exceed the simulator cap");
+    }
+    const auto telemetry_per_run = multiply_checked(
+        multiply_checked(learners, static_cast<std::uint64_t>(scenario.activities),
+                         "telemetry activity count"),
+        static_cast<std::uint64_t>(scenario.telemetry_events_per_activity),
+        "telemetry event count");
+    if (telemetry_per_run > static_cast<std::uint64_t>(std::numeric_limits<int>::max())) {
+        throw std::runtime_error(scenario.id + ": per-run telemetry count exceeds the integer cap");
+    }
 }
 
 std::vector<Scenario> read_scenarios(const std::string& path) {
@@ -194,6 +250,7 @@ std::vector<Scenario> read_scenarios(const std::string& path) {
     }
 
     std::vector<Scenario> scenarios;
+    std::set<std::string> scenario_ids;
     std::string line;
     int line_number = 1;
     while (std::getline(input, line)) {
@@ -231,7 +288,13 @@ std::vector<Scenario> read_scenarios(const std::string& path) {
             parse_uint64(fields[19], expected_header[19]),
         };
         validate_scenario(scenario);
+        if (!scenario_ids.insert(scenario.id).second) {
+            throw std::runtime_error("duplicate scenario_id: " + scenario.id);
+        }
         scenarios.push_back(std::move(scenario));
+        if (scenarios.size() > static_cast<std::size_t>(kMaxScenarios)) {
+            throw std::runtime_error("scenario file exceeds the simulator scenario cap");
+        }
     }
     if (scenarios.empty()) {
         throw std::runtime_error("scenario file contains no scenarios: " + path);
@@ -452,7 +515,9 @@ AggregateResult aggregate(const Scenario& scenario) {
     double within_48h = 0.0;
     double within_72h = 0.0;
     double total_jobs = 0.0;
-    const int total_learners = scenario.tenants * scenario.learners_per_tenant;
+    const std::uint64_t total_learners =
+        static_cast<std::uint64_t>(scenario.tenants) *
+        static_cast<std::uint64_t>(scenario.learners_per_tenant);
     const int capacity_days = scenario.enrollment_days + scenario.course_days;
     const double available_minutes =
         static_cast<double>(count_workdays(capacity_days, scenario.workdays_per_week)) *
@@ -529,8 +594,9 @@ void write_csv(const std::string& path, const std::vector<AggregateResult>& resu
               "worst_tenant_p95_turnaround_hours\n";
     output << std::fixed << std::setprecision(2);
     for (const auto& result : results) {
-        const int total_learners =
-            result.scenario.tenants * result.scenario.learners_per_tenant;
+        const std::uint64_t total_learners =
+            static_cast<std::uint64_t>(result.scenario.tenants) *
+            static_cast<std::uint64_t>(result.scenario.learners_per_tenant);
         output << result.scenario.id << ',' << result.scenario.tenants << ',' << total_learners
                << ',' << result.scenario.coaches << ',' << result.scenario.runs << ','
                << result.mean_activated << ',' << result.mean_completed << ','
@@ -555,15 +621,16 @@ void write_markdown(const std::string& path, const std::vector<AggregateResult>&
               "Generated by `academy_capacity_sim.cpp`. These are scenario-model outputs, not "
               "observed learner outcomes or staffing commitments.\n\n"
               "| Scenario | Tenants | Learners | Coaches | Runs | Completion | Mean jobs | "
-              "Demand / planned capacity | P50 turnaround | P95 turnaround | Within 24h | "
+              "Demand / planned capacity | P50 turnaround | P95 turnaround | Within target SLA | "
               "Within 48h | Mean max waiting | Peak jobs/day | Peak telemetry/day | "
               "Worst tenant P95 |\n"
               "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | "
               "---: | ---: | ---: | ---: | ---: | ---: |\n";
     output << std::fixed << std::setprecision(1);
     for (const auto& result : results) {
-        const int total_learners =
-            result.scenario.tenants * result.scenario.learners_per_tenant;
+        const std::uint64_t total_learners =
+            static_cast<std::uint64_t>(result.scenario.tenants) *
+            static_cast<std::uint64_t>(result.scenario.learners_per_tenant);
         output << "| " << result.scenario.id << " | " << result.scenario.tenants << " | "
                << total_learners << " | " << result.scenario.coaches << " | "
                << result.scenario.runs << " | " << result.completion_rate_pct << "% | "

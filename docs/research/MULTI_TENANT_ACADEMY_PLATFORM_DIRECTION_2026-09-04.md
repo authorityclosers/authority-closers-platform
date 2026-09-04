@@ -108,12 +108,13 @@ archive material is not copied into this repository.
 
 ## Current state: this is an active platform, not a blank LMS
 
-### Git and GitHub trail as of the review
+### Historical source checkout and current GitHub trail
 
-- Current work branch: `codex/g1-free-course-foundation`
-- Reviewed head: `af93e2d`
-- Branch distance from `main`: 104 commits
-- Diff from merge base: 750 files, approximately 170,264 insertions and 151 deletions
+- The initial source inventory was collected from the historical recovery branch
+  `codex/g1-free-course-foundation` at `af93e2d`: 104 commits from its then-current
+  `main`, with a 750-file merge-base diff. Those figures describe the inspected
+  recovery snapshot; they do not describe this research PR or recommend merging
+  that branch.
 - [PR #1](https://github.com/authorityclosers/authority-closers-platform/pull/1) merged the G0 control-plane and VPS foundation.
 - [PR #2](https://github.com/authorityclosers/authority-closers-platform/pull/2) remains an open draft for the G1 free-course production foundation. Its current validation checks pass, while the PR remains intentionally gated.
 - [PRs #3 through #25](https://github.com/authorityclosers/authority-closers-platform/pulls?q=is%3Apr+is%3Aclosed) show concentrated work across learner UX, release evidence, dependency security, appearance/settings, telemetry, media lifecycle/delivery, video, profile/avatar, staging recovery, progress presentation, and consent-aware analytics ingest.
