@@ -13,13 +13,26 @@ staging learner/admin credentials. From this worktree, run:
 pnpm dev:staging
 ```
 
+The default learner/admin ports are `3000` and `3001`. If either belongs to
+another workspace, leave that process alone and select two free loopback ports:
+
+```powershell
+pwsh -NoProfile -File scripts/Start-LocalStagingBridge.ps1 -LearnerPort 3100 -AdminPort 3101
+```
+
+Use the exact ports printed by the launcher. The isolated hosts remain
+`learner.localhost` and `admin.localhost`; only their loopback ports change.
+Only one tracked bridge instance may run from a worktree at a time. Stop it
+before changing ports so the process record and in-memory Access session cannot
+be orphaned.
+
 The launcher binds both Next dev servers to `127.0.0.1`. If the current
 Cloudflare Access user session is absent or expired, it opens the normal Access
 browser login. The Access JWT is captured in memory and passed only to the
 admin child process. It is not printed, stored in an env file, placed in a
 command line, written to the PID record, or exposed to the learner process.
 
-Startup succeeds only after both probes pass:
+On the default ports, startup succeeds only after both probes pass:
 
 - `http://learner.localhost:3000/v1/programs?limit=1` returns the staging public
   catalog with `X-AC-Dev-Data-Mode: staging-public-catalog`.
@@ -33,6 +46,9 @@ password authentication contract and create separate ephemeral cookies on
 distinct local hosts. Account creation, Google sign-in, email verification, and password
 recovery continue on the deployed learner staging origin because their
 provider callbacks and one-time links are origin-bound.
+
+When alternate ports are selected, replace only `3000` and `3001` in those
+probe/login URLs with the exact learner and admin ports printed by the launcher.
 
 Stop only the tracked process trees with:
 

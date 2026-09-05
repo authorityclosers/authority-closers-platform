@@ -669,4 +669,313 @@ describe("loopback admin proxy", () => {
     expect(response.status).toBe(200);
     expect(fetcher).toHaveBeenCalledOnce();
   });
+
+  it("accepts loopback requests with Host matching admin.localhost origin", async () => {
+    const adminEnv = {
+      AC_DEV_ADMIN_AUTH_BRIDGE_ENABLED: "true",
+      AC_DEV_ADMIN_AUTH_BRIDGE_ORIGIN: "http://admin.localhost:3001",
+      AC_DEV_ADMIN_AUTH_BRIDGE_UPSTREAM_ORIGIN:
+        "https://admin-staging.authorityclosers.com",
+      AC_DEV_ADMIN_ACCESS_JWT:
+        "t".repeat(32) + "." + "p".repeat(32) + "." + "s".repeat(32),
+    };
+    const fetcher = vi
+      .fn<DevAdminFetch>()
+      .mockImplementation(() =>
+        Promise.resolve(
+          Response.json(
+            { code: "authentication_required" },
+            { status: 401, headers: { "content-type": "application/json" } },
+          ),
+        ),
+      );
+
+    const response = await proxyDevelopmentAdminApi(
+      new Request("http://localhost:3001/v1/dev-bridge/health", {
+        headers: {
+          host: "admin.localhost:3001",
+        },
+      }),
+      fetcher,
+      adminEnv,
+      "development",
+      new InMemoryDevelopmentAdminSessionStore(),
+    );
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      status: string;
+      transport: string;
+    };
+    expect(body.status).toBe("ok");
+    expect(body.transport).toBe("connected");
+
+    // Omitting direct Host header while supplying only x-forwarded-host must be rejected
+    const rejectedWithoutHost = await proxyDevelopmentAdminApi(
+      new Request("http://127.0.0.1:3001/v1/dev-bridge/health", {
+        headers: {
+          "x-forwarded-host": "admin.localhost:3001",
+          "x-forwarded-proto": "http",
+        },
+      }),
+      fetcher,
+      adminEnv,
+      "development",
+      new InMemoryDevelopmentAdminSessionStore(),
+    );
+    expect(rejectedWithoutHost.status).toBe(403);
+  });
+
+  it("rejects loopback requests with mismatched Host or non-loopback URLs", async () => {
+    const adminEnv = {
+      AC_DEV_ADMIN_AUTH_BRIDGE_ENABLED: "true",
+      AC_DEV_ADMIN_AUTH_BRIDGE_ORIGIN: "http://admin.localhost:3001",
+      AC_DEV_ADMIN_AUTH_BRIDGE_UPSTREAM_ORIGIN:
+        "https://admin-staging.authorityclosers.com",
+      AC_DEV_ADMIN_ACCESS_JWT:
+        "t".repeat(32) + "." + "p".repeat(32) + "." + "s".repeat(32),
+    };
+    const fetcher = vi.fn<DevAdminFetch>();
+
+    // Wrong host: learner.localhost
+    const res1 = await proxyDevelopmentAdminApi(
+      new Request("http://localhost:3001/v1/dev-bridge/health", {
+        headers: { host: "learner.localhost:3000" },
+      }),
+      fetcher,
+      adminEnv,
+      "development",
+      new InMemoryDevelopmentAdminSessionStore(),
+    );
+    expect(res1.status).toBe(403);
+
+    // Wrong host: plain localhost when admin.localhost is expected
+    const res2 = await proxyDevelopmentAdminApi(
+      new Request("http://localhost:3001/v1/dev-bridge/health", {
+        headers: { host: "localhost:3001" },
+      }),
+      fetcher,
+      adminEnv,
+      "development",
+      new InMemoryDevelopmentAdminSessionStore(),
+    );
+    expect(res2.status).toBe(403);
+
+    // Hostile non-loopback URL
+    const res3 = await proxyDevelopmentAdminApi(
+      new Request("http://evil.com/v1/dev-bridge/health", {
+        headers: { host: "admin.localhost:3001" },
+      }),
+      fetcher,
+      adminEnv,
+      "development",
+      new InMemoryDevelopmentAdminSessionStore(),
+    );
+    expect(res3.status).toBe(403);
+
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("rejects conflicting or spoofed forwarded headers even if direct Host or forwarded-host looks valid", async () => {
+    const adminEnv = {
+      AC_DEV_ADMIN_AUTH_BRIDGE_ENABLED: "true",
+      AC_DEV_ADMIN_AUTH_BRIDGE_ORIGIN: "http://admin.localhost:3001",
+      AC_DEV_ADMIN_AUTH_BRIDGE_UPSTREAM_ORIGIN:
+        "https://admin-staging.authorityclosers.com",
+      AC_DEV_ADMIN_ACCESS_JWT:
+        "t".repeat(32) + "." + "p".repeat(32) + "." + "s".repeat(32),
+    };
+    const fetcher = vi.fn<DevAdminFetch>();
+
+    // Valid direct Host header, but spoofed/conflicting x-forwarded-host
+    const resConflictingHost = await proxyDevelopmentAdminApi(
+      new Request("http://localhost:3001/v1/dev-bridge/health", {
+        headers: {
+          host: "admin.localhost:3001",
+          "x-forwarded-host": "evil.com",
+        },
+      }),
+      fetcher,
+      adminEnv,
+      "development",
+      new InMemoryDevelopmentAdminSessionStore(),
+    );
+    expect(resConflictingHost.status).toBe(403);
+
+    // Valid direct Host header, but spoofed/conflicting x-forwarded-proto
+    const resConflictingProto = await proxyDevelopmentAdminApi(
+      new Request("http://localhost:3001/v1/dev-bridge/health", {
+        headers: {
+          host: "admin.localhost:3001",
+          "x-forwarded-proto": "https",
+        },
+      }),
+      fetcher,
+      adminEnv,
+      "development",
+      new InMemoryDevelopmentAdminSessionStore(),
+    );
+    expect(resConflictingProto.status).toBe(403);
+
+    // Does NOT solely trust x-forwarded-host if direct Host header is hostile
+    const resHostileDirectHost = await proxyDevelopmentAdminApi(
+      new Request("http://localhost:3001/v1/dev-bridge/health", {
+        headers: {
+          host: "evil.com",
+          "x-forwarded-host": "admin.localhost:3001",
+        },
+      }),
+      fetcher,
+      adminEnv,
+      "development",
+      new InMemoryDevelopmentAdminSessionStore(),
+    );
+    expect(resHostileDirectHost.status).toBe(403);
+
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed or ambiguous authority and forwarded headers", async () => {
+    const adminEnv = {
+      AC_DEV_ADMIN_AUTH_BRIDGE_ENABLED: "true",
+      AC_DEV_ADMIN_AUTH_BRIDGE_ORIGIN: "http://admin.localhost:3001",
+      AC_DEV_ADMIN_AUTH_BRIDGE_UPSTREAM_ORIGIN:
+        "https://admin-staging.authorityclosers.com",
+      AC_DEV_ADMIN_ACCESS_JWT:
+        "t".repeat(32) + "." + "p".repeat(32) + "." + "s".repeat(32),
+    };
+    const fetcher = vi.fn<DevAdminFetch>();
+    const malformedHeaders: Array<Record<string, string>> = [
+      { host: "admin.localhost:3001/path" },
+      { host: "admin.localhost:3001?query" },
+      { host: "admin.localhost:3001#fragment" },
+      { host: "evil.test@admin.localhost:3001" },
+      { host: "admin.localhost:3001, evil.test" },
+      { host: "admin.localhost:3002" },
+      { host: "[::1]:3001" },
+      { host: "" },
+      { host: "admin.localhost:3001", "x-forwarded-host": "" },
+      {
+        host: "admin.localhost:3001",
+        "x-forwarded-host": "admin.localhost:3001/path",
+      },
+      {
+        host: "admin.localhost:3001",
+        "x-forwarded-host": "evil.test@admin.localhost:3001",
+      },
+      {
+        host: "admin.localhost:3001",
+        "x-forwarded-host": "admin.localhost:3001, evil.test",
+      },
+      { host: "admin.localhost:3001", "x-forwarded-proto": "" },
+      { host: "admin.localhost:3001", "x-forwarded-proto": "http:" },
+      {
+        host: "admin.localhost:3001",
+        "x-forwarded-proto": "http,https",
+      },
+    ];
+
+    for (const headers of malformedHeaders) {
+      const response = await proxyDevelopmentAdminApi(
+        new Request("http://localhost:3001/v1/dev-bridge/health", {
+          headers,
+        }),
+        fetcher,
+        adminEnv,
+        "development",
+        new InMemoryDevelopmentAdminSessionStore(),
+      );
+      expect(response.status).toBe(403);
+    }
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("accepts canonical default-port Host forms for an exact default-port origin", async () => {
+    const adminEnv = {
+      AC_DEV_ADMIN_AUTH_BRIDGE_ENABLED: "true",
+      AC_DEV_ADMIN_AUTH_BRIDGE_ORIGIN: "http://admin.localhost",
+      AC_DEV_ADMIN_AUTH_BRIDGE_UPSTREAM_ORIGIN:
+        "https://admin-staging.authorityclosers.com",
+      AC_DEV_ADMIN_ACCESS_JWT:
+        "t".repeat(32) + "." + "p".repeat(32) + "." + "s".repeat(32),
+    };
+    const fetcher = vi.fn<DevAdminFetch>(() =>
+      Promise.resolve(
+        Response.json({ code: "authentication_required" }, { status: 401 }),
+      ),
+    );
+
+    for (const host of ["admin.localhost", "admin.localhost:80"]) {
+      const response = await proxyDevelopmentAdminApi(
+        new Request("http://localhost/v1/dev-bridge/health", {
+          headers: { host },
+        }),
+        fetcher,
+        adminEnv,
+        "development",
+        new InMemoryDevelopmentAdminSessionStore(),
+      );
+      expect(response.status).toBe(200);
+    }
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it("accepts exact IPv6 and HTTPS default-port loopback authorities", async () => {
+    const fetcher = vi.fn<DevAdminFetch>(() =>
+      Promise.resolve(
+        Response.json({ code: "authentication_required" }, { status: 401 }),
+      ),
+    );
+    const accessJwt =
+      "t".repeat(32) + "." + "p".repeat(32) + "." + "s".repeat(32);
+    const cases: Array<{
+      environment: {
+        AC_DEV_ADMIN_AUTH_BRIDGE_ENABLED: string;
+        AC_DEV_ADMIN_AUTH_BRIDGE_ORIGIN: string;
+        AC_DEV_ADMIN_AUTH_BRIDGE_UPSTREAM_ORIGIN: string;
+        AC_DEV_ADMIN_ACCESS_JWT: string;
+      };
+      url: string;
+      headers: Record<string, string>;
+    }> = [
+      {
+        environment: {
+          AC_DEV_ADMIN_AUTH_BRIDGE_ENABLED: "true",
+          AC_DEV_ADMIN_AUTH_BRIDGE_ORIGIN: "http://[::1]:3001",
+          AC_DEV_ADMIN_AUTH_BRIDGE_UPSTREAM_ORIGIN:
+            "https://admin-staging.authorityclosers.com",
+          AC_DEV_ADMIN_ACCESS_JWT: accessJwt,
+        },
+        url: "http://localhost:3001/v1/dev-bridge/health",
+        headers: { host: "[::1]:3001" },
+      },
+      {
+        environment: {
+          AC_DEV_ADMIN_AUTH_BRIDGE_ENABLED: "true",
+          AC_DEV_ADMIN_AUTH_BRIDGE_ORIGIN: "https://admin.localhost",
+          AC_DEV_ADMIN_AUTH_BRIDGE_UPSTREAM_ORIGIN:
+            "https://admin-staging.authorityclosers.com",
+          AC_DEV_ADMIN_ACCESS_JWT: accessJwt,
+        },
+        url: "https://localhost/v1/dev-bridge/health",
+        headers: {
+          host: "admin.localhost:443",
+          "x-forwarded-host": "admin.localhost",
+          "x-forwarded-proto": "https",
+        },
+      },
+    ];
+
+    for (const testCase of cases) {
+      const response = await proxyDevelopmentAdminApi(
+        new Request(testCase.url, { headers: testCase.headers }),
+        fetcher,
+        testCase.environment,
+        "development",
+        new InMemoryDevelopmentAdminSessionStore(),
+      );
+      expect(response.status).toBe(200);
+    }
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
 });

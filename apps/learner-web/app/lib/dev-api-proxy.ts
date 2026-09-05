@@ -156,6 +156,13 @@ function normalizedOrigin(value: string): URL {
   return url;
 }
 
+function originFromAuthorityHeader(value: string, protocol: string): string {
+  if (!value || value !== value.trim() || /[\s,/?#@\\]/u.test(value)) {
+    throw new Error("Development bridge authority header is malformed.");
+  }
+  return normalizedOrigin(`${protocol}//${value}`).origin;
+}
+
 function optionalConfiguredApiOrigin(
   environment: DevApiEnvironment,
 ): string | undefined {
@@ -654,7 +661,38 @@ function isAllowedBridgeOrigin(
 ): boolean {
   let requestOrigin: string;
   try {
-    requestOrigin = new URL(request.url).origin;
+    const rawUrl = new URL(request.url);
+    if (!isLoopbackHost(rawUrl.hostname)) return false;
+
+    const expectedUrl = new URL(expectedOrigin);
+    const hostHeader = request.headers.get("host");
+
+    if (hostHeader !== null) {
+      const directHostOrigin = originFromAuthorityHeader(
+        hostHeader,
+        rawUrl.protocol,
+      );
+      if (directHostOrigin !== expectedOrigin) return false;
+      requestOrigin = directHostOrigin;
+    } else {
+      if (rawUrl.origin !== expectedOrigin) return false;
+      requestOrigin = rawUrl.origin;
+    }
+
+    const forwardedHost = request.headers.get("x-forwarded-host");
+    if (forwardedHost !== null) {
+      const forwardedHostOrigin = originFromAuthorityHeader(
+        forwardedHost,
+        rawUrl.protocol,
+      );
+      if (forwardedHostOrigin !== expectedOrigin) return false;
+    }
+
+    const forwardedProto = request.headers.get("x-forwarded-proto");
+    if (forwardedProto !== null) {
+      if (!/^(?:http|https)$/u.test(forwardedProto)) return false;
+      if (`${forwardedProto}:` !== expectedUrl.protocol) return false;
+    }
   } catch {
     return false;
   }

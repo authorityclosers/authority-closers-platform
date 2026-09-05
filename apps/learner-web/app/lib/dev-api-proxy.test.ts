@@ -997,4 +997,316 @@ describe("development learner API proxy", () => {
     expect(response.status).toBe(200);
     expect(fetcher).toHaveBeenCalledOnce();
   });
+
+  it("accepts loopback requests with Host matching learner.localhost origin", async () => {
+    const learnerEnv = {
+      AC_DEV_AUTH_BRIDGE_ENABLED: "true",
+      AC_DEV_AUTH_BRIDGE_ORIGIN: "http://learner.localhost:3000",
+      AC_DEV_AUTH_BRIDGE_UPSTREAM_ORIGIN:
+        "https://staging.authorityclosers.com",
+    };
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      expect(String(input)).toBe(
+        "https://api-staging.authorityclosers.com/v1/programs?limit=1",
+      );
+      return Response.json({ items: [] });
+    });
+
+    // Next.js dev server synthesizes request.url as http://localhost:3000/v1/...
+    // while the client sets Host: learner.localhost:3000
+    const response = await proxyDevelopmentLearnerApi(
+      new Request("http://localhost:3000/v1/programs?limit=1", {
+        headers: {
+          host: "learner.localhost:3000",
+        },
+      }),
+      fetcher,
+      learnerEnv,
+      "development",
+      new InMemoryDevelopmentBridgeSessionStore(),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-ac-dev-data-mode")).toBe(
+      "staging-public-catalog",
+    );
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it("accepts loopback requests when direct Host and forwarded headers agree on learner.localhost origin", async () => {
+    const learnerEnv = {
+      AC_DEV_AUTH_BRIDGE_ENABLED: "true",
+      AC_DEV_AUTH_BRIDGE_ORIGIN: "http://learner.localhost:3000",
+      AC_DEV_AUTH_BRIDGE_UPSTREAM_ORIGIN:
+        "https://staging.authorityclosers.com",
+    };
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      expect(String(input)).toBe(
+        "https://api-staging.authorityclosers.com/v1/programs?limit=1",
+      );
+      return Response.json({ items: [] });
+    });
+
+    const response = await proxyDevelopmentLearnerApi(
+      new Request("http://127.0.0.1:3000/v1/programs?limit=1", {
+        headers: {
+          host: "learner.localhost:3000",
+          "x-forwarded-host": "learner.localhost:3000",
+          "x-forwarded-proto": "http",
+        },
+      }),
+      fetcher,
+      learnerEnv,
+      "development",
+      new InMemoryDevelopmentBridgeSessionStore(),
+    );
+
+    expect(response.status).toBe(200);
+    expect(fetcher).toHaveBeenCalledOnce();
+
+    // Omitting direct Host header while supplying only x-forwarded-host must be rejected
+    const rejectedWithoutHost = await proxyDevelopmentLearnerApi(
+      new Request("http://127.0.0.1:3000/v1/programs?limit=1", {
+        headers: {
+          "x-forwarded-host": "learner.localhost:3000",
+          "x-forwarded-proto": "http",
+        },
+      }),
+      fetcher,
+      learnerEnv,
+      "development",
+      new InMemoryDevelopmentBridgeSessionStore(),
+    );
+    expect(rejectedWithoutHost.status).toBe(403);
+  });
+
+  it("rejects loopback requests with mismatched Host or non-loopback URLs", async () => {
+    const learnerEnv = {
+      AC_DEV_AUTH_BRIDGE_ENABLED: "true",
+      AC_DEV_AUTH_BRIDGE_ORIGIN: "http://learner.localhost:3000",
+      AC_DEV_AUTH_BRIDGE_UPSTREAM_ORIGIN:
+        "https://staging.authorityclosers.com",
+    };
+    const fetcher = vi.fn();
+
+    // Wrong host: admin.localhost
+    const res1 = await proxyDevelopmentLearnerApi(
+      new Request("http://localhost:3000/v1/programs?limit=1", {
+        headers: { host: "admin.localhost:3001" },
+      }),
+      fetcher,
+      learnerEnv,
+      "development",
+      new InMemoryDevelopmentBridgeSessionStore(),
+    );
+    expect(res1.status).toBe(403);
+
+    // Wrong host: plain localhost when learner.localhost is expected
+    const res2 = await proxyDevelopmentLearnerApi(
+      new Request("http://localhost:3000/v1/programs?limit=1", {
+        headers: { host: "localhost:3000" },
+      }),
+      fetcher,
+      learnerEnv,
+      "development",
+      new InMemoryDevelopmentBridgeSessionStore(),
+    );
+    expect(res2.status).toBe(403);
+
+    // Hostile non-loopback URL even if host header claims learner.localhost
+    const res3 = await proxyDevelopmentLearnerApi(
+      new Request("http://evil.com/v1/programs?limit=1", {
+        headers: { host: "learner.localhost:3000" },
+      }),
+      fetcher,
+      learnerEnv,
+      "development",
+      new InMemoryDevelopmentBridgeSessionStore(),
+    );
+    expect(res3.status).toBe(403);
+
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("rejects conflicting or spoofed forwarded headers even if direct Host or forwarded-host looks valid", async () => {
+    const learnerEnv = {
+      AC_DEV_AUTH_BRIDGE_ENABLED: "true",
+      AC_DEV_AUTH_BRIDGE_ORIGIN: "http://learner.localhost:3000",
+      AC_DEV_AUTH_BRIDGE_UPSTREAM_ORIGIN:
+        "https://staging.authorityclosers.com",
+    };
+    const fetcher = vi.fn();
+
+    // Valid Host header, but spoofed/conflicting x-forwarded-host
+    const resConflictingHost = await proxyDevelopmentLearnerApi(
+      new Request("http://localhost:3000/v1/programs?limit=1", {
+        headers: {
+          host: "learner.localhost:3000",
+          "x-forwarded-host": "evil.com",
+        },
+      }),
+      fetcher,
+      learnerEnv,
+      "development",
+      new InMemoryDevelopmentBridgeSessionStore(),
+    );
+    expect(resConflictingHost.status).toBe(403);
+
+    // Valid Host header, but spoofed/conflicting x-forwarded-proto (e.g. https when http is expected)
+    const resConflictingProto = await proxyDevelopmentLearnerApi(
+      new Request("http://localhost:3000/v1/programs?limit=1", {
+        headers: {
+          host: "learner.localhost:3000",
+          "x-forwarded-proto": "https",
+        },
+      }),
+      fetcher,
+      learnerEnv,
+      "development",
+      new InMemoryDevelopmentBridgeSessionStore(),
+    );
+    expect(resConflictingProto.status).toBe(403);
+
+    // Does NOT solely trust x-forwarded-host if direct Host header is hostile
+    const resHostileDirectHost = await proxyDevelopmentLearnerApi(
+      new Request("http://localhost:3000/v1/programs?limit=1", {
+        headers: {
+          host: "evil.com",
+          "x-forwarded-host": "learner.localhost:3000",
+        },
+      }),
+      fetcher,
+      learnerEnv,
+      "development",
+      new InMemoryDevelopmentBridgeSessionStore(),
+    );
+    expect(resHostileDirectHost.status).toBe(403);
+
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed or ambiguous authority and forwarded headers", async () => {
+    const learnerEnv = {
+      AC_DEV_AUTH_BRIDGE_ENABLED: "true",
+      AC_DEV_AUTH_BRIDGE_ORIGIN: "http://learner.localhost:3000",
+      AC_DEV_AUTH_BRIDGE_UPSTREAM_ORIGIN:
+        "https://staging.authorityclosers.com",
+    };
+    const fetcher = vi.fn();
+    const malformedHeaders: Array<Record<string, string>> = [
+      { host: "learner.localhost:3000/path" },
+      { host: "learner.localhost:3000?query" },
+      { host: "learner.localhost:3000#fragment" },
+      { host: "evil.test@learner.localhost:3000" },
+      { host: "learner.localhost:3000, evil.test" },
+      { host: "learner.localhost:3002" },
+      { host: "[::1]:3000" },
+      { host: "" },
+      { host: "learner.localhost:3000", "x-forwarded-host": "" },
+      {
+        host: "learner.localhost:3000",
+        "x-forwarded-host": "learner.localhost:3000/path",
+      },
+      {
+        host: "learner.localhost:3000",
+        "x-forwarded-host": "evil.test@learner.localhost:3000",
+      },
+      {
+        host: "learner.localhost:3000",
+        "x-forwarded-host": "learner.localhost:3000, evil.test",
+      },
+      { host: "learner.localhost:3000", "x-forwarded-proto": "" },
+      { host: "learner.localhost:3000", "x-forwarded-proto": "http:" },
+      {
+        host: "learner.localhost:3000",
+        "x-forwarded-proto": "http,https",
+      },
+    ];
+
+    for (const headers of malformedHeaders) {
+      const response = await proxyDevelopmentLearnerApi(
+        new Request("http://localhost:3000/v1/programs?limit=1", { headers }),
+        fetcher,
+        learnerEnv,
+        "development",
+        new InMemoryDevelopmentBridgeSessionStore(),
+      );
+      expect(response.status).toBe(403);
+    }
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("accepts canonical default-port Host forms for an exact default-port origin", async () => {
+    const learnerEnv = {
+      AC_DEV_AUTH_BRIDGE_ENABLED: "true",
+      AC_DEV_AUTH_BRIDGE_ORIGIN: "http://learner.localhost",
+      AC_DEV_AUTH_BRIDGE_UPSTREAM_ORIGIN:
+        "https://staging.authorityclosers.com",
+    };
+    const fetcher = vi.fn(() => Promise.resolve(Response.json({ items: [] })));
+
+    for (const host of ["learner.localhost", "learner.localhost:80"]) {
+      const response = await proxyDevelopmentLearnerApi(
+        new Request("http://localhost/v1/programs?limit=1", {
+          headers: { host },
+        }),
+        fetcher,
+        learnerEnv,
+        "development",
+        new InMemoryDevelopmentBridgeSessionStore(),
+      );
+      expect(response.status).toBe(200);
+    }
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it("accepts exact IPv6 and HTTPS default-port loopback authorities", async () => {
+    const fetcher = vi.fn(() => Promise.resolve(Response.json({ items: [] })));
+    const cases: Array<{
+      environment: {
+        AC_DEV_AUTH_BRIDGE_ENABLED: string;
+        AC_DEV_AUTH_BRIDGE_ORIGIN: string;
+        AC_DEV_AUTH_BRIDGE_UPSTREAM_ORIGIN: string;
+      };
+      url: string;
+      headers: Record<string, string>;
+    }> = [
+      {
+        environment: {
+          AC_DEV_AUTH_BRIDGE_ENABLED: "true",
+          AC_DEV_AUTH_BRIDGE_ORIGIN: "http://[::1]:3000",
+          AC_DEV_AUTH_BRIDGE_UPSTREAM_ORIGIN:
+            "https://staging.authorityclosers.com",
+        },
+        url: "http://localhost:3000/v1/programs?limit=1",
+        headers: { host: "[::1]:3000" },
+      },
+      {
+        environment: {
+          AC_DEV_AUTH_BRIDGE_ENABLED: "true",
+          AC_DEV_AUTH_BRIDGE_ORIGIN: "https://learner.localhost",
+          AC_DEV_AUTH_BRIDGE_UPSTREAM_ORIGIN:
+            "https://staging.authorityclosers.com",
+        },
+        url: "https://localhost/v1/programs?limit=1",
+        headers: {
+          host: "learner.localhost:443",
+          "x-forwarded-host": "learner.localhost",
+          "x-forwarded-proto": "https",
+        },
+      },
+    ];
+
+    for (const testCase of cases) {
+      const response = await proxyDevelopmentLearnerApi(
+        new Request(testCase.url, { headers: testCase.headers }),
+        fetcher,
+        testCase.environment,
+        "development",
+        new InMemoryDevelopmentBridgeSessionStore(),
+      );
+      expect(response.status).toBe(200);
+    }
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
 });
