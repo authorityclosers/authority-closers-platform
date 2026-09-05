@@ -139,6 +139,13 @@ function exactOrigin(value: string): URL {
   return url;
 }
 
+function originFromAuthorityHeader(value: string, protocol: string): string {
+  if (!value || value !== value.trim() || /[\s,/?#@\\]/u.test(value)) {
+    throw new Error("Development admin authority header is malformed.");
+  }
+  return exactOrigin(`${protocol}//${value}`).origin;
+}
+
 function loopbackOrigin(value: string, field: string): URL {
   const url = exactOrigin(value);
   if (
@@ -357,7 +364,38 @@ function hasForbiddenBrowserCredential(request: Request): boolean {
 function hasAllowedOrigin(request: Request, browserOrigin: string): boolean {
   let requestOrigin: string;
   try {
-    requestOrigin = new URL(request.url).origin;
+    const rawUrl = new URL(request.url);
+    if (!isLoopbackHost(rawUrl.hostname)) return false;
+
+    const expectedUrl = new URL(browserOrigin);
+    const hostHeader = request.headers.get("host");
+
+    if (hostHeader !== null) {
+      const directHostOrigin = originFromAuthorityHeader(
+        hostHeader,
+        rawUrl.protocol,
+      );
+      if (directHostOrigin !== browserOrigin) return false;
+      requestOrigin = directHostOrigin;
+    } else {
+      if (rawUrl.origin !== browserOrigin) return false;
+      requestOrigin = rawUrl.origin;
+    }
+
+    const forwardedHost = request.headers.get("x-forwarded-host");
+    if (forwardedHost !== null) {
+      const forwardedHostOrigin = originFromAuthorityHeader(
+        forwardedHost,
+        rawUrl.protocol,
+      );
+      if (forwardedHostOrigin !== browserOrigin) return false;
+    }
+
+    const forwardedProto = request.headers.get("x-forwarded-proto");
+    if (forwardedProto !== null) {
+      if (!/^(?:http|https)$/u.test(forwardedProto)) return false;
+      if (`${forwardedProto}:` !== expectedUrl.protocol) return false;
+    }
   } catch {
     return false;
   }

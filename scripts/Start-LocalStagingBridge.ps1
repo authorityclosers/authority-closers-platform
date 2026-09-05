@@ -1,6 +1,10 @@
 [CmdletBinding()]
 param(
-    [switch]$NoBrowser
+    [switch]$NoBrowser,
+    [ValidateRange(1024, 65535)]
+    [int]$LearnerPort = 3000,
+    [ValidateRange(1024, 65535)]
+    [int]$AdminPort = 3001
 )
 
 Set-StrictMode -Version Latest
@@ -9,8 +13,12 @@ $ErrorActionPreference = "Stop"
 $RepositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $RuntimeDirectory = Join-Path $RepositoryRoot ".tmp\local-staging-bridge"
 $PidFile = Join-Path $RuntimeDirectory "processes.json"
-$LearnerOrigin = "http://learner.localhost:3000"
-$AdminOrigin = "http://admin.localhost:3001"
+if ($LearnerPort -eq $AdminPort) {
+    throw "LearnerPort and AdminPort must be different."
+}
+
+$LearnerOrigin = "http://learner.localhost:$LearnerPort"
+$AdminOrigin = "http://admin.localhost:$AdminPort"
 $AdminStagingOrigin = "https://admin-staging.authorityclosers.com"
 $LearnerStagingOrigin = "https://staging.authorityclosers.com"
 $AccessJwtPattern = '^[A-Za-z0-9_-]{16,2048}\.[A-Za-z0-9_-]{16,4096}\.[A-Za-z0-9_-]{16,2048}$'
@@ -85,6 +93,29 @@ function Stop-StartedProcess {
     & taskkill.exe /PID $Process.Id /T /F *> $null
 }
 
+function Get-LiveTrackedProcesses {
+    param(
+        [Parameter(Mandatory)] [object]$Record,
+        [Parameter(Mandatory)] [string]$ExpectedRepository
+    )
+    if ($Record.repository -ne $ExpectedRepository) {
+        throw "The tracked process file belongs to a different workspace."
+    }
+
+    return @($Record.processes | ForEach-Object {
+            $Tracked = $_
+            $Process = Get-Process -Id ([int]$Tracked.id) -ErrorAction SilentlyContinue
+            if ($null -eq $Process) {
+                return
+            }
+            $ExpectedStart = [long]$Tracked.started_at_file_time_utc
+            $ActualStart = $Process.StartTime.ToFileTimeUtc()
+            if ([Math]::Abs($ActualStart - $ExpectedStart) -le [TimeSpan]::TicksPerSecond) {
+                $Tracked
+            }
+        })
+}
+
 if ($PSVersionTable.PSEdition -ne "Core" -or $PSVersionTable.PSVersion.Major -lt 7) {
     throw "PowerShell 7 or later is required."
 }
@@ -99,28 +130,51 @@ $null = Assert-ToolVersion -Command "node" -RequiredMajor 24
 $PnpmPath = Assert-ToolVersion -Command "pnpm.cmd" -RequiredMajor 11
 $CloudflaredPath = (Get-Command "cloudflared.exe" -ErrorAction Stop).Source
 
-$OccupiedPorts = Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |
-    Where-Object { $_.LocalPort -in @(3000, 3001) }
-if ($OccupiedPorts) {
-    $Owners = ($OccupiedPorts | Select-Object -ExpandProperty OwningProcess -Unique) -join ", "
-    throw "Ports 3000 or 3001 are already in use (process IDs: $Owners). Run 'pnpm dev:staging:down' or stop the exact owning process."
-}
-
 New-Item -ItemType Directory -Path $RuntimeDirectory -Force | Out-Null
-
-Write-Host "Checking the existing Cloudflare Access user session..."
-$AccessJwt = (& $CloudflaredPath access token --app $AdminStagingOrigin 2>$null | Out-String).Trim()
-if ($AccessJwt -notmatch $AccessJwtPattern) {
-    Write-Host "Cloudflare Access authentication is required. Complete the browser prompt for the approved admin identity."
-    & $CloudflaredPath access login --quiet --auto-close $AdminStagingOrigin
-    if ($LASTEXITCODE -ne 0) {
-        throw "Cloudflare Access login did not complete."
+$StartupLock = $null
+$PidFileCreatedByThisRun = $false
+try {
+    try {
+        $StartupLock = [IO.File]::Open(
+            (Join-Path $RuntimeDirectory "startup.lock"),
+            [IO.FileMode]::OpenOrCreate,
+            [IO.FileAccess]::ReadWrite,
+            [IO.FileShare]::None
+        )
     }
+    catch {
+        throw "Another local staging bridge start or stop operation is already running."
+    }
+
+    if (Test-Path -LiteralPath $PidFile -PathType Leaf) {
+        $ExistingRecord = Get-Content -LiteralPath $PidFile -Raw | ConvertFrom-Json
+        $LiveTrackedProcesses = @(Get-LiveTrackedProcesses -Record $ExistingRecord -ExpectedRepository $RepositoryRoot)
+        if ($LiveTrackedProcesses.Count -gt 0) {
+            throw "A tracked local staging bridge is already running. Run 'pnpm dev:staging:down' before starting another instance."
+        }
+        Remove-Item -LiteralPath $PidFile -Force
+    }
+
+    $OccupiedPorts = Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |
+        Where-Object { $_.LocalPort -in @($LearnerPort, $AdminPort) }
+    if ($OccupiedPorts) {
+        $Owners = ($OccupiedPorts | Select-Object -ExpandProperty OwningProcess -Unique) -join ", "
+        throw "Requested ports $LearnerPort or $AdminPort are already in use (process IDs: $Owners). Run 'pnpm dev:staging:down' or select free -LearnerPort and -AdminPort values."
+    }
+
+    Write-Host "Checking the existing Cloudflare Access user session..."
     $AccessJwt = (& $CloudflaredPath access token --app $AdminStagingOrigin 2>$null | Out-String).Trim()
-}
-if ($AccessJwt -notmatch $AccessJwtPattern -or $AccessJwt.Length -gt 8192) {
-    throw "A current Cloudflare Access user token was not available."
-}
+    if ($AccessJwt -notmatch $AccessJwtPattern) {
+        Write-Host "Cloudflare Access authentication is required. Complete the browser prompt for the approved admin identity."
+        & $CloudflaredPath access login --quiet --auto-close $AdminStagingOrigin
+        if ($LASTEXITCODE -ne 0) {
+            throw "Cloudflare Access login did not complete."
+        }
+        $AccessJwt = (& $CloudflaredPath access token --app $AdminStagingOrigin 2>$null | Out-String).Trim()
+    }
+    if ($AccessJwt -notmatch $AccessJwtPattern -or $AccessJwt.Length -gt 8192) {
+        throw "A current Cloudflare Access user token was not available."
+    }
 
 $CommonEnvironment = @{
     "PATH" = $env:PATH
@@ -143,7 +197,7 @@ $LearnerProcess = $null
 $AdminProcess = $null
 try {
     $LearnerProcess = Start-Process -FilePath $PnpmPath `
-        -ArgumentList @("--filter", "@ac/learner-web", "exec", "next", "dev", "--webpack", "--hostname", "127.0.0.1", "--port", "3000") `
+        -ArgumentList @("--filter", "@ac/learner-web", "exec", "next", "dev", "--webpack", "--hostname", "127.0.0.1", "--port", "$LearnerPort") `
         -WorkingDirectory $RepositoryRoot `
         -WindowStyle Hidden `
         -RedirectStandardOutput (Join-Path $RuntimeDirectory "learner.out.log") `
@@ -152,7 +206,7 @@ try {
         -PassThru
 
     $AdminProcess = Start-Process -FilePath $PnpmPath `
-        -ArgumentList @("--filter", "@ac/admin-web", "exec", "next", "dev", "--webpack", "--hostname", "127.0.0.1", "--port", "3001") `
+        -ArgumentList @("--filter", "@ac/admin-web", "exec", "next", "dev", "--webpack", "--hostname", "127.0.0.1", "--port", "$AdminPort") `
         -WorkingDirectory $RepositoryRoot `
         -WindowStyle Hidden `
         -RedirectStandardOutput (Join-Path $RuntimeDirectory "admin.out.log") `
@@ -172,6 +226,7 @@ try {
         )
     }
     $ProcessRecord | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $PidFile -Encoding utf8
+    $PidFileCreatedByThisRun = $true
 
     Wait-ForHealth -Name "Learner UI" -Process $LearnerProcess -Probe {
         $Response = Invoke-WebRequest "$LearnerOrigin/v1/programs?limit=1" -TimeoutSec 10
@@ -185,7 +240,7 @@ try {
 catch {
     Stop-StartedProcess -Process $AdminProcess
     Stop-StartedProcess -Process $LearnerProcess
-    if (Test-Path -LiteralPath $PidFile) {
+    if ($PidFileCreatedByThisRun -and (Test-Path -LiteralPath $PidFile)) {
         Remove-Item -LiteralPath $PidFile -Force
     }
     throw "Local staging bridge startup failed: $($_.Exception.Message) Logs: $RuntimeDirectory"
@@ -200,4 +255,10 @@ Write-Host "Stop:    pnpm dev:staging:down"
 if (-not $NoBrowser) {
     Start-Process $LearnerOrigin | Out-Null
     Start-Process "$AdminOrigin/login" | Out-Null
+}
+}
+finally {
+    if ($null -ne $StartupLock) {
+        $StartupLock.Dispose()
+    }
 }

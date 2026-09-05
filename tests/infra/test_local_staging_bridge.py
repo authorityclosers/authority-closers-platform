@@ -26,8 +26,10 @@ def test_launcher_binds_both_next_servers_to_loopback_and_checks_health() -> Non
     assert 'Parameters.ContainsKey("Environment")' in START
     assert '$env:PATH = "$NodeDirectory' in START
     assert START.count('"--hostname", "127.0.0.1"') == 2
-    assert '"--port", "3000"' in START
-    assert '"--port", "3001"' in START
+    assert '[int]$LearnerPort = 3000' in START
+    assert '[int]$AdminPort = 3001' in START
+    assert '"--port", "$LearnerPort"' in START
+    assert '"--port", "$AdminPort"' in START
     assert '"$LearnerOrigin/v1/programs?limit=1"' in START
     assert '"$AdminOrigin/v1/dev-bridge/health"' in START
     assert 'Response.transport -eq "connected"' in START
@@ -37,11 +39,31 @@ def test_launcher_uses_distinct_loopback_hosts_for_browser_cookie_isolation() ->
     learner_origin = "http://learner.localhost:3000"
     admin_origin = "http://admin.localhost:3001"
 
-    assert f'$LearnerOrigin = "{learner_origin}"' in START
-    assert f'$AdminOrigin = "{admin_origin}"' in START
+    assert '$LearnerOrigin = "http://learner.localhost:$LearnerPort"' in START
+    assert '$AdminOrigin = "http://admin.localhost:$AdminPort"' in START
+    assert '$LearnerPort -eq $AdminPort' in START
     assert urlparse(learner_origin).hostname != urlparse(admin_origin).hostname
     assert urlparse(learner_origin).hostname.endswith(".localhost")
     assert urlparse(admin_origin).hostname.endswith(".localhost")
+
+
+def test_launcher_allows_free_alternate_ports_without_widening_hosts() -> None:
+    assert 'Where-Object { $_.LocalPort -in @($LearnerPort, $AdminPort) }' in START
+    assert "select free -LearnerPort and -AdminPort values" in START
+    assert START.count('[ValidateRange(1024, 65535)]') == 2
+
+
+def test_launcher_refuses_to_orphan_an_existing_tracked_bridge() -> None:
+    assert '[IO.FileShare]::None' in START
+    assert '[IO.FileShare]::None' in STOP
+    assert 'Join-Path $RuntimeDirectory "startup.lock"' in START
+    assert 'Join-Path $RuntimeDirectory "startup.lock"' in STOP
+    assert "$StartupLock.Dispose()" in START
+    assert "$StartupLock.Dispose()" in STOP
+    assert 'Get-LiveTrackedProcesses' in START
+    assert 'A tracked local staging bridge is already running' in START
+    assert '$PidFileCreatedByThisRun = $true' in START
+    assert '$PidFileCreatedByThisRun -and' in START
 
 
 def test_ordinary_app_dev_commands_are_also_loopback_only() -> None:
