@@ -113,10 +113,18 @@ def _run(coroutine):
         return runner.run(coroutine)
 
 
-async def _seed(schema_url: URL) -> dict[str, UUID]:
+async def _seed(
+    schema_url: URL,
+    *,
+    deterministic_gold_tenants: bool = False,
+) -> dict[str, UUID]:
     engine = create_async_engine(schema_url, pool_pre_ping=True)
     sessions = async_sessionmaker(engine, expire_on_commit=False)
-    tenant_a, tenant_b = gold_tenant_id("tenant-a"), gold_tenant_id("tenant-b")
+    tenant_a, tenant_b = (
+        (gold_tenant_id("tenant-a"), gold_tenant_id("tenant-b"))
+        if deterministic_gold_tenants
+        else (uuid4(), uuid4())
+    )
     source_a, source_b, withdrawn_source, state_source = uuid4(), uuid4(), uuid4(), uuid4()
     version_a, version_b, withdrawn_version, state_version = (
         uuid4(),
@@ -277,9 +285,7 @@ async def _seed(schema_url: URL) -> dict[str, UUID]:
                 "tenant_a": tenant_a,
                 "tenant_b": tenant_b,
                 "digest_open": hashlib.sha256(open_passage.encode("utf-8")).hexdigest(),
-                "digest_restricted": hashlib.sha256(
-                    restricted_passage.encode("utf-8")
-                ).hexdigest(),
+                "digest_restricted": hashlib.sha256(restricted_passage.encode("utf-8")).hexdigest(),
                 "digest_access": hashlib.sha256(access_passage.encode("utf-8")).hexdigest(),
                 "digest_state": hashlib.sha256(state_passage.encode("utf-8")).hexdigest(),
                 "digest_other": hashlib.sha256(other_passage.encode("utf-8")).hexdigest(),
@@ -335,7 +341,7 @@ def test_postgresql_retrieval_is_tenant_acl_safe_and_deterministic(postgres_harn
                     purpose=IntelligencePurpose.SUPPORT_ASSISTANCE,
                     acl_subject_ids=(ids["acl_subject_a"],),
                 ),
-                question="account recovery support review",
+                question="How does account recovery work?",
                 min_rank_score=PINNED_MIN_RANK_SCORE,
                 top_k=12,
             )
@@ -345,10 +351,13 @@ def test_postgresql_retrieval_is_tenant_acl_safe_and_deterministic(postgres_harn
             assert first.chunks == second.chunks
             assert {chunk.tenant_id for chunk in first.chunks} == {ids["tenant_a"]}
             assert {chunk.locator for chunk in first.chunks} == {"recovery.md#email"}
-            assert first.chunks[0].content_sha256 == hashlib.sha256(
-                b"How does account recovery work? "
-                b"Account recovery requires verified support review."
-            ).hexdigest()
+            assert (
+                first.chunks[0].content_sha256
+                == hashlib.sha256(
+                    b"How does account recovery work? "
+                    b"Account recovery requires verified support review."
+                ).hexdigest()
+            )
 
             other = await PostgresKnowledgeRepository(session).search(
                 KnowledgeQuery(
@@ -440,9 +449,12 @@ def test_postgresql_retrieval_does_not_flush_or_break_outer_transaction(
                 assert result.outcome is RetrievalOutcome.FOUND
                 assert pending in session.new
                 await session.flush()
-            assert await session.scalar(
-                text("SELECT slug FROM tenants WHERE id = :id"), {"id": pending_id}
-            ) == f"pending-{pending_id.hex}"
+            assert (
+                await session.scalar(
+                    text("SELECT slug FROM tenants WHERE id = :id"), {"id": pending_id}
+                )
+                == f"pending-{pending_id.hex}"
+            )
         await engine.dispose()
 
     _run(exercise())
@@ -549,6 +561,7 @@ def test_postgresql_withdrawn_version_is_not_retrievable(postgres_harness: URL) 
                     ),
                     question="account recovery",
                     min_rank_score=PINNED_MIN_RANK_SCORE,
+                    snapshot_id=ids["version_a"],
                 )
             )
             assert result.outcome is RetrievalOutcome.NO_AUTHORIZED_EVIDENCE
@@ -740,9 +753,7 @@ def test_postgresql_knowledge_digest_and_version_chain_guards(postgres_harness: 
             await session.rollback()
 
             passage = "Exact UTF-8 passage ✓"
-            version_digest = canonical_knowledge_version_digest(
-                ((0, "digest#exact", passage),)
-            )
+            version_digest = canonical_knowledge_version_digest(((0, "digest#exact", passage),))
             await session.execute(
                 text(
                     "INSERT INTO knowledge_source_versions "
@@ -785,9 +796,7 @@ def test_postgresql_knowledge_digest_and_version_chain_guards(postgres_harness: 
             await session.commit()
             assert (
                 await session.scalar(
-                    text(
-                        "SELECT content_sha256 FROM knowledge_source_versions WHERE id = :id"
-                    ),
+                    text("SELECT content_sha256 FROM knowledge_source_versions WHERE id = :id"),
                     {"id": version_two},
                 )
                 == version_digest
@@ -890,7 +899,7 @@ def test_postgresql_gold_set_runner_enforces_context_acl_and_withdrawal(
 ) -> None:
     """Run the complete gold fixture through PostgreSQL and typed evaluation."""
 
-    ids = _run(_seed(postgres_harness))
+    ids = _run(_seed(postgres_harness, deterministic_gold_tenants=True))
     cases = load_gold_set(ROOT / "tests" / "fixtures" / "knowledge_gold_set.jsonl")
 
     async def exercise() -> None:
@@ -901,9 +910,7 @@ def test_postgresql_gold_set_runner_enforces_context_acl_and_withdrawal(
             predictions: dict[str, GoldPrediction] = {}
             for case in cases:
                 access = gold_access_context(case)
-                snapshot_id = (
-                    ids["withdrawn_version"] if case.case_id == "ks-0007" else None
-                )
+                snapshot_id = ids["withdrawn_version"] if case.case_id == "ks-0007" else None
                 result = await repository.search(
                     KnowledgeQuery(
                         access=access,

@@ -146,9 +146,7 @@ class KnowledgeSourceVersion(Base):
 
     __tablename__ = "knowledge_source_versions"
     __table_args__ = (
-        CheckConstraint(
-            "version_no > 0", name=conv("ck_knowledge_versions_positive_number")
-        ),
+        CheckConstraint("version_no > 0", name=conv("ck_knowledge_versions_positive_number")),
         CheckConstraint(
             "status IN ('active', 'superseded', 'withdrawn')",
             name=conv("ck_knowledge_versions_status_supported"),
@@ -249,9 +247,7 @@ class KnowledgeChunk(Base):
 
     __tablename__ = "knowledge_chunks"
     __table_args__ = (
-        CheckConstraint(
-            "ordinal >= 0", name=conv("ck_knowledge_chunks_ordinal_nonnegative")
-        ),
+        CheckConstraint("ordinal >= 0", name=conv("ck_knowledge_chunks_ordinal_nonnegative")),
         CheckConstraint(
             "length(trim(locator)) > 0", name=conv("ck_knowledge_chunks_locator_nonblank")
         ),

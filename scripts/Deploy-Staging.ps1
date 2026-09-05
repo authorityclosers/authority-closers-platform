@@ -18,6 +18,7 @@ param(
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 $expectedAccessTeamHost = "restless-cherry-c46f.cloudflareaccess.com"
+$imagePartSizeBytes = 16 * 1024 * 1024
 if (-not $IsWindows) {
     throw "The staging controller requires the trusted Windows operator host."
 }
@@ -40,6 +41,81 @@ function Assert-NativeSuccess {
     }
 }
 
+function Get-BoundedNativeDetail {
+    param([AllowNull()][object]$Value)
+    if ($null -eq $Value) {
+        return ""
+    }
+    $detail = ([string]$Value) -replace "[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]", " "
+    $detail = ($detail -replace "\s+", " ").Trim()
+    $detail = $detail -replace "(?i)(https?://[^\s?#]+)\?[^\s#]*", '$1?[REDACTED]'
+    $detail = $detail -replace "(?i)(https?://[^\s#]+)#\S*", '$1#[REDACTED]'
+    $detail = $detail -replace (
+        "(?<![A-Za-z0-9_-])[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}" +
+        "(?![A-Za-z0-9_-])"
+    ), '[REDACTED_JWT]'
+    $detail = $detail -replace "(?i)\b(authorization)(\s*[:=]\s*)Bearer\s+[^\s,;]+", '$1$2[REDACTED]'
+    $detail = $detail -replace "(?i)\b(authorization)\s+Bearer\s+[^\s,;]+", '$1 Bearer [REDACTED]'
+    $detail = $detail -replace (
+        "(?i)\b(token|secret|password|authorization|api[_-]?key|access[_-]?token|refresh[_-]?token)" +
+        "\b(\s*[:=]\s*)(?:'[^']*'|`"[^`"]*`"|[^\s,;]+)"
+    ), '$1$2[REDACTED]'
+    if ($detail.Length -gt 512) {
+        return $detail.Substring(0, 509) + "..."
+    }
+    return $detail
+}
+
+function Invoke-NativeAttempt {
+    param(
+        [Parameter(Mandatory = $true)][string]$FilePath,
+        [Parameter(Mandatory = $true)][string[]]$NativeArguments,
+        [Parameter(Mandatory = $true)][string]$Operation
+    )
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = $FilePath
+    foreach ($argument in $NativeArguments) {
+        $startInfo.ArgumentList.Add($argument)
+    }
+    $startInfo.UseShellExecute = $false
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    $startInfo.CreateNoWindow = $true
+    $process = [System.Diagnostics.Process]::new()
+    $process.StartInfo = $startInfo
+    $standardOutput = ""
+    $standardError = ""
+    $exitCode = -1
+    $standardOutputTask = $null
+    $standardErrorTask = $null
+    try {
+        if (-not $process.Start()) {
+            throw "$Operation could not start."
+        }
+        $standardOutputTask = $process.StandardOutput.ReadToEndAsync()
+        $standardErrorTask = $process.StandardError.ReadToEndAsync()
+        $process.WaitForExit()
+        if ($null -ne $standardOutputTask) {
+            $standardOutput = [string]$standardOutputTask.GetAwaiter().GetResult()
+        }
+        if ($null -ne $standardErrorTask) {
+            $standardError = [string]$standardErrorTask.GetAwaiter().GetResult()
+        }
+        $exitCode = $process.ExitCode
+    }
+    catch {
+        $standardError = $_.Exception.Message
+    }
+    finally {
+        $process.Dispose()
+    }
+    return [pscustomobject]@{
+        Output = $standardOutput
+        StandardError = $standardError
+        ExitCode = $exitCode
+    }
+}
+
 function Invoke-RetriableNative {
     param(
         [Parameter(Mandatory = $true)][string]$FilePath,
@@ -48,34 +124,17 @@ function Invoke-RetriableNative {
         [ValidateRange(1, 5)][int]$MaxAttempts = 4
     )
     for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
-        $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
-        $startInfo.FileName = $FilePath
-        foreach ($argument in $NativeArguments) {
-            $startInfo.ArgumentList.Add($argument)
-        }
-        $startInfo.UseShellExecute = $false
-        $startInfo.RedirectStandardOutput = $true
-        $startInfo.RedirectStandardError = $true
-        $startInfo.CreateNoWindow = $true
-        $process = [System.Diagnostics.Process]::new()
-        $process.StartInfo = $startInfo
-        try {
-            if (-not $process.Start()) {
-                throw "$Operation could not start."
-            }
-            $standardOutputTask = $process.StandardOutput.ReadToEndAsync()
-            $standardErrorTask = $process.StandardError.ReadToEndAsync()
-            $process.WaitForExit()
-            $standardOutput = $standardOutputTask.GetAwaiter().GetResult()
-            $standardErrorTask.GetAwaiter().GetResult() | Out-Null
-            $exitCode = $process.ExitCode
-        }
-        finally {
-            $process.Dispose()
-        }
+        $attemptResult = Invoke-NativeAttempt `
+            -FilePath $FilePath `
+            -NativeArguments $NativeArguments `
+            -Operation $Operation
+        $exitCode = $attemptResult.ExitCode
+        $standardOutput = $attemptResult.Output
+        $stderrDetail = Get-BoundedNativeDetail -Value $attemptResult.StandardError
         if ($exitCode -eq 0) {
             return $standardOutput
         }
+        $detailSuffix = if ($stderrDetail) { "; stderr: $stderrDetail" } else { "" }
         if ($exitCode -ne 255 -or $attempt -eq $MaxAttempts) {
             $attemptSummary = if ($exitCode -eq 255) {
                 " after $attempt transport attempts"
@@ -83,15 +142,117 @@ function Invoke-RetriableNative {
             else {
                 ""
             }
-            throw "$Operation failed with exit code $exitCode$attemptSummary."
+            throw "$Operation failed with exit code $exitCode$attemptSummary$detailSuffix."
         }
-        Write-Warning "$Operation connection attempt $attempt of $MaxAttempts failed; retrying."
+        Write-Warning (
+            "$Operation connection attempt $attempt of $MaxAttempts failed with exit code " +
+            "$exitCode$detailSuffix; retrying."
+        )
         Start-Sleep -Seconds 2
     }
 }
 
+function Invoke-RetriableImagePartTransfer {
+    param(
+        [Parameter(Mandatory = $true)][string]$ScpPath,
+        [Parameter(Mandatory = $true)][string]$PartPath,
+        [Parameter(Mandatory = $true)][string]$RemotePartialPath,
+        [Parameter(Mandatory = $true)][string]$RemoteVerificationScript,
+        [ValidateRange(1, 5)][int]$MaxAttempts = 4
+    )
+    $operation = "Application image part transfer: $([System.IO.Path]::GetFileName($PartPath))"
+    for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+        $attemptResult = Invoke-NativeAttempt `
+            -FilePath $ScpPath `
+            -NativeArguments @($PartPath, "${SshHost}:$RemotePartialPath") `
+            -Operation $operation
+        $exitCode = $attemptResult.ExitCode
+        $stderrDetail = Get-BoundedNativeDetail -Value $attemptResult.StandardError
+        if ($exitCode -eq 0) {
+            $verificationResult = Invoke-SshScript `
+                -Script $RemoteVerificationScript `
+                -ReturnResult
+            $exitCode = $verificationResult.ExitCode
+            $stderrDetail = Get-BoundedNativeDetail -Value $verificationResult.StandardError
+            if ($exitCode -eq 0) {
+                return
+            }
+        }
+        $detailSuffix = if ($stderrDetail) { "; stderr: $stderrDetail" } else { "" }
+        if ($exitCode -notin @(1, 255) -or $attempt -eq $MaxAttempts) {
+            $attemptSummary = if ($exitCode -in @(1, 255)) {
+                " after $attempt attempts"
+            }
+            else {
+                ""
+            }
+            throw "$operation failed with exit code $exitCode$attemptSummary$detailSuffix."
+        }
+        Write-Warning (
+            "$operation attempt $attempt of $MaxAttempts failed with exit code " +
+            "$exitCode$detailSuffix; retrying."
+        )
+        Start-Sleep -Seconds 2
+    }
+}
+
+function New-ImagePartVerificationScript {
+    param(
+        [Parameter(Mandatory = $true)][string]$PartsDirectory,
+        [Parameter(Mandatory = $true)][string]$PartName,
+        [Parameter(Mandatory = $true)][long]$PartSize,
+        [Parameter(Mandatory = $true)][string]$PartDigest
+    )
+    @"
+set -euo pipefail
+parts_dir='$PartsDirectory'
+part_name='$PartName'
+part_size='$PartSize'
+part_digest='$PartDigest'
+part_path="`$parts_dir/`$part_name"
+partial_path="`$part_path.partial"
+verify_part_path() {
+  verify_path="`$1"
+  test -f "`$verify_path" || return 1
+  test ! -L "`$verify_path" || return 1
+  part_actual_size="`$(stat --format='%s' -- "`$verify_path")" || return 1
+  test "`$part_actual_size" = "`$part_size" || return 1
+  printf '%s  %s\n' "`$part_digest" "`$verify_path" | sha256sum --check --status || return 1
+}
+if test -e "`$part_path" || test -L "`$part_path"; then
+  if test -e "`$partial_path" || test -L "`$partial_path"; then
+    rm -f -- "`$partial_path"
+  fi
+  if verify_part_path "`$part_path"; then
+    test ! -e "`$partial_path"
+    test ! -L "`$partial_path"
+    exit 0
+  fi
+  rm -f -- "`$part_path"
+  exit 1
+fi
+if ! test -e "`$partial_path" && ! test -L "`$partial_path"; then
+  exit 1
+fi
+if ! verify_part_path "`$partial_path"; then
+  rm -f -- "`$partial_path"
+  exit 1
+fi
+mv -- "`$partial_path" "`$part_path"
+if ! verify_part_path "`$part_path"; then
+  rm -f -- "`$part_path"
+  exit 1
+fi
+test ! -e "`$partial_path"
+test ! -L "`$partial_path"
+"@
+}
+
 function Invoke-SshScript {
-    param([Parameter(Mandatory = $true)][string]$Script)
+    param(
+        [Parameter(Mandatory = $true)][string]$Script,
+        [switch]$ReturnResult
+    )
     $normalized = $Script -replace "`r", ""
     if (-not $normalized.EndsWith("`n", [StringComparison]::Ordinal)) {
         $normalized += "`n"
@@ -103,9 +264,16 @@ function Invoke-SshScript {
     $startInfo.ArgumentList.Add("-s")
     $startInfo.UseShellExecute = $false
     $startInfo.RedirectStandardInput = $true
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
     $startInfo.CreateNoWindow = $true
     $process = [System.Diagnostics.Process]::new()
     $process.StartInfo = $startInfo
+    $standardOutput = ""
+    $standardError = ""
+    $exitCode = -1
+    $standardOutputTask = $null
+    $standardErrorTask = $null
     try {
         if (-not $process.Start()) {
             throw "Remote command could not start."
@@ -113,12 +281,39 @@ function Invoke-SshScript {
         $process.StandardInput.NewLine = "`n"
         $process.StandardInput.Write($normalized)
         $process.StandardInput.Close()
+        $standardOutputTask = $process.StandardOutput.ReadToEndAsync()
+        $standardErrorTask = $process.StandardError.ReadToEndAsync()
         $process.WaitForExit()
-        if ($process.ExitCode -ne 0) {
-            throw "Remote command failed with exit code $($process.ExitCode)."
+        if ($null -ne $standardOutputTask) {
+            $standardOutput = [string]$standardOutputTask.GetAwaiter().GetResult()
         }
+        if ($null -ne $standardErrorTask) {
+            $standardError = [string]$standardErrorTask.GetAwaiter().GetResult()
+        }
+        $exitCode = $process.ExitCode
     }
-    finally { $process.Dispose() }
+    catch {
+        $standardError = $_.Exception.Message
+    }
+    finally {
+        $process.Dispose()
+    }
+    $stderrDetail = Get-BoundedNativeDetail -Value $standardError
+    $result = [pscustomobject]@{
+        ExitCode = $exitCode
+        Output = $standardOutput
+        StandardError = $stderrDetail
+    }
+    if ($ReturnResult) {
+        return $result
+    }
+    if ($exitCode -ne 0) {
+        $detailSuffix = if ($stderrDetail) { "; stderr: $stderrDetail" } else { "" }
+        throw "Remote command failed with exit code $exitCode$detailSuffix."
+    }
+    if ($stderrDetail) {
+        Write-Warning "Remote command stderr: $stderrDetail"
+    }
 }
 
 function Get-HttpResult {
@@ -372,6 +567,83 @@ function Expand-ExactArtifact {
     finally { $archive.Dispose() }
 }
 
+function New-DeterministicImageParts {
+    param(
+        [Parameter(Mandatory = $true)][string]$ImagePath,
+        [Parameter(Mandatory = $true)][string]$PartsDirectory,
+        [Parameter(Mandatory = $true)][string]$ManifestPath,
+        [Parameter(Mandatory = $true)][long]$PartSizeBytes
+    )
+    if ($PartSizeBytes -ne (16 * 1024 * 1024)) {
+        throw "Application image part size must remain exactly 16 MiB."
+    }
+    $image = Get-Item -LiteralPath $ImagePath -Force
+    if ($image.PSIsContainer -or ($image.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+        throw "Application image archive must be a real local file."
+    }
+    if ($image.Length -le 0) {
+        throw "Application image archive must not be empty."
+    }
+    $manifestLines = [System.Collections.Generic.List[string]]::new()
+    $buffer = [byte[]]::new(1024 * 1024)
+    $inputStream = [System.IO.File]::Open(
+        $ImagePath,
+        [System.IO.FileMode]::Open,
+        [System.IO.FileAccess]::Read,
+        [System.IO.FileShare]::Read
+    )
+    try {
+        $partIndex = 0
+        while ($inputStream.Position -lt $inputStream.Length) {
+            $partName = "application-images.tar.gz.part-{0:D8}" -f $partIndex
+            $partPath = Join-Path $PartsDirectory $partName
+            $partStream = [System.IO.File]::Open(
+                $partPath,
+                [System.IO.FileMode]::CreateNew,
+                [System.IO.FileAccess]::Write,
+                [System.IO.FileShare]::None
+            )
+            try {
+                $remaining = [Math]::Min(
+                    [int64]$PartSizeBytes,
+                    $inputStream.Length - $inputStream.Position
+                )
+                while ($remaining -gt 0) {
+                    $readLength = [int][Math]::Min([int64]$buffer.Length, $remaining)
+                    $read = $inputStream.Read($buffer, 0, $readLength)
+                    if ($read -le 0) {
+                        throw "Application image archive ended before a deterministic part was complete."
+                    }
+                    $partStream.Write($buffer, 0, $read)
+                    $remaining -= $read
+                }
+            }
+            finally {
+                $partStream.Dispose()
+            }
+            $partSize = (Get-Item -LiteralPath $partPath -Force).Length
+            if ($partSize -le 0 -or $partSize -gt $PartSizeBytes) {
+                throw "Generated application image part has an invalid size."
+            }
+            $partDigest = (Get-FileHash -LiteralPath $partPath -Algorithm SHA256).Hash.ToLowerInvariant()
+            $manifestLines.Add("$partName`t$partSize`t$partDigest")
+            $partIndex++
+        }
+    }
+    finally {
+        $inputStream.Dispose()
+    }
+    if ($manifestLines.Count -eq 0) {
+        throw "Application image part manifest must not be empty."
+    }
+    $manifestText = ($manifestLines.ToArray() -join "`n") + "`n"
+    [System.IO.File]::WriteAllText(
+        $ManifestPath,
+        $manifestText,
+        [System.Text.UTF8Encoding]::new($false)
+    )
+}
+
 function Protect-PrivateStage {
     param([Parameter(Mandatory = $true)][string]$StagePath)
     $directory = Get-Item -LiteralPath $StagePath -Force
@@ -512,6 +784,7 @@ $stageDirectory = Join-Path $TransferRoot ".stage-$ReleaseSha-$([Guid]::NewGuid(
 $remoteDirectory = ""
 New-Item -ItemType Directory -Path $stageDirectory | Out-Null
 Protect-PrivateStage -StagePath $stageDirectory
+$primaryError = $null
 try {
     $bundleDirectory = Join-Path $stageDirectory "bundle"
     New-Item -ItemType Directory -Path $bundleDirectory | Out-Null
@@ -562,6 +835,24 @@ try {
     if ($seenBundleFiles.Count -ne $expectedBundleFiles.Count) {
         throw "SHA256SUMS does not cover the complete release bundle."
     }
+    $imageArchivePath = Join-Path $bundleDirectory "application-images.tar.gz"
+    $imagePartsDirectory = Join-Path $stageDirectory "application-image-parts"
+    $imagePartManifestPath = Join-Path $stageDirectory "application-images.parts.manifest"
+    New-Item -ItemType Directory -Path $imagePartsDirectory | Out-Null
+    New-DeterministicImageParts `
+        -ImagePath $imageArchivePath `
+        -PartsDirectory $imagePartsDirectory `
+        -ManifestPath $imagePartManifestPath `
+        -PartSizeBytes $imagePartSizeBytes
+    $imageParts = @(Get-ChildItem -LiteralPath $imagePartsDirectory -File -Force | Sort-Object Name)
+    if ($imageParts.Count -eq 0) {
+        throw "Application image part transfer set must not be empty."
+    }
+    foreach ($part in $imageParts) {
+        if ($part.Name -notmatch "^application-images\.tar\.gz\.part-[0-9]{8}$") {
+            throw "Application image part has an unsafe deterministic name."
+        }
+    }
 
     $archivePath = Join-Path $stageDirectory "ac-application-$ReleaseSha.tar"
     & git -C $repositoryRoot archive --format=tar "--output=$archivePath" $ReleaseSha -- infra/application
@@ -571,8 +862,15 @@ try {
         $archivePath $archiveDigest $ReleaseSha
     Assert-NativeSuccess "Exact-commit release archive verification"
 
-    $remoteDirectory = (& ssh $SshHost "umask 077; mktemp -d /var/tmp/ac-release-$ReleaseSha.XXXXXX").Trim()
-    Assert-NativeSuccess "Private remote staging directory creation"
+    $remoteDirectory = ([string](
+            Invoke-RetriableNative `
+                -FilePath $sshPath `
+                -NativeArguments @(
+                    $SshHost,
+                    "umask 077; mktemp -d /var/tmp/ac-release-$ReleaseSha.XXXXXX"
+                ) `
+                -Operation "Private remote staging directory creation"
+        )).Trim()
     if ($remoteDirectory -notmatch "^/var/tmp/ac-release-$ReleaseSha\.[A-Za-z0-9]+$") {
         throw "Remote staging directory is outside the validated private pattern."
     }
@@ -580,14 +878,14 @@ try {
         -FilePath $sshPath `
         -NativeArguments @(
             $SshHost,
-            "install -d -m 0700 '$remoteDirectory/bundle' '$remoteDirectory/source'"
+            "install -d -m 0700 '$remoteDirectory/bundle' '$remoteDirectory/bundle/.application-images.parts' '$remoteDirectory/source'"
         ) `
         -Operation "Private remote staging layout creation" | Out-Null
     Invoke-RetriableNative `
         -FilePath $scpPath `
         -NativeArguments @($archivePath, "${SshHost}:$remoteDirectory/") `
         -Operation "Release archive transfer" | Out-Null
-    foreach ($name in @("SHA256SUMS", "application-images.tar.gz", "release-images.env")) {
+    foreach ($name in @("SHA256SUMS", "release-images.env")) {
         Invoke-RetriableNative `
             -FilePath $scpPath `
             -NativeArguments @(
@@ -596,11 +894,103 @@ try {
             ) `
             -Operation "Release bundle transfer: $name" | Out-Null
     }
+    Invoke-RetriableNative `
+        -FilePath $scpPath `
+        -NativeArguments @(
+            $imagePartManifestPath,
+            "${SshHost}:$remoteDirectory/bundle/"
+        ) `
+        -Operation "Application image part manifest transfer" | Out-Null
+    foreach ($part in $imageParts) {
+        $partDigest = (Get-FileHash -LiteralPath $part.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+        $verifyPartRemote = New-ImagePartVerificationScript `
+            -PartsDirectory "$remoteDirectory/bundle/.application-images.parts" `
+            -PartName $part.Name `
+            -PartSize $part.Length `
+            -PartDigest $partDigest
+        Invoke-RetriableImagePartTransfer `
+            -ScpPath $scpPath `
+            -PartPath $part.FullName `
+            -RemotePartialPath "$remoteDirectory/bundle/.application-images.parts/$($part.Name).partial" `
+            -RemoteVerificationScript $verifyPartRemote | Out-Null
+    }
 
     $deployRemote = @"
 set -euo pipefail
 release_id='$ReleaseSha'
 release_archive='$remoteDirectory/ac-application-$ReleaseSha.tar'
+bundle_dir='$remoteDirectory/bundle'
+parts_dir="`$bundle_dir/.application-images.parts"
+parts_manifest="`$bundle_dir/application-images.parts.manifest"
+image_archive="`$bundle_dir/application-images.tar.gz"
+checksum_file="`$bundle_dir/SHA256SUMS"
+part_limit='$imagePartSizeBytes'
+test -f "`$parts_manifest"
+test -f "`$checksum_file"
+manifest_count=0
+expected_index=0
+while IFS= read -r manifest_line; do
+  IFS=`$'\t' read -r part_name part_size part_digest extra <<< "`$manifest_line"
+  canonical_line="`$part_name"`$'\t'"`$part_size"`$'\t'"`$part_digest"
+  test "`$manifest_line" = "`$canonical_line"
+  if test -z "`$part_name" || test -z "`$part_size" || test -z "`$part_digest" || test -n "`$extra"; then
+    echo 'invalid application image part manifest entry' >&2
+    exit 1
+  fi
+  if ! [[ "`$part_name" =~ ^application-images\.tar\.gz\.part-[0-9]{8}`$ ]]; then
+    echo 'unsafe application image part name' >&2
+    exit 1
+  fi
+  expected_part_name="`$(printf 'application-images.tar.gz.part-%08d' "`$expected_index")"
+  test "`$part_name" = "`$expected_part_name"
+  if ! [[ "`$part_size" =~ ^[1-9][0-9]*`$ ]] || test "`$part_size" -gt "`$part_limit"; then
+    echo 'invalid application image part size' >&2
+    exit 1
+  fi
+  if ! [[ "`$part_digest" =~ ^[0-9a-f]{64}`$ ]]; then
+    echo 'invalid application image part digest' >&2
+    exit 1
+  fi
+  part_path="`$parts_dir/`$part_name"
+  test ! -L "`$part_path"
+  test -f "`$part_path"
+  part_actual_size="`$(stat --format='%s' -- "`$part_path")"
+  test "`$part_actual_size" = "`$part_size"
+  printf '%s  %s\n' "`$part_digest" "`$part_path" | sha256sum --check --status
+  manifest_count=`$((manifest_count + 1))
+  expected_index=`$((expected_index + 1))
+done < "`$parts_manifest"
+test "`$manifest_count" -gt 0
+test "`$manifest_count" = "`$expected_index"
+actual_part_count="`$(find "`$parts_dir" -mindepth 1 -maxdepth 1 -type f -printf '%f\n' | wc -l)"
+test "`$actual_part_count" = "`$manifest_count"
+actual_part_entry_count="`$(find "`$parts_dir" -mindepth 1 -maxdepth 1 | wc -l)"
+test "`$actual_part_entry_count" = "`$manifest_count"
+reassembled="`$bundle_dir/.application-images.tar.gz.reassembled"
+rm -f -- "`$reassembled"
+concat_index=0
+while IFS= read -r manifest_line; do
+  IFS=`$'\t' read -r part_name part_size part_digest extra <<< "`$manifest_line"
+  canonical_line="`$part_name"`$'\t'"`$part_size"`$'\t'"`$part_digest"
+  test "`$manifest_line" = "`$canonical_line"
+  expected_part_name="`$(printf 'application-images.tar.gz.part-%08d' "`$concat_index")"
+  test "`$part_name" = "`$expected_part_name"
+  cat -- "`$parts_dir/`$part_name" >> "`$reassembled"
+  concat_index=`$((concat_index + 1))
+done < "`$parts_manifest"
+test "`$concat_index" = "`$manifest_count"
+image_digest_count="`$(grep -Ec '^[0-9a-f]{64}[[:space:]]+\*?application-images\.tar\.gz$' "`$checksum_file")"
+test "`$image_digest_count" = 1
+expected_image_digest="`$(grep -E '^[0-9a-f]{64}[[:space:]]+\*?application-images\.tar\.gz$' "`$checksum_file" | awk '{print `$1}')"
+printf '%s  %s\n' "`$expected_image_digest" "`$reassembled" | sha256sum --check --status
+mv -f -- "`$reassembled" "`$image_archive"
+(cd "`$bundle_dir" && sha256sum --check --strict SHA256SUMS)
+# The installer stages an exact three-file image-bundle contract. The chunk
+# transport metadata is private transfer state, not part of that reviewed
+# bundle, so remove it only after the reassembled archive has passed its
+# digest and manifest checks.
+rm -rf -- "`$parts_dir"
+rm -- "`$parts_manifest"
 printf '%s  %s\n' '$archiveDigest' "`$release_archive" | sha256sum --check --status
 tar --extract --file "`$release_archive" --directory '$remoteDirectory/source' infra/application
 sudo env \
@@ -615,12 +1005,44 @@ sudo env \
     Test-Staging -ProbeOAuth
     Write-Output "PASS  Staging deployment and compact smoke completed for $ReleaseSha."
 }
+catch {
+    $primaryError = $_
+    throw
+}
 finally {
-    if ($remoteDirectory -match "^/var/tmp/ac-release-$ReleaseSha\.[A-Za-z0-9]+$") {
-        Invoke-RetriableNative `
-            -FilePath $sshPath `
-            -NativeArguments @($SshHost, "rm -rf -- '$remoteDirectory'") `
-            -Operation "Private remote staging cleanup" | Out-Null
+    $cleanupFailures = [System.Collections.Generic.List[object]]::new()
+    try {
+        if ($remoteDirectory -match "^/var/tmp/ac-release-$ReleaseSha\.[A-Za-z0-9]+$") {
+            Invoke-RetriableNative `
+                -FilePath $sshPath `
+                -NativeArguments @($SshHost, "rm -rf -- '$remoteDirectory'") `
+                -Operation "Private remote staging cleanup" | Out-Null
+        }
     }
-    Remove-PrivateStage -StagePath $stageDirectory
+    catch {
+        $cleanupFailures.Add([pscustomobject]@{ Scope = "remote"; Error = $_ })
+    }
+    try {
+        Remove-PrivateStage -StagePath $stageDirectory
+    }
+    catch {
+        $cleanupFailures.Add([pscustomobject]@{ Scope = "local"; Error = $_ })
+    }
+    if ($cleanupFailures.Count -gt 0) {
+        if ($null -ne $primaryError) {
+            foreach ($cleanupFailure in $cleanupFailures) {
+                $cleanupDetail = Get-BoundedNativeDetail -Value $cleanupFailure.Error.Exception.Message
+                $cleanupMessage = "Staging $($cleanupFailure.Scope) cleanup failed after the primary deployment error"
+                if ($cleanupDetail) {
+                    Write-Warning "${cleanupMessage}: $cleanupDetail"
+                }
+                else {
+                    Write-Warning "$cleanupMessage."
+                }
+            }
+        }
+        else {
+            throw $cleanupFailures[0].Error
+        }
+    }
 }

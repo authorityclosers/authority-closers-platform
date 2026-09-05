@@ -134,11 +134,27 @@ html[data-theme="dark"] .site-frame--learner .learner-sidebar-wordmark__mark {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
 }
 
-.site-frame--learner.site-frame--collapsed .learner-sidebar:hover .learner-sidebar-toggle,
-.site-frame--learner.site-frame--collapsed .learner-sidebar:focus-within .learner-sidebar-toggle,
-.site-frame--learner.site-frame--collapsed .learner-sidebar-toggle:focus-visible {
+.site-frame--learner.site-frame--collapsed
+  .learner-sidebar:hover
+  .learner-sidebar-toggle,
+.site-frame--learner.site-frame--collapsed
+  .learner-sidebar:focus-within
+  .learner-sidebar-toggle,
+.site-frame--learner.site-frame--collapsed
+  .learner-sidebar-toggle:focus-visible {
   opacity: 1;
   pointer-events: auto;
+}
+
+/* Touch-first desktop-class devices do not have hover discovery. Keep this
+ * after the collapsed defaults so visibility remains the winning cascade. */
+@media (min-width: 1024px) and (hover: none),
+  (min-width: 1024px) and (pointer: coarse) {
+  .site-frame--learner .learner-sidebar-toggle,
+  .site-frame--learner.site-frame--collapsed .learner-sidebar-toggle {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 /* The learner rail scrolls normally without exposing a second, browser-gray
@@ -1217,6 +1233,14 @@ html[data-theme="dark"] {
     cubic-bezier(0.2, 0, 0, 1);
 }
 
+@media (min-width: 1024px) {
+  .site-frame--learner .learner-header {
+    height: 76px !important;
+    min-height: 76px !important;
+    max-height: 76px !important;
+  }
+}
+
 .site-frame--learner.site-frame--collapsed .learner-sidebar {
   width: var(--sidebar-width-collapsed) !important;
   overflow: visible !important;
@@ -1419,7 +1443,7 @@ html[data-theme="dark"] .site-frame--learner .learner-sidebar-wordmark__mark {
   place-items: center;
   border-radius: 4px;
   background: var(--sidebar-rail-accent);
-  color: #ffffff;
+  color: var(--theme-action-text, #ffffff);
   font-size: 0.6rem;
   font-weight: 800;
 }
@@ -1798,7 +1822,6 @@ html[data-theme="dark"] .site-frame--learner .learner-sidebar-wordmark__mark {
   background: var(--sidebar-active-tint) !important;
   color: var(--sidebar-active-text, var(--sidebar-text)) !important;
   border-color: transparent !important;
-  border-left-color: var(--sidebar-rail-accent) !important;
 }
 
 .site-frame--learner.site-frame--collapsed
@@ -2508,12 +2531,25 @@ html[data-theme="dark"] .mobile-brand-tenant {
   .site-frame--learner .command-palette-overlay,
   .site-frame--learner .command-palette-dialog,
   .site-frame--learner .sidebar-collapse-button,
-  .site-frame--learner .learner-sidebar-toggle,
   .site-frame--learner .tenant-switcher__dropdown,
-  .site-frame--learner .sidebar-tooltip-panel,
   .site-frame--learner .sidebar-badge__progress-fill {
     animation: none !important;
     transition: none !important;
     transform: none !important;
+  }
+
+  .site-frame--learner .learner-sidebar-toggle {
+    animation: none !important;
+    transition: none !important;
+    transform: translateY(-50%) !important;
+  }
+
+  .site-frame--learner.site-frame--collapsed .learner-sidebar-toggle {
+    transform: translate(-50%, -50%) !important;
+  }
+
+  .sidebar-tooltip-panel {
+    animation: none !important;
+    transition: none !important;
   }
 }

@@ -788,7 +788,7 @@ export function LearnerShell({
               <Link
                 href={ROUTES.profile}
                 className="learner-sidebar__account-link"
-                title="Profile"
+                title={sidebarCollapsed ? undefined : "Profile"}
                 aria-label={`Learner profile: ${effectiveDisplayName}`}
               >
                 <IdentityAvatar
