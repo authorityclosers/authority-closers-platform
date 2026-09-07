@@ -32,9 +32,11 @@ describe("trusted academy artwork primitives", () => {
     expect(html).toContain(
       'alt="Dipak Vishwakarma, your guide at Closers Academy"',
     );
-    expect(html).toContain('width="768"');
-    expect(html).toContain('height="960"');
-    expect(html).toContain("instructor-v1%2Feditorial.webp");
+    expect(html).toContain('width="3074"');
+    expect(html).toContain('height="3864"');
+    expect(html).toContain("instructor-v2%2Ffront-facing.jpeg");
+    expect(html).toContain("/_next/image?");
+    expect(html).toContain("srcSet=");
     const decorative = renderToStaticMarkup(
       <InstructorPortrait decorative fill />,
     );

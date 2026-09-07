@@ -1,0 +1,5811 @@
+{
+  "evidence_class": "Synthetic API fixtures against local development UI; not live or performance proof",
+  "created_utc": "2026-09-07T14:04:56.791347+00:00",
+  "user_storage_imported": false,
+  "server_writes_allowed": false,
+  "cases": [
+    {
+      "width": 390,
+      "height": 844,
+      "theme": "light",
+      "failures": [],
+      "screenshots": [
+        "fixture-390-light-settings-entry.png",
+        "fixture-390-light-appearance.png",
+        "fixture-390-light-learning-setup.png",
+        "fixture-390-light-security.png",
+        "fixture-390-light-notification-popover.png",
+        "fixture-390-light-notifications-route.png"
+      ],
+      "checks": [
+        "search filters control keywords",
+        "single active panel",
+        "heading focus",
+        "local preference save",
+        "back navigation",
+        "no results recovery",
+        "deep link",
+        "notification Escape and focus restoration"
+      ],
+      "page_errors": [],
+      "network": {
+        "fixture_reads": [
+          "/v1/me",
+          "/v1/me",
+          "/v1/profile/avatar",
+          "/v1/onboarding",
+          "/v1/me",
+          "/v1/profile/avatar"
+        ],
+        "unknown_api_reads": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "contrast": [
+        {
+          "color": "rgb(21, 38, 56)",
+          "fontSize": "22.4px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "H2",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(242, 240, 232)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(247, 248, 252)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            255,
+            255,
+            255
+          ],
+          "effectiveForeground": [
+            21,
+            38,
+            56
+          ],
+          "contrast": 15.370697987638057,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(86, 100, 117)",
+          "fontSize": "10.88px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "SMALL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SPAN",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "LABEL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(242, 240, 232)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(247, 248, 252)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            255,
+            255,
+            255
+          ],
+          "effectiveForeground": [
+            86,
+            100,
+            117
+          ],
+          "contrast": 6.042424442678719,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(21, 38, 56)",
+          "fontSize": "12.48px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "SELECT",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "LABEL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(242, 240, 232)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(247, 248, 252)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            255,
+            255,
+            255
+          ],
+          "effectiveForeground": [
+            21,
+            38,
+            56
+          ],
+          "contrast": 15.370697987638057,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(86, 100, 117)",
+          "fontSize": "10.88px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "SMALL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SPAN",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "LABEL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(242, 240, 232)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(247, 248, 252)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            255,
+            255,
+            255
+          ],
+          "effectiveForeground": [
+            86,
+            100,
+            117
+          ],
+          "contrast": 6.042424442678719,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(21, 38, 56)",
+          "fontSize": "12.48px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "SELECT",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "LABEL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(242, 240, 232)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(247, 248, 252)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            255,
+            255,
+            255
+          ],
+          "effectiveForeground": [
+            21,
+            38,
+            56
+          ],
+          "contrast": 15.370697987638057,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(86, 100, 117)",
+          "fontSize": "10.88px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "SMALL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SPAN",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "LABEL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(242, 240, 232)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(247, 248, 252)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            255,
+            255,
+            255
+          ],
+          "effectiveForeground": [
+            86,
+            100,
+            117
+          ],
+          "contrast": 6.042424442678719,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(21, 38, 56)",
+          "fontSize": "12.48px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "SELECT",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "LABEL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(242, 240, 232)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(247, 248, 252)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            255,
+            255,
+            255
+          ],
+          "effectiveForeground": [
+            21,
+            38,
+            56
+          ],
+          "contrast": 15.370697987638057,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(86, 100, 117)",
+          "fontSize": "10.88px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "SMALL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SPAN",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "LABEL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(242, 240, 232)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(247, 248, 252)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            255,
+            255,
+            255
+          ],
+          "effectiveForeground": [
+            86,
+            100,
+            117
+          ],
+          "contrast": 6.042424442678719,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(21, 38, 56)",
+          "fontSize": "12.48px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "SELECT",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "LABEL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(242, 240, 232)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(247, 248, 252)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            255,
+            255,
+            255
+          ],
+          "effectiveForeground": [
+            21,
+            38,
+            56
+          ],
+          "contrast": 15.370697987638057,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(21, 38, 56)",
+          "fontSize": "22.4px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "H2",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(242, 240, 232)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(247, 248, 252)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            255,
+            255,
+            255
+          ],
+          "effectiveForeground": [
+            21,
+            38,
+            56
+          ],
+          "contrast": 15.370697987638057,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(21, 38, 56)",
+          "fontSize": "22.4px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "H2",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(242, 240, 232)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(247, 248, 252)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            255,
+            255,
+            255
+          ],
+          "effectiveForeground": [
+            21,
+            38,
+            56
+          ],
+          "contrast": 15.370697987638057,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(21, 38, 56)",
+          "fontSize": "12.8px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "P",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HEADER",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(242, 240, 232)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(247, 248, 252)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            255,
+            255,
+            255
+          ],
+          "effectiveForeground": [
+            21,
+            38,
+            56
+          ],
+          "contrast": 15.370697987638057,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(86, 100, 117)",
+          "fontSize": "12.16px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "P",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HEADER",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(242, 240, 232)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(247, 248, 252)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            255,
+            255,
+            255
+          ],
+          "effectiveForeground": [
+            86,
+            100,
+            117
+          ],
+          "contrast": 6.042424442678719,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(49, 85, 198)",
+          "fontSize": "12.8px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "A",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HEADER",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(242, 240, 232)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(247, 248, 252)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            255,
+            255,
+            255
+          ],
+          "effectiveForeground": [
+            49,
+            85,
+            198
+          ],
+          "contrast": 6.47062358785625,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(21, 38, 56)",
+          "fontSize": "22.4px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "H2",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(242, 240, 232)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(247, 248, 252)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            255,
+            255,
+            255
+          ],
+          "effectiveForeground": [
+            21,
+            38,
+            56
+          ],
+          "contrast": 15.370697987638057,
+          "solidColorMeasurement": true
+        }
+      ]
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "theme": "dark",
+      "failures": [],
+      "screenshots": [
+        "fixture-390-dark-settings-entry.png",
+        "fixture-390-dark-appearance.png",
+        "fixture-390-dark-learning-setup.png",
+        "fixture-390-dark-security.png",
+        "fixture-390-dark-notification-popover.png",
+        "fixture-390-dark-notifications-route.png"
+      ],
+      "checks": [
+        "search filters control keywords",
+        "single active panel",
+        "heading focus",
+        "local preference save",
+        "back navigation",
+        "no results recovery",
+        "deep link",
+        "notification Escape and focus restoration"
+      ],
+      "page_errors": [],
+      "network": {
+        "fixture_reads": [
+          "/v1/me",
+          "/v1/me",
+          "/v1/profile/avatar",
+          "/v1/onboarding",
+          "/v1/me",
+          "/v1/profile/avatar"
+        ],
+        "unknown_api_reads": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "contrast": [
+        {
+          "color": "rgb(237, 242, 251)",
+          "fontSize": "22.4px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "H2",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            10,
+            20,
+            32
+          ],
+          "effectiveForeground": [
+            237,
+            242,
+            251
+          ],
+          "contrast": 16.488223926773752,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(182, 192, 210)",
+          "fontSize": "10.88px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "SMALL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SPAN",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "LABEL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            10,
+            20,
+            32
+          ],
+          "effectiveForeground": [
+            182,
+            192,
+            210
+          ],
+          "contrast": 10.106937003303575,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(237, 242, 251)",
+          "fontSize": "12.48px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "SELECT",
+              "background": "rgb(12, 22, 39)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "LABEL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            12,
+            22,
+            39
+          ],
+          "effectiveForeground": [
+            237,
+            242,
+            251
+          ],
+          "contrast": 16.120443134872875,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(182, 192, 210)",
+          "fontSize": "10.88px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "SMALL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SPAN",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "LABEL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            10,
+            20,
+            32
+          ],
+          "effectiveForeground": [
+            182,
+            192,
+            210
+          ],
+          "contrast": 10.106937003303575,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(237, 242, 251)",
+          "fontSize": "12.48px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "SELECT",
+              "background": "rgb(12, 22, 39)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "LABEL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            12,
+            22,
+            39
+          ],
+          "effectiveForeground": [
+            237,
+            242,
+            251
+          ],
+          "contrast": 16.120443134872875,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(182, 192, 210)",
+          "fontSize": "10.88px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "SMALL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SPAN",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "LABEL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            10,
+            20,
+            32
+          ],
+          "effectiveForeground": [
+            182,
+            192,
+            210
+          ],
+          "contrast": 10.106937003303575,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(237, 242, 251)",
+          "fontSize": "12.48px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "SELECT",
+              "background": "rgb(12, 22, 39)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "LABEL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            12,
+            22,
+            39
+          ],
+          "effectiveForeground": [
+            237,
+            242,
+            251
+          ],
+          "contrast": 16.120443134872875,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(182, 192, 210)",
+          "fontSize": "10.88px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "SMALL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SPAN",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "LABEL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            10,
+            20,
+            32
+          ],
+          "effectiveForeground": [
+            182,
+            192,
+            210
+          ],
+          "contrast": 10.106937003303575,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(237, 242, 251)",
+          "fontSize": "12.48px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "SELECT",
+              "background": "rgb(12, 22, 39)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "LABEL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            12,
+            22,
+            39
+          ],
+          "effectiveForeground": [
+            237,
+            242,
+            251
+          ],
+          "contrast": 16.120443134872875,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(237, 242, 251)",
+          "fontSize": "22.4px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "H2",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            10,
+            20,
+            32
+          ],
+          "effectiveForeground": [
+            237,
+            242,
+            251
+          ],
+          "contrast": 16.488223926773752,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(237, 242, 251)",
+          "fontSize": "22.4px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "H2",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            10,
+            20,
+            32
+          ],
+          "effectiveForeground": [
+            237,
+            242,
+            251
+          ],
+          "contrast": 16.488223926773752,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(237, 242, 251)",
+          "fontSize": "12.8px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "P",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(16, 26, 43)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HEADER",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            16,
+            26,
+            43
+          ],
+          "effectiveForeground": [
+            237,
+            242,
+            251
+          ],
+          "contrast": 15.518535572453711,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(182, 192, 210)",
+          "fontSize": "12.16px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "P",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(16, 26, 43)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HEADER",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            16,
+            26,
+            43
+          ],
+          "effectiveForeground": [
+            182,
+            192,
+            210
+          ],
+          "contrast": 9.512538288592072,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(155, 179, 255)",
+          "fontSize": "12.8px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "A",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(16, 26, 43)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HEADER",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            16,
+            26,
+            43
+          ],
+          "effectiveForeground": [
+            155,
+            179,
+            255
+          ],
+          "contrast": 8.538209490648232,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(237, 242, 251)",
+          "fontSize": "22.4px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "H2",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            10,
+            20,
+            32
+          ],
+          "effectiveForeground": [
+            237,
+            242,
+            251
+          ],
+          "contrast": 16.488223926773752,
+          "solidColorMeasurement": true
+        }
+      ]
+    },
+    {
+      "width": 768,
+      "height": 900,
+      "theme": "light",
+      "failures": [],
+      "screenshots": [
+        "fixture-768-light-settings-entry.png",
+        "fixture-768-light-appearance.png",
+        "fixture-768-light-learning-setup.png",
+        "fixture-768-light-security.png",
+        "fixture-768-light-notification-popover.png",
+        "fixture-768-light-notifications-route.png"
+      ],
+      "checks": [
+        "search filters control keywords",
+        "single active panel",
+        "heading focus",
+        "local preference save",
+        "back navigation",
+        "no results recovery",
+        "deep link",
+        "notification Escape and focus restoration"
+      ],
+      "page_errors": [],
+      "network": {
+        "fixture_reads": [
+          "/v1/me",
+          "/v1/me",
+          "/v1/profile/avatar",
+          "/v1/onboarding",
+          "/v1/me",
+          "/v1/profile/avatar"
+        ],
+        "unknown_api_reads": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "contrast": [
+        {
+          "color": "rgb(21, 38, 56)",
+          "fontSize": "19.2px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "H2",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(242, 240, 232)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(247, 248, 252)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            255,
+            255,
+            255
+          ],
+          "effectiveForeground": [
+            21,
+            38,
+            56
+          ],
+          "contrast": 15.370697987638057,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(21, 38, 56)",
+          "fontSize": "19.2px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "H2",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(242, 240, 232)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(247, 248, 252)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            255,
+            255,
+            255
+          ],
+          "effectiveForeground": [
+            21,
+            38,
+            56
+          ],
+          "contrast": 15.370697987638057,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(86, 100, 117)",
+          "fontSize": "11.52px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "SMALL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SPAN",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "LABEL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(242, 240, 232)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(247, 248, 252)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            255,
+            255,
+            255
+          ],
+          "effectiveForeground": [
+            86,
+            100,
+            117
+          ],
+          "contrast": 6.042424442678719,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(21, 38, 56)",
+          "fontSize": "12.48px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "SELECT",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "LABEL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(242, 240, 232)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(247, 248, 252)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            255,
+            255,
+            255
+          ],
+          "effectiveForeground": [
+            21,
+            38,
+            56
+          ],
+          "contrast": 15.370697987638057,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(86, 100, 117)",
+          "fontSize": "11.52px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "SMALL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SPAN",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "LABEL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(242, 240, 232)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(247, 248, 252)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            255,
+            255,
+            255
+          ],
+          "effectiveForeground": [
+            86,
+            100,
+            117
+          ],
+          "contrast": 6.042424442678719,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(21, 38, 56)",
+          "fontSize": "12.48px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "SELECT",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "LABEL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(242, 240, 232)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(247, 248, 252)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            255,
+            255,
+            255
+          ],
+          "effectiveForeground": [
+            21,
+            38,
+            56
+          ],
+          "contrast": 15.370697987638057,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(86, 100, 117)",
+          "fontSize": "11.52px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "SMALL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SPAN",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "LABEL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(242, 240, 232)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(247, 248, 252)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            255,
+            255,
+            255
+          ],
+          "effectiveForeground": [
+            86,
+            100,
+            117
+          ],
+          "contrast": 6.042424442678719,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(21, 38, 56)",
+          "fontSize": "12.48px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "SELECT",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "LABEL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(242, 240, 232)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(247, 248, 252)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            255,
+            255,
+            255
+          ],
+          "effectiveForeground": [
+            21,
+            38,
+            56
+          ],
+          "contrast": 15.370697987638057,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(86, 100, 117)",
+          "fontSize": "11.52px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "SMALL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SPAN",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "LABEL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(242, 240, 232)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(247, 248, 252)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            255,
+            255,
+            255
+          ],
+          "effectiveForeground": [
+            86,
+            100,
+            117
+          ],
+          "contrast": 6.042424442678719,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(21, 38, 56)",
+          "fontSize": "12.48px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "SELECT",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "LABEL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(242, 240, 232)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(247, 248, 252)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            255,
+            255,
+            255
+          ],
+          "effectiveForeground": [
+            21,
+            38,
+            56
+          ],
+          "contrast": 15.370697987638057,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(21, 38, 56)",
+          "fontSize": "19.2px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "H2",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(242, 240, 232)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(247, 248, 252)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            255,
+            255,
+            255
+          ],
+          "effectiveForeground": [
+            21,
+            38,
+            56
+          ],
+          "contrast": 15.370697987638057,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(21, 38, 56)",
+          "fontSize": "19.2px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "H2",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(242, 240, 232)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(247, 248, 252)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            255,
+            255,
+            255
+          ],
+          "effectiveForeground": [
+            21,
+            38,
+            56
+          ],
+          "contrast": 15.370697987638057,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(21, 38, 56)",
+          "fontSize": "12.8px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "P",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HEADER",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(242, 240, 232)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(247, 248, 252)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            255,
+            255,
+            255
+          ],
+          "effectiveForeground": [
+            21,
+            38,
+            56
+          ],
+          "contrast": 15.370697987638057,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(86, 100, 117)",
+          "fontSize": "12.16px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "P",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HEADER",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(242, 240, 232)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(247, 248, 252)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            255,
+            255,
+            255
+          ],
+          "effectiveForeground": [
+            86,
+            100,
+            117
+          ],
+          "contrast": 6.042424442678719,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(49, 85, 198)",
+          "fontSize": "12.8px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "A",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HEADER",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(242, 240, 232)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(247, 248, 252)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            255,
+            255,
+            255
+          ],
+          "effectiveForeground": [
+            49,
+            85,
+            198
+          ],
+          "contrast": 6.47062358785625,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(21, 38, 56)",
+          "fontSize": "19.2px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "H2",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(255, 255, 255)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(242, 240, 232)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(247, 248, 252)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            255,
+            255,
+            255
+          ],
+          "effectiveForeground": [
+            21,
+            38,
+            56
+          ],
+          "contrast": 15.370697987638057,
+          "solidColorMeasurement": true
+        }
+      ]
+    },
+    {
+      "width": 768,
+      "height": 900,
+      "theme": "dark",
+      "failures": [],
+      "screenshots": [
+        "fixture-768-dark-settings-entry.png",
+        "fixture-768-dark-appearance.png",
+        "fixture-768-dark-learning-setup.png",
+        "fixture-768-dark-security.png",
+        "fixture-768-dark-notification-popover.png",
+        "fixture-768-dark-notifications-route.png"
+      ],
+      "checks": [
+        "search filters control keywords",
+        "single active panel",
+        "heading focus",
+        "local preference save",
+        "back navigation",
+        "no results recovery",
+        "deep link",
+        "notification Escape and focus restoration"
+      ],
+      "page_errors": [],
+      "network": {
+        "fixture_reads": [
+          "/v1/me",
+          "/v1/me",
+          "/v1/profile/avatar",
+          "/v1/onboarding",
+          "/v1/me",
+          "/v1/profile/avatar"
+        ],
+        "unknown_api_reads": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "contrast": [
+        {
+          "color": "rgb(237, 242, 251)",
+          "fontSize": "19.2px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "H2",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(16, 26, 43)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            16,
+            26,
+            43
+          ],
+          "effectiveForeground": [
+            237,
+            242,
+            251
+          ],
+          "contrast": 15.518535572453711,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(237, 242, 251)",
+          "fontSize": "19.2px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "H2",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(16, 26, 43)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            16,
+            26,
+            43
+          ],
+          "effectiveForeground": [
+            237,
+            242,
+            251
+          ],
+          "contrast": 15.518535572453711,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(182, 192, 210)",
+          "fontSize": "11.52px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "SMALL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SPAN",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "LABEL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(16, 26, 43)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            16,
+            26,
+            43
+          ],
+          "effectiveForeground": [
+            182,
+            192,
+            210
+          ],
+          "contrast": 9.512538288592072,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(237, 242, 251)",
+          "fontSize": "12.48px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "SELECT",
+              "background": "rgb(12, 22, 39)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "LABEL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(16, 26, 43)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            12,
+            22,
+            39
+          ],
+          "effectiveForeground": [
+            237,
+            242,
+            251
+          ],
+          "contrast": 16.120443134872875,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(182, 192, 210)",
+          "fontSize": "11.52px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "SMALL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SPAN",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "LABEL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(16, 26, 43)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            16,
+            26,
+            43
+          ],
+          "effectiveForeground": [
+            182,
+            192,
+            210
+          ],
+          "contrast": 9.512538288592072,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(237, 242, 251)",
+          "fontSize": "12.48px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "SELECT",
+              "background": "rgb(12, 22, 39)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "LABEL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(16, 26, 43)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            12,
+            22,
+            39
+          ],
+          "effectiveForeground": [
+            237,
+            242,
+            251
+          ],
+          "contrast": 16.120443134872875,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(182, 192, 210)",
+          "fontSize": "11.52px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "SMALL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SPAN",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "LABEL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(16, 26, 43)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            16,
+            26,
+            43
+          ],
+          "effectiveForeground": [
+            182,
+            192,
+            210
+          ],
+          "contrast": 9.512538288592072,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(237, 242, 251)",
+          "fontSize": "12.48px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "SELECT",
+              "background": "rgb(12, 22, 39)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "LABEL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(16, 26, 43)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            12,
+            22,
+            39
+          ],
+          "effectiveForeground": [
+            237,
+            242,
+            251
+          ],
+          "contrast": 16.120443134872875,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(182, 192, 210)",
+          "fontSize": "11.52px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "SMALL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SPAN",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "LABEL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(16, 26, 43)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            16,
+            26,
+            43
+          ],
+          "effectiveForeground": [
+            182,
+            192,
+            210
+          ],
+          "contrast": 9.512538288592072,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(237, 242, 251)",
+          "fontSize": "12.48px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "SELECT",
+              "background": "rgb(12, 22, 39)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "LABEL",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(16, 26, 43)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            12,
+            22,
+            39
+          ],
+          "effectiveForeground": [
+            237,
+            242,
+            251
+          ],
+          "contrast": 16.120443134872875,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(237, 242, 251)",
+          "fontSize": "19.2px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "H2",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(16, 26, 43)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            16,
+            26,
+            43
+          ],
+          "effectiveForeground": [
+            237,
+            242,
+            251
+          ],
+          "contrast": 15.518535572453711,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(237, 242, 251)",
+          "fontSize": "19.2px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "H2",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(16, 26, 43)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            16,
+            26,
+            43
+          ],
+          "effectiveForeground": [
+            237,
+            242,
+            251
+          ],
+          "contrast": 15.518535572453711,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(237, 242, 251)",
+          "fontSize": "12.8px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "P",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(16, 26, 43)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HEADER",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            16,
+            26,
+            43
+          ],
+          "effectiveForeground": [
+            237,
+            242,
+            251
+          ],
+          "contrast": 15.518535572453711,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(182, 192, 210)",
+          "fontSize": "12.16px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "P",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(16, 26, 43)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HEADER",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            16,
+            26,
+            43
+          ],
+          "effectiveForeground": [
+            182,
+            192,
+            210
+          ],
+          "contrast": 9.512538288592072,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(155, 179, 255)",
+          "fontSize": "12.8px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "A",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(16, 26, 43)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HEADER",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            16,
+            26,
+            43
+          ],
+          "effectiveForeground": [
+            155,
+            179,
+            255
+          ],
+          "contrast": 8.538209490648232,
+          "solidColorMeasurement": true
+        },
+        {
+          "color": "rgb(237, 242, 251)",
+          "fontSize": "19.2px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "H2",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "SECTION",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(16, 26, 43)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "MAIN",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            16,
+            26,
+            43
+          ],
+          "effectiveForeground": [
+            237,
+            242,
+            251
+          ],
+          "contrast": 15.518535572453711,
+          "solidColorMeasurement": true
+        }
+      ]
+    }
+  ],
+  "browser_version": "152.0.7977.82"
+}

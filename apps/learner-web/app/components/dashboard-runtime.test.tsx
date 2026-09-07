@@ -218,7 +218,7 @@ describe("mounted dashboard progressive plan", () => {
     );
     expect(
       container.querySelector(".ac-media-frame__art")?.getAttribute("src"),
-    ).toContain("instructor-v1%2Feditorial.webp");
+    ).toContain("instructor-v2%2Ffront-facing.jpeg");
     const editorial = container.querySelector(".ac-media-frame");
     expect(editorial?.textContent).toContain("Learn with Dipak");
     expect(editorial?.textContent).not.toContain("Published reflection");

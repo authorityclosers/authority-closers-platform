@@ -6,9 +6,9 @@ export type NotificationKind = "learning" | "account" | "system";
  * drifting into different claims while notification history is unavailable.
  */
 export const NOTIFICATION_SOURCE_UNAVAILABLE_COPY = {
-  heading: "Notifications are not connected yet",
+  heading: "Notifications aren’t available yet",
   message:
-    "This first slice does not have a server-backed notification source. Learning, access, and progress state remain available on their own screens.",
+    "You can still find your current courses and next steps in My Learning.",
 } as const;
 
 export type NotificationItem = {

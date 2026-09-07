@@ -1560,7 +1560,7 @@ html[data-theme="dark"]
 }
 
 .site-frame--learner .ac-dashboard--editorial .ac-media-frame__art {
-  object-position: 50% 55%;
+  object-position: 50% 42%;
 }
 .site-frame--learner .ac-dashboard--editorial .ac-media-frame__veil {
   background: linear-gradient(0deg, rgb(10 20 32 / 85%), transparent 68%);

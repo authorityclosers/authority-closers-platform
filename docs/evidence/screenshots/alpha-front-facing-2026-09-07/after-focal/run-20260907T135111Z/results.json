@@ -1,0 +1,1266 @@
+{
+  "evidence_class": "Synthetic API fixtures against local development UI; not live or performance proof",
+  "base_url": "http://learner.localhost:3100",
+  "created_utc": "2026-09-07T13:51:11.230965+00:00",
+  "user_cookies_or_storage_loaded": false,
+  "server_writes_allowed": false,
+  "cases": [
+    {
+      "route": "/home",
+      "theme": "light",
+      "width": 390,
+      "height": 844,
+      "failures": [],
+      "screenshots": [
+        "docs\\evidence\\screenshots\\alpha-front-facing-2026-09-07\\after-focal\\run-20260907T135111Z\\fixture-home-light-390x844.png",
+        "docs\\evidence\\screenshots\\alpha-front-facing-2026-09-07\\after-focal\\run-20260907T135111Z\\fixture-home-light-390x844-full.png"
+      ],
+      "page_errors": [],
+      "network": {
+        "fixture_reads": [
+          "/v1/me",
+          "/v1/profile/avatar",
+          "/v1/me",
+          "/v1/onboarding",
+          "/v1/programs",
+          "/v1/learning/alpha-fixture-program",
+          "/v1/learning/calendar"
+        ],
+        "unknown_api_reads": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "layout": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "scrollWidth": 390,
+        "clientWidth": 390,
+        "horizontalOverflow": 0,
+        "theme": "light",
+        "sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "visible": false
+        },
+        "mobileIdentity": {
+          "x": 24,
+          "y": 67.296875,
+          "width": 165.4375,
+          "height": 32.390625,
+          "visible": true
+        },
+        "mobileMark": {
+          "x": 28,
+          "y": 71.484375,
+          "width": 24,
+          "height": 24,
+          "visible": true
+        },
+        "headerActions": {
+          "x": 230,
+          "y": 61.5,
+          "width": 136,
+          "height": 44,
+          "visible": true
+        },
+        "headerActionTargets": [
+          {
+            "label": "Search courses, lessons, and more",
+            "box": {
+              "x": 230,
+              "y": 61.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          },
+          {
+            "label": "Notifications",
+            "box": {
+              "x": 276,
+              "y": 61.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          },
+          {
+            "label": "Account menu for Learner QA",
+            "box": {
+              "x": 322,
+              "y": 61.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          }
+        ],
+        "profileNameColors": {
+          "color": "rgb(21, 38, 56)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "headerColors": {
+          "color": "rgb(11, 31, 68)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "bodyColors": {
+          "color": "rgb(17, 20, 15)",
+          "background": "rgb(242, 240, 232)"
+        },
+        "mobileIdentityText": [
+          {
+            "text": "",
+            "box": {
+              "x": 24,
+              "y": 67.484375,
+              "width": 32,
+              "height": 32,
+              "visible": true
+            },
+            "clientWidth": 30,
+            "scrollWidth": 30
+          },
+          {
+            "text": "Closers Academyby Authority Closers",
+            "box": {
+              "x": 66,
+              "y": 67.296875,
+              "width": 123.4375,
+              "height": 32.390625,
+              "visible": true
+            },
+            "clientWidth": 123,
+            "scrollWidth": 123
+          },
+          {
+            "text": "Closers Academy",
+            "box": {
+              "x": 66,
+              "y": 67.296875,
+              "width": 123.4375,
+              "height": 18.390625,
+              "visible": true
+            },
+            "clientWidth": 123,
+            "scrollWidth": 123
+          },
+          {
+            "text": "by Authority Closers",
+            "box": {
+              "x": 66,
+              "y": 85.6875,
+              "width": 123.4375,
+              "height": 14,
+              "visible": true
+            },
+            "clientWidth": 123,
+            "scrollWidth": 123
+          }
+        ],
+        "visibleImages": [
+          {
+            "path": "/_next/image",
+            "box": {
+              "x": 37,
+              "y": 332.8125,
+              "width": 316,
+              "height": 166.3125,
+              "visible": true
+            },
+            "naturalWidth": 390,
+            "naturalHeight": 489
+          }
+        ],
+        "mobileNavigation": {
+          "x": 0,
+          "y": 784,
+          "width": 390,
+          "height": 60,
+          "visible": true
+        },
+        "main": {
+          "x": 0,
+          "y": 120,
+          "width": 390,
+          "height": 1270.390625,
+          "visible": true
+        },
+        "heading": {
+          "x": 20,
+          "y": 168.3125,
+          "width": 350,
+          "height": 63.90625,
+          "visible": true
+        },
+        "overflowingElements": []
+      },
+      "artwork": [
+        {
+          "alt": "",
+          "width": 316,
+          "height": 166,
+          "naturalWidth": 390,
+          "naturalHeight": 489,
+          "complete": true,
+          "visible": true
+        },
+        {
+          "alt": "",
+          "width": 960,
+          "height": 840,
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "visible": false
+        },
+        {
+          "alt": "",
+          "width": 960,
+          "height": 840,
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "visible": false
+        }
+      ],
+      "primary_cta_contrast": {
+        "color": "rgb(255, 255, 255)",
+        "fontSize": "12.48px",
+        "opacityProduct": 1,
+        "layers": [
+          {
+            "tag": "A",
+            "background": "rgb(49, 85, 198)",
+            "backgroundImage": "none",
+            "opacity": 1
+          },
+          {
+            "tag": "DIV",
+            "background": "rgba(0, 0, 0, 0)",
+            "backgroundImage": "none",
+            "opacity": 1
+          },
+          {
+            "tag": "DIV",
+            "background": "rgba(0, 0, 0, 0)",
+            "backgroundImage": "none",
+            "opacity": 1
+          },
+          {
+            "tag": "SECTION",
+            "background": "rgb(255, 255, 255)",
+            "backgroundImage": "none",
+            "opacity": 1
+          },
+          {
+            "tag": "DIV",
+            "background": "rgba(0, 0, 0, 0)",
+            "backgroundImage": "none",
+            "opacity": 1
+          },
+          {
+            "tag": "DIV",
+            "background": "rgba(0, 0, 0, 0)",
+            "backgroundImage": "none",
+            "opacity": 1
+          },
+          {
+            "tag": "DIV",
+            "background": "rgba(0, 0, 0, 0)",
+            "backgroundImage": "none",
+            "opacity": 1
+          },
+          {
+            "tag": "DIV",
+            "background": "rgba(0, 0, 0, 0)",
+            "backgroundImage": "none",
+            "opacity": 1
+          },
+          {
+            "tag": "MAIN",
+            "background": "rgb(255, 255, 255)",
+            "backgroundImage": "none",
+            "opacity": 1
+          },
+          {
+            "tag": "DIV",
+            "background": "rgb(255, 255, 255)",
+            "backgroundImage": "none",
+            "opacity": 1
+          },
+          {
+            "tag": "BODY",
+            "background": "rgb(242, 240, 232)",
+            "backgroundImage": "none",
+            "opacity": 1
+          },
+          {
+            "tag": "HTML",
+            "background": "rgb(247, 248, 252)",
+            "backgroundImage": "none",
+            "opacity": 1
+          }
+        ],
+        "background": [
+          49,
+          85,
+          198
+        ],
+        "effectiveForeground": [
+          255,
+          255,
+          255
+        ],
+        "contrast": 6.47062358785625,
+        "solidColorMeasurement": true
+      }
+    },
+    {
+      "route": "/home",
+      "theme": "light",
+      "width": 320,
+      "height": 844,
+      "failures": [],
+      "screenshots": [
+        "docs\\evidence\\screenshots\\alpha-front-facing-2026-09-07\\after-focal\\run-20260907T135111Z\\fixture-home-light-320x844.png"
+      ],
+      "page_errors": [],
+      "network": {
+        "fixture_reads": [
+          "/v1/me",
+          "/v1/profile/avatar",
+          "/v1/me",
+          "/v1/onboarding",
+          "/v1/programs",
+          "/v1/learning/alpha-fixture-program",
+          "/v1/learning/calendar"
+        ],
+        "unknown_api_reads": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "layout": {
+        "viewport": {
+          "width": 320,
+          "height": 844
+        },
+        "scrollWidth": 320,
+        "clientWidth": 320,
+        "horizontalOverflow": 0,
+        "theme": "light",
+        "sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "visible": false
+        },
+        "mobileIdentity": {
+          "x": 10,
+          "y": 67.5,
+          "width": 151.640625,
+          "height": 32,
+          "visible": true
+        },
+        "mobileMark": {
+          "x": 14,
+          "y": 71.5,
+          "width": 24,
+          "height": 24,
+          "visible": true
+        },
+        "headerActions": {
+          "x": 170,
+          "y": 61.5,
+          "width": 140,
+          "height": 44,
+          "visible": true
+        },
+        "headerActionTargets": [
+          {
+            "label": "Search courses, lessons, and more",
+            "box": {
+              "x": 170,
+              "y": 61.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          },
+          {
+            "label": "Notifications",
+            "box": {
+              "x": 218,
+              "y": 61.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          },
+          {
+            "label": "Account menu for Learner QA",
+            "box": {
+              "x": 266,
+              "y": 61.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          }
+        ],
+        "profileNameColors": {
+          "color": "rgb(21, 38, 56)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "headerColors": {
+          "color": "rgb(11, 31, 68)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "bodyColors": {
+          "color": "rgb(17, 20, 15)",
+          "background": "rgb(242, 240, 232)"
+        },
+        "mobileIdentityText": [
+          {
+            "text": "",
+            "box": {
+              "x": 10,
+              "y": 67.5,
+              "width": 32,
+              "height": 32,
+              "visible": true
+            },
+            "clientWidth": 30,
+            "scrollWidth": 30
+          },
+          {
+            "text": "Closers Academyby Authority Closers",
+            "box": {
+              "x": 52,
+              "y": 68.375,
+              "width": 109.640625,
+              "height": 30.25,
+              "visible": true
+            },
+            "clientWidth": 110,
+            "scrollWidth": 110
+          },
+          {
+            "text": "Closers Academy",
+            "box": {
+              "x": 52,
+              "y": 68.375,
+              "width": 109.640625,
+              "height": 16.25,
+              "visible": true
+            },
+            "clientWidth": 110,
+            "scrollWidth": 110
+          },
+          {
+            "text": "by Authority Closers",
+            "box": {
+              "x": 52,
+              "y": 84.625,
+              "width": 109.640625,
+              "height": 14,
+              "visible": true
+            },
+            "clientWidth": 110,
+            "scrollWidth": 110
+          }
+        ],
+        "visibleImages": [
+          {
+            "path": "/_next/image",
+            "box": {
+              "x": 21,
+              "y": 322.8125,
+              "width": 278,
+              "height": 146.3125,
+              "visible": true
+            },
+            "naturalWidth": 320,
+            "naturalHeight": 402
+          }
+        ],
+        "mobileNavigation": {
+          "x": 0,
+          "y": 784,
+          "width": 320,
+          "height": 60,
+          "visible": true
+        },
+        "main": {
+          "x": 0,
+          "y": 120,
+          "width": 320,
+          "height": 1226.390625,
+          "visible": true
+        },
+        "heading": {
+          "x": 10,
+          "y": 160.3125,
+          "width": 300,
+          "height": 63.90625,
+          "visible": true
+        },
+        "overflowingElements": []
+      },
+      "artwork": [
+        {
+          "alt": "",
+          "width": 278,
+          "height": 146,
+          "naturalWidth": 320,
+          "naturalHeight": 402,
+          "complete": true,
+          "visible": true
+        },
+        {
+          "alt": "",
+          "width": 960,
+          "height": 840,
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "visible": false
+        },
+        {
+          "alt": "",
+          "width": 960,
+          "height": 840,
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "visible": false
+        }
+      ],
+      "primary_cta_contrast": {
+        "color": "rgb(255, 255, 255)",
+        "fontSize": "12.48px",
+        "opacityProduct": 1,
+        "layers": [
+          {
+            "tag": "A",
+            "background": "rgb(49, 85, 198)",
+            "backgroundImage": "none",
+            "opacity": 1
+          },
+          {
+            "tag": "DIV",
+            "background": "rgba(0, 0, 0, 0)",
+            "backgroundImage": "none",
+            "opacity": 1
+          },
+          {
+            "tag": "DIV",
+            "background": "rgba(0, 0, 0, 0)",
+            "backgroundImage": "none",
+            "opacity": 1
+          },
+          {
+            "tag": "SECTION",
+            "background": "rgb(255, 255, 255)",
+            "backgroundImage": "none",
+            "opacity": 1
+          },
+          {
+            "tag": "DIV",
+            "background": "rgba(0, 0, 0, 0)",
+            "backgroundImage": "none",
+            "opacity": 1
+          },
+          {
+            "tag": "DIV",
+            "background": "rgba(0, 0, 0, 0)",
+            "backgroundImage": "none",
+            "opacity": 1
+          },
+          {
+            "tag": "DIV",
+            "background": "rgba(0, 0, 0, 0)",
+            "backgroundImage": "none",
+            "opacity": 1
+          },
+          {
+            "tag": "DIV",
+            "background": "rgba(0, 0, 0, 0)",
+            "backgroundImage": "none",
+            "opacity": 1
+          },
+          {
+            "tag": "MAIN",
+            "background": "rgb(255, 255, 255)",
+            "backgroundImage": "none",
+            "opacity": 1
+          },
+          {
+            "tag": "DIV",
+            "background": "rgb(255, 255, 255)",
+            "backgroundImage": "none",
+            "opacity": 1
+          },
+          {
+            "tag": "BODY",
+            "background": "rgb(242, 240, 232)",
+            "backgroundImage": "none",
+            "opacity": 1
+          },
+          {
+            "tag": "HTML",
+            "background": "rgb(247, 248, 252)",
+            "backgroundImage": "none",
+            "opacity": 1
+          }
+        ],
+        "background": [
+          49,
+          85,
+          198
+        ],
+        "effectiveForeground": [
+          255,
+          255,
+          255
+        ],
+        "contrast": 6.47062358785625,
+        "solidColorMeasurement": true
+      }
+    },
+    {
+      "route": "/home",
+      "theme": "dark",
+      "width": 390,
+      "height": 844,
+      "failures": [],
+      "screenshots": [
+        "docs\\evidence\\screenshots\\alpha-front-facing-2026-09-07\\after-focal\\run-20260907T135111Z\\fixture-home-dark-390x844.png",
+        "docs\\evidence\\screenshots\\alpha-front-facing-2026-09-07\\after-focal\\run-20260907T135111Z\\fixture-home-dark-390x844-full.png"
+      ],
+      "page_errors": [],
+      "network": {
+        "fixture_reads": [
+          "/v1/me",
+          "/v1/profile/avatar",
+          "/v1/me",
+          "/v1/onboarding",
+          "/v1/programs",
+          "/v1/learning/alpha-fixture-program",
+          "/v1/learning/calendar"
+        ],
+        "unknown_api_reads": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "layout": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "scrollWidth": 390,
+        "clientWidth": 390,
+        "horizontalOverflow": 0,
+        "theme": "dark",
+        "sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "visible": false
+        },
+        "mobileIdentity": {
+          "x": 24,
+          "y": 67.296875,
+          "width": 165.4375,
+          "height": 32.390625,
+          "visible": true
+        },
+        "mobileMark": {
+          "x": 28,
+          "y": 71.484375,
+          "width": 24,
+          "height": 24,
+          "visible": true
+        },
+        "headerActions": {
+          "x": 230,
+          "y": 61.5,
+          "width": 136,
+          "height": 44,
+          "visible": true
+        },
+        "headerActionTargets": [
+          {
+            "label": "Search courses, lessons, and more",
+            "box": {
+              "x": 230,
+              "y": 61.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          },
+          {
+            "label": "Notifications",
+            "box": {
+              "x": 276,
+              "y": 61.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          },
+          {
+            "label": "Account menu for Learner QA",
+            "box": {
+              "x": 322,
+              "y": 61.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          }
+        ],
+        "profileNameColors": {
+          "color": "rgb(237, 242, 251)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "headerColors": {
+          "color": "rgb(237, 242, 251)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "bodyColors": {
+          "color": "rgb(237, 242, 251)",
+          "background": "rgb(10, 20, 32)"
+        },
+        "mobileIdentityText": [
+          {
+            "text": "",
+            "box": {
+              "x": 24,
+              "y": 67.484375,
+              "width": 32,
+              "height": 32,
+              "visible": true
+            },
+            "clientWidth": 30,
+            "scrollWidth": 30
+          },
+          {
+            "text": "Closers Academyby Authority Closers",
+            "box": {
+              "x": 66,
+              "y": 67.296875,
+              "width": 123.4375,
+              "height": 32.390625,
+              "visible": true
+            },
+            "clientWidth": 123,
+            "scrollWidth": 123
+          },
+          {
+            "text": "Closers Academy",
+            "box": {
+              "x": 66,
+              "y": 67.296875,
+              "width": 123.4375,
+              "height": 18.390625,
+              "visible": true
+            },
+            "clientWidth": 123,
+            "scrollWidth": 123
+          },
+          {
+            "text": "by Authority Closers",
+            "box": {
+              "x": 66,
+              "y": 85.6875,
+              "width": 123.4375,
+              "height": 14,
+              "visible": true
+            },
+            "clientWidth": 123,
+            "scrollWidth": 123
+          }
+        ],
+        "visibleImages": [
+          {
+            "path": "/_next/image",
+            "box": {
+              "x": 37,
+              "y": 332.8125,
+              "width": 316,
+              "height": 166.3125,
+              "visible": true
+            },
+            "naturalWidth": 390,
+            "naturalHeight": 489
+          }
+        ],
+        "mobileNavigation": {
+          "x": 0,
+          "y": 784,
+          "width": 390,
+          "height": 60,
+          "visible": true
+        },
+        "main": {
+          "x": 0,
+          "y": 120,
+          "width": 390,
+          "height": 1270.390625,
+          "visible": true
+        },
+        "heading": {
+          "x": 20,
+          "y": 168.3125,
+          "width": 350,
+          "height": 63.90625,
+          "visible": true
+        },
+        "overflowingElements": []
+      },
+      "artwork": [
+        {
+          "alt": "",
+          "width": 316,
+          "height": 166,
+          "naturalWidth": 390,
+          "naturalHeight": 489,
+          "complete": true,
+          "visible": true
+        },
+        {
+          "alt": "",
+          "width": 960,
+          "height": 840,
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "visible": false
+        },
+        {
+          "alt": "",
+          "width": 960,
+          "height": 840,
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "visible": false
+        }
+      ],
+      "primary_cta_contrast": {
+        "color": "rgb(7, 17, 36)",
+        "fontSize": "12.48px",
+        "opacityProduct": 1,
+        "layers": [
+          {
+            "tag": "A",
+            "background": "rgb(155, 179, 255)",
+            "backgroundImage": "none",
+            "opacity": 1
+          },
+          {
+            "tag": "DIV",
+            "background": "rgba(0, 0, 0, 0)",
+            "backgroundImage": "none",
+            "opacity": 1
+          },
+          {
+            "tag": "DIV",
+            "background": "rgba(0, 0, 0, 0)",
+            "backgroundImage": "none",
+            "opacity": 1
+          },
+          {
+            "tag": "SECTION",
+            "background": "rgb(16, 26, 43)",
+            "backgroundImage": "none",
+            "opacity": 1
+          },
+          {
+            "tag": "DIV",
+            "background": "rgba(0, 0, 0, 0)",
+            "backgroundImage": "none",
+            "opacity": 1
+          },
+          {
+            "tag": "DIV",
+            "background": "rgba(0, 0, 0, 0)",
+            "backgroundImage": "none",
+            "opacity": 1
+          },
+          {
+            "tag": "DIV",
+            "background": "rgba(0, 0, 0, 0)",
+            "backgroundImage": "none",
+            "opacity": 1
+          },
+          {
+            "tag": "DIV",
+            "background": "rgba(0, 0, 0, 0)",
+            "backgroundImage": "none",
+            "opacity": 1
+          },
+          {
+            "tag": "MAIN",
+            "background": "rgb(10, 20, 32)",
+            "backgroundImage": "none",
+            "opacity": 1
+          },
+          {
+            "tag": "DIV",
+            "background": "rgb(10, 20, 32)",
+            "backgroundImage": "none",
+            "opacity": 1
+          },
+          {
+            "tag": "BODY",
+            "background": "rgb(10, 20, 32)",
+            "backgroundImage": "none",
+            "opacity": 1
+          },
+          {
+            "tag": "HTML",
+            "background": "rgb(10, 20, 32)",
+            "backgroundImage": "none",
+            "opacity": 1
+          }
+        ],
+        "background": [
+          155,
+          179,
+          255
+        ],
+        "effectiveForeground": [
+          7,
+          17,
+          36
+        ],
+        "contrast": 9.227466362598307,
+        "solidColorMeasurement": true
+      }
+    },
+    {
+      "route": "/home",
+      "theme": "dark",
+      "width": 320,
+      "height": 844,
+      "failures": [],
+      "screenshots": [
+        "docs\\evidence\\screenshots\\alpha-front-facing-2026-09-07\\after-focal\\run-20260907T135111Z\\fixture-home-dark-320x844.png"
+      ],
+      "page_errors": [],
+      "network": {
+        "fixture_reads": [
+          "/v1/me",
+          "/v1/profile/avatar",
+          "/v1/me",
+          "/v1/onboarding",
+          "/v1/programs",
+          "/v1/learning/alpha-fixture-program",
+          "/v1/learning/calendar"
+        ],
+        "unknown_api_reads": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "layout": {
+        "viewport": {
+          "width": 320,
+          "height": 844
+        },
+        "scrollWidth": 320,
+        "clientWidth": 320,
+        "horizontalOverflow": 0,
+        "theme": "dark",
+        "sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "visible": false
+        },
+        "mobileIdentity": {
+          "x": 10,
+          "y": 67.5,
+          "width": 151.640625,
+          "height": 32,
+          "visible": true
+        },
+        "mobileMark": {
+          "x": 14,
+          "y": 71.5,
+          "width": 24,
+          "height": 24,
+          "visible": true
+        },
+        "headerActions": {
+          "x": 170,
+          "y": 61.5,
+          "width": 140,
+          "height": 44,
+          "visible": true
+        },
+        "headerActionTargets": [
+          {
+            "label": "Search courses, lessons, and more",
+            "box": {
+              "x": 170,
+              "y": 61.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          },
+          {
+            "label": "Notifications",
+            "box": {
+              "x": 218,
+              "y": 61.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          },
+          {
+            "label": "Account menu for Learner QA",
+            "box": {
+              "x": 266,
+              "y": 61.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          }
+        ],
+        "profileNameColors": {
+          "color": "rgb(237, 242, 251)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "headerColors": {
+          "color": "rgb(237, 242, 251)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "bodyColors": {
+          "color": "rgb(237, 242, 251)",
+          "background": "rgb(10, 20, 32)"
+        },
+        "mobileIdentityText": [
+          {
+            "text": "",
+            "box": {
+              "x": 10,
+              "y": 67.5,
+              "width": 32,
+              "height": 32,
+              "visible": true
+            },
+            "clientWidth": 30,
+            "scrollWidth": 30
+          },
+          {
+            "text": "Closers Academyby Authority Closers",
+            "box": {
+              "x": 52,
+              "y": 68.375,
+              "width": 109.640625,
+              "height": 30.25,
+              "visible": true
+            },
+            "clientWidth": 110,
+            "scrollWidth": 110
+          },
+          {
+            "text": "Closers Academy",
+            "box": {
+              "x": 52,
+              "y": 68.375,
+              "width": 109.640625,
+              "height": 16.25,
+              "visible": true
+            },
+            "clientWidth": 110,
+            "scrollWidth": 110
+          },
+          {
+            "text": "by Authority Closers",
+            "box": {
+              "x": 52,
+              "y": 84.625,
+              "width": 109.640625,
+              "height": 14,
+              "visible": true
+            },
+            "clientWidth": 110,
+            "scrollWidth": 110
+          }
+        ],
+        "visibleImages": [
+          {
+            "path": "/_next/image",
+            "box": {
+              "x": 21,
+              "y": 322.8125,
+              "width": 278,
+              "height": 146.3125,
+              "visible": true
+            },
+            "naturalWidth": 320,
+            "naturalHeight": 402
+          }
+        ],
+        "mobileNavigation": {
+          "x": 0,
+          "y": 784,
+          "width": 320,
+          "height": 60,
+          "visible": true
+        },
+        "main": {
+          "x": 0,
+          "y": 120,
+          "width": 320,
+          "height": 1226.390625,
+          "visible": true
+        },
+        "heading": {
+          "x": 10,
+          "y": 160.3125,
+          "width": 300,
+          "height": 63.90625,
+          "visible": true
+        },
+        "overflowingElements": []
+      },
+      "artwork": [
+        {
+          "alt": "",
+          "width": 278,
+          "height": 146,
+          "naturalWidth": 320,
+          "naturalHeight": 402,
+          "complete": true,
+          "visible": true
+        },
+        {
+          "alt": "",
+          "width": 960,
+          "height": 840,
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "visible": false
+        },
+        {
+          "alt": "",
+          "width": 960,
+          "height": 840,
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "visible": false
+        }
+      ],
+      "primary_cta_contrast": {
+        "color": "rgb(7, 17, 36)",
+        "fontSize": "12.48px",
+        "opacityProduct": 1,
+        "layers": [
+          {
+            "tag": "A",
+            "background": "rgb(155, 179, 255)",
+            "backgroundImage": "none",
+            "opacity": 1
+          },
+          {
+            "tag": "DIV",
+            "background": "rgba(0, 0, 0, 0)",
+            "backgroundImage": "none",
+            "opacity": 1
+          },
+          {
+            "tag": "DIV",
+            "background": "rgba(0, 0, 0, 0)",
+            "backgroundImage": "none",
+            "opacity": 1
+          },
+          {
+            "tag": "SECTION",
+            "background": "rgb(16, 26, 43)",
+            "backgroundImage": "none",
+            "opacity": 1
+          },
+          {
+            "tag": "DIV",
+            "background": "rgba(0, 0, 0, 0)",
+            "backgroundImage": "none",
+            "opacity": 1
+          },
+          {
+            "tag": "DIV",
+            "background": "rgba(0, 0, 0, 0)",
+            "backgroundImage": "none",
+            "opacity": 1
+          },
+          {
+            "tag": "DIV",
+            "background": "rgba(0, 0, 0, 0)",
+            "backgroundImage": "none",
+            "opacity": 1
+          },
+          {
+            "tag": "DIV",
+            "background": "rgba(0, 0, 0, 0)",
+            "backgroundImage": "none",
+            "opacity": 1
+          },
+          {
+            "tag": "MAIN",
+            "background": "rgb(10, 20, 32)",
+            "backgroundImage": "none",
+            "opacity": 1
+          },
+          {
+            "tag": "DIV",
+            "background": "rgb(10, 20, 32)",
+            "backgroundImage": "none",
+            "opacity": 1
+          },
+          {
+            "tag": "BODY",
+            "background": "rgb(10, 20, 32)",
+            "backgroundImage": "none",
+            "opacity": 1
+          },
+          {
+            "tag": "HTML",
+            "background": "rgb(10, 20, 32)",
+            "backgroundImage": "none",
+            "opacity": 1
+          }
+        ],
+        "background": [
+          155,
+          179,
+          255
+        ],
+        "effectiveForeground": [
+          7,
+          17,
+          36
+        ],
+        "contrast": 9.227466362598307,
+        "solidColorMeasurement": true
+      }
+    }
+  ],
+  "browser_version": "152.0.7977.82",
+  "failure_count": 0,
+  "blocked_write_count": 0
+}

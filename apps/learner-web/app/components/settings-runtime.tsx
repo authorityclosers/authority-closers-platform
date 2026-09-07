@@ -2,6 +2,7 @@
 
 import {
   ArrowRight,
+  ArrowLeft,
   CheckCircle2,
   ChevronRight,
   CircleAlert,
@@ -13,6 +14,8 @@ import {
   ShieldCheck,
   UserRound,
   Info,
+  Search,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState, type RefObject } from "react";
@@ -35,6 +38,7 @@ import {
   SETTINGS_SECTIONS,
   type SettingsSection,
   type SettingsSectionIconName,
+  type SettingsSectionId,
 } from "../lib/settings-registry";
 import { hasMembershipRole } from "./membership-availability";
 import {
@@ -573,13 +577,12 @@ function AppearanceCard({
         <div>
           <strong>Browser-local appearance</strong>
           <p>
-            Appearance choices change presentation only. They are stored on this
-            browser when available and never change your account, access, or
-            learning progress.
+            Preferences apply to this browser, not your account or learning
+            progress.
           </p>
         </div>
       </div>
-      <AppearanceControl />
+      <AppearanceControl compact />
     </section>
   );
 }
@@ -603,7 +606,7 @@ function SecurityPrivacyCard({
     >
       <SectionHeader section={section} />
       <p className={styles.boundaryNote}>
-        This first-slice panel includes password recovery and policy links only.
+        Recover your password or review how your information is handled.
       </p>
       <nav
         className={styles.policyLinks}
@@ -689,9 +692,24 @@ function SettingsSectionCard({
   }
 }
 
-function focusSettingsHeading(headingId: string) {
-  if (typeof document === "undefined") return;
-  document.getElementById(headingId)?.focus();
+const settingsKeywords: Record<SettingsSectionId, string> = {
+  "verified-account": "name email identity verification account role",
+  appearance:
+    "theme light dark system color accent density display motion animation preset",
+  "learning-setup": "goal context weekly time practice preferences onboarding",
+  "security-privacy": "password recovery terms policies privacy security",
+  session: "logout log out sign out device session",
+};
+
+export function searchSettingsSections(
+  query: string,
+): readonly SettingsSection[] {
+  const words = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
+  return SETTINGS_SECTIONS.filter((section) => {
+    const text =
+      `${section.label} ${section.detail} ${settingsKeywords[section.id]}`.toLocaleLowerCase();
+    return words.every((word) => text.includes(word));
+  });
 }
 
 export function SettingsView({
@@ -701,6 +719,7 @@ export function SettingsView({
   draftCleanup = { status: "idle" },
   onRetryCleanup,
   focusTargets,
+  initialSection = null,
 }: {
   resources: SettingsResources;
   api?: LearnerApi;
@@ -708,7 +727,51 @@ export function SettingsView({
   draftCleanup?: SettingsDraftCleanupState;
   onRetryCleanup?: () => void;
   focusTargets?: SettingsFocusTargets;
+  initialSection?: SettingsSectionId | null;
 }) {
+  const [selectedSection, setSelectedSection] =
+    useState<SettingsSectionId | null>(initialSection);
+  const [search, setSearch] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const syncLocation = (event?: Event) => {
+      const section = getSettingsSectionByAnchor(window.location.hash.slice(1));
+      setSelectedSection(section?.id ?? null);
+      setSearch("");
+      if (event && !section) {
+        window.requestAnimationFrame(() => searchRef.current?.focus());
+      }
+    };
+    syncLocation();
+    window.addEventListener("hashchange", syncLocation);
+    window.addEventListener("popstate", syncLocation);
+    return () => {
+      window.removeEventListener("hashchange", syncLocation);
+      window.removeEventListener("popstate", syncLocation);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!selectedSection) return;
+    const section = getSettingsSectionByAnchor(selectedSection);
+    if (section)
+      document
+        .getElementById(section.headingId)
+        ?.focus({ preventScroll: true });
+  }, [selectedSection]);
+
+  function navigateSection(section: SettingsSectionId | null) {
+    const href = `${window.location.pathname}${window.location.search}${section ? `#${section}` : ""}`;
+    if (window.location.hash !== (section ? `#${section}` : "")) {
+      window.history.pushState(null, "", href);
+    }
+    setSelectedSection(section);
+    setSearch("");
+    if (!section)
+      window.requestAnimationFrame(() => searchRef.current?.focus());
+  }
+
   if (resources.me.status === "error" && isSessionExpired(resources.me.error)) {
     return (
       <ReauthenticationBoundary
@@ -737,9 +800,16 @@ export function SettingsView({
     resources.me.status === "ready" ? resources.me.data : null,
     resources.onboarding.status === "ready" ? resources.onboarding.data : null,
   );
+  const activeSection =
+    SETTINGS_SECTIONS.find((section) => section.id === selectedSection) ??
+    SETTINGS_SECTIONS[0];
+  const visibleSections = searchSettingsSections(search);
 
   return (
-    <div className={styles.settingsLedger}>
+    <div
+      className={styles.settingsLedger}
+      data-detail-open={selectedSection ? "true" : "false"}
+    >
       {offlineRead ? (
         <div
           className={`${styles.settingsOfflineNotice} offline-read-notice`}
@@ -750,7 +820,6 @@ export function SettingsView({
         </div>
       ) : null}
       <aside className={styles.settingsIndex} aria-label="Settings sections">
-        <p className={styles.indexEyebrow}>Account control surface</p>
         <div className={styles.indexHeadingRow}>
           <h1
             className={styles.routeEntryHeading}
@@ -760,16 +829,36 @@ export function SettingsView({
           >
             Settings
           </h1>
-          <span className={styles.indexCount}>
-            {SETTINGS_SECTIONS.length} areas
-          </span>
         </div>
-        <p className={styles.indexDescription}>
-          Manage your account, learning setup, and preferences.
-        </p>
+        <p className={styles.indexDescription}>Make yourself at home.</p>
+        <div className={styles.searchField}>
+          <Search size={17} aria-hidden="true" />
+          <input
+            ref={searchRef}
+            type="search"
+            aria-label="Search settings"
+            placeholder="Search settings"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+          {search ? (
+            <button
+              type="button"
+              aria-label="Clear search"
+              onClick={() => {
+                setSearch("");
+                searchRef.current?.focus();
+              }}
+            >
+              <X size={16} aria-hidden="true" />
+            </button>
+          ) : null}
+        </div>
         <nav className={styles.indexNav} aria-label="Settings sections">
           <div className={styles.indexGroups}>
-            {SETTINGS_SECTION_GROUPS.map((group) => (
+            {SETTINGS_SECTION_GROUPS.filter((group) =>
+              visibleSections.some((section) => section.groupId === group.id),
+            ).map((group) => (
               <section
                 className={styles.indexGroup}
                 key={group.id}
@@ -777,52 +866,90 @@ export function SettingsView({
               >
                 <div className={styles.indexGroupHeader}>
                   <h2 id={`settings-group-${group.id}`}>{group.label}</h2>
-                  <small>{group.detail}</small>
                 </div>
                 <div className={styles.indexGroupLinks}>
-                  {SETTINGS_SECTIONS.filter(
-                    (section) => section.groupId === group.id,
-                  ).map((section) => {
-                    const Icon = settingsSectionIcons[section.icon];
-                    return (
-                      <a
-                        className={styles.indexLink}
-                        href={`#${section.anchor}`}
-                        key={section.id}
-                        onClick={() => focusSettingsHeading(section.headingId)}
-                      >
-                        <span
-                          className={styles.indexLinkNumber}
-                          aria-hidden="true"
+                  {visibleSections
+                    .filter((section) => section.groupId === group.id)
+                    .map((section) => {
+                      const Icon = settingsSectionIcons[section.icon];
+                      return (
+                        <a
+                          className={`${styles.indexLink} ${activeSection.id === section.id ? styles.indexLinkCurrent : ""}`}
+                          href={`#${section.anchor}`}
+                          aria-current={
+                            activeSection.id === section.id
+                              ? "location"
+                              : undefined
+                          }
+                          key={section.id}
+                          onClick={(event) => {
+                            if (
+                              event.button !== 0 ||
+                              event.metaKey ||
+                              event.ctrlKey ||
+                              event.altKey ||
+                              event.shiftKey
+                            )
+                              return;
+                            event.preventDefault();
+                            navigateSection(section.id);
+                          }}
                         >
-                          {section.screenId.replace("SET-", "")}
-                        </span>
-                        <Icon size={19} strokeWidth={1.8} aria-hidden="true" />
-                        <span className={styles.indexLinkCopy}>
-                          <strong>{section.label}</strong>
-                          <small>{section.detail}</small>
-                        </span>
-                      </a>
-                    );
-                  })}
+                          <Icon
+                            size={19}
+                            strokeWidth={1.8}
+                            aria-hidden="true"
+                          />
+                          <span className={styles.indexLinkCopy}>
+                            <strong>{section.label}</strong>
+                            <small>{section.detail}</small>
+                          </span>
+                          <ChevronRight
+                            className={styles.indexChevron}
+                            size={16}
+                            aria-hidden="true"
+                          />
+                        </a>
+                      );
+                    })}
                 </div>
               </section>
             ))}
+            {visibleSections.length === 0 ? (
+              <div className={styles.noResults} role="status">
+                <strong>No settings found</strong>
+                <p>Try “theme”, “password”, or “learning”.</p>
+              </div>
+            ) : null}
           </div>
         </nav>
       </aside>
 
-      <div className={styles.settingsContent}>
+      <div className={styles.settingsContent} data-settings-panel>
+        <button
+          className={styles.backToCategories}
+          type="button"
+          onClick={() => navigateSection(null)}
+        >
+          <ArrowLeft size={17} aria-hidden="true" /> All settings
+        </button>
+        {/* Keep each operation owner mounted through category changes. Native hidden
+            exposes one panel without losing pending logout or local-save recovery. */}
         {SETTINGS_SECTIONS.map((section) => (
-          <SettingsSectionCard
+          <div
             key={section.id}
-            section={section}
-            resources={resources}
-            api={api}
-            onRetry={onRetry}
-            learnerAccessConfirmed={learnerAccessConfirmed}
-            focusTargets={focusTargets}
-          />
+            hidden={activeSection.id !== section.id}
+            data-settings-category
+          >
+            <SettingsSectionCard
+              section={section}
+              resources={resources}
+              api={api}
+              onRetry={onRetry}
+              learnerAccessConfirmed={learnerAccessConfirmed}
+              focusTargets={focusTargets}
+            />
+          </div>
         ))}
       </div>
     </div>

@@ -52,65 +52,48 @@ export function NotificationPopover({
     <div
       id="learner-notifications-popover"
       ref={panelRef}
-      className="notification-popover"
+      className={styles.popover}
       role="dialog"
       aria-modal="false"
       aria-labelledby="learner-notifications-popover-title"
       aria-describedby="learner-notifications-popover-description"
     >
-      <div className="notification-popover__header">
-        <div className="notification-popover__title-row">
-          <div>
-            <p className="notification-popover__eyebrow">Workspace updates</p>
-            <h2
-              id="learner-notifications-popover-title"
-              className="notification-popover__title"
-            >
-              Notifications
-            </h2>
-          </div>
-          <button
-            type="button"
-            className="notification-popover__close"
-            onClick={onClose}
-            aria-label="Close notifications"
-          >
-            <X size={16} aria-hidden="true" />
-          </button>
+      <div className={styles.popoverHeader}>
+        <h2 id="learner-notifications-popover-title">Notifications</h2>
+        <button
+          type="button"
+          className={styles.popoverClose}
+          onClick={onClose}
+          aria-label="Close notifications"
+        >
+          <X size={16} aria-hidden="true" />
+        </button>
+      </div>
+
+      <div className={styles.popoverBody}>
+        <div className={styles.popoverIcon} aria-hidden="true">
+          <Bell size={20} />
         </div>
-        <div className="notification-popover__status-row">
-          <span className="notification-popover__status-badge" role="status">
-            Unavailable
-          </span>
+        <div>
+          <p className={styles.popoverStateTitle}>
+            {NOTIFICATION_SOURCE_UNAVAILABLE_COPY.heading}
+          </p>
           <p
             id="learner-notifications-popover-description"
-            className="notification-popover__subhead"
+            className={styles.popoverCopy}
           >
-            Notification history is unavailable in this first-slice workspace.
+            {NOTIFICATION_SOURCE_UNAVAILABLE_COPY.message}
           </p>
         </div>
       </div>
 
-      <div className="notification-popover__body">
-        <div className="notification-popover__empty-icon" aria-hidden="true">
-          <Bell size={24} />
-        </div>
-        <p className="notification-popover__empty-title">
-          {NOTIFICATION_SOURCE_UNAVAILABLE_COPY.heading}
-        </p>
-        <p className="notification-popover__empty-copy">
-          {NOTIFICATION_SOURCE_UNAVAILABLE_COPY.message}
-        </p>
-      </div>
-
-      <div className="notification-popover__footer">
+      <div className={styles.popoverFooter}>
         <Link
-          href={ROUTES.notifications}
-          className="notification-popover__action-link"
+          href={ROUTES.learning}
+          className={styles.popoverAction}
           onClick={onClose}
         >
-          View full notifications page{" "}
-          <ArrowRight size={14} aria-hidden="true" />
+          Go to My Learning <ArrowRight size={14} aria-hidden="true" />
         </Link>
       </div>
     </div>
@@ -221,8 +204,8 @@ function NotificationsState({
             : "There are no updates to show right now."}
         </p>
         <div className={styles.stateActions}>
-          <Link className="button button--cobalt" href={ROUTES.dashboard}>
-            Back to Dashboard
+          <Link className="button button--cobalt" href={ROUTES.learning}>
+            Go to My Learning <ArrowRight size={15} aria-hidden="true" />
           </Link>
         </div>
       </section>

@@ -149,6 +149,7 @@ export function SignOutControl({
   }
 
   async function signOut() {
+    if (signingOut || cleanupOnly || locallySignedOut) return;
     setSigningOut(true);
     setFailure(null);
     setCleanupOnly(false);
@@ -193,12 +194,16 @@ export function SignOutControl({
         className={className}
         type="button"
         onClick={() => void signOut()}
-        disabled={signingOut}
+        disabled={signingOut || cleanupOnly || locallySignedOut}
         role={role}
         tabIndex={tabIndex}
       >
         <LogOut size={16} aria-hidden="true" />
-        {signingOut ? "Signing out…" : "Sign out"}
+        {signingOut
+          ? "Signing out…"
+          : cleanupOnly || locallySignedOut
+            ? "Signed out"
+            : "Sign out"}
       </button>
       {failure ? (
         <SignOutFailure
