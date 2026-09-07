@@ -378,7 +378,9 @@ describe("learning loop video runtime", () => {
     );
 
     expect(html).toContain("This video isn’t available yet");
-    expect(html).toContain("This lesson stays incomplete until you can watch it.");
+    expect(html).toContain(
+      "This lesson stays incomplete until you can watch it.",
+    );
     expect(html).not.toContain("The server exposes a completion action");
     expect(html).not.toContain("<video");
     expect(html).not.toContain("Mastery");
