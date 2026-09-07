@@ -1,8 +1,9 @@
 # Foundation repair rollout — preparation evidence
 
-Status update at 16:10 UTC: the exact foundation repair is installed and healthy;
-the post-deployment section below supersedes the preparation-only status. Actual
-off-site restore acceptance remains separate and is not claimed here.
+Status update: the exact foundation repair is installed and healthy. The
+post-deployment and 16:21 UTC logical restore sections below supersede the
+preparation-only status. Full foundation and production restore acceptance
+remain separate; the new passing proof is specifically the staging database.
 
 ## Baseline and retained recovery state
 
@@ -122,3 +123,35 @@ This closes deployed edge-log redaction, not signed-film playback or production
 readiness. Fresh canonical logical backup/off-site restore proof, publication
 authority, film activation and authenticated learner streaming remain separate
 acceptance results. The earlier release and durable host archive are retained.
+
+## Actual staging logical backup and off-site restore — 16:16–16:21 UTC
+
+The canonical `ac-postgres-backup.service` and
+`ac-restic-postgres-restore-proof@staging.service` each ran once and completed
+with `Result=success`, `ExecMainStatus=0`. Their execution PIDs were 872581 and
+875440. The logical backup timer was temporarily paused for serialized testing
+and restored active/enabled; no disabled proof timer was enabled. A subsequent
+timer-driven backup is not another test run or a failed cleanup.
+
+Retained source evidence directory:
+`/srv/authority-closers/recovery-evidence/postgres-logical/staging-20260907T162119Z-43f1acfb1dbb`.
+Both `off-site-restore-proof.json` and `restore-drill-43c7f6ac03ba.json` say
+`passed`. The root independently re-read these files and terminal service state.
+
+- Application, backup and restored workspace: exact release
+  `a5eef0df4b340070ac6e58f9912d73a3bf1d2f18`.
+- Backup captured 16:16:34.557127Z; remote snapshot created 16:16:39.994060Z.
+- Drill started 16:21:27.897828Z, completed 16:21:35.276501Z.
+- Observed backup age **293.341 seconds**, below the **900-second** target.
+- Measured restore boundary **6.939 seconds**, below **3,600 seconds**. Boundary:
+  `restore-verified-marker-held-worker-provider-call-blocked`.
+- Objective and operation gates passed. All 39 representative canonical tables
+  were checked; migration head was `20260904_0018` at this release.
+- External connections were empty. Held worker had zero provider calls,
+  `run_once_rejected=true`, `worker_ready=false`.
+- Exact run-label container/network/volume cleanup completed; independent
+  inspection found no remaining resources bearing label value `43c7f6ac03ba`.
+
+This was a small staging dataset, not a production-scale recovery/performance
+guarantee. Earlier September 1 failures remain historical failures. This proof
+does not certify full foundation restoration, media playback or production.

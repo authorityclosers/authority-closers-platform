@@ -18,6 +18,8 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "identity_command_idempotency",
         "tenants",
         "memberships",
+        "capability_grants",
+        "capability_revocations",
         "programs",
         "program_versions",
         "catalog_publish_commands",

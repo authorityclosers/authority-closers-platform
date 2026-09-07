@@ -136,6 +136,7 @@ class Program(Base):
     __tablename__ = "programs"
     __table_args__ = (
         UniqueConstraint("id", "scope", "owner_key", name="uq_programs_scope_identity"),
+        UniqueConstraint("id", "tenant_id", name="uq_programs_tenant_identity"),
         CheckConstraint("length(trim(slug)) > 0", name="slug_nonblank"),
         CheckConstraint("length(trim(title)) > 0", name="title_nonblank"),
         *_scope_constraints("programs"),

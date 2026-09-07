@@ -303,3 +303,23 @@ claim. The managed startup settings still need to be applied before that QA;
 normal sign-in, approved source delivery, GET/HEAD/206 seek, captions, playback,
 reconnect/expiry and safe diagnostic observations remain live gates. The
 anonymous 401 proof above remains accurately limited to rejection behavior.
+
+## Merge and managed-runtime verification — 16:16–16:22 UTC
+
+PR #42 passed exact candidate Application validation `34142421351` and
+Control-plane validation `34142421368`, then merged at 16:22:09Z as
+`ec0009ec0ea0333d7cfa266d2c353d07ddaf1268`. The same implementation worktree
+integrated main without discarding its unrelated files.
+
+The managed pair was stopped through its PID/start-time-verified controller;
+old logs were retained in a private ignored timestamped directory. The normal
+launcher restarted localhost only. Both health checks passed, with learner
+3100 and admin 3101 bound to loopback; memory-only sessions require normal
+sign-in again. Staging was not restarted by this local operation.
+
+The final running learner passed `Test-LocalMediaPrivacy.ps1`: synthetic
+anonymous registration 401/no-store, opaque GET/HEAD 401/401, 55/55 anonymous
+identity requests 401. The marker remained **0 before and after across three
+diagnostic files**, with **15,393 inspected bytes unchanged**. This supersedes
+the earlier startup-pending status and does not turn denial evidence into a
+successful media-playback claim.
