@@ -1,0 +1,698 @@
+{
+  "evidence_class": "Synthetic API fixtures against local development UI; not live or performance proof",
+  "created_utc": "2026-09-07T14:16:35.650783+00:00",
+  "user_storage_imported": false,
+  "server_writes_allowed": false,
+  "cases": [
+    {
+      "width": 390,
+      "theme": "light",
+      "failures": [],
+      "screenshots": [
+        "docs\\evidence\\screenshots\\alpha-profile-2026-09-07\\before\\run-20260907T141635Z\\390-light-profile.png"
+      ],
+      "checks": [],
+      "page_errors": [],
+      "network": {
+        "fixture_reads": [
+          "/v1/me",
+          "/v1/profile/avatar",
+          "/v1/me",
+          "/v1/onboarding",
+          "/v1/profile/avatar"
+        ],
+        "unknown_api_reads": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "layout": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "scrollWidth": 390,
+        "clientWidth": 390,
+        "horizontalOverflow": 0,
+        "theme": "light",
+        "sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "visible": false
+        },
+        "mobileIdentity": {
+          "x": 24,
+          "y": 67.296875,
+          "width": 165.4375,
+          "height": 32.390625,
+          "visible": true
+        },
+        "mobileMark": {
+          "x": 28,
+          "y": 71.484375,
+          "width": 24,
+          "height": 24,
+          "visible": true
+        },
+        "headerActions": {
+          "x": 230,
+          "y": 61.5,
+          "width": 136,
+          "height": 44,
+          "visible": true
+        },
+        "headerActionTargets": [
+          {
+            "label": "Search courses, lessons, and more",
+            "box": {
+              "x": 230,
+              "y": 61.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          },
+          {
+            "label": "Notifications",
+            "box": {
+              "x": 276,
+              "y": 61.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          },
+          {
+            "label": "Account menu for Learner QA",
+            "box": {
+              "x": 322,
+              "y": 61.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          }
+        ],
+        "profileNameColors": {
+          "color": "rgb(21, 38, 56)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "headerColors": {
+          "color": "rgb(11, 31, 68)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "bodyColors": {
+          "color": "rgb(17, 20, 15)",
+          "background": "rgb(242, 240, 232)"
+        },
+        "mobileIdentityText": [
+          {
+            "text": "",
+            "box": {
+              "x": 24,
+              "y": 67.484375,
+              "width": 32,
+              "height": 32,
+              "visible": true
+            },
+            "clientWidth": 30,
+            "scrollWidth": 30
+          },
+          {
+            "text": "Closers Academyby Authority Closers",
+            "box": {
+              "x": 66,
+              "y": 67.296875,
+              "width": 123.4375,
+              "height": 32.390625,
+              "visible": true
+            },
+            "clientWidth": 123,
+            "scrollWidth": 123
+          },
+          {
+            "text": "Closers Academy",
+            "box": {
+              "x": 66,
+              "y": 67.296875,
+              "width": 123.4375,
+              "height": 18.390625,
+              "visible": true
+            },
+            "clientWidth": 123,
+            "scrollWidth": 123
+          },
+          {
+            "text": "by Authority Closers",
+            "box": {
+              "x": 66,
+              "y": 85.6875,
+              "width": 123.4375,
+              "height": 14,
+              "visible": true
+            },
+            "clientWidth": 123,
+            "scrollWidth": 123
+          }
+        ],
+        "visibleImages": [],
+        "mobileNavigation": {
+          "x": 0,
+          "y": 784,
+          "width": 390,
+          "height": 60,
+          "visible": true
+        },
+        "main": {
+          "x": 0,
+          "y": 120,
+          "width": 390,
+          "height": 1726.03125,
+          "visible": true
+        },
+        "heading": {
+          "x": 14,
+          "y": 171.1875,
+          "width": 362,
+          "height": 25.078125,
+          "visible": true
+        },
+        "overflowingElements": []
+      }
+    },
+    {
+      "width": 390,
+      "theme": "dark",
+      "failures": [],
+      "screenshots": [
+        "docs\\evidence\\screenshots\\alpha-profile-2026-09-07\\before\\run-20260907T141635Z\\390-dark-profile.png"
+      ],
+      "checks": [],
+      "page_errors": [],
+      "network": {
+        "fixture_reads": [
+          "/v1/me",
+          "/v1/profile/avatar",
+          "/v1/me",
+          "/v1/onboarding",
+          "/v1/profile/avatar"
+        ],
+        "unknown_api_reads": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "layout": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "scrollWidth": 390,
+        "clientWidth": 390,
+        "horizontalOverflow": 0,
+        "theme": "dark",
+        "sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "visible": false
+        },
+        "mobileIdentity": {
+          "x": 24,
+          "y": 67.296875,
+          "width": 165.4375,
+          "height": 32.390625,
+          "visible": true
+        },
+        "mobileMark": {
+          "x": 28,
+          "y": 71.484375,
+          "width": 24,
+          "height": 24,
+          "visible": true
+        },
+        "headerActions": {
+          "x": 230,
+          "y": 61.5,
+          "width": 136,
+          "height": 44,
+          "visible": true
+        },
+        "headerActionTargets": [
+          {
+            "label": "Search courses, lessons, and more",
+            "box": {
+              "x": 230,
+              "y": 61.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          },
+          {
+            "label": "Notifications",
+            "box": {
+              "x": 276,
+              "y": 61.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          },
+          {
+            "label": "Account menu for Learner QA",
+            "box": {
+              "x": 322,
+              "y": 61.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          }
+        ],
+        "profileNameColors": {
+          "color": "rgb(237, 242, 251)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "headerColors": {
+          "color": "rgb(237, 242, 251)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "bodyColors": {
+          "color": "rgb(237, 242, 251)",
+          "background": "rgb(10, 20, 32)"
+        },
+        "mobileIdentityText": [
+          {
+            "text": "",
+            "box": {
+              "x": 24,
+              "y": 67.484375,
+              "width": 32,
+              "height": 32,
+              "visible": true
+            },
+            "clientWidth": 30,
+            "scrollWidth": 30
+          },
+          {
+            "text": "Closers Academyby Authority Closers",
+            "box": {
+              "x": 66,
+              "y": 67.296875,
+              "width": 123.4375,
+              "height": 32.390625,
+              "visible": true
+            },
+            "clientWidth": 123,
+            "scrollWidth": 123
+          },
+          {
+            "text": "Closers Academy",
+            "box": {
+              "x": 66,
+              "y": 67.296875,
+              "width": 123.4375,
+              "height": 18.390625,
+              "visible": true
+            },
+            "clientWidth": 123,
+            "scrollWidth": 123
+          },
+          {
+            "text": "by Authority Closers",
+            "box": {
+              "x": 66,
+              "y": 85.6875,
+              "width": 123.4375,
+              "height": 14,
+              "visible": true
+            },
+            "clientWidth": 123,
+            "scrollWidth": 123
+          }
+        ],
+        "visibleImages": [],
+        "mobileNavigation": {
+          "x": 0,
+          "y": 784,
+          "width": 390,
+          "height": 60,
+          "visible": true
+        },
+        "main": {
+          "x": 0,
+          "y": 120,
+          "width": 390,
+          "height": 1726.03125,
+          "visible": true
+        },
+        "heading": {
+          "x": 14,
+          "y": 171.1875,
+          "width": 362,
+          "height": 25.078125,
+          "visible": true
+        },
+        "overflowingElements": []
+      }
+    },
+    {
+      "width": 1440,
+      "theme": "light",
+      "failures": [],
+      "screenshots": [
+        "docs\\evidence\\screenshots\\alpha-profile-2026-09-07\\before\\run-20260907T141635Z\\1440-light-profile.png"
+      ],
+      "checks": [],
+      "page_errors": [],
+      "network": {
+        "fixture_reads": [
+          "/v1/me",
+          "/v1/profile/avatar",
+          "/v1/me",
+          "/v1/onboarding",
+          "/v1/profile/avatar"
+        ],
+        "unknown_api_reads": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "layout": {
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "horizontalOverflow": 0,
+        "theme": "light",
+        "sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 76,
+          "height": 900,
+          "visible": true
+        },
+        "mobileIdentity": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "visible": false
+        },
+        "mobileMark": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "visible": false
+        },
+        "headerActions": {
+          "x": 1208,
+          "y": 65.5,
+          "width": 208,
+          "height": 44,
+          "visible": true
+        },
+        "headerActionTargets": [
+          {
+            "label": "Notifications",
+            "box": {
+              "x": 1208,
+              "y": 65.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          },
+          {
+            "label": "Account menu for Learner QA",
+            "box": {
+              "x": 1264,
+              "y": 65.5,
+              "width": 152,
+              "height": 44,
+              "visible": true
+            }
+          }
+        ],
+        "profileNameColors": {
+          "color": "rgb(21, 38, 56)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "headerColors": {
+          "color": "rgb(11, 31, 68)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "bodyColors": {
+          "color": "rgb(17, 20, 15)",
+          "background": "rgb(242, 240, 232)"
+        },
+        "mobileIdentityText": [
+          {
+            "text": "",
+            "box": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "visible": false
+            },
+            "clientWidth": 0,
+            "scrollWidth": 0
+          },
+          {
+            "text": "Closers Academyby Authority Closers",
+            "box": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "visible": false
+            },
+            "clientWidth": 0,
+            "scrollWidth": 0
+          },
+          {
+            "text": "Closers Academy",
+            "box": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "visible": false
+            },
+            "clientWidth": 0,
+            "scrollWidth": 0
+          },
+          {
+            "text": "by Authority Closers",
+            "box": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "visible": false
+            },
+            "clientWidth": 0,
+            "scrollWidth": 0
+          }
+        ],
+        "visibleImages": [],
+        "mobileNavigation": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "visible": false
+        },
+        "main": {
+          "x": 76,
+          "y": 126,
+          "width": 1364,
+          "height": 836,
+          "visible": true
+        },
+        "heading": {
+          "x": 168,
+          "y": 177.1875,
+          "width": 1180,
+          "height": 34.484375,
+          "visible": true
+        },
+        "overflowingElements": []
+      }
+    },
+    {
+      "width": 1440,
+      "theme": "dark",
+      "failures": [],
+      "screenshots": [
+        "docs\\evidence\\screenshots\\alpha-profile-2026-09-07\\before\\run-20260907T141635Z\\1440-dark-profile.png"
+      ],
+      "checks": [],
+      "page_errors": [],
+      "network": {
+        "fixture_reads": [
+          "/v1/me",
+          "/v1/profile/avatar",
+          "/v1/me",
+          "/v1/onboarding",
+          "/v1/profile/avatar"
+        ],
+        "unknown_api_reads": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "layout": {
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "horizontalOverflow": 0,
+        "theme": "dark",
+        "sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 76,
+          "height": 900,
+          "visible": true
+        },
+        "mobileIdentity": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "visible": false
+        },
+        "mobileMark": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "visible": false
+        },
+        "headerActions": {
+          "x": 1208,
+          "y": 65.5,
+          "width": 208,
+          "height": 44,
+          "visible": true
+        },
+        "headerActionTargets": [
+          {
+            "label": "Notifications",
+            "box": {
+              "x": 1208,
+              "y": 65.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          },
+          {
+            "label": "Account menu for Learner QA",
+            "box": {
+              "x": 1264,
+              "y": 65.5,
+              "width": 152,
+              "height": 44,
+              "visible": true
+            }
+          }
+        ],
+        "profileNameColors": {
+          "color": "rgb(237, 242, 251)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "headerColors": {
+          "color": "rgb(237, 242, 251)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "bodyColors": {
+          "color": "rgb(237, 242, 251)",
+          "background": "rgb(10, 20, 32)"
+        },
+        "mobileIdentityText": [
+          {
+            "text": "",
+            "box": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "visible": false
+            },
+            "clientWidth": 0,
+            "scrollWidth": 0
+          },
+          {
+            "text": "Closers Academyby Authority Closers",
+            "box": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "visible": false
+            },
+            "clientWidth": 0,
+            "scrollWidth": 0
+          },
+          {
+            "text": "Closers Academy",
+            "box": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "visible": false
+            },
+            "clientWidth": 0,
+            "scrollWidth": 0
+          },
+          {
+            "text": "by Authority Closers",
+            "box": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "visible": false
+            },
+            "clientWidth": 0,
+            "scrollWidth": 0
+          }
+        ],
+        "visibleImages": [],
+        "mobileNavigation": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "visible": false
+        },
+        "main": {
+          "x": 76,
+          "y": 126,
+          "width": 1364,
+          "height": 836,
+          "visible": true
+        },
+        "heading": {
+          "x": 168,
+          "y": 177.1875,
+          "width": 1180,
+          "height": 34.484375,
+          "visible": true
+        },
+        "overflowingElements": []
+      }
+    }
+  ],
+  "browser_version": "152.0.7977.82",
+  "passed": true
+}
