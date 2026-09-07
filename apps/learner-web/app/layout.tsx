@@ -13,23 +13,25 @@ import "./learner-next-slice.css";
 import "./progress-momentum.css";
 import { DevStagingBridgeNotice } from "./components/dev-staging-bridge-notice";
 import { PwaRegister } from "./components/pwa-register";
-import { ThemeRuntime } from "./components/theme-control";
+import { ThemeRuntime } from "./components/theme-runtime";
 
 const sans = Inter({ subsets: ["latin"], variable: "--font-sans" });
 const serif = Newsreader({ subsets: ["latin"], variable: "--font-serif" });
 
 export const metadata: Metadata = {
-  title: "Authority Closers — Learning that changes the next conversation",
+  title: "Closers Academy · Cohorva",
   description: "Evidence-backed sales practice for deliberate professionals.",
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
-    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
+    apple: [
+      { url: "/brand/closers-academy-v0.1/icon-180.png", sizes: "180x180" },
+    ],
   },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "AC Learning",
+    title: "Closers Academy",
   },
   formatDetection: {
     telephone: false,

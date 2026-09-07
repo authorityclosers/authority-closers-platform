@@ -105,7 +105,16 @@ export function presentationModuleTitle(title: string): string {
   return title.replace(/\s*[—–]\s*/g, " · ").trim();
 }
 
-type DashboardPlanStatus = "available" | "not_configured" | "unavailable";
+type DashboardPlanStatus =
+  | "loading"
+  | "available"
+  | "not_configured"
+  | "unavailable";
+
+export type DashboardPlanData = {
+  calendar?: CalendarResponse;
+  calendarStatus: Exclude<DashboardPlanStatus, "loading">;
+};
 
 type LoadResult = "loaded" | "error" | "aborted" | "redirecting";
 
@@ -122,7 +131,7 @@ export type DashboardReadResult =
   | { kind: "ready"; data: DashboardData }
   | { kind: "onboarding" };
 
-export async function loadDashboardData(
+export async function loadDashboardCoreData(
   api: LearnerApi,
   signal?: AbortSignal,
 ): Promise<DashboardReadResult> {
@@ -147,13 +156,31 @@ export async function loadDashboardData(
     }
   }
 
+  return {
+    kind: "ready",
+    data: {
+      me,
+      programs: programsRes.items,
+      learning,
+      offlineRead:
+        getEarliestOfflineReadMetadata(me, onboarding, programsRes, learning) ??
+        undefined,
+    },
+  };
+}
+
+export async function loadDashboardPlan(
+  api: LearnerApi,
+  me: MeResponse,
+  signal?: AbortSignal,
+): Promise<DashboardPlanData> {
   // Planning is an optional, tenant-scoped projection. Keep the core
   // dashboard readable when the learner has no active tenant yet or when the
   // proposal endpoint is unavailable; never fall back to invented dates or
   // a learning-path order presented as a schedule.
   let calendar: CalendarResponse | undefined;
-  let calendarStatus: DashboardPlanStatus = "not_configured";
-  if (me.selected_tenant_id && api.calendar) {
+  let calendarStatus: DashboardPlanData["calendarStatus"] = "not_configured";
+  if (hasMembershipRole(me) && me.selected_tenant_id && api.calendar) {
     try {
       calendar = await api.calendar({ signal });
       calendarStatus =
@@ -168,19 +195,21 @@ export async function loadDashboardData(
     }
   }
 
-  return {
-    kind: "ready",
-    data: {
-      me,
-      programs: programsRes.items,
-      learning,
-      calendar,
-      calendarStatus,
-      offlineRead:
-        getEarliestOfflineReadMetadata(me, onboarding, programsRes, learning) ??
-        undefined,
-    },
-  };
+  return { calendar, calendarStatus };
+}
+
+// Preserve the complete loader contract for consumers that need both reads.
+// The mounted dashboard uses the core and plan phases independently below.
+export async function loadDashboardData(
+  api: LearnerApi,
+  signal?: AbortSignal,
+): Promise<DashboardReadResult> {
+  const result = await loadDashboardCoreData(api, signal);
+  if (result.kind !== "ready" || !hasMembershipRole(result.data.me)) {
+    return result;
+  }
+  const plan = await loadDashboardPlan(api, result.data.me, signal);
+  return { kind: "ready", data: { ...result.data, ...plan } };
 }
 
 export type DashboardRuntimeProps = { api?: LearnerApi };
@@ -217,13 +246,36 @@ export function DashboardRuntime({ api = defaultApi }: DashboardRuntimeProps) {
     setError(null);
     setOnboardingRedirecting(false);
     try {
-      const result = await loadDashboardData(api, controller.signal);
+      const result = await loadDashboardCoreData(api, controller.signal);
       if (!isCurrent()) return "aborted";
       if (result.kind === "onboarding") {
         setOnboardingRedirecting(true);
         return "redirecting";
       }
-      setData(result.data);
+      const hasPlanContext = Boolean(
+        hasMembershipRole(result.data.me) &&
+          result.data.me.selected_tenant_id &&
+          api.calendar,
+      );
+      setData({
+        ...result.data,
+        calendarStatus: hasPlanContext ? "loading" : "not_configured",
+      });
+      if (hasPlanContext) {
+        // The core task can render while this optional panel is pending. Both
+        // success and session recovery belong to this exact load generation.
+        void loadDashboardPlan(api, result.data.me, controller.signal)
+          .then((plan) => {
+            if (!isCurrent()) return;
+            setData((current) =>
+              current && isCurrent() ? { ...current, ...plan } : current,
+            );
+          })
+          .catch((err: unknown) => {
+            if (isAbortError(err) || !isCurrent()) return;
+            setError(err);
+          });
+      }
       return "loaded";
     } catch (err) {
       if (isAbortError(err) || !isCurrent()) return "aborted";
@@ -424,7 +476,7 @@ export function DashboardRuntime({ api = defaultApi }: DashboardRuntimeProps) {
                   className="card-header-title ac-card-title"
                 >
                   <span className="desktop-text">Continue learning</span>
-                  <span className="mobile-text">Continue watching</span>
+                  <span className="mobile-text">Continue learning</span>
                 </h2>
                 <Link
                   className="card-header-link ac-card-link"
@@ -443,30 +495,26 @@ export function DashboardRuntime({ api = defaultApi }: DashboardRuntimeProps) {
                 {/* Presentation artwork is not a media source or player. */}
                 <div
                   className="continue-learning-media ac-media-frame"
-                  role="status"
-                  aria-label="Presentation artwork; approved lesson media is unavailable"
+                  aria-label="Closers Academy course presentation"
                 >
                   <Image
-                    src="/media/ac-course-hero-v1.png"
+                    src="/brand/instructor-v1/editorial.webp"
                     alt=""
                     fill
-                    sizes="(max-width: 1023px) 44vw, 100vw"
+                    sizes="(max-width: 1023px) 44vw, 32vw"
                     className="ac-media-frame__art"
                   />
                   <div className="ac-media-frame__veil" aria-hidden="true" />
                   <div className="ac-media-frame__copy">
                     <span className="ac-media-frame__eyebrow">
-                      Module {leadModule?.position ?? 1} · presentation artwork
+                      Closers Academy · with Dipak
                     </span>
                     <strong>
                       {leadModule
                         ? presentationModuleTitle(leadModule.title)
                         : learning.program_title}
                     </strong>
-                    <span>
-                      Approved lesson media is not connected yet. Playback is
-                      unavailable.
-                    </span>
+                    <span>Watch. Reflect. Put it into practice.</span>
                   </div>
                 </div>
 
@@ -574,6 +622,7 @@ export function DashboardRuntime({ api = defaultApi }: DashboardRuntimeProps) {
             <section
               className="card todays-plan-card ac-card"
               aria-labelledby="todays-plan-title"
+              aria-busy={planStatus === "loading"}
             >
               <div className="card-header-row ac-card-header">
                 <h2
@@ -585,9 +634,11 @@ export function DashboardRuntime({ api = defaultApi }: DashboardRuntimeProps) {
                 <span className="date-badge ac-date-pill desktop-only">
                   {planStatus === "available"
                     ? `${planItems.length} ${planItems.length === 1 ? "item" : "items"}`
-                    : planStatus === "unavailable"
-                      ? "Unavailable"
-                      : "Not configured"}
+                    : planStatus === "loading"
+                      ? "Loading"
+                      : planStatus === "unavailable"
+                        ? "Unavailable"
+                        : "Not configured"}
                 </span>
                 <Link
                   className="card-header-link ac-card-link mobile-only"
@@ -752,9 +803,11 @@ export function DashboardRuntime({ api = defaultApi }: DashboardRuntimeProps) {
                   </div>
                 ) : (
                   <div className="dashboard-card-empty" role="status">
-                    {planStatus === "unavailable"
-                      ? "Today's plan is unavailable right now. Open My Learning for the published path."
-                      : "No explicit plan has been published for today yet."}
+                    {planStatus === "loading"
+                      ? "Loading today's plan. You can continue learning while it loads."
+                      : planStatus === "unavailable"
+                        ? "Today's plan is unavailable right now. Open My Learning for the published path."
+                        : "No explicit plan has been published for today yet."}
                   </div>
                 )}
               </div>
@@ -984,10 +1037,10 @@ export function DashboardRuntime({ api = defaultApi }: DashboardRuntimeProps) {
                     id="weekly-activity-title"
                     className="card-header-title ac-card-title"
                   >
-                    Your weekly activity
+                    Your course progress
                   </h2>
                   <p className="card-header-subtitle ac-card-subtitle">
-                    Course projection · server published
+                    Every completed step counts.
                   </p>
                 </div>
                 <Link

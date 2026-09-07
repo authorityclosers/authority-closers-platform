@@ -1,20 +1,52 @@
 import type { SVGProps } from "react";
 
+function MarkFrame({ children, ...props }: SVGProps<SVGSVGElement>) {
+  const hasAccessibleName = Boolean(
+    props["aria-label"] || props["aria-labelledby"],
+  );
+
+  return (
+    <svg
+      aria-hidden={hasAccessibleName ? undefined : true}
+      role={hasAccessibleName ? "img" : undefined}
+      focusable="false"
+      viewBox="0 0 512 512"
+      fill="currentColor"
+      {...props}
+    >
+      {children}
+    </svg>
+  );
+}
+
+/** Authority Closers company mark: the supplied Open A geometry. */
 export function BrandMark(props: SVGProps<SVGSVGElement>) {
   return (
-    <svg aria-hidden="true" viewBox="0 0 48 48" fill="none" {...props}>
-      <path
-        d="M1 38 14.8 7h7.4L36 38h-8.2l-2.5-6.2H11.7L9.1 38H1Z"
-        fill="currentColor"
-      />
-      <path
-        d="M14.7 24.5h7.6L18.5 15l-3.8 9.5Z"
-        fill="var(--ac-mark-cut, #10120f)"
-      />
-      <path
-        d="M47 13.5C44.5 9.8 40.8 8 36.3 8 28.4 8 22 15 22 23.5S28.4 39 36.3 39c4.5 0 8.4-1.9 10.7-5.4l-5.2-4c-1.3 1.9-3.1 2.8-5.4 2.8-4.4 0-7.6-3.7-7.6-8.9 0-5.3 3.2-9 7.6-9 2.2 0 4 .9 5.4 2.9l5.2-3.9Z"
-        fill="currentColor"
-      />
-    </svg>
+    <MarkFrame {...props}>
+      <polygon points="32.0,432.0 192.0,48.0 280.0,48.0 120.0,432.0" />
+      <polygon points="308.0,112.0 440.0,432.0 144.0,432.0 184.0,328.0 296.0,328.0 260.0,224.0" />
+    </MarkFrame>
+  );
+}
+
+/** Closers Academy identity; choosing this artwork does not select a tenant. */
+export function AcademyMark(props: SVGProps<SVGSVGElement>) {
+  return (
+    <MarkFrame {...props}>
+      <polygon points="48.0,104.0 232.0,176.0 232.0,408.0 48.0,336.0" />
+      <polygon points="272.0,176.0 456.0,104.0 456.0,336.0 272.0,408.0" />
+      <polygon points="112.0,432.0 392.0,432.0 392.0,480.0 112.0,480.0" />
+    </MarkFrame>
+  );
+}
+
+/** Cohorva's provisional platform identity, independent of academy artwork. */
+export function PlatformMark(props: SVGProps<SVGSVGElement>) {
+  return (
+    <MarkFrame {...props}>
+      <polygon points="72.0,80.0 224.0,80.0 224.0,176.0 168.0,176.0 168.0,352.0 72.0,352.0" />
+      <polygon points="256.0,80.0 432.0,80.0 432.0,352.0 336.0,352.0 336.0,176.0 256.0,176.0" />
+      <polygon points="168.0,384.0 336.0,384.0 336.0,448.0 168.0,448.0" />
+    </MarkFrame>
   );
 }

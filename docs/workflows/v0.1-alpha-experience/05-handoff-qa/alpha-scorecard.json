@@ -1,0 +1,176 @@
+{
+  "schema_version": 1,
+  "workstream_id": "AC-WF-V01-ALPHA",
+  "updated_at": "2026-09-07",
+  "contract": "../00-start-here/alpha-acceptance-contract-2026-09-07.md",
+  "status": "in_progress",
+  "planned_iterations": 3,
+  "current_iteration": 1,
+  "persistent_goal": {
+    "status_observed": "usageLimited",
+    "replacement_created": false,
+    "reason": "create_goal refused because this thread has an unfinished goal"
+  },
+  "baseline": {
+    "environment": "staging",
+    "release_sha": "31aee3ce5915e476c08a722f8b28768b49b514cf",
+    "observed_date": "2026-09-07",
+    "source": "read-only VPS, GitHub and HTTP release audit"
+  },
+  "candidate": {
+    "release_sha": null,
+    "staging": "not_deployed",
+    "production": "blocked"
+  },
+  "scope": {
+    "inventory_frozen": false,
+    "routes": {
+      "total_page_templates": 37,
+      "product_rendering": 34,
+      "compatibility_redirects": 1,
+      "development_only": 2,
+      "learner_page_templates": 27,
+      "admin_page_templates": 10,
+      "inventory": "../00-start-here/route-inventory-2026-09-07.md"
+    },
+    "journeys": null,
+    "applicable_states": null,
+    "passed_journeys": null,
+    "coverage_percent": null
+  },
+  "acceptance": [
+    {
+      "id": "A01",
+      "name": "Scope and preservation",
+      "status": "pending",
+      "evidence": ["../00-start-here/route-inventory-2026-09-07.md"],
+      "observed": "37/37 exact page templates classified. Full action/state denominator not frozen; existing user changes preserved."
+    },
+    {
+      "id": "A02",
+      "name": "Functional journeys",
+      "status": "pending",
+      "evidence": [],
+      "observed": null
+    },
+    {
+      "id": "A03",
+      "name": "Responsive composition",
+      "status": "pending",
+      "evidence": ["../../../evidence/20260907_ALPHA_SURFACES_QA.md"],
+      "observed": "Partial: Discover/Learning local synthetic matrix 24/24 passed at 320, 390, 768, 1024, 1440 and 1920 px in light/dark. No overflow. Other routes and 360 px/keyboard-viewport acceptance pending."
+    },
+    {
+      "id": "A04",
+      "name": "Accessibility",
+      "status": "pending",
+      "evidence": ["../../../evidence/20260907_ALPHA_SURFACES_QA.md"],
+      "observed": "Partial: eight search and four More focus cases, 12 reduced-motion combinations and four actual sidebar collapses pass. Dark account-name contrast 12.03:1 including opacity. Full audit/zoom/other journeys pending."
+    },
+    {
+      "id": "A05",
+      "name": "Visual coherence",
+      "status": "pending",
+      "evidence": [],
+      "observed": null
+    },
+    {
+      "id": "A06",
+      "name": "Lab speed",
+      "status": "pending",
+      "evidence": [],
+      "observed": null
+    },
+    {
+      "id": "A07",
+      "name": "Runtime and bundle discipline",
+      "status": "pending",
+      "evidence": [
+        "../../../evidence/20260907_ALPHA_THEME_RUNTIME.md",
+        "../../../evidence/20260907_ALPHA_DASHBOARD_PLAN_LOADING.md",
+        "../../../evidence/20260907_ALPHA_SIDEBAR_NAVIGATION.md"
+      ],
+      "observed": "Mounted dashboard optional-plan loading, stale-response/abort handling and lightweight root theme runtime implemented/tested. Production JS/CSS transfer comparison and interaction timings still pending."
+    },
+    {
+      "id": "A08",
+      "name": "PWA and work safety",
+      "status": "pending",
+      "evidence": [],
+      "observed": null
+    },
+    {
+      "id": "A09",
+      "name": "Security and data invariants",
+      "status": "pending",
+      "evidence": [],
+      "observed": null
+    },
+    {
+      "id": "A10",
+      "name": "Engineering quality",
+      "status": "pending",
+      "evidence": [
+        "../../../evidence/20260907_ALPHA_FOUNDATION_INTEGRATION.md"
+      ],
+      "observed": "Local pnpm validate exited 0: formatting, lint, typecheck, 519 learner tests, 132 admin tests, 1216 Python tests and both production builds pass. 139 environment-dependent tests skipped. Remote CI/integration and final Alpha coverage pending."
+    },
+    {
+      "id": "A11",
+      "name": "Release documentation",
+      "status": "pending",
+      "evidence": [
+        "https://drive.google.com/file/d/1O6Rdy9M_ciUKzWkak3oUaNLFemqovp9s/view",
+        "https://drive.google.com/file/d/1bs6YeI5qDo5TItacLCwb0iLWVleDTow1/view"
+      ],
+      "observed": "Acceptance contract, QA report and 32 local screenshots plus results JSON uploaded/readback verified in the existing release folder. New live before/after evidence and exact-SHA release ledger entry pending; no new release claimed."
+    },
+    {
+      "id": "A12",
+      "name": "Environment promotion",
+      "status": "blocked",
+      "evidence": [],
+      "observed": "Production DNS/ingress, independent application secrets/bootstrap, admin Access, provider and backup/restore evidence absent or failing; new candidate not deployed."
+    },
+    {
+      "id": "A13",
+      "name": "Licensed high-quality VPS test video streaming",
+      "status": "pending",
+      "evidence": [
+        "../../../evidence/20260907_ALPHA_FOUNDATION_INTEGRATION.md",
+        "../../../evidence/20260907_ALPHA_SECOND_MEDIA_FIXTURE.md"
+      ],
+      "observed": "Official pinned BBB 4K and distinct Caminandes 1080p downloaded and hash/probe verified. Local 12-second HLS ladders and diagnostic captions built; decoder/filter/encoder pools bounded. Nothing uploaded/bound to a VPS course; authorized delivery/player/evidence and VPS resource tests pending."
+    }
+  ],
+  "field_performance": {
+    "status": "not_measured",
+    "lcp_p75_ms_target": 2500,
+    "inp_p75_ms_target": 200,
+    "cls_p75_target": 0.1,
+    "samples": null,
+    "telemetry_activation_authorized_by_this_contract": false
+  },
+  "capability_gates": [
+    {
+      "id": "MEDIA",
+      "status": "blocked",
+      "reason": "Approved real lesson source/binding and actual playback/evidence proof not established by supplied prototypes."
+    },
+    {
+      "id": "PRODUCTION",
+      "status": "blocked",
+      "reason": "Independent production environment activation and recovery evidence incomplete."
+    },
+    {
+      "id": "NATIVE",
+      "status": "deferred",
+      "reason": "Only responsive web/PWA and adapter compatibility are in scope."
+    },
+    {
+      "id": "AI_VPS",
+      "status": "out_of_scope",
+      "reason": "User requested idle; external task pause not confirmed because task-control tools are unavailable."
+    }
+  ]
+}

@@ -155,16 +155,16 @@ export function PublicCatalogHome({ api = defaultApi }: { api?: LearnerApi }) {
           aria-label="Authority Closers learning experience"
         >
           <Image
-            src="/media/dipak-learning-hero-v1.png"
-            alt=""
-            width={1672}
-            height={941}
+            src="/brand/instructor-v1/editorial.webp"
+            alt="Dipak Vishwakarma, your guide at Closers Academy"
+            width={768}
+            height={960}
             priority
             sizes="(max-width: 760px) 100vw, 46vw"
           />
           <div className="ac-public-hero__overlay">
-            <span>Core Method</span>
-            <strong>Evidence-led practice</strong>
+            <span>Learn with Dipak Vishwakarma</span>
+            <strong>One better conversation at a time.</strong>
           </div>
           <div className="ac-public-hero__status">
             <span

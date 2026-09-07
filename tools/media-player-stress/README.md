@@ -7,23 +7,30 @@ change auth policy. The synthetic trace is diagnostic evidence only.
 
 ## Media provenance
 
-The public sample is Blender Foundation's Big Buck Bunny, obtained from the
-official Blender download host:
+The public samples are Blender Foundation's Big Buck Bunny and Caminandes 2:
+Gran Dillama, obtained from the official Blender download host:
 
 - [Blender film/about page](https://peach.blender.org/about/)
 - [Blender download page](https://peach.blender.org/download/)
 - [Official 2160p 30fps normal download archive](https://download.blender.org/demo/movies/BBB/bbb_sunflower_2160p_30fps_normal.mp4.zip)
 - [Official 320x180 download archive](https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4.zip)
+- [Caminandes 2 official film and current CC BY 4.0 license](https://studio.blender.org/projects/api/assets/2363/)
+- [Caminandes 2 official 1080p archive](https://download.blender.org/demo/movies/caminandes_gran_dillama.mp4.zip)
 
-Blender identifies the film as Creative Commons Attribution 3.0. The exact
+Blender identifies Big Buck Bunny as Creative Commons Attribution 3.0 and the
+current Caminandes 2 film item as Creative Commons Attribution 4.0. The exact
 source URLs, license/provenance pages, retrieval date, archive hashes, and
 extracted-file hashes are pinned in
-[`fixture-manifest.json`](fixture-manifest.json). The two external fixtures are
+[`fixture-manifest.json`](fixture-manifest.json). The three external fixtures are
 test inputs only; they are not Authority Closers course content. Do not
 substitute copyrighted course media. Keep the archive and extracted file under
 the ignored `tools/media-player-stress/.artifacts/` directory. Use the
 checksum-pinned acquisition CLI below; direct download, archive expansion, or
 arbitrary public URLs are intentionally not part of this harness.
+
+Preserve the original film credits and the manifest's attribution and license
+links. Identify any excerpts, transcodes or synthetic caption tracks as test
+derivatives; neither film is a Dipak recording or an Authority Closers lesson.
 
 The other fixtures are local FFmpeg test-pattern MP4s used only to cover
 16:9/4:3/2.35:1 geometry and 3/4/6-second durations:
@@ -89,6 +96,7 @@ rejected.
 python tools/media-player-stress/acquire_media_fixtures.py manifest
 python tools/media-player-stress/acquire_media_fixtures.py acquire --fixture bbb-4k-30-normal
 python tools/media-player-stress/acquire_media_fixtures.py acquire --fixture bbb-320x180-24
+python tools/media-player-stress/acquire_media_fixtures.py acquire --fixture caminandes-gran-dillama-1080p
 python tools/media-player-stress/acquire_media_fixtures.py generate --fixture generated-16x9-4s
 python tools/media-player-stress/acquire_media_fixtures.py generate --fixture generated-4x3-6s
 python tools/media-player-stress/acquire_media_fixtures.py generate --fixture generated-wide-3s
@@ -98,6 +106,10 @@ python tools/media-player-stress/acquire_media_fixtures.py verify
 Render a bounded HLS ladder (the default is six declared resolutions/bitrates)
 into a new ignored directory. Use a short duration for repeatable local smoke
 checks; the source fixture itself remains pinned to its full metadata duration.
+Renditions run sequentially, with each decoder, filter pipeline and encoder
+limited to two FFmpeg worker threads. This is a per-pool bound, not a claim
+that the entire process has only two threads; output/time/byte limits still
+apply. The generated lavfi fixtures and their pinned commands are unchanged.
 
 ```powershell
 python tools/media-player-stress/build_hls_ladder.py `

@@ -43,6 +43,10 @@ from fixture_harness import (  # noqa: E402
 )
 
 _MAX_DURATION_SECONDS = 10 * 60
+# Renditions are rendered sequentially. Bound each decoder, filter pipeline
+# and encoder as well: FFmpeg's automatic core count can exhaust a small
+# workstation while its normal validation/build jobs are running.
+_TRANSCODE_THREADS = 2
 _MAX_SEGMENT_BYTES = 512 * 1024 * 1024
 _MAX_MANIFEST_BYTES = 2 * 1024 * 1024
 _MAX_CAPTION_BYTES = 2 * 1024 * 1024
@@ -451,6 +455,12 @@ def _render_profile(
         "-loglevel",
         "error",
         "-y",
+        "-threads",
+        str(_TRANSCODE_THREADS),
+        "-filter_threads",
+        str(_TRANSCODE_THREADS),
+        "-filter_complex_threads",
+        str(_TRANSCODE_THREADS),
         "-i",
         str(source),
         "-t",
@@ -461,6 +471,8 @@ def _render_profile(
         _filter_for(profile),
         "-c:v",
         "libx264",
+        "-threads",
+        str(_TRANSCODE_THREADS),
         "-profile:v",
         "main",
         "-pix_fmt",

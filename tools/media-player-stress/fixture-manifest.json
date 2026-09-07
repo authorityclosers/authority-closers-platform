@@ -2,7 +2,7 @@
   "schema_version": "ac-media-stress-fixtures.v1",
   "purpose": "Non-production media pipeline and player stress fixtures only.",
   "status": "test_only",
-  "manifest_updated_at": "2026-09-04",
+  "manifest_updated_at": "2026-09-07",
   "content_boundary": {
     "authority_closers_course_content": false,
     "canonical_learning_state": false,
@@ -14,7 +14,7 @@
   "source_policy": {
     "download_requires_https": true,
     "allowed_download_hosts": ["download.blender.org"],
-    "allowed_provenance_hosts": ["peach.blender.org", "download.blender.org"],
+    "allowed_provenance_hosts": ["peach.blender.org", "download.blender.org", "studio.blender.org"],
     "arbitrary_public_urls": false,
     "max_archive_bytes": 2147483648,
     "max_fixture_bytes": 8589934592
@@ -134,6 +134,37 @@
         "fps": "24/1",
         "container": "mp4",
         "duration_seconds": 596.458,
+        "duration_tolerance_seconds": 0.25,
+        "video_codec": "h264",
+        "audio_codecs": ["aac"]
+      }
+    },
+    {
+      "id": "caminandes-gran-dillama-1080p",
+      "title": "Caminandes 2: Gran Dillama — official 1080p film",
+      "kind": "external_open_license",
+      "course_content": false,
+      "source_url": "https://download.blender.org/demo/movies/caminandes_gran_dillama.mp4.zip",
+      "source_page": "https://studio.blender.org/projects/api/assets/2363/",
+      "source_index": "https://download.blender.org/demo/movies/",
+      "license": "Creative Commons Attribution 4.0",
+      "license_url": "https://creativecommons.org/licenses/by/4.0/",
+      "attribution": "Blender Foundation / Blender Studio; Caminandes 2: Gran Dillama (2013), directed by Pablo Vazquez; studio.blender.org",
+      "source_index_date": "2023-11-24",
+      "source_date_basis": "official Blender download directory listing; not asserted as HTTP Last-Modified",
+      "retrieved_at": "2026-09-07",
+      "archive_cache_path": "sources/caminandes-gran-dillama-1080p/caminandes_gran_dillama.mp4.zip",
+      "cache_path": "sources/caminandes-gran-dillama-1080p/caminandes_gran_dillama.mp4",
+      "archive_member": "caminandes_gran_dillama.mp4",
+      "archive_sha256": "2e54abfb18dcb0a25d41e7b5d97fd51b226cec58d2fbcad101cf6deecea8c48b",
+      "sha256": "468e6743c674689a728726bbe4bb4b2a65bd8702a89f021af26a8bb4d450eebd",
+      "content_type": "video/mp4",
+      "metadata": {
+        "width": 1920,
+        "height": 1080,
+        "fps": "24/1",
+        "container": "mp4",
+        "duration_seconds": 146.041667,
         "duration_tolerance_seconds": 0.25,
         "video_codec": "h264",
         "audio_codecs": ["aac"]

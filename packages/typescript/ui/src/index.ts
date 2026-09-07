@@ -1,4 +1,10 @@
-export { BrandMark } from "./mark";
+export {
+  COMPANY_BRAND,
+  FIRST_ACADEMY_BRAND,
+  PLATFORM_BRAND,
+} from "./brand-presentation";
+export type { BrandPresentation } from "./brand-presentation";
+export { AcademyMark, BrandMark, PlatformMark } from "./mark";
 export {
   ActivityRow,
   ModuleCard,

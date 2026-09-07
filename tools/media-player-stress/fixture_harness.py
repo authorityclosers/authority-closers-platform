@@ -37,30 +37,39 @@ _SHA256 = re.compile(r"^[0-9a-fA-F]{64}$")
 _ID = re.compile(r"^[a-z0-9][a-z0-9-]{1,79}$")
 _FPS = re.compile(r"^[1-9][0-9]{0,4}/[1-9][0-9]{0,4}$")
 _ALLOWED_DOWNLOAD_HOSTS = frozenset({"download.blender.org"})
-_ALLOWED_PROVENANCE_HOSTS = frozenset({"download.blender.org", "peach.blender.org"})
+_ALLOWED_PROVENANCE_HOSTS = frozenset(
+    {"download.blender.org", "peach.blender.org", "studio.blender.org"}
+)
 _ALLOWED_DOWNLOAD_PATHS = frozenset(
     {
         "/demo/movies/BBB/bbb_sunflower_2160p_30fps_normal.mp4.zip",
         "/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4.zip",
+        "/demo/movies/caminandes_gran_dillama.mp4.zip",
     }
 )
-_ALLOWED_SOURCE_PAGES = frozenset({"/about/"})
-_ALLOWED_SOURCE_INDEXES = frozenset({"/demo/movies/BBB/", "/download/"})
-_ALLOWED_LICENSE_PATHS = frozenset({"/licenses/by/3.0/"})
+_ALLOWED_SOURCE_PAGES = frozenset({"/about/", "/projects/api/assets/2363/"})
+_ALLOWED_SOURCE_INDEXES = frozenset({"/demo/movies/BBB/", "/download/", "/demo/movies/"})
+_ALLOWED_LICENSE_PATHS = frozenset({"/licenses/by/3.0/", "/licenses/by/4.0/"})
 _ALLOWED_SOURCE_URLS = frozenset(
     {
         "https://download.blender.org/demo/movies/BBB/bbb_sunflower_2160p_30fps_normal.mp4.zip",
         "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4.zip",
+        "https://download.blender.org/demo/movies/caminandes_gran_dillama.mp4.zip",
     }
 )
-_ALLOWED_SOURCE_PAGE_URLS = frozenset({"https://peach.blender.org/about/"})
+_ALLOWED_SOURCE_PAGE_URLS = frozenset(
+    {"https://peach.blender.org/about/", "https://studio.blender.org/projects/api/assets/2363/"}
+)
 _ALLOWED_SOURCE_INDEX_URLS = frozenset(
     {
         "https://download.blender.org/demo/movies/BBB/",
         "https://peach.blender.org/download/",
+        "https://download.blender.org/demo/movies/",
     }
 )
-_ALLOWED_LICENSE_URLS = frozenset({"https://creativecommons.org/licenses/by/3.0/"})
+_ALLOWED_LICENSE_URLS = frozenset(
+    {"https://creativecommons.org/licenses/by/3.0/", "https://creativecommons.org/licenses/by/4.0/"}
+)
 _ALLOWED_VIDEO_CODECS = frozenset({"h264"})
 _ALLOWED_AUDIO_CODECS = frozenset({"aac", "mp3", "ac3"})
 _EXPECTED_ARCHIVE_MEMBERS = {
@@ -70,9 +79,14 @@ _EXPECTED_ARCHIVE_MEMBERS = {
     (
         "https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4.zip"
     ): "BigBuckBunny_320x180.mp4",
+    (
+        "https://download.blender.org/demo/movies/caminandes_gran_dillama.mp4.zip"
+    ): "caminandes_gran_dillama.mp4",
 }
 _EXPECTED_EXTERNAL_PROVENANCE = {
     ("https://download.blender.org/demo/movies/BBB/bbb_sunflower_2160p_30fps_normal.mp4.zip"): {
+        "license": "Creative Commons Attribution 3.0",
+        "license_url": "https://creativecommons.org/licenses/by/3.0/",
         "source_page": "https://peach.blender.org/about/",
         "source_index": "https://download.blender.org/demo/movies/BBB/",
         "source_index_date": "2023-11-24",
@@ -82,10 +96,23 @@ _EXPECTED_EXTERNAL_PROVENANCE = {
         ),
     },
     ("https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4.zip"): {
+        "license": "Creative Commons Attribution 3.0",
+        "license_url": "https://creativecommons.org/licenses/by/3.0/",
         "source_page": "https://peach.blender.org/about/",
         "source_index": "https://peach.blender.org/download/",
         "source_index_date": "2008-06-05",
         "attribution": "Blender Foundation; Big Buck Bunny",
+    },
+    ("https://download.blender.org/demo/movies/caminandes_gran_dillama.mp4.zip"): {
+        "license": "Creative Commons Attribution 4.0",
+        "license_url": "https://creativecommons.org/licenses/by/4.0/",
+        "source_page": "https://studio.blender.org/projects/api/assets/2363/",
+        "source_index": "https://download.blender.org/demo/movies/",
+        "source_index_date": "2023-11-24",
+        "attribution": (
+            "Blender Foundation / Blender Studio; Caminandes 2: Gran Dillama (2013), "
+            "directed by Pablo Vazquez; studio.blender.org"
+        ),
     },
 }
 _EXPECTED_PROFILE_IDS = ("2160p", "1440p", "1080p", "720p", "480p", "360p")
@@ -132,7 +159,7 @@ _EXPECTED_NETWORK_SCENARIO_IDS = (
 # authority merely because it is present next to this script: changing one
 # must require an intentional code change which updates this pin as well.
 EXPECTED_FIXTURE_MANIFEST_SHA256 = (
-    "ee4da2e4039d458ecaf933aaa9a019fee29eb813addbe85b61ef7d78254859ae"
+    "fc61c87d5428d53d35b82061a53fbdbd9967b8bf658c6d0425a78a07bc106290"
 )
 EXPECTED_CAPTIONS_MANIFEST_SHA256 = (
     "02d5e104a3a0c2cf760a1132b09e02cd8f45c95fa3b0861d891faedd492e8185"
@@ -140,7 +167,7 @@ EXPECTED_CAPTIONS_MANIFEST_SHA256 = (
 EXPECTED_NETWORK_SCENARIOS_SHA256 = (
     "ac8d59e2209d6b3090b5499d89f8b689809f1b467e6a3ea3c47a4d43ad0cdc1f"
 )
-EXPECTED_TEST_MANIFEST_SHA256 = "88b29bfbea077200a522ff85179785a2efbdc8dcdb076cf2c71ce321f96eb0f6"
+EXPECTED_TEST_MANIFEST_SHA256 = "34fc19911d55ef0d002c19ca22dc15f31ca8e443fe8ae10e0fb32fdda0080411"
 _EXPECTED_SIDECAR_DIGESTS = {
     DEFAULT_MANIFEST_PATH.resolve(): EXPECTED_FIXTURE_MANIFEST_SHA256,
     Path(__file__).with_name("captions-manifest.json").resolve(): EXPECTED_CAPTIONS_MANIFEST_SHA256,
@@ -662,15 +689,13 @@ def _validate_fixture(
             fixture.get("license_url"),
             field_name="license_url",
             allowed_hosts=frozenset({"creativecommons.org"}),
-            exact_path="/licenses/by/3.0/",
+            allowed_paths=_ALLOWED_LICENSE_PATHS,
             exact_urls=_ALLOWED_LICENSE_URLS,
         )
         if "Creative Commons" not in fixture["license"]:
             raise FixtureManifestError("external fixture license must state Creative Commons")
         expected_provenance = _EXPECTED_EXTERNAL_PROVENANCE[source_url]
-        if fixture.get("license") != "Creative Commons Attribution 3.0" or any(
-            fixture.get(key) != value for key, value in expected_provenance.items()
-        ):
+        if any(fixture.get(key) != value for key, value in expected_provenance.items()):
             raise FixtureManifestError("external fixture license/provenance is not exact")
         archive_path = _safe_relative(
             _require_string(fixture, "archive_cache_path"),
@@ -748,7 +773,7 @@ def load_manifest(
         raise FixtureManifestError("unsupported fixture manifest schema")
     if payload.get("status") != "test_only":
         raise FixtureManifestError("fixture manifest must remain test_only")
-    if payload.get("manifest_updated_at") != "2026-09-04":
+    if payload.get("manifest_updated_at") != "2026-09-07":
         raise FixtureManifestError("fixture manifest update date is missing or malformed")
     boundary = payload.get("content_boundary")
     if not isinstance(boundary, Mapping) or any(
@@ -773,7 +798,11 @@ def load_manifest(
         raise FixtureManifestError("fixture source policy must reject arbitrary public URLs")
     if policy.get("allowed_download_hosts") != ["download.blender.org"]:
         raise FixtureManifestError("fixture download allowlist changed unexpectedly")
-    if policy.get("allowed_provenance_hosts") != ["peach.blender.org", "download.blender.org"]:
+    if policy.get("allowed_provenance_hosts") != [
+        "peach.blender.org",
+        "download.blender.org",
+        "studio.blender.org",
+    ]:
         raise FixtureManifestError("fixture provenance allowlist changed unexpectedly")
     _positive_int(policy, "max_archive_bytes", maximum=2 * 1024 * 1024 * 1024)
     _positive_int(policy, "max_fixture_bytes", maximum=8 * 1024 * 1024 * 1024)

@@ -1,12 +1,12 @@
 const CACHE_PREFIX = "ac-learner-shell-";
-const CACHE_NAME = `${CACHE_PREFIX}v0.1.1`;
+const CACHE_NAME = `${CACHE_PREFIX}v0.1.2`;
 const OFFLINE_URL = "/offline";
 const SHELL_ASSETS = [
   OFFLINE_URL,
   "/icon.svg",
-  "/icon-192.png",
-  "/icon-512.png",
-  "/apple-touch-icon.png",
+  "/brand/closers-academy-v0.1/icon-192.png",
+  "/brand/closers-academy-v0.1/icon-512.png",
+  "/brand/closers-academy-v0.1/icon-180.png",
   "/manifest.webmanifest",
   "/theme-init.js",
 ];
@@ -128,6 +128,8 @@ self.addEventListener("fetch", (event) => {
 
   if (
     url.pathname.startsWith("/_next/static/") ||
+    (SHELL_ASSETS.includes(url.pathname) &&
+      url.pathname.startsWith("/brand/")) ||
     url.pathname === "/icon.svg" ||
     url.pathname === "/theme-init.js"
   ) {

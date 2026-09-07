@@ -368,15 +368,15 @@ describe("installable browser shell", () => {
     expect(metadata.display).toBe("standalone");
     expect(metadata.start_url).toBe("/");
     expect(metadata.scope).toBe("/");
-    expect(metadata.name).toBe("Authority Closers Learning");
+    expect(metadata.name).toBe("Closers Academy · Cohorva");
     expect(metadata.icons).toEqual([
       expect.objectContaining({
-        src: "/icon-192.png",
+        src: "/brand/closers-academy-v0.1/icon-192.png",
         sizes: "192x192",
         purpose: "any",
       }),
       expect.objectContaining({
-        src: "/icon-512.png",
+        src: "/brand/closers-academy-v0.1/icon-512.png",
         sizes: "512x512",
         purpose: "maskable",
       }),

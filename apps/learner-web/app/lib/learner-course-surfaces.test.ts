@@ -11,7 +11,12 @@ import {
   RouteHeader,
   StatusBanner,
 } from "@ac/ui";
-import { loadDiscoverData } from "../components/discover-runtime";
+import {
+  DiscoverLoadErrorState,
+  getDiscoverLoadErrorClass,
+  getDiscoverLoadErrorPresentation,
+  loadDiscoverData,
+} from "../components/discover-runtime";
 import {
   getCourseNextAction,
   getCourseProjection,
@@ -377,6 +382,118 @@ describe("learner course surface primitives", () => {
       canRetry: false,
     });
   });
+
+  it("classifies Discover retryable statuses and network failures while keeping terminal errors distinct", () => {
+    for (const status of [408, 425, 429, 500, 503, 599]) {
+      expect(getDiscoverLoadErrorClass(new ApiError(status, "temporary"))).toBe(
+        "retryable",
+      );
+    }
+    expect(getDiscoverLoadErrorClass(new TypeError("offline"))).toBe(
+      "retryable",
+    );
+    for (const status of [400, 401, 403, 404, 499]) {
+      expect(getDiscoverLoadErrorClass(new ApiError(status, "terminal"))).toBe(
+        "terminal",
+      );
+    }
+    expect(getDiscoverLoadErrorClass(new Error("invalid response"))).toBe(
+      "terminal",
+    );
+
+    expect(getDiscoverLoadErrorPresentation(new TypeError("offline"))).toEqual({
+      errorClass: "retryable",
+      title: "Catalog is temporarily unavailable",
+      detail:
+        "The catalog service or network is temporarily unavailable. Retry the read; no learner work was changed.",
+      requiresSignIn: false,
+      requiresSupport: false,
+      supportHref: null,
+      canRetry: true,
+    });
+    expect(
+      getDiscoverLoadErrorPresentation(new ApiError(401, "expired")),
+    ).toEqual({
+      errorClass: "terminal",
+      title: "Sign in to view Discover",
+      detail:
+        "Your session has expired. Sign in again to view published programs.",
+      requiresSignIn: true,
+      requiresSupport: false,
+      supportHref: null,
+      canRetry: false,
+    });
+    expect(
+      getDiscoverLoadErrorPresentation(new ApiError(403, "denied")),
+    ).toEqual({
+      errorClass: "terminal",
+      title: "Catalog access is unavailable",
+      detail:
+        "This account is not authorized to view the published catalog. If you think this is incorrect, contact support.",
+      requiresSignIn: false,
+      requiresSupport: true,
+      supportHref:
+        "mailto:admin@authorityclosers.com?subject=Authority%20Closers%20learner%20access",
+      canRetry: false,
+    });
+    const forbiddenMarkup = renderToStaticMarkup(
+      createElement(DiscoverLoadErrorState, {
+        presentation: getDiscoverLoadErrorPresentation(
+          new ApiError(403, "denied"),
+        ),
+        onRetry: () => undefined,
+      }),
+    );
+    expect(forbiddenMarkup).toContain(
+      'href="mailto:admin@authorityclosers.com?subject=Authority%20Closers%20learner%20access"',
+    );
+    expect(forbiddenMarkup).toContain("Contact learner support");
+    expect(forbiddenMarkup).toContain("surface-state--error_terminal");
+    expect(forbiddenMarkup).toContain('class="surface-state__icon"');
+    expect(forbiddenMarkup).toContain('class="surface-state__body"');
+    expect(forbiddenMarkup).not.toContain("Retry catalog");
+
+    const retryableMarkup = renderToStaticMarkup(
+      createElement(DiscoverLoadErrorState, {
+        presentation: getDiscoverLoadErrorPresentation(
+          new TypeError("offline"),
+        ),
+        onRetry: () => undefined,
+      }),
+    );
+    expect(retryableMarkup).toContain("Retry catalog");
+    expect(retryableMarkup).toContain('data-error-class="retryable"');
+    expect(retryableMarkup).toContain('data-state="ERROR_RETRYABLE"');
+    expect(retryableMarkup).toContain("surface-state--error_retryable");
+    expect(retryableMarkup).toContain("surface-state__eyebrow");
+  });
+
+  it("keeps the Discover summary scoped to the first page and copy neutral", () => {
+    const source = readFileSync(
+      new URL("../components/discover-runtime.tsx", import.meta.url),
+      "utf8",
+    );
+    const learningSource = readFileSync(
+      new URL("../components/learning-runtime.tsx", import.meta.url),
+      "utf8",
+    );
+
+    expect(source).toContain('data-count-scope="first-page"');
+    expect(source).toContain("<strong>{programs.length}</strong>");
+    expect(source).toContain("published programs shown");
+    expect(source).toContain(
+      '<nav className="learning-breadcrumbs" aria-label="Breadcrumb">',
+    );
+    expect(source).toContain('<span aria-current="page">Discover</span>');
+    expect(learningSource).toContain(
+      '<nav className="learning-breadcrumbs" aria-label="Breadcrumb">',
+    );
+    expect(learningSource).toContain(
+      '<span aria-current="page">My Learning</span>',
+    );
+    expect(source).not.toContain("Check back soon");
+    expect(source).not.toContain("Program ${String(index + 1)");
+  });
 });
 
 describe("learner course route wiring", () => {
@@ -461,5 +578,13 @@ describe("learner course route wiring", () => {
     expect(css).toContain(".site-frame--learner .skeleton-line");
     expect(css).toContain("max-width: 100%");
     expect(css).toContain("min-height: 44px");
+    expect(css).toContain(".site-frame--learner .discover-view");
+    expect(css).toContain(".site-frame--learner .discover-catalog-summary");
+    // Scope this contract to the phone filter row. Another two-column rule
+    // elsewhere must not make a broken collection-tab layout pass.
+    expect(css).toMatch(
+      /@media \(max-width: 560px\)\s*\{(?:(?!@media)[\s\S])*?\.site-frame--learner \.learning-collection-tabs\s*\{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/,
+    );
+    expect(css).toContain('html[data-theme="dark"] .site-frame--learner');
   });
 });

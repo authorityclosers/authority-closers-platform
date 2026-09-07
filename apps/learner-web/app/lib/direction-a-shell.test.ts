@@ -10,6 +10,7 @@ import {
   closeNotificationPopover,
   initialsForDisplayName,
   LearnerShell,
+  MobileLearnerBrand,
 } from "../components/site-shell";
 import {
   firstActionableActivity,
@@ -456,9 +457,7 @@ describe("Direction A & B UI System & Shell", () => {
       );
 
       expect(learnerNavLink).toContain("prefetch={false}");
-      expect(shellSource).toContain(
-        "href={ROUTES.dashboard}\n              prefetch={false}",
-      );
+      expect(MobileLearnerBrand({}).props.prefetch).toBe(false);
       expect(shellSource).toContain(
         "href={ROUTES.discover}\n              prefetch={false}",
       );
@@ -554,6 +553,14 @@ describe("Direction A & B UI System & Shell", () => {
       // Safe area padding on mobile bottom nav and drawer
       expect(clarityCss).toContain("env(safe-area-inset-bottom)");
       expect(clarityCss).toContain("env(safe-area-inset-top)");
+
+      // Mobile keeps a visible 44px search trigger when the wide search slot hides.
+      expect(clarityCss).toMatch(
+        /\.site-frame--learner \.mobile-header-icon-button \{\s*display: inline-flex;\s*flex: 0 0 44px;/,
+      );
+      expect(clarityCss).not.toMatch(
+        /\.site-frame--learner \.mobile-header-icon-button \{\s*display: none !important;/,
+      );
 
       // 320px ultra-compact mobile polish
       expect(clarityCss).toContain("@media (max-width: 360px)");
@@ -717,7 +724,7 @@ describe("Direction A & B UI System & Shell", () => {
       expect(shellSliceCss).toContain("--ac-mark-cut: var(--theme-action);");
       expect(shellSliceCss).toContain("@media (max-width: 1023px)");
       expect(shellSliceCss).toMatch(
-        /@media \(max-width: 1023px\)[\s\S]*?\.site-frame--learner \.learner-help-widget \{[\s\S]*?bottom: calc\(88px \+ env\(safe-area-inset-bottom\)\);/,
+        /@media \(max-width: 1023px\)[\s\S]*?\.site-frame--learner \.learner-help-widget \{[\s\S]*?display: none;/,
       );
       expect(clarityCss).toContain(
         ".site-frame--learner .progress-summary__number::after",
@@ -726,7 +733,8 @@ describe("Direction A & B UI System & Shell", () => {
       expect(clarityCss).toContain("@media (max-width: 360px)");
       expect(clarityCss).toContain(".section-header-row");
       expect(dashboardSource).toContain("Today&apos;s plan");
-      expect(dashboardSource).toContain("Your weekly activity");
+      expect(dashboardSource).toContain("Your course progress");
+      expect(dashboardSource).not.toContain("Your weekly activity");
       expect(dashboardSource).toContain("calendarStatus");
       expect(dashboardSource).toContain("planItems");
       expect(dashboardSource).toContain("ROUTES.calendar");

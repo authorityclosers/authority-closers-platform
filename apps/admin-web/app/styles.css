@@ -1824,16 +1824,16 @@ code {
    for the route primitives; this scoped layer gives the v0.1 shell a faithful,
    light enterprise learning workspace without changing its API behavior. */
 .clarity-shell {
-  --bg: #f7f8fa;
+  --bg: #f7f8fc;
   --panel: #ffffff;
   --panel-raised: #ffffff;
   --panel-soft: #f4f7fb;
   --line: #e2e8f0;
   --line-strong: #cbd5e1;
-  --text: #101828;
-  --muted: #526176;
+  --text: #152638;
+  --muted: #566475;
   --quiet: #697586;
-  --signal: #1769e0;
+  --signal: #3155c6;
   --signal-ink: #ffffff;
   --amber: #b54708;
   --danger: #b42318;
@@ -1871,6 +1871,7 @@ code {
 .clarity-shell .brand-mark {
   width: 28px;
   height: 28px;
+  color: var(--signal);
 }
 
 .clarity-shell .brand-copy {

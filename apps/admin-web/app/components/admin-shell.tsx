@@ -16,7 +16,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import { BrandMark } from "@ac/ui";
+import { PLATFORM_BRAND, PlatformMark } from "@ac/ui";
 
 import {
   AdminSessionProvider,
@@ -197,15 +197,15 @@ export function AdminShell({
             <Link
               className="brand"
               href="/"
-              aria-label="Authority Closers operations home"
+              aria-label={`${PLATFORM_BRAND.name} operations home`}
             >
-              <BrandMark className="brand-mark" />
+              <PlatformMark className="brand-mark" />
               <span className="brand-copy">
-                <strong>Authority LMS</strong>
+                <strong>{PLATFORM_BRAND.name}</strong>
                 <small>admin workspace</small>
               </span>
             </Link>
-            <span className="sidebar-index">v2</span>
+            <span className="sidebar-index">Alpha</span>
           </div>
 
           <AdminTenantContext />
@@ -282,7 +282,7 @@ export function AdminShell({
           {children}
 
           <footer className="admin-footer">
-            <span>AUTHORITY LMS / ADMIN FOUNDATION</span>
+            <span>{PLATFORM_BRAND.name} / Academy operations</span>
             <span>
               {surface === "studio"
                 ? "TENANT-SCOPED · SERVER-AUTHORIZED · NO STORE"

@@ -4203,7 +4203,7 @@ a.learning-list-card:hover {
 .learner-profile__name {
   font-size: 13px;
   font-weight: 600;
-  color: #0f172a;
+  color: var(--theme-text, #152638);
   min-width: 0;
   max-width: min(28vw, 180px);
   overflow: hidden;
@@ -8671,7 +8671,7 @@ a.learning-list-card:hover {
 
 .site-frame--learner .learner-profile__name {
   max-width: 160px;
-  color: #102349;
+  color: var(--theme-text, #152638);
   font-weight: 600;
 }
 
@@ -9014,9 +9014,16 @@ a.learning-list-card:hover {
   }
 
   .site-frame--learner .learner-header__context,
-  .site-frame--learner .learner-header__search-slot,
-  .site-frame--learner .mobile-header-icon-button {
+  .site-frame--learner .learner-header__search-slot {
     display: none !important;
+  }
+
+  .site-frame--learner .mobile-header-icon-button {
+    display: inline-flex;
+    flex: 0 0 44px;
+    color: var(--theme-text);
+    border-color: transparent;
+    background: transparent;
   }
 
   .site-frame--learner .learner-header__actions {
