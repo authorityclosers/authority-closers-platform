@@ -457,9 +457,26 @@ unset loaded_api_migration_heads
 install -d -m 0750 -o root -g acops "$state_root"
 install -d -m 0700 -o 999 -g 999 "$state_root/postgres"
 
+python3 "$release_dir/scripts/staging-public-films.py" \
+  preflight "$release_dir" "$target_environment"
+
 compose_for() {
   local target_release="$1"
   shift
+  local fixture_override=''
+  local -a fixture_compose_files=()
+  # Resolve the target release's policy on every call, including rollback.
+  # Old releases without a policy remain off; production never merges it.
+  if [[ "$target_environment" == staging && (
+    -e "$target_release/capabilities/staging-public-films.json" ||
+    -L "$target_release/capabilities/staging-public-films.json"
+  ) ]]; then
+    fixture_override="$(python3 "$release_dir/scripts/staging-public-films.py" \
+      compose-file "$target_release" "$target_environment")" || return 1
+    if [[ -n "$fixture_override" ]]; then
+      fixture_compose_files=(--file "$fixture_override")
+    fi
+  fi
   with_release_secrets \
     env \
         -u COMPOSE_PROJECT_NAME \
@@ -490,11 +507,16 @@ compose_for() {
         -u AC_API_IMAGE \
         -u AC_LEARNER_IMAGE \
         -u AC_ADMIN_IMAGE \
+        -u AC_MEDIA_PROVIDER_ENABLED \
+        -u AC_MEDIA_STRESS_FIXTURES_ENABLED \
+        -u AC_MEDIA_STRESS_FIXTURES_CACHE_ROOT \
+        -u AC_MEDIA_STAGING_PUBLIC_FILMS_DELIVERY_ENABLED \
     docker compose \
       --project-name "$compose_project" \
       --env-file "$target_release/environments/$target_environment.env" \
       --env-file "$target_release/release-images.env" \
       --file "$target_release/compose.yaml" \
+      "${fixture_compose_files[@]}" \
       "$@"
 }
 
@@ -507,6 +529,8 @@ if [[ -L "$current_link" ]]; then
     exit 1
   }
   (cd "$previous_release" && sha256sum --check --strict RELEASE-FILES.sha256 >/dev/null)
+  python3 "$release_dir/scripts/staging-public-films.py" \
+    preflight "$previous_release" "$target_environment"
 elif [[ -e "$current_link" ]]; then
   printf 'Current application release path is not a symbolic link.\n' >&2
   exit 1

@@ -20,11 +20,15 @@ PREPARER = APPLICATION / "scripts" / "prepare-release-inputs.py"
 
 REQUIRED_FILES = (
     "infra/application/compose.yaml",
+    "infra/application/compose.staging-public-films.yaml",
+    "infra/application/capabilities/staging-public-films.json",
+    "infra/application/data/alpha_public_films_12s_v1.json",
     "infra/application/environments/staging.env",
     "infra/application/environments/production.env",
     "infra/application/scripts/install-application-release.sh",
     "infra/application/scripts/prepare-release-inputs.py",
     "infra/application/scripts/restore-drill.py",
+    "infra/application/scripts/staging-public-films.py",
     "infra/application/scripts/validate-google-oauth-secrets.py",
     "infra/application/scripts/verify-release-archive.py",
 )

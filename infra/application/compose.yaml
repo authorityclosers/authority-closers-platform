@@ -42,6 +42,12 @@ x-application-environment: &application-environment
   AC_SESSION_COOKIE_NAME: __Host-ac_session
   AC_OAUTH_TRANSACTION_COOKIE_NAME: __Host-ac_oauth_transaction
   AC_TRUSTED_PROXY_ADDRESSES: ${AC_TRUSTED_PROXY_ADDRESSES:?AC_TRUSTED_PROXY_ADDRESSES must contain the exact edge-router IP}
+  # Inert defaults apply to API, worker and migrator. Only the release-owned
+  # staging/API override may expose the exact immutable public-film fixture.
+  AC_MEDIA_PROVIDER_ENABLED: "false"
+  AC_MEDIA_STRESS_FIXTURES_ENABLED: "false"
+  AC_MEDIA_STRESS_FIXTURES_CACHE_ROOT: ""
+  AC_MEDIA_STAGING_PUBLIC_FILMS_DELIVERY_ENABLED: "false"
 
 x-migration-environment: &migration-environment
   <<: *application-environment
