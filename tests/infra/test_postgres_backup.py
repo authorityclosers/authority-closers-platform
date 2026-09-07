@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import errno
 import hashlib
 import importlib.util
 import os
@@ -507,6 +508,7 @@ def test_foundation_restic_units_have_wall_clock_and_cleanup_bounds() -> None:
         + jitter_seconds
         + backup.PG_DUMP_TIMEOUT_SECONDS
         + backup.RESTIC_UPLOAD_TIMEOUT_SECONDS
+        + backup.RESTIC_REPOSITORY_LOCK_WAIT_SECONDS
         <= 15 * 60
     )
 
@@ -624,3 +626,120 @@ def test_every_operational_script_and_unit_is_in_the_exact_install_manifest() ->
         assert str(source.relative_to(FOUNDATION)).replace(os.sep, "/") in manifest
     for source in (FOUNDATION / "config" / "systemd").glob("*"):
         assert str(source.relative_to(FOUNDATION)).replace(os.sep, "/") in manifest
+
+
+def test_repository_lock_wait_retries_only_contention_until_success(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clock = [0.0]
+    attempts = []
+
+    def lock(_fd: int, _flags: int) -> None:
+        attempts.append(clock[0])
+        if len(attempts) < 3:
+            raise OSError(errno.EAGAIN, "synthetic contention")
+
+    monkeypatch.setattr(backup, "fcntl", SimpleNamespace(flock=lock, LOCK_EX=1, LOCK_NB=2))
+    monkeypatch.setattr(backup.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(
+        backup.time, "sleep", lambda seconds: clock.__setitem__(0, clock[0] + seconds)
+    )
+    backup.wait_for_repository_lock(9, timeout_seconds=1)
+    assert attempts == [0, 0.25, 0.5]
+
+
+def test_repository_lock_wait_has_a_monotonic_deadline(monkeypatch: pytest.MonkeyPatch) -> None:
+    clock = [0.0]
+
+    def lock(_fd: int, _flags: int) -> None:
+        raise OSError(errno.EACCES, "synthetic contention")
+
+    monkeypatch.setattr(backup, "fcntl", SimpleNamespace(flock=lock, LOCK_EX=1, LOCK_NB=2))
+    monkeypatch.setattr(backup.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(
+        backup.time, "sleep", lambda seconds: clock.__setitem__(0, clock[0] + seconds)
+    )
+    with pytest.raises(backup.BackupError, match="lock wait timed out"):
+        backup.wait_for_repository_lock(9, timeout_seconds=0.3)
+    assert clock[0] == 0.3
+
+
+@pytest.mark.parametrize("error_number", [errno.EBADF, errno.EIO, errno.EPERM])
+def test_repository_lock_does_not_retry_permanent_errors(
+    monkeypatch: pytest.MonkeyPatch, error_number: int
+) -> None:
+    def lock(_fd: int, _flags: int) -> None:
+        raise OSError(error_number, "synthetic invalid descriptor or permission")
+
+    monkeypatch.setattr(backup, "fcntl", SimpleNamespace(flock=lock, LOCK_EX=1, LOCK_NB=2))
+    monkeypatch.setattr(backup.time, "sleep", lambda _seconds: pytest.fail("must not retry"))
+    with pytest.raises(backup.BackupError, match="could not be acquired safely"):
+        backup.wait_for_repository_lock(9)
+
+
+@pytest.mark.parametrize("wait", [0, -1, 61, float("inf"), float("nan")])
+def test_repository_lock_rejects_unbounded_wait(wait: float) -> None:
+    with pytest.raises(backup.BackupError, match="wait bound is invalid"):
+        backup.wait_for_repository_lock(9, timeout_seconds=wait)
+
+
+@pytest.mark.parametrize(
+    ("diagnostic", "reason"),
+    [
+        (
+            b"AC_BACKUP_FAILURE=repository_lock_descriptor_invalid",
+            "repository_lock_descriptor_invalid",
+        ),
+        (b"AC_BACKUP_FAILURE=repository_lock_timeout", "repository_lock_timeout"),
+        (b"AC_BACKUP_FAILURE=r2_usage_guard", "r2_usage_guard_failed"),
+        (b"unable to create lock in backend", "remote_repository_lock_contention"),
+        (b"AccessDenied", "remote_authorization_failed"),
+        (b"no such host", "remote_name_resolution_failed"),
+        (b"unrecognized synthetic provider details", "command_failed"),
+    ],
+)
+def test_upload_failure_diagnostics_are_fixed_labels(diagnostic: bytes, reason: str) -> None:
+    assert backup.upload_failure_reason(diagnostic + b" token=synthetic-private-value") == reason
+
+
+def test_upload_failure_drains_bounded_stderr_without_emitting_child_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    command = [
+        sys.executable,
+        "-c",
+        "import sys; sys.stderr.write('synthetic-private-value' * 10000); "
+        "sys.stderr.write('\\nAC_BACKUP_FAILURE=repository_lock_descriptor_invalid\\n'); "
+        "sys.exit(17)",
+    ]
+    monkeypatch.setattr(backup, "upload_command", lambda *_args: command)
+    observed_sizes = []
+    classifier = backup.upload_failure_reason
+
+    def classify(diagnostic: bytes) -> str:
+        observed_sizes.append(len(diagnostic))
+        return classifier(diagnostic)
+
+    monkeypatch.setattr(backup, "upload_failure_reason", classify)
+    with pytest.raises(backup.BackupError) as failure:
+        backup.upload_dump(tmp_path / "backup.dump", tmp_path / "metadata.json", "staging", 1)
+    assert "reason=repository_lock_descriptor_invalid, exit_status=17" in str(failure.value)
+    assert "synthetic-private-value" not in str(failure.value)
+    assert observed_sizes == [backup.UPLOAD_DIAGNOSTIC_MAX_BYTES]
+    assert capsys.readouterr() == ("", "")
+
+
+@pytest.mark.parametrize(("exit_status", "reason"), [(124, "timeout"), (137, "terminated")])
+def test_upload_timeout_and_termination_are_distinct_without_retry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, exit_status: int, reason: str
+) -> None:
+    command_calls = []
+
+    def command(*_args: object) -> list[str]:
+        command_calls.append(True)
+        return [sys.executable, "-c", f"import sys; sys.exit({exit_status})"]
+
+    monkeypatch.setattr(backup, "upload_command", command)
+    with pytest.raises(backup.BackupError, match=f"reason={reason}, exit_status={exit_status}"):
+        backup.upload_dump(tmp_path / "backup.dump", tmp_path / "metadata.json", "staging", 1)
+    assert command_calls == [True]

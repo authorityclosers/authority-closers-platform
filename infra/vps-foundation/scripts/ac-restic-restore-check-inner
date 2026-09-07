@@ -43,10 +43,20 @@ chown root:acops "$restic_lock_file"
   printf 'The Restic repository lock descriptor has an unsafe identity.\n' >&2
   exit 1
 }
-flock --exclusive --nonblock 9 || {
-  printf 'Another Restic backup or prune is already active.\n' >&2
-  exit 1
-}
+# Wait only for local contention; invalid descriptors/configuration fail closed.
+restic_lock_wait_seconds=600
+if flock --exclusive --timeout "$restic_lock_wait_seconds" --conflict-exit-code 75 9 2>/dev/null; then
+  :
+else
+  restic_lock_status=$?
+  if ((restic_lock_status == 75)); then
+    printf 'Restic repository lock wait timed out after %s seconds.\n' "$restic_lock_wait_seconds" >&2
+  else
+    printf 'Restic repository lock acquisition failed safely.\n' >&2
+  fi
+  exit "$restic_lock_status"
+fi
+# Repository lock acquired.
 
 [[ "$AC_FOUNDATION_RPO_TARGET_SECONDS" =~ ^[0-9]+$ ]]
 [[ "$AC_FOUNDATION_RESTORE_TARGET_SECONDS" =~ ^[0-9]+$ ]]

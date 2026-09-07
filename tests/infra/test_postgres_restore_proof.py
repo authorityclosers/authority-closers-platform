@@ -603,7 +603,8 @@ def test_units_manifest_and_wrapper_are_narrow_and_hardened() -> None:
         'export AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"',
         "export RESTIC_CACHE_DIR='/var/cache/authority-closers-restic'",
         'exec 9>>"$restic_lock_file"',
-        "flock --exclusive --nonblock 9",
+        'flock --exclusive --timeout "$restic_lock_wait_seconds" --conflict-exit-code 75 9',
+        "restic_lock_wait_seconds=600",
         "ac-restic-postgres-restore-proof.py",
     ):
         assert marker in inner
