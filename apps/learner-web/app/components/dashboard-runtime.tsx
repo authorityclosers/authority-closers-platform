@@ -10,7 +10,6 @@ import {
   FileText,
   MessageSquare,
 } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -38,21 +37,10 @@ import {
 } from "./membership-availability";
 import { useInvalidateDraftsWithoutMembership } from "./learner-runtime";
 import { DashboardSkeleton } from "./skeletons";
+import { CourseArtwork, InstructorPortrait } from "./course-artwork";
 
 const defaultApi = createLearnerApi();
 export const FREE_COURSE_SLUG = "authority-closers-free-course";
-
-const PRESENTATION_ARTWORK = [
-  "/media/ac-course-hero-v1.png",
-  "/media/ac-module-conversation-v1.png",
-  "/media/ac-module-presentation-v1.png",
-] as const;
-
-function presentationArtwork(
-  index: number,
-): (typeof PRESENTATION_ARTWORK)[number] {
-  return PRESENTATION_ARTWORK[index % PRESENTATION_ARTWORK.length];
-}
 
 export function selectPublishedFreeCourse(
   programs: ProgramSummaryResponse[],
@@ -424,16 +412,14 @@ export function DashboardRuntime({ api = defaultApi }: DashboardRuntimeProps) {
     : 0;
 
   return (
-    <div className="dashboard-view dashboard-view--modern ac-dashboard-wrapper">
+    <div className="dashboard-view dashboard-view--modern ac-dashboard-wrapper ac-dashboard--editorial">
       {/* Welcome Banner */}
       <section
         className="dashboard-intro ac-welcome-banner"
         aria-labelledby="dashboard-title"
       >
         <div>
-          <p className="dashboard-intro__eyebrow sr-only">
-            Learning Command Center
-          </p>
+          <p className="dashboard-intro__eyebrow">Your learning space</p>
           <h1
             id="dashboard-title"
             className="dashboard-intro__title ac-welcome-title"
@@ -497,24 +483,18 @@ export function DashboardRuntime({ api = defaultApi }: DashboardRuntimeProps) {
                   className="continue-learning-media ac-media-frame"
                   aria-label="Closers Academy course presentation"
                 >
-                  <Image
-                    src="/brand/instructor-v1/editorial.webp"
-                    alt=""
+                  <InstructorPortrait
+                    decorative
                     fill
-                    sizes="(max-width: 1023px) 44vw, 32vw"
+                    sizes="(max-width: 620px) 100vw, 320px"
                     className="ac-media-frame__art"
                   />
                   <div className="ac-media-frame__veil" aria-hidden="true" />
                   <div className="ac-media-frame__copy">
                     <span className="ac-media-frame__eyebrow">
-                      Closers Academy · with Dipak
+                      Closers Academy
                     </span>
-                    <strong>
-                      {leadModule
-                        ? presentationModuleTitle(leadModule.title)
-                        : learning.program_title}
-                    </strong>
-                    <span>Watch. Reflect. Put it into practice.</span>
+                    <strong>Learn with Dipak</strong>
                   </div>
                 </div>
 
@@ -969,7 +949,7 @@ export function DashboardRuntime({ api = defaultApi }: DashboardRuntimeProps) {
               </div>
 
               <div className="my-courses-list ac-courses-list">
-                {programs.slice(0, 3).map((program, index) => {
+                {programs.slice(0, 3).map((program) => {
                   const isCurrentProgram = program.id === learning.program_id;
                   return (
                     <Link
@@ -982,13 +962,7 @@ export function DashboardRuntime({ api = defaultApi }: DashboardRuntimeProps) {
                       key={program.id}
                     >
                       <div className="course-item-thumb ac-course-thumb">
-                        <Image
-                          src={presentationArtwork(index)}
-                          alt=""
-                          fill
-                          sizes="44px"
-                        />
-                        <span>Published</span>
+                        <CourseArtwork compact />
                       </div>
                       <div className="course-item-info ac-course-info">
                         <strong className="ac-course-name">
@@ -1116,22 +1090,7 @@ export function DashboardRuntime({ api = defaultApi }: DashboardRuntimeProps) {
               aria-labelledby="upcoming-banner-title"
             >
               <div className="upcoming-banner-thumb ac-upcoming-thumb">
-                <Image
-                  src="/media/ac-course-hero-v1.png"
-                  alt=""
-                  fill
-                  sizes="(max-width: 1023px) 100vw, 220px"
-                />
-                <div className="ac-upcoming-thumb__veil" aria-hidden="true" />
-                <span className="upcoming-thumb-badge ac-upcoming-badge">
-                  CATALOG
-                </span>
-                <strong className="ac-upcoming-thumb-title">
-                  Catalog updates
-                </strong>
-                <span className="upcoming-thumb-pill ac-upcoming-pill">
-                  SERVER PUBLISHED
-                </span>
+                <CourseArtwork artwork="nextMove" />
               </div>
 
               <div className="upcoming-banner-content ac-upcoming-body">
@@ -1172,6 +1131,7 @@ export function DashboardRuntime({ api = defaultApi }: DashboardRuntimeProps) {
           className="card start-course-hero"
           aria-labelledby="start-course-title"
         >
+          <CourseArtwork />
           <div className="start-course-hero__copy">
             <span className="card-badge card-badge--neutral">
               {freeCourse ? "Published program" : "No published free course"}

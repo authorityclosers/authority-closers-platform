@@ -1,0 +1,575 @@
+{
+  "evidence_class": "Synthetic API fixtures against local development UI; not live or performance proof",
+  "base_url": "http://learner.localhost:3100",
+  "created_utc": "2026-09-07T13:17:36.715429+00:00",
+  "user_cookies_or_storage_loaded": false,
+  "server_writes_allowed": false,
+  "cases": [
+    {
+      "route": "/",
+      "theme": "dark",
+      "width": 390,
+      "height": 844,
+      "failures": [],
+      "screenshots": [
+        "docs\\evidence\\screenshots\\alpha-pass2-2026-09-07\\after-public-copy\\run-20260907T131736Z\\fixture-public-dark-390x844.png",
+        "docs\\evidence\\screenshots\\alpha-pass2-2026-09-07\\after-public-copy\\run-20260907T131736Z\\fixture-public-dark-390x844-full.png"
+      ],
+      "page_errors": [],
+      "network": {
+        "fixture_reads": [
+          "/v1/programs"
+        ],
+        "unknown_api_reads": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "layout": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "scrollWidth": 390,
+        "clientWidth": 390,
+        "horizontalOverflow": 0,
+        "theme": "dark",
+        "sidebar": null,
+        "mobileIdentity": null,
+        "mobileMark": null,
+        "headerActions": null,
+        "headerActionTargets": [],
+        "profileNameColors": null,
+        "headerColors": null,
+        "bodyColors": {
+          "color": "rgb(237, 242, 251)",
+          "background": "rgb(10, 20, 32)"
+        },
+        "mobileIdentityText": [],
+        "visibleImages": [
+          {
+            "path": "/_next/image",
+            "box": {
+              "x": 13,
+              "y": 442.859375,
+              "width": 364,
+              "height": 318,
+              "visible": true
+            },
+            "naturalWidth": 390,
+            "naturalHeight": 487
+          },
+          {
+            "path": "/_next/image",
+            "box": {
+              "x": 272,
+              "y": 461.859375,
+              "width": 86,
+              "height": 78,
+              "visible": true
+            },
+            "naturalWidth": 64,
+            "naturalHeight": 56
+          },
+          {
+            "path": "/_next/image",
+            "box": {
+              "x": 53.046875,
+              "y": 1437.59375,
+              "width": 283.90625,
+              "height": 248.40625,
+              "visible": true
+            },
+            "naturalWidth": 0,
+            "naturalHeight": 0
+          }
+        ],
+        "mobileNavigation": null,
+        "main": {
+          "x": 0,
+          "y": 109,
+          "width": 390,
+          "height": 1837.6875,
+          "visible": true
+        },
+        "heading": {
+          "x": 12,
+          "y": 158.265625,
+          "width": 366,
+          "height": 70.1875,
+          "visible": true
+        },
+        "overflowingElements": [
+          {
+            "tag": "SPAN",
+            "className": "academy-artwork__orbit",
+            "width": 298.46875
+          }
+        ]
+      },
+      "artwork": [
+        {
+          "alt": "Dipak Vishwakarma, your guide at Closers Academy",
+          "width": 364,
+          "height": 318,
+          "naturalWidth": 390,
+          "naturalHeight": 487,
+          "complete": true,
+          "visible": true
+        },
+        {
+          "alt": "",
+          "width": 86,
+          "height": 78,
+          "naturalWidth": 64,
+          "naturalHeight": 56,
+          "complete": true,
+          "visible": true
+        },
+        {
+          "alt": "",
+          "width": 284,
+          "height": 248,
+          "naturalWidth": 0,
+          "naturalHeight": 0,
+          "complete": false,
+          "visible": false
+        }
+      ],
+      "public_header_contrast": [
+        {
+          "label": "Authority Closers",
+          "color": "rgb(237, 242, 251)",
+          "fontSize": "15.68px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "SPAN",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "A",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HEADER",
+              "background": "rgba(16, 26, 43, 0.96)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(251, 252, 254)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            25.40000000000001,
+            35.040000000000006,
+            51.44000000000001
+          ],
+          "effectiveForeground": [
+            237,
+            242,
+            251
+          ],
+          "contrast": 14.036944383382078,
+          "solidColorMeasurement": true
+        },
+        {
+          "label": "Sign in",
+          "color": "rgb(237, 242, 251)",
+          "fontSize": "11.52px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "A",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "NAV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HEADER",
+              "background": "rgba(16, 26, 43, 0.96)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(251, 252, 254)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            25.40000000000001,
+            35.040000000000006,
+            51.44000000000001
+          ],
+          "effectiveForeground": [
+            237,
+            242,
+            251
+          ],
+          "contrast": 14.036944383382078,
+          "solidColorMeasurement": true
+        }
+      ],
+      "public_footer_contrast": [
+        {
+          "label": "Authority Closers",
+          "color": "rgb(237, 242, 251)",
+          "fontSize": "15.68px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "SPAN",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "A",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "FOOTER",
+              "background": "rgba(16, 26, 43, 0.96)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(251, 252, 254)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            25.40000000000001,
+            35.040000000000006,
+            51.44000000000001
+          ],
+          "effectiveForeground": [
+            237,
+            242,
+            251
+          ],
+          "contrast": 14.036944383382078,
+          "solidColorMeasurement": true
+        },
+        {
+          "label": "Closers Academy \u00b7 Powered by Cohorva",
+          "color": "rgb(182, 192, 210)",
+          "fontSize": "12.48px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "P",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "FOOTER",
+              "background": "rgba(16, 26, 43, 0.96)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(251, 252, 254)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            25.40000000000001,
+            35.040000000000006,
+            51.44000000000001
+          ],
+          "effectiveForeground": [
+            182,
+            192,
+            210
+          ],
+          "contrast": 8.60435382438904,
+          "solidColorMeasurement": true
+        },
+        {
+          "label": "Privacy",
+          "color": "rgb(237, 242, 251)",
+          "fontSize": "12.48px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "A",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "NAV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "FOOTER",
+              "background": "rgba(16, 26, 43, 0.96)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(251, 252, 254)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            25.40000000000001,
+            35.040000000000006,
+            51.44000000000001
+          ],
+          "effectiveForeground": [
+            237,
+            242,
+            251
+          ],
+          "contrast": 14.036944383382078,
+          "solidColorMeasurement": true
+        },
+        {
+          "label": "Terms",
+          "color": "rgb(237, 242, 251)",
+          "fontSize": "12.48px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "A",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "NAV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "FOOTER",
+              "background": "rgba(16, 26, 43, 0.96)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(251, 252, 254)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            25.40000000000001,
+            35.040000000000006,
+            51.44000000000001
+          ],
+          "effectiveForeground": [
+            237,
+            242,
+            251
+          ],
+          "contrast": 14.036944383382078,
+          "solidColorMeasurement": true
+        },
+        {
+          "label": "Sign in",
+          "color": "rgb(237, 242, 251)",
+          "fontSize": "12.48px",
+          "opacityProduct": 1,
+          "layers": [
+            {
+              "tag": "A",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "NAV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgba(0, 0, 0, 0)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "FOOTER",
+              "background": "rgba(16, 26, 43, 0.96)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "DIV",
+              "background": "rgb(251, 252, 254)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "BODY",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            },
+            {
+              "tag": "HTML",
+              "background": "rgb(10, 20, 32)",
+              "backgroundImage": "none",
+              "opacity": 1
+            }
+          ],
+          "background": [
+            25.40000000000001,
+            35.040000000000006,
+            51.44000000000001
+          ],
+          "effectiveForeground": [
+            237,
+            242,
+            251
+          ],
+          "contrast": 14.036944383382078,
+          "solidColorMeasurement": true
+        }
+      ]
+    }
+  ],
+  "browser_version": "152.0.7977.82",
+  "failure_count": 0,
+  "blocked_write_count": 0
+}

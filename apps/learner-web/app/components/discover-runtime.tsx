@@ -36,6 +36,7 @@ import {
   useInvalidateDraftsWithoutMembership,
 } from "./learner-runtime";
 import { DiscoverSkeleton } from "./skeletons";
+import { CourseArtwork } from "./course-artwork";
 
 const defaultApi = createLearnerApi();
 export const FREE_COURSE_SLUG = "authority-closers-free-course";
@@ -399,26 +400,12 @@ export function DiscoverRuntime({
               const isCurrentEnrollment = isFreeCourse && isEnrolled;
               return (
                 <ProgramCard
-                  className="card discover-program-card"
+                  className="card discover-program-card ac-program-card--artwork"
                   key={program.id}
                   title={program.title}
                   titleId={`discover-program-${program.id}`}
                   titleAs="h3"
-                  media={
-                    <div className="ac-program-card__media-content">
-                      <div className="ac-program-card__media-badge">
-                        {isFreeCourse ? "Free enrollment" : "Published program"}
-                      </div>
-                      <div>
-                        <strong className="ac-program-card__media-title">
-                          {program.title}
-                        </strong>
-                        <span className="ac-program-card__media-meta">
-                          Version {program.version_number}
-                        </span>
-                      </div>
-                    </div>
-                  }
+                  media={<CourseArtwork />}
                   badges={
                     <>
                       <span className="card-badge card-badge--primary">

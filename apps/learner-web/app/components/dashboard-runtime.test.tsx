@@ -219,6 +219,14 @@ describe("mounted dashboard progressive plan", () => {
     expect(
       container.querySelector(".ac-media-frame__art")?.getAttribute("src"),
     ).toContain("instructor-v1%2Feditorial.webp");
+    const editorial = container.querySelector(".ac-media-frame");
+    expect(editorial?.textContent).toContain("Learn with Dipak");
+    expect(editorial?.textContent).not.toContain("Published reflection");
+    expect(editorial?.querySelector("img")?.getAttribute("alt")).toBe("");
+    expect(editorial?.querySelector("video, iframe, button")).toBeNull();
+    expect(container.querySelector(".ac-continue-meta h3")?.textContent).toBe(
+      "Published reflection",
+    );
     const planPanel = container.querySelector(".todays-plan-card");
     expect(planPanel?.getAttribute("aria-busy")).toBe("true");
     expect(planPanel?.textContent).toContain("Loading today's plan");

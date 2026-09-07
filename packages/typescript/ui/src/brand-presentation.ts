@@ -52,3 +52,30 @@ export const PLATFORM_BRAND = {
     icon: "/brand/cohorva-v0.1/icon.svg",
   },
 } as const satisfies BrandPresentation;
+
+/** Decorative supplied artwork, never a topic, completion badge or media grant. */
+export const ACADEMY_ARTWORK = {
+  discovery: {
+    src: "/brand/learning-art-v1/discovery.webp",
+    width: 960,
+    height: 840,
+  },
+  reflection: {
+    src: "/brand/learning-art-v1/reflection.webp",
+    width: 960,
+    height: 840,
+  },
+  nextMove: {
+    src: "/brand/learning-art-v1/next-move.webp",
+    width: 960,
+    height: 840,
+  },
+} as const;
+
+/** Verified supplied editorial derivative; not an instructor assignment to a program. */
+export const INSTRUCTOR_PORTRAIT = {
+  src: "/brand/instructor-v1/editorial.webp",
+  width: 768,
+  height: 960,
+  alt: "Dipak Vishwakarma, your guide at Closers Academy",
+} as const;

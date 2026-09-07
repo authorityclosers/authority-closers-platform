@@ -6,6 +6,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import {
+  ACADEMY_ARTWORK,
   AcademyMark,
   BrandMark,
   COMPANY_BRAND,
@@ -47,6 +48,15 @@ const portraitHashes: Record<string, string> = {
     "feaeb766fa03d771d5d5647553ab83752a7cee34efd0dca35a433f2a8c02607b",
 };
 
+const learningArtworkHashes: Record<string, string> = {
+  "learning-art-v1/discovery.webp":
+    "7672d4cba35748fe60aa0c6777fdf010a57d2f6548444bbb52abdc2c74f21882",
+  "learning-art-v1/reflection.webp":
+    "9b640d53ad2c951d0884d037b26983a03a845e34374e9655a3f97cc29c644a90",
+  "learning-art-v1/next-move.webp":
+    "df451fd23e75c27c7932bc71c8cb95c6543c3414ca3a44f6bf973185496e84e7",
+};
+
 const academyIconHashes: Record<string, string> = {
   "closers-academy-v0.1/icon-180.png":
     "fda4867411d5d71c8d6af35384bc9167685c66dd07637a6ae210a400d0cbf0b0",
@@ -67,6 +77,17 @@ function polygonPoints(svg: string) {
 }
 
 describe("brand presentation boundary", () => {
+  it("keeps decorative artwork serializable and independent from course identity or state", () => {
+    expect(JSON.parse(JSON.stringify(ACADEMY_ARTWORK))).toEqual(
+      ACADEMY_ARTWORK,
+    );
+    for (const artwork of Object.values(ACADEMY_ARTWORK)) {
+      expect(Object.keys(artwork).sort()).toEqual(["height", "src", "width"]);
+      expect(artwork.width).toBe(960);
+      expect(artwork.height).toBe(840);
+      expect(artwork.src).toMatch(/^\/brand\/learning-art-v1\/[a-z-]+\.webp$/);
+    }
+  });
   it("keeps company, academy and provisional platform identities distinct in serializable data", () => {
     const brands = [COMPANY_BRAND, FIRST_ACADEMY_BRAND, PLATFORM_BRAND];
     expect(brands.map(({ name, role }) => [name, role])).toEqual([
@@ -161,7 +182,12 @@ describe("public brand asset allowlist", () => {
     [
       "learner",
       learnerBrandRoot,
-      { ...sourceHashes, ...portraitHashes, ...academyIconHashes },
+      {
+        ...sourceHashes,
+        ...portraitHashes,
+        ...academyIconHashes,
+        ...learningArtworkHashes,
+      },
     ],
     ["admin", adminBrandRoot, { ...sourceHashes, ...platformIconHashes }],
   ] as const)(

@@ -12,7 +12,7 @@ This records the bounded shared-brand and public-asset change within the alpha c
 - Selected source logos, marks, icons and portrait derivatives were visually inspected before integration. Runtime SVGs are byte-identical outlined exports. No live-text font dependency, source installer, prototype script, demonstration course video, audio, model, research pack, draft answer key or full archive was copied into public assets.
 - This subtask did not change existing root icons, service workers, manifests, tenant selection, routes, or learner/admin TSX. Shell and manifest integration is recorded by the main alpha lane.
 
-Final public/brand inventory: **24 files, 147,798 bytes**. Learner: 14 files / 115,314 bytes. Admin: 10 files / 32,484 bytes. These are total stored assets, not the initial page transfer size.
+Initial checkpoint public/brand inventory: **24 files, 147,798 bytes**. Learner: 14 files / 115,314 bytes. Admin: 10 files / 32,484 bytes. The pass2 addition below supersedes these inventory totals without changing the initial assets. These are total stored assets, not the initial page transfer size.
 
 ## Supplied package verification
 
@@ -89,3 +89,19 @@ Required runtime: Node 24.19.0, pnpm 11.19.0.
 - Targeted Prettier formatting was applied only to this subtask's shared source, focused test and evidence. `pnpm --filter @ac/learner-web exec eslint app/lib/brand-presentation.test.ts --max-warnings 0`: pass under Node 24.19.0.
 - Initial 15-test/typecheck runs under Node 22 also passed but do not replace the required Node 24 verification.
 - No staging, commit, deployment, process restart, database change, or external publication was performed by this subtask.
+
+## Presentation pass2 addition
+
+The subsequent user-authorized presentation pass selects only these three byte-identical decorative object WebPs from learning `11_visual_upgrade/assets/webp/`, after inspecting the actual assets and the supplied Today desktop/mobile boards. Each source is 960 × 840. The images contain no baked program title, score, earned badge, state or playback affordance. They are not program metadata or instructor assignment.
+
+| Learner runtime path beneath public/brand | Source file       |  Bytes | SHA-256                                                            |
+| ----------------------------------------- | ----------------- | -----: | ------------------------------------------------------------------ |
+| `learning-art-v1/discovery.webp`          | `discovery.webp`  | 41,940 | `7672d4cba35748fe60aa0c6777fdf010a57d2f6548444bbb52abdc2c74f21882` |
+| `learning-art-v1/reflection.webp`         | `reflection.webp` | 32,748 | `9b640d53ad2c951d0884d037b26983a03a845e34374e9655a3f97cc29c644a90` |
+| `learning-art-v1/next-move.webp`          | `next-move.webp`  | 30,966 | `df451fd23e75c27c7932bc71c8cb95c6543c3414ca3a44f6bf973185496e84e7` |
+
+The added inventory is **3 files / 105,654 bytes**. Current total: **27 files / 253,452 bytes**; learner **17 / 220,968**, admin unchanged **10 / 32,484**. No masters, prototype JS, videos, audio, models or baked `shift-*` course covers entered runtime. The existing verified portrait derivative is reused, not duplicated.
+
+`ACADEMY_ARTWORK` and `INSTRUCTOR_PORTRAIT` provide serializable, trusted presentation descriptors. `CourseArtwork` accepts only an allowlisted decorative kind and compact mode; it accepts no arbitrary source URL, server title, access state or playback data. `InstructorPortrait` preserves intrinsic dimensions and supports a meaningful editorial alt or decorative use beside the visible academy attribution. The complete runtime file/hash allowlist test now includes all three WebPs.
+
+Pass2 implementation, fixture QA and remaining route gaps are recorded in [20260907_ALPHA_PRESENTATION_PASS2.md](20260907_ALPHA_PRESENTATION_PASS2.md). No new Drive rights or trademark assertion is made.

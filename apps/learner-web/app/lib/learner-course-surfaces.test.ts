@@ -182,6 +182,13 @@ describe("learner course surface primitives", () => {
     );
 
     expect(inProgress).toContain("Continue course");
+    expect(inProgress).toMatch(/<h2[^>]*>Course One<\/h2>/);
+    expect(inProgress.match(/>Course One</g)).toHaveLength(1);
+    expect(inProgress).toContain("reflection.webp");
+    expect(inProgress).toContain('data-presentation-only="true"');
+    expect(inProgress).toContain("1 of 4 required activities");
+    expect(inProgress).toContain('aria-valuenow="25"');
+    expect(inProgress).not.toMatch(/<video|<iframe/);
     expect(inProgress).toContain('data-next-action="continue"');
     expect(inProgress).toContain('href="/learn/course-one"');
     expect(inProgress).toContain("Saved");

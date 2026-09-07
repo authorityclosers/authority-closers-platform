@@ -485,7 +485,9 @@ html[data-theme="dark"] {
   --ac-mark-cut: var(--theme-canvas);
 }
 
-html[data-theme="dark"] :is(.site-header, .site-footer) {
+/* Match the public shell's surface specificity so light base CSS cannot
+   override the dark background while its text correctly becomes light. */
+html[data-theme="dark"] .site-frame :is(.site-header, .site-footer) {
   color: var(--theme-text);
   border-color: var(--theme-border);
   background: rgba(16, 26, 43, 0.96);
