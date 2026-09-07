@@ -240,6 +240,22 @@ def adapted_foundation_caddy_config() -> dict:
         )
         image = re.search(r"^CADDY_IMAGE=(caddy@sha256:[0-9a-f]{64})$", images, re.MULTILINE)
         assert image, "Use only the reviewed digest-pinned foundation Caddy image"
+        # The image binary carries cap_net_bind_service=ep. Linux can refuse
+        # its exec with an empty bounding set even under no-new-privileges.
+        # A non-root, same-byte copy drops that xattr without granting any
+        # capabilities or changing the image. Its sole writable path is tmpfs.
+        parser_script = (
+            "set -eu; umask 077; "
+            'test "$(stat -c %u:%g:%a /run/ac-caddy-parser)" = 65534:65534:700; '
+            "cp /usr/bin/caddy /run/ac-caddy-parser/caddy; "
+            "chmod 0500 /run/ac-caddy-parser/caddy; "
+            "original=$(sha256sum /usr/bin/caddy); "
+            "copied=$(sha256sum /run/ac-caddy-parser/caddy); "
+            'test "${original%% *}" = "${copied%% *}"; '
+            "capabilities=$(getcap /run/ac-caddy-parser/caddy); "
+            'test -z "$capabilities"; '
+            "exec /run/ac-caddy-parser/caddy adapt --config - --adapter caddyfile"
+        )
         command = [
             docker,
             "run",
@@ -262,13 +278,12 @@ def adapted_foundation_caddy_config() -> dict:
             "64",
             "--log-driver",
             "none",
+            "--tmpfs",
+            "/run/ac-caddy-parser:rw,nosuid,nodev,exec,size=64m,mode=0700,uid=65534,gid=65534",
             image[1],
-            "caddy",
-            "adapt",
-            "--config",
-            "-",
-            "--adapter",
-            "caddyfile",
+            "/bin/sh",
+            "-c",
+            parser_script,
         ]
     result = subprocess.run(  # noqa: S603 - fixed parser; stdin source, no server/listener or mounted files
         command,

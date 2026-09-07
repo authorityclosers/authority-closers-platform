@@ -48,7 +48,7 @@ Ruff lint/format and scoped `git diff --check` passed.
 
 The new parser fixture uses local Caddy when available, otherwise only the
 source-pinned foundation Caddy image in a disposable local/CI container. The
-parser has no network, mounts, published ports, capabilities or writable root;
+parser has no network, host mounts, published ports, capabilities or writable root;
 it has memory/CPU/PID/time bounds and only executes `caddy adapt` on stdin.
 It never contacts the deployed VPS, starts an HTTP server or receives secrets.
 
@@ -82,6 +82,45 @@ and verified that every non-logging adapted setting remained identical. All
 three negative controls were rejected. No Critical or Important findings remain
 in this scoped change. Reviewed Caddyfile SHA-256:
 `f4d41bc1d54e932f27a99459314d446c76d576e38217ef6ad428e105b0a07617`.
+
+### Linux CI parser execution correction
+
+The first PR41 Linux run reported 1,593 passing tests, 28 skips and four
+parser-fixture errors: the pinned image's `/usr/bin/caddy` could not execute
+with `operation not permitted`. This was not a Caddyfile parsing failure.
+Independent disposable-container reproduction confirmed the binary carries
+`cap_net_bind_service=ep`; both direct execution and execution from a shell
+failed with empty effective/bounding capability sets and `NoNewPrivs=1`.
+The fixture already supplied `no-new-privileges:true`, so repeating that option
+would not repair the failure. See the Linux documentation on
+[file-capability safety checks](https://man7.org/linux/man-pages/man7/capabilities.7.html)
+and [no-new-privileges](https://docs.kernel.org/userspace-api/no_new_privs.html).
+
+The test harness now copies only that exact pinned binary, as UID/GID 65534,
+into a private 64 MiB tmpfs at `/run/ac-caddy-parser`. It asserts directory
+ownership/mode `65534:65534:700`, makes the copy `0500`, verifies its SHA-256
+equals the image binary and verifies `getcap` returns no file capabilities,
+then execs only `adapt` on stdin. The copy has unchanged executable bytes;
+only the privilege-bearing xattr is absent. The image and host are untouched.
+Network `none`, read-only root, all capabilities dropped, no-new-privileges,
+128 MiB memory, half CPU, 64 PIDs, no container log driver and the existing
+timeout all remain enforced. No host bind or image-declared volume exists.
+
+Verification after this correction:
+
+- Windows focused suite: **46 passed, 4 local parser skips** (5.65 seconds).
+  Ruff lint/format passed. The CI missing-parser path still fails, not skips.
+- The **exact updated fixture** was independently executed through SSH on
+  Linux, substituting only its Docker CLI transport. The actual candidate
+  Caddyfile parsed, both logging destinations passed and all three negative
+  controls were rejected. No server/listener or deployed configuration was
+  started, loaded or changed.
+- All four owned disposable reproduction/proof containers were automatically
+  removed; exact-name readback confirmed none remained. No capability was
+  added and no file was extracted onto the host.
+
+This closes the reproduced harness defect; a subsequent complete Linux CI run
+is still required and is not claimed by the isolated proof.
 
 After a controlled release, a clearly synthetic noncredential marker must be
 checked in both normal-access and controlled error-path output without using
