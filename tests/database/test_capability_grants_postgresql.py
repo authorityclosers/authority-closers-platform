@@ -268,6 +268,10 @@ async def _manager_fixture(engine: AsyncEngine, scope: Scope) -> ActorContext:
             assert person is not None
             person.email_verified_at = now
         db.add(Membership(tenant_id=scope.other_tenant, person_id=scope.actor, role="owner"))
+        # Session.selected_tenant_id references this composite membership key.
+        # These independently added ORM objects have no relationship edge to
+        # order their inserts, so establish the referenced row before session.
+        await db.flush()
         db.add(
             IdentitySession(
                 id=session_id,

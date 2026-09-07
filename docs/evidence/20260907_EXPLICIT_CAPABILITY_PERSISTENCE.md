@@ -80,3 +80,16 @@ state. The earlier a5/0018 restore proof does not certify 0019 rows.
 After those gates: persisted operator access, reviewed film-on release,
 canonical technical-film publication and actual learner playback. The full
 Alpha UI/feature/performance/PWA/production objective remains unchanged.
+
+## PR43 first Linux/PostgreSQL run — fixture correction
+
+Application run `34145542979` at exact head
+`abbe6053e278f55d5d601c10b6fd94d1011bdcf1` failed: **4 failed, 1,674 passed,
+28 skipped**. Migration, least-privilege roles, backup-role dump, catalog locking
+and six capability PostgreSQL cases passed. Four real-service/concurrency cases
+failed before their assertions: the shared fixture added membership and session
+without flushing the referenced composite membership key first. PostgreSQL
+correctly rejected the session FK. The fixture now flushes membership before
+adding the selected-tenant session. No constraint, assertion, runtime code or
+authorization rule was weakened. A fresh Linux run is required to verify all
+four formerly blocked service/locking cases; this correction is not a pass claim.
