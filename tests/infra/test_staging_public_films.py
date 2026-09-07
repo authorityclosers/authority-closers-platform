@@ -413,7 +413,7 @@ compose_for {shlex.quote(old.as_posix())} config
         assert str(previous.as_posix()) + "/compose.staging-public-films.yaml" in rollback
 
 
-def test_effective_compose_override_mounts_only_api_and_keeps_other_services_inert():
+def test_effective_compose_override_mounts_only_api_and_keeps_other_services_inert(tmp_path):
     docker = shutil.which("docker.exe" if os.name == "nt" else "docker")
     if docker is None:
         pytest.skip("Docker Compose CLI is unavailable; no daemon is required for config")
@@ -453,7 +453,41 @@ def test_effective_compose_override_mounts_only_api_and_keeps_other_services_ine
     services = json.loads(result.stdout)["services"]
     api = services["api"]
     mount = api["volumes"][0]
-    assert mount["read_only"] and mount["bind"]["create_host_path"] is False
+    assert len(api["volumes"]) == 1 and mount["type"] == "bind"
+    assert mount["read_only"] is True
+
+    # Older compose-go serializes false with omitempty; newer OptOut versions
+    # serialize false explicitly and may omit true. Verify the source boundary
+    # AND distinguish an intentionally unsafe positive control with the same
+    # installed CLI. Never treat an omitted field alone as proof of safety.
+    override_source = (APPLICATION / "compose.staging-public-films.yaml").read_text(
+        encoding="utf-8"
+    )
+    assert len(re.findall(r"(?m)^\s+create_host_path: false$", override_source)) == 1
+    positive_control = tmp_path / "create-host-path-enabled.yaml"
+    positive_control.write_text(
+        override_source.replace("create_host_path: false", "create_host_path: true"),
+        encoding="utf-8",
+    )
+    control_args = list(result.args)
+    control_args[control_args.index(str(APPLICATION / "compose.staging-public-films.yaml"))] = str(
+        positive_control
+    )
+    control_result = subprocess.run(  # noqa: S603 - config only; unsafe control is never deployed
+        control_args,
+        env={**os.environ, **values},
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=30,
+    )
+    assert control_result.returncode == 0, control_result.stderr
+    control_mount = json.loads(control_result.stdout)["services"]["api"]["volumes"][0]
+    omitted = object()
+    disabled_value = mount.get("bind", {}).get("create_host_path", omitted)
+    enabled_value = control_mount.get("bind", {}).get("create_host_path", omitted)
+    assert disabled_value is False or (disabled_value is omitted and enabled_value is True)
+    assert enabled_value is True or (enabled_value is omitted and disabled_value is False)
     assert mount["source"].endswith(
         "/media-staging/" + hashlib.sha256(SOURCE_MANIFEST.read_bytes()).hexdigest()
     )

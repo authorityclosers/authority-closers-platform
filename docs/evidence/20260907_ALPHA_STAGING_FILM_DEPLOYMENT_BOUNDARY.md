@@ -109,3 +109,29 @@ path and byte bounds, atomic publication/idempotency/drift, per-release rollback
 selection, production exclusion and pre-writer-stop preflight. The Linux
 filesystem proof remains explicitly pending CI. No VPS files were changed by
 the reviewer.
+
+## CI compatibility follow-up
+
+Application run `34133239324` for `2607368` executed the three real POSIX
+filesystem tests successfully, but failed the effective Compose assertion:
+the Linux CLI omitted the false `create_host_path` field. This was a test
+serialization assumption, not a policy change. Older
+[compose-go v2.4.9](https://github.com/compose-spec/compose-go/blob/v2.4.9/types/types.go)
+uses a Boolean with JSON `omitempty`; newer
+[compose-go](https://github.com/compose-spec/compose-go/blob/main/types/types.go)
+uses `OptOut`, which may instead omit true. Docker's
+[documented mount control](https://docs.docker.com/reference/compose-file/services/#long-syntax-5)
+still requires explicit false in our source.
+
+The corrected test retains that explicit-source assertion and runs the same
+installed CLI against both the checked-in false setting and a test-owned true
+positive control. It accepts only distinguishable false/true serialization
+pairs; missing values on both sides, inverted values, nulls and non-Booleans
+fail. The positive control is only passed to `compose config`, never deployed
+or used to start containers. API-only/read-only mount checks and inert
+worker/migrator/provider assertions remain intact.
+
+Local follow-up: **126 passed, 3 POSIX-only skipped** in 21.26 seconds;
+Ruff formatting and lint passed. A new full Linux CI run is required after the
+fix. The committed capability is still off; no VPS installation or streaming
+acceptance is inferred from this compatibility correction.
