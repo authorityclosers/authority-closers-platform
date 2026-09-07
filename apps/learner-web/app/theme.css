@@ -5,18 +5,21 @@
  * geometry intact and translate only surfaces, text, controls, and states.
  */
 html {
-  --theme-canvas: #f7f8fa;
+  --brand-academy-ink: #173f43;
+  --brand-academy-surface: #edf4f2;
+  --brand-academy-border: #ccded9;
+  --theme-canvas: #f7f8fc;
   --theme-surface: #ffffff;
   --theme-surface-raised: #ffffff;
   --theme-surface-subtle: #eef3ff;
   --theme-input: #ffffff;
-  --theme-text: #0f1b33;
-  --theme-text-muted: #596579;
+  --theme-text: #152638;
+  --theme-text-muted: #566475;
   --theme-text-subtle: #667085;
   --theme-text-inverse: #ffffff;
   --theme-border: #d7deea;
   --theme-border-strong: #aab6c8;
-  --theme-action: #3157d8;
+  --theme-action: #3155c6;
   --theme-action-hover: #2449bf;
   --theme-action-text: #ffffff;
   --theme-focus: #2557d6;
@@ -36,7 +39,10 @@ html {
 }
 
 html[data-theme="dark"] {
-  --theme-canvas: #09111f;
+  --brand-academy-ink: #bde5d4;
+  --brand-academy-surface: #163331;
+  --brand-academy-border: #345752;
+  --theme-canvas: #0a1420;
   --theme-surface: #101a2b;
   --theme-surface-raised: #142036;
   --theme-surface-subtle: #17243a;
@@ -75,13 +81,13 @@ html[data-theme="dark"] {
 /* 1. Cobalt (Default Authority Closers) */
 html[data-accent="cobalt"],
 html:not([data-accent]) {
-  --theme-action: #3157d8;
+  --theme-action: #3155c6;
   --theme-action-hover: #2449bf;
   --theme-action-text: #ffffff;
   --theme-focus: #2557d6;
   --theme-info-surface: #eef3ff;
   --theme-info-text: #234ec8;
-  --theme-accent-indicator: #3157d8;
+  --theme-accent-indicator: #3155c6;
 }
 
 html[data-theme="dark"][data-accent="cobalt"],
@@ -330,6 +336,12 @@ html[data-reduced-motion="true"]
   .site-frame--learner
   .button:active:not(:disabled),
 html[data-reduced-motion="true"] .site-frame--learner .practice-step-card:hover,
+html[data-reduced-motion="true"] .site-frame--learner .ac-program-card:hover,
+html[data-reduced-motion="true"]
+  .site-frame--learner
+  .learning-course-card:hover,
+html[data-motion="reduced"] .site-frame--learner .ac-program-card:hover,
+html[data-motion="reduced"] .site-frame--learner .learning-course-card:hover,
 html[data-motion="reduced"]
   .site-frame--learner
   .learner-help-chatbox__trigger:hover,
@@ -340,6 +352,10 @@ html[data-motion="reduced"] .site-frame--learner .practice-step-card:hover {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  html:not([data-motion="full"]) .site-frame--learner .ac-program-card:hover,
+  html:not([data-motion="full"])
+    .site-frame--learner
+    .learning-course-card:hover,
   html:not([data-motion="full"])
     .site-frame--learner
     .learner-help-chatbox__trigger:hover,
@@ -376,9 +392,40 @@ html:not([data-reduced-motion="true"]):not([data-motion="reduced"])
 }
 
 .site-frame--learner .mobile-drawer-sheet {
+  color: var(--theme-text);
+  background: var(--theme-surface-raised);
   padding-bottom: max(20px, env(safe-area-inset-bottom));
   padding-left: max(16px, env(safe-area-inset-left));
   padding-right: max(16px, env(safe-area-inset-right));
+}
+
+.site-frame--learner .learner-profile__name,
+.site-frame--learner .learner-profile__chevron,
+.site-frame--learner .mobile-drawer-user strong,
+.site-frame--learner .mobile-drawer-link {
+  color: var(--theme-text);
+}
+
+.site-frame--learner .mobile-drawer-user > div > span {
+  color: var(--theme-text-muted);
+}
+
+.site-frame--learner .mobile-drawer-header {
+  border-color: var(--theme-border);
+}
+
+.site-frame--learner .mobile-drawer-close {
+  color: var(--theme-text);
+  background: var(--theme-surface-subtle);
+}
+
+.site-frame--learner .mobile-drawer-link:hover,
+.site-frame--learner .mobile-drawer-close:hover {
+  background: var(--theme-surface-subtle);
+}
+
+.site-frame--learner .mobile-drawer-link--danger {
+  color: var(--theme-danger-text);
 }
 
 html[data-theme="dark"] body {
@@ -438,7 +485,9 @@ html[data-theme="dark"] {
   --ac-mark-cut: var(--theme-canvas);
 }
 
-html[data-theme="dark"] :is(.site-header, .site-footer) {
+/* Match the public shell's surface specificity so light base CSS cannot
+   override the dark background while its text correctly becomes light. */
+html[data-theme="dark"] .site-frame :is(.site-header, .site-footer) {
   color: var(--theme-text);
   border-color: var(--theme-border);
   background: rgba(16, 26, 43, 0.96);

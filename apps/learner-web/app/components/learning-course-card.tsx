@@ -1,9 +1,10 @@
-import { ArrowRight, BookOpen, Bookmark, CheckCircle2 } from "lucide-react";
+import { ArrowRight, Bookmark, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import { ProgramCard, ProgressMeter } from "@ac/ui";
 
 import type { LearningCourseSummaryResponse } from "../lib/learner-api";
 import { ROUTES } from "../lib/routes";
+import { CourseArtwork } from "./course-artwork";
 
 export type CourseNextAction = {
   id: "continue" | "review" | "open";
@@ -142,7 +143,7 @@ export function LearningCourseCard({
 
   return (
     <ProgramCard
-      className={`learning-course-card ${getCourseStateClass(course.state)}`}
+      className={`learning-course-card ac-program-card--artwork ${getCourseStateClass(course.state)}`}
       title={course.program_title}
       titleId={titleId}
       titleAs="h2"
@@ -153,20 +154,7 @@ export function LearningCourseCard({
           saved={course.saved_state === "saved"}
         />
       }
-      media={
-        <div className="learning-course-card__media-content">
-          <div className="learning-course-card__media-icon" aria-hidden="true">
-            <BookOpen size={26} />
-          </div>
-          <div>
-            <span className="learning-course-card__media-kicker">
-              Authority Closers learning
-            </span>
-            <strong>Published version {course.version_number}</strong>
-          </div>
-        </div>
-      }
-      description="Follow the published course path; the destination determines the current learner action."
+      media={<CourseArtwork artwork="reflection" />}
       meta={
         <span>
           Version {course.version_number} · Enrolled{" "}

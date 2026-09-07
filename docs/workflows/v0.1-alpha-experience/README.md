@@ -12,6 +12,13 @@ implementation-facing workflow. It does not assert that every screen is live.
 
 ## Start here
 
+Current consolidation direction (2026-09-07): read the
+[Alpha acceptance contract](00-start-here/alpha-acceptance-contract-2026-09-07.md)
+and [live work scorecard](05-handoff-qa/alpha-scorecard.json) first. They define
+the user-selected V3/Brand kit, provisional Cohorva identity, three-pass plan and
+measurable release gates. Earlier visual/scope notes below remain historical
+context where explicitly superseded; controlled business/security rules remain.
+
 1. Read [`00-start-here/experience-brief.md`](00-start-here/experience-brief.md).
 2. Follow the six journeys in
    [`01-research-journeys/journeys.md`](01-research-journeys/journeys.md).

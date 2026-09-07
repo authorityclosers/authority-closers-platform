@@ -475,6 +475,13 @@ export function LearningViewRuntime({
             Learner library
           </span>
         }
+        breadcrumbs={
+          <nav className="learning-breadcrumbs" aria-label="Breadcrumb">
+            <Link href={ROUTES.dashboard}>Dashboard</Link>
+            <span aria-hidden="true">/</span>
+            <span aria-current="page">My Learning</span>
+          </nav>
+        }
         description={
           offlineRead
             ? "Read-only snapshot of your learner library. Reconnect to verify access and enable live actions."

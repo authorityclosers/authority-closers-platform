@@ -1,6 +1,12 @@
 "use client";
 
-import { ArrowRight, BookOpen, Compass } from "lucide-react";
+import {
+  AlertCircle,
+  ArrowRight,
+  BookOpen,
+  Compass,
+  RotateCcw,
+} from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ProgramCard, RouteHeader, StatusBanner } from "@ac/ui";
@@ -25,13 +31,75 @@ import {
   hasMembershipRole,
   MembershipDraftCleanupNotice,
 } from "./membership-availability";
-import { useInvalidateDraftsWithoutMembership } from "./learner-runtime";
+import {
+  LEARNER_SUPPORT_HREF,
+  useInvalidateDraftsWithoutMembership,
+} from "./learner-runtime";
 import { DiscoverSkeleton } from "./skeletons";
+import { CourseArtwork } from "./course-artwork";
 
 const defaultApi = createLearnerApi();
 export const FREE_COURSE_SLUG = "authority-closers-free-course";
 
 type LoadResult = "loaded" | "error" | "aborted";
+
+const RETRYABLE_CATALOG_STATUSES = new Set([408, 425, 429]);
+
+export function getDiscoverLoadErrorClass(
+  error: unknown,
+): "retryable" | "terminal" {
+  if (
+    error instanceof ApiError &&
+    (RETRYABLE_CATALOG_STATUSES.has(error.status) ||
+      (error.status >= 500 && error.status <= 599))
+  ) {
+    return "retryable";
+  }
+  return error instanceof TypeError ? "retryable" : "terminal";
+}
+
+export type DiscoverLoadErrorPresentation = {
+  errorClass: "retryable" | "terminal";
+  title: string;
+  detail: string;
+  requiresSignIn: boolean;
+  requiresSupport: boolean;
+  supportHref: string | null;
+  canRetry: boolean;
+};
+
+export function getDiscoverLoadErrorPresentation(
+  error: unknown,
+): DiscoverLoadErrorPresentation {
+  const errorClass = getDiscoverLoadErrorClass(error);
+  const is401 = error instanceof ApiError && error.status === 401;
+  const is403 = error instanceof ApiError && error.status === 403;
+  const canRetry = errorClass === "retryable";
+  return {
+    errorClass,
+    title: is401
+      ? "Sign in to view Discover"
+      : is403
+        ? "Catalog access is unavailable"
+        : canRetry
+          ? "Catalog is temporarily unavailable"
+          : "Discover could not load",
+    detail: is401
+      ? "Your session has expired. Sign in again to view published programs."
+      : is403
+        ? "This account is not authorized to view the published catalog. If you think this is incorrect, contact support."
+        : canRetry
+          ? "The catalog service or network is temporarily unavailable. Retry the read; no learner work was changed."
+          : userFacingRequestError(
+              error,
+              "The catalog service is temporarily unreachable.",
+            ),
+    requiresSignIn: is401,
+    requiresSupport: is403,
+    supportHref: is403 ? LEARNER_SUPPORT_HREF : null,
+    canRetry,
+  };
+}
 
 function publishedDate(value: string): string {
   const date = new Date(value);
@@ -81,6 +149,61 @@ export async function loadDiscoverData(
     offlineRead:
       getEarliestOfflineReadMetadata(me, programs, learning) ?? undefined,
   };
+}
+
+export function DiscoverLoadErrorState({
+  presentation,
+  onRetry,
+  draftCleanup,
+}: {
+  presentation: DiscoverLoadErrorPresentation;
+  onRetry: () => void;
+  draftCleanup?: ReturnType<typeof useInvalidateDraftsWithoutMembership>;
+}) {
+  return (
+    <section
+      className={`surface-state surface-state--error_${presentation.errorClass}`}
+      data-error-class={presentation.errorClass}
+      data-state={
+        presentation.errorClass === "retryable"
+          ? "ERROR_RETRYABLE"
+          : "ERROR_TERMINAL"
+      }
+      role="alert"
+      aria-live="polite"
+    >
+      <div className="surface-state__icon">
+        <AlertCircle aria-hidden="true" />
+      </div>
+      <div className="surface-state__body">
+        <p className="surface-state__eyebrow">
+          {presentation.canRetry ? "Try again" : "Unavailable"}
+        </p>
+        <h1>{presentation.title}</h1>
+        <p>{presentation.detail}</p>
+        {draftCleanup ? (
+          <MembershipDraftCleanupNotice cleanup={draftCleanup} />
+        ) : null}
+        {presentation.requiresSignIn ? (
+          <Link className="button button--ink" href={ROUTES.sessionExpired}>
+            Sign in again
+          </Link>
+        ) : presentation.requiresSupport && presentation.supportHref ? (
+          <a className="button button--outline" href={presentation.supportHref}>
+            Contact learner support
+          </a>
+        ) : presentation.canRetry ? (
+          <button
+            className="button button--outline"
+            type="button"
+            onClick={onRetry}
+          >
+            <RotateCcw size={16} aria-hidden="true" /> Retry catalog
+          </button>
+        ) : null}
+      </div>
+    </section>
+  );
 }
 
 export function DiscoverRuntime({
@@ -163,63 +286,52 @@ export function DiscoverRuntime({
   if (loading) return <DiscoverSkeleton />;
 
   if (error) {
-    const is401 = error instanceof ApiError && error.status === 401;
-    const is403 = error instanceof ApiError && error.status === 403;
     return (
-      <div className="surface-state surface-state--error-terminal" role="alert">
-        <h1>
-          {is401
-            ? "Sign in to view Discover"
-            : is403
-              ? "Catalog access is unavailable"
-              : "Discover could not load"}
-        </h1>
-        <p>
-          {is401
-            ? "Your session has expired. Sign in again to view published programs."
-            : is403
-              ? "This account is not authorized to view the published catalog."
-              : userFacingRequestError(
-                  error,
-                  "The catalog service is temporarily unreachable.",
-                )}
-        </p>
-        <MembershipDraftCleanupNotice cleanup={draftCleanup} />
-        {is401 ? (
-          <Link className="button button--ink" href={ROUTES.sessionExpired}>
-            Sign in again
-          </Link>
-        ) : (
-          <button
-            className="button button--outline"
-            type="button"
-            onClick={() => void load()}
-          >
-            Retry catalog
-          </button>
-        )}
-      </div>
+      <DiscoverLoadErrorState
+        presentation={getDiscoverLoadErrorPresentation(error)}
+        onRetry={() => void load()}
+        draftCleanup={draftCleanup}
+      />
     );
   }
 
   const isEnrolled = !!learning;
 
   return (
-    <div className="discover-view">
+    <div className="discover-view" data-testid="discover-view">
       <RouteHeader
         className="discover-header"
         title="Discover Programs"
         titleId="discover-title"
         titleClassName="discover-title"
+        eyebrow={
+          <span className="card-badge card-badge--primary">Course catalog</span>
+        }
         breadcrumbs={
-          <div className="learning-breadcrumbs" aria-label="Breadcrumb">
+          <nav className="learning-breadcrumbs" aria-label="Breadcrumb">
             <Link href={ROUTES.dashboard}>Dashboard</Link>
             <span aria-hidden="true">/</span>
-            <span>Discover</span>
-          </div>
+            <span aria-current="page">Discover</span>
+          </nav>
         }
         description="Published programs in the Authority Closers catalog."
         descriptionClassName="discover-subhead"
+        aside={
+          programs.length > 0 ? (
+            <div
+              className="learning-collection-summary discover-catalog-summary"
+              aria-label="Course catalog summary, first page"
+              data-count-scope="first-page"
+            >
+              <strong>{programs.length}</strong>
+              <span>
+                {programs.length === 1
+                  ? "published program shown"
+                  : "published programs shown"}
+              </span>
+            </div>
+          ) : undefined
+        }
       />
 
       <MembershipDraftCleanupNotice cleanup={draftCleanup} />
@@ -246,10 +358,13 @@ export function DiscoverRuntime({
 
       {programs.length === 0 ? (
         <section
-          className="card empty-notifications-card"
+          className="card discover-empty-state learning-collection-empty"
           aria-labelledby="empty-programs-title"
         >
-          <div className="empty-icon-circle" aria-hidden="true">
+          <div
+            className="discover-empty-state__icon learning-collection-empty__icon"
+            aria-hidden="true"
+          >
             <Compass size={28} />
           </div>
           <h2 id="empty-programs-title" className="empty-title">
@@ -258,14 +373,17 @@ export function DiscoverRuntime({
           <p className="empty-description">
             This catalog currently has no published program data.
           </p>
-          <div className="empty-actions">
+          <div className="discover-empty-state__actions learning-collection-empty__actions">
             <button
               className="button button--outline"
               type="button"
               onClick={() => void load()}
             >
-              Retry catalog
+              <RotateCcw size={16} aria-hidden="true" /> Retry catalog
             </button>
+            <Link className="button button--cobalt" href={ROUTES.dashboard}>
+              Return to dashboard <ArrowRight size={16} aria-hidden="true" />
+            </Link>
           </div>
         </section>
       ) : (
@@ -282,26 +400,12 @@ export function DiscoverRuntime({
               const isCurrentEnrollment = isFreeCourse && isEnrolled;
               return (
                 <ProgramCard
-                  className="card discover-program-card"
+                  className="card discover-program-card ac-program-card--artwork"
                   key={program.id}
                   title={program.title}
                   titleId={`discover-program-${program.id}`}
                   titleAs="h3"
-                  media={
-                    <div className="ac-program-card__media-content">
-                      <div className="ac-program-card__media-badge">
-                        {isFreeCourse ? "Free enrollment" : "Published program"}
-                      </div>
-                      <div>
-                        <strong className="ac-program-card__media-title">
-                          {program.title}
-                        </strong>
-                        <span className="ac-program-card__media-meta">
-                          Version {program.version_number}
-                        </span>
-                      </div>
-                    </div>
-                  }
+                  media={<CourseArtwork />}
                   badges={
                     <>
                       <span className="card-badge card-badge--primary">
@@ -326,6 +430,7 @@ export function DiscoverRuntime({
                         <Link
                           className="button button--cobalt button--full"
                           href={ROUTES.learning}
+                          aria-label={`Continue learning: ${program.title}`}
                         >
                           <BookOpen size={16} aria-hidden="true" /> Continue
                           learning
@@ -341,6 +446,7 @@ export function DiscoverRuntime({
                         <Link
                           className="button button--outline button--full"
                           href={ROUTES.programDetail(program.slug)}
+                          aria-label={`View program: ${program.title}`}
                         >
                           View program{" "}
                           <ArrowRight size={16} aria-hidden="true" />

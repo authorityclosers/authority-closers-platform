@@ -1,0 +1,210 @@
+{
+  "evidence_class": "local_synthetic_fixture_not_live",
+  "verified_on": "2026-09-07",
+  "folder_id": "1cHokGeWlomfPSB5l2chlA9SG7sGfXvZG",
+  "folder_url": "https://drive.google.com/drive/folders/1cHokGeWlomfPSB5l2chlA9SG7sGfXvZG",
+  "qa_report_id": "1bs6YeI5qDo5TItacLCwb0iLWVleDTow1",
+  "acceptance_contract_id": "1O6Rdy9M_ciUKzWkak3oUaNLFemqovp9s",
+  "folder_readback_count": 33,
+  "all_names_and_sizes_match": true,
+  "files": [
+    {
+      "name": "fixture-discover-dark-1440x900-collapsed.png",
+      "id": "1TEKgNDYJ1f6FvXw6Sreg8djr9m9MKMDd",
+      "bytes": 120089,
+      "url": "https://drive.google.com/file/d/1TEKgNDYJ1f6FvXw6Sreg8djr9m9MKMDd/view?usp=drivesdk"
+    },
+    {
+      "name": "fixture-discover-dark-1440x900-expanded.png",
+      "id": "1YsLQ0-fB6jmm3qdBMWCoSU7Rbmt8DPAX",
+      "bytes": 141708,
+      "url": "https://drive.google.com/file/d/1YsLQ0-fB6jmm3qdBMWCoSU7Rbmt8DPAX/view?usp=drivesdk"
+    },
+    {
+      "name": "fixture-discover-dark-1440x900-search.png",
+      "id": "1Nrl0eypiTmPrRtBCCmKLjLG-yiIinT5X",
+      "bytes": 142458,
+      "url": "https://drive.google.com/file/d/1Nrl0eypiTmPrRtBCCmKLjLG-yiIinT5X/view?usp=drivesdk"
+    },
+    {
+      "name": "fixture-discover-dark-320x844-layout.png",
+      "id": "1tqg5a6zX5fhboFY9Rj2ga1clJ89l4Yxq",
+      "bytes": 86113,
+      "url": "https://drive.google.com/file/d/1tqg5a6zX5fhboFY9Rj2ga1clJ89l4Yxq/view?usp=drivesdk"
+    },
+    {
+      "name": "fixture-discover-dark-390x844-mobile-full.png",
+      "id": "1Ad0OI061QJhHuSOk4xCEpuz9oJUHo3ZG",
+      "bytes": 96915,
+      "url": "https://drive.google.com/file/d/1Ad0OI061QJhHuSOk4xCEpuz9oJUHo3ZG/view?usp=drivesdk"
+    },
+    {
+      "name": "fixture-discover-dark-390x844-mobile.png",
+      "id": "1LTN4lOptVBcXqDFxWZLfsfaslx8i0NyS",
+      "bytes": 96110,
+      "url": "https://drive.google.com/file/d/1LTN4lOptVBcXqDFxWZLfsfaslx8i0NyS/view?usp=drivesdk"
+    },
+    {
+      "name": "fixture-discover-dark-390x844-more.png",
+      "id": "1JWNZdXl3ZuZbv5pZ--p7aCHP02r7cdhE",
+      "bytes": 73331,
+      "url": "https://drive.google.com/file/d/1JWNZdXl3ZuZbv5pZ--p7aCHP02r7cdhE/view?usp=drivesdk"
+    },
+    {
+      "name": "fixture-discover-dark-390x844-search.png",
+      "id": "1cd_EhkDZxi5cS38sYhsGMg0uc6w5wVB3",
+      "bytes": 93101,
+      "url": "https://drive.google.com/file/d/1cd_EhkDZxi5cS38sYhsGMg0uc6w5wVB3/view?usp=drivesdk"
+    },
+    {
+      "name": "fixture-discover-light-1440x900-collapsed.png",
+      "id": "1e4xJfn6mihBjEtq1OuRCNp69eSGQ281s",
+      "bytes": 124144,
+      "url": "https://drive.google.com/file/d/1e4xJfn6mihBjEtq1OuRCNp69eSGQ281s/view?usp=drivesdk"
+    },
+    {
+      "name": "fixture-discover-light-1440x900-expanded.png",
+      "id": "1OFgKtgiGBixS8rMNgsnZ5WgD_GXAzU4H",
+      "bytes": 145145,
+      "url": "https://drive.google.com/file/d/1OFgKtgiGBixS8rMNgsnZ5WgD_GXAzU4H/view?usp=drivesdk"
+    },
+    {
+      "name": "fixture-discover-light-1440x900-search.png",
+      "id": "1NS5UjemmW7PoSrxONEGQFAad2DQWld78",
+      "bytes": 141955,
+      "url": "https://drive.google.com/file/d/1NS5UjemmW7PoSrxONEGQFAad2DQWld78/view?usp=drivesdk"
+    },
+    {
+      "name": "fixture-discover-light-320x844-layout.png",
+      "id": "1Hk6m-SQPQI0i43MUntlybYMrIllrpqG-",
+      "bytes": 86704,
+      "url": "https://drive.google.com/file/d/1Hk6m-SQPQI0i43MUntlybYMrIllrpqG-/view?usp=drivesdk"
+    },
+    {
+      "name": "fixture-discover-light-390x844-mobile-full.png",
+      "id": "1OaunoZj3-V1Mx16LiUQaUU426NOumzXC",
+      "bytes": 98080,
+      "url": "https://drive.google.com/file/d/1OaunoZj3-V1Mx16LiUQaUU426NOumzXC/view?usp=drivesdk"
+    },
+    {
+      "name": "fixture-discover-light-390x844-mobile.png",
+      "id": "1A2opFS1JKy6X099_qxZWrJc13WpXG_Hj",
+      "bytes": 97106,
+      "url": "https://drive.google.com/file/d/1A2opFS1JKy6X099_qxZWrJc13WpXG_Hj/view?usp=drivesdk"
+    },
+    {
+      "name": "fixture-discover-light-390x844-more.png",
+      "id": "1hdw3-y02pNOZvlZ4QeMSAfkNKoAgKd7h",
+      "bytes": 71461,
+      "url": "https://drive.google.com/file/d/1hdw3-y02pNOZvlZ4QeMSAfkNKoAgKd7h/view?usp=drivesdk"
+    },
+    {
+      "name": "fixture-discover-light-390x844-search.png",
+      "id": "1Puvx6d88sHaXv8cghrO_m2idHMoE9moR",
+      "bytes": 91785,
+      "url": "https://drive.google.com/file/d/1Puvx6d88sHaXv8cghrO_m2idHMoE9moR/view?usp=drivesdk"
+    },
+    {
+      "name": "fixture-learning-dark-1440x900-collapsed.png",
+      "id": "1Y3J7Jtb3Q2jbiJi63j6hzbygwE-pAQeH",
+      "bytes": 148971,
+      "url": "https://drive.google.com/file/d/1Y3J7Jtb3Q2jbiJi63j6hzbygwE-pAQeH/view?usp=drivesdk"
+    },
+    {
+      "name": "fixture-learning-dark-1440x900-expanded.png",
+      "id": "1_TMu4NQIRPsloqGUY-cOI11U2yJ9R-RW",
+      "bytes": 166926,
+      "url": "https://drive.google.com/file/d/1_TMu4NQIRPsloqGUY-cOI11U2yJ9R-RW/view?usp=drivesdk"
+    },
+    {
+      "name": "fixture-learning-dark-1440x900-search.png",
+      "id": "1grtcBswNxxmAqEobyJgR2Bwq-dNfZJov",
+      "bytes": 176969,
+      "url": "https://drive.google.com/file/d/1grtcBswNxxmAqEobyJgR2Bwq-dNfZJov/view?usp=drivesdk"
+    },
+    {
+      "name": "fixture-learning-dark-320x844-layout.png",
+      "id": "1g0Qw8vL1E1_XUNEQT6UZdt9k4tovz_Cf",
+      "bytes": 76511,
+      "url": "https://drive.google.com/file/d/1g0Qw8vL1E1_XUNEQT6UZdt9k4tovz_Cf/view?usp=drivesdk"
+    },
+    {
+      "name": "fixture-learning-dark-390x844-mobile-full.png",
+      "id": "17txk32ejLa2cW-Se8JkhgbNlIMDlRdAb",
+      "bytes": 124415,
+      "url": "https://drive.google.com/file/d/17txk32ejLa2cW-Se8JkhgbNlIMDlRdAb/view?usp=drivesdk"
+    },
+    {
+      "name": "fixture-learning-dark-390x844-mobile.png",
+      "id": "1saTMq3icnV8Xn8Yp65EbRIsgTDuUau8b",
+      "bytes": 90993,
+      "url": "https://drive.google.com/file/d/1saTMq3icnV8Xn8Yp65EbRIsgTDuUau8b/view?usp=drivesdk"
+    },
+    {
+      "name": "fixture-learning-dark-390x844-more.png",
+      "id": "1L5ujssy7vEDkGrXTPGQujT3U9xWw3A5v",
+      "bytes": 73786,
+      "url": "https://drive.google.com/file/d/1L5ujssy7vEDkGrXTPGQujT3U9xWw3A5v/view?usp=drivesdk"
+    },
+    {
+      "name": "fixture-learning-dark-390x844-search.png",
+      "id": "1jPHsw_hIm-UXA8_1GCp4cDMH6YoCOhSz",
+      "bytes": 92551,
+      "url": "https://drive.google.com/file/d/1jPHsw_hIm-UXA8_1GCp4cDMH6YoCOhSz/view?usp=drivesdk"
+    },
+    {
+      "name": "fixture-learning-light-1440x900-collapsed.png",
+      "id": "1U9KvlZdQB3FHUKP5qc67qpQSfvGZNlQV",
+      "bytes": 153371,
+      "url": "https://drive.google.com/file/d/1U9KvlZdQB3FHUKP5qc67qpQSfvGZNlQV/view?usp=drivesdk"
+    },
+    {
+      "name": "fixture-learning-light-1440x900-expanded.png",
+      "id": "1DT9kzOg_mL-rUBeeavSDuANfoFxL76t8",
+      "bytes": 170481,
+      "url": "https://drive.google.com/file/d/1DT9kzOg_mL-rUBeeavSDuANfoFxL76t8/view?usp=drivesdk"
+    },
+    {
+      "name": "fixture-learning-light-1440x900-search.png",
+      "id": "190XQVK0TgjomDFcjFQsWM_Sgdhf_2biO",
+      "bytes": 174927,
+      "url": "https://drive.google.com/file/d/190XQVK0TgjomDFcjFQsWM_Sgdhf_2biO/view?usp=drivesdk"
+    },
+    {
+      "name": "fixture-learning-light-320x844-layout.png",
+      "id": "11ynWIGlsPmcPfvk9CeS-1q0nfTdJzxQC",
+      "bytes": 77517,
+      "url": "https://drive.google.com/file/d/11ynWIGlsPmcPfvk9CeS-1q0nfTdJzxQC/view?usp=drivesdk"
+    },
+    {
+      "name": "fixture-learning-light-390x844-mobile-full.png",
+      "id": "11oKdtQ9fXKDemtqIHGHENgUQMaBc5CpL",
+      "bytes": 126165,
+      "url": "https://drive.google.com/file/d/11oKdtQ9fXKDemtqIHGHENgUQMaBc5CpL/view?usp=drivesdk"
+    },
+    {
+      "name": "fixture-learning-light-390x844-mobile.png",
+      "id": "1FOiuzdKyVZ5xEKxRDiYQJuWySBUeshru",
+      "bytes": 92442,
+      "url": "https://drive.google.com/file/d/1FOiuzdKyVZ5xEKxRDiYQJuWySBUeshru/view?usp=drivesdk"
+    },
+    {
+      "name": "fixture-learning-light-390x844-more.png",
+      "id": "1phV3zJCjkby7w_QDNuzIJ-n8fT38WgZK",
+      "bytes": 71062,
+      "url": "https://drive.google.com/file/d/1phV3zJCjkby7w_QDNuzIJ-n8fT38WgZK/view?usp=drivesdk"
+    },
+    {
+      "name": "fixture-learning-light-390x844-search.png",
+      "id": "16jV2E1KRhJYvehs3t9KrVr6DDtZDxjGt",
+      "bytes": 91771,
+      "url": "https://drive.google.com/file/d/16jV2E1KRhJYvehs3t9KrVr6DDtZDxjGt/view?usp=drivesdk"
+    },
+    {
+      "name": "results.json",
+      "id": "1x-U23h-CECPCP7Vc58e_HLSMCjdepP2q",
+      "bytes": 198823,
+      "url": "https://drive.google.com/file/d/1x-U23h-CECPCP7Vc58e_HLSMCjdepP2q/view?usp=drivesdk"
+    }
+  ]
+}

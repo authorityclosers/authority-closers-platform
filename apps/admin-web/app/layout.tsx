@@ -11,7 +11,13 @@ const mono = IBM_Plex_Mono({
   variable: "--font-mono",
 });
 
-export const metadata: Metadata = { title: "Authority Closers Operations" };
+export const metadata: Metadata = {
+  title: "Cohorva · Academy Operations",
+  icons: {
+    icon: [{ url: "/brand/cohorva-v0.1/icon.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/brand/cohorva-v0.1/icon-180.png", sizes: "180x180" }],
+  },
+};
 
 export default function RootLayout({
   children,

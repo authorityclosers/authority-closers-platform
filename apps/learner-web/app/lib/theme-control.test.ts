@@ -3,8 +3,8 @@ import { runInNewContext } from "node:vm";
 
 import { describe, expect, it, vi } from "vitest";
 
+import { NAMED_PRESETS } from "../components/theme-control";
 import {
-  NAMED_PRESETS,
   normalizeAccentPreference,
   normalizeDensityPreference,
   normalizeMotionPreference,
@@ -12,7 +12,7 @@ import {
   resolveMotionPreference,
   resolveThemePreference,
   subscribeToThemeChanges,
-} from "../components/theme-control";
+} from "./appearance-preferences";
 
 describe("learner appearance preference", () => {
   function runPrepaint({
@@ -230,6 +230,9 @@ describe("learner appearance preference", () => {
     expect(layout).toContain('src="/theme-init.js"');
     expect(layout).toContain('strategy="beforeInteractive"');
     expect(layout).not.toContain("dangerouslySetInnerHTML");
+    // The root must load the lightweight runtime, not the settings module.
+    expect(layout).toContain('from "./components/theme-runtime"');
+    expect(layout).not.toContain('from "./components/theme-control"');
   });
 
   it("removes every runtime theme listener during cleanup", () => {

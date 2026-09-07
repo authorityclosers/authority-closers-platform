@@ -1,0 +1,2446 @@
+{
+  "evidence_class": "Synthetic API fixtures against local development UI; not live or performance proof",
+  "base_url": "http://learner.localhost:3100",
+  "created_utc": "2026-09-07T13:09:57.234313+00:00",
+  "user_cookies_or_storage_loaded": false,
+  "server_writes_allowed": false,
+  "cases": [
+    {
+      "route": "/discover",
+      "theme": "light",
+      "width": 1440,
+      "height": 900,
+      "failures": [],
+      "screenshots": [
+        "docs\\evidence\\screenshots\\alpha-pass2-2026-09-07\\after-mobile-containment\\run-20260907T130957Z\\fixture-discover-light-1440x900.png",
+        "docs\\evidence\\screenshots\\alpha-pass2-2026-09-07\\after-mobile-containment\\run-20260907T130957Z\\fixture-discover-light-1440x900-full.png"
+      ],
+      "page_errors": [],
+      "network": {
+        "fixture_reads": [
+          "/v1/me",
+          "/v1/profile/avatar",
+          "/v1/me",
+          "/v1/programs",
+          "/v1/learning/alpha-fixture-program"
+        ],
+        "unknown_api_reads": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "layout": {
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "horizontalOverflow": 0,
+        "theme": "light",
+        "sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 280,
+          "height": 900,
+          "visible": true
+        },
+        "mobileIdentity": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "visible": false
+        },
+        "mobileMark": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "visible": false
+        },
+        "headerActions": {
+          "x": 1208,
+          "y": 65.5,
+          "width": 208,
+          "height": 44,
+          "visible": true
+        },
+        "headerActionTargets": [
+          {
+            "label": "Notifications",
+            "box": {
+              "x": 1208,
+              "y": 65.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          },
+          {
+            "label": "Account menu for Learner QA",
+            "box": {
+              "x": 1264,
+              "y": 65.5,
+              "width": 152,
+              "height": 44,
+              "visible": true
+            }
+          }
+        ],
+        "profileNameColors": {
+          "color": "rgb(21, 38, 56)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "headerColors": {
+          "color": "rgb(11, 31, 68)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "bodyColors": {
+          "color": "rgb(17, 20, 15)",
+          "background": "rgb(242, 240, 232)"
+        },
+        "mobileIdentityText": [
+          {
+            "text": "",
+            "box": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "visible": false
+            },
+            "clientWidth": 0,
+            "scrollWidth": 0
+          },
+          {
+            "text": "Closers Academyby Authority Closers",
+            "box": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "visible": false
+            },
+            "clientWidth": 0,
+            "scrollWidth": 0
+          },
+          {
+            "text": "Closers Academy",
+            "box": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "visible": false
+            },
+            "clientWidth": 0,
+            "scrollWidth": 0
+          },
+          {
+            "text": "by Authority Closers",
+            "box": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "visible": false
+            },
+            "clientWidth": 0,
+            "scrollWidth": 0
+          }
+        ],
+        "visibleImages": [
+          {
+            "path": "/_next/image",
+            "box": {
+              "x": 338.203125,
+              "y": 342.671875,
+              "width": 263.796875,
+              "height": 230.8125,
+              "visible": true
+            },
+            "naturalWidth": 280,
+            "naturalHeight": 244
+          }
+        ],
+        "mobileNavigation": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "visible": false
+        },
+        "main": {
+          "x": 280,
+          "y": 126,
+          "width": 1160,
+          "height": 836,
+          "visible": true
+        },
+        "heading": {
+          "x": 300,
+          "y": 212.453125,
+          "width": 733.953125,
+          "height": 42.828125,
+          "visible": true
+        },
+        "overflowingElements": []
+      },
+      "artwork": [
+        {
+          "alt": "",
+          "width": 264,
+          "height": 231,
+          "naturalWidth": 280,
+          "naturalHeight": 244,
+          "complete": true,
+          "visible": true
+        }
+      ]
+    },
+    {
+      "route": "/discover",
+      "theme": "light",
+      "width": 390,
+      "height": 844,
+      "failures": [],
+      "screenshots": [
+        "docs\\evidence\\screenshots\\alpha-pass2-2026-09-07\\after-mobile-containment\\run-20260907T130957Z\\fixture-discover-light-390x844.png",
+        "docs\\evidence\\screenshots\\alpha-pass2-2026-09-07\\after-mobile-containment\\run-20260907T130957Z\\fixture-discover-light-390x844-full.png"
+      ],
+      "page_errors": [],
+      "network": {
+        "fixture_reads": [
+          "/v1/me",
+          "/v1/profile/avatar",
+          "/v1/me",
+          "/v1/programs",
+          "/v1/learning/alpha-fixture-program"
+        ],
+        "unknown_api_reads": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "layout": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "scrollWidth": 390,
+        "clientWidth": 390,
+        "horizontalOverflow": 0,
+        "theme": "light",
+        "sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "visible": false
+        },
+        "mobileIdentity": {
+          "x": 24,
+          "y": 67.296875,
+          "width": 165.4375,
+          "height": 32.390625,
+          "visible": true
+        },
+        "mobileMark": {
+          "x": 28,
+          "y": 71.484375,
+          "width": 24,
+          "height": 24,
+          "visible": true
+        },
+        "headerActions": {
+          "x": 230,
+          "y": 61.5,
+          "width": 136,
+          "height": 44,
+          "visible": true
+        },
+        "headerActionTargets": [
+          {
+            "label": "Search courses, lessons, and more",
+            "box": {
+              "x": 230,
+              "y": 61.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          },
+          {
+            "label": "Notifications",
+            "box": {
+              "x": 276,
+              "y": 61.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          },
+          {
+            "label": "Account menu for Learner QA",
+            "box": {
+              "x": 322,
+              "y": 61.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          }
+        ],
+        "profileNameColors": {
+          "color": "rgb(21, 38, 56)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "headerColors": {
+          "color": "rgb(11, 31, 68)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "bodyColors": {
+          "color": "rgb(17, 20, 15)",
+          "background": "rgb(242, 240, 232)"
+        },
+        "mobileIdentityText": [
+          {
+            "text": "",
+            "box": {
+              "x": 24,
+              "y": 67.484375,
+              "width": 32,
+              "height": 32,
+              "visible": true
+            },
+            "clientWidth": 30,
+            "scrollWidth": 30
+          },
+          {
+            "text": "Closers Academyby Authority Closers",
+            "box": {
+              "x": 66,
+              "y": 67.296875,
+              "width": 123.4375,
+              "height": 32.390625,
+              "visible": true
+            },
+            "clientWidth": 123,
+            "scrollWidth": 123
+          },
+          {
+            "text": "Closers Academy",
+            "box": {
+              "x": 66,
+              "y": 67.296875,
+              "width": 123.4375,
+              "height": 18.390625,
+              "visible": true
+            },
+            "clientWidth": 123,
+            "scrollWidth": 123
+          },
+          {
+            "text": "by Authority Closers",
+            "box": {
+              "x": 66,
+              "y": 85.6875,
+              "width": 123.4375,
+              "height": 14,
+              "visible": true
+            },
+            "clientWidth": 123,
+            "scrollWidth": 123
+          }
+        ],
+        "visibleImages": [
+          {
+            "path": "/_next/image",
+            "box": {
+              "x": 54.59375,
+              "y": 450.28125,
+              "width": 280.796875,
+              "height": 140,
+              "visible": true
+            },
+            "naturalWidth": 239,
+            "naturalHeight": 209
+          }
+        ],
+        "mobileNavigation": {
+          "x": 0,
+          "y": 784,
+          "width": 390,
+          "height": 60,
+          "visible": true
+        },
+        "main": {
+          "x": 0,
+          "y": 120,
+          "width": 390,
+          "height": 881.234375,
+          "visible": true
+        },
+        "heading": {
+          "x": 14,
+          "y": 206.453125,
+          "width": 362,
+          "height": 32.75,
+          "visible": true
+        },
+        "overflowingElements": [
+          {
+            "tag": "SPAN",
+            "className": "academy-artwork__orbit",
+            "width": 295.1875
+          }
+        ]
+      },
+      "artwork": [
+        {
+          "alt": "",
+          "width": 281,
+          "height": 140,
+          "naturalWidth": 239,
+          "naturalHeight": 209,
+          "complete": true,
+          "visible": true
+        }
+      ]
+    },
+    {
+      "route": "/discover",
+      "theme": "light",
+      "width": 320,
+      "height": 844,
+      "failures": [],
+      "screenshots": [
+        "docs\\evidence\\screenshots\\alpha-pass2-2026-09-07\\after-mobile-containment\\run-20260907T130957Z\\fixture-discover-light-320x844.png"
+      ],
+      "page_errors": [],
+      "network": {
+        "fixture_reads": [
+          "/v1/me",
+          "/v1/profile/avatar",
+          "/v1/me",
+          "/v1/programs",
+          "/v1/learning/alpha-fixture-program"
+        ],
+        "unknown_api_reads": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "layout": {
+        "viewport": {
+          "width": 320,
+          "height": 844
+        },
+        "scrollWidth": 320,
+        "clientWidth": 320,
+        "horizontalOverflow": 0,
+        "theme": "light",
+        "sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "visible": false
+        },
+        "mobileIdentity": {
+          "x": 10,
+          "y": 67.5,
+          "width": 151.640625,
+          "height": 32,
+          "visible": true
+        },
+        "mobileMark": {
+          "x": 14,
+          "y": 71.5,
+          "width": 24,
+          "height": 24,
+          "visible": true
+        },
+        "headerActions": {
+          "x": 170,
+          "y": 61.5,
+          "width": 140,
+          "height": 44,
+          "visible": true
+        },
+        "headerActionTargets": [
+          {
+            "label": "Search courses, lessons, and more",
+            "box": {
+              "x": 170,
+              "y": 61.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          },
+          {
+            "label": "Notifications",
+            "box": {
+              "x": 218,
+              "y": 61.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          },
+          {
+            "label": "Account menu for Learner QA",
+            "box": {
+              "x": 266,
+              "y": 61.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          }
+        ],
+        "profileNameColors": {
+          "color": "rgb(21, 38, 56)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "headerColors": {
+          "color": "rgb(11, 31, 68)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "bodyColors": {
+          "color": "rgb(17, 20, 15)",
+          "background": "rgb(242, 240, 232)"
+        },
+        "mobileIdentityText": [
+          {
+            "text": "",
+            "box": {
+              "x": 10,
+              "y": 67.5,
+              "width": 32,
+              "height": 32,
+              "visible": true
+            },
+            "clientWidth": 30,
+            "scrollWidth": 30
+          },
+          {
+            "text": "Closers Academyby Authority Closers",
+            "box": {
+              "x": 52,
+              "y": 68.375,
+              "width": 109.640625,
+              "height": 30.25,
+              "visible": true
+            },
+            "clientWidth": 110,
+            "scrollWidth": 110
+          },
+          {
+            "text": "Closers Academy",
+            "box": {
+              "x": 52,
+              "y": 68.375,
+              "width": 109.640625,
+              "height": 16.25,
+              "visible": true
+            },
+            "clientWidth": 110,
+            "scrollWidth": 110
+          },
+          {
+            "text": "by Authority Closers",
+            "box": {
+              "x": 52,
+              "y": 84.625,
+              "width": 109.640625,
+              "height": 14,
+              "visible": true
+            },
+            "clientWidth": 110,
+            "scrollWidth": 110
+          }
+        ],
+        "visibleImages": [
+          {
+            "path": "/_next/image",
+            "box": {
+              "x": 46.90625,
+              "y": 426.890625,
+              "width": 226.1875,
+              "height": 140,
+              "visible": true
+            },
+            "naturalWidth": 239,
+            "naturalHeight": 209
+          }
+        ],
+        "mobileNavigation": {
+          "x": 0,
+          "y": 784,
+          "width": 320,
+          "height": 60,
+          "visible": true
+        },
+        "main": {
+          "x": 0,
+          "y": 120,
+          "width": 320,
+          "height": 863.375,
+          "visible": true
+        },
+        "heading": {
+          "x": 14,
+          "y": 206.453125,
+          "width": 292,
+          "height": 26.859375,
+          "visible": true
+        },
+        "overflowingElements": [
+          {
+            "tag": "SPAN",
+            "className": "academy-artwork__orbit",
+            "width": 237.796875
+          }
+        ]
+      },
+      "artwork": [
+        {
+          "alt": "",
+          "width": 226,
+          "height": 140,
+          "naturalWidth": 239,
+          "naturalHeight": 209,
+          "complete": true,
+          "visible": true
+        }
+      ]
+    },
+    {
+      "route": "/discover",
+      "theme": "dark",
+      "width": 1440,
+      "height": 900,
+      "failures": [],
+      "screenshots": [
+        "docs\\evidence\\screenshots\\alpha-pass2-2026-09-07\\after-mobile-containment\\run-20260907T130957Z\\fixture-discover-dark-1440x900.png",
+        "docs\\evidence\\screenshots\\alpha-pass2-2026-09-07\\after-mobile-containment\\run-20260907T130957Z\\fixture-discover-dark-1440x900-full.png"
+      ],
+      "page_errors": [],
+      "network": {
+        "fixture_reads": [
+          "/v1/me",
+          "/v1/profile/avatar",
+          "/v1/me",
+          "/v1/programs",
+          "/v1/learning/alpha-fixture-program"
+        ],
+        "unknown_api_reads": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "layout": {
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "horizontalOverflow": 0,
+        "theme": "dark",
+        "sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 280,
+          "height": 900,
+          "visible": true
+        },
+        "mobileIdentity": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "visible": false
+        },
+        "mobileMark": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "visible": false
+        },
+        "headerActions": {
+          "x": 1208,
+          "y": 65.5,
+          "width": 208,
+          "height": 44,
+          "visible": true
+        },
+        "headerActionTargets": [
+          {
+            "label": "Notifications",
+            "box": {
+              "x": 1208,
+              "y": 65.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          },
+          {
+            "label": "Account menu for Learner QA",
+            "box": {
+              "x": 1264,
+              "y": 65.5,
+              "width": 152,
+              "height": 44,
+              "visible": true
+            }
+          }
+        ],
+        "profileNameColors": {
+          "color": "rgb(237, 242, 251)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "headerColors": {
+          "color": "rgb(237, 242, 251)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "bodyColors": {
+          "color": "rgb(237, 242, 251)",
+          "background": "rgb(10, 20, 32)"
+        },
+        "mobileIdentityText": [
+          {
+            "text": "",
+            "box": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "visible": false
+            },
+            "clientWidth": 0,
+            "scrollWidth": 0
+          },
+          {
+            "text": "Closers Academyby Authority Closers",
+            "box": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "visible": false
+            },
+            "clientWidth": 0,
+            "scrollWidth": 0
+          },
+          {
+            "text": "Closers Academy",
+            "box": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "visible": false
+            },
+            "clientWidth": 0,
+            "scrollWidth": 0
+          },
+          {
+            "text": "by Authority Closers",
+            "box": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "visible": false
+            },
+            "clientWidth": 0,
+            "scrollWidth": 0
+          }
+        ],
+        "visibleImages": [
+          {
+            "path": "/_next/image",
+            "box": {
+              "x": 338.203125,
+              "y": 342.671875,
+              "width": 263.796875,
+              "height": 230.8125,
+              "visible": true
+            },
+            "naturalWidth": 280,
+            "naturalHeight": 244
+          }
+        ],
+        "mobileNavigation": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "visible": false
+        },
+        "main": {
+          "x": 280,
+          "y": 126,
+          "width": 1160,
+          "height": 836,
+          "visible": true
+        },
+        "heading": {
+          "x": 300,
+          "y": 212.453125,
+          "width": 733.953125,
+          "height": 42.828125,
+          "visible": true
+        },
+        "overflowingElements": []
+      },
+      "artwork": [
+        {
+          "alt": "",
+          "width": 264,
+          "height": 231,
+          "naturalWidth": 280,
+          "naturalHeight": 244,
+          "complete": true,
+          "visible": true
+        }
+      ]
+    },
+    {
+      "route": "/discover",
+      "theme": "dark",
+      "width": 390,
+      "height": 844,
+      "failures": [],
+      "screenshots": [
+        "docs\\evidence\\screenshots\\alpha-pass2-2026-09-07\\after-mobile-containment\\run-20260907T130957Z\\fixture-discover-dark-390x844.png",
+        "docs\\evidence\\screenshots\\alpha-pass2-2026-09-07\\after-mobile-containment\\run-20260907T130957Z\\fixture-discover-dark-390x844-full.png"
+      ],
+      "page_errors": [],
+      "network": {
+        "fixture_reads": [
+          "/v1/me",
+          "/v1/profile/avatar",
+          "/v1/me",
+          "/v1/programs",
+          "/v1/learning/alpha-fixture-program"
+        ],
+        "unknown_api_reads": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "layout": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "scrollWidth": 390,
+        "clientWidth": 390,
+        "horizontalOverflow": 0,
+        "theme": "dark",
+        "sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "visible": false
+        },
+        "mobileIdentity": {
+          "x": 24,
+          "y": 67.296875,
+          "width": 165.4375,
+          "height": 32.390625,
+          "visible": true
+        },
+        "mobileMark": {
+          "x": 28,
+          "y": 71.484375,
+          "width": 24,
+          "height": 24,
+          "visible": true
+        },
+        "headerActions": {
+          "x": 230,
+          "y": 61.5,
+          "width": 136,
+          "height": 44,
+          "visible": true
+        },
+        "headerActionTargets": [
+          {
+            "label": "Search courses, lessons, and more",
+            "box": {
+              "x": 230,
+              "y": 61.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          },
+          {
+            "label": "Notifications",
+            "box": {
+              "x": 276,
+              "y": 61.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          },
+          {
+            "label": "Account menu for Learner QA",
+            "box": {
+              "x": 322,
+              "y": 61.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          }
+        ],
+        "profileNameColors": {
+          "color": "rgb(237, 242, 251)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "headerColors": {
+          "color": "rgb(237, 242, 251)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "bodyColors": {
+          "color": "rgb(237, 242, 251)",
+          "background": "rgb(10, 20, 32)"
+        },
+        "mobileIdentityText": [
+          {
+            "text": "",
+            "box": {
+              "x": 24,
+              "y": 67.484375,
+              "width": 32,
+              "height": 32,
+              "visible": true
+            },
+            "clientWidth": 30,
+            "scrollWidth": 30
+          },
+          {
+            "text": "Closers Academyby Authority Closers",
+            "box": {
+              "x": 66,
+              "y": 67.296875,
+              "width": 123.4375,
+              "height": 32.390625,
+              "visible": true
+            },
+            "clientWidth": 123,
+            "scrollWidth": 123
+          },
+          {
+            "text": "Closers Academy",
+            "box": {
+              "x": 66,
+              "y": 67.296875,
+              "width": 123.4375,
+              "height": 18.390625,
+              "visible": true
+            },
+            "clientWidth": 123,
+            "scrollWidth": 123
+          },
+          {
+            "text": "by Authority Closers",
+            "box": {
+              "x": 66,
+              "y": 85.6875,
+              "width": 123.4375,
+              "height": 14,
+              "visible": true
+            },
+            "clientWidth": 123,
+            "scrollWidth": 123
+          }
+        ],
+        "visibleImages": [
+          {
+            "path": "/_next/image",
+            "box": {
+              "x": 54.59375,
+              "y": 450.28125,
+              "width": 280.796875,
+              "height": 140,
+              "visible": true
+            },
+            "naturalWidth": 239,
+            "naturalHeight": 209
+          }
+        ],
+        "mobileNavigation": {
+          "x": 0,
+          "y": 784,
+          "width": 390,
+          "height": 60,
+          "visible": true
+        },
+        "main": {
+          "x": 0,
+          "y": 120,
+          "width": 390,
+          "height": 881.234375,
+          "visible": true
+        },
+        "heading": {
+          "x": 14,
+          "y": 206.453125,
+          "width": 362,
+          "height": 32.75,
+          "visible": true
+        },
+        "overflowingElements": [
+          {
+            "tag": "SPAN",
+            "className": "academy-artwork__orbit",
+            "width": 295.1875
+          }
+        ]
+      },
+      "artwork": [
+        {
+          "alt": "",
+          "width": 281,
+          "height": 140,
+          "naturalWidth": 239,
+          "naturalHeight": 209,
+          "complete": true,
+          "visible": true
+        }
+      ]
+    },
+    {
+      "route": "/discover",
+      "theme": "dark",
+      "width": 320,
+      "height": 844,
+      "failures": [],
+      "screenshots": [
+        "docs\\evidence\\screenshots\\alpha-pass2-2026-09-07\\after-mobile-containment\\run-20260907T130957Z\\fixture-discover-dark-320x844.png"
+      ],
+      "page_errors": [],
+      "network": {
+        "fixture_reads": [
+          "/v1/me",
+          "/v1/profile/avatar",
+          "/v1/me",
+          "/v1/programs",
+          "/v1/learning/alpha-fixture-program"
+        ],
+        "unknown_api_reads": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "layout": {
+        "viewport": {
+          "width": 320,
+          "height": 844
+        },
+        "scrollWidth": 320,
+        "clientWidth": 320,
+        "horizontalOverflow": 0,
+        "theme": "dark",
+        "sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "visible": false
+        },
+        "mobileIdentity": {
+          "x": 10,
+          "y": 67.5,
+          "width": 151.640625,
+          "height": 32,
+          "visible": true
+        },
+        "mobileMark": {
+          "x": 14,
+          "y": 71.5,
+          "width": 24,
+          "height": 24,
+          "visible": true
+        },
+        "headerActions": {
+          "x": 170,
+          "y": 61.5,
+          "width": 140,
+          "height": 44,
+          "visible": true
+        },
+        "headerActionTargets": [
+          {
+            "label": "Search courses, lessons, and more",
+            "box": {
+              "x": 170,
+              "y": 61.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          },
+          {
+            "label": "Notifications",
+            "box": {
+              "x": 218,
+              "y": 61.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          },
+          {
+            "label": "Account menu for Learner QA",
+            "box": {
+              "x": 266,
+              "y": 61.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          }
+        ],
+        "profileNameColors": {
+          "color": "rgb(237, 242, 251)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "headerColors": {
+          "color": "rgb(237, 242, 251)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "bodyColors": {
+          "color": "rgb(237, 242, 251)",
+          "background": "rgb(10, 20, 32)"
+        },
+        "mobileIdentityText": [
+          {
+            "text": "",
+            "box": {
+              "x": 10,
+              "y": 67.5,
+              "width": 32,
+              "height": 32,
+              "visible": true
+            },
+            "clientWidth": 30,
+            "scrollWidth": 30
+          },
+          {
+            "text": "Closers Academyby Authority Closers",
+            "box": {
+              "x": 52,
+              "y": 68.375,
+              "width": 109.640625,
+              "height": 30.25,
+              "visible": true
+            },
+            "clientWidth": 110,
+            "scrollWidth": 110
+          },
+          {
+            "text": "Closers Academy",
+            "box": {
+              "x": 52,
+              "y": 68.375,
+              "width": 109.640625,
+              "height": 16.25,
+              "visible": true
+            },
+            "clientWidth": 110,
+            "scrollWidth": 110
+          },
+          {
+            "text": "by Authority Closers",
+            "box": {
+              "x": 52,
+              "y": 84.625,
+              "width": 109.640625,
+              "height": 14,
+              "visible": true
+            },
+            "clientWidth": 110,
+            "scrollWidth": 110
+          }
+        ],
+        "visibleImages": [
+          {
+            "path": "/_next/image",
+            "box": {
+              "x": 46.90625,
+              "y": 426.890625,
+              "width": 226.1875,
+              "height": 140,
+              "visible": true
+            },
+            "naturalWidth": 239,
+            "naturalHeight": 209
+          }
+        ],
+        "mobileNavigation": {
+          "x": 0,
+          "y": 784,
+          "width": 320,
+          "height": 60,
+          "visible": true
+        },
+        "main": {
+          "x": 0,
+          "y": 120,
+          "width": 320,
+          "height": 863.375,
+          "visible": true
+        },
+        "heading": {
+          "x": 14,
+          "y": 206.453125,
+          "width": 292,
+          "height": 26.859375,
+          "visible": true
+        },
+        "overflowingElements": [
+          {
+            "tag": "SPAN",
+            "className": "academy-artwork__orbit",
+            "width": 237.796875
+          }
+        ]
+      },
+      "artwork": [
+        {
+          "alt": "",
+          "width": 226,
+          "height": 140,
+          "naturalWidth": 239,
+          "naturalHeight": 209,
+          "complete": true,
+          "visible": true
+        }
+      ]
+    },
+    {
+      "route": "/learning",
+      "theme": "light",
+      "width": 1440,
+      "height": 900,
+      "failures": [],
+      "screenshots": [
+        "docs\\evidence\\screenshots\\alpha-pass2-2026-09-07\\after-mobile-containment\\run-20260907T130957Z\\fixture-learning-light-1440x900.png",
+        "docs\\evidence\\screenshots\\alpha-pass2-2026-09-07\\after-mobile-containment\\run-20260907T130957Z\\fixture-learning-light-1440x900-full.png"
+      ],
+      "page_errors": [],
+      "network": {
+        "fixture_reads": [
+          "/v1/me",
+          "/v1/profile/avatar",
+          "/v1/me",
+          "/v1/learning"
+        ],
+        "unknown_api_reads": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "layout": {
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "horizontalOverflow": 0,
+        "theme": "light",
+        "sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 280,
+          "height": 900,
+          "visible": true
+        },
+        "mobileIdentity": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "visible": false
+        },
+        "mobileMark": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "visible": false
+        },
+        "headerActions": {
+          "x": 1208,
+          "y": 65.5,
+          "width": 208,
+          "height": 44,
+          "visible": true
+        },
+        "headerActionTargets": [
+          {
+            "label": "Notifications",
+            "box": {
+              "x": 1208,
+              "y": 65.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          },
+          {
+            "label": "Account menu for Learner QA",
+            "box": {
+              "x": 1264,
+              "y": 65.5,
+              "width": 152,
+              "height": 44,
+              "visible": true
+            }
+          }
+        ],
+        "profileNameColors": {
+          "color": "rgb(21, 38, 56)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "headerColors": {
+          "color": "rgb(11, 31, 68)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "bodyColors": {
+          "color": "rgb(17, 20, 15)",
+          "background": "rgb(242, 240, 232)"
+        },
+        "mobileIdentityText": [
+          {
+            "text": "",
+            "box": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "visible": false
+            },
+            "clientWidth": 0,
+            "scrollWidth": 0
+          },
+          {
+            "text": "Closers Academyby Authority Closers",
+            "box": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "visible": false
+            },
+            "clientWidth": 0,
+            "scrollWidth": 0
+          },
+          {
+            "text": "Closers Academy",
+            "box": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "visible": false
+            },
+            "clientWidth": 0,
+            "scrollWidth": 0
+          },
+          {
+            "text": "by Authority Closers",
+            "box": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "visible": false
+            },
+            "clientWidth": 0,
+            "scrollWidth": 0
+          }
+        ],
+        "visibleImages": [
+          {
+            "path": "/_next/image",
+            "box": {
+              "x": 338.203125,
+              "y": 512.296875,
+              "width": 263.796875,
+              "height": 280,
+              "visible": true
+            },
+            "naturalWidth": 280,
+            "naturalHeight": 244
+          }
+        ],
+        "mobileNavigation": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "visible": false
+        },
+        "main": {
+          "x": 280,
+          "y": 126,
+          "width": 1160,
+          "height": 850.765625,
+          "visible": true
+        },
+        "heading": {
+          "x": 300,
+          "y": 212.453125,
+          "width": 733.953125,
+          "height": 42.828125,
+          "visible": true
+        },
+        "overflowingElements": []
+      },
+      "artwork": [
+        {
+          "alt": "",
+          "width": 264,
+          "height": 280,
+          "naturalWidth": 280,
+          "naturalHeight": 244,
+          "complete": true,
+          "visible": true
+        }
+      ]
+    },
+    {
+      "route": "/learning",
+      "theme": "light",
+      "width": 390,
+      "height": 844,
+      "failures": [],
+      "screenshots": [
+        "docs\\evidence\\screenshots\\alpha-pass2-2026-09-07\\after-mobile-containment\\run-20260907T130957Z\\fixture-learning-light-390x844.png",
+        "docs\\evidence\\screenshots\\alpha-pass2-2026-09-07\\after-mobile-containment\\run-20260907T130957Z\\fixture-learning-light-390x844-full.png"
+      ],
+      "page_errors": [],
+      "network": {
+        "fixture_reads": [
+          "/v1/me",
+          "/v1/profile/avatar",
+          "/v1/me",
+          "/v1/learning"
+        ],
+        "unknown_api_reads": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "layout": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "scrollWidth": 390,
+        "clientWidth": 390,
+        "horizontalOverflow": 0,
+        "theme": "light",
+        "sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "visible": false
+        },
+        "mobileIdentity": {
+          "x": 24,
+          "y": 67.296875,
+          "width": 165.4375,
+          "height": 32.390625,
+          "visible": true
+        },
+        "mobileMark": {
+          "x": 28,
+          "y": 71.484375,
+          "width": 24,
+          "height": 24,
+          "visible": true
+        },
+        "headerActions": {
+          "x": 230,
+          "y": 61.5,
+          "width": 136,
+          "height": 44,
+          "visible": true
+        },
+        "headerActionTargets": [
+          {
+            "label": "Search courses, lessons, and more",
+            "box": {
+              "x": 230,
+              "y": 61.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          },
+          {
+            "label": "Notifications",
+            "box": {
+              "x": 276,
+              "y": 61.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          },
+          {
+            "label": "Account menu for Learner QA",
+            "box": {
+              "x": 322,
+              "y": 61.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          }
+        ],
+        "profileNameColors": {
+          "color": "rgb(21, 38, 56)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "headerColors": {
+          "color": "rgb(11, 31, 68)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "bodyColors": {
+          "color": "rgb(17, 20, 15)",
+          "background": "rgb(242, 240, 232)"
+        },
+        "mobileIdentityText": [
+          {
+            "text": "",
+            "box": {
+              "x": 24,
+              "y": 67.484375,
+              "width": 32,
+              "height": 32,
+              "visible": true
+            },
+            "clientWidth": 30,
+            "scrollWidth": 30
+          },
+          {
+            "text": "Closers Academyby Authority Closers",
+            "box": {
+              "x": 66,
+              "y": 67.296875,
+              "width": 123.4375,
+              "height": 32.390625,
+              "visible": true
+            },
+            "clientWidth": 123,
+            "scrollWidth": 123
+          },
+          {
+            "text": "Closers Academy",
+            "box": {
+              "x": 66,
+              "y": 67.296875,
+              "width": 123.4375,
+              "height": 18.390625,
+              "visible": true
+            },
+            "clientWidth": 123,
+            "scrollWidth": 123
+          },
+          {
+            "text": "by Authority Closers",
+            "box": {
+              "x": 66,
+              "y": 85.6875,
+              "width": 123.4375,
+              "height": 14,
+              "visible": true
+            },
+            "clientWidth": 123,
+            "scrollWidth": 123
+          }
+        ],
+        "visibleImages": [
+          {
+            "path": "/_next/image",
+            "box": {
+              "x": 54.59375,
+              "y": 693.40625,
+              "width": 280.796875,
+              "height": 140,
+              "visible": true
+            },
+            "naturalWidth": 239,
+            "naturalHeight": 209
+          }
+        ],
+        "mobileNavigation": {
+          "x": 0,
+          "y": 784,
+          "width": 390,
+          "height": 60,
+          "visible": true
+        },
+        "main": {
+          "x": 0,
+          "y": 120,
+          "width": 390,
+          "height": 1300.96875,
+          "visible": true
+        },
+        "heading": {
+          "x": 14,
+          "y": 206.453125,
+          "width": 362,
+          "height": 32.75,
+          "visible": true
+        },
+        "overflowingElements": [
+          {
+            "tag": "SPAN",
+            "className": "academy-artwork__orbit",
+            "width": 295.1875
+          }
+        ]
+      },
+      "artwork": [
+        {
+          "alt": "",
+          "width": 281,
+          "height": 140,
+          "naturalWidth": 239,
+          "naturalHeight": 209,
+          "complete": true,
+          "visible": true
+        }
+      ]
+    },
+    {
+      "route": "/learning",
+      "theme": "light",
+      "width": 320,
+      "height": 844,
+      "failures": [],
+      "screenshots": [
+        "docs\\evidence\\screenshots\\alpha-pass2-2026-09-07\\after-mobile-containment\\run-20260907T130957Z\\fixture-learning-light-320x844.png"
+      ],
+      "page_errors": [],
+      "network": {
+        "fixture_reads": [
+          "/v1/me",
+          "/v1/profile/avatar",
+          "/v1/me",
+          "/v1/learning"
+        ],
+        "unknown_api_reads": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "layout": {
+        "viewport": {
+          "width": 320,
+          "height": 844
+        },
+        "scrollWidth": 320,
+        "clientWidth": 320,
+        "horizontalOverflow": 0,
+        "theme": "light",
+        "sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "visible": false
+        },
+        "mobileIdentity": {
+          "x": 10,
+          "y": 67.5,
+          "width": 151.640625,
+          "height": 32,
+          "visible": true
+        },
+        "mobileMark": {
+          "x": 14,
+          "y": 71.5,
+          "width": 24,
+          "height": 24,
+          "visible": true
+        },
+        "headerActions": {
+          "x": 170,
+          "y": 61.5,
+          "width": 140,
+          "height": 44,
+          "visible": true
+        },
+        "headerActionTargets": [
+          {
+            "label": "Search courses, lessons, and more",
+            "box": {
+              "x": 170,
+              "y": 61.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          },
+          {
+            "label": "Notifications",
+            "box": {
+              "x": 218,
+              "y": 61.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          },
+          {
+            "label": "Account menu for Learner QA",
+            "box": {
+              "x": 266,
+              "y": 61.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          }
+        ],
+        "profileNameColors": {
+          "color": "rgb(21, 38, 56)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "headerColors": {
+          "color": "rgb(11, 31, 68)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "bodyColors": {
+          "color": "rgb(17, 20, 15)",
+          "background": "rgb(242, 240, 232)"
+        },
+        "mobileIdentityText": [
+          {
+            "text": "",
+            "box": {
+              "x": 10,
+              "y": 67.5,
+              "width": 32,
+              "height": 32,
+              "visible": true
+            },
+            "clientWidth": 30,
+            "scrollWidth": 30
+          },
+          {
+            "text": "Closers Academyby Authority Closers",
+            "box": {
+              "x": 52,
+              "y": 68.375,
+              "width": 109.640625,
+              "height": 30.25,
+              "visible": true
+            },
+            "clientWidth": 110,
+            "scrollWidth": 110
+          },
+          {
+            "text": "Closers Academy",
+            "box": {
+              "x": 52,
+              "y": 68.375,
+              "width": 109.640625,
+              "height": 16.25,
+              "visible": true
+            },
+            "clientWidth": 110,
+            "scrollWidth": 110
+          },
+          {
+            "text": "by Authority Closers",
+            "box": {
+              "x": 52,
+              "y": 84.625,
+              "width": 109.640625,
+              "height": 14,
+              "visible": true
+            },
+            "clientWidth": 110,
+            "scrollWidth": 110
+          }
+        ],
+        "visibleImages": [
+          {
+            "path": "/_next/image",
+            "box": {
+              "x": 46.90625,
+              "y": 714.921875,
+              "width": 226.1875,
+              "height": 140,
+              "visible": true
+            },
+            "naturalWidth": 239,
+            "naturalHeight": 209
+          }
+        ],
+        "mobileNavigation": {
+          "x": 0,
+          "y": 784,
+          "width": 320,
+          "height": 60,
+          "visible": true
+        },
+        "main": {
+          "x": 0,
+          "y": 120,
+          "width": 320,
+          "height": 1339.546875,
+          "visible": true
+        },
+        "heading": {
+          "x": 14,
+          "y": 206.453125,
+          "width": 292,
+          "height": 26.859375,
+          "visible": true
+        },
+        "overflowingElements": [
+          {
+            "tag": "SPAN",
+            "className": "academy-artwork__orbit",
+            "width": 237.796875
+          }
+        ]
+      },
+      "artwork": [
+        {
+          "alt": "",
+          "width": 226,
+          "height": 140,
+          "naturalWidth": 239,
+          "naturalHeight": 209,
+          "complete": true,
+          "visible": true
+        }
+      ]
+    },
+    {
+      "route": "/learning",
+      "theme": "dark",
+      "width": 1440,
+      "height": 900,
+      "failures": [],
+      "screenshots": [
+        "docs\\evidence\\screenshots\\alpha-pass2-2026-09-07\\after-mobile-containment\\run-20260907T130957Z\\fixture-learning-dark-1440x900.png",
+        "docs\\evidence\\screenshots\\alpha-pass2-2026-09-07\\after-mobile-containment\\run-20260907T130957Z\\fixture-learning-dark-1440x900-full.png"
+      ],
+      "page_errors": [],
+      "network": {
+        "fixture_reads": [
+          "/v1/me",
+          "/v1/profile/avatar",
+          "/v1/me",
+          "/v1/learning"
+        ],
+        "unknown_api_reads": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "layout": {
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "horizontalOverflow": 0,
+        "theme": "dark",
+        "sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 280,
+          "height": 900,
+          "visible": true
+        },
+        "mobileIdentity": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "visible": false
+        },
+        "mobileMark": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "visible": false
+        },
+        "headerActions": {
+          "x": 1208,
+          "y": 65.5,
+          "width": 208,
+          "height": 44,
+          "visible": true
+        },
+        "headerActionTargets": [
+          {
+            "label": "Notifications",
+            "box": {
+              "x": 1208,
+              "y": 65.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          },
+          {
+            "label": "Account menu for Learner QA",
+            "box": {
+              "x": 1264,
+              "y": 65.5,
+              "width": 152,
+              "height": 44,
+              "visible": true
+            }
+          }
+        ],
+        "profileNameColors": {
+          "color": "rgb(237, 242, 251)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "headerColors": {
+          "color": "rgb(237, 242, 251)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "bodyColors": {
+          "color": "rgb(237, 242, 251)",
+          "background": "rgb(10, 20, 32)"
+        },
+        "mobileIdentityText": [
+          {
+            "text": "",
+            "box": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "visible": false
+            },
+            "clientWidth": 0,
+            "scrollWidth": 0
+          },
+          {
+            "text": "Closers Academyby Authority Closers",
+            "box": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "visible": false
+            },
+            "clientWidth": 0,
+            "scrollWidth": 0
+          },
+          {
+            "text": "Closers Academy",
+            "box": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "visible": false
+            },
+            "clientWidth": 0,
+            "scrollWidth": 0
+          },
+          {
+            "text": "by Authority Closers",
+            "box": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "visible": false
+            },
+            "clientWidth": 0,
+            "scrollWidth": 0
+          }
+        ],
+        "visibleImages": [
+          {
+            "path": "/_next/image",
+            "box": {
+              "x": 338.203125,
+              "y": 512.296875,
+              "width": 263.796875,
+              "height": 280,
+              "visible": true
+            },
+            "naturalWidth": 280,
+            "naturalHeight": 244
+          }
+        ],
+        "mobileNavigation": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "visible": false
+        },
+        "main": {
+          "x": 280,
+          "y": 126,
+          "width": 1160,
+          "height": 850.765625,
+          "visible": true
+        },
+        "heading": {
+          "x": 300,
+          "y": 212.453125,
+          "width": 733.953125,
+          "height": 42.828125,
+          "visible": true
+        },
+        "overflowingElements": []
+      },
+      "artwork": [
+        {
+          "alt": "",
+          "width": 264,
+          "height": 280,
+          "naturalWidth": 280,
+          "naturalHeight": 244,
+          "complete": true,
+          "visible": true
+        }
+      ]
+    },
+    {
+      "route": "/learning",
+      "theme": "dark",
+      "width": 390,
+      "height": 844,
+      "failures": [],
+      "screenshots": [
+        "docs\\evidence\\screenshots\\alpha-pass2-2026-09-07\\after-mobile-containment\\run-20260907T130957Z\\fixture-learning-dark-390x844.png",
+        "docs\\evidence\\screenshots\\alpha-pass2-2026-09-07\\after-mobile-containment\\run-20260907T130957Z\\fixture-learning-dark-390x844-full.png"
+      ],
+      "page_errors": [],
+      "network": {
+        "fixture_reads": [
+          "/v1/me",
+          "/v1/profile/avatar",
+          "/v1/me",
+          "/v1/learning"
+        ],
+        "unknown_api_reads": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "layout": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "scrollWidth": 390,
+        "clientWidth": 390,
+        "horizontalOverflow": 0,
+        "theme": "dark",
+        "sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "visible": false
+        },
+        "mobileIdentity": {
+          "x": 24,
+          "y": 67.296875,
+          "width": 165.4375,
+          "height": 32.390625,
+          "visible": true
+        },
+        "mobileMark": {
+          "x": 28,
+          "y": 71.484375,
+          "width": 24,
+          "height": 24,
+          "visible": true
+        },
+        "headerActions": {
+          "x": 230,
+          "y": 61.5,
+          "width": 136,
+          "height": 44,
+          "visible": true
+        },
+        "headerActionTargets": [
+          {
+            "label": "Search courses, lessons, and more",
+            "box": {
+              "x": 230,
+              "y": 61.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          },
+          {
+            "label": "Notifications",
+            "box": {
+              "x": 276,
+              "y": 61.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          },
+          {
+            "label": "Account menu for Learner QA",
+            "box": {
+              "x": 322,
+              "y": 61.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          }
+        ],
+        "profileNameColors": {
+          "color": "rgb(237, 242, 251)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "headerColors": {
+          "color": "rgb(237, 242, 251)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "bodyColors": {
+          "color": "rgb(237, 242, 251)",
+          "background": "rgb(10, 20, 32)"
+        },
+        "mobileIdentityText": [
+          {
+            "text": "",
+            "box": {
+              "x": 24,
+              "y": 67.484375,
+              "width": 32,
+              "height": 32,
+              "visible": true
+            },
+            "clientWidth": 30,
+            "scrollWidth": 30
+          },
+          {
+            "text": "Closers Academyby Authority Closers",
+            "box": {
+              "x": 66,
+              "y": 67.296875,
+              "width": 123.4375,
+              "height": 32.390625,
+              "visible": true
+            },
+            "clientWidth": 123,
+            "scrollWidth": 123
+          },
+          {
+            "text": "Closers Academy",
+            "box": {
+              "x": 66,
+              "y": 67.296875,
+              "width": 123.4375,
+              "height": 18.390625,
+              "visible": true
+            },
+            "clientWidth": 123,
+            "scrollWidth": 123
+          },
+          {
+            "text": "by Authority Closers",
+            "box": {
+              "x": 66,
+              "y": 85.6875,
+              "width": 123.4375,
+              "height": 14,
+              "visible": true
+            },
+            "clientWidth": 123,
+            "scrollWidth": 123
+          }
+        ],
+        "visibleImages": [
+          {
+            "path": "/_next/image",
+            "box": {
+              "x": 54.59375,
+              "y": 693.40625,
+              "width": 280.796875,
+              "height": 140,
+              "visible": true
+            },
+            "naturalWidth": 239,
+            "naturalHeight": 209
+          }
+        ],
+        "mobileNavigation": {
+          "x": 0,
+          "y": 784,
+          "width": 390,
+          "height": 60,
+          "visible": true
+        },
+        "main": {
+          "x": 0,
+          "y": 120,
+          "width": 390,
+          "height": 1300.96875,
+          "visible": true
+        },
+        "heading": {
+          "x": 14,
+          "y": 206.453125,
+          "width": 362,
+          "height": 32.75,
+          "visible": true
+        },
+        "overflowingElements": [
+          {
+            "tag": "SPAN",
+            "className": "academy-artwork__orbit",
+            "width": 295.1875
+          }
+        ]
+      },
+      "artwork": [
+        {
+          "alt": "",
+          "width": 281,
+          "height": 140,
+          "naturalWidth": 239,
+          "naturalHeight": 209,
+          "complete": true,
+          "visible": true
+        }
+      ]
+    },
+    {
+      "route": "/learning",
+      "theme": "dark",
+      "width": 320,
+      "height": 844,
+      "failures": [],
+      "screenshots": [
+        "docs\\evidence\\screenshots\\alpha-pass2-2026-09-07\\after-mobile-containment\\run-20260907T130957Z\\fixture-learning-dark-320x844.png"
+      ],
+      "page_errors": [],
+      "network": {
+        "fixture_reads": [
+          "/v1/me",
+          "/v1/profile/avatar",
+          "/v1/me",
+          "/v1/learning"
+        ],
+        "unknown_api_reads": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "layout": {
+        "viewport": {
+          "width": 320,
+          "height": 844
+        },
+        "scrollWidth": 320,
+        "clientWidth": 320,
+        "horizontalOverflow": 0,
+        "theme": "dark",
+        "sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "visible": false
+        },
+        "mobileIdentity": {
+          "x": 10,
+          "y": 67.5,
+          "width": 151.640625,
+          "height": 32,
+          "visible": true
+        },
+        "mobileMark": {
+          "x": 14,
+          "y": 71.5,
+          "width": 24,
+          "height": 24,
+          "visible": true
+        },
+        "headerActions": {
+          "x": 170,
+          "y": 61.5,
+          "width": 140,
+          "height": 44,
+          "visible": true
+        },
+        "headerActionTargets": [
+          {
+            "label": "Search courses, lessons, and more",
+            "box": {
+              "x": 170,
+              "y": 61.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          },
+          {
+            "label": "Notifications",
+            "box": {
+              "x": 218,
+              "y": 61.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          },
+          {
+            "label": "Account menu for Learner QA",
+            "box": {
+              "x": 266,
+              "y": 61.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          }
+        ],
+        "profileNameColors": {
+          "color": "rgb(237, 242, 251)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "headerColors": {
+          "color": "rgb(237, 242, 251)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "bodyColors": {
+          "color": "rgb(237, 242, 251)",
+          "background": "rgb(10, 20, 32)"
+        },
+        "mobileIdentityText": [
+          {
+            "text": "",
+            "box": {
+              "x": 10,
+              "y": 67.5,
+              "width": 32,
+              "height": 32,
+              "visible": true
+            },
+            "clientWidth": 30,
+            "scrollWidth": 30
+          },
+          {
+            "text": "Closers Academyby Authority Closers",
+            "box": {
+              "x": 52,
+              "y": 68.375,
+              "width": 109.640625,
+              "height": 30.25,
+              "visible": true
+            },
+            "clientWidth": 110,
+            "scrollWidth": 110
+          },
+          {
+            "text": "Closers Academy",
+            "box": {
+              "x": 52,
+              "y": 68.375,
+              "width": 109.640625,
+              "height": 16.25,
+              "visible": true
+            },
+            "clientWidth": 110,
+            "scrollWidth": 110
+          },
+          {
+            "text": "by Authority Closers",
+            "box": {
+              "x": 52,
+              "y": 84.625,
+              "width": 109.640625,
+              "height": 14,
+              "visible": true
+            },
+            "clientWidth": 110,
+            "scrollWidth": 110
+          }
+        ],
+        "visibleImages": [
+          {
+            "path": "/_next/image",
+            "box": {
+              "x": 46.90625,
+              "y": 714.921875,
+              "width": 226.1875,
+              "height": 140,
+              "visible": true
+            },
+            "naturalWidth": 239,
+            "naturalHeight": 209
+          }
+        ],
+        "mobileNavigation": {
+          "x": 0,
+          "y": 784,
+          "width": 320,
+          "height": 60,
+          "visible": true
+        },
+        "main": {
+          "x": 0,
+          "y": 120,
+          "width": 320,
+          "height": 1339.546875,
+          "visible": true
+        },
+        "heading": {
+          "x": 14,
+          "y": 206.453125,
+          "width": 292,
+          "height": 26.859375,
+          "visible": true
+        },
+        "overflowingElements": [
+          {
+            "tag": "SPAN",
+            "className": "academy-artwork__orbit",
+            "width": 237.796875
+          }
+        ]
+      },
+      "artwork": [
+        {
+          "alt": "",
+          "width": 226,
+          "height": 140,
+          "naturalWidth": 239,
+          "naturalHeight": 209,
+          "complete": true,
+          "visible": true
+        }
+      ]
+    }
+  ],
+  "browser_version": "152.0.7977.82",
+  "failure_count": 0,
+  "blocked_write_count": 0
+}

@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -29,6 +28,7 @@ import {
 } from "../lib/offline-read-cache";
 import { ROUTES } from "../lib/routes";
 import { userFacingRequestError } from "../lib/user-facing-error";
+import { CourseArtwork, InstructorPortrait } from "./course-artwork";
 
 const defaultApi = createLearnerApi();
 
@@ -109,7 +109,7 @@ export function PublicCatalogHome({ api = defaultApi }: { api?: LearnerApi }) {
       : null;
 
   return (
-    <div className="ac-public-home">
+    <div className="ac-public-home ac-public-home--editorial">
       <section className="ac-public-hero" aria-labelledby="catalog-title">
         <div className="ac-public-hero__copy">
           <div className="ac-public-kicker">
@@ -128,7 +128,7 @@ export function PublicCatalogHome({ api = defaultApi }: { api?: LearnerApi }) {
               className="ac-public-button ac-public-button--primary"
               href="#published-programs"
             >
-              Explore published learning
+              Explore programs
               <ArrowRight size={18} aria-hidden="true" />
             </a>
             <Link
@@ -154,27 +154,13 @@ export function PublicCatalogHome({ api = defaultApi }: { api?: LearnerApi }) {
           className="ac-public-hero__visual"
           aria-label="Authority Closers learning experience"
         >
-          <Image
-            src="/media/dipak-learning-hero-v1.png"
-            alt=""
-            width={1672}
-            height={941}
-            priority
-            sizes="(max-width: 760px) 100vw, 46vw"
-          />
+          <InstructorPortrait priority />
           <div className="ac-public-hero__overlay">
-            <span>Core Method</span>
-            <strong>Evidence-led practice</strong>
+            <span>Learn with Dipak Vishwakarma</span>
+            <strong>One better conversation at a time.</strong>
           </div>
-          <div className="ac-public-hero__status">
-            <span
-              className="ac-public-hero__status-indicator"
-              aria-hidden="true"
-            />
-            <span>
-              <strong>Built for action</strong>
-              <small>One useful move at a time</small>
-            </span>
+          <div className="ac-public-hero__artwork">
+            <CourseArtwork artwork="nextMove" compact />
           </div>
         </div>
       </section>
@@ -222,8 +208,7 @@ export function PublicCatalogHome({ api = defaultApi }: { api?: LearnerApi }) {
             <h2 id="catalog-list-title">Start with what is available.</h2>
           </div>
           <p className="ac-public-section-heading__copy">
-            This list comes directly from the published catalog API. Nothing
-            here is invented for the page.
+            Explore available programs and choose where to begin.
           </p>
         </div>
 
@@ -285,7 +270,7 @@ export function PublicCatalogHome({ api = defaultApi }: { api?: LearnerApi }) {
                 : ""
             }`}
           >
-            {state.value.items.map((program, index) => {
+            {state.value.items.map((program) => {
               const isFeatured = state.value.items.length === 1;
               return (
                 <article
@@ -295,22 +280,7 @@ export function PublicCatalogHome({ api = defaultApi }: { api?: LearnerApi }) {
                   key={program.id}
                 >
                   <div className="ac-public-program-card__image">
-                    <Image
-                      src={
-                        index % 2 === 0
-                          ? "/media/ac-module-conversation-v1.png"
-                          : "/media/ac-module-presentation-v1.png"
-                      }
-                      alt=""
-                      width={1536}
-                      height={1024}
-                      sizes={
-                        isFeatured
-                          ? "(max-width: 760px) 100vw, 380px"
-                          : "(max-width: 760px) 100vw, 44vw"
-                      }
-                    />
-                    <span>Published · Version {program.version_number}</span>
+                    <CourseArtwork />
                   </div>
                   <div className="ac-public-program-card__body">
                     <p>Authority Closers program</p>

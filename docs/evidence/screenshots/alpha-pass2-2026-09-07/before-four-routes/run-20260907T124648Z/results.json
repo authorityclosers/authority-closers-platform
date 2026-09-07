@@ -1,0 +1,883 @@
+{
+  "evidence_class": "Synthetic API fixtures against local development UI; not live or performance proof",
+  "base_url": "http://learner.localhost:3100",
+  "created_utc": "2026-09-07T12:46:48.792111+00:00",
+  "user_cookies_or_storage_loaded": false,
+  "server_writes_allowed": false,
+  "cases": [
+    {
+      "route": "/",
+      "theme": "light",
+      "width": 1440,
+      "height": 900,
+      "failures": [],
+      "screenshots": [
+        "docs\\evidence\\screenshots\\alpha-pass2-2026-09-07\\before-four-routes\\run-20260907T124648Z\\fixture-public-light-1440x900.png",
+        "docs\\evidence\\screenshots\\alpha-pass2-2026-09-07\\before-four-routes\\run-20260907T124648Z\\fixture-public-light-1440x900-full.png"
+      ],
+      "page_errors": [],
+      "network": {
+        "fixture_reads": [
+          "/v1/programs"
+        ],
+        "unknown_api_reads": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "layout": {
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "horizontalOverflow": 0,
+        "theme": "light",
+        "sidebar": null,
+        "mobileIdentity": null,
+        "mobileMark": null,
+        "headerActions": null,
+        "headerActionTargets": [],
+        "profileNameColors": null,
+        "headerColors": null,
+        "bodyColors": {
+          "color": "rgb(17, 20, 15)",
+          "background": "rgb(242, 240, 232)"
+        },
+        "mobileIdentityText": [],
+        "visibleImages": [
+          {
+            "path": "/_next/image",
+            "box": {
+              "x": 797.953125,
+              "y": 155,
+              "width": 561.046875,
+              "height": 394,
+              "visible": true
+            },
+            "naturalWidth": 662,
+            "naturalHeight": 828
+          },
+          {
+            "path": "/_next/image",
+            "box": {
+              "x": 81,
+              "y": 1095.65625,
+              "width": 380,
+              "height": 291,
+              "visible": true
+            },
+            "naturalWidth": 380,
+            "naturalHeight": 285
+          }
+        ],
+        "mobileNavigation": null,
+        "main": {
+          "x": 0,
+          "y": 127,
+          "width": 1440,
+          "height": 1348.65625,
+          "visible": true
+        },
+        "heading": {
+          "x": 80,
+          "y": 229.96875,
+          "width": 600,
+          "height": 99.5,
+          "visible": true
+        },
+        "overflowingElements": []
+      },
+      "artwork": [
+        {
+          "alt": "Dipak Vishwakarma, your guide at Closers Academy",
+          "width": 561,
+          "height": 394,
+          "naturalWidth": 662,
+          "naturalHeight": 828,
+          "complete": true
+        },
+        {
+          "alt": "",
+          "width": 380,
+          "height": 291,
+          "naturalWidth": 380,
+          "naturalHeight": 285,
+          "complete": true
+        }
+      ]
+    },
+    {
+      "route": "/",
+      "theme": "light",
+      "width": 390,
+      "height": 844,
+      "failures": [],
+      "screenshots": [
+        "docs\\evidence\\screenshots\\alpha-pass2-2026-09-07\\before-four-routes\\run-20260907T124648Z\\fixture-public-light-390x844.png",
+        "docs\\evidence\\screenshots\\alpha-pass2-2026-09-07\\before-four-routes\\run-20260907T124648Z\\fixture-public-light-390x844-full.png"
+      ],
+      "page_errors": [],
+      "network": {
+        "fixture_reads": [
+          "/v1/programs"
+        ],
+        "unknown_api_reads": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "layout": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "scrollWidth": 390,
+        "clientWidth": 390,
+        "horizontalOverflow": 0,
+        "theme": "light",
+        "sidebar": null,
+        "mobileIdentity": null,
+        "mobileMark": null,
+        "headerActions": null,
+        "headerActionTargets": [],
+        "profileNameColors": null,
+        "headerColors": null,
+        "bodyColors": {
+          "color": "rgb(17, 20, 15)",
+          "background": "rgb(242, 240, 232)"
+        },
+        "mobileIdentityText": [],
+        "visibleImages": [
+          {
+            "path": "/_next/image",
+            "box": {
+              "x": 13,
+              "y": 507.140625,
+              "width": 364,
+              "height": 238,
+              "visible": true
+            },
+            "naturalWidth": 390,
+            "naturalHeight": 487
+          },
+          {
+            "path": "/_next/image",
+            "box": {
+              "x": 13,
+              "y": 1443.203125,
+              "width": 364,
+              "height": 279,
+              "visible": true
+            },
+            "naturalWidth": 390,
+            "naturalHeight": 292
+          }
+        ],
+        "mobileNavigation": null,
+        "main": {
+          "x": 0,
+          "y": 109,
+          "width": 390,
+          "height": 1873.890625,
+          "visible": true
+        },
+        "heading": {
+          "x": 12,
+          "y": 154.265625,
+          "width": 366,
+          "height": 55.75,
+          "visible": true
+        },
+        "overflowingElements": []
+      },
+      "artwork": [
+        {
+          "alt": "Dipak Vishwakarma, your guide at Closers Academy",
+          "width": 364,
+          "height": 238,
+          "naturalWidth": 390,
+          "naturalHeight": 487,
+          "complete": true
+        },
+        {
+          "alt": "",
+          "width": 364,
+          "height": 279,
+          "naturalWidth": 390,
+          "naturalHeight": 292,
+          "complete": true
+        }
+      ]
+    },
+    {
+      "route": "/",
+      "theme": "light",
+      "width": 320,
+      "height": 844,
+      "failures": [],
+      "screenshots": [
+        "docs\\evidence\\screenshots\\alpha-pass2-2026-09-07\\before-four-routes\\run-20260907T124648Z\\fixture-public-light-320x844.png"
+      ],
+      "page_errors": [],
+      "network": {
+        "fixture_reads": [
+          "/v1/programs"
+        ],
+        "unknown_api_reads": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "layout": {
+        "viewport": {
+          "width": 320,
+          "height": 844
+        },
+        "scrollWidth": 320,
+        "clientWidth": 320,
+        "horizontalOverflow": 0,
+        "theme": "light",
+        "sidebar": null,
+        "mobileIdentity": null,
+        "mobileMark": null,
+        "headerActions": null,
+        "headerActionTargets": [],
+        "profileNameColors": null,
+        "headerColors": null,
+        "bodyColors": {
+          "color": "rgb(17, 20, 15)",
+          "background": "rgb(242, 240, 232)"
+        },
+        "mobileIdentityText": [],
+        "visibleImages": [
+          {
+            "path": "/_next/image",
+            "box": {
+              "x": 13,
+              "y": 525.984375,
+              "width": 294,
+              "height": 238,
+              "visible": true
+            },
+            "naturalWidth": 320,
+            "naturalHeight": 400
+          },
+          {
+            "path": "/_next/image",
+            "box": {
+              "x": 13,
+              "y": 1504.703125,
+              "width": 294,
+              "height": 226.5,
+              "visible": true
+            },
+            "naturalWidth": 320,
+            "naturalHeight": 240
+          }
+        ],
+        "mobileNavigation": null,
+        "main": {
+          "x": 0,
+          "y": 109,
+          "width": 320,
+          "height": 1882.890625,
+          "visible": true
+        },
+        "heading": {
+          "x": 12,
+          "y": 154.265625,
+          "width": 296,
+          "height": 51.03125,
+          "visible": true
+        },
+        "overflowingElements": []
+      },
+      "artwork": [
+        {
+          "alt": "Dipak Vishwakarma, your guide at Closers Academy",
+          "width": 294,
+          "height": 238,
+          "naturalWidth": 320,
+          "naturalHeight": 400,
+          "complete": true
+        },
+        {
+          "alt": "",
+          "width": 294,
+          "height": 227,
+          "naturalWidth": 320,
+          "naturalHeight": 240,
+          "complete": true
+        }
+      ]
+    },
+    {
+      "route": "/",
+      "theme": "dark",
+      "width": 1440,
+      "height": 900,
+      "failures": [],
+      "screenshots": [
+        "docs\\evidence\\screenshots\\alpha-pass2-2026-09-07\\before-four-routes\\run-20260907T124648Z\\fixture-public-dark-1440x900.png",
+        "docs\\evidence\\screenshots\\alpha-pass2-2026-09-07\\before-four-routes\\run-20260907T124648Z\\fixture-public-dark-1440x900-full.png"
+      ],
+      "page_errors": [],
+      "network": {
+        "fixture_reads": [
+          "/v1/programs"
+        ],
+        "unknown_api_reads": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "layout": {
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "horizontalOverflow": 0,
+        "theme": "dark",
+        "sidebar": null,
+        "mobileIdentity": null,
+        "mobileMark": null,
+        "headerActions": null,
+        "headerActionTargets": [],
+        "profileNameColors": null,
+        "headerColors": null,
+        "bodyColors": {
+          "color": "rgb(237, 242, 251)",
+          "background": "rgb(10, 20, 32)"
+        },
+        "mobileIdentityText": [],
+        "visibleImages": [
+          {
+            "path": "/_next/image",
+            "box": {
+              "x": 797.953125,
+              "y": 155,
+              "width": 561.046875,
+              "height": 394,
+              "visible": true
+            },
+            "naturalWidth": 662,
+            "naturalHeight": 828
+          },
+          {
+            "path": "/_next/image",
+            "box": {
+              "x": 81,
+              "y": 1095.65625,
+              "width": 380,
+              "height": 291,
+              "visible": true
+            },
+            "naturalWidth": 380,
+            "naturalHeight": 285
+          }
+        ],
+        "mobileNavigation": null,
+        "main": {
+          "x": 0,
+          "y": 127,
+          "width": 1440,
+          "height": 1348.65625,
+          "visible": true
+        },
+        "heading": {
+          "x": 80,
+          "y": 229.96875,
+          "width": 600,
+          "height": 99.5,
+          "visible": true
+        },
+        "overflowingElements": []
+      },
+      "artwork": [
+        {
+          "alt": "Dipak Vishwakarma, your guide at Closers Academy",
+          "width": 561,
+          "height": 394,
+          "naturalWidth": 662,
+          "naturalHeight": 828,
+          "complete": true
+        },
+        {
+          "alt": "",
+          "width": 380,
+          "height": 291,
+          "naturalWidth": 380,
+          "naturalHeight": 285,
+          "complete": true
+        }
+      ]
+    },
+    {
+      "route": "/",
+      "theme": "dark",
+      "width": 390,
+      "height": 844,
+      "failures": [],
+      "screenshots": [
+        "docs\\evidence\\screenshots\\alpha-pass2-2026-09-07\\before-four-routes\\run-20260907T124648Z\\fixture-public-dark-390x844.png",
+        "docs\\evidence\\screenshots\\alpha-pass2-2026-09-07\\before-four-routes\\run-20260907T124648Z\\fixture-public-dark-390x844-full.png"
+      ],
+      "page_errors": [],
+      "network": {
+        "fixture_reads": [
+          "/v1/programs"
+        ],
+        "unknown_api_reads": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "layout": {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "scrollWidth": 390,
+        "clientWidth": 390,
+        "horizontalOverflow": 0,
+        "theme": "dark",
+        "sidebar": null,
+        "mobileIdentity": null,
+        "mobileMark": null,
+        "headerActions": null,
+        "headerActionTargets": [],
+        "profileNameColors": null,
+        "headerColors": null,
+        "bodyColors": {
+          "color": "rgb(237, 242, 251)",
+          "background": "rgb(10, 20, 32)"
+        },
+        "mobileIdentityText": [],
+        "visibleImages": [
+          {
+            "path": "/_next/image",
+            "box": {
+              "x": 13,
+              "y": 507.140625,
+              "width": 364,
+              "height": 238,
+              "visible": true
+            },
+            "naturalWidth": 390,
+            "naturalHeight": 487
+          },
+          {
+            "path": "/_next/image",
+            "box": {
+              "x": 13,
+              "y": 1443.203125,
+              "width": 364,
+              "height": 279,
+              "visible": true
+            },
+            "naturalWidth": 390,
+            "naturalHeight": 292
+          }
+        ],
+        "mobileNavigation": null,
+        "main": {
+          "x": 0,
+          "y": 109,
+          "width": 390,
+          "height": 1873.890625,
+          "visible": true
+        },
+        "heading": {
+          "x": 12,
+          "y": 154.265625,
+          "width": 366,
+          "height": 55.75,
+          "visible": true
+        },
+        "overflowingElements": []
+      },
+      "artwork": [
+        {
+          "alt": "Dipak Vishwakarma, your guide at Closers Academy",
+          "width": 364,
+          "height": 238,
+          "naturalWidth": 390,
+          "naturalHeight": 487,
+          "complete": true
+        },
+        {
+          "alt": "",
+          "width": 364,
+          "height": 279,
+          "naturalWidth": 390,
+          "naturalHeight": 292,
+          "complete": true
+        }
+      ]
+    },
+    {
+      "route": "/",
+      "theme": "dark",
+      "width": 320,
+      "height": 844,
+      "failures": [],
+      "screenshots": [
+        "docs\\evidence\\screenshots\\alpha-pass2-2026-09-07\\before-four-routes\\run-20260907T124648Z\\fixture-public-dark-320x844.png"
+      ],
+      "page_errors": [],
+      "network": {
+        "fixture_reads": [
+          "/v1/programs"
+        ],
+        "unknown_api_reads": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "layout": {
+        "viewport": {
+          "width": 320,
+          "height": 844
+        },
+        "scrollWidth": 320,
+        "clientWidth": 320,
+        "horizontalOverflow": 0,
+        "theme": "dark",
+        "sidebar": null,
+        "mobileIdentity": null,
+        "mobileMark": null,
+        "headerActions": null,
+        "headerActionTargets": [],
+        "profileNameColors": null,
+        "headerColors": null,
+        "bodyColors": {
+          "color": "rgb(237, 242, 251)",
+          "background": "rgb(10, 20, 32)"
+        },
+        "mobileIdentityText": [],
+        "visibleImages": [
+          {
+            "path": "/_next/image",
+            "box": {
+              "x": 13,
+              "y": 525.984375,
+              "width": 294,
+              "height": 238,
+              "visible": true
+            },
+            "naturalWidth": 320,
+            "naturalHeight": 400
+          },
+          {
+            "path": "/_next/image",
+            "box": {
+              "x": 13,
+              "y": 1504.703125,
+              "width": 294,
+              "height": 226.5,
+              "visible": true
+            },
+            "naturalWidth": 320,
+            "naturalHeight": 240
+          }
+        ],
+        "mobileNavigation": null,
+        "main": {
+          "x": 0,
+          "y": 109,
+          "width": 320,
+          "height": 1882.890625,
+          "visible": true
+        },
+        "heading": {
+          "x": 12,
+          "y": 154.265625,
+          "width": 296,
+          "height": 51.03125,
+          "visible": true
+        },
+        "overflowingElements": []
+      },
+      "artwork": [
+        {
+          "alt": "Dipak Vishwakarma, your guide at Closers Academy",
+          "width": 294,
+          "height": 238,
+          "naturalWidth": 320,
+          "naturalHeight": 400,
+          "complete": true
+        },
+        {
+          "alt": "",
+          "width": 294,
+          "height": 227,
+          "naturalWidth": 320,
+          "naturalHeight": 240,
+          "complete": true
+        }
+      ]
+    },
+    {
+      "route": "/home",
+      "theme": "light",
+      "width": 1440,
+      "height": 900,
+      "failures": [],
+      "screenshots": [
+        "docs\\evidence\\screenshots\\alpha-pass2-2026-09-07\\before-four-routes\\run-20260907T124648Z\\fixture-home-light-1440x900.png",
+        "docs\\evidence\\screenshots\\alpha-pass2-2026-09-07\\before-four-routes\\run-20260907T124648Z\\fixture-home-light-1440x900-full.png"
+      ],
+      "page_errors": [],
+      "network": {
+        "fixture_reads": [
+          "/v1/me",
+          "/v1/profile/avatar",
+          "/v1/me",
+          "/v1/onboarding",
+          "/v1/programs",
+          "/v1/learning/alpha-fixture-program"
+        ],
+        "unknown_api_reads": [
+          "/v1/learning/calendar"
+        ],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "layout": {
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "scrollWidth": 1440,
+        "clientWidth": 1440,
+        "horizontalOverflow": 0,
+        "theme": "light",
+        "sidebar": {
+          "x": 0,
+          "y": 0,
+          "width": 280,
+          "height": 900,
+          "visible": true
+        },
+        "mobileIdentity": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "visible": false
+        },
+        "mobileMark": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "visible": false
+        },
+        "headerActions": {
+          "x": 1208,
+          "y": 65.5,
+          "width": 208,
+          "height": 44,
+          "visible": true
+        },
+        "headerActionTargets": [
+          {
+            "label": "Notifications",
+            "box": {
+              "x": 1208,
+              "y": 65.5,
+              "width": 44,
+              "height": 44,
+              "visible": true
+            }
+          },
+          {
+            "label": "Account menu for Learner QA",
+            "box": {
+              "x": 1264,
+              "y": 65.5,
+              "width": 152,
+              "height": 44,
+              "visible": true
+            }
+          }
+        ],
+        "profileNameColors": {
+          "color": "rgb(21, 38, 56)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "headerColors": {
+          "color": "rgb(11, 31, 68)",
+          "background": "rgba(0, 0, 0, 0)"
+        },
+        "bodyColors": {
+          "color": "rgb(17, 20, 15)",
+          "background": "rgb(242, 240, 232)"
+        },
+        "mobileIdentityText": [
+          {
+            "text": "",
+            "box": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "visible": false
+            },
+            "clientWidth": 0,
+            "scrollWidth": 0
+          },
+          {
+            "text": "Closers Academyby Authority Closers",
+            "box": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "visible": false
+            },
+            "clientWidth": 0,
+            "scrollWidth": 0
+          },
+          {
+            "text": "Closers Academy",
+            "box": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "visible": false
+            },
+            "clientWidth": 0,
+            "scrollWidth": 0
+          },
+          {
+            "text": "by Authority Closers",
+            "box": {
+              "x": 0,
+              "y": 0,
+              "width": 0,
+              "height": 0,
+              "visible": false
+            },
+            "clientWidth": 0,
+            "scrollWidth": 0
+          }
+        ],
+        "visibleImages": [
+          {
+            "path": "/_next/image",
+            "box": {
+              "x": 333,
+              "y": 315.234375,
+              "width": 332,
+              "height": 200,
+              "visible": true
+            },
+            "naturalWidth": 460,
+            "naturalHeight": 576
+          },
+          {
+            "path": "/_next/image",
+            "box": {
+              "x": 705,
+              "y": 901.890625,
+              "width": 76,
+              "height": 42,
+              "visible": true
+            },
+            "naturalWidth": 44,
+            "naturalHeight": 24
+          },
+          {
+            "path": "/_next/image",
+            "box": {
+              "x": 333,
+              "y": 1038.203125,
+              "width": 220,
+              "height": 110,
+              "visible": true
+            },
+            "naturalWidth": 220,
+            "naturalHeight": 123
+          }
+        ],
+        "mobileNavigation": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "visible": false
+        },
+        "main": {
+          "x": 280,
+          "y": 126,
+          "width": 1160,
+          "height": 1194.515625,
+          "visible": true
+        },
+        "heading": {
+          "x": 312,
+          "y": 158,
+          "width": 384.03125,
+          "height": 30.234375,
+          "visible": true
+        },
+        "overflowingElements": []
+      },
+      "artwork": [
+        {
+          "alt": "",
+          "width": 332,
+          "height": 200,
+          "naturalWidth": 460,
+          "naturalHeight": 576,
+          "complete": true
+        },
+        {
+          "alt": "",
+          "width": 76,
+          "height": 42,
+          "naturalWidth": 44,
+          "naturalHeight": 24,
+          "complete": true
+        },
+        {
+          "alt": "",
+          "width": 220,
+          "height": 110,
+          "naturalWidth": 220,
+          "naturalHeight": 123,
+          "complete": true
+        }
+      ]
+    },
+    {
+      "route": "/home",
+      "theme": "light",
+      "width": 390,
+      "height": 844,
+      "failures": [
+        "Error: Locator.evaluate_all: Execution context was destroyed, most likely because of a navigation."
+      ],
+      "screenshots": [
+        "docs\\evidence\\screenshots\\alpha-pass2-2026-09-07\\before-four-routes\\run-20260907T124648Z\\fixture-home-light-390x844-failure.png"
+      ],
+      "page_errors": [],
+      "network": {
+        "fixture_reads": [
+          "/v1/me",
+          "/v1/profile/avatar",
+          "/v1/me",
+          "/v1/onboarding",
+          "/v1/programs",
+          "/v1/learning/alpha-fixture-program"
+        ],
+        "unknown_api_reads": [
+          "/v1/learning/calendar"
+        ],
+        "blocked_writes": [],
+        "blocked_external": []
+      }
+    }
+  ],
+  "browser_version": "152.0.7977.82"
+}

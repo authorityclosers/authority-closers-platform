@@ -1150,11 +1150,12 @@ html[data-theme="dark"] .site-frame--learner .learner-sidebar-wordmark__mark {
   }
 }
 
-/* The fixed bottom navigation is present through 1023px; keep the support
- * trigger clear of it at tablet widths as well as narrow mobile widths. */
+/* The fixed bottom navigation is present through 1023px and its More sheet
+ * already exposes Help & Support. Remove the duplicate floating trigger at
+ * those widths so it cannot cover a course card or primary action. */
 @media (max-width: 1023px) {
   .site-frame--learner .learner-help-widget {
-    bottom: calc(88px + env(safe-area-inset-bottom));
+    display: none;
   }
 }
 
@@ -1319,7 +1320,7 @@ html[data-theme="dark"] {
   border: none !important;
 }
 
-/* Existing Academy mark: 38px on left */
+/* Selected Closers Academy identity, independent of the user's action accent. */
 .site-frame--learner .learner-sidebar-wordmark__mark {
   display: grid !important;
   place-items: center !important;
@@ -1328,18 +1329,18 @@ html[data-theme="dark"] {
   min-width: 38px !important;
   min-height: 38px !important;
   border-radius: 10px !important;
-  background: #eef3ff !important;
-  color: var(--sidebar-rail-accent, #3157d8) !important;
-  border: 1px solid rgba(49, 87, 216, 0.2) !important;
+  background: var(--brand-academy-surface) !important;
+  color: var(--brand-academy-ink) !important;
+  border: 1px solid var(--brand-academy-border) !important;
   flex-shrink: 0 !important;
   box-sizing: border-box !important;
   --ac-mark-cut: var(--sidebar-mark-cut, #eef3ff) !important;
 }
 
 html[data-theme="dark"] .site-frame--learner .learner-sidebar-wordmark__mark {
-  background: rgba(49, 87, 216, 0.16) !important;
-  color: #9bb3ff !important;
-  border-color: rgba(155, 179, 255, 0.25) !important;
+  background: var(--brand-academy-surface) !important;
+  color: var(--brand-academy-ink) !important;
+  border-color: var(--brand-academy-border) !important;
   --ac-mark-cut: #142036 !important;
 }
 
@@ -1780,9 +1781,44 @@ html[data-theme="dark"] .site-frame--learner .learner-sidebar-wordmark__mark {
   outline-offset: 2px !important;
 }
 
-/* Immediate pending state */
-.site-frame--learner .learner-sidebar .sidebar-nav-item.is-pending {
+/* Pending belongs to Next's navigation lifecycle, not a permanent click flag. */
+.site-frame--learner
+  .learner-sidebar
+  .sidebar-nav-item:has(.sidebar-nav-item__inner.is-pending) {
   opacity: 0.8;
+}
+
+.learner-sidebar__platform {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  margin: 8px 8px 0;
+  color: var(--sidebar-text-muted);
+  font-size: 0.68rem;
+  font-weight: 550;
+  letter-spacing: 0.01em;
+}
+
+.learner-sidebar__platform > svg {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 17px;
+  color: var(--theme-action);
+}
+
+.learner-sidebar__alpha {
+  margin-left: auto;
+  padding: 2px 6px;
+  border: 1px solid var(--sidebar-border);
+  border-radius: 5px;
+  font-size: 0.6rem;
+  font-weight: 600;
+}
+
+.site-frame--collapsed .learner-sidebar__platform {
+  justify-content: center;
+  margin-inline: 0;
 }
 
 /* Disabled nav item */
@@ -2228,9 +2264,9 @@ html[data-theme="dark"] .sidebar-tooltip-panel::before {
   width: 32px;
   height: 32px;
   border-radius: 8px;
-  border: 1px solid rgba(49, 87, 216, 0.25);
-  background: #eef3ff;
-  color: var(--sidebar-rail-accent, #3157d8);
+  border: 1px solid var(--brand-academy-border);
+  background: var(--brand-academy-surface);
+  color: var(--brand-academy-ink);
   flex-shrink: 0;
   --ac-mark-cut: #eef3ff;
 }
@@ -2260,9 +2296,9 @@ html[data-theme="dark"] .sidebar-tooltip-panel::before {
 }
 
 html[data-theme="dark"] .mobile-brand-icon {
-  background: rgba(49, 87, 216, 0.16);
-  border-color: rgba(155, 179, 255, 0.25);
-  color: #9bb3ff;
+  background: var(--brand-academy-surface);
+  border-color: var(--brand-academy-border);
+  color: var(--brand-academy-ink);
   --ac-mark-cut: #142036;
 }
 

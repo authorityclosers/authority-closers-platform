@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
-import { createElement } from "react";
+import { createElement, isValidElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
+import { AcademyMark } from "@ac/ui";
 
 import {
   CommandPalette,
@@ -25,6 +26,7 @@ import {
   DEFAULT_TENANT_IDENTITY,
   LearnerShell,
   LearnerSidebarBrand,
+  MobileLearnerBrand,
 } from "../site-shell";
 import { ROUTES } from "../../lib/routes";
 
@@ -93,6 +95,15 @@ describe("P1 Learner Sidebar & Navigation Architecture", () => {
       const html = renderToStaticMarkup(
         createElement(TenantIdentity, { identity: customIdentity }),
       );
+      const mobileHtml = renderToStaticMarkup(
+        createElement(MobileLearnerBrand, { identity: customIdentity }),
+      );
+      expect(mobileHtml).toContain('href="/dashboard/custom"');
+      expect(mobileHtml).toContain(
+        'aria-label="Northstar Academy — by Northstar Enterprise"',
+      );
+      expect(mobileHtml).toContain("custom-mark");
+      expect(mobileHtml).not.toContain("Closers Academy");
 
       expect(html).toContain("Northstar Academy");
       expect(html).toContain("by Northstar Enterprise");
@@ -660,21 +671,16 @@ describe("P1 Learner Sidebar & Navigation Architecture", () => {
       expect(css).toContain(".mobile-brand-tenant");
     });
 
-    it("uses the approved shared BrandMark instead of a handcrafted academy SVG", () => {
+    it("uses the selected shared AcademyMark instead of a handcrafted or company mark", () => {
       const identitySource = readFileSync(
         new URL("./tenant-identity.tsx", import.meta.url),
         "utf8",
       );
-      const shellSource = readFileSync(
-        new URL("../site-shell.tsx", import.meta.url),
-        "utf8",
-      );
-
       expect(identitySource).not.toContain("function ClosersAcademyMark");
       expect(identitySource).not.toContain("<svg");
-      expect(shellSource).toContain(
-        'mark: <BrandMark className="learner-sidebar-wordmark__mark-art" />',
-      );
+      const mark = DEFAULT_TENANT_IDENTITY.mark;
+      expect(isValidElement(mark)).toBe(true);
+      if (isValidElement(mark)) expect(mark.type).toBe(AcademyMark);
     });
 
     it("enforces subtle active tint + 3px rail, neutral hover, scale .985 press, and 2px focus ring", () => {

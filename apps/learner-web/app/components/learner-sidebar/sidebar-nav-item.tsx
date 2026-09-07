@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
-import React, { useState, useTransition } from "react";
+import Link, { useLinkStatus } from "next/link";
+import React from "react";
 import { SidebarBadge } from "./sidebar-badge";
 import { SidebarTooltip } from "./sidebar-tooltip";
 import type { SidebarNavItemConfig } from "./sidebar-types";
@@ -14,60 +14,15 @@ export type SidebarNavItemProps = {
   onNavigate?: () => void;
 };
 
-export function SidebarNavItem({
-  item,
-  collapsed = false,
-  density = "comfortable",
-  depth = 0,
-  onNavigate,
-}: SidebarNavItemProps) {
-  const [isPending, startTransition] = useTransition();
-  const [localPending, setLocalPending] = useState(false);
+function SidebarNavItemContent({ item }: { item: SidebarNavItemConfig }) {
+  const { pending } = useLinkStatus();
+  const isPending = pending && !item.disabled && !item.external;
 
-  if (item.visible === false) {
-    return null;
-  }
-
-  const effectiveDensity = item.density ?? (depth > 0 ? "compact" : density);
-  const isCurrent = Boolean(item.current);
-  const isDisabled = Boolean(item.disabled);
-  const titleText = item.title ?? item.label;
-
-  const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
-    if (isDisabled) {
-      e.preventDefault();
-      return;
-    }
-    setLocalPending(true);
-    startTransition(() => {
-      onNavigate?.();
-      item.onClick?.();
-    });
-    try {
-      window.dispatchEvent(
-        new CustomEvent("ac:ui-nav-click", {
-          detail: { destination: item.href, label: item.label },
-        }),
-      );
-    } catch {
-      // Non-window fallback
-    }
-  };
-
-  const navLinkClass = [
-    "learner-nav__link",
-    "sidebar-nav-item",
-    `sidebar-nav-item--${effectiveDensity}`,
-    depth > 0 ? `sidebar-nav-item--depth-${depth}` : "",
-    isCurrent ? "is-current" : "",
-    isDisabled ? "is-disabled" : "",
-    isPending || localPending ? "is-pending" : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
-
-  const linkContent = (
-    <span className="sidebar-nav-item__inner">
+  return (
+    <span
+      className={`sidebar-nav-item__inner${isPending ? " is-pending" : ""}`}
+      aria-busy={isPending || undefined}
+    >
       {item.icon ? (
         <span
           className="learner-nav__icon sidebar-nav-item__icon"
@@ -84,11 +39,81 @@ export function SidebarNavItem({
           <SidebarBadge badge={item.badge} />
         </span>
       ) : null}
-      {isDisabled && item.disabledReason ? (
+      {item.disabled && item.disabledReason ? (
         <span className="sr-only">({item.disabledReason})</span>
       ) : null}
+      <span className="sr-only" role="status">
+        {isPending ? `Opening ${item.label}…` : ""}
+      </span>
     </span>
   );
+}
+
+export function SidebarNavItem({
+  item,
+  collapsed = false,
+  density = "comfortable",
+  depth = 0,
+  onNavigate,
+}: SidebarNavItemProps) {
+  if (item.visible === false) {
+    return null;
+  }
+
+  const effectiveDensity = item.density ?? (depth > 0 ? "compact" : density);
+  const isCurrent = Boolean(item.current);
+  const isDisabled = Boolean(item.disabled);
+  const titleText = item.title ?? item.label;
+
+  const handleNavigate = () => {
+    onNavigate?.();
+    item.onClick?.();
+    try {
+      window.dispatchEvent(
+        new CustomEvent("ac:ui-nav-click", {
+          detail: { destination: item.href, label: item.label },
+        }),
+      );
+    } catch {
+      // Non-window fallback
+    }
+  };
+
+  const handleClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    if (isDisabled) {
+      event.preventDefault();
+      return;
+    }
+    if (
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey ||
+      (event.currentTarget.target && event.currentTarget.target !== "_self")
+    ) {
+      return;
+    }
+    if (event.currentTarget.href === window.location.href) {
+      event.preventDefault();
+      return;
+    }
+    if (item.external) handleNavigate();
+  };
+
+  const navLinkClass = [
+    "learner-nav__link",
+    "sidebar-nav-item",
+    `sidebar-nav-item--${effectiveDensity}`,
+    depth > 0 ? `sidebar-nav-item--depth-${depth}` : "",
+    isCurrent ? "is-current" : "",
+    isDisabled ? "is-disabled" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const linkContent = <SidebarNavItemContent item={item} />;
 
   const navElement = item.external ? (
     <a
@@ -112,6 +137,7 @@ export function SidebarNavItem({
       tabIndex={isDisabled ? -1 : undefined}
       title={titleText}
       onClick={handleClick}
+      onNavigate={handleNavigate}
     >
       {linkContent}
     </Link>

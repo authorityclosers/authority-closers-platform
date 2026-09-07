@@ -52,7 +52,7 @@ describe("learner PWA cache boundary", () => {
 
   it("waits for a safe lifecycle boundary instead of reloading over dirty work", () => {
     expect(serviceWorker).toContain(
-      "const CACHE_NAME = `${CACHE_PREFIX}v0.1.1`",
+      "const CACHE_NAME = `${CACHE_PREFIX}v0.1.2`",
     );
     expect(serviceWorker).toContain('cache: "reload"');
     expect(serviceWorker).toContain('cache: "no-cache"');
@@ -73,27 +73,33 @@ describe("learner PWA cache boundary", () => {
     expect(metadata.prefer_related_applications).toBe(false);
     expect(metadata.icons).toEqual([
       expect.objectContaining({
-        src: "/icon-192.png",
+        src: "/brand/closers-academy-v0.1/icon-192.png",
         sizes: "192x192",
         type: "image/png",
         purpose: "any",
       }),
       expect.objectContaining({
-        src: "/icon-512.png",
+        src: "/brand/closers-academy-v0.1/icon-512.png",
         sizes: "512x512",
         type: "image/png",
         purpose: "maskable",
       }),
     ]);
-    expect(pngDimensions("../../public/icon-192.png")).toEqual({
+    expect(
+      pngDimensions("../../public/brand/closers-academy-v0.1/icon-192.png"),
+    ).toEqual({
       width: 192,
       height: 192,
     });
-    expect(pngDimensions("../../public/icon-512.png")).toEqual({
+    expect(
+      pngDimensions("../../public/brand/closers-academy-v0.1/icon-512.png"),
+    ).toEqual({
       width: 512,
       height: 512,
     });
-    expect(pngDimensions("../../public/apple-touch-icon.png")).toEqual({
+    expect(
+      pngDimensions("../../public/brand/closers-academy-v0.1/icon-180.png"),
+    ).toEqual({
       width: 180,
       height: 180,
     });
@@ -101,7 +107,7 @@ describe("learner PWA cache boundary", () => {
     expect(layout).toContain(
       '<meta name="apple-mobile-web-app-capable" content="yes" />',
     );
-    expect(layout).toContain('apple: [{ url: "/apple-touch-icon.png"');
+    expect(layout).toContain('url: "/brand/closers-academy-v0.1/icon-180.png"');
     expect(layout).toContain("capable: true");
     expect(layout).toContain('statusBarStyle: "default"');
     expect(layout).toContain('viewportFit: "cover"');

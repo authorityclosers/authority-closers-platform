@@ -16,7 +16,14 @@ describe("premium public catalog home", () => {
     expect(html).toContain("Review");
     expect(html).toContain("Improve");
     expect(html).toContain("Loading published programs");
-    expect(html).toContain("dipak-learning-hero-v1.png");
+    expect(html).toContain(
+      "Explore available programs and choose where to begin.",
+    );
+    expect(html).not.toContain("published catalog API");
+    expect(html).toContain("instructor-v1%2Feditorial.webp");
+    expect(html).toContain(
+      'alt="Dipak Vishwakarma, your guide at Closers Academy"',
+    );
     expect(html).not.toContain("65% complete");
     expect(html).not.toContain("weekly activity");
     expect(html).not.toContain("Live Coaching Session");
@@ -42,7 +49,8 @@ describe("premium public catalog home", () => {
     expect(componentSource).toContain("program.title");
     expect(componentSource).toContain("program.version_number");
     expect(componentSource).toContain("program.published_at");
-    expect(componentSource).toContain("/media/dipak-learning-hero-v1.png");
+    expect(componentSource).toContain("<InstructorPortrait priority");
+    expect(componentSource).toContain("<CourseArtwork");
     expect(componentSource).toContain("ac-public-program-grid--single");
     expect(componentSource).toContain("ac-public-program-card--featured");
     expect(componentSource).not.toContain("Module 1 · Shift");

@@ -23,7 +23,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
-import { BrandMark } from "@ac/ui";
+import {
+  AcademyMark,
+  BrandMark,
+  COMPANY_BRAND,
+  FIRST_ACADEMY_BRAND,
+  PLATFORM_BRAND,
+  PlatformMark,
+} from "@ac/ui";
 
 import { createLearnerApi } from "../lib/learner-api";
 import { NotificationPopover } from "./notifications-runtime";
@@ -69,11 +76,11 @@ export {
 };
 
 export const DEFAULT_TENANT_IDENTITY: TenantIdentityConfig = {
-  tenantName: "Authority Closers",
-  academyName: "Closers Academy",
-  attribution: "by Authority Closers",
+  tenantName: COMPANY_BRAND.name,
+  academyName: FIRST_ACADEMY_BRAND.name,
+  attribution: `by ${COMPANY_BRAND.name}`,
   homeHref: ROUTES.dashboard,
-  mark: <BrandMark className="learner-sidebar-wordmark__mark-art" />,
+  mark: <AcademyMark className="learner-sidebar-wordmark__mark-art" />,
 };
 
 export type PublicCurrent = "home" | "program";
@@ -109,6 +116,30 @@ export function LearnerSidebarBrand({
   collapsed?: boolean;
 }) {
   return <TenantIdentity identity={identity} collapsed={collapsed} />;
+}
+
+export function MobileLearnerBrand({
+  identity = DEFAULT_TENANT_IDENTITY,
+}: {
+  identity?: TenantIdentityConfig;
+}) {
+  const attribution = identity.attribution ?? `by ${identity.tenantName}`;
+  return (
+    <Link
+      className="mobile-brand-link"
+      href={identity.homeHref ?? ROUTES.dashboard}
+      prefetch={false}
+      aria-label={`${identity.academyName} — ${attribution}`}
+    >
+      <span className="mobile-brand-icon" aria-hidden="true">
+        {identity.mark ?? identity.logo}
+      </span>
+      <span className="mobile-brand-text">
+        <span className="mobile-brand-name">{identity.academyName}</span>
+        <span className="mobile-brand-tenant">{attribution}</span>
+      </span>
+    </Link>
+  );
 }
 
 export function PublicShell({
@@ -148,7 +179,9 @@ export function PublicShell({
       <footer className="site-footer">
         <div className="site-footer__inner">
           <BrandLink />
-          <p>Learner workspace · browser-first learning.</p>
+          <p>
+            {FIRST_ACADEMY_BRAND.name} · Powered by {PLATFORM_BRAND.name}
+          </p>
           <nav className="site-footer__links" aria-label="Legal and access">
             <Link href={ROUTES.privacy}>Privacy</Link>
             <Link href={ROUTES.terms}>Terms</Link>
@@ -823,6 +856,18 @@ export function LearnerShell({
               </Link>
             ) : null}
           </div>
+          <div
+            className="learner-sidebar__platform"
+            aria-label={`${PLATFORM_BRAND.name} learning platform, Alpha`}
+          >
+            <PlatformMark aria-hidden="true" />
+            {!sidebarCollapsed ? (
+              <>
+                <span>{PLATFORM_BRAND.name}</span>
+                <span className="learner-sidebar__alpha">Alpha</span>
+              </>
+            ) : null}
+          </div>
         </div>
       </aside>
 
@@ -830,22 +875,7 @@ export function LearnerShell({
       <header className="learner-header">
         <div className="learner-header__inner">
           <div className="learner-header__mobile-brand">
-            <Link
-              className="mobile-brand-link"
-              href={ROUTES.dashboard}
-              prefetch={false}
-              aria-label="Closers Academy — by Authority Closers"
-            >
-              <div className="mobile-brand-icon" aria-hidden="true">
-                <BrandMark className="mobile-brand-mark" />
-              </div>
-              <div className="mobile-brand-text">
-                <span className="mobile-brand-name">Closers Academy</span>
-                <span className="mobile-brand-tenant">
-                  by Authority Closers
-                </span>
-              </div>
-            </Link>
+            <MobileLearnerBrand identity={effectiveTenantIdentity} />
           </div>
 
           <div className="learner-header__search-slot">
