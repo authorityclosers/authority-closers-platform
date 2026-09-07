@@ -26,6 +26,7 @@ from ac_platform.http.learning import (
     install_learning_http,
 )
 from ac_platform.http.media import install_media_http
+from ac_platform.http.media_delivery import install_media_delivery_http
 from ac_platform.http.operations import install_operations_http
 from ac_platform.http.planning import install_planning_http
 from ac_platform.http.problem import problem_response, register_problem_handlers
@@ -168,6 +169,16 @@ def create_app(
         require_actor=require_actor,
         runtime=resolved_media_runtime,
     )
+    delivery_factory = resolved_media_runtime.authenticated_delivery_handler_factory
+    if delivery_factory is not None:
+        if resolved_media_runtime.media_cors_policy is None:
+            raise RuntimeError("authenticated media delivery requires its exact-origin policy")
+        install_media_delivery_http(
+            application,
+            cors_policy=resolved_media_runtime.media_cors_policy,
+            require_actor=require_actor,
+            authenticated_handler_factory=delivery_factory,
+        )
     install_operations_http(
         application,
         settings=settings,

@@ -20,7 +20,7 @@ describe("premium public catalog home", () => {
       "Explore available programs and choose where to begin.",
     );
     expect(html).not.toContain("published catalog API");
-    expect(html).toContain("instructor-v1%2Feditorial.webp");
+    expect(html).toContain("instructor-v2%2Ffront-facing.jpeg");
     expect(html).toContain(
       'alt="Dipak Vishwakarma, your guide at Closers Academy"',
     );

@@ -1,0 +1,217 @@
+{
+  "schema_version": "ac-alpha-staging-films.v1",
+  "manifest_id": "alpha-public-films-12s-v1",
+  "fixture_registry_sha256": "fc61c87d5428d53d35b82061a53fbdbd9967b8bf658c6d0425a78a07bc106290",
+  "course_content": false,
+  "production_enabled": false,
+  "clips": [
+    {
+      "fixture_id": "bbb-4k-30-normal",
+      "source_sha256": "37f0ff251a606c2dcfa26c19fe6bf843234b4e7a8889cfab50bc26f644e55520",
+      "duration_seconds": 12.032,
+      "width": 3840,
+      "height": 2160,
+      "fps": "30/1",
+      "progressive_path": "bbb-12s/progressive.mp4",
+      "hls_master_path": "bbb-12s/hls/master.m3u8",
+      "caption_path": "bbb-12s/hls/captions/stress-en.vtt",
+      "probe_path": "bbb-12s/probe.json",
+      "objects": [
+        {
+          "path": "bbb-12s/hls/1080p/index.m3u8",
+          "content_type": "application/vnd.apple.mpegurl",
+          "content_length": 246,
+          "sha256": "21c70fdeb4806b7629229e2fc61acab4d050cc45a39ae062f0317819699512b2"
+        },
+        {
+          "path": "bbb-12s/hls/1080p/segment-00000.ts",
+          "content_type": "video/mp2t",
+          "content_length": 629612,
+          "sha256": "0c53b099d768cf75e445de105f5d796d58f7c7c5db6d399c48e99e57d9a13f7d"
+        },
+        {
+          "path": "bbb-12s/hls/1080p/segment-00001.ts",
+          "content_type": "video/mp2t",
+          "content_length": 3147496,
+          "sha256": "8eaccbc5d2a55d3e5f62e3e0f3f22b6207c340dff2dcf7ff11043f3d6f80a579"
+        },
+        {
+          "path": "bbb-12s/hls/1080p/segment-00002.ts",
+          "content_type": "video/mp2t",
+          "content_length": 2790108,
+          "sha256": "bcf9044396bc03aef6aa104b2954ae532aea9140980c785fef44c4e298db1d30"
+        },
+        {
+          "path": "bbb-12s/hls/2160p/index.m3u8",
+          "content_type": "application/vnd.apple.mpegurl",
+          "content_length": 246,
+          "sha256": "21c70fdeb4806b7629229e2fc61acab4d050cc45a39ae062f0317819699512b2"
+        },
+        {
+          "path": "bbb-12s/hls/2160p/segment-00000.ts",
+          "content_type": "video/mp2t",
+          "content_length": 1092280,
+          "sha256": "fe51d5170f614205c83fd9570b6504b0fc737e6c2b621842e49344b1c07bab49"
+        },
+        {
+          "path": "bbb-12s/hls/2160p/segment-00001.ts",
+          "content_type": "video/mp2t",
+          "content_length": 7152460,
+          "sha256": "e03e7ea8341d3a07397da4daf7251684a263ce4dfc16e9fc14b8e19338136d34"
+        },
+        {
+          "path": "bbb-12s/hls/2160p/segment-00002.ts",
+          "content_type": "video/mp2t",
+          "content_length": 6653696,
+          "sha256": "5b9343308784652d2f5a05fbd65be3ccda584f6b7adad6e48875280fdcf6ef6d"
+        },
+        {
+          "path": "bbb-12s/hls/360p/index.m3u8",
+          "content_type": "application/vnd.apple.mpegurl",
+          "content_length": 246,
+          "sha256": "21c70fdeb4806b7629229e2fc61acab4d050cc45a39ae062f0317819699512b2"
+        },
+        {
+          "path": "bbb-12s/hls/360p/segment-00000.ts",
+          "content_type": "video/mp2t",
+          "content_length": 227104,
+          "sha256": "b250d5c2eea40af29381602e767ed98eeaecae694be518ce4bde0d5856741760"
+        },
+        {
+          "path": "bbb-12s/hls/360p/segment-00001.ts",
+          "content_type": "video/mp2t",
+          "content_length": 597276,
+          "sha256": "36b8194ec4729b5f04b2186e9db00cb6fff561fb85e62138b81ddb280cb8afbd"
+        },
+        {
+          "path": "bbb-12s/hls/360p/segment-00002.ts",
+          "content_type": "video/mp2t",
+          "content_length": 535424,
+          "sha256": "cb820c847f5ee32e5d4d230a1e90d25dedab812ed6a9c4e2fe884bcf656f0f43"
+        },
+        {
+          "path": "bbb-12s/hls/captions/stress-en.m3u8",
+          "content_type": "application/vnd.apple.mpegurl",
+          "content_length": 144,
+          "sha256": "51be0e0a9f303224a224dffa7cb18955627c4e55d0542f9d420c948ad09d28bb"
+        },
+        {
+          "path": "bbb-12s/hls/captions/stress-en.vtt",
+          "content_type": "text/vtt",
+          "content_length": 293,
+          "sha256": "3eda0839022a1c207c140fcf73f1b17c2e1f76c34537deb4d2200f688e6e40aa"
+        },
+        {
+          "path": "bbb-12s/hls/master.m3u8",
+          "content_type": "application/vnd.apple.mpegurl",
+          "content_length": 661,
+          "sha256": "fd19624c465b53204b896443c1fa20949fdd3d23ab533615a6e49302d7d92ea8"
+        },
+        {
+          "path": "bbb-12s/probe.json",
+          "content_type": "application/json",
+          "content_length": 515,
+          "sha256": "a4d219e7c5914da2067c53e203161b5af6033c0514cdf261c41fc2cd36c83f10"
+        },
+        {
+          "path": "bbb-12s/progressive.mp4",
+          "content_type": "video/mp4",
+          "content_length": 14538778,
+          "sha256": "7e7ee255d0ca2866ad528e9d6ddc0049a66883d6984ea9bf4d9fed188907bd4a"
+        }
+      ]
+    },
+    {
+      "fixture_id": "caminandes-gran-dillama-1080p",
+      "source_sha256": "468e6743c674689a728726bbe4bb4b2a65bd8702a89f021af26a8bb4d450eebd",
+      "duration_seconds": 12.032,
+      "width": 1920,
+      "height": 1080,
+      "fps": "24/1",
+      "progressive_path": "caminandes-12s/progressive.mp4",
+      "hls_master_path": "caminandes-12s/hls/master.m3u8",
+      "caption_path": "caminandes-12s/hls/captions/stress-en.vtt",
+      "probe_path": "caminandes-12s/probe.json",
+      "objects": [
+        {
+          "path": "caminandes-12s/hls/1080p/index.m3u8",
+          "content_type": "application/vnd.apple.mpegurl",
+          "content_length": 246,
+          "sha256": "21c70fdeb4806b7629229e2fc61acab4d050cc45a39ae062f0317819699512b2"
+        },
+        {
+          "path": "caminandes-12s/hls/1080p/segment-00000.ts",
+          "content_type": "video/mp2t",
+          "content_length": 1897296,
+          "sha256": "d1e2ef7d27732629fd72c32a867f99c99dba3dcec99215918792c0ae389a7309"
+        },
+        {
+          "path": "caminandes-12s/hls/1080p/segment-00001.ts",
+          "content_type": "video/mp2t",
+          "content_length": 3034884,
+          "sha256": "ee264ad0dfd419ef78e8af50657b47147701b8534e026550a628dcc0bf8e6a13"
+        },
+        {
+          "path": "caminandes-12s/hls/1080p/segment-00002.ts",
+          "content_type": "video/mp2t",
+          "content_length": 2887868,
+          "sha256": "2ab3f246af0f63e7f3919fce535720e5dd5f905082a99c814a48a1f45a61c66c"
+        },
+        {
+          "path": "caminandes-12s/hls/360p/index.m3u8",
+          "content_type": "application/vnd.apple.mpegurl",
+          "content_length": 246,
+          "sha256": "21c70fdeb4806b7629229e2fc61acab4d050cc45a39ae062f0317819699512b2"
+        },
+        {
+          "path": "caminandes-12s/hls/360p/segment-00000.ts",
+          "content_type": "video/mp2t",
+          "content_length": 382580,
+          "sha256": "07fd4e589b018821ee8918d27523025df9d2aa20927a61440cb794dcbfa61de7"
+        },
+        {
+          "path": "caminandes-12s/hls/360p/segment-00001.ts",
+          "content_type": "video/mp2t",
+          "content_length": 552720,
+          "sha256": "ddf1e24ea61167d8c2d4838746155ac1e8307d1b1c8aadd7789f5c5269bf2801"
+        },
+        {
+          "path": "caminandes-12s/hls/360p/segment-00002.ts",
+          "content_type": "video/mp2t",
+          "content_length": 533356,
+          "sha256": "ac09e1ae26edd34c89ddb9a998f14584a62e68eaa14da0519caceb17cc94d576"
+        },
+        {
+          "path": "caminandes-12s/hls/captions/stress-en.m3u8",
+          "content_type": "application/vnd.apple.mpegurl",
+          "content_length": 144,
+          "sha256": "51be0e0a9f303224a224dffa7cb18955627c4e55d0542f9d420c948ad09d28bb"
+        },
+        {
+          "path": "caminandes-12s/hls/captions/stress-en.vtt",
+          "content_type": "text/vtt",
+          "content_length": 293,
+          "sha256": "3eda0839022a1c207c140fcf73f1b17c2e1f76c34537deb4d2200f688e6e40aa"
+        },
+        {
+          "path": "caminandes-12s/hls/master.m3u8",
+          "content_type": "application/vnd.apple.mpegurl",
+          "content_length": 487,
+          "sha256": "b42a5cf43f35405d6ad37a0214693afd3601969a141c244328b95ad2f226de41"
+        },
+        {
+          "path": "caminandes-12s/probe.json",
+          "content_type": "application/json",
+          "content_length": 515,
+          "sha256": "d59aa2702bf85d0b657701545db314d4808c5b653ecf206cd2f00127b7da47e0"
+        },
+        {
+          "path": "caminandes-12s/progressive.mp4",
+          "content_type": "video/mp4",
+          "content_length": 7616989,
+          "sha256": "a85f27d1b52848fb51c486a882e2bd61318da502b62d7537e81ecca739198d74"
+        }
+      ]
+    }
+  ]
+}

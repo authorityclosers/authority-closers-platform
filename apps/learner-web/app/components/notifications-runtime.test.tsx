@@ -31,7 +31,7 @@ const items = [
 ];
 
 describe("NotificationsRuntime", () => {
-  it("keeps the bell surface honest and routes to the same unavailable page state", () => {
+  it("keeps one compact unavailable message and offers a useful existing destination", () => {
     const onClose = vi.fn();
     const html = renderToStaticMarkup(
       createElement(NotificationPopover, { onClose }),
@@ -44,19 +44,24 @@ describe("NotificationsRuntime", () => {
     expect(html).toContain(
       'aria-describedby="learner-notifications-popover-description"',
     );
-    expect(html).toContain("Notifications are not connected yet");
-    expect(html).toContain("server-backed notification source");
-    expect(html).toContain('href="/notifications"');
-    expect(html).toContain("View full notifications page");
+    expect(html.match(/Notifications aren’t available yet/g)).toHaveLength(1);
+    expect(html).toContain("current courses and next steps");
+    expect(html).toContain('href="/learning"');
+    expect(html).toContain("Go to My Learning");
+    expect(html).not.toContain('href="/notifications"');
+    expect(html).not.toMatch(
+      /first.slice|server-backed|Workspace updates|all caught up/i,
+    );
     expect(html).not.toContain("Mark all read");
     expect(html).not.toContain("unread");
   });
 
-  it("states the unconnected first-slice boundary without fabricating alerts", () => {
+  it("states the unavailable source without jargon or fabricated alerts", () => {
     const html = renderToStaticMarkup(createElement(NotificationsRuntime));
 
-    expect(html).toContain("Notifications are not connected yet");
-    expect(html).toContain("server-backed notification source");
+    expect(html).toContain("Notifications aren’t available yet");
+    expect(html).toContain('href="/learning"');
+    expect(html).not.toMatch(/first.slice|server-backed|all caught up/i);
     expect(html).not.toContain("Mark all read");
     expect(html).not.toContain("Welcome to Authority Closers");
   });

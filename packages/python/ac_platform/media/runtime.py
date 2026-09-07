@@ -9,11 +9,19 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
 
+from sqlalchemy.orm import Session
+
 from ac_platform.application.settings import Settings
+from ac_platform.kernel.authz import ActorContext
 from ac_platform.media.config import (
     MediaProviderActivationVerifier,
     MediaProviderConfig,
 )
+from ac_platform.media.database_delivery_authorizer import (
+    DatabaseMediaDeliveryAuthorizer,
+    DeliveryActivityResolver,
+)
+from ac_platform.media.delivery import PrivateMediaDeliveryHandler
 from ac_platform.media.errors import MediaConfigurationError
 from ac_platform.media.lifecycle import (
     MediaLifecycleHooks,
@@ -56,6 +64,9 @@ class MediaRuntime:
     activity_media_resolver: Callable[..., object] | None = None
     media_descriptor_resolver: Callable[..., object] | None = None
     playback_policy_resolver: Callable[..., object] | None = None
+    authenticated_delivery_handler_factory: (
+        Callable[[Session, ActorContext], PrivateMediaDeliveryHandler] | None
+    ) = None
 
     @property
     def learning_playback_composed(self) -> bool:
@@ -92,6 +103,7 @@ def create_media_runtime(
     retention_policy: MediaRetentionPolicy | None = None,
     activation_verifier: MediaProviderActivationVerifier | None = None,
     media_delivery_handler: SignedMediaDeliveryPort | None = None,
+    delivery_activity_resolver: DeliveryActivityResolver | None = None,
 ) -> MediaRuntime:
     """Compose media dependencies without contacting external providers.
 
@@ -117,6 +129,7 @@ def create_media_runtime(
             retention_policy,
             activation_verifier,
             media_delivery_handler,
+            delivery_activity_resolver,
         )
     )
     if settings.environment not in {"local", "test"} and (
@@ -199,7 +212,37 @@ def create_media_runtime(
         ),
         media_config=config,
         activation_verifier=activation_verifier,
+        delivery_activity_resolver=delivery_activity_resolver,
     )
+    handler_factory: Callable[[Session, ActorContext], PrivateMediaDeliveryHandler] | None = None
+    if (
+        media_delivery is not None
+        and media_cors_policy is not None
+        and delivery_activity_resolver is not None
+    ):
+        if media_delivery.delivery_origin != str(settings.public_app_url).rstrip("/"):
+            raise MediaConfigurationError(
+                "request-authenticated learner media must use the learner's same origin"
+            )
+
+        def authenticated_handler(
+            database: Session, actor: ActorContext
+        ) -> PrivateMediaDeliveryHandler:
+            return PrivateMediaDeliveryHandler(
+                storage=selected_storage,
+                signer=media_delivery.signer,
+                delivery_port=media_delivery,
+                max_object_bytes=min(8 * 1024**3, media_delivery.range_policy.max_bytes),
+                authorizer=DatabaseMediaDeliveryAuthorizer(
+                    database,
+                    actor,
+                    signer=media_signer,
+                    activity_resolver=delivery_activity_resolver,
+                ),
+                cors_policy=media_cors_policy,
+            )
+
+        handler_factory = authenticated_handler
     return MediaRuntime(
         service=service,
         telemetry=TelemetryRecorder(NullTelemetrySink()),
@@ -211,13 +254,19 @@ def create_media_runtime(
         media_cors_policy=media_cors_policy,
         activity_media_resolver=service.resolve_activity_media_binding_for_learning,
         media_descriptor_resolver=service.resolve_activity_media_descriptor_for_learner,
+        authenticated_delivery_handler_factory=handler_factory,
     )
 
 
 def create_default_media_runtime(settings: Settings) -> MediaRuntime:
     """Build the application runtime with its fail-closed composition defaults."""
 
-    return create_media_runtime(settings)
+    runtime = create_media_runtime(settings)
+    if settings.media_staging_public_films_delivery_enabled:
+        from ac_platform.media.staging_fixture_runtime import compose_staging_fixture_delivery
+
+        return compose_staging_fixture_delivery(settings, runtime)
+    return runtime
 
 
 def compose_learning_playback_policy_resolver(

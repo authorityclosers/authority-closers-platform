@@ -189,10 +189,51 @@ const motionOptions = [
   },
 ];
 
+function AppearanceChoice<T extends string>({
+  label,
+  detail,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  detail: string;
+  value: T;
+  options: readonly { value: T; label: string }[];
+  onChange: (value: T) => void;
+}) {
+  return (
+    <label className={styles.preferenceRow}>
+      <span>
+        <strong>{label}</strong>
+        <small>{detail}</small>
+      </span>
+      <select
+        aria-label={label}
+        value={value}
+        onChange={(event) => {
+          const option = options.find(
+            (item) => item.value === event.target.value,
+          );
+          if (option) onChange(option.value);
+        }}
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 export function ThemeControl({
   advanced = false,
+  compact = false,
 }: {
   advanced?: boolean;
+  compact?: boolean;
 } = {}) {
   const [preferences, setPreferences] = useState<AppearancePreferences>({
     theme: "light",
@@ -304,6 +345,107 @@ export function ThemeControl({
       setStorageError(result.reason);
       announce("Appearance reset for this session; storage unavailable.");
     }
+  }
+
+  if (compact) {
+    const activePreset = NAMED_PRESETS.find(
+      (preset) =>
+        preset.theme === preferences.theme &&
+        preset.accent === preferences.accent &&
+        preset.density === preferences.density &&
+        preset.motion === preferences.motion,
+    );
+    return (
+      <div className={styles.compactAppearance}>
+        {storageError ? (
+          <div className={styles.compactStorageError} role="alert">
+            <CircleAlert size={18} aria-hidden="true" />
+            <p>
+              {storageError === "quota_exceeded"
+                ? "This browser’s storage is full."
+                : "This browser isn’t allowing preferences to be saved."}{" "}
+              Your choices apply for this session only.
+            </p>
+          </div>
+        ) : null}
+        <AppearanceChoice
+          label="Theme"
+          detail="Choose light, dark, or follow your device."
+          value={preferences.theme}
+          options={themeOptions}
+          onChange={(theme) => handleUpdate({ theme }, `${theme} theme`)}
+        />
+        <AppearanceChoice
+          label="Accent color"
+          detail="A personal touch for links and controls."
+          value={preferences.accent}
+          options={accentOptions}
+          onChange={(accent) => handleUpdate({ accent }, `${accent} accent`)}
+        />
+        <AppearanceChoice
+          label="Display density"
+          detail="Choose how much breathing room you prefer."
+          value={preferences.density}
+          options={densityOptions}
+          onChange={(density) =>
+            handleUpdate({ density }, `${density} density`)
+          }
+        />
+        <AppearanceChoice
+          label="Motion"
+          detail="Follow your device or reduce animations."
+          value={preferences.motion}
+          options={motionOptions.map((option) => ({
+            ...option,
+            label:
+              option.value === "reduced"
+                ? "Reduced"
+                : option.value === "full"
+                  ? "Full"
+                  : "System",
+          }))}
+          onChange={(motion) => handleUpdate({ motion }, `${motion} motion`)}
+        />
+        <details className={styles.presetDisclosure}>
+          <summary>
+            Coordinated looks <span>{activePreset?.name ?? "Custom"}</span>
+          </summary>
+          <AppearanceChoice
+            label="Appearance preset"
+            detail="Apply a matching theme, accent, spacing, and motion."
+            value={activePreset?.id ?? "custom"}
+            options={[
+              ...(activePreset ? [] : [{ value: "custom", label: "Custom" }]),
+              ...NAMED_PRESETS.map((preset) => ({
+                value: preset.id,
+                label: preset.name,
+              })),
+            ]}
+            onChange={(id) => {
+              const preset = NAMED_PRESETS.find((item) => item.id === id);
+              if (preset) handleApplyPreset(preset);
+            }}
+          />
+        </details>
+        <div className={styles.compactAppearanceFooter}>
+          <button
+            className={styles.resetButton}
+            type="button"
+            onClick={handleReset}
+          >
+            <RotateCcw size={16} aria-hidden="true" /> Reset appearance
+          </button>
+          <p
+            className={styles.savedFeedback}
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            {feedback ?? "Changes apply instantly."}
+          </p>
+        </div>
+      </div>
+    );
   }
 
   if (!advanced) {
@@ -651,6 +793,8 @@ export function ThemeControl({
   );
 }
 
-export function AppearanceControl() {
-  return <ThemeControl advanced={true} />;
+export function AppearanceControl({
+  compact = false,
+}: { compact?: boolean } = {}) {
+  return <ThemeControl advanced={true} compact={compact} />;
 }

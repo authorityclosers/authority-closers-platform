@@ -6,7 +6,6 @@ import { describe, expect, it, vi } from "vitest";
 import {
   AppShell,
   closeAccountMenu,
-  closeHelpPopover,
   closeNotificationPopover,
   initialsForDisplayName,
   LearnerShell,
@@ -300,16 +299,6 @@ describe("Direction A & B UI System & Shell", () => {
       expect(focus).toHaveBeenCalledOnce();
     });
 
-    it("restores help-trigger focus when the help popover closes", () => {
-      const setOpen = vi.fn();
-      const focus = vi.fn();
-
-      closeHelpPopover(setOpen, { focus });
-
-      expect(setOpen).toHaveBeenCalledWith(false);
-      expect(focus).toHaveBeenCalledOnce();
-    });
-
     it("renders the desktop wide sidebar with all 7 primary workspace and account links plus help", () => {
       const html = renderToStaticMarkup(
         createElement(LearnerShell, {
@@ -486,11 +475,9 @@ describe("Direction A & B UI System & Shell", () => {
       );
       expect(shellSource).not.toContain("ac-toast");
       expect(shellSource).not.toContain("learner-toast");
-      expect(shellSource).toContain("Email support is available");
-      expect(shellSource).toContain(
-        "In-app chat is not connected in this workspace yet.",
-      );
-      expect(shellSource).toContain("Email learner support");
+      expect(shellSource).toContain("Help & Support");
+      expect(shellSource).toContain("SUPPORT_MAILTO");
+      expect(shellSource).not.toContain("learner-help-widget");
       expect(shellSource).not.toContain("live agent");
       expect(shellSource).not.toContain("connected LLM");
     });
@@ -655,12 +642,8 @@ describe("Direction A & B UI System & Shell", () => {
       expect(courseSurfacesCss).toMatch(
         /\.ac-program-grid\s*>\s*\.ac-program-card:only-child\s*\{[\s\S]*?width:\s*min\(100%,\s*380px\);[\s\S]*?justify-self:\s*start;/,
       );
-      expect(shellSource).toContain("closeHelpPopover");
-      expect(shellSource).toContain("setHelpOpen(false);");
-      expect(shellSource).toContain(
-        "closeHelpPopover(setHelpOpen, helpButtonRef.current)",
-      );
-      expect(shellSource).not.toContain("onClick={() => setHelpOpen(false)}");
+      expect(shellSource).not.toContain("setHelpOpen");
+      expect(shellSource).not.toContain("Open help chatbox");
       expect(shellSource).toContain(
         'if (event.key === "Tab") {\n      // Let the browser continue through the document\'s tab order.',
       );

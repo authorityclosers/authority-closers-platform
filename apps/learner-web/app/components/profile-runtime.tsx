@@ -5,13 +5,18 @@
 
 import {
   ArrowRight,
+  BookOpen,
+  Camera,
+  ChartNoAxesColumnIncreasing,
   CheckCircle2,
-  GraduationCap,
+  CircleAlert,
+  Clock3,
   PencilLine,
   Settings,
+  Target,
 } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   ApiError,
@@ -43,6 +48,7 @@ import {
 import { useInvalidateDraftsWithoutMembership } from "./learner-runtime";
 import { SignOutControl } from "./sign-out-control";
 import { ProfileSkeleton } from "./skeletons";
+import styles from "./profile-runtime.module.css";
 
 const defaultApi = createLearnerApi();
 export const PROFILE_AVATAR_REFRESH_INTERVAL_MS = 4 * 60 * 1000;
@@ -163,7 +169,10 @@ export function ProfileRuntime({
   const abortRef = useRef<AbortController | null>(null);
   const avatarRefreshGenerationRef = useRef(0);
   const avatarRefreshAbortRef = useRef<AbortController | null>(null);
-  const effectiveAvatarUpload = avatarUpload ?? createApiAvatarUploadPort(api);
+  const effectiveAvatarUpload = useMemo(
+    () => avatarUpload ?? createApiAvatarUploadPort(api),
+    [api, avatarUpload],
+  );
   const membershipKnown = me !== null;
   const membershipAvailable = me !== null && hasMembershipRole(me);
   const draftCleanup = useInvalidateDraftsWithoutMembership(
@@ -349,18 +358,18 @@ export function ProfileRuntime({
       : null;
 
   return (
-    <div className="profile-view">
-      <header className="profile-header" aria-labelledby="profile-heading">
-        <div className="learning-breadcrumbs" aria-label="Breadcrumb">
+    <div className={styles.profile}>
+      <header className={styles.header} aria-labelledby="profile-heading">
+        <nav className={styles.breadcrumbs} aria-label="Breadcrumb">
           <Link href={ROUTES.dashboard}>Dashboard</Link>
           <span aria-hidden="true">/</span>
-          <span>Profile</span>
-        </div>
-        <h1 id="profile-heading" className="profile-title">
-          Learner Profile
+          <span aria-current="page">Profile</span>
+        </nav>
+        <h1 id="profile-heading" className={styles.title}>
+          Your profile
         </h1>
-        <p className="profile-subhead">
-          Your account identity and learning preferences.
+        <p className={styles.subtitle}>
+          Make it yours. Keep your learning in focus.
         </p>
       </header>
 
@@ -374,242 +383,208 @@ export function ProfileRuntime({
         </div>
       ) : null}
 
-      <div className="profile-grid">
-        {/* Identity & Account Card */}
-        <section
-          className="card profile-card"
-          aria-labelledby="identity-card-title"
-        >
-          <div className="profile-card__hero profile-card__hero--avatar">
-            <div className="profile-avatar-panel">
-              <div className="profile-avatar-large">
-                {displayAvatar ? (
-                  <img
-                    className="profile-avatar-large__image"
-                    src={displayAvatar.deliveryUrl}
-                    alt={displayAvatar.alt || `${displayName}'s profile photo`}
-                    onError={() => {
-                      setFailedAvatarUrl(displayAvatar.deliveryUrl);
-                      void refreshAvatar();
-                    }}
-                  />
-                ) : (
-                  <span aria-hidden="true">{initials}</span>
-                )}
-              </div>
-              <div className="profile-avatar-panel__copy">
-                <span className="profile-avatar-panel__label">
-                  Profile photo
-                </span>
-                <p>
-                  Optional. Preview a crop locally before any server-backed
-                  profile update.
-                </p>
-                <button
-                  ref={avatarButtonRef}
-                  className="button button--small button--outline profile-avatar-panel__button"
-                  type="button"
-                  onClick={() => {
-                    setAvatarSuccessMessage(null);
-                    setAvatarDialogOpen(true);
-                  }}
-                  aria-haspopup="dialog"
-                >
-                  <PencilLine size={15} aria-hidden="true" />
-                  Change photo
-                </button>
-                {avatarSuccessMessage ? (
-                  <div
-                    className="profile-avatar-status profile-avatar-status--success"
-                    role="status"
-                    aria-live="polite"
-                    aria-atomic="true"
-                  >
-                    <CheckCircle2 size={14} aria-hidden="true" />
-                    {avatarSuccessMessage}
-                  </div>
-                ) : null}
-                {avatarError ? (
-                  <div className="profile-avatar-status" role="status">
-                    Profile photo delivery is unavailable right now; your
-                    account details remain available.
-                    <button
-                      className="text-button"
-                      type="button"
-                      onClick={() => void load()}
-                    >
-                      Retry photo
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-            <div className="profile-hero-copy">
-              <h2 id="identity-card-title" className="profile-name">
-                {displayName}
-              </h2>
-              <span className="profile-email">{me.email}</span>
-              <div className="profile-badges">
-                <span className="card-badge card-badge--success">
-                  <CheckCircle2 size={13} aria-hidden="true" />
-                  {me.email_verified_at
-                    ? "Email verified"
-                    : "Email verification pending"}
-                </span>
-                <span className="card-badge card-badge--primary">
-                  {me.membership_role ? "Active Learner" : "Learner"}
-                </span>
-              </div>
-            </div>
+      <section
+        className={styles.identity}
+        aria-labelledby="identity-card-title"
+      >
+        <div className={styles.identityRow}>
+          <div className={styles.avatar}>
+            {displayAvatar ? (
+              <img
+                className={styles.avatarImage}
+                src={displayAvatar.deliveryUrl}
+                alt={displayAvatar.alt || `${displayName}'s profile photo`}
+                width={96}
+                height={96}
+                decoding="async"
+                onError={() => {
+                  setFailedAvatarUrl(displayAvatar.deliveryUrl);
+                  void refreshAvatar();
+                }}
+              />
+            ) : (
+              <span aria-hidden="true">{initials}</span>
+            )}
           </div>
-
-          <div className="profile-facts-list">
-            <div className="fact-row">
-              <span className="fact-label">Account Role</span>
-              <strong className="fact-value">
-                {me.membership_role || "Learner"}
-              </strong>
-            </div>
-            <div className="fact-row">
-              <span className="fact-label">Verification Status</span>
-              <strong className="fact-value">
-                {me.email_verified_at ? "Verified" : "Pending"}
-              </strong>
-            </div>
+          <div className={styles.identityCopy}>
+            <h2 id="identity-card-title" className={styles.name}>
+              {displayName}
+            </h2>
+            <p className={styles.email}>{me.email}</p>
+            <span
+              className={
+                me.email_verified_at ? styles.verified : styles.pending
+              }
+            >
+              {me.email_verified_at ? (
+                <CheckCircle2 size={14} aria-hidden="true" />
+              ) : (
+                <CircleAlert size={14} aria-hidden="true" />
+              )}
+              {me.email_verified_at
+                ? "Email verified"
+                : "Email verification pending"}
+            </span>
           </div>
-        </section>
+          <div className={styles.photoAction}>
+            <button
+              ref={avatarButtonRef}
+              className={styles.outlineButton}
+              type="button"
+              onClick={() => {
+                setAvatarSuccessMessage(null);
+                setAvatarDialogOpen(true);
+              }}
+              aria-haspopup="dialog"
+            >
+              <Camera size={16} aria-hidden="true" />
+              Change photo
+            </button>
+            <span className={styles.photoHint}>
+              Choose a photo, then crop to fit.
+            </span>
+          </div>
+        </div>
+        {avatarSuccessMessage ? (
+          <div
+            className={styles.photoSuccess}
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            <CheckCircle2 size={14} aria-hidden="true" />
+            {avatarSuccessMessage}
+          </div>
+        ) : null}
+        {avatarError ? (
+          <div className={styles.photoNotice} role="status">
+            <span>
+              Your photo couldn’t load. Your account details are still here.
+            </span>
+            <button
+              className={styles.inlineButton}
+              type="button"
+              onClick={() => void refreshAvatar()}
+            >
+              Retry photo
+            </button>
+          </div>
+        ) : null}
+      </section>
 
-        {/* Learning Preferences Card */}
+      <div className={styles.contentGrid}>
         <section
-          className="card setup-card"
+          className={styles.focusCard}
           aria-labelledby="learning-setup-title"
         >
-          <div className="card-header">
-            <div className="card-header-icon" aria-hidden="true">
-              <GraduationCap size={20} />
-            </div>
-            <div>
-              <h2 id="learning-setup-title" className="card-title">
-                Learning Preferences
-              </h2>
-              <p className="card-description">
-                Your personalized setup from onboarding.
-              </p>
-            </div>
-          </div>
+          <header className={styles.sectionHeader}>
+            <h2 id="learning-setup-title">Your learning focus</h2>
+            <p>Your saved goals and learning routine.</p>
+          </header>
 
           {onboardingError ? (
-            <div className="alert-box alert-box--error" role="alert">
+            <div className={styles.setupError} role="alert">
               <p>
                 {userFacingRequestError(
                   onboardingError,
-                  "Learning preferences could not be loaded. The rest of your profile is still available.",
+                  "Your learning setup couldn’t load. Please try again.",
                 )}
               </p>
               <button
-                className="text-button"
+                className={styles.inlineButton}
                 type="button"
                 onClick={() => void load()}
               >
-                Retry preferences
+                Retry learning setup
               </button>
             </div>
           ) : onboarding ? (
-            <div className="profile-facts-list">
-              <div className="fact-row">
-                <span className="fact-label">Experience Context</span>
-                <strong className="fact-value">
-                  {contextLabel(onboarding.experience_context)}
-                </strong>
+            <>
+              <div className={styles.goal}>
+                <Target size={22} aria-hidden="true" />
+                <div>
+                  <span className={styles.label}>
+                    What you’re working toward
+                  </span>
+                  <p className={styles.goalText}>
+                    {onboarding.learning_goal ||
+                      "Choose a goal to give your learning direction."}
+                  </p>
+                </div>
               </div>
-              <div className="fact-row">
-                <span className="fact-label">Primary Goal</span>
-                <strong className="fact-value">
-                  {onboarding.learning_goal || "Not set"}
-                </strong>
-              </div>
-              <div className="fact-row">
-                <span className="fact-label">Current Situation</span>
-                <strong className="fact-value">
-                  {onboarding.practice_situation || "Not set"}
-                </strong>
-              </div>
-              <div className="fact-row">
-                <span className="fact-label">Weekly Commitment</span>
-                <strong className="fact-value">
-                  {formatMinutes(onboarding.weekly_minutes)}
-                </strong>
-              </div>
-            </div>
+              <dl className={styles.facts}>
+                <div>
+                  <dt>Experience</dt>
+                  <dd>{contextLabel(onboarding.experience_context)}</dd>
+                </div>
+                <div>
+                  <dt>
+                    <Clock3 size={14} aria-hidden="true" /> Weekly commitment
+                  </dt>
+                  <dd>{formatMinutes(onboarding.weekly_minutes)}</dd>
+                </div>
+                <div className={styles.practice}>
+                  <dt>Where you’ll put it into practice</dt>
+                  <dd>{onboarding.practice_situation || "Not set"}</dd>
+                </div>
+              </dl>
+            </>
           ) : (
-            <p className="empty-copy">
-              No onboarding preferences have been recorded yet.
+            <p className={styles.emptyCopy}>
+              What would you like to get better at? Add a goal and a weekly
+              commitment to make this space yours.
             </p>
           )}
 
-          <div className="card-footer-actions">
+          <footer className={styles.setupFooter}>
             {offlineRead ? (
-              <span
-                className="button button--small button--outline is-disabled"
-                aria-disabled="true"
-              >
+              <span className={styles.disabledButton} aria-disabled="true">
                 <PencilLine size={16} aria-hidden="true" /> Reconnect to edit
               </span>
             ) : (
               <Link
-                className="button button--small button--outline"
+                className={styles.outlineButton}
                 href={`${ROUTES.onboarding}?return=profile`}
               >
                 <PencilLine size={16} aria-hidden="true" /> Edit learning setup
               </Link>
             )}
-          </div>
+          </footer>
         </section>
 
-        {/* Quick Settings & Navigation Card */}
-        <section
-          className="card quick-actions-card"
-          aria-labelledby="account-actions-title"
-        >
-          <div className="card-header">
-            <div className="card-header-icon" aria-hidden="true">
-              <Settings size={20} />
-            </div>
-            <div>
-              <h2 id="account-actions-title" className="card-title">
-                Account & Appearance
-              </h2>
-              <p className="card-description">
-                Manage theme and account security.
-              </p>
-            </div>
+        <nav className={styles.nextSteps} aria-label="Profile shortcuts">
+          <h2>Keep moving forward</h2>
+          <Link
+            className={`${styles.shortcut} ${styles.primaryShortcut}`}
+            href={ROUTES.learning}
+          >
+            <BookOpen size={20} aria-hidden="true" />
+            <span>
+              <strong>Continue learning</strong>
+              <span>Pick up your next activity</span>
+            </span>
+            <ArrowRight size={18} aria-hidden="true" />
+          </Link>
+          <Link className={styles.shortcut} href={ROUTES.progress}>
+            <ChartNoAxesColumnIncreasing size={20} aria-hidden="true" />
+            <span>
+              <strong>Your progress</strong>
+              <span>See the steps you’ve completed</span>
+            </span>
+            <ArrowRight size={16} aria-hidden="true" />
+          </Link>
+          <Link className={styles.shortcut} href={ROUTES.settings}>
+            <Settings size={20} aria-hidden="true" />
+            <span>
+              <strong>Settings</strong>
+              <span>Appearance, privacy, and your account</span>
+            </span>
+            <ArrowRight size={16} aria-hidden="true" />
+          </Link>
+          <div className={styles.sessionAction}>
+            <SignOutControl api={api} className={styles.signOut} />
           </div>
-
-          <div className="quick-actions-links">
-            <Link className="quick-action-row" href={ROUTES.settings}>
-              <div>
-                <strong>Theme & Display Settings</strong>
-                <span>Switch between Light, Dark, and System appearance</span>
-              </div>
-              <ArrowRight size={16} aria-hidden="true" />
-            </Link>
-
-            <Link className="quick-action-row" href={ROUTES.progress}>
-              <div>
-                <strong>Progress</strong>
-                <span>View course completion and activity locks</span>
-              </div>
-              <ArrowRight size={16} aria-hidden="true" />
-            </Link>
-          </div>
-
-          <div className="card-footer-actions">
-            <SignOutControl
-              api={api}
-              className="button button--small button--outline button--danger"
-            />
-          </div>
-        </section>
+        </nav>
       </div>
 
       {avatarDialogOpen ? (

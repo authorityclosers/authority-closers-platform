@@ -396,6 +396,9 @@ export function AvatarCropDialog({
   }, [closeDialog]);
 
   useEffect(() => {
+    // Strict Mode replays setup after cleanup on the same mounted instance.
+    // Decode/upload completions must become eligible again for that setup.
+    mountedRef.current = true;
     return () => {
       mountedRef.current = false;
       selectionRef.current += 1;

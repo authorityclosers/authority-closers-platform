@@ -1,0 +1,6 @@
+{
+  "schema_version": "ac-staging-public-films-deployment.v1",
+  "environment": "staging",
+  "enabled": false,
+  "manifest_sha256": "d693acc73dc3f66c1b13ad6e68d5e41cba8478dc719f4b68211ce829442b0222"
+}

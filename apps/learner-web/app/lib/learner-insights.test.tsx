@@ -41,16 +41,17 @@ const availableAnalytics: AnalyticsViewResponse = {
 };
 
 describe("learner descriptive insights", () => {
-  it("keeps the support shell and notification affordance available without faking a provider", () => {
+  it("keeps navigation support and notifications without a floating placeholder chatbot", () => {
     const html = renderToStaticMarkup(
       createElement(LearnerShell, { current: "progress" }),
     );
 
-    expect(html).toContain('aria-label="Open help chatbox"');
-    expect(html).toContain('aria-controls="learner-help-chatbox"');
+    expect(html).not.toContain('aria-label="Open help chatbox"');
+    expect(html).not.toContain('aria-controls="learner-help-chatbox"');
     expect(html).toContain('aria-expanded="false"');
     expect(html).toContain('aria-label="Notifications"');
-    expect(html).toContain("learner-help-chatbox__trigger");
+    expect(html).not.toContain("learner-help-chatbox__trigger");
+    expect(html).toContain("mailto:");
     expect(html).toContain('aria-controls="learner-account-menu"');
   });
 

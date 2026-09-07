@@ -12,6 +12,7 @@ import {
   clearUnavailableMembershipLearnerLocalDrafts,
   createSettingsDraftCleanupController,
   startSettingsResourceLoad,
+  searchSettingsSections,
   type SettingsResources,
 } from "./settings-runtime";
 import { ThemeControl } from "./theme-control";
@@ -63,8 +64,8 @@ function readyResources(): SettingsResources {
   };
 }
 
-describe("Settings Direction B runtime", () => {
-  it("renders the ready ledger with only current Settings capabilities", () => {
+describe("Focused Settings runtime", () => {
+  it("renders one focused category with only current Settings capabilities", () => {
     const html = renderToStaticMarkup(
       createElement(SettingsView, {
         resources: readyResources(),
@@ -75,14 +76,9 @@ describe("Settings Direction B runtime", () => {
 
     expect(html.match(/<h1(?:\s|>)/g)).toHaveLength(1);
     expect(html).toContain("Settings");
-    expect(html).toContain("5 areas");
-    expect(html).toContain("Browser-local appearance");
-    expect(html).toContain(
-      "Appearance choices change presentation only. They are stored on this browser when available",
-    );
-    expect(html).toContain(
-      "This first-slice panel includes password recovery and policy links only.",
-    );
+    expect(html).toContain('aria-label="Search settings"');
+    expect(html).not.toContain("Account control surface");
+    expect(html).not.toContain("first-slice");
     expect(html).toContain("Setup &amp; preferences");
     expect(html).toContain("Security &amp; access");
     expect(html.match(/<h2 id="settings-group-/g)).toHaveLength(3);
@@ -96,13 +92,7 @@ describe("Settings Direction B runtime", () => {
     expect(html).toContain("Verified");
     expect(html).toContain("Close more confidently");
     expect(html).toContain("Edit learning setup");
-    expect(html).toContain('href="/onboarding?return=settings"');
-    expect(html).toContain('href="/forgot-password"');
-    expect(html).toContain('href="/terms"');
-    expect(html).toContain('href="/privacy"');
-    expect(html).toContain('aria-pressed="true"');
-    expect(html.match(/class="[^"]*indexLinkNumber/g)).toHaveLength(5);
-    expect(html).not.toContain("indexLinkCurrent");
+    expect(html).toContain('aria-current="location"');
     expect(html).not.toContain('aria-current="page"');
     expect(html).toMatch(/<nav[^>]*aria-label="Settings sections"/);
     expect(html).not.toMatch(
@@ -110,7 +100,7 @@ describe("Settings Direction B runtime", () => {
     );
   });
 
-  it("renders index links and cards from the same bounded registry order", () => {
+  it("keeps ordered operation owners mounted and hides every inactive category", () => {
     const html = renderToStaticMarkup(
       createElement(SettingsView, {
         resources: readyResources(),
@@ -129,12 +119,72 @@ describe("Settings Direction B runtime", () => {
     expect(indexAnchors).toEqual(expectedAnchors);
     expect(cardAnchors).toEqual(expectedAnchors);
     expect(
-      SETTINGS_SECTIONS.every(
-        (section) =>
-          html.includes(`id="${section.headingId}"`) &&
-          html.includes(`aria-labelledby="${section.headingId}"`),
-      ),
-    ).toBe(true);
+      html.match(/<div hidden="" data-settings-category="true">/g),
+    ).toHaveLength(4);
+    for (const section of SETTINGS_SECTIONS) {
+      const selected = renderToStaticMarkup(
+        createElement(SettingsView, {
+          resources: readyResources(),
+          api,
+          onRetry: vi.fn(),
+          initialSection: section.id,
+        }),
+      );
+      expect(selected).toContain(`id="${section.headingId}"`);
+      expect(selected).toContain(`aria-labelledby="${section.headingId}"`);
+      expect(
+        Array.from(selected.matchAll(/<section[^>]*\sid="([^\"]+)"/g)).map(
+          (match) => match[1],
+        ),
+      ).toEqual(expectedAnchors);
+      expect(
+        selected.match(/<div hidden="" data-settings-category="true">/g),
+      ).toHaveLength(4);
+      expect(selected).toMatch(
+        new RegExp(
+          `<div data-settings-category="true"><section[^>]*id="${section.id}"`,
+        ),
+      );
+    }
+  });
+
+  it("searches category and control keywords without creating new capabilities", () => {
+    expect(searchSettingsSections("  ")).toEqual(SETTINGS_SECTIONS);
+    expect(
+      searchSettingsSections("dark motion").map((section) => section.id),
+    ).toEqual(["appearance"]);
+    expect(
+      searchSettingsSections("PASSWORD").map((section) => section.id),
+    ).toEqual(["security-privacy"]);
+    expect(
+      searchSettingsSections("weekly").map((section) => section.id),
+    ).toEqual(["learning-setup"]);
+    expect(searchSettingsSections("billing")).toEqual([]);
+  });
+
+  it("uses compact labeled appearance controls with immediate local-save semantics", () => {
+    const html = renderToStaticMarkup(
+      createElement(SettingsView, {
+        resources: readyResources(),
+        api,
+        onRetry: vi.fn(),
+        initialSection: "appearance",
+      }),
+    );
+    expect(html).toContain("Preferences apply to this browser");
+    expect(html).not.toContain("Saved on this browser");
+    expect(html.match(/<select /g)).toHaveLength(5);
+    for (const label of [
+      "Theme",
+      "Accent color",
+      "Display density",
+      "Motion",
+      "Appearance preset",
+    ])
+      expect(html).toContain(`aria-label="${label}"`);
+    expect(html).toContain("Changes apply instantly.");
+    expect(html).not.toContain("Named presets");
+    expect(html).not.toContain("first-slice");
   });
 
   it("places an offline read notice across the full settings ledger", () => {
@@ -187,10 +237,11 @@ describe("Settings Direction B runtime", () => {
         },
         api,
         onRetry: vi.fn(),
+        initialSection: "learning-setup",
       }),
     );
 
-    expect(html).toContain("Alex Morgan");
+    expect(html).toContain('href="#verified-account"');
     expect(html).toContain("Learning setup unavailable");
     expect(html).toContain("Retry learning setup");
     expect(html).toContain("Appearance");
@@ -211,11 +262,23 @@ describe("Settings Direction B runtime", () => {
     );
 
     expect(html).toContain("Verified account unavailable");
-    expect(html).toContain(
-      "Learning setup will appear after learner access is confirmed.",
-    );
     expect(html).not.toContain("Sales");
     expect(html).not.toContain("Close more confidently");
+    const gated = renderToStaticMarkup(
+      createElement(SettingsView, {
+        resources: {
+          me: { status: "error", error: new TypeError("offline") },
+          onboarding: { status: "ready", data: onboarding },
+        },
+        api,
+        onRetry: vi.fn(),
+        initialSection: "learning-setup",
+      }),
+    );
+    expect(gated).toContain(
+      "Learning setup will appear after learner access is confirmed.",
+    );
+    expect(gated).not.toContain("Close more confidently");
   });
 
   it("renders only the reauthentication boundary for an expired identity", () => {

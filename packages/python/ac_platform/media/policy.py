@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from urllib.parse import parse_qs, quote, unquote, urlsplit
+from uuid import UUID
 
 from ac_platform.media.contracts import (
     EphemeralMediaUrl,
@@ -183,6 +184,42 @@ class SignedMediaUrl:
             raise TypeError("signed media URL supports_range must be a boolean")
 
 
+@dataclass(frozen=True, slots=True)
+class PersistedMediaGrantScope:
+    """Signed references; their current authority is rechecked in the database."""
+
+    delivery_grant_id: UUID
+    enrollment_id: UUID
+    binding_id: UUID
+
+    def __post_init__(self) -> None:
+        if not all(
+            isinstance(value, UUID)
+            for value in (self.delivery_grant_id, self.enrollment_id, self.binding_id)
+        ):
+            raise TypeError("persisted media grant references must be UUIDs")
+
+    def claims(self) -> dict[str, str]:
+        return {
+            "delivery_grant_id": str(self.delivery_grant_id),
+            "enrollment_id": str(self.enrollment_id),
+            "binding_id": str(self.binding_id),
+        }
+
+    @classmethod
+    def from_claims(cls, claims: Mapping[str, object]) -> PersistedMediaGrantScope | None:
+        names = ("delivery_grant_id", "enrollment_id", "binding_id")
+        if not any(name in claims for name in names):
+            return None
+        try:
+            values = [claims[name] for name in names]
+            if not all(isinstance(value, str) for value in values):
+                raise ValueError
+            return cls(*(UUID(str(value)) for value in values))
+        except (KeyError, TypeError, ValueError) as error:
+            raise MediaForbidden("The persisted media grant scope is invalid.") from error
+
+
 class SignedMediaDeliveryPort:
     """HMAC-backed provider-neutral URL issuer for local/test delivery."""
 
@@ -229,6 +266,7 @@ class SignedMediaDeliveryPort:
         now: datetime | None = None,
         kind: str = "playback",
         supports_range: bool | None = None,
+        grant_scope: PersistedMediaGrantScope | None = None,
     ) -> SignedMediaUrl:
         if kind not in {"read", "playback"}:
             raise ValueError("signed delivery kind must be read or playback")
@@ -257,6 +295,7 @@ class SignedMediaDeliveryPort:
                 "version_id": str(media_version.version_id),
                 "key": object_key,
                 "supports_range": effective_supports_range,
+                **(grant_scope.claims() if grant_scope is not None else {}),
             },
             now=issued_at,
             lifetime=self.playback_ttl,
@@ -346,6 +385,7 @@ HmacSignedMediaDelivery = SignedMediaDeliveryPort
 __all__ = [
     "HmacSignedMediaDelivery",
     "MediaCorsPolicy",
+    "PersistedMediaGrantScope",
     "RangeMode",
     "RangePolicy",
     "SignedMediaDeliveryPort",

@@ -31,6 +31,7 @@ from ac_platform.enrollment.models import Enrollment, Entitlement
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, require_safe_origin
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.kernel.errors import DomainError, ResourceNotFound
+from ac_platform.learning.catalog_activity import resolve_catalog_activity
 from ac_platform.learning.services import (
     ActivityDefinition,
     ActivityState,
@@ -343,21 +344,7 @@ class PlaybackFinishResponse(BaseModel):
 
 def _default_activity_resolver(row: object, _version: object) -> ActivityDefinition:
     """Resolve catalog facts without inventing content or scoring policy."""
-
-    return ActivityDefinition(
-        id=row.id,  # type: ignore[attr-defined]
-        kind=row.kind,  # type: ignore[attr-defined]
-        module_id=row.module_id,  # type: ignore[attr-defined]
-        program_version_id=row.program_version_id,  # type: ignore[attr-defined]
-        program_id=row.program_id,  # type: ignore[attr-defined]
-        program_scope=row.scope,  # type: ignore[attr-defined]
-        program_owner_key=row.owner_key,  # type: ignore[attr-defined]
-        title=row.title,  # type: ignore[attr-defined]
-        order=row.position,  # type: ignore[attr-defined]
-        required=row.is_required,  # type: ignore[attr-defined]
-        version=f"activity:{row.id}",  # type: ignore[attr-defined]
-        tenant_id=row.tenant_id,  # type: ignore[attr-defined]
-    )
+    return resolve_catalog_activity(row, _version)
 
 
 def _default_activity_prompt_resolver(row: object, _version: object) -> str | None:

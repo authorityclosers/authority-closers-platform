@@ -256,3 +256,54 @@ Only an owner who has selected that exact tenant receives the global
 job-retry/recovery permissions. This keeps tenantless identity email out of
 ordinary tenant administration while retaining an attributable, idempotent
 audit path.
+# Staging public-film fixture mount (default off)
+
+`capabilities/staging-public-films.json` is a source-controlled, release-local
+capability policy. It is **disabled** in this implementation. Enabling it requires
+an explicit reviewed source change and a new immutable application release;
+environment variables or changes to a live release directory are not an enable
+path. Production ignores this staging policy and never merges the override.
+
+The only admitted pack is the canonical two-film, 12-second technical sample
+manifest with SHA-256
+`d693acc73dc3f66c1b13ad6e68d5e41cba8478dc719f4b68211ce829442b0222`.
+`data/alpha_public_films_12s_v1.json` is a byte-identical mirror of the API's
+package manifest for the thin infrastructure archive. A compiled digest and CI
+byte-equality test prevent independent metadata drift. Do not hand-edit the
+mirror or replace it with an external manifest. Binary media is not in Git or
+the infrastructure archive.
+
+After this implementation has been released with policy still off, an authorized
+root operator may install the previously transferred, exact 30-file source pack:
+
+```sh
+python3 /srv/authority-closers/application/releases/<off-release-sha>/scripts/staging-public-films.py \
+  install /srv/authority-closers/application/releases/<off-release-sha> \
+  staging <absolute-reviewed-source-pack-directory>
+```
+
+The installer accepts no destination/URL/metadata override. It verifies all
+source paths, lengths and hashes before writing, copies only the explicit
+inventory into a private sibling stage, revalidates it, and atomically publishes
+it at `/srv/authority-closers/application/media-staging/<manifest-sha256>`.
+Installed directories are root-owned 0555, files root-owned 0444. An identical
+pack is preserved without changing its inodes or timestamps. Drift, extra files,
+links or unsafe ownership/modes cause refusal, not repair or replacement.
+No database state or learner authorization is created by this command.
+
+Only after an explicit reviewed policy-on release is installed does the API
+receive `compose.staging-public-films.yaml`. It mounts that fixed host directory
+read-only at `/run/ac-staging-public-films`, with `create_host_path: false` and
+fixed fixture/delivery flags. Worker and migrator remain unmounted and disabled;
+the general media provider remains disabled for every service. The application
+installer verifies an enabled target's pack, and any enabled rollback target's
+pack, before stopping writers. Every Compose call resolves its own target
+release policy: rollback cannot inherit the new release's setting. Legacy
+releases without the policy need no pack.
+
+The separate canonical staging catalog/import CLI and authenticated player
+verification remain mandatory after mount composition. See
+`docs/evidence/20260907_ALPHA_STAGING_FIXTURE_IMPORT.md` and
+`docs/evidence/20260907_ALPHA_STAGING_FILM_DEPLOYMENT_BOUNDARY.md` in the source
+repository. Mounting licensed samples does not make them Dipak instruction,
+grant official Watch completion, or activate production media.

@@ -42,6 +42,8 @@ const sourceHashes: Record<string, string> = {
     "75d1b7beeeb554dfc8ce50bc6acaa6ac5fe620011246930fb637059b40d761f4",
 };
 const portraitHashes: Record<string, string> = {
+  "instructor-v2/front-facing.jpeg":
+    "659f4ae78271e97962d2e4c2b0120a3d191facd0bf9eca3f140bb3ef126d6c68",
   "instructor-v1/editorial.webp":
     "44d6ab558a9980db63bf42b8a0142a094ac4aedf123a876881c188b1c1a6effe",
   "instructor-v1/avatar.webp":

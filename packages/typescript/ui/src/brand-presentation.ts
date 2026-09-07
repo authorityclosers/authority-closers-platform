@@ -72,10 +72,12 @@ export const ACADEMY_ARTWORK = {
   },
 } as const;
 
-/** Verified supplied editorial derivative; not an instructor assignment to a program. */
+/** Verified founder photograph; not an instructor assignment to a program.
+ * Next Image serves responsive optimized derivatives; the original is unchanged.
+ */
 export const INSTRUCTOR_PORTRAIT = {
-  src: "/brand/instructor-v1/editorial.webp",
-  width: 768,
-  height: 960,
+  src: "/brand/instructor-v2/front-facing.jpeg",
+  width: 3074,
+  height: 3864,
   alt: "Dipak Vishwakarma, your guide at Closers Academy",
 } as const;

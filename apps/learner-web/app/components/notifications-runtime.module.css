@@ -1,3 +1,106 @@
+.popover {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  z-index: 80;
+  width: min(380px, calc(100vw - 32px));
+  max-height: min(440px, calc(100dvh - 110px));
+  overflow: auto;
+  border: 1px solid var(--theme-border);
+  border-radius: 16px;
+  background: var(--theme-surface);
+  color: var(--theme-text);
+  box-shadow: 0 16px 48px rgb(15 27 51 / 16%);
+}
+
+.popoverHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 12px 0 20px;
+}
+.popoverHeader h2 {
+  margin: 0;
+  font-size: 0.96rem;
+  font-weight: 700;
+  color: var(--theme-text);
+}
+.popoverClose {
+  display: grid;
+  place-items: center;
+  min-width: 44px;
+  min-height: 44px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--theme-text-muted);
+  cursor: pointer;
+}
+.popoverClose:hover {
+  background: var(--theme-surface-subtle);
+}
+.popoverClose:focus-visible,
+.popoverAction:focus-visible {
+  outline: 2px solid var(--theme-focus);
+  outline-offset: 2px;
+}
+.popoverBody {
+  display: flex;
+  align-items: start;
+  gap: 12px;
+  padding: 16px 20px 20px;
+}
+.popoverIcon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  border-radius: 12px;
+  background: var(--theme-surface-subtle);
+  color: var(--theme-text-muted);
+}
+.popoverStateTitle {
+  margin: 0;
+  color: var(--theme-text);
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.45;
+}
+.popoverCopy {
+  margin: 7px 0 0;
+  color: var(--theme-text-muted);
+  font-size: 0.76rem;
+  line-height: 1.55;
+}
+.popoverFooter {
+  padding: 0 20px 12px;
+}
+.popoverAction {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  border-top: 1px solid var(--theme-border);
+  color: var(--theme-action);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+.popoverAction:hover {
+  color: var(--theme-action-hover);
+}
+
+@media (max-width: 760px) {
+  .popover {
+    position: fixed;
+    top: calc(72px + env(safe-area-inset-top));
+    right: 16px;
+  }
+}
+
 .state {
   display: grid;
   gap: 10px;

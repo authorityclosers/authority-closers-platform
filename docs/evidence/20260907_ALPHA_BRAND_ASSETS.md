@@ -105,3 +105,41 @@ The added inventory is **3 files / 105,654 bytes**. Current total: **27 files / 
 `ACADEMY_ARTWORK` and `INSTRUCTOR_PORTRAIT` provide serializable, trusted presentation descriptors. `CourseArtwork` accepts only an allowlisted decorative kind and compact mode; it accepts no arbitrary source URL, server title, access state or playback data. `InstructorPortrait` preserves intrinsic dimensions and supports a meaningful editorial alt or decorative use beside the visible academy attribution. The complete runtime file/hash allowlist test now includes all three WebPs.
 
 Pass2 implementation, fixture QA and remaining route gaps are recorded in [20260907_ALPHA_PRESENTATION_PASS2.md](20260907_ALPHA_PRESENTATION_PASS2.md). No new Drive rights or trademark assertion is made.
+
+## Front-facing founder photograph — subsequent user feedback
+
+The user requested a welcoming front-facing portrait in the learner Home card.
+Three originals were collected from the exact verified Founder Photos folder
+`1s62ybsDdB4gikMrzF8FbSR9LamIR4Th3`, not identified by facial recognition.
+Root inspected the seated front-facing alternative and selected the smiling
+standing photograph, **DSC06816.jpeg**, Drive ID
+`1eZtjAMRJE30jdigN33zTkbnbCvW5FzHY`. Metadata confirmed its parent, JPEG MIME,
+2,011,586-byte size and pre-existing anyone-reader permission. Permissions were
+not changed. SHA-256:
+`659f4ae78271e97962d2e4c2b0120a3d191facd0bf9eca3f140bb3ef126d6c68`.
+
+The byte-identical 3074×3864 source is now
+`apps/learner-web/public/brand/instructor-v2/front-facing.jpeg`. No generative
+face modification or retouching was performed. The versioned original remains
+available to the existing Next Image server optimizer; the browser uses its
+responsive optimized URL and srcset. This deliberately adds a 2 MB server-side
+source, not a 2 MB initial portrait request. The older derivatives are retained
+for historical/other uses and are not silently overwritten.
+
+Verification: 37 focused UI tests passed. Eight mounted Home/public-page
+390/1440 light/dark fixture cases passed with no recorded failures in
+`screenshots/alpha-front-facing-2026-09-07/run-20260907T134607Z`. An actual
+same-origin Next Image request at width 640/quality 75 with WebP acceptance
+returned **HTTP 200 / image/webp / 31,438 bytes**. This is a measured derivative
+response, not a cold-load/Core Web Vitals or production acceptance claim.
+The full updated allowlist is 28 files / 2,265,038 bytes; learner 18 files /
+2,232,554 bytes; admin unchanged. This follow-up is not in release `851ebc8`.
+
+Mobile focal follow-up: the Home portrait uses `object-position: 50% 42%` so the
+selected face remains comfortably inside the narrow card. Four additional Home
+320/390 light/dark cases passed in
+`screenshots/alpha-front-facing-2026-09-07/after-focal/run-20260907T135111Z`.
+Independent review reran all 37 focused tests and inspected six screenshots
+including the corrected mobile crop: no Critical/Important findings. No GPS
+latitude/longitude metadata was found in the selected original. These are local
+fixture checks, not real-user performance or live deployment evidence.

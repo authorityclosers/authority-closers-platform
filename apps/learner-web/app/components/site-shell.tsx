@@ -13,11 +13,9 @@ import {
   Compass,
   HelpCircle,
   LayoutDashboard,
-  MessageCircle,
   Search,
   Settings,
   User,
-  X,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -282,14 +280,6 @@ export function closeNotificationPopover(
   trigger?.focus();
 }
 
-export function closeHelpPopover(
-  setOpen: (open: boolean) => void,
-  trigger: Pick<HTMLButtonElement, "focus"> | null,
-): void {
-  setOpen(false);
-  trigger?.focus();
-}
-
 export type LearnerShellProps = {
   children?: React.ReactNode;
   current?: LearnerCurrent;
@@ -370,7 +360,6 @@ export function LearnerShell({
   function openCommandPalette(invokingElement?: HTMLElement | null): void {
     setAccountMenuOpen(false);
     setNotificationPopoverOpen(false);
-    setHelpOpen(false);
     setMobileDrawerOpen(false);
     const resolvedInvoker =
       invokingElement ??
@@ -388,7 +377,6 @@ export function LearnerShell({
     getSidebarCollapsedSnapshot,
     () => false,
   );
-  const [helpOpen, setHelpOpen] = useState(false);
   const [identity, setIdentity] = useState({
     displayName: userDisplayName,
     email: userEmail,
@@ -400,9 +388,6 @@ export function LearnerShell({
   const accountMenuRef = useRef<HTMLDivElement>(null);
   const notificationButtonRef = useRef<HTMLButtonElement>(null);
   const notificationPopoverRef = useRef<HTMLDivElement>(null);
-  const helpWrapperRef = useRef<HTMLDivElement>(null);
-  const helpButtonRef = useRef<HTMLButtonElement>(null);
-  const helpPanelRef = useRef<HTMLDivElement>(null);
   const avatarUpdateGenerationRef = useRef(0);
 
   let router: ReturnType<typeof useRouter> | null = null;
@@ -521,13 +506,10 @@ export function LearnerShell({
           notificationButtonRef.current,
         );
       }
-      if (helpOpen) {
-        closeHelpPopover(setHelpOpen, helpButtonRef.current);
-      }
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [accountMenuOpen, notificationPopoverOpen, helpOpen]);
+  }, [accountMenuOpen, notificationPopoverOpen]);
 
   useEffect(() => {
     if (!accountMenuOpen) return;
@@ -621,28 +603,6 @@ export function LearnerShell({
     document.addEventListener("pointerdown", handlePointerDown);
     return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, [notificationPopoverOpen]);
-
-  useEffect(() => {
-    if (!helpOpen) return;
-
-    const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target;
-      if (target instanceof Node && !helpWrapperRef.current?.contains(target)) {
-        closeHelpPopover(setHelpOpen, helpButtonRef.current);
-      }
-    };
-
-    document.addEventListener("pointerdown", handlePointerDown);
-    return () => document.removeEventListener("pointerdown", handlePointerDown);
-  }, [helpOpen]);
-
-  useEffect(() => {
-    if (!helpOpen) return;
-    const first = helpPanelRef.current?.querySelector<HTMLElement>(
-      'button, a[href], [tabindex]:not([tabindex="-1"])',
-    );
-    first?.focus();
-  }, [helpOpen]);
 
   const isHome = current === "dashboard" || current === "home";
   const isLearning = current === "learning" || current === "course";
@@ -917,7 +877,6 @@ export function LearnerShell({
                 ref={notificationButtonRef}
                 onClick={() => {
                   setAccountMenuOpen(false);
-                  setHelpOpen(false);
                   const nextOpen = !notificationPopoverOpen;
                   setNotificationPopoverOpen(nextOpen);
                 }}
@@ -949,7 +908,6 @@ export function LearnerShell({
                 ref={accountButtonRef}
                 onClick={() => {
                   setNotificationPopoverOpen(false);
-                  setHelpOpen(false);
                   setAccountMenuOpen((open) => !open);
                 }}
                 aria-expanded={accountMenuOpen}
@@ -1060,91 +1018,6 @@ export function LearnerShell({
       {/* Main Content Surface */}
       {children}
 
-      {/* Help chatbox shell. Conversation state is intentionally not
-          fabricated until a support provider is connected. */}
-      <div className="learner-help-widget" ref={helpWrapperRef}>
-        <button
-          type="button"
-          className="learner-help-chatbox__trigger"
-          ref={helpButtonRef}
-          onClick={() => {
-            const nextOpen = !helpOpen;
-            setHelpOpen(nextOpen);
-            setNotificationPopoverOpen(false);
-            setAccountMenuOpen(false);
-          }}
-          aria-expanded={helpOpen}
-          aria-controls="learner-help-chatbox"
-          aria-haspopup="dialog"
-          aria-label="Open help chatbox"
-          title="Help"
-        >
-          <MessageCircle size={19} aria-hidden="true" />
-          <span>Help</span>
-        </button>
-
-        {helpOpen ? (
-          <div
-            id="learner-help-chatbox"
-            ref={helpPanelRef}
-            className="learner-help-chatbox"
-            role="dialog"
-            aria-modal="false"
-            aria-labelledby="learner-help-chatbox-title"
-            tabIndex={-1}
-          >
-            <div className="learner-help-chatbox__header">
-              <div>
-                <p className="kicker">Learner support</p>
-                <h2 id="learner-help-chatbox-title">How can we help?</h2>
-              </div>
-              <button
-                type="button"
-                className="learner-help-chatbox__close"
-                onClick={() => {
-                  closeHelpPopover(setHelpOpen, helpButtonRef.current);
-                }}
-                aria-label="Close help chatbox"
-              >
-                <X size={16} aria-hidden="true" />
-              </button>
-            </div>
-            <div className="learner-help-chatbox__body">
-              <div className="learner-help-chatbox__availability" role="status">
-                <span
-                  className="learner-help-chatbox__availability-dot"
-                  aria-hidden="true"
-                />
-                <span>Email support is available</span>
-              </div>
-              <div className="learner-help-chatbox__message">
-                <span
-                  className="learner-help-chatbox__avatar"
-                  aria-hidden="true"
-                >
-                  <BrandMark className="learner-help-chatbox__brand-mark" />
-                </span>
-                <p>
-                  In-app chat is not connected in this workspace yet. Email the
-                  learner support team when you need a human response, and
-                  include the page you were on.
-                </p>
-              </div>
-              <a
-                className="learner-help-chatbox__email"
-                href={SUPPORT_MAILTO}
-                onClick={() =>
-                  closeHelpPopover(setHelpOpen, helpButtonRef.current)
-                }
-              >
-                Email learner support{" "}
-                <ArrowUpRight size={14} aria-hidden="true" />
-              </a>
-            </div>
-          </div>
-        ) : null}
-      </div>
-
       {/* Mobile Bottom Navigation (Direction A: 5-items) */}
       <MobileBottomNav
         current={current}
@@ -1153,7 +1026,6 @@ export function LearnerShell({
         onToggleMore={() => {
           setNotificationPopoverOpen(false);
           setAccountMenuOpen(false);
-          setHelpOpen(false);
           setMobileDrawerOpen((open) => !open);
         }}
         moreButtonRef={moreButtonRef}
