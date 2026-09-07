@@ -116,6 +116,38 @@ CANONICAL_TABLES = (
     "audit_chain_heads",
 )
 
+# Explicit compatibility catalogue, not a lexical version comparison or table
+# presence heuristic. Any later migration needs a reviewed parity decision.
+LEGACY_PARITY_MIGRATION_HEADS = frozenset(
+    {
+        "20260830_0006",
+        "20260830_0007",
+        "20260830_0008",
+        "20260830_0009",
+        "20260830_0010",
+        "20260830_0011",
+        "20260901_0012",
+        "20260902_0013",
+        "20260902_0014",
+        "20260903_0015",
+        "20260903_0016",
+        "20260904_0017",
+        "20260904_0018",
+    }
+)
+CAPABILITY_PARITY_MIGRATION_HEAD = "20260907_0019"
+CAPABILITY_PARITY_CONTRACT = "ac-postgres-parity-v2"
+CAPABILITY_PARITY_TABLES = CANONICAL_TABLES + ("capability_grants", "capability_revocations")
+
+
+def parity_tables_for_head(migration_head: str) -> tuple[str, ...]:
+    if migration_head in LEGACY_PARITY_MIGRATION_HEADS:
+        return CANONICAL_TABLES
+    if migration_head == CAPABILITY_PARITY_MIGRATION_HEAD:
+        return CAPABILITY_PARITY_TABLES
+    raise DrillError("migration head has no reviewed row-count parity contract")
+
+
 SIDE_EFFECT_COUNTS_QUERY = """
 SELECT
   (SELECT count(*) FROM outbox_events WHERE status = 'pending') AS pending_outbox,
@@ -474,6 +506,7 @@ def _validate_backup_metadata(
     backup: Path,
     environment: str,
     workspace_root: Path,
+    expected_migration_head: str | None = None,
 ) -> tuple[Path, datetime, str, str, str]:
     raw = Path(value).expanduser()
     if not raw.is_absolute() or raw.is_symlink():
@@ -519,13 +552,25 @@ def _validate_backup_metadata(
         "dump_sha256",
     }
     parity_keys = expected_keys | {"row_counts"}
-    if not isinstance(payload, dict) or set(payload) not in (expected_keys, parity_keys):
+    v2_keys = parity_keys | {"parity_contract", "migration_head"}
+    if not isinstance(payload, dict) or set(payload) not in (expected_keys, parity_keys, v2_keys):
         raise DrillError("backup metadata has an unexpected contract")
+    expected_head = expected_migration_head or _expected_migration_head(workspace_root)
+    tables = parity_tables_for_head(expected_head)
+    if expected_head == CAPABILITY_PARITY_MIGRATION_HEAD:
+        if (
+            set(payload) != v2_keys
+            or payload.get("parity_contract") != CAPABILITY_PARITY_CONTRACT
+            or payload.get("migration_head") != expected_head
+        ):
+            raise DrillError("capability backup requires its exact migration and parity contract")
+    elif "parity_contract" in payload or "migration_head" in payload:
+        raise DrillError("legacy backup must retain its legacy parity contract")
     if "row_counts" in payload:
         row_counts = payload["row_counts"]
         if (
             not isinstance(row_counts, dict)
-            or set(row_counts) != set(CANONICAL_TABLES)
+            or set(row_counts) != set(tables)
             or any(
                 isinstance(value, bool) or not isinstance(value, int) or value < 0
                 for value in row_counts.values()
@@ -774,6 +819,7 @@ def _stable_restore_inputs(
             backup=verified_backup,
             environment=config.environment,
             workspace_root=workspace_root,
+            expected_migration_head=config.expected_migration_head,
         )
         if (
             captured_at != config.backup_captured_at
@@ -1427,6 +1473,7 @@ def _verify_target_identity(target: DisposableTarget) -> dict[str, str]:
 
 
 def _schema_and_migration(target: DisposableTarget, expected_head: str) -> dict[str, Any]:
+    tables = parity_tables_for_head(expected_head)
     actual_tables = set(
         filter(
             None,
@@ -1438,7 +1485,7 @@ def _schema_and_migration(target: DisposableTarget, expected_head: str) -> dict[
             ).splitlines(),
         )
     )
-    missing = sorted(set(CANONICAL_TABLES) - actual_tables)
+    missing = sorted(set(tables) - actual_tables)
     if missing:
         raise DrillError(f"restored schema is missing {len(missing)} canonical tables")
     versions = _query(
@@ -1451,27 +1498,50 @@ def _schema_and_migration(target: DisposableTarget, expected_head: str) -> dict[
     return {
         "expected_migration_head": expected_head,
         "actual_migration_versions": versions,
-        "canonical_tables_checked": len(CANONICAL_TABLES),
-        "extra_public_tables": len(actual_tables - set(CANONICAL_TABLES)),
+        "canonical_tables_checked": len(tables),
+        "extra_public_tables": len(actual_tables - set(tables)),
     }
 
 
-def _row_counts(target: DisposableTarget) -> dict[str, int]:
+def _row_counts(target: DisposableTarget, expected_head: str) -> dict[str, int]:
+    tables = parity_tables_for_head(expected_head)
     query = " UNION ALL ".join(
-        f"SELECT '{table}', count(*)::bigint FROM \"{table}\"" for table in CANONICAL_TABLES
+        f"SELECT '{table}', count(*)::bigint FROM \"{table}\"" for table in tables
     )
     result: dict[str, int] = {}
     for line in _query(target, query, "collect representative row counts").splitlines():
         values = line.split("|", 1)
-        if len(values) != 2 or values[0] not in CANONICAL_TABLES:
+        if len(values) != 2 or values[0] not in tables or values[0] in result:
             raise DrillError("representative row counts returned an unexpected shape")
         try:
             result[values[0]] = int(values[1])
         except ValueError as error:
             raise DrillError("representative row count is invalid") from error
-    if set(result) != set(CANONICAL_TABLES) or any(value < 0 for value in result.values()):
+    if set(result) != set(tables) or any(value < 0 for value in result.values()):
         raise DrillError("representative row counts are incomplete")
     return result
+
+
+def _verify_capability_backup_parity(config: DrillConfig, actual: Mapping[str, int]) -> None:
+    if config.expected_migration_head != CAPABILITY_PARITY_MIGRATION_HEAD:
+        return
+    # These inputs have already been copied privately and hash/contract-checked.
+    try:
+        metadata = json.loads(config.backup_metadata.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise DrillError("capability backup metadata is unreadable for parity") from error
+    if (
+        not isinstance(metadata, dict)
+        or metadata.get("parity_contract") != CAPABILITY_PARITY_CONTRACT
+        or metadata.get("migration_head") != config.expected_migration_head
+        or set(actual) != set(CAPABILITY_PARITY_TABLES)
+        or dict(actual) != metadata.get("row_counts")
+        or any(
+            isinstance(value, bool) or not isinstance(value, int) or value < 0
+            for value in actual.values()
+        )
+    ):
+        raise DrillError("restored capability-aware row-count parity failed")
 
 
 def _invariants(target: DisposableTarget) -> dict[str, int]:
@@ -1792,6 +1862,9 @@ def _config_from_args(args: argparse.Namespace) -> DrillConfig:
     if not args.execute and args.acknowledge_isolated_target:
         raise DrillError("--acknowledge-isolated-target is valid only with --execute")
     _validate_reconciliation_args(args)
+    workspace_mode, workspace_release_id, expected_head = _workspace_release_contract(
+        workspace_root
+    )
     backup = _validate_backup(args.backup, workspace_root=workspace_root)
     (
         backup_metadata,
@@ -1804,12 +1877,10 @@ def _config_from_args(args: argparse.Namespace) -> DrillConfig:
         backup=backup,
         environment=args.environment,
         workspace_root=workspace_root,
+        expected_migration_head=expected_head,
     )
     postgres_image = _validate_postgres_image(args.postgres_image)
     application_image = _validate_application_image(args.application_image)
-    workspace_mode, workspace_release_id, expected_head = _workspace_release_contract(
-        workspace_root
-    )
     if backup_release_id != workspace_release_id:
         raise DrillError("backup release does not match the selected workspace release")
     # Deliberately last: validating configuration never creates this path.
@@ -2067,7 +2138,10 @@ def _execute(config: DrillConfig) -> tuple[dict[str, Any], Path]:
                 target,
                 config.expected_migration_head,
             )
-            evidence["row_counts"] = _row_counts(target)
+            evidence["row_counts"] = _row_counts(target, config.expected_migration_head)
+            if config.expected_migration_head == CAPABILITY_PARITY_MIGRATION_HEAD:
+                _verify_capability_backup_parity(config, evidence["row_counts"])
+                evidence["parity_contract"] = CAPABILITY_PARITY_CONTRACT
             evidence["invariants_before_hold"] = _invariants(target)
             before_hold = _side_effect_counts(target)
             evidence["counts_before_hold"] = before_hold.as_dict()

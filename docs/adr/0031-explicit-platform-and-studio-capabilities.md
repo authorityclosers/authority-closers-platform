@@ -86,3 +86,13 @@ Before activating populated capability state, add version-compatible explicit
 grant/revocation restoration proof across the shared contract. Do not silently
 weaken parity validation or claim the historical a5/0018 restore verifies new
 0019 authorization rows.
+
+### Recovery implementation checkpoint — September 7
+
+The three recovery helpers now implement explicit compatible V1/39-table and
+0019 V2/41-table contracts, with snapshot/release/restored-head checks and both
+capability-history counts required. Parent review and 132 local tests pass;
+Linux root execution and actual canonical live 0019 recovery remain gates.
+See [compatibility evidence](../evidence/20260907_CAPABILITY_BACKUP_PARITY_COMPATIBILITY.md).
+Roll out the backward-compatible foundation helpers before the reviewed 0019
+application; do not claim the earlier live 0018 proof covers new permission data.

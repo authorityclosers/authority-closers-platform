@@ -256,3 +256,17 @@ checks; distinguish fixture/local/staging/production evidence; and use scoped,
 validated improvements based on observed weaknesses. Iteration count cannot
 waive acceptance. Skill validation and behavioral forward-test evidence are
 recorded with this workstream.
+
+### Practice Arcade handoff extension — September 7
+
+The user supplied `AC_Practice_Arcade_02_Complete_Handoff.zip` and asked to use
+it with the earlier two kits for the UI/backend roadmap, while reiterating that
+working video and polished learner, instructor/Studio and administrator
+journeys must be delivered. The dated
+[Alpha-to-Arcade sequence](alpha-to-arcade-release-sequence-2026-09-07.md)
+extends this acceptance contract and existing active goal; it does not replace
+unfinished v0.1 work or call v0.2 implemented. Independent archive-integrity and
+limited visual/source observations are recorded in the linked intake evidence.
+Candidate numerical reward, social and assessment policies are not silently
+adopted as controlled product rules. Studio and Platform Console share the same
+responsive, behavioral and visual acceptance standard as the learner app.

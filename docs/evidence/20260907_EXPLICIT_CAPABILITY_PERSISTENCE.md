@@ -93,3 +93,14 @@ correctly rejected the session FK. The fixture now flushes membership before
 adding the selected-tenant session. No constraint, assertion, runtime code or
 authorization rule was weakened. A fresh Linux run is required to verify all
 four formerly blocked service/locking cases; this correction is not a pass claim.
+
+### Superseding verification
+
+The corrected head `35c658bd028b4fc3a7c048ab72dae700cd7682d6` passed Application
+validation run `34146151583`, including its PostgreSQL suite, and Control-plane
+validation run `34146151450`. The capacity simulation check also passed. A
+separate agent independently reviewed `abbe605..35c658b` and found no
+Critical/Important issue: the membership → session → audit → grant fixture
+ordering is explicit, and concurrency assertions remain unchanged. PR43 remains
+draft and unmerged; no deployment, account grant or media activation follows
+from these checks alone.

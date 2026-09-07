@@ -6,6 +6,21 @@
   "status": "in_progress",
   "planned_iterations": 3,
   "current_iteration": 1,
+  "release_sequence": {
+    "contract": "../00-start-here/alpha-to-arcade-release-sequence-2026-09-07.md",
+    "next_release": "v0.2 Practice Arcade",
+    "status": "source_intake_verified_implementation_pending",
+    "does_not_replace_unfinished_v01": true,
+    "priority": [
+      "working_video_and_course_workspace",
+      "studio_and_platform_console_parity",
+      "versioned_practice_engine",
+      "identity_personal_progress_and_rhythm",
+      "earned_only_cosmetics_after_policy_approval",
+      "cooperative_social_then_approved_ranked_event"
+    ],
+    "evidence": "../../../evidence/20260907_PRACTICE_ARCADE_HANDOFF_INTAKE.md"
+  },
   "persistent_goal": {
     "status_observed": "active",
     "replacement_created": true,
@@ -147,7 +162,7 @@
       "name": "Tenant-authorized Studio authoring",
       "status": "pending",
       "evidence": [],
-      "observed": "Existing Studio reads/publication depend on owner/admin membership. New explicit platform and tenant/program grant/revocation persistence is being implemented/tested without changing learner membership. HTTP/catalog/fixture and admin frontend integration plus PostgreSQL execution remain gates. Image placement, course/lesson/quiz editor and end-to-end Dipak workflows remain required; no admin enrollment bypass."
+      "observed": "Existing Studio reads/publication depend on owner/admin membership. Explicit platform and tenant/program grant/revocation persistence passes PR43 CI at 35c658b, including 10 PostgreSQL capability cases. No live grants or membership changes. HTTP/catalog/fixture and admin frontend integration, capability-aware restore proof and exact-runtime access remain gates. Image placement, course/lesson/quiz editor and end-to-end Dipak workflows remain required; Studio and Platform Console carry the same UI/UX quality standard as learner."
     },
     {
       "id": "A15",

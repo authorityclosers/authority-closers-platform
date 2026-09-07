@@ -104,6 +104,37 @@ PARITY_TABLES = (
     "audit_chain_heads",
 )
 
+# Explicit compatibility catalogue, not a lexical version comparison or table
+# presence heuristic. Any later migration needs a reviewed parity decision.
+LEGACY_PARITY_MIGRATION_HEADS = frozenset(
+    {
+        "20260830_0006",
+        "20260830_0007",
+        "20260830_0008",
+        "20260830_0009",
+        "20260830_0010",
+        "20260830_0011",
+        "20260901_0012",
+        "20260902_0013",
+        "20260902_0014",
+        "20260903_0015",
+        "20260903_0016",
+        "20260904_0017",
+        "20260904_0018",
+    }
+)
+CAPABILITY_PARITY_MIGRATION_HEAD = "20260907_0019"
+CAPABILITY_PARITY_CONTRACT = "ac-postgres-parity-v2"
+CAPABILITY_PARITY_TABLES = PARITY_TABLES + ("capability_grants", "capability_revocations")
+
+
+def parity_tables_for_head(migration_head: str) -> tuple[str, ...]:
+    if migration_head in LEGACY_PARITY_MIGRATION_HEADS:
+        return PARITY_TABLES
+    if migration_head == CAPABILITY_PARITY_MIGRATION_HEAD:
+        return CAPABILITY_PARITY_TABLES
+    raise RestoreProofError("migration head has no reviewed row-count parity contract")
+
 
 class RestoreProofError(RuntimeError):
     """A bounded operator-facing failure that never contains secret output."""
@@ -128,6 +159,7 @@ class ApplicationRelease:
     release_dir: Path
     restore_drill: Path
     api_image: str
+    migration_head: str
 
 
 def _parse_timestamp(value: object, *, label: str) -> dt.datetime:
@@ -671,6 +703,7 @@ def _validate_metadata(
     dump_path: Path,
     environment: str,
     *,
+    expected_migration_head: str,
     now: dt.datetime | None = None,
 ) -> tuple[str, dt.datetime, dict[str, int]]:
     try:
@@ -705,8 +738,21 @@ def _validate_metadata(
         "dump_sha256",
         "row_counts",
     }
-    if not isinstance(payload, dict) or set(payload) != expected_keys:
+    v2_keys = expected_keys | {"parity_contract", "migration_head"}
+    if not isinstance(payload, dict) or set(payload) not in (expected_keys, v2_keys):
         raise RestoreProofError("logical backup metadata has an unexpected contract")
+    tables = parity_tables_for_head(expected_migration_head)
+    if expected_migration_head == CAPABILITY_PARITY_MIGRATION_HEAD:
+        if (
+            set(payload) != v2_keys
+            or payload.get("parity_contract") != CAPABILITY_PARITY_CONTRACT
+            or payload.get("migration_head") != expected_migration_head
+        ):
+            raise RestoreProofError(
+                "capability backup requires exact migration and parity identity"
+            )
+    elif set(payload) != expected_keys:
+        raise RestoreProofError("legacy backup must retain its legacy parity contract")
     release_id = payload.get("release_id")
     if (
         payload.get("artifact_type") != "authority-closers-postgresql-logical"
@@ -736,7 +782,7 @@ def _validate_metadata(
         or SHA256_RE.fullmatch(payload["dump_sha256"]) is None
         or payload["dump_sha256"] != _sha256(dump_path)
         or not isinstance(payload.get("row_counts"), dict)
-        or set(payload["row_counts"]) != set(PARITY_TABLES)
+        or set(payload["row_counts"]) != set(tables)
         or any(
             isinstance(value, bool) or not isinstance(value, int) or value < 0
             for value in payload["row_counts"].values()
@@ -892,6 +938,7 @@ def resolve_current_release(environment: str, root: Path = Path("/")) -> Applica
         raise RestoreProofError("current immutable application release is unsafe")
     _verify_release_files(release_dir)
     images = _parse_release_env(release_dir / "release-images.env")
+    parity_tables_for_head(images["AC_MIGRATION_HEAD"])
     if images["AC_RELEASE_ID"] != release_dir.name:
         raise RestoreProofError("current immutable application release identity is inconsistent")
     restore_drill = release_dir / "scripts" / "restore-drill.py"
@@ -906,6 +953,7 @@ def resolve_current_release(environment: str, root: Path = Path("/")) -> Applica
         release_dir=release_dir,
         restore_drill=restore_drill,
         api_image=images["AC_API_IMAGE"],
+        migration_head=images["AC_MIGRATION_HEAD"],
     )
 
 
@@ -1000,16 +1048,32 @@ def _validate_drill_evidence(evidence_path: Path, evidence_dir: Path) -> None:
         raise RestoreProofError("restore drill evidence directory is dirty")
 
 
-def _verify_row_count_parity(evidence_path: Path, expected: Mapping[str, int]) -> None:
+def _verify_row_count_parity(
+    evidence_path: Path, expected: Mapping[str, int], *, expected_migration_head: str
+) -> None:
+    tables = parity_tables_for_head(expected_migration_head)
     try:
         payload = json.loads(evidence_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
         raise RestoreProofError("restore drill evidence is not readable for parity") from error
     actual = payload.get("row_counts") if isinstance(payload, Mapping) else None
+    schema = payload.get("schema") if isinstance(payload, Mapping) else None
     if (
         not isinstance(actual, Mapping)
-        or set(actual) != set(PARITY_TABLES)
+        or set(actual) != set(tables)
         or dict(actual) != dict(expected)
+        or any(
+            isinstance(value, bool) or not isinstance(value, int) or value < 0
+            for value in actual.values()
+        )
+        or not isinstance(schema, Mapping)
+        or schema.get("expected_migration_head") != expected_migration_head
+        or schema.get("actual_migration_versions") != [expected_migration_head]
+        or schema.get("canonical_tables_checked") != len(tables)
+        or (
+            expected_migration_head == CAPABILITY_PARITY_MIGRATION_HEAD
+            and payload.get("parity_contract") != CAPABILITY_PARITY_CONTRACT
+        )
     ):
         raise RestoreProofError("restored critical-table row-count parity failed")
 
@@ -1098,7 +1162,11 @@ def run(
         _restore_pair(snapshot, pair, restore_dir)
         restored_dump, restored_metadata = _verify_restored_pair(restore_dir, pair)
         release_id, captured_at, expected_counts = _validate_metadata(
-            restored_metadata, restored_dump, environment, now=now
+            restored_metadata,
+            restored_dump,
+            environment,
+            expected_migration_head=release.migration_head,
+            now=now,
         )
         if release_id != release.release_dir.name:
             raise RestoreProofError(
@@ -1109,7 +1177,11 @@ def run(
             restored_dump, restored_metadata, restore_root
         )
         stable_release_id, _stable_captured_at, _stable_counts = _validate_metadata(
-            metadata_path, dump_path, environment, now=now
+            metadata_path,
+            dump_path,
+            environment,
+            expected_migration_head=release.migration_head,
+            now=now,
         )
         if stable_release_id != release.release_dir.name:
             raise RestoreProofError(
@@ -1120,7 +1192,9 @@ def run(
         drill_evidence = _invoke_restore_drill(
             release, environment, dump_path, metadata_path, evidence_dir
         )
-        _verify_row_count_parity(drill_evidence, expected_counts)
+        _verify_row_count_parity(
+            drill_evidence, expected_counts, expected_migration_head=release.migration_head
+        )
         _write_proof_record(
             evidence_dir,
             snapshot,
