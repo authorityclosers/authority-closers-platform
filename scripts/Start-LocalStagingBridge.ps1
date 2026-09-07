@@ -185,6 +185,15 @@ $LearnerEnvironment["AC_DEV_AUTH_BRIDGE_ENABLED"] = "true"
 $LearnerEnvironment["AC_DEV_AUTH_BRIDGE_ORIGIN"] = $LearnerOrigin
 $LearnerEnvironment["AC_DEV_AUTH_BRIDGE_UPSTREAM_ORIGIN"] = $LearnerStagingOrigin
 $LearnerEnvironment["AC_DEV_API_ORIGIN"] = ""
+# Next 16.2.11 reads this internal threshold before loading next.config.ts.
+# Its largest recordable span is MAX_SAFE_INTEGER microseconds; this threshold
+# is expressed in milliseconds, so no valid span can reach it. Set only in the
+# child environment, before Next and all of its workers import tracing code.
+# next.config.ts rejects bridge startup if this guard or the validated pin differs.
+$LearnerEnvironment["NEXT_TRACE_SPAN_THRESHOLD_MS"] = "9007199254740991"
+# Node's native HTTPS debug logger can print signed request paths and cookies.
+# Reset only this child's mask before Node starts; changing it in Next is too late.
+$LearnerEnvironment["NODE_DEBUG"] = ""
 
 $AdminEnvironment = $CommonEnvironment.Clone()
 $AdminEnvironment["AC_DEV_ADMIN_AUTH_BRIDGE_ENABLED"] = "true"

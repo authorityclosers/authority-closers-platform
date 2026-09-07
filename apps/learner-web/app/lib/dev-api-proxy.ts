@@ -1,9 +1,21 @@
 import { randomBytes } from "node:crypto";
+import { fetchDevelopmentMediaUpstream } from "./dev-media-upstream";
+import {
+  DEVELOPMENT_MEDIA_MAX_BYTES,
+  DEVELOPMENT_MEDIA_REGISTRATION,
+  DEVELOPMENT_MEDIA_LOCATOR_PREFIX,
+  DEVELOPMENT_MEDIA_MAX_SOURCES,
+  isDevelopmentMediaLocatorPath,
+  readDevelopmentMediaSource,
+  isDevelopmentMediaRange,
+} from "./dev-media-transport";
 
 const DEFAULT_LOCAL_API_ORIGIN = "http://127.0.0.1:8000";
 const STAGING_API_ORIGIN = "https://api-staging.authorityclosers.com";
 const STAGING_PUBLIC_APP_ORIGIN = "https://staging.authorityclosers.com";
 const PROXY_TIMEOUT_MS = 12_000;
+const MEDIA_READ_TIMEOUT_MS = 30_000;
+const MEDIA_STREAM_MAX_MS = 30 * 60 * 1000;
 const MAX_BRIDGE_REQUEST_BODY_BYTES = 1024 * 1024;
 const MAX_CATALOG_SLUG_LENGTH = 120;
 const MAX_BRIDGE_QUERY_VALUE_LENGTH = 200;
@@ -59,11 +71,22 @@ export interface DevelopmentBridgeSessionStore {
   get(localSession: string): string | null;
   set(localSession: string, stagingSession: string): void;
   delete(localSession: string): void;
+  registerMedia(
+    localSession: string,
+    sources: string[],
+  ): RegisteredDevelopmentMedia[] | "limited" | null;
+  mediaSource(localSession: string, locator: string): string | null;
+  generation(localSession: string): object | null;
+  allowMediaRegistration(localSession: string): boolean;
 }
+
+type RegisteredDevelopmentMedia = { path: string; expires_at: number };
 
 type StoredBridgeSession = {
   stagingSession: string;
   expiresAt: number;
+  media: Map<string, { source: string; expiresAt: number }>;
+  registrations: { start: number; count: number };
 };
 
 /**
@@ -75,7 +98,11 @@ export class InMemoryDevelopmentBridgeSessionStore
 {
   private readonly sessions = new Map<string, StoredBridgeSession>();
 
-  constructor(private readonly now: () => number = Date.now) {}
+  constructor(
+    private readonly now: () => number = Date.now,
+    private readonly createLocator: () => string = () =>
+      randomBytes(32).toString("base64url"),
+  ) {}
 
   get(localSession: string): string | null {
     const stored = this.sessions.get(localSession);
@@ -97,11 +124,89 @@ export class InMemoryDevelopmentBridgeSessionStore
     this.sessions.set(localSession, {
       stagingSession,
       expiresAt: this.now() + BRIDGE_SESSION_MAX_AGE_SECONDS * 1000,
+      media: new Map(),
+      registrations: { start: this.now(), count: 0 },
     });
   }
 
   delete(localSession: string): void {
     this.sessions.delete(localSession);
+  }
+
+  generation(localSession: string): object | null {
+    return this.get(localSession) ? this.sessions.get(localSession)! : null;
+  }
+
+  allowMediaRegistration(localSession: string): boolean {
+    if (!this.get(localSession)) return false;
+    const session = this.sessions.get(localSession)!;
+    const now = this.now();
+    if (now - session.registrations.start >= 60_000)
+      session.registrations = { start: now, count: 0 };
+    return ++session.registrations.count <= 30;
+  }
+
+  registerMedia(
+    localSession: string,
+    sources: string[],
+  ): RegisteredDevelopmentMedia[] | "limited" | null {
+    if (!this.get(localSession)) return null;
+    const session = this.sessions.get(localSession)!;
+    const now = this.now();
+    if (
+      sources.length < 1 ||
+      sources.length > DEVELOPMENT_MEDIA_MAX_SOURCES ||
+      new Set(sources).size !== sources.length
+    )
+      return null;
+    const validated = sources.map((source) =>
+      readDevelopmentMediaSource(source, now),
+    );
+    if (validated.some((value) => !value)) return null;
+    for (const [locator, entry] of session.media)
+      if (entry.expiresAt <= now) session.media.delete(locator);
+    const missing = sources.filter(
+      (source) =>
+        ![...session.media.values()].some((entry) => entry.source === source),
+    );
+    if (session.media.size + missing.length > 64) return "limited";
+    const nextMedia = new Map(session.media);
+    const registrations = sources.map((source, index) => {
+      const existing = [...nextMedia].find(
+        ([, entry]) => entry.source === source,
+      );
+      if (existing)
+        return {
+          path: DEVELOPMENT_MEDIA_LOCATOR_PREFIX + existing[0],
+          expires_at: existing[1].expiresAt,
+        };
+      const locator = this.createLocator();
+      if (!/^[A-Za-z0-9_-]{43}$/.test(locator) || nextMedia.has(locator))
+        throw new Error("Local media registry is unavailable.");
+      const expiresAt = Math.min(
+        validated[index]!.expiresAt,
+        session.expiresAt,
+      );
+      nextMedia.set(locator, { source, expiresAt });
+      return {
+        path: DEVELOPMENT_MEDIA_LOCATOR_PREFIX + locator,
+        expires_at: expiresAt,
+      };
+    });
+    session.media = nextMedia;
+    return registrations;
+  }
+
+  mediaSource(localSession: string, locator: string): string | null {
+    if (!this.get(localSession)) return null;
+    const session = this.sessions.get(localSession)!;
+    const entry = session.media.get(locator);
+    if (!entry) return null;
+    if (entry.expiresAt <= this.now()) {
+      session.media.delete(locator);
+      return null;
+    }
+    return entry.source;
   }
 }
 
@@ -117,7 +222,11 @@ function isDevelopmentBridgeSessionStore(
   return (
     typeof candidate.get === "function" &&
     typeof candidate.set === "function" &&
-    typeof candidate.delete === "function"
+    typeof candidate.delete === "function" &&
+    typeof candidate.registerMedia === "function" &&
+    typeof candidate.mediaSource === "function" &&
+    typeof candidate.generation === "function" &&
+    typeof candidate.allowMediaRegistration === "function"
   );
 }
 
@@ -433,6 +542,14 @@ export function isStagingAuthenticatedLearnerRequest(
 ): boolean {
   const normalizedMethod = method.toUpperCase();
   const { pathname } = url;
+  if (pathname === DEVELOPMENT_MEDIA_REGISTRATION)
+    return normalizedMethod === "POST" && hasNoQuery(url);
+  if (pathname.startsWith(DEVELOPMENT_MEDIA_LOCATOR_PREFIX))
+    return (
+      ["GET", "HEAD"].includes(normalizedMethod) &&
+      hasNoQuery(url) &&
+      isDevelopmentMediaLocatorPath(pathname)
+    );
   if (pathname === "/v1/auth/password/login") {
     return normalizedMethod === "POST" && hasNoQuery(url);
   }
@@ -848,6 +965,7 @@ function readStreamChunk(
 async function readBoundedRequestBody(
   request: Request,
   signal: AbortSignal,
+  maximumBytes = MAX_BRIDGE_REQUEST_BODY_BYTES,
 ): Promise<{ body: ArrayBuffer | undefined; tooLarge: boolean }> {
   if (request.method === "GET" || request.method === "HEAD") {
     return { body: undefined, tooLarge: false };
@@ -855,8 +973,7 @@ async function readBoundedRequestBody(
   const declaredLength = request.headers.get("content-length");
   if (
     declaredLength !== null &&
-    (!/^\d+$/.test(declaredLength) ||
-      Number(declaredLength) > MAX_BRIDGE_REQUEST_BODY_BYTES)
+    (!/^\d+$/.test(declaredLength) || Number(declaredLength) > maximumBytes)
   ) {
     return { body: undefined, tooLarge: true };
   }
@@ -865,15 +982,19 @@ async function readBoundedRequestBody(
   const reader = request.body.getReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
-  while (true) {
-    const { done, value } = await readStreamChunk(reader, signal);
-    if (done) break;
-    total += value.byteLength;
-    if (total > MAX_BRIDGE_REQUEST_BODY_BYTES) {
-      await reader.cancel();
-      return { body: undefined, tooLarge: true };
+  try {
+    while (true) {
+      const { done, value } = await readStreamChunk(reader, signal);
+      if (done) break;
+      total += value.byteLength;
+      if (total > maximumBytes) {
+        void reader.cancel().catch(() => undefined);
+        return { body: undefined, tooLarge: true };
+      }
+      chunks.push(value);
     }
-    chunks.push(value);
+  } finally {
+    reader.releaseLock();
   }
   const combined = new Uint8Array(total);
   let offset = 0;
@@ -991,11 +1112,275 @@ async function proxyUpstream(
   }
 }
 
+/** Private progressive/caption bytes only; session/grant authority stays upstream. */
+async function proxyStagingMedia(
+  request: Request,
+  target: Extract<DevApiTarget, { mode: "staging-authenticated" }>,
+  fetcher: DevApiFetch,
+  stagingSession: string,
+  approvedSource: string,
+): Promise<Response> {
+  const range = request.headers.get("range");
+  if (!isDevelopmentMediaRange(range)) {
+    return jsonError(
+      416,
+      "Only one bounded byte range is supported by local media delivery.",
+    );
+  }
+  if (request.headers.get("sec-fetch-site") === "cross-site") {
+    return jsonError(
+      403,
+      "Cross-site requests cannot use local media delivery.",
+    );
+  }
+  if (request.signal.aborted)
+    return jsonError(504, "Local media delivery was cancelled.");
+
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  request.signal.addEventListener("abort", abort, { once: true });
+  if (request.signal.aborted) controller.abort();
+  let headerTimer: ReturnType<typeof setTimeout> | undefined = setTimeout(
+    abort,
+    PROXY_TIMEOUT_MS,
+  );
+  let streamTimer: ReturnType<typeof setTimeout> | undefined;
+  let readTimer: ReturnType<typeof setTimeout> | undefined;
+  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+  let streamController: ReadableStreamDefaultController<Uint8Array> | undefined;
+  let finished = false;
+  let transferred = false;
+  const sanitizedError = () =>
+    new Error("Local media stream is unavailable or cancelled.");
+  const cleanup = () => {
+    if (finished) return;
+    finished = true;
+    clearTimeout(headerTimer);
+    clearTimeout(streamTimer);
+    clearTimeout(readTimer);
+    request.signal.removeEventListener("abort", abort);
+    controller.signal.removeEventListener("abort", cancelStream);
+  };
+  const cancelStream = () => {
+    if (finished) return;
+    streamController?.error(sanitizedError());
+    cleanup();
+    void reader?.cancel().catch(() => undefined);
+  };
+  try {
+    const upstream = new URL(approvedSource);
+    if (
+      upstream.origin !== target.origin ||
+      !readDevelopmentMediaSource(approvedSource)
+    )
+      return jsonError(
+        403,
+        "Local media authorization is unavailable or expired.",
+      );
+    const headers = new Headers({
+      accept:
+        request.headers.get("accept") ?? "video/mp4, video/webm, text/vtt",
+      "accept-encoding": "identity",
+      origin: STAGING_PUBLIC_APP_ORIGIN,
+      cookie: `${STAGING_SESSION_COOKIE_NAME}=${stagingSession}`,
+    });
+    if (range !== null) headers.set("range", range);
+    const response = await fetcher(upstream, {
+      method: request.method,
+      headers,
+      redirect: "manual",
+      cache: "no-store",
+      credentials: "omit",
+      signal: controller.signal,
+    });
+    clearTimeout(headerTimer);
+    headerTimer = undefined;
+    const discard = () => {
+      void response.body?.cancel().catch(() => undefined);
+      controller.abort();
+    };
+    if (controller.signal.aborted) {
+      discard();
+      return jsonError(504, "Local media delivery was cancelled.");
+    }
+    if (![200, 206, 416].includes(response.status)) {
+      discard();
+      const status =
+        response.status >= 400 && response.status <= 599
+          ? response.status
+          : 502;
+      return jsonError(
+        status,
+        "The approved staging media could not be delivered.",
+      );
+    }
+
+    const outputHeaders = new Headers({
+      "cache-control": "private, no-store",
+      "referrer-policy": "no-referrer",
+      "x-content-type-options": "nosniff",
+      "x-ac-dev-data-mode": "staging-authenticated",
+    });
+    const contentRange = response.headers.get("content-range");
+    if (response.status === 416) {
+      discard();
+      if (
+        contentRange &&
+        /^bytes \*\/[1-9]\d{0,9}$/.test(contentRange) &&
+        Number(contentRange.slice(8)) <= DEVELOPMENT_MEDIA_MAX_BYTES
+      ) {
+        outputHeaders.set("content-range", contentRange);
+      }
+      return new Response(null, { status: 416, headers: outputHeaders });
+    }
+    const mime = response.headers
+      .get("content-type")
+      ?.split(";", 1)[0]
+      .trim()
+      .toLowerCase();
+    const encoding = response.headers.get("content-encoding");
+    const length = response.headers.get("content-length") ?? "";
+    const declared = Number(length);
+    if (
+      !mime ||
+      !["video/mp4", "video/webm", "text/vtt"].includes(mime) ||
+      (encoding !== null && encoding.toLowerCase() !== "identity") ||
+      !/^[1-9]\d{0,9}$/.test(length) ||
+      declared > DEVELOPMENT_MEDIA_MAX_BYTES
+    ) {
+      discard();
+      return jsonError(
+        502,
+        "Local delivery accepts only bounded progressive video or caption bytes.",
+      );
+    }
+    if (response.status === 206) {
+      const parsed = /^bytes (0|[1-9]\d*)-(0|[1-9]\d*)\/([1-9]\d*)$/.exec(
+        contentRange ?? "",
+      );
+      const requested = /^bytes=(\d+)-(\d*)$/.exec(range ?? "");
+      if (
+        range === null ||
+        !parsed ||
+        ![parsed[1], parsed[2], parsed[3]].every((value) =>
+          Number.isSafeInteger(Number(value)),
+        ) ||
+        Number(parsed[2]) < Number(parsed[1]) ||
+        Number(parsed[2]) >= Number(parsed[3]) ||
+        Number(parsed[3]) > DEVELOPMENT_MEDIA_MAX_BYTES ||
+        Number(parsed[2]) - Number(parsed[1]) + 1 !== declared ||
+        !requested ||
+        Number(parsed[1]) !== Number(requested[1]) ||
+        Number(parsed[2]) !==
+          Math.min(
+            requested[2] ? Number(requested[2]) : Number(parsed[3]) - 1,
+            Number(parsed[3]) - 1,
+          )
+      ) {
+        discard();
+        return jsonError(502, "The staging media range response was invalid.");
+      }
+      outputHeaders.set("content-range", contentRange!);
+    }
+    outputHeaders.set(
+      "content-type",
+      mime === "text/vtt" ? "text/vtt; charset=utf-8" : mime,
+    );
+    outputHeaders.set("content-length", length);
+    const accepts = response.headers.get("accept-ranges");
+    if (accepts === "bytes" || accepts === "none")
+      outputHeaders.set("accept-ranges", accepts);
+    const etag = response.headers.get("etag");
+    if (etag && /^"[a-f0-9]{64}"$/i.test(etag)) outputHeaders.set("etag", etag);
+    if (request.method === "HEAD") {
+      discard();
+      return new Response(null, {
+        status: response.status,
+        headers: outputHeaders,
+      });
+    }
+    if (!response.body) {
+      discard();
+      return jsonError(502, "The staging media stream was empty.");
+    }
+    reader = response.body.getReader();
+    let observed = 0;
+    const stream = new ReadableStream<Uint8Array>(
+      {
+        start(output) {
+          streamController = output;
+          controller.signal.addEventListener("abort", cancelStream, {
+            once: true,
+          });
+          streamTimer = setTimeout(abort, MEDIA_STREAM_MAX_MS);
+          if (controller.signal.aborted) cancelStream();
+        },
+        async pull(output) {
+          if (finished) return;
+          readTimer = setTimeout(abort, MEDIA_READ_TIMEOUT_MS);
+          try {
+            const { done, value } = await readStreamChunk(
+              reader!,
+              controller.signal,
+            );
+            clearTimeout(readTimer);
+            readTimer = undefined;
+            if (finished) return;
+            if (done) {
+              if (observed !== declared) throw sanitizedError();
+              cleanup();
+              reader!.releaseLock();
+              output.close();
+            } else {
+              observed += value.byteLength;
+              if (
+                !value.byteLength ||
+                value.byteLength > 16 * 1024 * 1024 ||
+                observed > declared
+              )
+                throw sanitizedError();
+              output.enqueue(value);
+            }
+          } catch {
+            if (!finished) {
+              output.error(sanitizedError());
+              cleanup();
+              controller.abort();
+              void reader?.cancel().catch(() => undefined);
+            }
+          }
+        },
+        cancel() {
+          cleanup();
+          controller.abort();
+          void reader?.cancel().catch(() => undefined);
+        },
+      },
+      { highWaterMark: 0 },
+    );
+    transferred = true;
+    return new Response(stream, {
+      status: response.status,
+      headers: outputHeaders,
+    });
+  } catch {
+    const timedOut = controller.signal.aborted;
+    controller.abort();
+    return jsonError(
+      timedOut ? 504 : 502,
+      "Local media delivery is unavailable or timed out.",
+    );
+  } finally {
+    if (!transferred) cleanup();
+  }
+}
+
 async function proxyAuthenticatedStaging(
   request: Request,
   target: Extract<DevApiTarget, { mode: "staging-authenticated" }>,
   fetcher: DevApiFetch,
   sessionStore: DevelopmentBridgeSessionStore,
+  mediaFetcher: DevApiFetch,
 ): Promise<Response> {
   if (!isAllowedBridgeOrigin(request, target.browserOrigin)) {
     return jsonError(
@@ -1062,12 +1447,113 @@ async function proxyAuthenticatedStaging(
     }
   }
 
-  const upstream = await proxyUpstream(
-    request,
-    target,
-    fetcher,
-    stagingSession,
+  if (incomingUrl.pathname === DEVELOPMENT_MEDIA_REGISTRATION) {
+    const generation = sessionStore.generation(localSession!);
+    if (!sessionStore.allowMediaRegistration(localSession!))
+      return jsonError(
+        429,
+        "Local media registration limit reached. Reopen the lesson later.",
+      );
+    if (
+      request.headers.get("sec-fetch-site") === "cross-site" ||
+      !/^application\/json(?:;\s*charset=utf-8)?$/i.test(
+        request.headers.get("content-type") ?? "",
+      ) ||
+      request.headers.has("content-encoding")
+    )
+      return jsonError(
+        400,
+        "Local media registration requires same-origin JSON.",
+      );
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    request.signal.addEventListener("abort", abort, { once: true });
+    if (request.signal.aborted) abort();
+    const timer = setTimeout(abort, PROXY_TIMEOUT_MS);
+    try {
+      const { body, tooLarge } = await readBoundedRequestBody(
+        request,
+        controller.signal,
+        64 * 1024,
+      );
+      if (tooLarge)
+        return jsonError(413, "Local media registration is too large.");
+      if (!body || controller.signal.aborted)
+        return jsonError(400, "Local media registration is unavailable.");
+      const payload: unknown = JSON.parse(
+        new TextDecoder("utf-8", { fatal: true }).decode(body),
+      );
+      if (
+        !payload ||
+        Array.isArray(payload) ||
+        typeof payload !== "object" ||
+        Object.keys(payload).length !== 1 ||
+        !("sources" in payload) ||
+        !Array.isArray(payload.sources) ||
+        !payload.sources.every((source) => typeof source === "string")
+      )
+        return jsonError(400, "Local media registration is invalid.");
+      // Recheck the session after the asynchronous body read: logout/replacement
+      // during registration must not attach sources to a new identity generation.
+      if (!generation || sessionStore.generation(localSession!) !== generation)
+        return localBridgeCookieFailure();
+      const items = sessionStore.registerMedia(localSession!, payload.sources);
+      if (items === "limited")
+        return jsonError(
+          429,
+          "Local media registration limit reached. Reopen the lesson later.",
+        );
+      if (!items)
+        return jsonError(
+          400,
+          "Local media registration is invalid or expired.",
+        );
+      return Response.json(
+        { items },
+        {
+          headers: {
+            "cache-control": "private, no-store",
+            "referrer-policy": "no-referrer",
+            "x-content-type-options": "nosniff",
+          },
+        },
+      );
+    } catch {
+      return jsonError(
+        controller.signal.aborted ? 504 : 400,
+        "Local media registration is unavailable.",
+      );
+    } finally {
+      clearTimeout(timer);
+      request.signal.removeEventListener("abort", abort);
+    }
+  }
+  const isMedia = incomingUrl.pathname.startsWith(
+    DEVELOPMENT_MEDIA_LOCATOR_PREFIX,
   );
+  const source = isMedia
+    ? sessionStore.mediaSource(
+        localSession!,
+        incomingUrl.pathname.slice(DEVELOPMENT_MEDIA_LOCATOR_PREFIX.length),
+      )
+    : null;
+  if (isMedia && !source)
+    return jsonError(
+      404,
+      "Local media is unavailable or expired. Reopen the lesson.",
+    );
+  const upstream = isMedia
+    ? {
+        response: await proxyStagingMedia(
+          request,
+          target,
+          mediaFetcher,
+          stagingSession!,
+          source!,
+        ),
+        setCookieHeaders: [],
+      }
+    : await proxyUpstream(request, target, fetcher, stagingSession);
   const response = upstream.response;
 
   if (isLogin && response.ok) {
@@ -1094,6 +1580,7 @@ async function proxyAuthenticatedStaging(
       );
     }
     const nextLocalSession = randomBytes(32).toString("base64url");
+    if (localSession !== null) sessionStore.delete(localSession);
     sessionStore.set(nextLocalSession, sessionCookie.token);
     setLocalBridgeCookie(
       response,
@@ -1112,7 +1599,7 @@ async function proxyAuthenticatedStaging(
 
 export async function proxyDevelopmentLearnerApi(
   request: Request,
-  fetcher: DevApiFetch = globalThis.fetch.bind(globalThis),
+  fetcher?: DevApiFetch,
   environment: DevApiEnvironment = process.env,
   nodeEnvironment: string | undefined = process.env.NODE_ENV,
   sessionStore: DevelopmentBridgeSessionStore = defaultDevelopmentBridgeSessionStore(),
@@ -1138,7 +1625,13 @@ export async function proxyDevelopmentLearnerApi(
   }
 
   if (target.mode === "staging-authenticated") {
-    return proxyAuthenticatedStaging(request, target, fetcher, sessionStore);
+    return proxyAuthenticatedStaging(
+      request,
+      target,
+      fetcher ?? globalThis.fetch.bind(globalThis),
+      sessionStore,
+      fetcher ?? fetchDevelopmentMediaUpstream,
+    );
   }
 
   if (target.mode === "staging-public-catalog") {
@@ -1153,5 +1646,12 @@ export async function proxyDevelopmentLearnerApi(
     }
   }
 
-  return (await proxyUpstream(request, target, fetcher, null)).response;
+  return (
+    await proxyUpstream(
+      request,
+      target,
+      fetcher ?? globalThis.fetch.bind(globalThis),
+      null,
+    )
+  ).response;
 }

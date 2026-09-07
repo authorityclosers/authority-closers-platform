@@ -7,9 +7,9 @@
   "planned_iterations": 3,
   "current_iteration": 1,
   "persistent_goal": {
-    "status_observed": "usageLimited",
-    "replacement_created": false,
-    "reason": "create_goal refused because this thread has an unfinished goal"
+    "status_observed": "active",
+    "replacement_created": true,
+    "reason": "User removed prior goal; expanded Alpha implementation goal created 2026-09-07T13:30:51Z"
   },
   "baseline": {
     "environment": "staging",
@@ -18,8 +18,8 @@
     "source": "read-only VPS, GitHub and HTTP release audit"
   },
   "candidate": {
-    "release_sha": null,
-    "staging": "not_deployed",
+    "release_sha": "a5eef0df4b340070ac6e58f9912d73a3bf1d2f18",
+    "staging": "deployed_2026-09-07; controller smoke passed; authenticated route verification in progress",
     "production": "blocked"
   },
   "scope": {
@@ -123,14 +123,14 @@
         "https://drive.google.com/file/d/1O6Rdy9M_ciUKzWkak3oUaNLFemqovp9s/view",
         "https://drive.google.com/file/d/1bs6YeI5qDo5TItacLCwb0iLWVleDTow1/view"
       ],
-      "observed": "Acceptance contract, QA report and 32 local screenshots plus results JSON uploaded/readback verified in the existing release folder. New live before/after evidence and exact-SHA release ledger entry pending; no new release claimed."
+      "observed": "Release 851ebc8 has verified BEFORE, local fixture and STAGING LIVE Drive folders. Eight new anonymous public Home/login mobile/desktop light/dark captures plus manifest uploaded/readback 9/9. Existing native ledger appended and readback verified with all earlier structured history and image preserved. Authenticated changed-route live screenshots remain pending. See 20260907_STAGING_ALPHA_FOUNDATION_RELEASE.md."
     },
     {
       "id": "A12",
       "name": "Environment promotion",
       "status": "blocked",
       "evidence": [],
-      "observed": "Production DNS/ingress, independent application secrets/bootstrap, admin Access, provider and backup/restore evidence absent or failing; new candidate not deployed."
+      "observed": "Staging851ebc8 installed with exact artifact/hash, health/OAuth/Access smoke, migration backup and retained31aee3c. Production unchanged: independent DNS/ingress, secrets/bootstrap, admin Access and backup/restore evidence incomplete."
     },
     {
       "id": "A13",
@@ -141,6 +141,27 @@
         "../../../evidence/20260907_ALPHA_SECOND_MEDIA_FIXTURE.md"
       ],
       "observed": "Official pinned BBB 4K and distinct Caminandes 1080p downloaded and hash/probe verified. Local 12-second HLS ladders and diagnostic captions built; decoder/filter/encoder pools bounded. Nothing uploaded/bound to a VPS course; authorized delivery/player/evidence and VPS resource tests pending."
+    },
+    {
+      "id": "A14",
+      "name": "Tenant-authorized Studio authoring",
+      "status": "pending",
+      "evidence": [],
+      "observed": "Existing Studio reads and audited publication are implemented. Image placement, course/lesson/quiz editor and end-to-end Dipak workflows remain required; no admin enrollment bypass."
+    },
+    {
+      "id": "A15",
+      "name": "Formative sales practice and learning guide",
+      "status": "pending",
+      "evidence": [],
+      "observed": "User explicitly requests fill-in-the-blank, matching, sales exercises and grounded guidance after working video. No games, bot, official scoring or sample success is being claimed."
+    },
+    {
+      "id": "A16",
+      "name": "Learner identity and opt-in competition",
+      "status": "pending",
+      "evidence": [],
+      "observed": "User adds persisted usernames, working high-quality photo updates, canonical streaks and learner competition/leaderboards after video. Uniqueness/impersonation/privacy tests and explicit streak/ranking definitions required; no email exposure or invented analytics-derived achievements."
     }
   ],
   "field_performance": {

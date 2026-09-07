@@ -109,7 +109,89 @@ calendar/insights, activity draft/evidence, certificate, and avatar routes.
 The collection is exactly `GET /v1/learning?limit=50` with an optional bounded
 cursor. Google, registration, recovery, verification, admin, internal, and
 arbitrary routes remain on deployed staging. Playback and media-provider
-capabilities remain unavailable until their existing governance gates are met.
+capabilities require their existing governance gates. The bounded progressive
+delivery bridge below transports only already-approved staging media; it does
+not activate a provider or approve missing lesson media.
+
+### Approved progressive media on localhost
+
+When the authenticated bridge is explicitly enabled, the existing server layout
+passes only its exact local origin to a transport context. The player must first
+validate the unchanged HTTPS staging descriptor and expiration envelope, then
+register eligible MP4/WebM and caption sources through authenticated same-origin
+`POST /v1/dev-bridge/media`. Signed sources travel only in the bounded JSON body,
+never in a localhost URL. The response contains positional opaque local paths
+and expiry, not tokens. Native media is withheld until registration completes.
+The browser carries its normal local HttpOnly bridge handle; the staging session
+and source registry remain in server memory. Do not copy a signed URL or staging
+cookie into browser storage, logs, a command, or a document.
+
+The byte gateway accepts authenticated GET/HEAD on
+`/v1/dev-bridge/media/{opaque-locator}` with **no query** and one bounded byte
+range. A locator is not a credential: it resolves only within its current local
+session generation, and staging still verifies the original signed source and
+staging cookie. The legacy token-in-local-query route is denied. Registration is
+limited to 12 distinct sources / 64 KiB per request, 30 requests per minute per
+session, 64 entries per session, and eight sessions. Entries expire no later than
+the original grant (whose validated envelope is at most one hour). Logout, 401,
+session replacement, eviction, expiry, and restart drop associated entries.
+Reconnect revalidates the original descriptor through the normal activity API
+before obtaining a fresh transport registration. Failed/expired authority is not
+repaired locally; no fallback to a remote signed source or new progress write is
+introduced. Video/WebVTT responses stream with cancellation after headers.
+
+HLS playlists and child rewriting are intentionally unsupported. An approved
+progressive fallback can be used; a manifest-only descriptor remains unavailable.
+No provider upload or database state is enabled by this path. The page must
+withhold unsupported transport rather than silently requesting a remote URL
+without its normal staging host-only cookie.
+
+Keep the local dev port private. Restarting the bridge clears its memory-only
+session mappings. Opted-in framework request/fetch logs must not record the
+signed token query; browser network tools may still display the live request
+and should not be copied/exported unredacted. Release evidence must use sanitized
+status/range/byte observations without signed URLs or credentials. This local
+bridge is not production deployment or a replacement for staging acceptance.
+
+#### Next development trace privacy (required before signed-media QA)
+
+`logging: false` suppresses ordinary console URL logs but **does not suppress
+Next's `.next/dev/trace` files or its unconditional exception loggers**. Opaque
+local locator URLs and the explicit media-only Node HTTPS upstream adapter are
+the privacy boundary. Do not route media through patched global fetch: its HMR
+cache can log a full outgoing signed URL when a background body read fails, even
+with `cache: no-store`. The managed launcher additionally sets
+`NEXT_TRACE_SPAN_THRESHOLD_MS=9007199254740991` only in the learner child's
+environment, before Next starts; its workers inherit it. Do not set this inside
+`next.config.ts`, where tracing may already be imported, or as a machine-wide
+environment variable. Next config refuses an enabled learner bridge without
+this exact startup guard or when the installed Next version differs from the
+reviewed **16.2.11** pin. Ordinary non-bridge development and production do not
+require this guard and keep their normal logging behavior.
+
+This is an **internal, undocumented Next control**, not a stable public API.
+An upgrade must revalidate the installed tracing implementation and update the
+explicit version fence only after the real reporter regression and synthetic
+HTTP/trace check pass. The installed-runtime test includes a leaking negative
+control, automatic batch flush, forced flush, inherited child environment, and
+the maximum duration Next permits. It is not sufficient to inspect stdout alone.
+
+After introducing this guard an already-running unguarded learner process may
+stop on config reload. Restart it through the managed launcher; do not weaken
+the gate to restore availability. Restarting clears local login handles. Preserve
+existing logs and traces as restricted local diagnostic evidence; do not export
+their contents, and do not delete files as a substitute for preventing writes.
+Only synthetic invalid no-cookie probes are permitted until the actual running
+process has passed the trace-file check. The current implementation evidence
+records any blocked restart or pending runtime check explicitly.
+
+The learner launcher also clears its child-only `NODE_DEBUG` mask before Node
+starts. Native HTTPS diagnostics can otherwise print signed paths and cookies.
+An enabled bridge refuses unsafe cached or current HTTP/HTTPS debug settings
+before any media request is constructed. Clearing the variable later inside
+application code is insufficient: Node caches its initial mask. Use the managed
+launcher after this change; do not enable credential-bearing diagnostic capture
+or copy diagnostic contents into release evidence.
 
 ## Authenticated admin bridge
 

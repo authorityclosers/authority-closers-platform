@@ -14,6 +14,7 @@ import {
   VideoViewer,
   type AuthorizedVideoMedia,
 } from "./learning-loop-runtime";
+import { DevelopmentMediaBridgeProvider } from "./development-media-bridge";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -172,19 +173,33 @@ afterEach(async () => {
   container.remove();
   vi.useRealTimers();
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
 });
 
-async function mount(activity = current, media?: AuthorizedVideoMedia) {
+async function mount(
+  activity = current,
+  media?: AuthorizedVideoMedia,
+  bridgeOrigin?: string | null,
+) {
   current = activity;
   await act(async () => {
-    root.render(
+    const viewer = (
       <VideoViewer
         activity={activity}
         api={api}
         moduleHref="/learn/module-1"
         media={media}
         onPlaybackCommitted={onCommitted}
-      />,
+      />
+    );
+    root.render(
+      bridgeOrigin === undefined ? (
+        viewer
+      ) : (
+        <DevelopmentMediaBridgeProvider browserOrigin={bridgeOrigin}>
+          {viewer}
+        </DevelopmentMediaBridgeProvider>
+      ),
     );
   });
   const video = container.querySelector("video");
@@ -222,6 +237,307 @@ function noWrites() {
   for (const name of writes) expect(api[name], name).not.toHaveBeenCalled();
   expect(onCommitted).not.toHaveBeenCalled();
 }
+
+const BRIDGE_ORIGIN = "http://learner.localhost:3100";
+const STAGING_ORIGIN = "https://staging.authorityclosers.com";
+const BRIDGE_KEY =
+  "tenants/tenant-1/media/lesson_video/asset-1/media-version-1/original/lesson.mp4";
+
+function stagingFixture(tracked = false): ActivityResponse {
+  const result = activityFixture(
+    { allowed_actions: tracked ? ["complete_video"] : [] },
+    { key: BRIDGE_KEY },
+  );
+  const query = new URL(result.media!.delivery!.progressive_url!).search;
+  result.media!.delivery!.progressive_url = `${STAGING_ORIGIN}/v1/media/playback/${encodeURIComponent(BRIDGE_KEY)}${query}`;
+  return result;
+}
+
+function enableBridgeOrigin() {
+  vi.stubEnv("NODE_ENV", "development");
+  vi.spyOn(window.location, "origin", "get").mockReturnValue(BRIDGE_ORIGIN);
+  return vi
+    .spyOn(globalThis, "fetch")
+    .mockImplementation(async (input, init) => {
+      expect(String(input)).toBe(`${BRIDGE_ORIGIN}/v1/dev-bridge/media`);
+      expect(init?.method).toBe("POST");
+      expect(init?.credentials).toBe("same-origin");
+      expect(init?.redirect).toBe("error");
+      expect(init?.cache).toBe("no-store");
+      const { sources } = JSON.parse(String(init?.body)) as {
+        sources: string[];
+      };
+      return Response.json({
+        items: sources.map((_, index) => ({
+          path: `/v1/dev-bridge/media/${String.fromCharCode(97 + index).repeat(43)}`,
+          expires_at: NOW.getTime() + 120_000,
+        })),
+      });
+    });
+}
+
+describe("post-validation native media transport", () => {
+  it("maps video and captions while preserving HTTPS scope across reconnect and making no writes", async () => {
+    enableBridgeOrigin();
+    const activity = stagingFixture();
+    const original = activity.media!.delivery!.progressive_url!;
+    const captionKey = BRIDGE_KEY.replace(
+      "lesson.mp4",
+      "captions/en/caption-1",
+    );
+    const captionClaims = activityFixture({}, { key: captionKey });
+    const captionQuery = new URL(
+      captionClaims.media!.delivery!.progressive_url!,
+    ).search;
+    const captionSource = `${STAGING_ORIGIN}/v1/media/playback/${encodeURIComponent(captionKey)}${captionQuery}`;
+    activity.media!.captions = [
+      {
+        id: "caption-1",
+        language: "en",
+        kind: "captions",
+        state: "ready",
+        source_url: captionSource,
+        media_version_id: "media-version-1",
+        content_type: "text/vtt",
+        is_default: true,
+        created_at: NOW.toISOString(),
+      },
+    ];
+    const video = (await mount(activity, undefined, BRIDGE_ORIGIN))!;
+    expect(video.src).toBe(
+      `${BRIDGE_ORIGIN}/v1/dev-bridge/media/${"a".repeat(43)}`,
+    );
+    expect(container.querySelector("track")?.src).toBe(
+      `${BRIDGE_ORIGIN}/v1/dev-bridge/media/${"b".repeat(43)}`,
+    );
+    expect(activity.media!.delivery!.progressive_url).toBe(original);
+    expect(
+      [...container.querySelectorAll("[src]")].every(
+        (element) => !element.getAttribute("src")?.includes("token="),
+      ),
+    ).toBe(true);
+    expect(approvedDeliveryExpiresAt(activity)).toBeGreaterThan(Date.now());
+    await play();
+    await connection(false);
+    await connection(true);
+    await play();
+    const reconnectedVideo = container.querySelector("video")!;
+    expect(reconnectedVideo).not.toBe(video);
+    expect(reconnectedVideo.src).toBe(
+      `${BRIDGE_ORIGIN}/v1/dev-bridge/media/${"a".repeat(43)}`,
+    );
+    expect(api.activity).toHaveBeenCalled();
+    await fire(reconnectedVideo, "ended", 12);
+    noWrites();
+  });
+
+  it("withholds invalid local transport without a remote fallback", async () => {
+    enableBridgeOrigin();
+    await mount(stagingFixture(), undefined, "http://localhost:3100");
+    expect(container.querySelector("video")).toBeNull();
+    expect(container.textContent).toContain("Video preview unavailable");
+    expect(container.querySelector("[src]")).toBeNull();
+    expect(container.querySelector("a")?.href).toBe(
+      `${STAGING_ORIGIN}/activity/video-1`,
+    );
+    noWrites();
+  });
+
+  it("does not rescue an expired original descriptor by mapping its transport", async () => {
+    enableBridgeOrigin();
+    vi.setSystemTime(new Date(NOW.getTime() + 121_000));
+    await mount(stagingFixture(), undefined, BRIDGE_ORIGIN);
+    expect(container.querySelector("video")).toBeNull();
+    noWrites();
+  });
+
+  it("preserves tracked completion using original descriptors, not rewritten scope", async () => {
+    enableBridgeOrigin();
+    const video = (await mount(
+      stagingFixture(true),
+      undefined,
+      BRIDGE_ORIGIN,
+    ))!;
+    await play();
+    expect(api.startPlayback).toHaveBeenCalledOnce();
+    await fire(video, "timeupdate", 12);
+    await fire(video, "ended", 12);
+    expect(api.finishPlayback).toHaveBeenCalledOnce();
+    expect(api.submitEvidence).toHaveBeenCalledOnce();
+    expect(onCommitted).toHaveBeenCalledOnce();
+  });
+
+  it("does not rewrite production media even if a context value is present", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    const activity = stagingFixture();
+    const video = (await mount(activity, undefined, BRIDGE_ORIGIN))!;
+    expect(video.src).toBe(activity.media!.delivery!.progressive_url);
+    await play();
+    noWrites();
+  });
+
+  it("withholds pending registration and never attaches a late source after the activity changes", async () => {
+    const fetcher = enableBridgeOrigin();
+    const pending = deferred<Response>();
+    fetcher.mockImplementationOnce(async () => pending.promise);
+    await mount(stagingFixture(), undefined, BRIDGE_ORIGIN);
+    expect(container.querySelector("video")).toBeNull();
+    expect(container.textContent).toContain("Preparing video preview");
+    const signal = fetcher.mock.calls[0][1]?.signal;
+    await mount(
+      activityFixture({ id: "other-activity" }),
+      undefined,
+      BRIDGE_ORIGIN,
+    );
+    expect(signal?.aborted).toBe(true);
+    await act(async () =>
+      pending.resolve(
+        Response.json({
+          items: [
+            {
+              path: `/v1/dev-bridge/media/${"a".repeat(43)}`,
+              expires_at: NOW.getTime() + 120_000,
+            },
+          ],
+        }),
+      ),
+    );
+    expect(container.querySelector("video")).toBeNull();
+    noWrites();
+  });
+
+  it("stops a denied or expired registration without native src or canonical writes", async () => {
+    const fetcher = enableBridgeOrigin();
+    fetcher.mockResolvedValueOnce(new Response(null, { status: 401 }));
+    await mount(stagingFixture(), undefined, BRIDGE_ORIGIN);
+    expect(container.querySelector("[src]")).toBeNull();
+    expect(container.textContent).toContain("Video preview unavailable");
+    noWrites();
+  });
+
+  it("cancels an unmounted registration and rejects completion after original expiry", async () => {
+    const fetcher = enableBridgeOrigin();
+    const pending = deferred<Response>();
+    fetcher.mockImplementationOnce(async () => pending.promise);
+    await mount(stagingFixture(), undefined, BRIDGE_ORIGIN);
+    const signal = fetcher.mock.calls[0][1]?.signal;
+    await act(async () => root.unmount());
+    unmounted = true;
+    expect(signal?.aborted).toBe(true);
+    vi.setSystemTime(new Date(NOW.getTime() + 121_000));
+    await act(async () =>
+      pending.resolve(
+        Response.json({
+          items: [
+            {
+              path: `/v1/dev-bridge/media/${"a".repeat(43)}`,
+              expires_at: NOW.getTime() + 120_000,
+            },
+          ],
+        }),
+      ),
+    );
+    expect(container.querySelector("[src]")).toBeNull();
+    noWrites();
+  });
+
+  it("survives StrictMode setup/cleanup without accepting the first late registration", async () => {
+    const fetcher = enableBridgeOrigin();
+    const pending = deferred<Response>();
+    fetcher.mockImplementationOnce(async () => pending.promise);
+    const activity = stagingFixture();
+    await act(async () =>
+      root.render(
+        <StrictMode>
+          <DevelopmentMediaBridgeProvider browserOrigin={BRIDGE_ORIGIN}>
+            <VideoViewer
+              activity={activity}
+              api={api}
+              moduleHref="/learn/module-1"
+              onPlaybackCommitted={onCommitted}
+            />
+          </DevelopmentMediaBridgeProvider>
+        </StrictMode>,
+      ),
+    );
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher.mock.calls[0][1]?.signal?.aborted).toBe(true);
+    expect(container.querySelector("video")?.src).toBe(
+      `${BRIDGE_ORIGIN}/v1/dev-bridge/media/${"a".repeat(43)}`,
+    );
+    await act(async () =>
+      pending.resolve(
+        Response.json({
+          items: [
+            {
+              path: `/v1/dev-bridge/media/${"z".repeat(43)}`,
+              expires_at: NOW.getTime() + 120_000,
+            },
+          ],
+        }),
+      ),
+    );
+    expect(container.querySelector("video")?.src).toBe(
+      `${BRIDGE_ORIGIN}/v1/dev-bridge/media/${"a".repeat(43)}`,
+    );
+    noWrites();
+  });
+
+  it("removes native media when an established mapping expires", async () => {
+    enableBridgeOrigin();
+    await mount(stagingFixture(), undefined, BRIDGE_ORIGIN);
+    expect(container.querySelector("video")).not.toBeNull();
+    await act(async () => vi.advanceTimersByTimeAsync(120_001));
+    expect(container.querySelector("[src]")).toBeNull();
+    noWrites();
+  });
+
+  it.each([
+    { items: [] },
+    {
+      items: [
+        {
+          path: "https://staging.authorityclosers.com/unsafe",
+          expires_at: NOW.getTime() + 120_000,
+        },
+      ],
+    },
+    {
+      items: [
+        {
+          path: `/v1/dev-bridge/media/${"a".repeat(43)}?token=fixture`,
+          expires_at: NOW.getTime() + 120_000,
+        },
+      ],
+    },
+    {
+      items: [
+        {
+          path: `/v1/dev-bridge/media/${"a".repeat(43)}`,
+          expires_at: NOW.getTime() + 121_000,
+        },
+      ],
+    },
+    {
+      items: [
+        {
+          path: `/v1/dev-bridge/media/${"a".repeat(43)}`,
+          expires_at: NOW.getTime(),
+        },
+      ],
+    },
+  ])(
+    "rejects invalid registration response shape or widened authority %#",
+    async (payload) => {
+      const fetcher = enableBridgeOrigin();
+      fetcher.mockResolvedValueOnce(Response.json(payload));
+      await mount(stagingFixture(), undefined, BRIDGE_ORIGIN);
+      expect(container.querySelector("[src]")).toBeNull();
+      expect(container.textContent).toContain("Video preview unavailable");
+      noWrites();
+    },
+  );
+});
 function deferred<T>() {
   let resolve!: (result: T) => void;
   const promise = new Promise<T>((done) => {
