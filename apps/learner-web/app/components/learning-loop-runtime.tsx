@@ -38,6 +38,7 @@ import {
   type LearnerApi,
   type PlaybackEventInput,
 } from "../lib/learner-api";
+import { useDevelopmentMediaTransport } from "./development-media-bridge";
 
 /**
  * Non-canonical video telemetry events. These are downstream observation hooks
@@ -1039,11 +1040,27 @@ function VideoViewerHeading({
 export function VideoViewer(props: VideoViewerProps) {
   const resolution = resolveApprovedMedia(props.activity, props.media);
   const mode = playbackMode(props.activity, resolution.media);
+  const transport = useDevelopmentMediaTransport(
+    mode !== "unavailable" && resolution.media
+      ? [
+          resolution.media.src,
+          ...(resolution.media.captions ?? []).map((track) => track.src),
+          ...(resolution.media.qualities ?? []).map((quality) => quality.src),
+        ]
+      : [],
+  );
+  const transportSource = resolution.media
+    ? transport.resolveUrl(resolution.media.src)
+    : null;
   return (
     <VideoViewerSession
-      key={playbackContext(props.activity, resolution.media, mode)}
+      key={JSON.stringify([
+        playbackContext(props.activity, resolution.media, mode),
+        transportSource,
+      ])}
       {...props}
       mode={mode}
+      transport={transport}
     />
   );
 }
@@ -1057,14 +1074,37 @@ function VideoViewerSession({
   onPlaybackCommitted,
   onTelemetryEvent,
   mode,
-}: VideoViewerProps & { mode: VideoPlaybackMode }) {
+  transport,
+}: VideoViewerProps & {
+  mode: VideoPlaybackMode;
+  transport: ReturnType<typeof useDevelopmentMediaTransport>;
+}) {
   const mediaResolution = useMemo(
     () => resolveApprovedMedia(activity, media),
     [activity, media],
   );
-  const activeMedia = mediaResolution.media;
+  const approvedMedia = mediaResolution.media;
+  // Preserve the original approved HTTPS descriptor for every authorization
+  // comparison. Only the final native-media transport is adapted for local QA.
+  const activeMedia = useMemo(() => {
+    if (!approvedMedia) return null;
+    const src = transport.resolveUrl(approvedMedia.src);
+    if (!src) return null;
+    return {
+      ...approvedMedia,
+      src,
+      captions: approvedMedia.captions?.flatMap((track) => {
+        const source = transport.resolveUrl(track.src);
+        return source ? [{ ...track, src: source }] : [];
+      }),
+      qualities: approvedMedia.qualities?.flatMap((quality) => {
+        const source = transport.resolveUrl(quality.src);
+        return source ? [{ ...quality, src: source }] : [];
+      }),
+    };
+  }, [approvedMedia, transport]);
   const isBlocked = mediaResolution.state === "blocked";
-  const authorized = mode !== "unavailable";
+  const authorized = mode !== "unavailable" && activeMedia !== null;
   const tracked = mode === "tracked";
   const deliveryExpiresAt = approvedDeliveryExpiresAt(activity);
   const playbackRates = useMemo(
@@ -1392,9 +1432,17 @@ function VideoViewerSession({
               refreshedActivity,
               refreshedResolution.media,
               playbackMode(refreshedActivity, refreshedResolution.media),
-            ) === playbackContext(activity, activeMedia, mode);
+            ) === playbackContext(activity, approvedMedia, mode);
           if (!mediaStillAuthorized) {
             stopAuthorization();
+            return false;
+          }
+
+          if (transport.enabled) {
+            // Reconnect invalidates the local byte mapping only after the
+            // unchanged descriptor has been rechecked by the normal API.
+            // The new async registration withholds native src until ready.
+            transport.refresh();
             return false;
           }
 
@@ -1439,12 +1487,13 @@ function VideoViewerSession({
       reconnectRefreshRequestRef.current = request;
       return request;
     }, [
-      activeMedia,
+      approvedMedia,
       activity,
       api,
       isConnectionEpochCurrent,
       media,
       mode,
+      transport,
       stopAuthorization,
       updateStatus,
     ]);
@@ -1508,7 +1557,7 @@ function VideoViewerSession({
             currentActivity,
             currentMedia,
             playbackMode(currentActivity, currentMedia),
-          ) !== playbackContext(activity, activeMedia, mode)
+          ) !== playbackContext(activity, approvedMedia, mode)
         ) {
           stopAuthorization();
           return false;
@@ -1545,7 +1594,7 @@ function VideoViewerSession({
     return request;
   }, [
     activity,
-    activeMedia,
+    approvedMedia,
     api,
     authorized,
     isCanonicalWriteAllowed,
@@ -1634,7 +1683,7 @@ function VideoViewerSession({
             currentActivity,
             currentMedia,
             playbackMode(currentActivity, currentMedia),
-          ) !== playbackContext(activity, activeMedia, mode)
+          ) !== playbackContext(activity, approvedMedia, mode)
         ) {
           stopAuthorization();
           return;
@@ -1670,7 +1719,7 @@ function VideoViewerSession({
     return request;
   }, [
     activity,
-    activeMedia,
+    approvedMedia,
     api,
     duration,
     flushWatch,
@@ -2518,6 +2567,44 @@ function VideoViewerSession({
           <Link className="button button--outline" href={moduleHref}>
             Return to module
           </Link>
+        </div>
+      </section>
+    );
+  }
+
+  if (
+    transport.enabled &&
+    approvedMedia &&
+    !activeMedia &&
+    mode !== "unavailable"
+  ) {
+    return (
+      <section
+        className="momentum-video-viewer"
+        aria-labelledby={labelledBy ?? `video-title-${activity.id}`}
+      >
+        <VideoViewerHeading activity={activity} labelledBy={labelledBy} />
+        <div className="lesson-media-notice" role="status">
+          <div className="lesson-media-notice__copy">
+            <h3>
+              {transport.pending
+                ? "Preparing video preview"
+                : "Video preview unavailable"}
+            </h3>
+            <p>
+              {transport.pending
+                ? "Connecting this lesson to your local session…"
+                : "This local preview can’t open the video. You can try the lesson on staging."}
+            </p>
+          </div>
+          <a
+            className="button button--outline"
+            href={`https://staging.authorityclosers.com/activity/${encodeURIComponent(activity.id)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Open lesson on staging
+          </a>
         </div>
       </section>
     );

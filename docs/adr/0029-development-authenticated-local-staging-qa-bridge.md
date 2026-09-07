@@ -121,3 +121,131 @@ Revisit if protected local QA becomes shared, remote, persistent, non-learner,
 admin-surface, or production-connected; if the session contract changes; if
 the staging provider requires OAuth or another non-password flow; or if a
 provider-approved ephemeral session exchange becomes available.
+
+## 2026-09-07 addendum: authenticated local progressive media transport
+
+The owner requested actual approved staging lesson playback through the existing
+local learner session. This addendum is a bounded transport extension, not media
+provider activation. The server-issued descriptor remains unchanged: its original
+HTTPS source and signed grant envelope still pass the player's existing scope
+and expiry checks before any transport mapping.
+
+The root server layout resolves the existing development bridge configuration.
+It serializes only the exact non-secret loopback browser origin into a scoped
+React context. No session, public environment bypass flag, provider credential,
+or global browser authorization configuration is introduced. In opted-in bridge
+mode the final playback/caption transport maps only the exact staging public
+origin and canonical `/v1/media/playback/{encoded-object-key}?token=...` path to
+that same configured/current loopback origin. An unsupported mapping returns
+null and must withhold playback, never fall back to the original upstream URL.
+
+Only authenticated GET and HEAD are added to the gateway allowlist. Keys use
+the canonical structured immutable object namespace, have at most 512 decoded
+characters, and cannot contain double encoding, traversal, ambiguous encoding,
+empty components, credentials, fragments, or extra query fields. The query is
+one bounded application media token. Parsing does not validate its signature or
+grant: staging rechecks the existing session, tenant, enrollment, activity,
+binding, immutable version, signed key, and token expiration on every byte
+request. Existing local handles, memory-only staging cookies, origin checks,
+logout/401 invalidation, and production/default-off gates are unchanged.
+
+Progressive MP4/WebM and WebVTT are the first transport slice. A key need not
+have an extension because canonical originals and caption IDs may not have one;
+successful response MIME and declared length are separately allowlisted.
+Manifests and HLS child URL rewriting are not enabled. GET/HEAD may forward only
+one validated bounded `bytes=start-end` or `bytes=start-` range; suffix/multipart
+and malformed ranges are refused. The backend already registers both methods.
+
+Bodies stream with backpressure rather than buffering the video in application
+memory. Request cancellation and downstream cancellation remain attached until
+stream completion, and bounded header/read/whole-stream timeouts are retained.
+Only safe media response headers cross the boundary. Redirects, unexpected MIME,
+inconsistent range/length, and upstream error bodies fail closed with sanitized
+responses. No token-bearing URL, cookie, or upstream exception is logged or
+persisted by this adapter. Framework request/fetch logging for this opted-in
+development surface must also suppress signed URLs.
+
+This transport requires its own implementation/security regression evidence and
+independent review before handoff. It does not claim successful real playback
+until the player hook, normal local session, and actual approved staging media
+have been tested together. Provider uploads, HLS, real-call processing, direct
+database access, production access, and autonomous learning evidence remain
+outside this addendum.
+
+### Trace-privacy correction to the 2026-09-07 media addendum
+
+Independent review disproved console-only suppression as a complete privacy
+boundary: installed Next 16.2.11 attaches the full incoming URL to handle-request
+and memory-usage spans, and its JSON reporter persists those spans in
+`.next/dev/trace` regardless of `logging: false`. A synthetic no-cookie 401
+request appeared twice after automatic reporter batching. No actual media token
+was used in that probe. The earlier stdout-only observation remains valid but
+does not establish trace privacy.
+
+The managed launcher sets Next's internal `NEXT_TRACE_SPAN_THRESHOLD_MS` to
+`9007199254740991` in the learner child before Next bootstrap. In this exact
+installed version, `Span.stop` rejects durations above `Number.MAX_SAFE_INTEGER`
+microseconds and reports only when duration exceeds threshold milliseconds times
+1000. The configured comparison cutoff is finite and strictly greater than
+every permitted duration; it therefore suppresses every normally recorded span.
+Next workers inherit the same startup environment. This does not patch a
+dependency, change globals after import, remove logs, or disable production
+observability. Build-worker trace replay is not a new supported local delivery
+mode; the managed development launcher remains webpack-based.
+
+This control is undocumented and version-dependent. Enabled local bridge config
+fails closed unless the threshold is exact and the installed Next version is
+16.2.11. Any framework upgrade requires fresh installed-runtime and HTTP/trace
+privacy proof before changing the fence. Tests exercise the installed reporter
+in fresh processes with a leaking negative control, more than 100 events,
+explicit flush, maximum valid duration, and inherited subprocess environment.
+Actual running-server HTTP evidence is separate and must not be inferred from
+the installed-module regression. A blocked restart blocks local media QA, not
+the wider product or staging deployment.
+
+### Superseding media URL boundary: session-bound opaque registry
+
+Further independent review demonstrated that tracing suppression is insufficient
+as a complete privacy boundary. Next's outer request-handler catch unconditionally
+prints an incoming request URL if a handler escapes; its patched-fetch HMR cache
+can separately print an outgoing fetch URL after a background body-read failure.
+Both demonstrations used only synthetic tokens and no network authorization.
+The earlier console and trace observations remain preserved, not reclassified
+as successful privacy acceptance.
+
+This decision **replaces the token-in-local-query mapping described above**.
+The original HTTPS activity descriptor remains unchanged and passes all existing
+player authority/expiry checks. The client submits a bounded authenticated
+same-origin JSON POST to `/v1/dev-bridge/media`, and receives only opaque local
+locator paths plus expiry. Native video, captions and quality URLs remain absent
+until registration succeeds. Source URLs exist only in the POST body and memory.
+Only GET/HEAD without any query can use a locator. The old signed local route
+is denied; there is no compatibility or remote-source fallback.
+
+The registry belongs to the existing in-memory local session object, not an
+independent credential store. An opaque random locator cannot authorize a byte
+request without the same valid current local session. Registration rechecks the
+session generation after asynchronously reading its body, including replacement
+with an identical staging-cookie string. Logout, upstream 401, replacement,
+eviction, expiry and restart invalidate the associated registry. Every byte
+request still sends the original source and normal staging cookie for backend
+signature, session, tenant, enrollment, binding, object and grant checks.
+
+Bounds are 12 distinct sources and 64 KiB per registration, 12-second body
+timeout, 30 attempts/minute per session, 64 registry entries per session and
+eight sessions. Registration validates exact fixed-staging canonical URL/key
+syntax plus the AC-MEDIA type, playback kind, key agreement, nonempty scope
+metadata, safe timestamps, at most 30 seconds future clock skew, and at most
+one-hour grant envelope. This metadata parsing can reject but cannot validate
+a signature or grant new authority. Registry expiry cannot exceed signed expiry
+or the local session. Reconnect first rechecks the existing activity descriptor
+and then invalidates/re-registers its client mapping, with stale asynchronous
+responses withheld and no automatic progress write.
+
+Signed upstream media bytes use an explicit server-only Node HTTPS transport,
+not Next's instrumented global fetch. It preserves the exact staging target,
+manual redirects, safe request headers, cancellation and Web Stream response
+contract. The gateway's previously reviewed Range, MIME, size, backpressure,
+timeout and sanitized-error gates remain in force. Ordinary JSON API traffic
+keeps its existing fetch path. The trace threshold and validated-version fence
+remain defense-in-depth; they are not the sole privacy boundary.

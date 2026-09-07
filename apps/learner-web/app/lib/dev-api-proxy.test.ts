@@ -18,6 +18,30 @@ const AUTH_BRIDGE_ENV = {
 };
 const STAGING_SESSION = "s".repeat(43);
 const LOCAL_SESSION = "l".repeat(43);
+const MEDIA_KEY =
+  "tenants/tenant-1/media/lesson_video/asset-1/version-1/original/renditions/lesson.mp4";
+const LEGACY_MEDIA_PATH = `/v1/media/playback/${encodeURIComponent(MEDIA_KEY)}?token=AC-MEDIA.fixture.${"s".repeat(43)}`;
+const MEDIA_LOCATOR = "m".repeat(43);
+const MEDIA_PATH = `/v1/dev-bridge/media/${MEDIA_LOCATOR}`;
+function mediaSource(key = MEDIA_KEY, overrides: Record<string, unknown> = {}) {
+  const iat = Math.floor(Date.now() / 1000);
+  const claims = {
+    typ: "AC-MEDIA",
+    token_type: "playback",
+    iat,
+    exp: iat + 3600,
+    key,
+    activity_id: "activity-1",
+    activity_version: "activity-version-1",
+    asset_id: "asset-1",
+    version_id: "version-1",
+    binding_id: "binding-1",
+    enrollment_id: "enrollment-1",
+    delivery_grant_id: "grant-1",
+    ...overrides,
+  };
+  return `https://staging.authorityclosers.com/v1/media/playback/${encodeURIComponent(key)}?token=AC-MEDIA.${Buffer.from(JSON.stringify(claims)).toString("base64url")}.${"s".repeat(43)}`;
+}
 
 function stagingSessionCookie(
   token = STAGING_SESSION,
@@ -45,6 +69,476 @@ function localSessionFromResponse(response: Response): string {
   expect(match).not.toBeNull();
   return match?.[1] ?? "";
 }
+
+describe("authenticated development media streaming", () => {
+  function store(source = mediaSource()) {
+    const value = new InMemoryDevelopmentBridgeSessionStore(
+      Date.now,
+      () => MEDIA_LOCATOR,
+    );
+    value.set(LOCAL_SESSION, STAGING_SESSION);
+    value.registerMedia(LOCAL_SESSION, [source]);
+    return value;
+  }
+  function request(init: RequestInit = {}, path = MEDIA_PATH) {
+    return bridgeRequest(path, {
+      ...init,
+      headers: {
+        cookie: `__Host-ac_dev_qa_session=${LOCAL_SESSION}`,
+        ...Object.fromEntries(new Headers(init.headers)),
+      },
+    });
+  }
+  function bytes(
+    body: BodyInit | null = new Uint8Array([1, 2, 3, 4]),
+    init: ResponseInit = {},
+  ) {
+    return new Response(body, {
+      ...init,
+      headers: {
+        "content-type": "video/mp4",
+        "content-length": "4",
+        "accept-ranges": "bytes",
+        ...Object.fromEntries(new Headers(init.headers)),
+      },
+    });
+  }
+  const run = (
+    incoming: Request,
+    fetcher: Parameters<typeof proxyDevelopmentLearnerApi>[1],
+    sessions = store(),
+  ) =>
+    proxyDevelopmentLearnerApi(
+      incoming,
+      fetcher,
+      AUTH_BRIDGE_ENV,
+      "development",
+      sessions,
+    );
+
+  it("streams GET from fixed staging with only the server-held cookie and safe headers", async () => {
+    const fetcher = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        expect(String(input)).toContain(
+          "https://staging.authorityclosers.com/v1/media/playback/",
+        );
+        expect(new URL(String(input)).searchParams.get("token")).toMatch(
+          /^AC-MEDIA\./,
+        );
+        expect(init?.method).toBe("GET");
+        expect(init?.redirect).toBe("manual");
+        expect(init?.credentials).toBe("omit");
+        expect(init?.cache).toBe("no-store");
+        expect(Object.fromEntries(new Headers(init?.headers))).toEqual({
+          accept: "video/mp4",
+          "accept-encoding": "identity",
+          origin: "https://staging.authorityclosers.com",
+          cookie: `__Host-ac_session=${STAGING_SESSION}`,
+        });
+        return bytes(undefined, {
+          headers: {
+            "set-cookie": stagingSessionCookie(),
+            authorization: "Bearer fixture-secret",
+            location: "https://evil.example",
+            "x-provider-secret": "never-forward",
+            "access-control-allow-origin":
+              "https://staging.authorityclosers.com",
+            etag: `"${"a".repeat(64)}"`,
+          },
+        });
+      },
+    );
+    const response = await run(
+      request({
+        headers: {
+          accept: "video/mp4",
+          referer: "http://localhost:3000/private?token=fixture",
+          "x-request-id": "untrusted",
+          "if-range": '"untrusted"',
+        },
+      }),
+      fetcher,
+    );
+    expect(response.status).toBe(200);
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(
+      new Uint8Array([1, 2, 3, 4]),
+    );
+    expect(response.headers.get("content-length")).toBe("4");
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(response.headers.get("referrer-policy")).toBe("no-referrer");
+    expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+    for (const header of [
+      "set-cookie",
+      "authorization",
+      "location",
+      "x-provider-secret",
+      "access-control-allow-origin",
+    ])
+      expect(response.headers.has(header)).toBe(false);
+  });
+
+  it("forwards HEAD with the same MIME/range policy and no body", async () => {
+    const fetcher = vi.fn(
+      async (_input: RequestInfo | URL, init?: RequestInit) => {
+        expect(init?.method).toBe("HEAD");
+        expect(new Headers(init?.headers).get("range")).toBe("bytes=0-3");
+        return bytes(null, {
+          status: 206,
+          headers: { "content-range": "bytes 0-3/10" },
+        });
+      },
+    );
+    const response = await run(
+      request({ method: "HEAD", headers: { range: "bytes=0-3" } }),
+      fetcher,
+    );
+    expect(response.status).toBe(206);
+    expect(response.body).toBeNull();
+    expect(response.headers.get("content-range")).toBe("bytes 0-3/10");
+    expect(response.headers.get("content-length")).toBe("4");
+  });
+
+  it("supports a single partial range and the existing extensionless caption namespace", async () => {
+    const response = await run(
+      request({ headers: { range: "bytes=5-8" } }),
+      async (_input, init) => {
+        expect(new Headers(init?.headers).get("range")).toBe("bytes=5-8");
+        return bytes(undefined, {
+          status: 206,
+          headers: { "content-range": "bytes 5-8/12" },
+        });
+      },
+    );
+    expect(response.status).toBe(206);
+    expect((await response.arrayBuffer()).byteLength).toBe(4);
+    const caption = await run(
+      request(),
+      async () =>
+        bytes("WEBVTT", {
+          headers: {
+            "content-type": "text/vtt",
+            "content-length": "6",
+            "accept-ranges": "none",
+          },
+        }),
+      store(
+        mediaSource(
+          MEDIA_KEY.replace("lesson.mp4", "captions/en/captions/caption-1"),
+        ),
+      ),
+    );
+    expect(caption.status).toBe(200);
+    expect(await caption.text()).toBe("WEBVTT");
+  });
+
+  it("does not read the complete upstream body before returning headers", async () => {
+    const pull = vi.fn(
+      (output: ReadableStreamDefaultController<Uint8Array>) => {
+        output.enqueue(new Uint8Array([1, 2, 3, 4]));
+        output.close();
+      },
+    );
+    const response = await run(request(), async () =>
+      bytes(new ReadableStream({ pull }, { highWaterMark: 0 })),
+    );
+    expect(pull).not.toHaveBeenCalled();
+    expect(response.status).toBe(200);
+    expect((await response.arrayBuffer()).byteLength).toBe(4);
+    expect(pull).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects malformed paths/queries and disallowed methods before upstream", async () => {
+    const fetcher = vi.fn();
+    for (const path of [
+      LEGACY_MEDIA_PATH,
+      LEGACY_MEDIA_PATH.replace("%2F", "/"),
+      LEGACY_MEDIA_PATH.replace("%2F", "%2f"),
+      LEGACY_MEDIA_PATH.replace("%2F", "%252F"),
+      LEGACY_MEDIA_PATH.replace("original", ".."),
+      MEDIA_PATH + "&token=again",
+      MEDIA_PATH + "&url=https://evil.example",
+      MEDIA_PATH + "?token=fixture",
+      MEDIA_PATH + "/extra",
+      MEDIA_PATH.replace(MEDIA_LOCATOR, "%6D" + MEDIA_LOCATOR.slice(1)),
+    ])
+      expect((await run(request({}, path), fetcher)).status).toBe(403);
+    for (const method of ["POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
+      expect((await run(request({ method }), fetcher)).status).toBe(403);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid ranges before any upstream byte request", async () => {
+    const fetcher = vi.fn();
+    for (const range of [
+      "bytes=-2",
+      "bytes=0-1,3-4",
+      "bytes=3-1",
+      "bytes=8589934592-",
+      "bytes=0-99999999999999999999999999999999999999999",
+      "bytes=01-2",
+    ])
+      expect((await run(request({ headers: { range } }), fetcher)).status).toBe(
+        416,
+      );
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("retains exact origin, credential, local-cookie, and default-off boundaries for media", async () => {
+    const fetcher = vi.fn();
+    for (const headers of [
+      { origin: "https://evil.example" },
+      { host: "localhost:3001" },
+      { "x-forwarded-host": "evil.example" },
+      { "sec-fetch-site": "cross-site" },
+      { authorization: "Bearer fixture" },
+      { "x-api-key": "fixture" },
+      { cookie: `__Host-ac_session=${STAGING_SESSION}` },
+      { cookie: "" },
+      {
+        cookie: `__Host-ac_dev_qa_session=${LOCAL_SESSION}; __Host-ac_dev_qa_session=${LOCAL_SESSION}`,
+      },
+      { cookie: `__Host-ac_dev_admin_qa_session=${LOCAL_SESSION}` },
+    ] as Record<string, string>[])
+      expect([400, 401, 403]).toContain(
+        (await run(request({ headers }), fetcher)).status,
+      );
+    expect(
+      (
+        await proxyDevelopmentLearnerApi(
+          request(),
+          fetcher,
+          AUTH_BRIDGE_ENV,
+          "production",
+          store(),
+        )
+      ).status,
+    ).toBe(404);
+    expect(
+      (
+        await proxyDevelopmentLearnerApi(
+          request(),
+          fetcher,
+          { AC_DEV_API_ORIGIN: "https://api-staging.authorityclosers.com" },
+          "development",
+          store(),
+        )
+      ).status,
+    ).toBe(403);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("rejects redirects, HTML/JSON/HLS successes, compressed or unbounded objects", async () => {
+    for (const method of ["GET", "HEAD"]) {
+      for (const headers of [
+        { "content-type": "application/vnd.apple.mpegurl" },
+        { "content-type": "application/json" },
+        { "content-type": "text/html" },
+        { "content-encoding": "gzip" },
+        { "content-length": "8589934593" },
+        { "content-length": "" },
+      ] as Record<string, string>[]) {
+        const response = await run(request({ method }), async () =>
+          bytes("private fixture body", { headers }),
+        );
+        expect(response.status).toBe(502);
+        expect(await response.text()).not.toContain("private fixture body");
+      }
+    }
+    const response = await run(
+      request(),
+      async () =>
+        new Response("private fixture body", {
+          status: 302,
+          headers: { location: "https://evil.example" },
+        }),
+    );
+    expect(response.status).toBe(502);
+    expect(response.headers.has("location")).toBe(false);
+    expect(await response.text()).not.toContain("private fixture body");
+  });
+
+  it("rejects inconsistent partial ranges and preserves a sanitized 416", async () => {
+    for (const range of [
+      "bytes 1-4/10",
+      "bytes 0-4/10",
+      "bytes 0-3/3",
+      "bytes 0-3/9999999999999999",
+      "nonsense",
+    ]) {
+      const response = await run(
+        request({ headers: { range: "bytes=0-3" } }),
+        async () =>
+          bytes(undefined, {
+            status: 206,
+            headers: { "content-range": range },
+          }),
+      );
+      expect(response.status).toBe(502);
+    }
+    const response = await run(
+      request({ headers: { range: "bytes=20-" } }),
+      async () =>
+        new Response("private fixture error", {
+          status: 416,
+          headers: { "content-range": "bytes */10" },
+        }),
+    );
+    expect(response.status).toBe(416);
+    expect(response.headers.get("content-range")).toBe("bytes */10");
+    expect(response.body).toBeNull();
+  });
+
+  it("sanitizes upstream 401 and invalidates the local session; logout also blocks later bytes", async () => {
+    const sessions = store();
+    const response = await run(
+      request(),
+      async () => new Response("private fixture error", { status: 401 }),
+      sessions,
+    );
+    expect(response.status).toBe(401);
+    expect(await response.text()).not.toContain("private fixture error");
+    expect(response.headers.get("set-cookie")).toContain("Max-Age=0");
+    expect(sessions.get(LOCAL_SESSION)).toBeNull();
+    const nextFetch = vi.fn();
+    expect((await run(request(), nextFetch, sessions)).status).toBe(401);
+    expect(nextFetch).not.toHaveBeenCalled();
+    sessions.set(LOCAL_SESSION, STAGING_SESSION);
+    await run(
+      request({ method: "POST" }, "/v1/auth/logout"),
+      async () => new Response(null, { status: 204 }),
+      sessions,
+    );
+    expect((await run(request(), nextFetch, sessions)).status).toBe(401);
+  });
+
+  it("keeps incoming cancellation active after headers and sanitizes stream errors", async () => {
+    const incoming = new AbortController();
+    let upstreamSignal: AbortSignal | null | undefined;
+    const cancel = vi.fn();
+    const response = await run(
+      request({ signal: incoming.signal }),
+      async (_input, init) => {
+        upstreamSignal = init?.signal;
+        return bytes(new ReadableStream({ cancel }, { highWaterMark: 0 }));
+      },
+    );
+    const pending = response.body!.getReader().read();
+    const observed = expect(pending).rejects.toThrow(
+      "Local media stream is unavailable or cancelled.",
+    );
+    incoming.abort(new Error("private fixture reason"));
+    await observed;
+    expect(upstreamSignal?.aborted).toBe(true);
+    expect(cancel).toHaveBeenCalled();
+  });
+
+  it("does not fetch already-aborted media requests", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const fetcher = vi.fn();
+    expect(
+      (await run(request({ signal: controller.signal }), fetcher)).status,
+    ).toBe(504);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("times out waiting for upstream media headers without exposing its exception", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetcher = vi.fn(
+        (_input: RequestInfo | URL, init?: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener(
+              "abort",
+              () => reject(new Error("private upstream URL fixture")),
+              { once: true },
+            );
+          }),
+      );
+      const pending = run(request(), fetcher);
+      await vi.advanceTimersByTimeAsync(12_001);
+      const response = await pending;
+      expect(response.status).toBe(504);
+      expect(await response.text()).not.toContain(
+        "private upstream URL fixture",
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("aborts upstream when the response consumer cancels after receiving bytes", async () => {
+    let upstreamSignal: AbortSignal | null | undefined;
+    const cancel = vi.fn();
+    const response = await run(request(), async (_input, init) => {
+      upstreamSignal = init?.signal;
+      return bytes(
+        new ReadableStream(
+          {
+            pull(output) {
+              output.enqueue(new Uint8Array([1]));
+            },
+            cancel,
+          },
+          { highWaterMark: 0 },
+        ),
+      );
+    });
+    const reader = response.body!.getReader();
+    expect((await reader.read()).value).toEqual(new Uint8Array([1]));
+    await reader.cancel("private consumer reason");
+    expect(upstreamSignal?.aborted).toBe(true);
+    expect(cancel).toHaveBeenCalled();
+  });
+
+  it("times out a stalled body read and an unconsumed long-lived response", async () => {
+    vi.useFakeTimers();
+    try {
+      for (const read of [true, false]) {
+        let upstreamSignal: AbortSignal | null | undefined;
+        const response = await run(request(), async (_input, init) => {
+          upstreamSignal = init?.signal;
+          return bytes(new ReadableStream({}, { highWaterMark: 0 }));
+        });
+        const reader = response.body!.getReader();
+        const pending = read ? reader.read() : null;
+        const observed = pending
+          ? expect(pending).rejects.toThrow("Local media stream")
+          : null;
+        await vi.advanceTimersByTimeAsync(read ? 30_001 : 30 * 60 * 1000 + 1);
+        if (observed) await observed;
+        else await expect(reader.read()).rejects.toThrow("Local media stream");
+        expect(upstreamSignal?.aborted).toBe(true);
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("rejects truncated/oversized bodies without forwarding raw provider errors", async () => {
+    for (const body of [new Uint8Array([1]), new Uint8Array([1, 2, 3, 4, 5])]) {
+      const response = await run(request(), async () => bytes(body));
+      await expect(response.arrayBuffer()).rejects.toThrow(
+        "Local media stream",
+      );
+    }
+    const response = await run(request(), async () =>
+      bytes(
+        new ReadableStream(
+          {
+            pull() {
+              throw new Error("private provider token details");
+            },
+          },
+          { highWaterMark: 0 },
+        ),
+      ),
+    );
+    await expect(response.arrayBuffer()).rejects.toThrow(
+      "Local media stream is unavailable or cancelled.",
+    );
+  });
+});
 
 describe("development learner API proxy", () => {
   it("is disabled outside development", () => {
