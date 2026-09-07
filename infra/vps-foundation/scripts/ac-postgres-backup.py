@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import datetime as dt
+import errno
 import hashlib
 import json
 import os
@@ -57,6 +58,9 @@ R2_GUARD_CLIENT_TIMEOUT_SECONDS = (
     R2_GUARD_UNIT_TIMEOUT_SECONDS + R2_GUARD_STOP_TIMEOUT_SECONDS + R2_GUARD_CLIENT_GRACE_SECONDS
 )
 RESTIC_UPLOAD_TIMEOUT_SECONDS = 4 * 60
+RESTIC_REPOSITORY_LOCK_WAIT_SECONDS = 60
+RESTIC_REPOSITORY_LOCK_POLL_SECONDS = 0.25
+UPLOAD_DIAGNOSTIC_MAX_BYTES = 8192
 OPERATION_KILL_AFTER_SECONDS = 30
 RESTIC_TAG = "authority-closers-postgres-logical"
 ENVIRONMENTS = ("staging", "production")
@@ -177,6 +181,7 @@ def worst_case_two_environment_backup_seconds() -> int:
         + PG_RESTORE_LIST_TIMEOUT_SECONDS
         + PG_RESTORE_LIST_TIMEOUT_SECONDS
         + RESTIC_UPLOAD_TIMEOUT_SECONDS
+        + RESTIC_REPOSITORY_LOCK_WAIT_SECONDS
         + OPERATION_KILL_AFTER_SECONDS
         + 30
         + R2_GUARD_CLIENT_TIMEOUT_SECONDS
@@ -1000,15 +1005,36 @@ def secure_lock_file(host_root: Path, filename: str) -> Iterator[int]:
 
 
 @contextlib.contextmanager
-def repository_lock(host_root: Path) -> Iterator[int]:
+def repository_lock(
+    host_root: Path, *, timeout_seconds: float = RESTIC_REPOSITORY_LOCK_WAIT_SECONDS
+) -> Iterator[int]:
     with secure_lock_file(host_root, "ac-restic-repository.lock") as lock_fd:
+        wait_for_repository_lock(lock_fd, timeout_seconds=timeout_seconds)
+        yield lock_fd
+
+
+def wait_for_repository_lock(
+    lock_fd: int, *, timeout_seconds: float = RESTIC_REPOSITORY_LOCK_WAIT_SECONDS
+) -> None:
+    if not 0 < timeout_seconds <= RESTIC_REPOSITORY_LOCK_WAIT_SECONDS:
+        raise BackupError("The Restic repository lock wait bound is invalid.")
+    deadline = time.monotonic() + timeout_seconds
+    while True:
         try:
             fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return
         except OSError as exc:
-            raise BackupError(
-                "Another Restic backup, prune, or logical dump is already active."
-            ) from exc
-        yield lock_fd
+            if exc.errno not in (errno.EACCES, errno.EAGAIN):
+                raise BackupError(
+                    "The Restic repository lock could not be acquired safely."
+                ) from exc
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise BackupError(
+                    "The Restic repository lock wait timed out; "
+                    "another backup, prune, or restore proof remains active."
+                ) from exc
+            time.sleep(min(RESTIC_REPOSITORY_LOCK_POLL_SECONDS, remaining))
 
 
 @contextlib.contextmanager
@@ -1054,23 +1080,108 @@ def upload_dump(
     if repository_lock_fd is not None:
         environment_vars["AC_RESTIC_LOCK_FD"] = str(repository_lock_fd)
     try:
-        run_options = {
-            "check": True,
-            "stdout": subprocess.DEVNULL,
-            "stderr": subprocess.DEVNULL,
-            "env": environment_vars,
-        }
-        if os.name == "posix" and repository_lock_fd is not None:
-            run_options["pass_fds"] = (repository_lock_fd,)
-        subprocess.run(  # noqa: S603 - command is fixed to the installed Infisical/Restic wrappers
+        process = subprocess.Popen(  # noqa: S603 - fixed installed Infisical/Restic wrappers
             command,
-            timeout=RESTIC_UPLOAD_TIMEOUT_SECONDS + OPERATION_KILL_AFTER_SECONDS + 30,
-            **run_options,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            env=environment_vars,
+            pass_fds=(repository_lock_fd,)
+            if os.name == "posix" and repository_lock_fd is not None
+            else (),
+            start_new_session=(os.name == "posix"),
         )
-    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+    except OSError as exc:
         raise BackupError(
-            "The encrypted off-host logical snapshot failed; the local dump was retained."
+            "The encrypted off-host logical snapshot failed "
+            "(stage=off_host_upload, reason=launch_failed); the local dump was retained."
         ) from exc
+    assert process.stderr is not None
+    diagnostic_tail = bytearray()
+    diagnostic_read_failed = threading.Event()
+
+    def drain_diagnostics() -> None:
+        # Drain continuously to avoid pipe deadlock, retaining only a bounded
+        # in-memory tail. Raw child output is never persisted or emitted.
+        assert process.stderr is not None
+        try:
+            while chunk := process.stderr.read(1024):
+                diagnostic_tail.extend(chunk)
+                del diagnostic_tail[:-UPLOAD_DIAGNOSTIC_MAX_BYTES]
+        except OSError:
+            diagnostic_read_failed.set()
+        finally:
+            process.stderr.close()
+
+    reader = threading.Thread(
+        target=drain_diagnostics, name=f"ac-upload-diagnostics-{process.pid}", daemon=True
+    )
+    reader.start()
+    timed_out = False
+    try:
+        process.wait(timeout=RESTIC_UPLOAD_TIMEOUT_SECONDS + OPERATION_KILL_AFTER_SECONDS + 30)
+    except subprocess.TimeoutExpired:
+        timed_out = True
+        terminate_process(process)
+    finally:
+        reader.join(timeout=1)
+    if reader.is_alive():
+        # A child retaining stderr must not leave an unbounded background reader
+        # or be counted as a successful off-host write.
+        terminate_process(process)
+        reader.join(timeout=1)
+        if reader.is_alive() and os.name == "posix":
+            # The leader may have exited before TERM while a descendant kept
+            # stderr open. Escalate only this upload's start_new_session group.
+            with contextlib.suppress(ProcessLookupError):
+                os.killpg(process.pid, signal.SIGKILL)
+            reader.join(timeout=1)
+        diagnostic_read_failed.set()
+    if diagnostic_read_failed.is_set():
+        raise BackupError(
+            "The encrypted off-host logical snapshot failed "
+            "(stage=off_host_upload, reason=diagnostics_unavailable); "
+            "the local dump was retained."
+        )
+    if timed_out or process.returncode != 0:
+        if timed_out or process.returncode == 124:
+            reason = "timeout"
+        elif process.returncode == 137 or (
+            process.returncode is not None and process.returncode < 0
+        ):
+            reason = "terminated"
+        else:
+            reason = upload_failure_reason(bytes(diagnostic_tail))
+        raise BackupError(
+            "The encrypted off-host logical snapshot failed "
+            f"(stage=off_host_upload, reason={reason}, exit_status={process.returncode}); "
+            "the local dump was retained."
+        )
+
+
+def upload_failure_reason(stderr_tail: bytes) -> str:
+    """Return only a fixed diagnostic label, never child text or credentials."""
+    diagnostic = stderr_tail.lower()
+    signatures = (
+        (
+            b"ac_backup_failure=repository_lock_descriptor_invalid",
+            "repository_lock_descriptor_invalid",
+        ),
+        (b"ac_backup_failure=repository_lock_timeout", "repository_lock_timeout"),
+        (b"ac_backup_failure=repository_lock_unavailable", "repository_lock_unavailable"),
+        (b"ac_backup_failure=r2_usage_guard", "r2_usage_guard_failed"),
+        (b"unable to create lock in backend", "remote_repository_lock_contention"),
+        (b"repository is already locked", "remote_repository_lock_contention"),
+        (b"accessdenied", "remote_authorization_failed"),
+        (b"invalidaccesskeyid", "remote_authorization_failed"),
+        (b"signaturedoesnotmatch", "remote_authorization_failed"),
+        (b"unauthorized", "authentication_failed"),
+        (b"no such host", "remote_name_resolution_failed"),
+        (b"connection refused", "remote_connection_failed"),
+        (b"i/o timeout", "remote_timeout"),
+    )
+    return next(
+        (label for signature, label in signatures if signature in diagnostic), "command_failed"
+    )
 
 
 def publish_snapshot(

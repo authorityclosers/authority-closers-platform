@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import copy
+import json
 import os
 import re
 import shlex
@@ -41,6 +43,15 @@ INFISICAL_RUNNER = (ROOT / "infra" / "vps-foundation" / "scripts" / "ac-infisica
 WORKFLOW = (ROOT / ".github" / "workflows" / "application.yml").read_text(encoding="utf-8")
 GIT_ATTRIBUTES = (ROOT / ".gitattributes").read_text(encoding="utf-8")
 ENV_EXAMPLE = (ROOT / ".env.example").read_text(encoding="utf-8")
+LOG_CREDENTIAL_QUERY_KEYS = {
+    "code",
+    "state",
+    "access_token",
+    "refresh_token",
+    "id_token",
+    "client_secret",
+    "token",
+}
 
 
 def _bash_executable() -> str:
@@ -188,12 +199,162 @@ def test_runtime_containers_are_not_privileged_or_host_published() -> None:
     assert COMPOSE.count("pull_policy: never") == 5
 
 
-def test_edge_and_application_logs_redact_oauth_credentials() -> None:
+def test_edge_and_application_logs_redact_oauth_and_media_credentials() -> None:
     assert '"--no-access-log"' in PYTHON_DOCKERFILE
     assert "request>uri query" in CADDYFILE
-    for field in ("code", "state", "access_token", "refresh_token", "id_token", "client_secret"):
+    assert CADDYFILE.count("import credential_query_redaction") == 2
+    assert "log default {" in CADDYFILE.split("(base_security_headers)", maxsplit=1)[0]
+    for field in LOG_CREDENTIAL_QUERY_KEYS:
         assert f"replace {field} REDACTED" in CADDYFILE
     assert "wrap json" in CADDYFILE
+
+
+@pytest.fixture(scope="module")
+def adapted_foundation_caddy_config() -> dict:
+    """Adapt checked-in bytes; never start a server or contact the deployed VPS."""
+    caddy = shutil.which("caddy")
+    if caddy:
+        command = [caddy, "adapt", "--config", "-", "--adapter", "caddyfile"]
+    else:
+        docker = shutil.which("docker")
+        try:
+            available = (
+                docker is not None
+                and subprocess.run(  # noqa: S603 - discovered CLI, fixed read-only probe
+                    [docker, "info", "--format", "{{.ServerVersion}}"],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                    timeout=15,
+                ).returncode
+                == 0
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            available = False
+        if not available:
+            if os.environ.get("CI", "").lower() == "true":
+                pytest.fail("CI requires Caddy or Docker for real edge-log adaptation proof")
+            pytest.skip("Caddy and Docker daemon unavailable; live adaptation is a separate proof")
+        images = (ROOT / "infra/vps-foundation/config/release/foundation-images.env").read_text(
+            encoding="utf-8"
+        )
+        image = re.search(r"^CADDY_IMAGE=(caddy@sha256:[0-9a-f]{64})$", images, re.MULTILINE)
+        assert image, "Use only the reviewed digest-pinned foundation Caddy image"
+        # The image binary carries cap_net_bind_service=ep. Linux can refuse
+        # its exec with an empty bounding set even under no-new-privileges.
+        # A non-root, same-byte copy drops that xattr without granting any
+        # capabilities or changing the image. Its sole writable path is tmpfs.
+        parser_script = (
+            "set -eu; umask 077; "
+            'test "$(stat -c %u:%g:%a /run/ac-caddy-parser)" = 65534:65534:700; '
+            "cp /usr/bin/caddy /run/ac-caddy-parser/caddy; "
+            "chmod 0500 /run/ac-caddy-parser/caddy; "
+            "original=$(sha256sum /usr/bin/caddy); "
+            "copied=$(sha256sum /run/ac-caddy-parser/caddy); "
+            'test "${original%% *}" = "${copied%% *}"; '
+            "capabilities=$(getcap /run/ac-caddy-parser/caddy); "
+            'test -z "$capabilities"; '
+            "exec /run/ac-caddy-parser/caddy adapt --config - --adapter caddyfile"
+        )
+        command = [
+            docker,
+            "run",
+            "--rm",
+            "--interactive",
+            "--network",
+            "none",
+            "--read-only",
+            "--cap-drop",
+            "ALL",
+            "--security-opt",
+            "no-new-privileges:true",
+            "--user",
+            "65534:65534",
+            "--memory",
+            "128m",
+            "--cpus",
+            "0.5",
+            "--pids-limit",
+            "64",
+            "--log-driver",
+            "none",
+            "--tmpfs",
+            "/run/ac-caddy-parser:rw,nosuid,nodev,exec,size=64m,mode=0700,uid=65534,gid=65534",
+            image[1],
+            "/bin/sh",
+            "-c",
+            parser_script,
+        ]
+    result = subprocess.run(  # noqa: S603 - fixed parser; stdin source, no server/listener or mounted files
+        command,
+        input=CADDYFILE,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=120,
+    )
+    assert result.returncode == 0, "Caddy could not adapt the checked-in edge configuration"
+    return json.loads(result.stdout)
+
+
+def _require_credential_filter(logger: dict) -> None:
+    encoder = logger["encoder"]
+    assert encoder["format"] == "filter"
+    assert encoder["wrap"]["format"] == "json"
+    query = encoder["fields"]["request>uri"]
+    assert query["filter"] == "query"
+    assert len(query["actions"]) == len(LOG_CREDENTIAL_QUERY_KEYS)
+    assert {action["parameter"] for action in query["actions"]} == LOG_CREDENTIAL_QUERY_KEYS
+    assert all(
+        action["type"] == "replace" and action["value"] == "REDACTED" for action in query["actions"]
+    )
+
+
+def _require_all_caddy_request_logs_redacted(config: dict) -> None:
+    logs = config["logging"]["logs"]
+    runtime = logs["default"]
+    _require_credential_filter(runtime)
+    # The default keeps HTTP error logs; access has its separate stdout sink.
+    assert not runtime.get("include")
+    assert runtime.get("writer", {}).get("output", "stderr") == "stderr"
+    access_logs = {name: log for name, log in logs.items() if name != "default"}
+    assert len(access_logs) == 1
+    access_name, access = next(iter(access_logs.items()))
+    assert runtime["exclude"] == [f"http.log.access.{access_name}"]
+    assert access["include"] == [f"http.log.access.{access_name}"]
+    assert not access.get("exclude")
+    assert access["writer"]["output"] == "stdout"
+    _require_credential_filter(access)
+    servers = config["apps"]["http"]["servers"]
+    assert len(servers) == 1
+    assert next(iter(servers.values()))["logs"]["default_logger_name"] == access_name
+
+
+def test_real_caddy_adaptation_redacts_access_and_runtime_error_destinations(
+    adapted_foundation_caddy_config: dict,
+) -> None:
+    _require_all_caddy_request_logs_redacted(adapted_foundation_caddy_config)
+
+
+@pytest.mark.parametrize(
+    "mutation", ["runtime-unfiltered", "access-token-missing", "error-excluded"]
+)
+def test_adapted_log_assertions_reject_incomplete_redaction(
+    adapted_foundation_caddy_config: dict,
+    mutation: str,
+) -> None:
+    candidate = copy.deepcopy(adapted_foundation_caddy_config)
+    logs = candidate["logging"]["logs"]
+    if mutation == "runtime-unfiltered":
+        del logs["default"]["encoder"]
+    elif mutation == "access-token-missing":
+        access = next(log for name, log in logs.items() if name != "default")
+        actions = access["encoder"]["fields"]["request>uri"]["actions"]
+        actions[:] = [action for action in actions if action["parameter"] != "token"]
+    else:
+        logs["default"]["exclude"].append("http.log.error")
+    with pytest.raises((AssertionError, KeyError)):
+        _require_all_caddy_request_logs_redacted(candidate)
 
 
 def test_release_fails_closed_on_identity_and_database_secrets() -> None:

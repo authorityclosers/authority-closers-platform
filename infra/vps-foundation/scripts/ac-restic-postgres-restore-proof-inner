@@ -41,9 +41,19 @@ chown root:acops "$restic_lock_file"
   printf 'The private Restic lock descriptor is unsafe.\n' >&2
   exit 1
 }
-flock --exclusive --nonblock 9 || {
-  printf 'Another Restic backup, prune, or restore proof is active.\n' >&2
-  exit 1
-}
+# Wait only for local contention; invalid descriptors/configuration fail closed.
+restic_lock_wait_seconds=600
+if flock --exclusive --timeout "$restic_lock_wait_seconds" --conflict-exit-code 75 9 2>/dev/null; then
+  :
+else
+  restic_lock_status=$?
+  if ((restic_lock_status == 75)); then
+    printf 'Restic repository lock wait timed out after %s seconds.\n' "$restic_lock_wait_seconds" >&2
+  else
+    printf 'Restic repository lock acquisition failed safely.\n' >&2
+  fi
+  exit "$restic_lock_status"
+fi
+# Repository lock acquired.
 
 exec /usr/local/libexec/authority-closers/ac-restic-postgres-restore-proof.py "$@"

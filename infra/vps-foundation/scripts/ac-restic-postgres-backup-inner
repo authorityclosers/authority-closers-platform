@@ -49,8 +49,12 @@ if [[ -n "${AC_RESTIC_LOCK_FD:-}" ]]; then
     printf 'Invalid inherited Restic lock descriptor.\n' >&2
     exit 1
   }
-  flock --exclusive --nonblock "$AC_RESTIC_LOCK_FD" || {
-    printf 'Another Restic backup or prune is already active.\n' >&2
+  [[ -e "/proc/self/fd/$AC_RESTIC_LOCK_FD" ]] || {
+    printf 'AC_BACKUP_FAILURE=repository_lock_descriptor_invalid\n' >&2
+    exit 1
+  }
+  flock --exclusive --nonblock "$AC_RESTIC_LOCK_FD" 2>/dev/null || {
+    printf 'AC_BACKUP_FAILURE=repository_lock_unavailable\n' >&2
     exit 1
   }
 else
@@ -83,15 +87,28 @@ else
     printf 'The Restic repository lock descriptor has an unsafe identity.\n' >&2
     exit 1
   }
-  flock --exclusive --nonblock 9 || {
-    printf 'Another Restic backup or prune is already active.\n' >&2
-    exit 1
-  }
+  # Wait only for local contention; inherited locks must already be held.
+  restic_lock_wait_seconds=60
+  if flock --exclusive --timeout "$restic_lock_wait_seconds" --conflict-exit-code 75 9 2>/dev/null; then
+    :
+  else
+    restic_lock_status=$?
+    if ((restic_lock_status == 75)); then
+      printf 'AC_BACKUP_FAILURE=repository_lock_timeout\n' >&2
+    else
+      printf 'AC_BACKUP_FAILURE=repository_lock_unavailable\n' >&2
+    fi
+    exit "$restic_lock_status"
+  fi
+  # Repository lock acquired.
 fi
 
 # The guard queries live R2 usage and adds the full retained logical-dump model
 # before this individual Restic write. It is deliberately repeated per write.
-/usr/local/libexec/authority-closers/r2-usage-guard
+if ! /usr/local/libexec/authority-closers/r2-usage-guard; then
+  printf 'AC_BACKUP_FAILURE=r2_usage_guard\n' >&2
+  exit 1
+fi
 
 restic backup \
   --retry-lock 0 \

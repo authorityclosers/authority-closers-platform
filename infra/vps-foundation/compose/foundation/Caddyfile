@@ -1,7 +1,27 @@
+(credential_query_redaction) {
+	request>uri query {
+		replace code REDACTED
+		replace state REDACTED
+		replace access_token REDACTED
+		replace refresh_token REDACTED
+		replace id_token REDACTED
+		replace client_secret REDACTED
+		replace token REDACTED
+	}
+}
+
 {
 	admin off
 	auto_https off
 	persist_config off
+	# Runtime HTTP errors can contain the original request URI too. The site
+	# access logger below is a separate destination and cannot redact these.
+	log default {
+		format filter {
+			import credential_query_redaction
+			wrap json
+		}
+	}
 }
 
 (base_security_headers) {
@@ -132,14 +152,7 @@
 	log {
 		output stdout
 		format filter {
-			request>uri query {
-				replace code REDACTED
-				replace state REDACTED
-				replace access_token REDACTED
-				replace refresh_token REDACTED
-				replace id_token REDACTED
-				replace client_secret REDACTED
-			}
+			import credential_query_redaction
 			wrap json
 		}
 	}
