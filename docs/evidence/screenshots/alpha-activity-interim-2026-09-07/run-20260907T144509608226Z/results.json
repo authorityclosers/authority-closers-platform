@@ -1,0 +1,1419 @@
+{
+  "evidenceClass": "Synthetic API fixtures against local development UI; interim presentation evidence only; not live, streaming, or performance proof",
+  "interimOnly": true,
+  "baseUrl": "http://learner.localhost:3100",
+  "createdUtc": "2026-09-07T14:45:09.610218+00:00",
+  "freshBrowserContext": true,
+  "userProfileLoaded": false,
+  "cookiesLoaded": false,
+  "storageStateLoaded": false,
+  "serverWritesAllowed": false,
+  "unknownApiReadsAllowed": false,
+  "screenshotMode": "interim",
+  "browserVersion": "152.0.7977.82",
+  "cases": [
+    {
+      "fixture": "73dfbbf7-5f2c-5e88-ad27-e5c84c65690f",
+      "screenId": "ACT-01",
+      "kind": "VIDEO",
+      "mediaState": "unavailable",
+      "theme": "light",
+      "viewport": {
+        "width": 320,
+        "height": 844
+      },
+      "evidenceClass": "Synthetic API fixtures against local development UI; interim presentation evidence only; not live, streaming, or performance proof",
+      "checks": {
+        "title": {
+          "count": 1,
+          "text": "Watch the Module 1 shift"
+        },
+        "leakyCopy": {
+          "forbidden_copy_absent": true,
+          "floating_help_count": 0
+        },
+        "media": {
+          "stage": "unavailable",
+          "accessibleLabel": "Lesson video unavailable",
+          "videoElements": 0
+        },
+        "videoContext": {
+          "aboutThisLesson": true,
+          "promptMovedOutOfTopLevelPrompt": true
+        },
+        "modulePathKeyboard": {
+          "links": 5,
+          "currentStepCount": 1,
+          "focus": {
+            "tag": "A",
+            "text": "Watch\nAvailable",
+            "visible": true,
+            "focusVisible": true,
+            "outline": "solid",
+            "outlineWidth": "3px",
+            "boxShadow": "none"
+          },
+          "variant": "mobile-disclosure"
+        },
+        "layout": {
+          "viewport": {
+            "width": 320,
+            "height": 844
+          },
+          "documentWidth": 320,
+          "horizontalOverflow": 0,
+          "offenders": []
+        },
+        "touchTargets": {
+          "checked": 17,
+          "undersized": []
+        },
+        "reducedMotion": {
+          "mediaQuery": true,
+          "dataMotion": "reduced",
+          "dataReducedMotion": "true"
+        },
+        "requestedTheme": {
+          "dataTheme": "light",
+          "preference": "light",
+          "bodyBackground": "rgb(242, 240, 232)",
+          "bodyText": "rgb(17, 20, 15)"
+        }
+      },
+      "screenshots": [
+        "docs\\evidence\\screenshots\\alpha-activity-interim-2026-09-07\\run-20260907T144509608226Z\\interim-activity-act-01-unavailable-light-320x844.png"
+      ],
+      "network": {
+        "fixture_reads": [
+          "GET /v1/me",
+          "GET /v1/activities/73dfbbf7-5f2c-5e88-ad27-e5c84c65690f",
+          "GET /v1/me",
+          "GET /v1/profile/avatar",
+          "GET /v1/learning/e2e-canonical-free-course"
+        ],
+        "unknown_api_blocked": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "page_errors": [],
+      "console_errors": [],
+      "failures": []
+    },
+    {
+      "fixture": "73dfbbf7-5f2c-5e88-ad27-e5c84c65690f",
+      "screenId": "ACT-01",
+      "kind": "VIDEO",
+      "mediaState": "unavailable",
+      "theme": "light",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "evidenceClass": "Synthetic API fixtures against local development UI; interim presentation evidence only; not live, streaming, or performance proof",
+      "checks": {
+        "title": {
+          "count": 1,
+          "text": "Watch the Module 1 shift"
+        },
+        "leakyCopy": {
+          "forbidden_copy_absent": true,
+          "floating_help_count": 0
+        },
+        "media": {
+          "stage": "unavailable",
+          "accessibleLabel": "Lesson video unavailable",
+          "videoElements": 0
+        },
+        "videoContext": {
+          "aboutThisLesson": true,
+          "promptMovedOutOfTopLevelPrompt": true
+        },
+        "modulePathKeyboard": {
+          "links": 5,
+          "currentStepCount": 1,
+          "focus": {
+            "tag": "A",
+            "text": "Watch\nAvailable",
+            "visible": true,
+            "focusVisible": true,
+            "outline": "solid",
+            "outlineWidth": "3px",
+            "boxShadow": "none"
+          },
+          "variant": "mobile-disclosure"
+        },
+        "layout": {
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "documentWidth": 390,
+          "horizontalOverflow": 0,
+          "offenders": []
+        },
+        "touchTargets": {
+          "checked": 17,
+          "undersized": []
+        },
+        "reducedMotion": {
+          "mediaQuery": true,
+          "dataMotion": "reduced",
+          "dataReducedMotion": "true"
+        },
+        "requestedTheme": {
+          "dataTheme": "light",
+          "preference": "light",
+          "bodyBackground": "rgb(242, 240, 232)",
+          "bodyText": "rgb(17, 20, 15)"
+        }
+      },
+      "screenshots": [
+        "docs\\evidence\\screenshots\\alpha-activity-interim-2026-09-07\\run-20260907T144509608226Z\\interim-activity-act-01-unavailable-light-390x844.png"
+      ],
+      "network": {
+        "fixture_reads": [
+          "GET /v1/me",
+          "GET /v1/activities/73dfbbf7-5f2c-5e88-ad27-e5c84c65690f",
+          "GET /v1/me",
+          "GET /v1/profile/avatar",
+          "GET /v1/learning/e2e-canonical-free-course"
+        ],
+        "unknown_api_blocked": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "page_errors": [],
+      "console_errors": [],
+      "failures": []
+    },
+    {
+      "fixture": "73dfbbf7-5f2c-5e88-ad27-e5c84c65690f",
+      "screenId": "ACT-01",
+      "kind": "VIDEO",
+      "mediaState": "unavailable",
+      "theme": "light",
+      "viewport": {
+        "width": 768,
+        "height": 900
+      },
+      "evidenceClass": "Synthetic API fixtures against local development UI; interim presentation evidence only; not live, streaming, or performance proof",
+      "checks": {
+        "title": {
+          "count": 1,
+          "text": "Watch the Module 1 shift"
+        },
+        "leakyCopy": {
+          "forbidden_copy_absent": true,
+          "floating_help_count": 0
+        },
+        "media": {
+          "stage": "unavailable",
+          "accessibleLabel": "Lesson video unavailable",
+          "videoElements": 0
+        },
+        "videoContext": {
+          "aboutThisLesson": true,
+          "promptMovedOutOfTopLevelPrompt": true
+        },
+        "modulePathKeyboard": {
+          "links": 5,
+          "currentStepCount": 1,
+          "focus": {
+            "tag": "A",
+            "text": "Reflect\nAvailable",
+            "visible": true,
+            "focusVisible": true,
+            "outline": "solid",
+            "outlineWidth": "3px",
+            "boxShadow": "none"
+          },
+          "variant": "desktop-panel"
+        },
+        "layout": {
+          "viewport": {
+            "width": 768,
+            "height": 900
+          },
+          "documentWidth": 768,
+          "horizontalOverflow": 0,
+          "offenders": []
+        },
+        "touchTargets": {
+          "checked": 17,
+          "undersized": []
+        },
+        "reducedMotion": {
+          "mediaQuery": true,
+          "dataMotion": "reduced",
+          "dataReducedMotion": "true"
+        },
+        "requestedTheme": {
+          "dataTheme": "light",
+          "preference": "light",
+          "bodyBackground": "rgb(242, 240, 232)",
+          "bodyText": "rgb(17, 20, 15)"
+        }
+      },
+      "screenshots": [
+        "docs\\evidence\\screenshots\\alpha-activity-interim-2026-09-07\\run-20260907T144509608226Z\\interim-activity-act-01-unavailable-light-768x900.png"
+      ],
+      "network": {
+        "fixture_reads": [
+          "GET /v1/me",
+          "GET /v1/activities/73dfbbf7-5f2c-5e88-ad27-e5c84c65690f",
+          "GET /v1/me",
+          "GET /v1/profile/avatar",
+          "GET /v1/learning/e2e-canonical-free-course"
+        ],
+        "unknown_api_blocked": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "page_errors": [],
+      "console_errors": [],
+      "failures": []
+    },
+    {
+      "fixture": "73dfbbf7-5f2c-5e88-ad27-e5c84c65690f",
+      "screenId": "ACT-01",
+      "kind": "VIDEO",
+      "mediaState": "unavailable",
+      "theme": "light",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "evidenceClass": "Synthetic API fixtures against local development UI; interim presentation evidence only; not live, streaming, or performance proof",
+      "checks": {
+        "title": {
+          "count": 1,
+          "text": "Watch the Module 1 shift"
+        },
+        "leakyCopy": {
+          "forbidden_copy_absent": true,
+          "floating_help_count": 0
+        },
+        "media": {
+          "stage": "unavailable",
+          "accessibleLabel": "Lesson video unavailable",
+          "videoElements": 0
+        },
+        "videoContext": {
+          "aboutThisLesson": true,
+          "promptMovedOutOfTopLevelPrompt": true
+        },
+        "modulePathKeyboard": {
+          "links": 5,
+          "currentStepCount": 1,
+          "focus": {
+            "tag": "A",
+            "text": "Reflect\nAvailable",
+            "visible": true,
+            "focusVisible": true,
+            "outline": "solid",
+            "outlineWidth": "3px",
+            "boxShadow": "none"
+          },
+          "variant": "desktop-panel"
+        },
+        "layout": {
+          "viewport": {
+            "width": 1440,
+            "height": 900
+          },
+          "documentWidth": 1440,
+          "horizontalOverflow": 0,
+          "offenders": []
+        },
+        "touchTargets": {
+          "checked": 17,
+          "undersized": []
+        },
+        "reducedMotion": {
+          "mediaQuery": true,
+          "dataMotion": "reduced",
+          "dataReducedMotion": "true"
+        },
+        "requestedTheme": {
+          "dataTheme": "light",
+          "preference": "light",
+          "bodyBackground": "rgb(242, 240, 232)",
+          "bodyText": "rgb(17, 20, 15)"
+        }
+      },
+      "screenshots": [
+        "docs\\evidence\\screenshots\\alpha-activity-interim-2026-09-07\\run-20260907T144509608226Z\\interim-activity-act-01-unavailable-light-1440x900.png"
+      ],
+      "network": {
+        "fixture_reads": [
+          "GET /v1/me",
+          "GET /v1/activities/73dfbbf7-5f2c-5e88-ad27-e5c84c65690f",
+          "GET /v1/me",
+          "GET /v1/profile/avatar",
+          "GET /v1/learning/e2e-canonical-free-course"
+        ],
+        "unknown_api_blocked": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "page_errors": [],
+      "console_errors": [],
+      "failures": []
+    },
+    {
+      "fixture": "73dfbbf7-5f2c-5e88-ad27-e5c84c65690f",
+      "screenId": "ACT-01",
+      "kind": "VIDEO",
+      "mediaState": "unavailable",
+      "theme": "dark",
+      "viewport": {
+        "width": 320,
+        "height": 844
+      },
+      "evidenceClass": "Synthetic API fixtures against local development UI; interim presentation evidence only; not live, streaming, or performance proof",
+      "checks": {
+        "title": {
+          "count": 1,
+          "text": "Watch the Module 1 shift"
+        },
+        "leakyCopy": {
+          "forbidden_copy_absent": true,
+          "floating_help_count": 0
+        },
+        "media": {
+          "stage": "unavailable",
+          "accessibleLabel": "Lesson video unavailable",
+          "videoElements": 0
+        },
+        "videoContext": {
+          "aboutThisLesson": true,
+          "promptMovedOutOfTopLevelPrompt": true
+        },
+        "modulePathKeyboard": {
+          "links": 5,
+          "currentStepCount": 1,
+          "focus": {
+            "tag": "A",
+            "text": "Watch\nAvailable",
+            "visible": true,
+            "focusVisible": true,
+            "outline": "solid",
+            "outlineWidth": "3px",
+            "boxShadow": "none"
+          },
+          "variant": "mobile-disclosure"
+        },
+        "layout": {
+          "viewport": {
+            "width": 320,
+            "height": 844
+          },
+          "documentWidth": 320,
+          "horizontalOverflow": 0,
+          "offenders": []
+        },
+        "touchTargets": {
+          "checked": 17,
+          "undersized": []
+        },
+        "reducedMotion": {
+          "mediaQuery": true,
+          "dataMotion": "reduced",
+          "dataReducedMotion": "true"
+        },
+        "requestedTheme": {
+          "dataTheme": "dark",
+          "preference": "dark",
+          "bodyBackground": "rgb(10, 20, 32)",
+          "bodyText": "rgb(237, 242, 251)"
+        }
+      },
+      "screenshots": [
+        "docs\\evidence\\screenshots\\alpha-activity-interim-2026-09-07\\run-20260907T144509608226Z\\interim-activity-act-01-unavailable-dark-320x844.png"
+      ],
+      "network": {
+        "fixture_reads": [
+          "GET /v1/me",
+          "GET /v1/activities/73dfbbf7-5f2c-5e88-ad27-e5c84c65690f",
+          "GET /v1/me",
+          "GET /v1/profile/avatar",
+          "GET /v1/learning/e2e-canonical-free-course"
+        ],
+        "unknown_api_blocked": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "page_errors": [],
+      "console_errors": [],
+      "failures": []
+    },
+    {
+      "fixture": "73dfbbf7-5f2c-5e88-ad27-e5c84c65690f",
+      "screenId": "ACT-01",
+      "kind": "VIDEO",
+      "mediaState": "unavailable",
+      "theme": "dark",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "evidenceClass": "Synthetic API fixtures against local development UI; interim presentation evidence only; not live, streaming, or performance proof",
+      "checks": {
+        "title": {
+          "count": 1,
+          "text": "Watch the Module 1 shift"
+        },
+        "leakyCopy": {
+          "forbidden_copy_absent": true,
+          "floating_help_count": 0
+        },
+        "media": {
+          "stage": "unavailable",
+          "accessibleLabel": "Lesson video unavailable",
+          "videoElements": 0
+        },
+        "videoContext": {
+          "aboutThisLesson": true,
+          "promptMovedOutOfTopLevelPrompt": true
+        },
+        "modulePathKeyboard": {
+          "links": 5,
+          "currentStepCount": 1,
+          "focus": {
+            "tag": "A",
+            "text": "Watch\nAvailable",
+            "visible": true,
+            "focusVisible": true,
+            "outline": "solid",
+            "outlineWidth": "3px",
+            "boxShadow": "none"
+          },
+          "variant": "mobile-disclosure"
+        },
+        "layout": {
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "documentWidth": 390,
+          "horizontalOverflow": 0,
+          "offenders": []
+        },
+        "touchTargets": {
+          "checked": 17,
+          "undersized": []
+        },
+        "reducedMotion": {
+          "mediaQuery": true,
+          "dataMotion": "reduced",
+          "dataReducedMotion": "true"
+        },
+        "requestedTheme": {
+          "dataTheme": "dark",
+          "preference": "dark",
+          "bodyBackground": "rgb(10, 20, 32)",
+          "bodyText": "rgb(237, 242, 251)"
+        }
+      },
+      "screenshots": [
+        "docs\\evidence\\screenshots\\alpha-activity-interim-2026-09-07\\run-20260907T144509608226Z\\interim-activity-act-01-unavailable-dark-390x844.png"
+      ],
+      "network": {
+        "fixture_reads": [
+          "GET /v1/me",
+          "GET /v1/activities/73dfbbf7-5f2c-5e88-ad27-e5c84c65690f",
+          "GET /v1/me",
+          "GET /v1/profile/avatar",
+          "GET /v1/learning/e2e-canonical-free-course"
+        ],
+        "unknown_api_blocked": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "page_errors": [],
+      "console_errors": [],
+      "failures": []
+    },
+    {
+      "fixture": "73dfbbf7-5f2c-5e88-ad27-e5c84c65690f",
+      "screenId": "ACT-01",
+      "kind": "VIDEO",
+      "mediaState": "unavailable",
+      "theme": "dark",
+      "viewport": {
+        "width": 768,
+        "height": 900
+      },
+      "evidenceClass": "Synthetic API fixtures against local development UI; interim presentation evidence only; not live, streaming, or performance proof",
+      "checks": {
+        "title": {
+          "count": 1,
+          "text": "Watch the Module 1 shift"
+        },
+        "leakyCopy": {
+          "forbidden_copy_absent": true,
+          "floating_help_count": 0
+        },
+        "media": {
+          "stage": "unavailable",
+          "accessibleLabel": "Lesson video unavailable",
+          "videoElements": 0
+        },
+        "videoContext": {
+          "aboutThisLesson": true,
+          "promptMovedOutOfTopLevelPrompt": true
+        },
+        "modulePathKeyboard": {
+          "links": 5,
+          "currentStepCount": 1,
+          "focus": {
+            "tag": "A",
+            "text": "Reflect\nAvailable",
+            "visible": true,
+            "focusVisible": true,
+            "outline": "solid",
+            "outlineWidth": "3px",
+            "boxShadow": "none"
+          },
+          "variant": "desktop-panel"
+        },
+        "layout": {
+          "viewport": {
+            "width": 768,
+            "height": 900
+          },
+          "documentWidth": 768,
+          "horizontalOverflow": 0,
+          "offenders": []
+        },
+        "touchTargets": {
+          "checked": 17,
+          "undersized": []
+        },
+        "reducedMotion": {
+          "mediaQuery": true,
+          "dataMotion": "reduced",
+          "dataReducedMotion": "true"
+        },
+        "requestedTheme": {
+          "dataTheme": "dark",
+          "preference": "dark",
+          "bodyBackground": "rgb(10, 20, 32)",
+          "bodyText": "rgb(237, 242, 251)"
+        }
+      },
+      "screenshots": [
+        "docs\\evidence\\screenshots\\alpha-activity-interim-2026-09-07\\run-20260907T144509608226Z\\interim-activity-act-01-unavailable-dark-768x900.png"
+      ],
+      "network": {
+        "fixture_reads": [
+          "GET /v1/me",
+          "GET /v1/activities/73dfbbf7-5f2c-5e88-ad27-e5c84c65690f",
+          "GET /v1/me",
+          "GET /v1/profile/avatar",
+          "GET /v1/learning/e2e-canonical-free-course"
+        ],
+        "unknown_api_blocked": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "page_errors": [],
+      "console_errors": [],
+      "failures": []
+    },
+    {
+      "fixture": "73dfbbf7-5f2c-5e88-ad27-e5c84c65690f",
+      "screenId": "ACT-01",
+      "kind": "VIDEO",
+      "mediaState": "unavailable",
+      "theme": "dark",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "evidenceClass": "Synthetic API fixtures against local development UI; interim presentation evidence only; not live, streaming, or performance proof",
+      "checks": {
+        "title": {
+          "count": 1,
+          "text": "Watch the Module 1 shift"
+        },
+        "leakyCopy": {
+          "forbidden_copy_absent": true,
+          "floating_help_count": 0
+        },
+        "media": {
+          "stage": "unavailable",
+          "accessibleLabel": "Lesson video unavailable",
+          "videoElements": 0
+        },
+        "videoContext": {
+          "aboutThisLesson": true,
+          "promptMovedOutOfTopLevelPrompt": true
+        },
+        "modulePathKeyboard": {
+          "links": 5,
+          "currentStepCount": 1,
+          "focus": {
+            "tag": "A",
+            "text": "Reflect\nAvailable",
+            "visible": true,
+            "focusVisible": true,
+            "outline": "solid",
+            "outlineWidth": "3px",
+            "boxShadow": "none"
+          },
+          "variant": "desktop-panel"
+        },
+        "layout": {
+          "viewport": {
+            "width": 1440,
+            "height": 900
+          },
+          "documentWidth": 1440,
+          "horizontalOverflow": 0,
+          "offenders": []
+        },
+        "touchTargets": {
+          "checked": 17,
+          "undersized": []
+        },
+        "reducedMotion": {
+          "mediaQuery": true,
+          "dataMotion": "reduced",
+          "dataReducedMotion": "true"
+        },
+        "requestedTheme": {
+          "dataTheme": "dark",
+          "preference": "dark",
+          "bodyBackground": "rgb(10, 20, 32)",
+          "bodyText": "rgb(237, 242, 251)"
+        }
+      },
+      "screenshots": [
+        "docs\\evidence\\screenshots\\alpha-activity-interim-2026-09-07\\run-20260907T144509608226Z\\interim-activity-act-01-unavailable-dark-1440x900.png"
+      ],
+      "network": {
+        "fixture_reads": [
+          "GET /v1/me",
+          "GET /v1/activities/73dfbbf7-5f2c-5e88-ad27-e5c84c65690f",
+          "GET /v1/me",
+          "GET /v1/profile/avatar",
+          "GET /v1/learning/e2e-canonical-free-course"
+        ],
+        "unknown_api_blocked": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "page_errors": [],
+      "console_errors": [],
+      "failures": []
+    },
+    {
+      "fixture": "alpha-fixture-video-blocked",
+      "screenId": "ACT-01-BLOCKED",
+      "kind": "VIDEO",
+      "mediaState": "blocked",
+      "theme": "light",
+      "viewport": {
+        "width": 320,
+        "height": 844
+      },
+      "evidenceClass": "Synthetic API fixtures against local development UI; interim presentation evidence only; not live, streaming, or performance proof",
+      "checks": {
+        "title": {
+          "count": 1,
+          "text": "Watch the Module 1 shift"
+        },
+        "leakyCopy": {
+          "forbidden_copy_absent": true,
+          "floating_help_count": 0
+        },
+        "media": {
+          "stage": "blocked",
+          "accessibleLabel": "Video for Watch the Module 1 shift unavailable",
+          "videoElements": 0
+        },
+        "videoContext": {
+          "aboutThisLesson": true,
+          "promptMovedOutOfTopLevelPrompt": true
+        },
+        "modulePathKeyboard": {
+          "links": 5,
+          "currentStepCount": 1,
+          "focus": {
+            "tag": "A",
+            "text": "Watch\nAvailable",
+            "visible": true,
+            "focusVisible": true,
+            "outline": "solid",
+            "outlineWidth": "3px",
+            "boxShadow": "none"
+          },
+          "variant": "mobile-disclosure"
+        },
+        "layout": {
+          "viewport": {
+            "width": 320,
+            "height": 844
+          },
+          "documentWidth": 320,
+          "horizontalOverflow": 0,
+          "offenders": []
+        },
+        "touchTargets": {
+          "checked": 17,
+          "undersized": []
+        },
+        "reducedMotion": {
+          "mediaQuery": true,
+          "dataMotion": "reduced",
+          "dataReducedMotion": "true"
+        },
+        "requestedTheme": {
+          "dataTheme": "light",
+          "preference": "light",
+          "bodyBackground": "rgb(242, 240, 232)",
+          "bodyText": "rgb(17, 20, 15)"
+        }
+      },
+      "screenshots": [
+        "docs\\evidence\\screenshots\\alpha-activity-interim-2026-09-07\\run-20260907T144509608226Z\\interim-activity-act-01-blocked-blocked-light-320x844.png"
+      ],
+      "network": {
+        "fixture_reads": [
+          "GET /v1/me",
+          "GET /v1/activities/alpha-fixture-video-blocked",
+          "GET /v1/me",
+          "GET /v1/profile/avatar",
+          "GET /v1/learning/e2e-canonical-free-course"
+        ],
+        "unknown_api_blocked": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "page_errors": [],
+      "console_errors": [],
+      "failures": []
+    },
+    {
+      "fixture": "alpha-fixture-video-blocked",
+      "screenId": "ACT-01-BLOCKED",
+      "kind": "VIDEO",
+      "mediaState": "blocked",
+      "theme": "light",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "evidenceClass": "Synthetic API fixtures against local development UI; interim presentation evidence only; not live, streaming, or performance proof",
+      "checks": {
+        "title": {
+          "count": 1,
+          "text": "Watch the Module 1 shift"
+        },
+        "leakyCopy": {
+          "forbidden_copy_absent": true,
+          "floating_help_count": 0
+        },
+        "media": {
+          "stage": "blocked",
+          "accessibleLabel": "Video for Watch the Module 1 shift unavailable",
+          "videoElements": 0
+        },
+        "videoContext": {
+          "aboutThisLesson": true,
+          "promptMovedOutOfTopLevelPrompt": true
+        },
+        "modulePathKeyboard": {
+          "links": 5,
+          "currentStepCount": 1,
+          "focus": {
+            "tag": "A",
+            "text": "Watch\nAvailable",
+            "visible": true,
+            "focusVisible": true,
+            "outline": "solid",
+            "outlineWidth": "3px",
+            "boxShadow": "none"
+          },
+          "variant": "mobile-disclosure"
+        },
+        "layout": {
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "documentWidth": 390,
+          "horizontalOverflow": 0,
+          "offenders": []
+        },
+        "touchTargets": {
+          "checked": 17,
+          "undersized": []
+        },
+        "reducedMotion": {
+          "mediaQuery": true,
+          "dataMotion": "reduced",
+          "dataReducedMotion": "true"
+        },
+        "requestedTheme": {
+          "dataTheme": "light",
+          "preference": "light",
+          "bodyBackground": "rgb(242, 240, 232)",
+          "bodyText": "rgb(17, 20, 15)"
+        }
+      },
+      "screenshots": [
+        "docs\\evidence\\screenshots\\alpha-activity-interim-2026-09-07\\run-20260907T144509608226Z\\interim-activity-act-01-blocked-blocked-light-390x844.png"
+      ],
+      "network": {
+        "fixture_reads": [
+          "GET /v1/me",
+          "GET /v1/activities/alpha-fixture-video-blocked",
+          "GET /v1/me",
+          "GET /v1/profile/avatar",
+          "GET /v1/learning/e2e-canonical-free-course"
+        ],
+        "unknown_api_blocked": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "page_errors": [],
+      "console_errors": [],
+      "failures": []
+    },
+    {
+      "fixture": "alpha-fixture-video-blocked",
+      "screenId": "ACT-01-BLOCKED",
+      "kind": "VIDEO",
+      "mediaState": "blocked",
+      "theme": "light",
+      "viewport": {
+        "width": 768,
+        "height": 900
+      },
+      "evidenceClass": "Synthetic API fixtures against local development UI; interim presentation evidence only; not live, streaming, or performance proof",
+      "checks": {
+        "title": {
+          "count": 1,
+          "text": "Watch the Module 1 shift"
+        },
+        "leakyCopy": {
+          "forbidden_copy_absent": true,
+          "floating_help_count": 0
+        },
+        "media": {
+          "stage": "blocked",
+          "accessibleLabel": "Video for Watch the Module 1 shift unavailable",
+          "videoElements": 0
+        },
+        "videoContext": {
+          "aboutThisLesson": true,
+          "promptMovedOutOfTopLevelPrompt": true
+        },
+        "modulePathKeyboard": {
+          "links": 5,
+          "currentStepCount": 1,
+          "focus": {
+            "tag": "A",
+            "text": "Reflect\nAvailable",
+            "visible": true,
+            "focusVisible": true,
+            "outline": "solid",
+            "outlineWidth": "3px",
+            "boxShadow": "none"
+          },
+          "variant": "desktop-panel"
+        },
+        "layout": {
+          "viewport": {
+            "width": 768,
+            "height": 900
+          },
+          "documentWidth": 768,
+          "horizontalOverflow": 0,
+          "offenders": []
+        },
+        "touchTargets": {
+          "checked": 17,
+          "undersized": []
+        },
+        "reducedMotion": {
+          "mediaQuery": true,
+          "dataMotion": "reduced",
+          "dataReducedMotion": "true"
+        },
+        "requestedTheme": {
+          "dataTheme": "light",
+          "preference": "light",
+          "bodyBackground": "rgb(242, 240, 232)",
+          "bodyText": "rgb(17, 20, 15)"
+        }
+      },
+      "screenshots": [
+        "docs\\evidence\\screenshots\\alpha-activity-interim-2026-09-07\\run-20260907T144509608226Z\\interim-activity-act-01-blocked-blocked-light-768x900.png"
+      ],
+      "network": {
+        "fixture_reads": [
+          "GET /v1/me",
+          "GET /v1/activities/alpha-fixture-video-blocked",
+          "GET /v1/me",
+          "GET /v1/profile/avatar",
+          "GET /v1/learning/e2e-canonical-free-course"
+        ],
+        "unknown_api_blocked": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "page_errors": [],
+      "console_errors": [],
+      "failures": []
+    },
+    {
+      "fixture": "alpha-fixture-video-blocked",
+      "screenId": "ACT-01-BLOCKED",
+      "kind": "VIDEO",
+      "mediaState": "blocked",
+      "theme": "light",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "evidenceClass": "Synthetic API fixtures against local development UI; interim presentation evidence only; not live, streaming, or performance proof",
+      "checks": {
+        "title": {
+          "count": 1,
+          "text": "Watch the Module 1 shift"
+        },
+        "leakyCopy": {
+          "forbidden_copy_absent": true,
+          "floating_help_count": 0
+        },
+        "media": {
+          "stage": "blocked",
+          "accessibleLabel": "Video for Watch the Module 1 shift unavailable",
+          "videoElements": 0
+        },
+        "videoContext": {
+          "aboutThisLesson": true,
+          "promptMovedOutOfTopLevelPrompt": true
+        },
+        "modulePathKeyboard": {
+          "links": 5,
+          "currentStepCount": 1,
+          "focus": {
+            "tag": "A",
+            "text": "Reflect\nAvailable",
+            "visible": true,
+            "focusVisible": true,
+            "outline": "solid",
+            "outlineWidth": "3px",
+            "boxShadow": "none"
+          },
+          "variant": "desktop-panel"
+        },
+        "layout": {
+          "viewport": {
+            "width": 1440,
+            "height": 900
+          },
+          "documentWidth": 1440,
+          "horizontalOverflow": 0,
+          "offenders": []
+        },
+        "touchTargets": {
+          "checked": 17,
+          "undersized": []
+        },
+        "reducedMotion": {
+          "mediaQuery": true,
+          "dataMotion": "reduced",
+          "dataReducedMotion": "true"
+        },
+        "requestedTheme": {
+          "dataTheme": "light",
+          "preference": "light",
+          "bodyBackground": "rgb(242, 240, 232)",
+          "bodyText": "rgb(17, 20, 15)"
+        }
+      },
+      "screenshots": [
+        "docs\\evidence\\screenshots\\alpha-activity-interim-2026-09-07\\run-20260907T144509608226Z\\interim-activity-act-01-blocked-blocked-light-1440x900.png"
+      ],
+      "network": {
+        "fixture_reads": [
+          "GET /v1/me",
+          "GET /v1/activities/alpha-fixture-video-blocked",
+          "GET /v1/me",
+          "GET /v1/profile/avatar",
+          "GET /v1/learning/e2e-canonical-free-course"
+        ],
+        "unknown_api_blocked": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "page_errors": [],
+      "console_errors": [],
+      "failures": []
+    },
+    {
+      "fixture": "alpha-fixture-video-blocked",
+      "screenId": "ACT-01-BLOCKED",
+      "kind": "VIDEO",
+      "mediaState": "blocked",
+      "theme": "dark",
+      "viewport": {
+        "width": 320,
+        "height": 844
+      },
+      "evidenceClass": "Synthetic API fixtures against local development UI; interim presentation evidence only; not live, streaming, or performance proof",
+      "checks": {
+        "title": {
+          "count": 1,
+          "text": "Watch the Module 1 shift"
+        },
+        "leakyCopy": {
+          "forbidden_copy_absent": true,
+          "floating_help_count": 0
+        },
+        "media": {
+          "stage": "blocked",
+          "accessibleLabel": "Video for Watch the Module 1 shift unavailable",
+          "videoElements": 0
+        },
+        "videoContext": {
+          "aboutThisLesson": true,
+          "promptMovedOutOfTopLevelPrompt": true
+        },
+        "modulePathKeyboard": {
+          "links": 5,
+          "currentStepCount": 1,
+          "focus": {
+            "tag": "A",
+            "text": "Watch\nAvailable",
+            "visible": true,
+            "focusVisible": true,
+            "outline": "solid",
+            "outlineWidth": "3px",
+            "boxShadow": "none"
+          },
+          "variant": "mobile-disclosure"
+        },
+        "layout": {
+          "viewport": {
+            "width": 320,
+            "height": 844
+          },
+          "documentWidth": 320,
+          "horizontalOverflow": 0,
+          "offenders": []
+        },
+        "touchTargets": {
+          "checked": 17,
+          "undersized": []
+        },
+        "reducedMotion": {
+          "mediaQuery": true,
+          "dataMotion": "reduced",
+          "dataReducedMotion": "true"
+        },
+        "requestedTheme": {
+          "dataTheme": "dark",
+          "preference": "dark",
+          "bodyBackground": "rgb(10, 20, 32)",
+          "bodyText": "rgb(237, 242, 251)"
+        }
+      },
+      "screenshots": [
+        "docs\\evidence\\screenshots\\alpha-activity-interim-2026-09-07\\run-20260907T144509608226Z\\interim-activity-act-01-blocked-blocked-dark-320x844.png"
+      ],
+      "network": {
+        "fixture_reads": [
+          "GET /v1/me",
+          "GET /v1/activities/alpha-fixture-video-blocked",
+          "GET /v1/me",
+          "GET /v1/profile/avatar",
+          "GET /v1/learning/e2e-canonical-free-course"
+        ],
+        "unknown_api_blocked": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "page_errors": [],
+      "console_errors": [],
+      "failures": []
+    },
+    {
+      "fixture": "alpha-fixture-video-blocked",
+      "screenId": "ACT-01-BLOCKED",
+      "kind": "VIDEO",
+      "mediaState": "blocked",
+      "theme": "dark",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "evidenceClass": "Synthetic API fixtures against local development UI; interim presentation evidence only; not live, streaming, or performance proof",
+      "checks": {
+        "title": {
+          "count": 1,
+          "text": "Watch the Module 1 shift"
+        },
+        "leakyCopy": {
+          "forbidden_copy_absent": true,
+          "floating_help_count": 0
+        },
+        "media": {
+          "stage": "blocked",
+          "accessibleLabel": "Video for Watch the Module 1 shift unavailable",
+          "videoElements": 0
+        },
+        "videoContext": {
+          "aboutThisLesson": true,
+          "promptMovedOutOfTopLevelPrompt": true
+        },
+        "modulePathKeyboard": {
+          "links": 5,
+          "currentStepCount": 1,
+          "focus": {
+            "tag": "A",
+            "text": "Watch\nAvailable",
+            "visible": true,
+            "focusVisible": true,
+            "outline": "solid",
+            "outlineWidth": "3px",
+            "boxShadow": "none"
+          },
+          "variant": "mobile-disclosure"
+        },
+        "layout": {
+          "viewport": {
+            "width": 390,
+            "height": 844
+          },
+          "documentWidth": 390,
+          "horizontalOverflow": 0,
+          "offenders": []
+        },
+        "touchTargets": {
+          "checked": 17,
+          "undersized": []
+        },
+        "reducedMotion": {
+          "mediaQuery": true,
+          "dataMotion": "reduced",
+          "dataReducedMotion": "true"
+        },
+        "requestedTheme": {
+          "dataTheme": "dark",
+          "preference": "dark",
+          "bodyBackground": "rgb(10, 20, 32)",
+          "bodyText": "rgb(237, 242, 251)"
+        }
+      },
+      "screenshots": [
+        "docs\\evidence\\screenshots\\alpha-activity-interim-2026-09-07\\run-20260907T144509608226Z\\interim-activity-act-01-blocked-blocked-dark-390x844.png"
+      ],
+      "network": {
+        "fixture_reads": [
+          "GET /v1/me",
+          "GET /v1/activities/alpha-fixture-video-blocked",
+          "GET /v1/me",
+          "GET /v1/profile/avatar",
+          "GET /v1/learning/e2e-canonical-free-course"
+        ],
+        "unknown_api_blocked": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "page_errors": [],
+      "console_errors": [],
+      "failures": []
+    },
+    {
+      "fixture": "alpha-fixture-video-blocked",
+      "screenId": "ACT-01-BLOCKED",
+      "kind": "VIDEO",
+      "mediaState": "blocked",
+      "theme": "dark",
+      "viewport": {
+        "width": 768,
+        "height": 900
+      },
+      "evidenceClass": "Synthetic API fixtures against local development UI; interim presentation evidence only; not live, streaming, or performance proof",
+      "checks": {
+        "title": {
+          "count": 1,
+          "text": "Watch the Module 1 shift"
+        },
+        "leakyCopy": {
+          "forbidden_copy_absent": true,
+          "floating_help_count": 0
+        },
+        "media": {
+          "stage": "blocked",
+          "accessibleLabel": "Video for Watch the Module 1 shift unavailable",
+          "videoElements": 0
+        },
+        "videoContext": {
+          "aboutThisLesson": true,
+          "promptMovedOutOfTopLevelPrompt": true
+        },
+        "modulePathKeyboard": {
+          "links": 5,
+          "currentStepCount": 1,
+          "focus": {
+            "tag": "A",
+            "text": "Reflect\nAvailable",
+            "visible": true,
+            "focusVisible": true,
+            "outline": "solid",
+            "outlineWidth": "3px",
+            "boxShadow": "none"
+          },
+          "variant": "desktop-panel"
+        },
+        "layout": {
+          "viewport": {
+            "width": 768,
+            "height": 900
+          },
+          "documentWidth": 768,
+          "horizontalOverflow": 0,
+          "offenders": []
+        },
+        "touchTargets": {
+          "checked": 17,
+          "undersized": []
+        },
+        "reducedMotion": {
+          "mediaQuery": true,
+          "dataMotion": "reduced",
+          "dataReducedMotion": "true"
+        },
+        "requestedTheme": {
+          "dataTheme": "dark",
+          "preference": "dark",
+          "bodyBackground": "rgb(10, 20, 32)",
+          "bodyText": "rgb(237, 242, 251)"
+        }
+      },
+      "screenshots": [
+        "docs\\evidence\\screenshots\\alpha-activity-interim-2026-09-07\\run-20260907T144509608226Z\\interim-activity-act-01-blocked-blocked-dark-768x900.png"
+      ],
+      "network": {
+        "fixture_reads": [
+          "GET /v1/me",
+          "GET /v1/activities/alpha-fixture-video-blocked",
+          "GET /v1/me",
+          "GET /v1/profile/avatar",
+          "GET /v1/learning/e2e-canonical-free-course"
+        ],
+        "unknown_api_blocked": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "page_errors": [],
+      "console_errors": [],
+      "failures": []
+    },
+    {
+      "fixture": "alpha-fixture-video-blocked",
+      "screenId": "ACT-01-BLOCKED",
+      "kind": "VIDEO",
+      "mediaState": "blocked",
+      "theme": "dark",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "evidenceClass": "Synthetic API fixtures against local development UI; interim presentation evidence only; not live, streaming, or performance proof",
+      "checks": {
+        "title": {
+          "count": 1,
+          "text": "Watch the Module 1 shift"
+        },
+        "leakyCopy": {
+          "forbidden_copy_absent": true,
+          "floating_help_count": 0
+        },
+        "media": {
+          "stage": "blocked",
+          "accessibleLabel": "Video for Watch the Module 1 shift unavailable",
+          "videoElements": 0
+        },
+        "videoContext": {
+          "aboutThisLesson": true,
+          "promptMovedOutOfTopLevelPrompt": true
+        },
+        "modulePathKeyboard": {
+          "links": 5,
+          "currentStepCount": 1,
+          "focus": {
+            "tag": "A",
+            "text": "Reflect\nAvailable",
+            "visible": true,
+            "focusVisible": true,
+            "outline": "solid",
+            "outlineWidth": "3px",
+            "boxShadow": "none"
+          },
+          "variant": "desktop-panel"
+        },
+        "layout": {
+          "viewport": {
+            "width": 1440,
+            "height": 900
+          },
+          "documentWidth": 1440,
+          "horizontalOverflow": 0,
+          "offenders": []
+        },
+        "touchTargets": {
+          "checked": 17,
+          "undersized": []
+        },
+        "reducedMotion": {
+          "mediaQuery": true,
+          "dataMotion": "reduced",
+          "dataReducedMotion": "true"
+        },
+        "requestedTheme": {
+          "dataTheme": "dark",
+          "preference": "dark",
+          "bodyBackground": "rgb(10, 20, 32)",
+          "bodyText": "rgb(237, 242, 251)"
+        }
+      },
+      "screenshots": [
+        "docs\\evidence\\screenshots\\alpha-activity-interim-2026-09-07\\run-20260907T144509608226Z\\interim-activity-act-01-blocked-blocked-dark-1440x900.png"
+      ],
+      "network": {
+        "fixture_reads": [
+          "GET /v1/me",
+          "GET /v1/activities/alpha-fixture-video-blocked",
+          "GET /v1/me",
+          "GET /v1/profile/avatar",
+          "GET /v1/learning/e2e-canonical-free-course"
+        ],
+        "unknown_api_blocked": [],
+        "blocked_writes": [],
+        "blocked_external": []
+      },
+      "page_errors": [],
+      "console_errors": [],
+      "failures": []
+    }
+  ],
+  "failureCount": 0,
+  "blockedWriteCount": 0,
+  "unknownApiBlockedCount": 0,
+  "blockedExternalCount": 0,
+  "fixtureReadPaths": [
+    "GET /v1/activities/73dfbbf7-5f2c-5e88-ad27-e5c84c65690f",
+    "GET /v1/activities/alpha-fixture-video-blocked",
+    "GET /v1/learning/e2e-canonical-free-course",
+    "GET /v1/me",
+    "GET /v1/profile/avatar"
+  ]
+}

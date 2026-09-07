@@ -363,7 +363,8 @@ describe("learning loop video runtime", () => {
       }),
     );
     expect(html).not.toContain("<video");
-    expect(html).toContain("No approved progressive media delivery");
+    expect(html).toContain("This video isn’t available yet");
+    expect(html).not.toContain("No approved progressive media delivery");
   });
 
   it("renders an honest unavailable state when no authorized media descriptor exists", () => {
@@ -376,14 +377,36 @@ describe("learning loop video runtime", () => {
       }),
     );
 
-    expect(html).toContain("No approved lesson media is connected yet.");
-    expect(html).toContain("The server exposes a completion action");
-    expect(html).toContain(
-      "Watch evidence cannot be submitted while media is unavailable",
-    );
+    expect(html).toContain("This video isn’t available yet");
+    expect(html).toContain("This lesson stays incomplete until you can watch it.");
+    expect(html).not.toContain("The server exposes a completion action");
     expect(html).not.toContain("<video");
     expect(html).not.toContain("Mastery");
     expect(html).not.toContain("Complete");
+  });
+
+  it("uses the containing lesson heading and never prints backend reason codes", () => {
+    const html = renderToStaticMarkup(
+      createElement(VideoViewer, {
+        activity: {
+          ...activity,
+          media: {
+            ...blockedActivity.media!,
+            state: "unavailable",
+            playback_available: false,
+            reason: "approved_activity_media_binding_unavailable",
+          },
+        },
+        api,
+        moduleHref: "/learn/module-1",
+        labelledBy: "activity-heading",
+      }),
+    );
+    expect(html).toContain('aria-labelledby="activity-heading"');
+    expect(html).not.toContain(activity.title);
+    expect(html).not.toContain("approved_activity_media_binding_unavailable");
+    expect(html).not.toContain("Server-resolved");
+    expect(html).toContain('href="/learn/module-1"');
   });
 
   it("renders media only from the explicit authorized descriptor", () => {
@@ -449,12 +472,12 @@ describe("learning loop video runtime", () => {
       }),
     );
 
-    expect(html).toContain("Lesson media blocked by policy.");
-    expect(html).toContain("Media policy blocked");
+    expect(html).toContain("This video can’t be played right now");
+    expect(html).not.toContain("Media policy blocked");
     expect(html).toContain(
-      "Watch evidence cannot be submitted while media is blocked.",
+      "Watching and completion are unavailable for this video.",
     );
-    expect(html).toContain(
+    expect(html).not.toContain(
       "Lesson media blocked by licensing and compliance policy.",
     );
     expect(html).not.toContain("<video");
@@ -469,8 +492,8 @@ describe("learning loop video runtime", () => {
       }),
     );
 
-    expect(html).toContain("Lesson media blocked by policy.");
-    expect(html).toContain("Content distribution revoked.");
+    expect(html).toContain("This video can’t be played right now");
+    expect(html).not.toContain("Content distribution revoked.");
     expect(html).toContain('href="/learn/module-1"');
   });
 

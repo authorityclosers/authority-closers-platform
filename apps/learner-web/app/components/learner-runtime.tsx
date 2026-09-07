@@ -2527,6 +2527,7 @@ export function ConnectedActivityWorkspace({
       ? ROUTES.module(visibleLearning.program_slug, currentModule.id)
       : ROUTES.myLearning;
   const kindLabel = activityKindLabel(activity.kind);
+  const isVideo = activity.kind.toLowerCase() === "video";
   const isReflection = activity.kind.toLowerCase() === "reflection";
   const saveLabel = isReflection ? "Save reflection" : "Save draft";
   const activityBoundary = isReflection
@@ -2586,13 +2587,13 @@ export function ConnectedActivityWorkspace({
               </span>
               {kindLabel} · {currentStepLabel}
             </p>
-            <h1>{activity.title}</h1>
+            <h1 id={`activity-title-${activity.id}`}>{activity.title}</h1>
           </div>
           <span className="status-pill">
             {activityStateLabel(activity.state)}
           </span>
         </div>
-        {prompt ? (
+        {prompt && !isVideo ? (
           <section className="activity-prompt" aria-labelledby="prompt-title">
             <p className="kicker" id="prompt-title">
               Published prompt
@@ -2603,7 +2604,7 @@ export function ConnectedActivityWorkspace({
               draft; submission remains a separate action.
             </p>
           </section>
-        ) : lockedReason ? (
+        ) : !prompt && lockedReason ? (
           <div className="activity-access-boundary" role="status">
             <LockKeyhole size={20} aria-hidden="true" />
             <div>
@@ -2611,42 +2612,44 @@ export function ConnectedActivityWorkspace({
               <p>{lockedReason}</p>
             </div>
           </div>
-        ) : (
+        ) : !prompt ? (
           <div className="surface-state" role="status">
             <h3>No learner prompt is published for this activity.</h3>
             <p>Draft and evidence controls remain unavailable.</p>
           </div>
-        )}
-        <aside
-          className="activity-stage-summary"
-          aria-label="Current step"
-          aria-live="polite"
-        >
-          <div>
-            <span>Current · {kindLabel}</span>
-            <strong>{currentStepLabel}</strong>
-          </div>
-          <p>{activityBoundary}</p>
-          {learningPathStatus === "loading" ? (
-            <p className="activity-stage-summary__path-state" role="status">
-              Loading the server-authorized module path…
-            </p>
-          ) : learningPathStatus === "unavailable" ? (
-            <p className="activity-stage-summary__path-state" role="status">
-              The complete module path is temporarily unavailable.
-            </p>
-          ) : learningPathStatus === "forbidden" ? (
-            <p className="activity-stage-summary__path-state" role="alert">
-              This account cannot open the complete module path.
-            </p>
-          ) : learningPathStatus === "error" ? (
-            <p className="activity-stage-summary__path-state" role="alert">
-              {isSessionExpiredError(learningPathError)
-                ? "Your session expired while refreshing the module path."
-                : "The module path could not refresh."}
-            </p>
-          ) : null}
-        </aside>
+        ) : null}
+        {!isVideo || learningPathStatus !== "ready" ? (
+          <aside
+            className="activity-stage-summary"
+            aria-label="Current step"
+            aria-live="polite"
+          >
+            <div>
+              <span>Current · {kindLabel}</span>
+              <strong>{currentStepLabel}</strong>
+            </div>
+            {!isVideo ? <p>{activityBoundary}</p> : null}
+            {learningPathStatus === "loading" ? (
+              <p className="activity-stage-summary__path-state" role="status">
+                Loading your module path…
+              </p>
+            ) : learningPathStatus === "unavailable" ? (
+              <p className="activity-stage-summary__path-state" role="status">
+                The complete module path is temporarily unavailable.
+              </p>
+            ) : learningPathStatus === "forbidden" ? (
+              <p className="activity-stage-summary__path-state" role="alert">
+                This account cannot open the complete module path.
+              </p>
+            ) : learningPathStatus === "error" ? (
+              <p className="activity-stage-summary__path-state" role="alert">
+                {isSessionExpiredError(learningPathError)
+                  ? "Your session expired while refreshing the module path."
+                  : "The module path could not refresh."}
+              </p>
+            ) : null}
+          </aside>
+        ) : null}
         <details className="activity-mobile-path">
           <summary>
             <span>View module path</span>
@@ -2742,15 +2745,24 @@ export function ConnectedActivityWorkspace({
           </section>
         ) : activity.kind.toLowerCase() === "video" ? (
           // VideoViewer owns the Approved lesson media is unavailable state.
-          <VideoViewer
-            key={activity.id}
-            activity={activity}
-            api={api}
-            moduleHref={moduleHref}
-            onPlaybackCommitted={() =>
-              refreshCommittedMutationState("evidence")
-            }
-          />
+          <>
+            <VideoViewer
+              key={activity.id}
+              activity={activity}
+              api={api}
+              moduleHref={moduleHref}
+              labelledBy={`activity-title-${activity.id}`}
+              onPlaybackCommitted={() =>
+                refreshCommittedMutationState("evidence")
+              }
+            />
+            {prompt ? (
+              <details className="lesson-context">
+                <summary>About this lesson</summary>
+                <p>{prompt}</p>
+              </details>
+            ) : null}
+          </>
         ) : (
           <form
             className="activity-response-form"
@@ -2929,7 +2941,22 @@ export function ConnectedActivityWorkspace({
             </button>
           </div>
         ) : null}
-        {recoveryMessage ? <p role="status">{recoveryMessage}</p> : null}
+        {recoveryMessage ? (
+          isVideo &&
+          !dirty &&
+          !staleLocalDraft &&
+          !localCleanupPendingDraft &&
+          !localCleanupPendingRaw ? (
+            <details className="lesson-context">
+              <summary>Device storage notice</summary>
+              <p>{recoveryMessage}</p>
+            </details>
+          ) : (
+            <p className="activity-recovery-status" role="status">
+              {recoveryMessage}
+            </p>
+          )
+        ) : null}
         {message ? (
           <div
             className="activity-mutation-message"

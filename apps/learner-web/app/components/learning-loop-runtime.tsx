@@ -150,6 +150,8 @@ export interface VideoViewerProps {
   activity: ActivityResponse;
   api: LearnerApi;
   moduleHref: string;
+  /** Reuse the containing activity heading instead of repeating its title. */
+  labelledBy?: string;
   media?: AuthorizedVideoMedia | null;
   onPlaybackCommitted?: () => void | Promise<void>;
   onTelemetryEvent?: (event: VideoTelemetryEvent) => void;
@@ -190,6 +192,19 @@ export function isApprovedProgressiveMediaSource(
     typeof source.contentType !== "string" ||
     typeof source.src !== "string"
   ) {
+    return false;
+  }
+  try {
+    const url = new URL(source.src);
+    if (
+      !["https:", "http:"].includes(url.protocol) ||
+      url.username ||
+      url.password
+    )
+      return false;
+    if (manifestLikeMediaUrlPattern.test(decodeURIComponent(url.pathname)))
+      return false;
+  } catch {
     return false;
   }
   const contentType = source.contentType.split(";", 1)[0].trim().toLowerCase();
@@ -283,7 +298,10 @@ export function resolveApprovedMedia(
   state: "approved" | "blocked" | "unavailable";
   reason: string;
 } {
-  if (explicitMedia !== undefined && explicitMedia !== null) {
+  // Local presentation props cannot override a server denial or open a new
+  // playback capability. Preserve the existing tracked adapter only when no
+  // server descriptor is present and complete_video is already authorized.
+  if (!activity.media && canStartPlayback(activity) && explicitMedia) {
     if (!isApprovedProgressiveMediaSource(explicitMedia)) {
       return {
         media: null,
@@ -316,7 +334,10 @@ export function resolveApprovedMedia(
     };
   }
 
-  if (descriptor.state !== "approved" || !descriptor.playback_available) {
+  if (
+    descriptor.state !== "approved" ||
+    descriptor.playback_available !== true
+  ) {
     return {
       media: null,
       state: "unavailable",
@@ -324,12 +345,11 @@ export function resolveApprovedMedia(
     };
   }
 
-  // The Phase 1 learner surface intentionally consumes only a server-issued
-  // progressive URL. A manifest URL is not a player implementation: using it
-  // here would silently activate an HLS/provider path before its capability,
-  // CORS, session, and retention gates are promoted.
+  // A separately supplied progressive fallback is usable even when HLS is
+  // primary. Never pass a manifest to native video or claim adaptive playback.
   const streamUrl =
-    descriptor.delivery?.protocol === "progressive"
+    descriptor.delivery?.protocol === "progressive" ||
+    descriptor.delivery?.protocol === "hls"
       ? descriptor.delivery.progressive_url
       : null;
   if (!streamUrl) {
@@ -354,11 +374,16 @@ export function resolveApprovedMedia(
     };
   }
 
-  const captions: AuthorizedCaptionTrack[] = (descriptor.captions || [])
+  const captions: AuthorizedCaptionTrack[] = (
+    Array.isArray(descriptor.captions) ? descriptor.captions : []
+  )
     .filter(
       (c) =>
+        c &&
+        typeof c.language === "string" &&
         (c.kind === "captions" || c.kind === "subtitles") &&
         c.state === "ready" &&
+        typeof c.source_url === "string" &&
         Boolean(c.source_url),
     )
     .map((c) => ({
@@ -380,6 +405,116 @@ export function resolveApprovedMedia(
     state: "approved",
     reason: descriptor.reason || "Media is approved for playback.",
   };
+}
+
+type VideoPlaybackMode = "tracked" | "read-only" | "unavailable";
+
+/**
+ * Read only the documented application delivery envelope, never verify or
+ * manufacture authorization in the browser. These bounds can only withhold
+ * playback; the signed URL AND the authenticated byte request remain the
+ * authority. No token is logged, stored, or used as learning evidence.
+ */
+export function approvedDeliveryExpiresAt(
+  activity: ActivityResponse,
+): number | null {
+  const descriptor = activity.media;
+  const source = descriptor?.delivery?.progressive_url;
+  if (!source || source.length > 8192) return null;
+  try {
+    const url = new URL(source);
+    if (
+      url.protocol !== "https:" ||
+      url.username ||
+      url.password ||
+      url.hash ||
+      !url.pathname.startsWith("/v1/media/playback/") ||
+      url.searchParams.getAll("token").length !== 1
+    )
+      return null;
+    const token = url.searchParams.get("token")!;
+    if (token.length > 4096) return null;
+    const match = /^AC-MEDIA\.([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]{43})$/.exec(
+      token,
+    );
+    if (!match) return null;
+    const payload = match[1].replace(/-/g, "+").replace(/_/g, "/");
+    const claims = JSON.parse(
+      atob(payload.padEnd(Math.ceil(payload.length / 4) * 4, "=")),
+    ) as Record<string, unknown>;
+    if (
+      !claims ||
+      typeof claims !== "object" ||
+      claims.typ !== "AC-MEDIA" ||
+      claims.token_type !== "playback" ||
+      !Number.isSafeInteger(claims.iat) ||
+      !Number.isSafeInteger(claims.exp) ||
+      (claims.iat as number) < 0 ||
+      (claims.exp as number) <= (claims.iat as number) ||
+      (claims.exp as number) - (claims.iat as number) > 3600 ||
+      (claims.iat as number) * 1000 > Date.now() + 30_000 ||
+      claims.activity_id !== activity.id ||
+      !descriptor?.activity_version ||
+      claims.activity_version !== descriptor.activity_version ||
+      !descriptor.media_id ||
+      claims.asset_id !== descriptor.media_id ||
+      !descriptor.media_version_id ||
+      claims.version_id !== descriptor.media_version_id ||
+      !descriptor.binding_id ||
+      claims.binding_id !== descriptor.binding_id ||
+      claims.enrollment_id !== activity.enrollment_id ||
+      typeof claims.delivery_grant_id !== "string" ||
+      !claims.delivery_grant_id ||
+      typeof claims.key !== "string" ||
+      claims.key.length > 2048 ||
+      decodeURIComponent(url.pathname.slice("/v1/media/playback/".length)) !==
+        claims.key
+    )
+      return null;
+    return (claims.exp as number) * 1000;
+  } catch {
+    return null;
+  }
+}
+
+function playbackMode(
+  activity: ActivityResponse,
+  source: AuthorizedVideoMedia | null,
+): VideoPlaybackMode {
+  if (
+    activity.kind.toLowerCase() !== "video" ||
+    !["available", "in_progress"].includes(activity.state.toLowerCase()) ||
+    !source
+  )
+    return "unavailable";
+  const expiresAt = approvedDeliveryExpiresAt(activity);
+  // A malformed/expired application token is never rescued by complete_video.
+  if (
+    activity.media?.delivery?.progressive_url?.includes("/v1/media/") &&
+    (expiresAt === null || expiresAt <= Date.now())
+  )
+    return "unavailable";
+  if (canStartPlayback(activity)) return "tracked";
+  return expiresAt !== null && expiresAt > Date.now()
+    ? "read-only"
+    : "unavailable";
+}
+
+function playbackContext(
+  activity: ActivityResponse,
+  media: AuthorizedVideoMedia | null,
+  mode: VideoPlaybackMode,
+): string {
+  return JSON.stringify([
+    activity.id,
+    activity.enrollment_id,
+    activity.program_version_id,
+    mode,
+    activity.media?.binding_id,
+    activity.media?.media_version_id,
+    activity.media?.activity_version,
+    media?.src,
+  ]);
 }
 
 function clientEventId(sequence: number): string {
@@ -419,50 +554,30 @@ function isPlaybackSessionInvalid(error: unknown): boolean {
 }
 
 export function LockedMediaStage({
-  activity,
   moduleHref,
-  reason,
 }: Pick<VideoViewerProps, "activity" | "moduleHref"> & { reason?: string }) {
-  const authorized = canStartPlayback(activity);
-
   return (
     <div
-      className="momentum-video-stage momentum-video-stage--unavailable"
+      className="lesson-media-notice"
       role="status"
-      aria-label="Approved lesson media is unavailable"
+      aria-label="Lesson video unavailable"
     >
-      <div className="momentum-video-stage__topline">
-        <span className="momentum-video-stage__index">01</span>
-        <span>LESSON PLAYBACK</span>
-        <span className="momentum-video-stage__badge">
-          <VideoOff size={14} aria-hidden="true" />
-          Media not connected
-        </span>
-      </div>
-      <div className="momentum-video-stage__copy">
-        <div className="momentum-video-stage__icon" aria-hidden="true">
-          <VideoOff size={28} />
-        </div>
-        <p className="momentum-video-stage__eyebrow">
-          Server-authorized lesson
-        </p>
-        <h3>No approved lesson media is connected yet.</h3>
+      <span className="lesson-media-notice__icon" aria-hidden="true">
+        <VideoOff size={26} />
+      </span>
+      <div className="lesson-media-notice__copy">
+        <h3>This video isn’t available yet</h3>
         <p>
-          {authorized
-            ? reason && reason !== "No approved lesson media is connected yet."
-              ? reason
-              : "The server exposes a completion action, but this activity cannot start playback until approved lesson media is attached."
-            : reason ||
-              "Playback and completion remain unavailable for this activity until the server resolves the required capability."}
+          There’s no playable video attached to this lesson. You can return to
+          the module and explore your other available steps.
         </p>
       </div>
-      <div className="momentum-video-stage__footer">
-        <span>
-          <ShieldCheck size={15} aria-hidden="true" />
-          Watch evidence cannot be submitted while media is unavailable.
-        </span>
-        <Link href={moduleHref}>Return to module</Link>
-      </div>
+      <Link className="button button--outline" href={moduleHref}>
+        Back to module
+      </Link>
+      <p className="lesson-media-notice__note">
+        This lesson stays incomplete until you can watch it.
+      </p>
     </div>
   );
 }
@@ -470,42 +585,29 @@ export function LockedMediaStage({
 export function BlockedMediaStage({
   activity,
   moduleHref,
-  reason,
 }: Pick<VideoViewerProps, "activity" | "moduleHref"> & { reason?: string }) {
   return (
     <div
-      className="momentum-video-stage momentum-video-stage--blocked"
+      className="lesson-media-notice"
       role="status"
-      aria-label={`Lesson media for ${activity.title} is blocked by policy`}
+      aria-label={`Video for ${activity.title} unavailable`}
     >
-      <div className="momentum-video-stage__topline">
-        <span className="momentum-video-stage__index">01</span>
-        <span>LESSON PLAYBACK</span>
-        <span className="momentum-video-stage__badge">
-          <ShieldAlert size={14} aria-hidden="true" />
-          Media policy blocked
-        </span>
-      </div>
-      <div className="momentum-video-stage__copy">
-        <div className="momentum-video-stage__icon" aria-hidden="true">
-          <ShieldAlert size={28} />
-        </div>
-        <p className="momentum-video-stage__eyebrow">
-          Server-authorized policy
-        </p>
-        <h3>Lesson media blocked by policy.</h3>
+      <span className="lesson-media-notice__icon" aria-hidden="true">
+        <ShieldAlert size={26} />
+      </span>
+      <div className="lesson-media-notice__copy">
+        <h3>This video can’t be played right now</h3>
         <p>
-          {reason ||
-            "Playback is blocked by content and distribution policy for this activity."}
+          Playback is restricted for this lesson. Return to the module to see
+          which steps are available.
         </p>
       </div>
-      <div className="momentum-video-stage__footer">
-        <span>
-          <ShieldCheck size={15} aria-hidden="true" />
-          Watch evidence cannot be submitted while media is blocked.
-        </span>
-        <Link href={moduleHref}>Return to module</Link>
-      </div>
+      <Link className="button button--outline" href={moduleHref}>
+        Back to module
+      </Link>
+      <p className="lesson-media-notice__note">
+        Watching and completion are unavailable for this video.
+      </p>
     </div>
   );
 }
@@ -917,21 +1019,54 @@ export function VideoKeyboardShortcutsDialog({
   );
 }
 
-export function VideoViewer({
+function VideoViewerHeading({
+  activity,
+  labelledBy,
+}: Pick<VideoViewerProps, "activity" | "labelledBy">) {
+  if (labelledBy) return null;
+  return (
+    <div className="momentum-video-viewer__heading">
+      <div>
+        <p className="momentum-video-viewer__eyebrow">
+          <CirclePlay size={16} aria-hidden="true" /> Video lesson
+        </p>
+        <h2 id={`video-title-${activity.id}`}>{activity.title}</h2>
+      </div>
+    </div>
+  );
+}
+
+export function VideoViewer(props: VideoViewerProps) {
+  const resolution = resolveApprovedMedia(props.activity, props.media);
+  const mode = playbackMode(props.activity, resolution.media);
+  return (
+    <VideoViewerSession
+      key={playbackContext(props.activity, resolution.media, mode)}
+      {...props}
+      mode={mode}
+    />
+  );
+}
+
+function VideoViewerSession({
   activity,
   api,
   moduleHref,
+  labelledBy,
   media = null,
   onPlaybackCommitted,
   onTelemetryEvent,
-}: VideoViewerProps) {
+  mode,
+}: VideoViewerProps & { mode: VideoPlaybackMode }) {
   const mediaResolution = useMemo(
     () => resolveApprovedMedia(activity, media),
     [activity, media],
   );
   const activeMedia = mediaResolution.media;
   const isBlocked = mediaResolution.state === "blocked";
-  const authorized = Boolean(activeMedia?.src) && canStartPlayback(activity);
+  const authorized = mode !== "unavailable";
+  const tracked = mode === "tracked";
+  const deliveryExpiresAt = approvedDeliveryExpiresAt(activity);
   const playbackRates = useMemo(
     () => normalizePlaybackRates(activeMedia?.playbackRates),
     [activeMedia?.playbackRates],
@@ -973,6 +1108,8 @@ export function VideoViewer({
   const [canPictureInPicture, setCanPictureInPicture] = useState(false);
   const [hasEnded, setHasEnded] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
+  const [authorizationStopped, setAuthorizationStopped] = useState(false);
+  const authorizationStoppedRef = useRef(false);
   const [playbackSessionNeedsRetry, setPlaybackSessionNeedsRetry] =
     useState(false);
   const [mediaState, setMediaState] = useState<MediaState>(
@@ -1030,22 +1167,61 @@ export function VideoViewer({
   }, []);
 
   const isConnectionEpochCurrent = useCallback((epoch: number) => {
-    return isPlaybackConnectionCurrent(
-      epoch,
-      connectionEpochRef.current,
-      isLearnerOnline(),
-      false,
+    return (
+      mountedRef.current &&
+      !authorizationStoppedRef.current &&
+      isPlaybackConnectionCurrent(
+        epoch,
+        connectionEpochRef.current,
+        isLearnerOnline(),
+        false,
+      )
     );
   }, []);
 
-  const isCanonicalWriteAllowed = useCallback((epoch: number) => {
-    return isPlaybackConnectionCurrent(
-      epoch,
-      connectionEpochRef.current,
-      isLearnerOnline(),
-      reconnectRefreshRequiredRef.current,
+  const isPlaybackAllowed = useCallback(
+    (epoch: number) => {
+      return (
+        authorized &&
+        mountedRef.current &&
+        !authorizationStoppedRef.current &&
+        (deliveryExpiresAt === null || deliveryExpiresAt > Date.now()) &&
+        isPlaybackConnectionCurrent(
+          epoch,
+          connectionEpochRef.current,
+          isLearnerOnline(),
+          reconnectRefreshRequiredRef.current,
+        )
+      );
+    },
+    [authorized, deliveryExpiresAt],
+  );
+
+  const isCanonicalWriteAllowed = useCallback(
+    (epoch: number) => {
+      return tracked && isPlaybackAllowed(epoch);
+    },
+    [isPlaybackAllowed, tracked],
+  );
+
+  const stopAuthorization = useCallback(() => {
+    authorizationStoppedRef.current = true;
+    connectionEpochRef.current += 1;
+    sessionRef.current = null;
+    setAuthorizationStopped(true);
+    setIsPlaying(false);
+    const video = videoRef.current;
+    video?.pause();
+    // Drop buffered delivery as well: an expired grant cannot keep playing a
+    // fully buffered object while the next authenticated request is pending.
+    video?.removeAttribute("src");
+    video?.load();
+    setMediaState("blocked");
+    updateStatus(
+      "error",
+      "Playback authorization changed or expired. Reopen the lesson to continue.",
     );
-  }, []);
+  }, [updateStatus]);
 
   const resetPlaybackSession = useCallback((needsRetry = false) => {
     sessionRef.current = null;
@@ -1211,20 +1387,14 @@ export function VideoViewer({
             media,
           );
           const mediaStillAuthorized =
-            canStartPlayback(refreshedActivity) &&
             refreshedResolution.state === "approved" &&
-            Boolean(refreshedResolution.media?.src) &&
-            refreshedResolution.media?.src === activeMedia?.src;
+            playbackContext(
+              refreshedActivity,
+              refreshedResolution.media,
+              playbackMode(refreshedActivity, refreshedResolution.media),
+            ) === playbackContext(activity, activeMedia, mode);
           if (!mediaStillAuthorized) {
-            setPlaybackSessionNeedsRetry(true);
-            setMediaState("blocked");
-            setMediaMessage(
-              "Playback authorization changed. Reopen the lesson to continue.",
-            );
-            updateStatus(
-              "error",
-              "Playback authorization changed. Reopen the lesson to continue.",
-            );
+            stopAuthorization();
             return false;
           }
 
@@ -1245,6 +1415,13 @@ export function VideoViewer({
           return true;
         } catch (error) {
           if (!isConnectionEpochCurrent(refreshEpoch)) return false;
+          if (
+            error instanceof ApiError &&
+            [401, 403, 404].includes(error.status)
+          ) {
+            stopAuthorization();
+            return false;
+          }
           setPlaybackSessionNeedsRetry(true);
           setMediaState("error");
           setMediaMessage(
@@ -1263,10 +1440,12 @@ export function VideoViewer({
       return request;
     }, [
       activeMedia,
-      activity.id,
+      activity,
       api,
       isConnectionEpochCurrent,
       media,
+      mode,
+      stopAuthorization,
       updateStatus,
     ]);
 
@@ -1275,6 +1454,7 @@ export function VideoViewer({
       const refreshed = await refreshPlaybackAuthorization();
       if (!refreshed) return false;
     }
+    if (!tracked) return isPlaybackAllowed(connectionEpochRef.current);
     if (sessionRef.current?.closed) {
       updateStatus("submitted", "Watch progress has already been submitted.");
       return false;
@@ -1322,6 +1502,17 @@ export function VideoViewer({
         if (!isConnectionEpochCurrent(startEpoch)) return false;
         const currentActivity = await api.activity(activity.id);
         if (!isCanonicalWriteAllowed(startEpoch)) return false;
+        const currentMedia = resolveApprovedMedia(currentActivity, media).media;
+        if (
+          playbackContext(
+            currentActivity,
+            currentMedia,
+            playbackMode(currentActivity, currentMedia),
+          ) !== playbackContext(activity, activeMedia, mode)
+        ) {
+          stopAuthorization();
+          return false;
+        }
         activityRevisionRef.current = currentActivity.revision;
         sessionRef.current = {
           id: started.session_id,
@@ -1353,13 +1544,19 @@ export function VideoViewer({
     startRequestRef.current = request;
     return request;
   }, [
-    activity.id,
+    activity,
+    activeMedia,
     api,
     authorized,
     isCanonicalWriteAllowed,
     isConnectionEpochCurrent,
+    isPlaybackAllowed,
+    media,
+    mode,
     refreshPlaybackAuthorization,
     resetPlaybackSession,
+    stopAuthorization,
+    tracked,
     updateStatus,
   ]);
 
@@ -1368,7 +1565,7 @@ export function VideoViewer({
     if (!video) return;
     const playEpoch = connectionEpochRef.current;
     const ok = await ensurePlaybackSession();
-    if (!ok || !isCanonicalWriteAllowed(playEpoch)) {
+    if (!ok || !isPlaybackAllowed(playEpoch)) {
       video.pause();
       return;
     }
@@ -1377,7 +1574,7 @@ export function VideoViewer({
     } catch (error) {
       updateStatus("error", playbackErrorMessage(error));
     }
-  }, [ensurePlaybackSession, isCanonicalWriteAllowed, updateStatus]);
+  }, [ensurePlaybackSession, isPlaybackAllowed, updateStatus]);
 
   const completePlayback = useCallback(async () => {
     if (completionRequestRef.current) return completionRequestRef.current;
@@ -1431,6 +1628,17 @@ export function VideoViewer({
         if (!isConnectionEpochCurrent(completionEpoch)) return;
         const currentActivity = await api.activity(activity.id);
         if (!isCanonicalWriteAllowed(completionEpoch)) return;
+        const currentMedia = resolveApprovedMedia(currentActivity, media).media;
+        if (
+          playbackContext(
+            currentActivity,
+            currentMedia,
+            playbackMode(currentActivity, currentMedia),
+          ) !== playbackContext(activity, activeMedia, mode)
+        ) {
+          stopAuthorization();
+          return;
+        }
         activityRevisionRef.current = currentActivity.revision;
         if (!isCanonicalWriteAllowed(completionEpoch)) return;
         await api.submitEvidence(
@@ -1461,14 +1669,18 @@ export function VideoViewer({
     completionRequestRef.current = request;
     return request;
   }, [
-    activity.id,
+    activity,
+    activeMedia,
     api,
     duration,
     flushWatch,
     isCanonicalWriteAllowed,
     isConnectionEpochCurrent,
+    media,
+    mode,
     onPlaybackCommitted,
     resetPlaybackSession,
+    stopAuthorization,
     updateStatus,
   ]);
 
@@ -1607,9 +1819,20 @@ export function VideoViewer({
     return () => {
       unmountingRef.current = true;
       mountedRef.current = false;
+      connectionEpochRef.current += 1;
+      qualitySwitchRef.current += 1;
       video?.pause();
     };
   }, []);
+
+  useEffect(() => {
+    if (!authorized || deliveryExpiresAt === null) return;
+    const timer = window.setTimeout(
+      stopAuthorization,
+      Math.max(0, deliveryExpiresAt - Date.now()),
+    );
+    return () => window.clearTimeout(timer);
+  }, [authorized, deliveryExpiresAt, stopAuthorization]);
 
   useEffect(() => {
     activityRevisionRef.current = activity.revision;
@@ -1705,17 +1928,33 @@ export function VideoViewer({
       void startPlaybackAndPlay();
       return;
     }
-    if (!sessionRef.current) {
+    if (tracked && !sessionRef.current) {
       videoRef.current?.pause();
       setIsPlaying(false);
       void startPlaybackAndPlay();
       return;
     }
+    if (!isPlaybackAllowed(connectionEpochRef.current)) {
+      videoRef.current?.pause();
+      setIsPlaying(false);
+      if (deliveryExpiresAt !== null && deliveryExpiresAt <= Date.now())
+        stopAuthorization();
+      return;
+    }
     setIsPlaying(true);
+    if (!tracked) updateStatus("idle", "");
     setMediaState("playing");
     setMediaMessage("Playing approved lesson media.");
     emitTelemetry("video_play");
-  }, [emitTelemetry, startPlaybackAndPlay, updateStatus]);
+  }, [
+    deliveryExpiresAt,
+    emitTelemetry,
+    isPlaybackAllowed,
+    startPlaybackAndPlay,
+    stopAuthorization,
+    tracked,
+    updateStatus,
+  ]);
 
   const handlePause = useCallback(() => {
     if (!mountedRef.current) return;
@@ -1729,15 +1968,19 @@ export function VideoViewer({
       setMediaState("backgrounded");
       setMediaMessage("Playback paused while this tab is in the background.");
     } else if (videoRef.current?.ended || hasEnded) {
-      setMediaState("processing");
-      setMediaMessage("Processing watch evidence with the server…");
+      setMediaState(tracked ? "processing" : "paused");
+      setMediaMessage(
+        tracked
+          ? "Processing watch evidence with the server…"
+          : "Playback ended. Progress has not been recorded.",
+      );
     } else if (mediaState !== "processing") {
       setMediaState("paused");
       setMediaMessage("Playback paused. Press Play to resume.");
     }
     emitTelemetry("video_pause");
     if (!unmountingRef.current) void flushWatch();
-  }, [emitTelemetry, flushWatch, hasEnded, mediaState]);
+  }, [emitTelemetry, flushWatch, hasEnded, mediaState, tracked]);
 
   const handleSeeked = useCallback(() => {
     const video = videoRef.current;
@@ -1827,10 +2070,14 @@ export function VideoViewer({
       return;
     }
     setMediaState("buffering");
-    setMediaMessage("Playback is buffering. Watch evidence remains paused.");
+    setMediaMessage("Playback is buffering.");
   }, []);
 
   const handleMediaError = useCallback(() => {
+    // Media elements do not expose HTTP status. Revalidate the descriptor
+    // before retrying any failed delivery, including an expired/denied URL.
+    reconnectRefreshRequiredRef.current = true;
+    videoRef.current?.pause();
     setIsPlaying(false);
     if (offlineRef.current || !isLearnerOnline()) {
       setMediaState("offline");
@@ -1855,10 +2102,9 @@ export function VideoViewer({
     emitTelemetry("video_error", {
       message: "Approved lesson media could not be loaded.",
     });
-    videoRef.current?.pause();
   }, [emitTelemetry, updateStatus]);
 
-  const retryMedia = useCallback(() => {
+  const retryMedia = useCallback(async () => {
     const video = videoRef.current;
     if (!video) return;
     if (offlineRef.current || !isLearnerOnline()) {
@@ -1872,11 +2118,17 @@ export function VideoViewer({
       );
       return;
     }
+    if (
+      reconnectRefreshRequiredRef.current &&
+      !(await refreshPlaybackAuthorization())
+    )
+      return;
+    if (!isPlaybackAllowed(connectionEpochRef.current)) return;
     updateStatus("idle", "Loading approved lesson media…");
     setMediaState("loading");
     setMediaMessage("Retrying approved lesson media…");
     video.load();
-  }, [updateStatus]);
+  }, [isPlaybackAllowed, refreshPlaybackAuthorization, updateStatus]);
 
   useEffect(() => {
     function handleVisibilityChange() {
@@ -2016,7 +2268,12 @@ export function VideoViewer({
       const resumeAfterLoad = !video.paused;
       const switchId = ++qualitySwitchRef.current;
       const restorePlayback = () => {
-        if (qualitySwitchRef.current !== switchId) return;
+        if (
+          qualitySwitchRef.current !== switchId ||
+          !mountedRef.current ||
+          authorizationStoppedRef.current
+        )
+          return;
         if (Number.isFinite(video.duration) && video.duration > 0) {
           video.currentTime = Math.min(restorePosition, video.duration);
           setCurrentTime(video.currentTime);
@@ -2243,26 +2500,37 @@ export function VideoViewer({
     ? mediaMessage
     : statusMessage || mediaMessage;
 
+  if (authorizationStopped) {
+    return (
+      <section
+        className="momentum-video-viewer"
+        aria-labelledby={labelledBy ?? `video-title-${activity.id}`}
+      >
+        <VideoViewerHeading activity={activity} labelledBy={labelledBy} />
+        <div className="lesson-media-notice" role="status">
+          <div className="lesson-media-notice__copy">
+            <h3>Reopen this lesson to continue</h3>
+            <p>
+              Playback authorization changed or expired. Playback has stopped;
+              no further watch progress is submitted.
+            </p>
+          </div>
+          <Link className="button button--outline" href={moduleHref}>
+            Return to module
+          </Link>
+        </div>
+      </section>
+    );
+  }
+
   if (!authorized || !activeMedia) {
     if (activity.state.toLowerCase() === "completed") {
       return (
         <section
           className="momentum-video-viewer"
-          aria-labelledby={`video-title-${activity.id}`}
+          aria-labelledby={labelledBy ?? `video-title-${activity.id}`}
         >
-          <div className="momentum-video-viewer__heading">
-            <div>
-              <p className="momentum-video-viewer__eyebrow">
-                <CirclePlay size={16} aria-hidden="true" />
-                Video lesson
-              </p>
-              <h2 id={`video-title-${activity.id}`}>{activity.title}</h2>
-            </div>
-            <span className="momentum-video-viewer__policy">
-              <ShieldCheck size={15} aria-hidden="true" />
-              Server-resolved
-            </span>
-          </div>
+          <VideoViewerHeading activity={activity} labelledBy={labelledBy} />
           <CompletedMediaStage activity={activity} moduleHref={moduleHref} />
           <div
             className="momentum-video-viewer__facts"
@@ -2281,39 +2549,14 @@ export function VideoViewer({
       return (
         <section
           className="momentum-video-viewer"
-          aria-labelledby={`video-title-${activity.id}`}
+          aria-labelledby={labelledBy ?? `video-title-${activity.id}`}
         >
-          <div className="momentum-video-viewer__heading">
-            <div>
-              <p className="momentum-video-viewer__eyebrow">
-                <CirclePlay size={16} aria-hidden="true" />
-                Video lesson
-              </p>
-              <h2 id={`video-title-${activity.id}`}>{activity.title}</h2>
-            </div>
-            <span className="momentum-video-viewer__policy">
-              <ShieldAlert size={15} aria-hidden="true" />
-              Policy blocked
-            </span>
-          </div>
+          <VideoViewerHeading activity={activity} labelledBy={labelledBy} />
           <BlockedMediaStage
             activity={activity}
             moduleHref={moduleHref}
             reason={mediaResolution.reason}
           />
-          <div
-            className="momentum-video-viewer__facts"
-            aria-label="Video lesson status"
-          >
-            <span>
-              <CheckCircle2 size={15} aria-hidden="true" />
-              Completion is server-determined
-            </span>
-            <span>
-              <ShieldAlert size={15} aria-hidden="true" />
-              Policy blocked: playback restricted
-            </span>
-          </div>
         </section>
       );
     }
@@ -2321,39 +2564,14 @@ export function VideoViewer({
     return (
       <section
         className="momentum-video-viewer"
-        aria-labelledby={`video-title-${activity.id}`}
+        aria-labelledby={labelledBy ?? `video-title-${activity.id}`}
       >
-        <div className="momentum-video-viewer__heading">
-          <div>
-            <p className="momentum-video-viewer__eyebrow">
-              <CirclePlay size={16} aria-hidden="true" />
-              Video lesson
-            </p>
-            <h2 id={`video-title-${activity.id}`}>{activity.title}</h2>
-          </div>
-          <span className="momentum-video-viewer__policy">
-            <ShieldCheck size={15} aria-hidden="true" />
-            Server-resolved
-          </span>
-        </div>
+        <VideoViewerHeading activity={activity} labelledBy={labelledBy} />
         <LockedMediaStage
           activity={activity}
           moduleHref={moduleHref}
           reason={mediaResolution.reason}
         />
-        <div
-          className="momentum-video-viewer__facts"
-          aria-label="Video lesson status"
-        >
-          <span>
-            <CheckCircle2 size={15} aria-hidden="true" />
-            Completion is server-determined
-          </span>
-          <span>
-            <FileText size={15} aria-hidden="true" />
-            Captions and transcript unavailable
-          </span>
-        </div>
       </section>
     );
   }
@@ -2386,21 +2604,14 @@ export function VideoViewer({
   return (
     <section
       className="momentum-video-viewer"
-      aria-labelledby={`video-title-${activity.id}`}
+      aria-labelledby={labelledBy ?? `video-title-${activity.id}`}
     >
-      <div className="momentum-video-viewer__heading">
-        <div>
-          <p className="momentum-video-viewer__eyebrow">
-            <CirclePlay size={16} aria-hidden="true" />
-            Video lesson
-          </p>
-          <h2 id={`video-title-${activity.id}`}>{activity.title}</h2>
-        </div>
-        <span className="momentum-video-viewer__policy">
-          <ShieldCheck size={15} aria-hidden="true" />
-          Server-resolved
-        </span>
-      </div>
+      <VideoViewerHeading activity={activity} labelledBy={labelledBy} />
+      {!tracked ? (
+        <p role="note">
+          Playback only — progress is not recorded for this lesson.
+        </p>
+      ) : null}
 
       <div
         ref={playerRef}
@@ -2410,6 +2621,7 @@ export function VideoViewer({
         role="region"
         aria-label={`Video player for ${activity.title}`}
         data-fullscreen-target="player"
+        data-playback-mode={mode}
       >
         <div
           className="momentum-video-player__stage"
@@ -2432,18 +2644,23 @@ export function VideoViewer({
               handlePlay();
             }}
             onPause={handlePause}
+            onPlaying={handlePlay}
             onEnded={() => {
               setHasEnded(true);
-              setMediaState("processing");
-              setMediaMessage("Processing watch evidence with the server…");
-              void completePlayback();
+              setIsPlaying(false);
+              setMediaState(tracked ? "processing" : "paused");
+              setMediaMessage(
+                tracked
+                  ? "Processing watch evidence with the server…"
+                  : "Playback ended. Progress has not been recorded.",
+              );
+              if (tracked) void completePlayback();
             }}
             onTimeUpdate={handleTimeUpdate}
             onLoadedMetadata={handleLoadedMetadata}
             onCanPlay={handleCanPlay}
             onWaiting={handleWaiting}
             onStalled={handleWaiting}
-            onSuspend={handleWaiting}
             onError={handleMediaError}
             onSeeked={handleSeeked}
             aria-label={activity.title}
@@ -2698,14 +2915,18 @@ export function VideoViewer({
               className="momentum-video-viewer__retry"
               type="button"
               onClick={() =>
-                mediaState === "error" &&
-                !hasEnded &&
-                !playbackSessionNeedsRetry
-                  ? retryMedia()
+                !tracked ||
+                (mediaState === "error" &&
+                  !hasEnded &&
+                  !playbackSessionNeedsRetry)
+                  ? void retryMedia()
                   : void retryPlaybackSave()
               }
             >
-              {mediaState === "error" && !hasEnded && !playbackSessionNeedsRetry
+              {!tracked ||
+              (mediaState === "error" &&
+                !hasEnded &&
+                !playbackSessionNeedsRetry)
                 ? "Retry media"
                 : "Retry server save"}
             </button>

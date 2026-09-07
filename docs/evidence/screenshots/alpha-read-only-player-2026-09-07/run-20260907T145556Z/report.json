@@ -1,0 +1,19 @@
+{
+  "evidence": "Synthetic API/envelope with locally fulfilled reviewed MP4; not server authentication, HLS/ABR, staging or performance proof",
+  "cases": [
+    {
+      "width": 1440,
+      "theme": "light",
+      "decoded": {
+        "width": 1920,
+        "height": 1080,
+        "duration": 12.032,
+        "advanced": true
+      },
+      "attempted_writes": 0,
+      "reconnect_denial_stopped": true,
+      "horizontal_overflow": false,
+      "status": "pass"
+    }
+  ]
+}
