@@ -55,6 +55,13 @@ from ac_platform.media.contracts import (
     MediaVersionId,
     create_media_authorization_context,
 )
+from ac_platform.media.database_delivery_authorizer import (
+    DeliveryActivityResolver,
+    activity_delivery_fingerprint,
+    activity_delivery_scope,
+    grant_token,
+    require_activity_delivery_access,
+)
 from ac_platform.media.errors import (
     MediaBadRequest,
     MediaConfigurationError,
@@ -90,7 +97,7 @@ from ac_platform.media.models import (
     MediaVersion,
     MediaWebhookInbox,
 )
-from ac_platform.media.policy import SignedMediaDeliveryPort
+from ac_platform.media.policy import PersistedMediaGrantScope, SignedMediaDeliveryPort
 from ac_platform.media.processing import (
     FailClosedProcessor,
     MediaProcessor,
@@ -108,6 +115,7 @@ from ac_platform.media.storage import (
 
 if TYPE_CHECKING:
     from ac_platform.learning.services import LearningAccessContext
+    from ac_platform.media.staging_fixture_manifest import VerifiedStagingFixturePack
 
 _CONTENT_TYPES: dict[MediaPurpose, frozenset[str]] = {
     MediaPurpose.AVATAR: frozenset({"image/jpeg", "image/png", "image/webp"}),
@@ -196,6 +204,7 @@ class MediaService:
         retention_policy: MediaRetentionPolicy | None = None,
         processing_quota: ProcessingQuota | None = None,
         delivery_port: SignedMediaDeliveryPort | None = None,
+        delivery_activity_resolver: DeliveryActivityResolver | None = None,
         media_config: MediaProviderConfig | None = None,
         activation_verifier: MediaProviderActivationVerifier | None = None,
     ) -> None:
@@ -226,6 +235,9 @@ class MediaService:
         # playback unavailable unless the caller explicitly composes the
         # reviewed app route/session/grant/CORS/range boundary.
         self.delivery_port = delivery_port
+        # Separate explicit composition from ordinary owner-media playback.
+        # Merely injecting a signer does not activate learner delivery.
+        self.delivery_activity_resolver = delivery_activity_resolver
 
     def _provider_activation_verified(self) -> bool:
         """Permit the legacy verifier seam only for local/test contract tests.
@@ -239,6 +251,129 @@ class MediaService:
             and self.media_config.environment in {"local", "test"}
             and self.media_config.activation_verified(self.activation_verifier)
         )
+
+    def register_verified_staging_fixture_source(
+        self,
+        database: Session,
+        actor: ActorContext,
+        pack: VerifiedStagingFixturePack,
+        fixture_id: str,
+        *,
+        environment: str,
+        release_id: str,
+    ) -> MediaVersion:
+        """Register only a sealed test-package source, never caller-declared READY.
+
+        The owning import application supplies the transaction and audit. The
+        ordinary upload/provider paths and their gates remain unchanged.
+        """
+        from ac_platform.identity.models import Person
+        from ac_platform.media.staging_fixture_manifest import VerifiedStagingFixturePack
+        from ac_platform.tenancy.models import Membership, Tenant
+
+        if not isinstance(pack, VerifiedStagingFixturePack):
+            raise MediaForbidden("A verified staging fixture package is required.")
+        tenant_id = self._tenant(actor)
+        pack.require_scope(environment=environment, release_id=release_id, tenant_id=tenant_id)
+        if self.storage is not pack.storage:
+            raise MediaForbidden("The verified fixture storage is not composed.")
+        authorized = database.scalar(
+            select(Membership)
+            .join(Person, Person.id == Membership.person_id)
+            .join(Tenant, Tenant.id == Membership.tenant_id)
+            .where(
+                Membership.tenant_id == tenant_id,
+                Membership.person_id == actor.person_id,
+                Membership.role.in_(("admin", "owner")),
+                Membership.status == "active",
+                Membership.ended_at.is_(None),
+                Person.status == "active",
+                Tenant.status == "active",
+            )
+            .with_for_update()
+        )
+        if authorized is None:
+            raise MediaForbidden("Persisted tenant administrator authority is required.")
+        clip = next((item for item in pack.clips if item.spec.fixture_id == fixture_id), None)
+        if clip is None:
+            raise MediaForbidden("The staging fixture is outside the approved package.")
+        expected = next(
+            item for item in clip.spec.objects if item.path == clip.spec.progressive_path
+        )
+        head = self.storage.head(clip.source_key)
+        if head is None or (
+            head.content_length != expected.content_length
+            or head.content_type != "video/mp4"
+            or head.checksum_sha256 != expected.sha256
+        ):
+            raise MediaForbidden("The verified staging source bytes changed.")
+        scan = self.scanner.scan(
+            storage=self.storage,
+            object_key=clip.source_key,
+            declared_content_type="video/mp4",
+            content_length=head.content_length,
+            checksum_sha256=head.checksum_sha256,
+        )
+        if not scan.clean or scan.verified_checksum_sha256 != expected.sha256:
+            raise MediaForbidden("The verified staging source inspection is unavailable.")
+        existing = database.scalar(
+            select(MediaVersion).where(MediaVersion.id == clip.version_id).with_for_update()
+        )
+        asset = database.scalar(
+            select(MediaAsset).where(MediaAsset.id == clip.asset_id).with_for_update()
+        )
+        if existing is not None or asset is not None:
+            if (
+                existing is None
+                or asset is None
+                or (
+                    asset.tenant_id != tenant_id
+                    or asset.owner_person_id != actor.person_id
+                    or asset.purpose != "video"
+                    or asset.state == MediaLifecycle.RETIRED.value
+                    or existing.tenant_id != tenant_id
+                    or existing.asset_id != asset.id
+                    or existing.object_key != clip.source_key
+                    or existing.checksum_sha256 != expected.sha256
+                    or existing.actual_bytes != expected.content_length
+                    or existing.content_type != "video/mp4"
+                    or existing.state
+                    not in {MediaLifecycle.PROCESSING.value, MediaLifecycle.READY.value}
+                )
+            ):
+                raise MediaConflict("The deterministic fixture identity is occupied or changed.")
+            return existing
+        now = self._now()
+        asset = MediaAsset(
+            id=clip.asset_id,
+            tenant_id=tenant_id,
+            owner_person_id=actor.person_id,
+            purpose=MediaPurpose.VIDEO.value,
+            state=MediaLifecycle.PROCESSING.value,
+            created_at=now,
+            updated_at=now,
+        )
+        database.add(asset)
+        database.flush()
+        version = MediaVersion(
+            id=clip.version_id,
+            tenant_id=tenant_id,
+            asset_id=asset.id,
+            version_number=1,
+            purpose=MediaPurpose.VIDEO.value,
+            state=MediaLifecycle.PROCESSING.value,
+            content_type="video/mp4",
+            declared_bytes=expected.content_length,
+            actual_bytes=expected.content_length,
+            checksum_sha256=expected.sha256,
+            object_key=clip.source_key,
+            storage_version_id=head.storage_version_id,
+            created_at=now,
+            updated_at=now,
+        )
+        database.add(version)
+        database.flush()
+        return version
 
     @staticmethod
     def _now() -> datetime:
@@ -611,7 +746,7 @@ class MediaService:
                 reason="approved_media_version_unavailable",
             )
         projected = self._version_response(database, version, include_sources=False)
-        return ActivityMediaDescriptorResponse(
+        descriptor = ActivityMediaDescriptorResponse(
             state="approved",
             reason="approved_media_delivery_not_composed",
             binding_id=snapshot.binding_id,
@@ -626,6 +761,122 @@ class MediaService:
             captions=projected.captions if projected is not None else [],
             delivery=None,
             playback_available=False,
+        )
+        if self.delivery_port is None or self.delivery_activity_resolver is None:
+            return descriptor
+        if access.actor != actor or access.person_id != actor.person_id:
+            raise MediaForbidden("The activity delivery actor is unavailable.")
+        now = self._now().replace(microsecond=0)
+        require_activity_delivery_access(
+            database,
+            actor,
+            snapshot,
+            access.enrollment_id,
+            activity_resolver=self.delivery_activity_resolver,
+            now=now,
+        )
+        rows = database.scalars(
+            select(MediaRendition)
+            .where(
+                MediaRendition.tenant_id == tenant_id,
+                MediaRendition.asset_id == snapshot.asset_id,
+                MediaRendition.version_id == snapshot.version_id,
+            )
+            .order_by(MediaRendition.bitrate_kbps.desc(), MediaRendition.id)
+        ).all()
+        hls = next((row for row in rows if row.protocol == DeliveryProtocol.HLS.value), None)
+        progressive = next(
+            (row for row in rows if row.protocol == DeliveryProtocol.PROGRESSIVE.value), None
+        )
+        if hls is None and progressive is None:
+            return descriptor.model_copy(
+                update={"state": "blocked", "reason": "approved_media_rendition_unavailable"}
+            )
+        fingerprint = activity_delivery_fingerprint(
+            activity_delivery_scope(actor, snapshot, access.enrollment_id)
+        )
+        grant = database.scalar(
+            select(MediaPlaybackGrant)
+            .where(
+                MediaPlaybackGrant.tenant_id == tenant_id,
+                MediaPlaybackGrant.actor_person_id == actor.person_id,
+                MediaPlaybackGrant.request_fingerprint == fingerprint,
+                MediaPlaybackGrant.revoked_at.is_(None),
+                MediaPlaybackGrant.expires_at > now,
+            )
+            .order_by(MediaPlaybackGrant.created_at.desc())
+            .limit(1)
+        )
+        if grant is None:
+            grant_id = uuid4()
+            grant = MediaPlaybackGrant(
+                id=grant_id,
+                tenant_id=tenant_id,
+                actor_person_id=actor.person_id,
+                session_id=uuid4(),
+                asset_id=snapshot.asset_id,
+                version_id=snapshot.version_id,
+                token_nonce=uuid4().hex,
+                created_at=now,
+                expires_at=now + self.delivery_port.playback_ttl,
+                idempotency_key=f"activity-delivery:{grant_id}",
+                request_fingerprint=fingerprint,
+            )
+            grant.token_digest = self.signer.digest(grant_token(grant, self.signer))
+            database.add(grant)
+            database.flush()
+        elif not hmac.compare_digest(
+            grant.token_digest, self.signer.digest(grant_token(grant, self.signer))
+        ):
+            raise MediaForbidden("The activity delivery grant is unavailable.")
+        authorized = snapshot.as_authorized_media_version(actor)
+        grant_scope = PersistedMediaGrantScope(grant.id, access.enrollment_id, snapshot.binding_id)
+
+        def signed_url(key: str, *, supports_range: bool) -> str:
+            # All derivatives share the original grant window, not a refreshed
+            # TTL. Actual byte requests must use the authenticated DB authorizer.
+            return self.delivery_port.issue(  # type: ignore[union-attr]
+                authorization=authorized.authorization,
+                activity_id=authorized.activity_id,
+                activity_version=authorized.activity_version,
+                media_version=authorized.media_version,
+                object_key=key,
+                now=_as_utc(grant.created_at),
+                supports_range=supports_range,
+                grant_scope=grant_scope,
+            ).url.value
+
+        captions = database.scalars(
+            select(MediaCaptionTrack)
+            .where(
+                MediaCaptionTrack.tenant_id == tenant_id,
+                MediaCaptionTrack.version_id == snapshot.version_id,
+                MediaCaptionTrack.state == CaptionState.READY.value,
+            )
+            .order_by(MediaCaptionTrack.id)
+        ).all()
+        return descriptor.model_copy(
+            update={
+                "reason": "approved_media_delivery_available",
+                "playback_available": True,
+                "delivery": MediaDeliveryResponse(
+                    protocol=DeliveryProtocol.HLS
+                    if hls is not None
+                    else DeliveryProtocol.PROGRESSIVE,
+                    manifest_url=signed_url(hls.object_key, supports_range=False) if hls else None,
+                    progressive_url=signed_url(progressive.object_key, supports_range=True)
+                    if progressive
+                    else None,
+                ),
+                "captions": [
+                    self._caption_response(
+                        caption, include_source_url=False, expires_at=None
+                    ).model_copy(
+                        update={"source_url": signed_url(caption.object_key, supports_range=False)}
+                    )
+                    for caption in captions
+                ],
+            }
         )
 
     @staticmethod

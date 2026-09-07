@@ -113,6 +113,9 @@ class Settings(BaseSettings):
     # production runtime composition.
     media_stress_fixtures_enabled: bool = False
     media_stress_fixtures_cache_root: str | None = None
+    # Separate deployment opt-in: loading diagnostic fixtures alone never mounts
+    # learner delivery. This flag can serve only the package-owned two-film set.
+    media_staging_public_films_delivery_enabled: bool = False
 
     @field_validator("public_learner_tenant_id", "operations_tenant_id", mode="before")
     @classmethod
@@ -250,6 +253,17 @@ class Settings(BaseSettings):
 
     def _validate_media_stress_fixtures(self) -> None:
         """Keep local fixture opt-in outside production and normal local mode."""
+
+        if self.media_staging_public_films_delivery_enabled and (
+            self.environment not in {"staging", "test"}
+            or not self.media_stress_fixtures_enabled
+            or self.public_learner_tenant_id is None
+            or self.media_provider_enabled
+        ):
+            raise ValueError(
+                "staging public-film delivery requires isolated staging/test fixtures, "
+                "a configured learner tenant and no general media provider"
+            )
 
         if self.media_stress_fixtures_enabled and self.environment == "production":
             raise ValueError("AC_MEDIA_STRESS_FIXTURES_ENABLED is forbidden in production")

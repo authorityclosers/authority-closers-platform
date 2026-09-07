@@ -684,6 +684,11 @@ class PrivateMediaDeliveryHandler:
         )
         activity_id = _claim_text(claims, "activity_id")
         activity_version = _claim_text(claims, "activity_version")
+        # Preserve the durable grant scope without extending its TTL or the
+        # independently validated HLS object inventory.
+        from ac_platform.media.policy import PersistedMediaGrantScope
+
+        grant_scope = PersistedMediaGrantScope.from_claims(claims)
 
         def signed_child(uri: str) -> str:
             try:
@@ -705,6 +710,7 @@ class PrivateMediaDeliveryHandler:
                 now=issued_at,
                 kind=token_type,
                 supports_range=False,
+                grant_scope=grant_scope,
             )
             if signed.expires_at != expires_at or signed.expires_at <= now:
                 raise MediaStorageUnavailable("The HLS child token lifetime is unverified.")
