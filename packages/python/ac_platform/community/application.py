@@ -123,9 +123,7 @@ def encode_cursor(cursor: LeaderboardCursor) -> str:
 def decode_cursor(value: str) -> LeaderboardCursor:
     try:
         padding = "=" * (-len(value) % 4)
-        payload = json.loads(
-            base64.b64decode(value + padding, altchars=b"-_", validate=True)
-        )
+        payload = json.loads(base64.b64decode(value + padding, altchars=b"-_", validate=True))
         if not isinstance(payload, dict) or set(payload) != {"v", "xp", "u"}:
             raise ValueError
         xp = payload["xp"]
@@ -278,7 +276,7 @@ class CommunityApplication:
                     revision=expected_revision + 1,
                     updated_at=func.now(),
                 )
-            )
+            ),
         )
         if result.rowcount != 1:
             raise CommunityRevisionConflict("Community preferences changed. Refresh and try again.")
@@ -287,9 +285,7 @@ class CommunityApplication:
         await AuditRepository(self.database).append_for_actor(
             actor,
             action=(
-                "community.leaderboard_joined"
-                if opted_in
-                else "community.leaderboard_withdrawn"
+                "community.leaderboard_joined" if opted_in else "community.leaderboard_withdrawn"
             ),
             resource_type="academy_public_profile",
             resource_id=actor.person_id,

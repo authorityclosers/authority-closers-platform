@@ -266,9 +266,9 @@ def test_concurrent_normalized_username_claims_have_one_owner(postgres_harness) 
                 assert [(row.person_id, row.username) for row in profiles] == [
                     (owner.person_id, "shared_name")
                 ]
-                assert await _event_count(
-                    database, state.tenant_id, "community.username_claimed"
-                ) == 1
+                assert (
+                    await _event_count(database, state.tenant_id, "community.username_claimed") == 1
+                )
                 assert (
                     await database.run_sync(
                         lambda sync: verify_audit_chain_sync(sync, state.tenant_id)
@@ -305,9 +305,9 @@ def test_same_person_username_retry_is_idempotent_and_audited_once(postgres_harn
                     )
                 )
                 assert row is not None and row.username == "retry_user"
-                assert await _event_count(
-                    database, state.tenant_id, "community.username_claimed"
-                ) == 1
+                assert (
+                    await _event_count(database, state.tenant_id, "community.username_claimed") == 1
+                )
         finally:
             await engine.dispose()
 
@@ -381,12 +381,13 @@ def test_username_reuse_is_academy_scoped_and_profiles_do_not_leak_between_peopl
                     )
                 )
                 assert other_person_profile["username"] is None
-                assert await _event_count(
-                    database, state.tenant_id, "community.username_claimed"
-                ) == 1
-                assert await _event_count(
-                    database, second_tenant_id, "community.username_claimed"
-                ) == 1
+                assert (
+                    await _event_count(database, state.tenant_id, "community.username_claimed") == 1
+                )
+                assert (
+                    await _event_count(database, second_tenant_id, "community.username_claimed")
+                    == 1
+                )
         finally:
             await engine.dispose()
 
@@ -436,12 +437,14 @@ def test_leaderboard_opt_in_out_uses_revisions_and_appends_one_audit_per_change(
                 )
                 assert row is not None
                 assert (row.leaderboard_opted_in, row.revision) == (False, 3)
-                assert await _event_count(
-                    database, state.tenant_id, "community.leaderboard_joined"
-                ) == 1
-                assert await _event_count(
-                    database, state.tenant_id, "community.leaderboard_withdrawn"
-                ) == 1
+                assert (
+                    await _event_count(database, state.tenant_id, "community.leaderboard_joined")
+                    == 1
+                )
+                assert (
+                    await _event_count(database, state.tenant_id, "community.leaderboard_withdrawn")
+                    == 1
+                )
         finally:
             await engine.dispose()
 
@@ -650,9 +653,9 @@ def test_academy_public_profiles_migration_matches_orm_metadata(postgres_harness
     model_table = metadata.tables[table_name]
     inspector = inspect(postgres_harness.engine)
 
-    assert {
-        column["name"] for column in inspector.get_columns(table_name)
-    } == set(model_table.columns.keys())
+    assert {column["name"] for column in inspector.get_columns(table_name)} == set(
+        model_table.columns.keys()
+    )
 
     database_foreign_keys = {
         item["name"]: (
@@ -696,9 +699,7 @@ def test_academy_public_profiles_migration_matches_orm_metadata(postgres_harness
         for item in inspector.get_indexes(table_name)
         if not item.get("duplicates_constraint")
     }
-    model_indexes = {
-        index.name: tuple(index.columns.keys()) for index in model_table.indexes
-    }
+    model_indexes = {index.name: tuple(index.columns.keys()) for index in model_table.indexes}
     assert database_indexes == model_indexes
 
     def include_object(obj: object, name: str | None, kind: str, *_args: object) -> bool:
