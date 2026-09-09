@@ -187,6 +187,14 @@ class MediaVersion(Base):
 class MediaUploadIntent(Base):
     __tablename__ = "media_upload_intents"
     __table_args__ = (
+        Index(
+            "ix_media_upload_intents_scope_latest",
+            "tenant_id",
+            "asset_id",
+            "version_id",
+            "created_at",
+            "id",
+        ),
         ForeignKeyConstraint(
             ["tenant_id", "actor_person_id"],
             ["memberships.tenant_id", "memberships.person_id"],
@@ -250,6 +258,42 @@ class MediaUploadIntent(Base):
         onupdate=utc_now,
         server_default=func.now(),
     )
+
+
+class StudioVideoUpload(Base):
+    """Immutable course admission for an upload; not permission or publication."""
+
+    __tablename__ = "studio_video_uploads"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "upload_id"],
+            ["media_upload_intents.tenant_id", "media_upload_intents.id"],
+            name="fk_studio_video_uploads_intent_scope",
+        ),
+        ForeignKeyConstraint(
+            ["program_id", "tenant_id"],
+            ["programs.id", "programs.tenant_id"],
+            name="fk_studio_video_uploads_program_scope",
+        ),
+        Index("ix_studio_video_uploads_course", "tenant_id", "program_id", "upload_id"),
+    )
+
+    upload_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    program_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, server_default=func.now()
+    )
+
+
+@event.listens_for(Session, "before_flush")
+def _enforce_studio_upload_scope(session: Session, _context: object, _instances: object) -> None:
+    for instance in session.deleted:
+        if isinstance(instance, StudioVideoUpload):
+            raise ValueError("Studio upload admission history cannot be deleted")
+    for instance in session.dirty:
+        if isinstance(instance, StudioVideoUpload) and session.is_modified(instance):
+            raise ValueError("Studio upload admission history is immutable")
 
 
 class MediaRendition(Base):
@@ -727,4 +771,5 @@ __all__ = [
     "MediaUploadIntent",
     "MediaVersion",
     "MediaWebhookInbox",
+    "StudioVideoUpload",
 ]

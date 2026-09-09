@@ -12,6 +12,7 @@ import {
   type PracticeApi,
   type PracticeCheckResult,
   type PracticePrompt,
+  type PracticeSummary,
 } from "../lib/practice-api";
 
 (
@@ -94,6 +95,20 @@ it("requires a choice, sends stable option ID, shows backend explanation, and ad
   expect(next).not.toHaveBeenCalled();
   await click(button("Next prompt"));
   expect(next).toHaveBeenCalledWith(false);
+});
+
+it("links saved practice to the real academy username and leaderboard section", async () => {
+  vi.mocked(api.catalog).mockResolvedValue({
+    items: [],
+    mode: "editorial_preview",
+    course_progress_affected: false,
+    responses_stored: false,
+  });
+  await act(async () => root.render(<PracticeArcade api={api} durable />));
+  const link = container.querySelector<HTMLAnchorElement>(
+    'a[href="/profile#community-identity-title"]',
+  );
+  expect(link?.textContent).toContain("Username & leaderboard");
 });
 
 it("keeps the response on network failure and retries without erasing choices", async () => {
@@ -256,6 +271,59 @@ it("a denied catalog shows sign-in without a placeholder library", async () => {
   await act(async () => root.render(<PracticeArcade api={api} />));
   expect(container.querySelector('a[href="/login"]')).toBeTruthy();
   expect(container.textContent).not.toContain("8 sets");
+});
+
+async function mountCatalog(items: PracticeSummary[]) {
+  api.catalog = vi.fn().mockResolvedValue({ items });
+  await act(async () => root.render(<PracticeArcade api={api} />));
+}
+
+const catalogSet: PracticeSummary = {
+  id: "custom-conversation",
+  version: 1,
+  title: "Find a useful question",
+  kind: "branch",
+  skill: "Discovery",
+  description: "Listen, then choose your response.",
+  art: "discovery-compass",
+  color: "mint",
+  estimated_minutes: 4,
+  item_count: 5,
+};
+
+it("features only an available set and uses its real title and prompt count", async () => {
+  await mountCatalog([catalogSet]);
+  const featured = container.querySelector(
+    '[aria-labelledby="practice-featured-title"]',
+  )!;
+  expect(featured.textContent).toContain(catalogSet.title);
+  expect(featured.textContent).toContain("5 prompts");
+  expect(featured.querySelector("a")?.getAttribute("href")).toBe(
+    "/practice?set=custom-conversation",
+  );
+  expect(
+    container.querySelector('a[href="/practice?set=next-move"]'),
+  ).toBeNull();
+  expect(container.textContent).not.toContain("Every set has three");
+});
+
+it("shows an honest empty library with a useful route instead of a dead start button", async () => {
+  await mountCatalog([]);
+  expect(container.textContent).toContain("Your next practice is on its way");
+  expect(container.querySelector('a[href="/learning"]')).toBeTruthy();
+  expect(container.querySelector('a[href^="/practice?set="]')).toBeNull();
+});
+
+it("keeps format labels beside decorative color and safely falls back for unknown colors", async () => {
+  await mountCatalog([
+    catalogSet,
+    { ...catalogSet, id: "other", kind: "gap", color: "unrecognized" },
+  ]);
+  const cards = container.querySelectorAll("a[data-color]");
+  expect(cards[0].getAttribute("data-color")).toBe("mint");
+  expect(cards[0].textContent).toContain("Conversation");
+  expect(cards[1].getAttribute("data-color")).toBe("cobalt");
+  expect(cards[1].textContent).toContain("Fill the gap");
 });
 
 it("response readiness rejects incomplete or duplicate arrangements", () => {

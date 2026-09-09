@@ -371,7 +371,7 @@ class CatalogAuthoringCommand(Base):
         ),
         CheckConstraint(
             "operation IN ('module_add', 'module_update', 'activity_add', 'activity_update', "
-            "'version_revise')",
+            "'version_revise', 'program_create')",
             name="operation_supported",
         ),
         Index("ix_catalog_authoring_commands_version", "tenant_id", "program_version_id"),
