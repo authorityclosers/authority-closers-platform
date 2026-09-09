@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+import { StudioDashboard } from "@ac/operations-web/studio-workspace";
 export default function Studio() {
-  redirect("/studio/programs");
+  return <StudioDashboard />;
 }

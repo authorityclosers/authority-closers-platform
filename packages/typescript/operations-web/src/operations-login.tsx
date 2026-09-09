@@ -62,7 +62,7 @@ function OperationsLoginForm({
     () => true,
     () => false,
   );
-  const destination = surface === "coach" ? "/studio/programs" : "/";
+  const destination = surface === "coach" ? "/studio" : "/";
 
   useEffect(() => {
     const controller = new AbortController();

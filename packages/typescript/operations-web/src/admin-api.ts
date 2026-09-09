@@ -161,12 +161,14 @@ async function requestJson<T>(
 async function requestSessionJson<T>(
   path: "/v1/me" | "/v1/context" | "/v1/me/studio-access",
   fetcher: Fetcher,
+  signal?: AbortSignal,
 ) {
   const response = await fetcher(path, {
     method: "GET",
     cache: "no-store",
     credentials: "same-origin",
     headers: { accept: "application/json" },
+    signal,
   });
   if (!response.ok) throw await parseProblem(response);
   return response.json() as Promise<T>;
@@ -174,26 +176,31 @@ async function requestSessionJson<T>(
 
 export async function loadAdminSession(
   fetcher: Fetcher = fetch,
+  signal?: AbortSignal,
 ): Promise<AdminSession> {
   let me: AdminMe;
   let context: AdminContext;
   let studioAccess: unknown;
   try {
-    me = meSchema.parse(await requestSessionJson<unknown>("/v1/me", fetcher));
+    me = meSchema.parse(
+      await requestSessionJson<unknown>("/v1/me", fetcher, signal),
+    );
     context = contextSchema.parse(
-      await requestSessionJson<unknown>("/v1/context", fetcher),
+      await requestSessionJson<unknown>("/v1/context", fetcher, signal),
     );
     studioAccess = await requestSessionJson<unknown>(
       "/v1/me/studio-access",
       fetcher,
+      signal,
     );
   } catch (error) {
-    if (error instanceof AdminApiProblem) {
+    if (error instanceof AdminApiProblem && [401, 403].includes(error.status)) {
       throw new AdminSessionDenied(
         "The product session could not be verified.",
       );
     }
-    throw new AdminSessionDenied();
+    if (error instanceof z.ZodError) throw new AdminSessionDenied();
+    throw error;
   }
 
   const identity = verifyAdminIdentity(me, context, studioAccess);

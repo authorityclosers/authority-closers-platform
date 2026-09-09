@@ -1,5 +1,4 @@
 import { StudioProgram } from "@ac/operations-web/studio";
-import { CoachShell } from "../../../components/coach-shell";
 import { notFound } from "next/navigation";
 export default async function Course({
   params,
@@ -14,8 +13,8 @@ export default async function Course({
   )
     notFound();
   return (
-    <CoachShell>
+    <>
       <StudioProgram programId={programId} />
-    </CoachShell>
+    </>
   );
 }

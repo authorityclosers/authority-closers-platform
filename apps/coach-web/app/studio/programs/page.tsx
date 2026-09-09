@@ -1,8 +1,7 @@
 import { StudioProgramList } from "@ac/operations-web/studio";
-import { CoachShell } from "../../components/coach-shell";
 export default function Courses() {
   return (
-    <CoachShell>
+    <>
       <div className="coach-page-heading">
         <p className="section-eyebrow">Your academy</p>
         <h1>A great course starts here.</h1>
@@ -12,6 +11,6 @@ export default function Courses() {
         </p>
       </div>
       <StudioProgramList />
-    </CoachShell>
+    </>
   );
 }
