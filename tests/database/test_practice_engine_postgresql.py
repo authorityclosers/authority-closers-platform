@@ -13,7 +13,9 @@ from uuid import UUID, uuid4
 
 import pytest
 from alembic.autogenerate import compare_metadata
+from alembic.config import Config
 from alembic.migration import MigrationContext
+from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine, delete, func, insert, inspect, select, text, update
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import DBAPIError
@@ -37,6 +39,14 @@ from ac_platform.tenancy.models import Membership, Tenant
 from tests.unit.test_practice_engine import finish
 
 ROOT = Path(__file__).parents[2]
+
+
+def _migration_head() -> str:
+    config = Config(str(ROOT / "alembic.ini"))
+    config.set_main_option("script_location", str(ROOT / "db" / "migrations"))
+    head = ScriptDirectory.from_config(config).get_current_head()
+    assert head is not None
+    return head
 
 
 @pytest.fixture(scope="module")
@@ -94,6 +104,7 @@ def postgres_harness():
             db.add(Tenant(id=original, slug=original.hex, name="Preexisting 0019 academy"))
         migrate("20260908_0020")
         migrate("20260908_0021")
+        migrate("head")
         with Session(scoped) as db:
             assert db.get(Tenant, original).name == "Preexisting 0019 academy"
         yield scoped
@@ -147,7 +158,9 @@ def run(coroutine):
 
 def test_populated_upgrade_registry_and_distinct_constraint_names(postgres_harness):
     with postgres_harness.connect() as connection:
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "20260908_0021"
+        assert (
+            connection.scalar(text("SELECT version_num FROM alembic_version")) == _migration_head()
+        )
         assert compare_metadata(MigrationContext.configure(connection), model_metadata()) == []
         names = [
             constraint["name"]

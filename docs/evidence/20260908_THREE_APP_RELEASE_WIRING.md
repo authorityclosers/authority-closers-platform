@@ -97,3 +97,32 @@ Actual verification after these changes:
 This addendum records source/test readiness only. At the time it was written,
 no candidate commit, workflow artifact, foundation/application installation,
 DNS/Access change or staging/production acceptance had yet occurred.
+
+## 2026-09-09 exact-candidate CI parity correction
+
+Workflow run `34365367103` checked out candidate
+`a391dfa4299197d66606c13de35aed4b3203182f`. Its database migration, privilege,
+backup-role, seed, catalog-locking and Studio PostgreSQL parity gates passed, as
+did the capacity simulation. The aggregate suite then stopped packaging after
+three stale registry assertions failed: one fresh-migration test still named
+migration `0019`, the practice populated-upgrade fixture stopped at `0021`, and
+the explicit registry set omitted the practice and Studio command models that
+are already in migrations `0020`-`0023`.
+
+The correction keeps the historical seeded upgrade stages, then migrates to the
+Alembic script directory's single current head and proves that exact revision is
+installed. The explicit permanent-table registry now includes the eleven
+practice/focus tables and `catalog_authoring_commands`. It does not change a
+migration, model or runtime behavior.
+
+Actual focused checks after the correction:
+
+- Model-registry file: **3 passed**.
+- Fresh learning migration/head/append-only guard case: **1 passed** against a
+  random disposable loopback PostgreSQL schema.
+- Populated `0019` through current-head migration and autogenerate-drift case:
+  **1 passed** against a separate random disposable loopback PostgreSQL schema.
+- Scoped Ruff format/lint and `git diff --check` passed.
+
+No image was packaged from the failed run, and no VPS installation or DNS change
+was attempted from that candidate.

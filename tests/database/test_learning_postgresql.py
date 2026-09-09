@@ -16,6 +16,8 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine, func, inspect, select, text
 from sqlalchemy.engine import URL, Engine, make_url
 from sqlalchemy.exc import DBAPIError, IntegrityError
@@ -76,6 +78,15 @@ LEARNING_TABLES = {
     "learning_progress_projections",
     "learning_command_idempotency",
 }
+
+
+def _migration_head() -> str:
+    root = Path(__file__).parents[2]
+    config = Config(str(root / "alembic.ini"))
+    config.set_main_option("script_location", str(root / "db" / "migrations"))
+    head = ScriptDirectory.from_config(config).get_current_head()
+    assert head is not None
+    return head
 
 
 def _postgres_base_url() -> URL:
@@ -437,7 +448,9 @@ def test_fresh_migration_matches_learning_models_and_installs_append_only_guards
     inspector = inspect(learning_postgres_engine)
     with learning_postgres_engine.connect() as connection:
         schema = connection.scalar(text("SELECT current_schema()"))
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "20260907_0019"
+        assert (
+            connection.scalar(text("SELECT version_num FROM alembic_version")) == _migration_head()
+        )
         trigger_names = set(
             connection.scalars(
                 text(

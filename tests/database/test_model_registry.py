@@ -22,6 +22,7 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "capability_revocations",
         "programs",
         "program_versions",
+        "catalog_authoring_commands",
         "catalog_publish_commands",
         "modules",
         "module_prerequisites",
@@ -69,6 +70,17 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "learning_plan_items",
         "learning_next_action_projections",
         "analytics_events",
+        "practice_profiles",
+        "practice_set_versions",
+        "practice_attempts",
+        "practice_responses",
+        "practice_feedback_acks",
+        "practice_participations",
+        "practice_reward_claims",
+        "practice_ledger_entries",
+        "practice_commands",
+        "practice_focus_runs",
+        "practice_focus_events",
     }
 
     assert set(model_metadata().tables) == expected
