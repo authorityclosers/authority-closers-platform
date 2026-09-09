@@ -1,4 +1,4 @@
-"""Exact migration-bound parity through practice, Focus and Studio authoring."""
+"""Exact migration-bound parity through Studio uploads and community identity."""
 
 from __future__ import annotations
 
@@ -28,8 +28,24 @@ PRACTICE = "20260908_0020"
 FOCUS = "20260908_0021"
 AUTHORING = "20260908_0022"
 REVISION = "20260909_0023"
-HEADS = (LEGACY, CAPABILITIES, PRACTICE, FOCUS, AUTHORING, REVISION)
+MEDIA_LIBRARY = "20260909_0024"
+COURSE_CREATION = "20260909_0025"
+STUDIO_VIDEO_UPLOADS = "20260910_0026"
+COMMUNITY_IDENTITY = "20260910_0027"
+HEADS = (
+    LEGACY,
+    CAPABILITIES,
+    PRACTICE,
+    FOCUS,
+    AUTHORING,
+    REVISION,
+    MEDIA_LIBRARY,
+    COURSE_CREATION,
+    STUDIO_VIDEO_UPLOADS,
+    COMMUNITY_IDENTITY,
+)
 VERSIONED_HEADS = HEADS[1:]
+TABLELESS_VERSIONED_HEADS = (REVISION, MEDIA_LIBRARY, COURSE_CREATION)
 NEW_TABLES = {
     PRACTICE: (
         "practice_set_versions",
@@ -44,6 +60,8 @@ NEW_TABLES = {
     ),
     FOCUS: ("practice_focus_runs", "practice_focus_events"),
     AUTHORING: ("catalog_authoring_commands",),
+    STUDIO_VIDEO_UPLOADS: ("studio_video_uploads",),
+    COMMUNITY_IDENTITY: ("academy_public_profiles",),
 }
 ROOT = Path(__file__).parents[2]
 
@@ -105,7 +123,7 @@ def test_three_separately_packaged_helpers_have_identical_versioned_contracts() 
             assert module.parity_tables_for_head(head) == backup.PARITY_TABLES
 
 
-@pytest.mark.parametrize("head", ["", "20000101_0001", "20260909_0024", "20260907_0019;bad"])
+@pytest.mark.parametrize("head", ["", "20000101_0001", "20260910_0028", "20260907_0019;bad"])
 def test_unknown_or_unsafe_heads_never_fall_back_to_legacy(head: str) -> None:
     for module in (backup, proof, drill):
         with pytest.raises(RuntimeError, match="no reviewed"):
@@ -413,7 +431,21 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
             and node.func.attr == "create_table"
         }
         assert created == set(added)
-    expected_counts = (39, 41, 50, 52, 53, 53)
+    for head in TABLELESS_VERSIONED_HEADS:
+        paths = list((ROOT / "db/migrations/versions").glob(f"{head}_*.py"))
+        assert len(paths) == 1
+        tree = ast.parse(paths[0].read_text(encoding="utf-8"))
+        created = {
+            ast.literal_eval(node.args[0])
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "op"
+            and node.func.attr == "create_table"
+        }
+        assert created == set()
+    expected_counts = (39, 41, 50, 52, 53, 53, 53, 53, 54, 55)
     expected_contracts = (
         None,
         "ac-postgres-parity-v2",
@@ -421,6 +453,10 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
         "ac-postgres-parity-v4",
         "ac-postgres-parity-v5",
         "ac-postgres-parity-v5",
+        "ac-postgres-parity-v5",
+        "ac-postgres-parity-v5",
+        "ac-postgres-parity-v6",
+        "ac-postgres-parity-v7",
     )
     for module in (backup, proof, drill):
         assert module.VERSIONED_PARITY_CONTRACTS == backup.VERSIONED_PARITY_CONTRACTS

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from sqlalchemy import UniqueConstraint
 
 from ac_platform.db.models import model_metadata
@@ -18,6 +20,7 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "identity_command_idempotency",
         "tenants",
         "memberships",
+        "academy_public_profiles",
         "capability_grants",
         "capability_revocations",
         "programs",
@@ -60,6 +63,7 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "media_assets",
         "media_versions",
         "media_upload_intents",
+        "studio_video_uploads",
         "media_renditions",
         "media_caption_tracks",
         "media_playback_grants",
@@ -103,3 +107,17 @@ def test_media_upload_intent_model_keeps_fail_closed_checks() -> None:
 
     assert "ck_media_upload_intents_request_fingerprint_sha256" in check_names
     assert "ck_media_upload_intents_state_supported" in check_names
+
+
+def test_academy_public_profile_migration_is_forward_only() -> None:
+    migration = (
+        Path(__file__).parents[2]
+        / "db"
+        / "migrations"
+        / "versions"
+        / "20260910_0027_academy_public_profiles.py"
+    ).read_text(encoding="utf-8")
+
+    downgrade = migration.split("def downgrade() -> None:", 1)[1]
+    assert "raise RuntimeError" in downgrade
+    assert "drop_table" not in downgrade

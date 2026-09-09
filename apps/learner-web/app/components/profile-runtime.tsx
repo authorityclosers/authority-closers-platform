@@ -41,6 +41,7 @@ import {
   type AvatarUploadPort,
 } from "../lib/avatar-upload";
 import { AvatarCropDialog } from "./avatar-crop-dialog";
+import { CommunityIdentityCard } from "./community-identity-card";
 import {
   hasMembershipRole,
   MembershipUnavailable,
@@ -471,6 +472,13 @@ export function ProfileRuntime({
           </div>
         ) : null}
       </section>
+
+      {!offlineRead ? (
+        <CommunityIdentityCard
+          key={`${me.person_id}:${me.selected_tenant_id ?? "none"}`}
+          api={api}
+        />
+      ) : null}
 
       <div className={styles.contentGrid}>
         <section

@@ -81,6 +81,36 @@ export interface MeResponse {
   permissions: string[];
 }
 
+export interface CommunityProfileResponse {
+  username: string | null;
+  leaderboard_opted_in: boolean;
+  revision: number;
+  leaderboard_policy: {
+    version: "all_time_practice_xp_v1";
+    period: "all_time";
+    measure: "confirmed_practice_xp";
+    ranking: "competition";
+    privacy: "academy_opt_in";
+  };
+}
+
+export interface CommunityLeaderboardResponse {
+  policy: {
+    version: "all_time_practice_xp_v1";
+    label: "All-time practice XP";
+    period: "all_time";
+    ranking: "competition";
+    scope: "academy";
+  };
+  items: Array<{
+    rank: number;
+    username: string;
+    xp_total: number;
+    is_current_learner: boolean;
+  }>;
+  next_cursor: string | null;
+}
+
 export interface AvatarCropMetadata {
   x: number;
   y: number;
@@ -863,6 +893,45 @@ export function createLearnerApi(
       ),
     me: (options: LearnerReadOptions = {}) =>
       request<MeResponse>("/v1/me", { ...options, cache: "no-store" }),
+    communityProfile: (options: LearnerReadOptions = {}) =>
+      request<CommunityProfileResponse>("/v1/community/profile", {
+        ...options,
+        cache: "no-store",
+      }),
+    claimUsername: (username: string, signal?: AbortSignal) =>
+      logicalJsonMutation<CommunityProfileResponse>(
+        `community-username:${username.trim().toLowerCase()}`,
+        "/v1/community/username",
+        { username },
+        {},
+        "PUT",
+        signal,
+      ),
+    setLeaderboardOptIn: (
+      optedIn: boolean,
+      expectedRevision: number,
+      signal?: AbortSignal,
+    ) =>
+      logicalJsonMutation<CommunityProfileResponse>(
+        `community-leaderboard-opt-in:${expectedRevision}:${String(optedIn)}`,
+        "/v1/community/leaderboard-opt-in",
+        { opted_in: optedIn, expected_revision: expectedRevision },
+        {},
+        "PUT",
+        signal,
+      ),
+    communityLeaderboard: (
+      limit = 25,
+      cursor?: string,
+      options: LearnerReadOptions = {},
+    ) => {
+      const query = new URLSearchParams({ limit: String(limit) });
+      if (cursor) query.set("cursor", cursor);
+      return request<CommunityLeaderboardResponse>(
+        `/v1/community/leaderboard?${query.toString()}`,
+        { ...options, cache: "no-store" },
+      );
+    },
     profileAvatar: (options: LearnerReadOptions = {}) =>
       request<ProfileAvatarResponse>("/v1/profile/avatar", {
         ...options,
