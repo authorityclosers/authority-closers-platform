@@ -483,6 +483,11 @@ if [[ -e "$application_edge_route_releases_root" || -L "$application_edge_route_
   }
 fi
 install -d -m 0755 "$application_edge_route_releases_root"
+# A setgid application parent makes GNU install inherit the setgid bit. Keep
+# this projection boundary an ordinary root-owned 755 directory so later
+# release projections and selectors are validated against the intended mode.
+chmod 0755 "$application_edge_route_releases_root"
+chmod a-s "$application_edge_route_releases_root"
 if [[ "$test_mode" == 0 ]]; then
   chown root:root "$application_edge_route_releases_root"
   [[ "$(stat -c '%U:%G %a' "$application_edge_route_releases_root")" == 'root:root 755' ]]
@@ -582,8 +587,13 @@ if [[ -e "$application_edge_routes_root" || -L "$application_edge_routes_root" ]
     printf 'Application edge-route selector root is not a real directory.\n' >&2
     exit 1
   }
+  selector_root_mode="$(stat -c '%a' "$application_edge_routes_root")"
+  [[ "$selector_root_mode" == 755 || "$selector_root_mode" == 2755 ]] || {
+    printf 'Application edge-route selector root has unexpected mode.\n' >&2
+    exit 1
+  }
   if [[ "$test_mode" == 0 ]]; then
-    [[ "$(stat -c '%U:%G %a' "$application_edge_routes_root")" == 'root:root 755' ]] || {
+    [[ "$(stat -c '%U:%G' "$application_edge_routes_root")" == 'root:root' ]] || {
       printf 'Application edge-route selector root has unexpected ownership or mode.\n' >&2
       exit 1
     }
@@ -617,6 +627,16 @@ if [[ ! -d "$application_edge_routes_root" ]]; then
     install -d -m 0755 -o root -g root "$application_edge_routes_root"
   fi
   application_edge_routes_root_created=1
+fi
+# The selector root can also inherit setgid when it is first created beneath
+# the application root; normalize it before its exact mode is enforced.
+chmod 0755 "$application_edge_routes_root"
+chmod a-s "$application_edge_routes_root"
+if [[ "$test_mode" == 0 ]]; then
+  [[ "$(stat -c '%U:%G %a' "$application_edge_routes_root")" == 'root:root 755' ]] || {
+    printf 'Application edge-route selector root has unexpected ownership or mode.\n' >&2
+    exit 1
+  }
 fi
 for route_environment in production staging; do
   route_selector="$application_edge_routes_root/$route_environment.caddy"

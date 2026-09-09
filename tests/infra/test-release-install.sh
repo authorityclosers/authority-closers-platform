@@ -113,6 +113,14 @@ if python3 "$source_foundation/scripts/verify-git-release-archive.py" \
 fi
 printf 'UNTRACKED-WORKTREE-MUTATION\n' >> "$source_foundation/compose/foundation/Caddyfile"
 
+# GNU install inherits a parent's setgid bit when creating descendants. Keep
+# the real installer path under that production-shaped parent so this harness
+# catches regressions that only appear on the VPS filesystem.
+application_parent="$tmp_dir/root/srv/authority-closers/application"
+mkdir -p "$application_parent"
+chmod 2750 "$application_parent"
+[[ "$(stat -c '%a' "$application_parent")" == 2750 ]]
+
 AC_TEST_MODE=1 \
 AC_INSTALL_ROOT="$tmp_dir/root" \
 AC_RELEASE_ID=foundation-test-ci \
@@ -124,6 +132,10 @@ current="$tmp_dir/root/srv/authority-closers/current"
 [[ -f "$tmp_dir/root/srv/authority-closers/application/.deployment.lock" ]]
 [[ -L "$current" ]]
 [[ "$(readlink -f "$current")" == "$release" ]]
+projection_root="$tmp_dir/root/srv/authority-closers/application/edge-route-releases"
+selector_root="$tmp_dir/root/srv/authority-closers/application/edge-routes"
+[[ "$(stat -c '%a' "$projection_root")" == 755 ]]
+[[ "$(stat -c '%a' "$selector_root")" == 755 ]]
 (cd "$release" && sha256sum --check --strict RELEASE-FILES.sha256 >/dev/null)
 [[ "$(<"$release/RELEASE-COMMIT")" == "$release_sha" ]]
 [[ "$(stat -c '%a' "$release/compose/foundation/Caddyfile")" == 644 ]]
@@ -138,6 +150,21 @@ for route_environment in production staging; do
   [[ -L "$route_selector" ]]
   [[ "$(readlink -f "$route_selector")" == "$route_projection" ]]
 done
+
+# An unexpected selector-root mode must fail before selector provenance is
+# considered; do not silently widen the preflight admission boundary.
+chmod 0700 "$selector_root"
+if AC_TEST_MODE=1 \
+  AC_INSTALL_ROOT="$tmp_dir/root" \
+  AC_RELEASE_ID=foundation-test-bad-selector-mode \
+  AC_RELEASE_GIT_SHA="$release_sha" \
+  AC_RELEASE_ARCHIVE="$archive" \
+  AC_RELEASE_ARCHIVE_SHA256="$archive_sha" \
+    bash "$installer" >/dev/null 2>&1; then
+  printf 'Foundation installer accepted an unexpected selector-root mode.\n' >&2
+  exit 1
+fi
+chmod 0755 "$selector_root"
 
 # The foundation and application installers share one non-blocking release
 # lock, so a concurrent edge owner cannot validate then overwrite stale state.
@@ -203,6 +230,7 @@ AC_RELEASE_ARCHIVE="$archive" \
 AC_RELEASE_ARCHIVE_SHA256="$archive_sha" \
   bash "$installer" >/dev/null
 next_projection_root="$tmp_dir/root/srv/authority-closers/application/edge-route-releases/foundation-test-next"
+next_release="$tmp_dir/root/srv/authority-closers/releases/foundation-test-next"
 [[ "$(readlink -f "$production_selector")" == "$application_projection/production.caddy" ]]
 [[ "$(readlink -f "$staging_selector")" == "$next_projection_root/staging.caddy" ]]
 
@@ -348,7 +376,7 @@ if AC_TEST_MODE=1 \
   printf 'Injected post-install failure unexpectedly succeeded.\n' >&2
   exit 1
 fi
-[[ "$(readlink -f "$current")" == "$release" ]]
+[[ "$(readlink -f "$current")" == "$next_release" ]]
 [[ "$(sha256sum "$installed_health" | awk '{print $1}')" == "$installed_health_sha" ]]
 if AC_TEST_MODE=1 \
   AC_TEST_FAIL_AFTER_ACTIVATE=1 \
@@ -359,7 +387,7 @@ if AC_TEST_MODE=1 \
   printf 'Injected post-activation failure unexpectedly succeeded.\n' >&2
   exit 1
 fi
-[[ "$(readlink -f "$current")" == "$release" ]]
+[[ "$(readlink -f "$current")" == "$next_release" ]]
 [[ "$(sha256sum "$installed_health" | awk '{print $1}')" == "$installed_health_sha" ]]
 
 bash "$foundation/scripts/validate-images-pinned.sh" >/dev/null
