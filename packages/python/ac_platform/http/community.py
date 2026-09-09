@@ -139,10 +139,9 @@ def install_community_http(
     ) -> dict[str, Any]:
         if auth.resolved.actor.tenant_id is None or auth.resolved.membership_role != "learner":
             raise HTTPException(403, "Select your learner academy to view the leaderboard.")
-        if (
-            not set(request.query_params).issubset({"limit", "cursor"})
-            or len(request.query_params.multi_items()) != len(request.query_params)
-        ):
+        if not set(request.query_params).issubset({"limit", "cursor"}) or len(
+            request.query_params.multi_items()
+        ) != len(request.query_params):
             raise HTTPException(422, "Leaderboard accepts only pagination parameters.")
         response.headers["cache-control"] = "private, no-store"
         return await CommunityApplication(auth.database).leaderboard(
