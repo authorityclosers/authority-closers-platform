@@ -63,7 +63,7 @@ function studioContextKey(state: AdminSessionState): string {
   ]);
 }
 
-function useStudioData<T>(
+export function useStudioData<T>(
   loader: () => Promise<T>,
   dependency: string,
   programId?: string,
@@ -88,6 +88,15 @@ function useStudioData<T>(
     void Promise.resolve()
       .then(loader)
       .then((data) => {
+        if (
+          data &&
+          typeof data === "object" &&
+          "tenant_id" in data &&
+          session.status === "ready" &&
+          data.tenant_id !== session.session.tenantId
+        ) {
+          throw new Error("Studio response did not match the active academy");
+        }
         if (active) {
           setResult({
             dependency: requestKey,
@@ -102,8 +111,7 @@ function useStudioData<T>(
             state: {
               status: "error",
               data: null,
-              error:
-                "Studio data could not be loaded. No catalog state is being inferred.",
+              error: "We couldn’t load your courses. Please try again.",
             },
           });
         }
@@ -122,7 +130,7 @@ function useStudioData<T>(
   };
 }
 
-function LoadBoundary({
+export function LoadBoundary({
   canRead,
   children,
   error,
@@ -142,9 +150,27 @@ function LoadBoundary({
       <section className="studio-boundary panel" role="status">
         <LoaderCircle className="studio-spinner" aria-hidden="true" />
         <div>
-          <span className="section-eyebrow">Session boundary</span>
-          <h2>Checking Academy Studio access</h2>
-          <p>No catalog data is requested before tenant context is verified.</p>
+          <h2>Opening your Studio</h2>
+          <p>Checking your account…</p>
+        </div>
+      </section>
+    );
+  }
+  if (sessionStatus === "error") {
+    return (
+      <section className="studio-boundary panel" role="alert">
+        <AlertTriangle aria-hidden="true" />
+        <div>
+          <h2>We couldn’t check your account</h2>
+          <p>
+            Your work has not changed. Reload to reconnect to your workspace.
+          </p>
+          <button
+            className="button button-secondary"
+            onClick={() => window.location.reload()}
+          >
+            Reconnect
+          </button>
         </div>
       </section>
     );
@@ -154,11 +180,10 @@ function LoadBoundary({
       <section className="studio-boundary panel" role="status">
         <ShieldCheck aria-hidden="true" />
         <div>
-          <span className="section-eyebrow">Authorization boundary</span>
-          <h2>Academy Studio is unavailable</h2>
+          <h2>Studio access is unavailable</h2>
           <p>
-            A verified selected-tenant session with the catalog_read permission
-            is required. No program data was requested.
+            Sign in with the account assigned to your academy. If you’re already
+            signed in, ask your administrator to check your Studio access.
           </p>
         </div>
       </section>
@@ -169,9 +194,8 @@ function LoadBoundary({
       <section className="studio-boundary panel" role="status">
         <LoaderCircle className="studio-spinner" aria-hidden="true" />
         <div>
-          <span className="section-eyebrow">Tenant-scoped read</span>
-          <h2>Loading Academy Studio</h2>
-          <p>Reading the authorized catalog without cached operational data.</p>
+          <h2>Loading your courses</h2>
+          <p>Getting your latest saved work.</p>
         </div>
       </section>
     );
@@ -184,15 +208,14 @@ function LoadBoundary({
       >
         <AlertTriangle aria-hidden="true" />
         <div>
-          <span className="section-eyebrow">Read failed closed</span>
-          <h2>Studio data is unavailable</h2>
+          <h2>Your courses couldn’t be loaded</h2>
           <p>{error}</p>
           <button
             className="button button-secondary"
             type="button"
             onClick={onRetry}
           >
-            Retry Studio read
+            Try again
           </button>
         </div>
       </section>
@@ -224,19 +247,22 @@ function formatAge(seconds: number | null): string {
 
 const blockerLabels: Record<string, string> = {
   version_not_draft: "Version is no longer a draft",
-  structure_invalid: "Catalog topology is invalid",
-  provenance_incomplete: "Reviewed content provenance is incomplete",
-  content_digest_mismatch: "Content changed after its recorded digest",
-  supersession_required: "Published-version supersession is incomplete",
+  structure_invalid: "Check the module order and required learning activities",
+  provenance_incomplete:
+    "The content source and review still need to be recorded",
+  content_digest_mismatch: "The latest edits need a content review",
+  supersession_required: "Choose which published version this draft replaces",
 };
 
 function Blockers({ blockers }: { blockers: readonly string[] }) {
-  if (blockers.length === 0)
-    return <span>Existing publication rules pass</span>;
+  if (blockers.length === 0) return <span>Publication checks passed</span>;
   return (
     <ul className="studio-blockers">
       {blockers.map((blocker) => (
-        <li key={blocker}>{blockerLabels[blocker] ?? blocker}</li>
+        <li key={blocker}>
+          {blockerLabels[blocker] ??
+            "An additional publication check is needed"}
+        </li>
       ))}
     </ul>
   );
@@ -384,11 +410,11 @@ export function StudioProgramList() {
         >
           <div className="section-heading">
             <div>
-              <span className="section-eyebrow">Your Studio scope</span>
-              <h2 id="program-list-title">Programs</h2>
+              <span className="section-eyebrow">Your academy</span>
+              <h2 id="program-list-title">Your courses</h2>
               <p>
-                Open an available program to review its content and the actions
-                assigned to you.
+                Pick up where you left off. Open a course to shape its lessons,
+                preview the content, or check what’s needed to publish.
               </p>
             </div>
             <span className="status-badge status-badge-muted">
@@ -399,8 +425,11 @@ export function StudioProgramList() {
             <div className="studio-empty">
               <Database aria-hidden="true" />
               <div>
-                <h3>No visible programs</h3>
-                <p>No programs are currently available in your Studio scope.</p>
+                <h3>No courses assigned yet</h3>
+                <p>
+                  Your courses will appear here once your administrator assigns
+                  them to you.
+                </p>
               </div>
             </div>
           ) : (
@@ -408,13 +437,16 @@ export function StudioProgramList() {
               {state.data.programs.map((program) => (
                 <article key={program.id}>
                   <div className="studio-program-title">
-                    <span className="studio-scope">{program.scope}</span>
+                    <span className="studio-scope">
+                      {program.access === "global_read_only"
+                        ? "Shared · read only"
+                        : "Your academy"}
+                    </span>
                     <h3>{program.title}</h3>
-                    <code>{program.slug}</code>
                   </div>
                   <dl>
                     <div>
-                      <dt>Visible versions</dt>
+                      <dt>Versions</dt>
                       <dd>{program.version_count}</dd>
                     </div>
                     <div>
@@ -425,8 +457,8 @@ export function StudioProgramList() {
                       <dt>Access</dt>
                       <dd>
                         {program.access === "global_read_only"
-                          ? "Global read-only"
-                          : "Selected tenant"}
+                          ? "Read only"
+                          : "Academy course"}
                       </dd>
                     </div>
                     <div>
@@ -442,7 +474,7 @@ export function StudioProgramList() {
                     className="button button-secondary"
                     href={`/studio/programs/${program.id}`}
                   >
-                    Open program <ArrowRight size={16} aria-hidden="true" />
+                    Open course <ArrowRight size={16} aria-hidden="true" />
                   </Link>
                 </article>
               ))}
@@ -450,7 +482,7 @@ export function StudioProgramList() {
           )}
           {state.data.truncated ? (
             <p className="studio-bounded-note">
-              The program list is bounded to 100 records.
+              Showing the first 100 courses available to your account.
             </p>
           ) : null}
         </section>
