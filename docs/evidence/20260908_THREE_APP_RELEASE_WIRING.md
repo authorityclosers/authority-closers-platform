@@ -138,3 +138,53 @@ arguments, subprocess output, runtime responses, environment values, or
 unexpected exception details. The focused controller/probe suite passed
 **50 tests**; scoped Ruff format/lint and `git diff --check` also passed. This is
 diagnostic hardening, not an image-runtime pass or release approval.
+
+Workflow run `34369922189` checked out diagnostic candidate
+`afab2fed7dcd68dd4eef8d1fdb7ccf330957643d`. The capacity simulation, complete
+validation job and all four exact image builds passed. The same pre-publication
+gate then identified the failure as the local Docker runtime HTTP probe, but the
+in-container probe still combined every fixed response check under that single
+Docker operation. Publication, transport-manifest creation and artifact upload
+therefore remained blocked.
+
+The probe now emits only one anchored, allowlisted surface/phase marker when it
+fails. Its standalone boundary first normalizes the requested surface to
+`admin`, `coach` or a fixed `unknown` value, so even a hostile direct CLI
+argument cannot be echoed. The controller translates an exact recognized
+marker to a fixed message; unknown surfaces, phases, appended output or any
+other stderr stay behind the generic Docker failure. Docker arguments, HTTP
+responses, exception text and environment values remain undisclosed. The
+successful proof schema and every runtime assertion are unchanged.
+
+Actual focused checks after this diagnostic refinement:
+
+- Python controller suite: **55 passed**.
+- Node probe contract suite: **23 passed**, including a spawned-process hostile
+  argument regression.
+- Scoped Ruff lint/format, Prettier and `git diff --check` passed.
+
+This refinement is diagnostic only. Run `34369922189` published no image tag or
+release artifact, and it authorizes no installation or DNS change.
+
+Independent reproduction from the exact candidate source then isolated the
+runtime failure: Next 16's production proxy adapter rejects the relative
+`Location` values previously returned for anonymous Admin and Coach requests,
+so the first public-health denial became HTTP 500. Both operations proxies now
+emit absolute HTTPS redirects only for their exact staging/production direct
+hosts. An unrecognized direct host receives a no-store 421 with no redirect,
+and an untrusted `x-forwarded-host` cannot select the destination. The same
+correction covers Admin's authenticated home-to-Platform redirect.
+
+The image probe now supplies the production proxy scheme, requires the exact
+same-origin `/login` destination with no query or fragment, and proves that a
+foreign direct host is not redirected. The login, compiled-asset, API-denial
+and Admin-to-Coach assertions remain required.
+
+Actual focused checks after the proxy correction:
+
+- Admin/Coach proxy and Platform admission suites: **75 passed**.
+- Node compiled-image probe contract: **23 passed**.
+- Python release-image controller: **55 passed**.
+
+These source checks close the reproduced cause; an exact workflow image run is
+still required before any publication or installation.

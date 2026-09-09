@@ -1,6 +1,28 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { resolveAdminServerContext } from "@ac/operations-web/server-auth";
 
+const COACH_PUBLIC_HOSTS = new Set([
+  "coach-staging.authorityclosers.com",
+  "coach.authorityclosers.com",
+]);
+
+function loginRedirect(request: NextRequest) {
+  const host = (
+    request.headers.get("host") ?? request.nextUrl.host
+  ).toLowerCase();
+  if (!COACH_PUBLIC_HOSTS.has(host))
+    return new NextResponse(null, {
+      status: 421,
+      headers: { "cache-control": "no-store" },
+    });
+  const response = NextResponse.redirect(
+    new URL("/login", `https://${host}`),
+    307,
+  );
+  response.headers.set("cache-control", "no-store");
+  return response;
+}
+
 export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
   if (
@@ -25,11 +47,7 @@ export async function proxy(request: NextRequest) {
     internalApiUrl: process.env.AC_INTERNAL_API_URL,
     internalApiHost: process.env.AC_INTERNAL_API_HOST,
   });
-  if (!context)
-    return new NextResponse(null, {
-      status: 307,
-      headers: { Location: "/login", "Cache-Control": "no-store" },
-    });
+  if (!context) return loginRedirect(request);
   if (
     !context.studioCapabilities.some(
       (item) => item.tenant_id === context.tenantId,

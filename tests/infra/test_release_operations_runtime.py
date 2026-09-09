@@ -322,6 +322,44 @@ def test_real_subprocess_adapter_bounds_calls_and_sanitizes_failures(monkeypatch
     assert set(observed["env"]) <= {"HOME", "PATH", "LC_ALL"}
 
 
+def test_exact_runtime_probe_marker_maps_to_fixed_phase(monkeypatch):
+    def fake_run(_args, **_kwargs):
+        return SimpleNamespace(
+            returncode=1,
+            stdout="",
+            stderr="AC_RELEASE_PROBE_FAILURE=coach:compiled-assets\n",
+        )
+
+    monkeypatch.setattr(gate.subprocess, "run", fake_run)
+    with pytest.raises(
+        gate.GateError, match="Coach runtime check failed at compiled asset serving"
+    ):
+        gate.Docker().run(["exec", "synthetic-never-print"])
+
+
+@pytest.mark.parametrize(
+    "stderr",
+    [
+        "AC_RELEASE_PROBE_FAILURE=learner:compiled-assets\n",
+        "AC_RELEASE_PROBE_FAILURE=admin:unknown\n",
+        "AC_RELEASE_PROBE_FAILURE=coach:admin-coach-redirect\n",
+        "AC_RELEASE_PROBE_FAILURE=admin:readiness\nsynthetic-never-print",
+    ],
+)
+def test_unrecognized_or_contaminated_probe_marker_stays_generic(monkeypatch, stderr):
+    monkeypatch.setattr(
+        gate.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(returncode=1, stdout="", stderr=stderr),
+    )
+    with pytest.raises(gate.GateError) as error:
+        gate.Docker().run(["exec", "synthetic-never-print"])
+    assert str(error.value) == (
+        "Local Docker runtime HTTP probe failed; no runtime pass was recorded."
+    )
+    assert "synthetic-never-print" not in str(error.value)
+
+
 @pytest.mark.parametrize(
     ("arguments", "label"),
     [

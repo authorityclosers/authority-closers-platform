@@ -16,6 +16,10 @@ import {
 
 const INTERNAL_HEALTH_PATH = "/healthz";
 const INTERNAL_HEALTH_HOSTS = new Set(["127.0.0.1:3001", "localhost:3001"]);
+const ADMIN_PUBLIC_HOSTS = new Set([
+  "admin-staging.authorityclosers.com",
+  "admin.authorityclosers.com",
+]);
 
 function isInternalHealthRequest(request: NextRequest) {
   const requestHost = (
@@ -25,6 +29,20 @@ function isInternalHealthRequest(request: NextRequest) {
     request.nextUrl.pathname === INTERNAL_HEALTH_PATH &&
     INTERNAL_HEALTH_HOSTS.has(requestHost)
   );
+}
+
+function sameOriginRedirect(request: NextRequest, path: string) {
+  const host = (
+    request.headers.get("host") ?? request.nextUrl.host
+  ).toLowerCase();
+  if (!ADMIN_PUBLIC_HOSTS.has(host))
+    return new NextResponse(null, {
+      status: 421,
+      headers: { "cache-control": "no-store" },
+    });
+  const response = NextResponse.redirect(new URL(path, `https://${host}`), 307);
+  response.headers.set("cache-control", "no-store");
+  return response;
 }
 
 /**
@@ -90,19 +108,13 @@ export async function proxy(request: NextRequest) {
     });
     if (platform) {
       if (request.nextUrl.pathname === "/")
-        return new NextResponse(null, {
-          status: 307,
-          headers: { location: "/platform", "cache-control": "no-store" },
-        });
+        return sameOriginRedirect(request, "/platform");
       const response = NextResponse.next();
       response.headers.set("cache-control", "private, no-store");
       return response;
     }
     if (request.nextUrl.pathname === "/platform")
-      return new NextResponse(null, {
-        status: 307,
-        headers: { location: "/login", "cache-control": "no-store" },
-      });
+      return sameOriginRedirect(request, "/login");
   }
   const serverContext =
     runtime === "production"
@@ -125,10 +137,7 @@ export async function proxy(request: NextRequest) {
     serverContext === null &&
     !request.nextUrl.pathname.startsWith("/v1/")
   ) {
-    return new NextResponse(null, {
-      status: 307,
-      headers: { Location: "/login", "Cache-Control": "no-store" },
-    });
+    return sameOriginRedirect(request, "/login");
   }
 
   const studioScopeDenied =

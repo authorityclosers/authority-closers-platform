@@ -85,17 +85,19 @@ describe("admin route access policy", () => {
     expect(normalizeAdminRuntime("development")).toBe("development");
   });
 
-  it("sends anonymous page requests to a no-store relative login without admitting the workspace", async () => {
+  it("sends anonymous page requests to the exact no-store login origin without admitting the workspace", async () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv(LOCAL_PREVIEW_ENV, "1");
 
     const response = await proxy(
-      new NextRequest("https://admin.authorityclosers.test/"),
+      new NextRequest("https://admin.authorityclosers.com/"),
     );
     expect(proxy.length).toBe(1);
     expect(response.status).toBe(307);
     expect(response.headers.get("cache-control")).toBe("no-store");
-    expect(response.headers.get("location")).toBe("/login");
+    expect(response.headers.get("location")).toBe(
+      "https://admin.authorityclosers.com/login",
+    );
     expect(response.headers.get("x-middleware-next")).toBeNull();
   });
 
@@ -122,7 +124,9 @@ describe("admin route access policy", () => {
     });
     expect(normalizedRuntimeOrigin.status).toBe(200);
     expect(external.status).toBe(307);
-    expect(external.headers.get("location")).toBe("/login");
+    expect(external.headers.get("location")).toBe(
+      "https://admin.authorityclosers.com/login",
+    );
   });
 
   it("allows an explicitly enabled local preview without request claims", async () => {
@@ -248,7 +252,7 @@ describe("admin route access policy", () => {
     );
 
     const response = await proxy(
-      new NextRequest("https://admin.authorityclosers.test/?role=owner", {
+      new NextRequest("https://admin.authorityclosers.com/?role=owner", {
         headers: {
           cookie: "__Host-ac_session=invalid; role=owner",
           "x-admin-role": "owner",
@@ -257,7 +261,9 @@ describe("admin route access policy", () => {
     );
 
     expect(response.status).toBe(307);
-    expect(response.headers.get("location")).toBe("/login");
+    expect(response.headers.get("location")).toBe(
+      "https://admin.authorityclosers.com/login",
+    );
     expect(response.headers.get("x-middleware-next")).toBeNull();
     expect(await response.text()).not.toContain("role=owner");
   });

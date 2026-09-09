@@ -178,7 +178,9 @@ describe("separate Platform Admin admission", () => {
     const home = await proxy(
       new NextRequest("https://admin.authorityclosers.com/"),
     );
-    expect(home.headers.get("location")).toBe("/platform");
+    expect(home.headers.get("location")).toBe(
+      "https://admin.authorityclosers.com/platform",
+    );
     const people = await proxy(
       new NextRequest("https://admin.authorityclosers.com/people"),
     );
@@ -194,7 +196,9 @@ describe("separate Platform Admin admission", () => {
       new NextRequest("https://admin.authorityclosers.com/platform?role=owner"),
     );
     expect(denied.status).toBe(307);
-    expect(denied.headers.get("location")).toBe("/login");
+    expect(denied.headers.get("location")).toBe(
+      "https://admin.authorityclosers.com/login",
+    );
   });
   it.each([
     "/v1/me/platform-access",

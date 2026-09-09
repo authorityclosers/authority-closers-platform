@@ -37,9 +37,12 @@ describe("separate Coach surface", () => {
       ),
     ).toBe(false);
   });
-  it.each([adminProxy, coachProxy])(
-    "uses a relative no-store login redirect behind an HTTP reverse proxy %#",
-    async (proxy) => {
+  it.each([
+    [adminProxy, "admin.authorityclosers.com"],
+    [coachProxy, "coach.authorityclosers.com"],
+  ])(
+    "uses the exact direct host for a no-store HTTPS login redirect %#",
+    async (proxy, host) => {
       vi.stubEnv("NODE_ENV", "production");
       vi.stubEnv("AC_DEV_LOCAL_SANDBOX_ENABLED", "true");
       vi.spyOn(serverAuth, "resolveAdminServerContext").mockResolvedValue(null);
@@ -48,7 +51,7 @@ describe("separate Coach surface", () => {
           "http://internal.invalid:3002/people?secret=synthetic",
           {
             headers: {
-              host: "coach.authorityclosers.com",
+              host,
               "x-forwarded-proto": "https",
               "x-forwarded-host": "evil.test",
             },
@@ -56,9 +59,27 @@ describe("separate Coach surface", () => {
         ),
       );
       expect(response.status).toBe(307);
-      expect(response.headers.get("location")).toBe("/login");
+      expect(response.headers.get("location")).toBe(`https://${host}/login`);
       expect(response.headers.get("cache-control")).toBe("no-store");
       expect(response.headers.get("x-middleware-next")).toBeNull();
+    },
+  );
+  it.each([adminProxy, coachProxy])(
+    "does not redirect an unrecognized direct host %#",
+    async (proxy) => {
+      vi.stubEnv("NODE_ENV", "production");
+      vi.spyOn(serverAuth, "resolveAdminServerContext").mockResolvedValue(null);
+      const response = await proxy(
+        new NextRequest("http://internal.invalid:3002/people", {
+          headers: {
+            host: "untrusted.invalid",
+            "x-forwarded-host": "admin.authorityclosers.com",
+          },
+        }),
+      );
+      expect(response.status).toBe(421);
+      expect(response.headers.get("location")).toBeNull();
+      expect(response.headers.get("cache-control")).toBe("no-store");
     },
   );
   it("does not admit Platform Admin-only authority to Coach pages", async () => {

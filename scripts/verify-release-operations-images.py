@@ -24,10 +24,38 @@ CONTAINER = re.compile(r"[0-9a-f]{64}\Z")
 OWNER_LABEL = "com.authorityclosers.release-runtime-proof"
 REVISION_LABEL = "org.opencontainers.image.revision"
 PROBE = Path(__file__).with_name("verify-release-operations-probe.mjs")
+PROBE_FAILURE = re.compile(
+    r"\AAC_RELEASE_PROBE_FAILURE=(admin|coach):"
+    r"(bootstrap|readiness|public-health|forwarded-health|anonymous-pages|"
+    r"production-login|compiled-assets|api-denial|admin-coach-redirect)\r?\n?\Z"
+)
+PROBE_PHASES = {
+    "bootstrap": "process bootstrap",
+    "readiness": "loopback readiness",
+    "public-health": "public health denial",
+    "forwarded-health": "forwarded health denial",
+    "anonymous-pages": "anonymous page denial",
+    "production-login": "production login rendering",
+    "compiled-assets": "compiled asset serving",
+    "api-denial": "anonymous API denial",
+    "admin-coach-redirect": "Admin-to-Coach redirect safety",
+}
 
 
 class GateError(RuntimeError):
     """Only fixed, credential-free errors may cross the CLI boundary."""
+
+
+def runtime_probe_failure(raw: str) -> str | None:
+    """Translate one exact probe marker into a fixed diagnostic."""
+
+    match = PROBE_FAILURE.fullmatch(raw)
+    if match is None:
+        return None
+    surface, phase = match.groups()
+    if phase == "admin-coach-redirect" and surface != "admin":
+        return None
+    return f"{surface.title()} runtime check failed at {PROBE_PHASES[phase]}."
 
 
 def docker_operation(arguments: list[str]) -> str:
@@ -73,7 +101,13 @@ class Docker:
             )
         except (OSError, subprocess.TimeoutExpired) as error:
             raise GateError(f"Local Docker {operation} did not complete.") from error
-        if result.returncode != 0 or len(result.stdout) > 1_000_000:
+        if result.returncode != 0:
+            if arguments[:1] == ["exec"]:
+                failure = runtime_probe_failure(result.stderr)
+                if failure is not None:
+                    raise GateError(failure)
+            raise GateError(f"Local Docker {operation} failed; no runtime pass was recorded.")
+        if len(result.stdout) > 1_000_000:
             raise GateError(f"Local Docker {operation} failed; no runtime pass was recorded.")
         return result.stdout.strip()
 
