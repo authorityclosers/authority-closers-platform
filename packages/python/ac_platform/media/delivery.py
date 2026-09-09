@@ -387,7 +387,9 @@ class PrivateMediaDeliveryHandler:
             f"{quote(object_key, safe='')}?token={quote(token, safe='')}"
         )
         signed = SignedMediaUrl(
-            url=EphemeralMediaUrl(expected_url),
+            url=EphemeralMediaUrl(
+                expected_url, allow_loopback_http=self.delivery_port.allow_loopback_http
+            ),
             expires_at=expires_at,
             media_version=media_version,
             kind=token_type,

@@ -593,13 +593,20 @@ export function ProfileRuntime({
           profileRevision={me.profile_revision}
           currentAvatar={currentAvatar}
           adapter={effectiveAvatarUpload}
-          onClose={() => {
+          onClose={(result) => {
             setAvatarDialogOpen(false);
+            // Aborting the wait cannot roll back a save already accepted by
+            // the service. Reconcile the displayed photo through its normal
+            // authenticated read, without manufacturing a success notice.
+            if (result?.saveMayBePending) void refreshAvatar();
             window.requestAnimationFrame(() =>
               avatarButtonRef.current?.focus(),
             );
           }}
           onSuccess={(avatar) => {
+            // A read started before this save must not replace the newer photo.
+            avatarRefreshGenerationRef.current += 1;
+            avatarRefreshAbortRef.current?.abort();
             setCurrentAvatar(avatar);
             setFailedAvatarUrl(null);
             setAvatarSuccessMessage("Profile photo updated.");

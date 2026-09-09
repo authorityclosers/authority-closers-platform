@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { canUseAdminPermission, type AdminSessionState } from "./admin-session";
+import {
+  canBrowseStudio,
+  canUseStudioPermission,
+  canUseAdminPermission,
+  type AdminSessionState,
+} from "./admin-session";
 
 const readyState: AdminSessionState = {
   status: "ready",
@@ -14,6 +19,7 @@ const readyState: AdminSessionState = {
     tenantId: "33333333-3333-4333-8333-333333333333",
     membershipRole: "admin",
     permissions: ["admin_surface", "catalog_publish"],
+    studioCapabilities: [],
   },
 };
 
@@ -42,5 +48,47 @@ describe("admin session boundary", () => {
         "catalog_publish",
       ),
     ).toBe(false);
+  });
+
+  it("uses program scope for course controls without granting tenant or admin actions", () => {
+    const programId = "44444444-4444-4444-8444-444444444444";
+    const state: AdminSessionState = {
+      ...readyState,
+      session: {
+        ...readyState.session,
+        membershipRole: "learner",
+        permissions: [],
+        studioCapabilities: [
+          {
+            permission: "catalog_read",
+            scope_kind: "program",
+            tenant_id: readyState.session.tenantId,
+            program_id: programId,
+          },
+          {
+            permission: "catalog_publish",
+            scope_kind: "program",
+            tenant_id: readyState.session.tenantId,
+            program_id: programId,
+          },
+        ],
+      },
+    };
+    expect(canBrowseStudio(state)).toBe(true);
+    expect(canUseStudioPermission(state, "catalog_read", programId)).toBe(true);
+    expect(canUseStudioPermission(state, "catalog_publish", programId)).toBe(
+      true,
+    );
+    expect(canUseStudioPermission(state, "catalog_publish")).toBe(false);
+    expect(
+      canUseStudioPermission(
+        state,
+        "catalog_publish",
+        readyState.session.personId,
+      ),
+    ).toBe(false);
+    expect(canUseAdminPermission(state, "admin_surface")).toBe(false);
+    expect(canUseAdminPermission(state, "learner_diagnose")).toBe(false);
+    expect(canUseAdminPermission(state, "enrollment_grant")).toBe(false);
   });
 });

@@ -23,6 +23,14 @@ REQUIRED_FILES = (
     "infra/application/compose.staging-public-films.yaml",
     "infra/application/capabilities/staging-public-films.json",
     "infra/application/data/alpha_public_films_12s_v1.json",
+    "infra/application/compose.public-films.yaml",
+    "infra/application/capabilities/public-films.json",
+    "infra/application/data/public_films_technical_demo_12s_v1.json",
+    "infra/application/edge-routes/production-hold.caddy",
+    "infra/application/edge-routes/production.caddy",
+    "infra/application/edge-routes/staging-hold.caddy",
+    "infra/application/edge-routes/staging.caddy",
+    "infra/application/scripts/public-films.py",
     "infra/application/environments/staging.env",
     "infra/application/environments/production.env",
     "infra/application/scripts/install-application-release.sh",
@@ -42,6 +50,11 @@ IMAGE_VALUES = {
     "AC_API_IMAGE": "sha256:" + "2" * 64,
     "AC_API_REGISTRY_DIGEST": ("ghcr.io/authorityclosers/authority-closers-api@sha256:" + "d" * 64),
     "AC_API_TRANSPORT_DIGEST": "sha256:" + "2" * 64,
+    "AC_COACH_IMAGE": "sha256:" + "4" * 64,
+    "AC_COACH_REGISTRY_DIGEST": (
+        "ghcr.io/authorityclosers/authority-closers-coach-web@sha256:" + "a" * 64
+    ),
+    "AC_COACH_TRANSPORT_DIGEST": "sha256:" + "4" * 64,
     "AC_LEARNER_IMAGE": "sha256:" + "3" * 64,
     "AC_LEARNER_REGISTRY_DIGEST": (
         "ghcr.io/authorityclosers/authority-closers-learner-web@sha256:" + "f" * 64
@@ -156,9 +169,11 @@ rollback_release() {{
   [[ -d "$input_stage" && -d "$stage_dir" && -d "$artifact_stage" ]] || return 1
   printf 'rollback-before-cleanup\n' > {quoted["rollback_marker"]}
 }}
+record_forward_recovery_required() {{ return 99; }}
 {finish}
 mutation_started={int(mutation_started)}
 release_committed={int(release_committed)}
+write_exposure_started=0
 trap finish EXIT
 exit {exit_status}
 """,
@@ -227,7 +242,7 @@ def _run_rollback_harness(
     *,
     fail_stage: str | None = None,
 ) -> tuple[subprocess.CompletedProcess[str], list[str]]:
-    rollback = _installer_function("rollback_release", "\n\nfinish()")
+    rollback = _installer_function("rollback_release", "\n\ncontain_forward_recovery() {")
     events = tmp_path / "rollback-events"
     backup = tmp_path / "pre-migration.dump"
     backup.write_bytes(b"PGDMP fixture")
@@ -250,13 +265,15 @@ fail_stage={failure}
 target_environment=staging
 release_id={"a" * 40}
 current_tmp=''
-evidence_tmp=''
-backup_file="$backup"
-backup_ready=1
-database_writers_fenced=1
+  evidence_tmp=''
+  attempt_tmp=''
+  backup_file="$backup"
+  backup_ready=1
+  database_mutation_started=1
+  write_exposure_started=0
 
 compose_for() {{
-  if [[ "$*" == *"stop --timeout 30 api worker learner-web admin-web"* ]]; then
+  if [[ "$*" == *"stop --timeout 30 api worker learner-web admin-web coach-web"* ]]; then
     printf 'compose:stop\n' >> "$events"
     return 0
   fi
@@ -283,6 +300,11 @@ set_database_writer_access() {{
 
 restore_current_link() {{
   printf 'link:restore\n' >> "$events"
+}}
+
+restore_edge_route() {{
+  printf 'edge:restore\n' >> "$events"
+  [[ "$fail_stage" != edge ]]
 }}
 
 {rollback}
@@ -584,7 +606,17 @@ def test_manifest_shell_syntax_is_rejected_without_execution(tmp_path: Path) -> 
 
 
 @pytest.mark.parametrize(
-    "mutation", ["missing", "extra", "duplicate", "wrong-repository", "runtime-mismatch"]
+    "mutation",
+    [
+        "missing",
+        "extra",
+        "duplicate",
+        "wrong-repository",
+        "runtime-mismatch",
+        "coach-missing",
+        "coach-repository",
+        "coach-mismatch",
+    ],
 )
 def test_manifest_requires_exact_keys_and_key_specific_values(
     tmp_path: Path,
@@ -599,6 +631,12 @@ def test_manifest_requires_exact_keys_and_key_specific_values(
         values["AC_ADMIN_REGISTRY_DIGEST"] = values["AC_API_REGISTRY_DIGEST"]
     elif mutation == "runtime-mismatch":
         values["AC_API_IMAGE"] = "sha256:" + "9" * 64
+    elif mutation == "coach-missing":
+        del values["AC_COACH_IMAGE"]
+    elif mutation == "coach-repository":
+        values["AC_COACH_REGISTRY_DIGEST"] = values["AC_ADMIN_REGISTRY_DIGEST"]
+    elif mutation == "coach-mismatch":
+        values["AC_COACH_IMAGE"] = "sha256:" + "9" * 64
     bundle = tmp_path / f"malformed-{mutation}"
     _write_image_bundle(bundle, values)
     if mutation == "duplicate":
@@ -810,19 +848,23 @@ def test_installer_quiesces_writers_before_dump_and_reopens_connect_by_phase() -
 
 
 def test_rollback_fences_and_restores_before_reopening_or_restarting() -> None:
-    rollback = _installer_function("rollback_release", "\n\nfinish()")
-    stop_services = 'compose_for "$release_dir" stop --timeout 30 api worker learner-web admin-web'
+    rollback = _installer_function("rollback_release", "\n\nrecord_forward_recovery_required() {")
+    stop_services = (
+        'compose_for "$release_dir" stop --timeout 30 api worker learner-web admin-web coach-web'
+    )
     fence_writers = "if set_database_writer_access fence; then"
     restore_database = "pg_restore "
-    grant_runtime = "if set_database_writer_access runtime; then"
+    grant_runtime = "set_database_writer_access runtime || rollback_failed=1"
     restore_link = "restore_current_link || rollback_failed=1"
+    restore_edge = "restore_edge_route || rollback_failed=1"
     restart_previous = 'compose_for "$previous_release" up --detach'
 
     assert rollback.index(stop_services) < rollback.index(fence_writers)
     assert rollback.index(fence_writers) < rollback.index(restore_database)
-    assert rollback.index(restore_database) < rollback.index(grant_runtime)
-    assert rollback.index(grant_runtime) < rollback.index(restore_link)
-    assert rollback.index(restore_link) < rollback.index(restart_previous)
+    assert rollback.index(restore_database) < rollback.index(restore_link)
+    assert rollback.index(restore_link) < rollback.index(restore_edge)
+    assert rollback.index(restore_edge) < rollback.index(grant_runtime)
+    assert rollback.index(grant_runtime) < rollback.index(restart_previous)
     assert '[[ "$backup_ready" == 1 && "$rollback_fenced" == 1 ]]' in rollback
     assert '[[ "$rollback_fenced" == 1 && "$rollback_failed" == 0 ]]' in rollback
 
@@ -837,8 +879,9 @@ def test_rollback_restarts_previous_release_only_after_restore_and_runtime_grant
         "compose:stop",
         "access:fence",
         "compose:restore",
-        "access:runtime",
         "link:restore",
+        "edge:restore",
+        "access:runtime",
         "compose:restart",
     ]
 
@@ -849,7 +892,18 @@ def test_rollback_restarts_previous_release_only_after_restore_and_runtime_grant
         ("restore", ["compose:stop", "access:fence", "compose:restore"]),
         (
             "runtime",
-            ["compose:stop", "access:fence", "compose:restore", "access:runtime"],
+            [
+                "compose:stop",
+                "access:fence",
+                "compose:restore",
+                "link:restore",
+                "edge:restore",
+                "access:runtime",
+            ],
+        ),
+        (
+            "edge",
+            ["compose:stop", "access:fence", "compose:restore", "link:restore", "edge:restore"],
         ),
     ),
 )
@@ -862,7 +916,6 @@ def test_rollback_failure_keeps_previous_release_stopped(
 
     assert result.returncode != 0
     assert events == expected_events
-    assert "link:restore" not in events
     assert "compose:restart" not in events
     assert "Automatic application rollback was incomplete" in result.stderr
 
@@ -894,7 +947,7 @@ def test_installer_restores_current_link_and_writes_evidence_atomically() -> Non
     restore_call = "restore_current_link || rollback_failed=1"
     restart_previous = 'compose_for "$previous_release" up --detach'
     evidence_temp = 'evidence_tmp="$(mktemp "$evidence_root/.deployment-${release_id}.XXXXXX")"'
-    evidence_commit = 'mv --no-target-directory "$evidence_tmp" "$evidence_file"'
+    evidence_commit = 'mv --no-target-directory --no-clobber "$evidence_tmp" "$evidence_file"'
     mark_committed = "release_committed=1"
 
     assert installer.index(arm_switch) < installer.index(advance)

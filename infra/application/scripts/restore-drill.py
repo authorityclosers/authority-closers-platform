@@ -140,12 +140,52 @@ CAPABILITY_PARITY_CONTRACT = "ac-postgres-parity-v2"
 CAPABILITY_PARITY_TABLES = CANONICAL_TABLES + ("capability_grants", "capability_revocations")
 
 
+PRACTICE_PARITY_MIGRATION_HEAD = "20260908_0020"
+PRACTICE_PARITY_CONTRACT = "ac-postgres-parity-v3"
+PRACTICE_PARITY_TABLES = CAPABILITY_PARITY_TABLES + (
+    "practice_set_versions",
+    "practice_attempts",
+    "practice_profiles",
+    "practice_responses",
+    "practice_commands",
+    "practice_feedback_acks",
+    "practice_participations",
+    "practice_reward_claims",
+    "practice_ledger_entries",
+)
+FOCUS_PARITY_MIGRATION_HEAD = "20260908_0021"
+FOCUS_PARITY_CONTRACT = "ac-postgres-parity-v4"
+FOCUS_PARITY_TABLES = PRACTICE_PARITY_TABLES + ("practice_focus_runs", "practice_focus_events")
+AUTHORING_PARITY_MIGRATION_HEAD = "20260908_0022"
+AUTHORING_PARITY_CONTRACT = "ac-postgres-parity-v5"
+AUTHORING_PARITY_TABLES = FOCUS_PARITY_TABLES + ("catalog_authoring_commands",)
+# 20260909_0023 extends the immutable authoring-command operation catalogue
+# without changing the restored table inventory or its parity contract.
+REVISION_PARITY_MIGRATION_HEAD = "20260909_0023"
+REVISION_PARITY_CONTRACT = AUTHORING_PARITY_CONTRACT
+REVISION_PARITY_TABLES = AUTHORING_PARITY_TABLES
+VERSIONED_PARITY_CONTRACTS = {
+    CAPABILITY_PARITY_MIGRATION_HEAD: (CAPABILITY_PARITY_CONTRACT, CAPABILITY_PARITY_TABLES),
+    PRACTICE_PARITY_MIGRATION_HEAD: (PRACTICE_PARITY_CONTRACT, PRACTICE_PARITY_TABLES),
+    FOCUS_PARITY_MIGRATION_HEAD: (FOCUS_PARITY_CONTRACT, FOCUS_PARITY_TABLES),
+    AUTHORING_PARITY_MIGRATION_HEAD: (AUTHORING_PARITY_CONTRACT, AUTHORING_PARITY_TABLES),
+    REVISION_PARITY_MIGRATION_HEAD: (REVISION_PARITY_CONTRACT, REVISION_PARITY_TABLES),
+}
+
+
 def parity_tables_for_head(migration_head: str) -> tuple[str, ...]:
     if migration_head in LEGACY_PARITY_MIGRATION_HEADS:
         return CANONICAL_TABLES
-    if migration_head == CAPABILITY_PARITY_MIGRATION_HEAD:
-        return CAPABILITY_PARITY_TABLES
+    if migration_head in VERSIONED_PARITY_CONTRACTS:
+        return VERSIONED_PARITY_CONTRACTS[migration_head][1]
     raise DrillError("migration head has no reviewed row-count parity contract")
+
+
+def parity_contract_for_head(migration_head: str) -> str | None:
+    parity_tables_for_head(migration_head)
+    if migration_head in LEGACY_PARITY_MIGRATION_HEADS:
+        return None
+    return VERSIONED_PARITY_CONTRACTS[migration_head][0]
 
 
 SIDE_EFFECT_COUNTS_QUERY = """
@@ -552,18 +592,23 @@ def _validate_backup_metadata(
         "dump_sha256",
     }
     parity_keys = expected_keys | {"row_counts"}
-    v2_keys = parity_keys | {"parity_contract", "migration_head"}
-    if not isinstance(payload, dict) or set(payload) not in (expected_keys, parity_keys, v2_keys):
+    versioned_keys = parity_keys | {"parity_contract", "migration_head"}
+    if not isinstance(payload, dict) or set(payload) not in (
+        expected_keys,
+        parity_keys,
+        versioned_keys,
+    ):
         raise DrillError("backup metadata has an unexpected contract")
     expected_head = expected_migration_head or _expected_migration_head(workspace_root)
     tables = parity_tables_for_head(expected_head)
-    if expected_head == CAPABILITY_PARITY_MIGRATION_HEAD:
+    contract = parity_contract_for_head(expected_head)
+    if contract is not None:
         if (
-            set(payload) != v2_keys
-            or payload.get("parity_contract") != CAPABILITY_PARITY_CONTRACT
+            set(payload) != versioned_keys
+            or payload.get("parity_contract") != contract
             or payload.get("migration_head") != expected_head
         ):
-            raise DrillError("capability backup requires its exact migration and parity contract")
+            raise DrillError("versioned backup requires its exact migration and parity contract")
     elif "parity_contract" in payload or "migration_head" in payload:
         raise DrillError("legacy backup must retain its legacy parity contract")
     if "row_counts" in payload:
@@ -1522,26 +1567,28 @@ def _row_counts(target: DisposableTarget, expected_head: str) -> dict[str, int]:
     return result
 
 
-def _verify_capability_backup_parity(config: DrillConfig, actual: Mapping[str, int]) -> None:
-    if config.expected_migration_head != CAPABILITY_PARITY_MIGRATION_HEAD:
+def _verify_versioned_backup_parity(config: DrillConfig, actual: Mapping[str, int]) -> None:
+    contract = parity_contract_for_head(config.expected_migration_head)
+    if contract is None:
         return
+    tables = parity_tables_for_head(config.expected_migration_head)
     # These inputs have already been copied privately and hash/contract-checked.
     try:
         metadata = json.loads(config.backup_metadata.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
-        raise DrillError("capability backup metadata is unreadable for parity") from error
+        raise DrillError("versioned backup metadata is unreadable for parity") from error
     if (
         not isinstance(metadata, dict)
-        or metadata.get("parity_contract") != CAPABILITY_PARITY_CONTRACT
+        or metadata.get("parity_contract") != contract
         or metadata.get("migration_head") != config.expected_migration_head
-        or set(actual) != set(CAPABILITY_PARITY_TABLES)
+        or set(actual) != set(tables)
         or dict(actual) != metadata.get("row_counts")
         or any(
             isinstance(value, bool) or not isinstance(value, int) or value < 0
             for value in actual.values()
         )
     ):
-        raise DrillError("restored capability-aware row-count parity failed")
+        raise DrillError("restored versioned row-count parity failed")
 
 
 def _invariants(target: DisposableTarget) -> dict[str, int]:
@@ -2139,9 +2186,10 @@ def _execute(config: DrillConfig) -> tuple[dict[str, Any], Path]:
                 config.expected_migration_head,
             )
             evidence["row_counts"] = _row_counts(target, config.expected_migration_head)
-            if config.expected_migration_head == CAPABILITY_PARITY_MIGRATION_HEAD:
-                _verify_capability_backup_parity(config, evidence["row_counts"])
-                evidence["parity_contract"] = CAPABILITY_PARITY_CONTRACT
+            contract = parity_contract_for_head(config.expected_migration_head)
+            if contract is not None:
+                _verify_versioned_backup_parity(config, evidence["row_counts"])
+                evidence["parity_contract"] = contract
             evidence["invariants_before_hold"] = _invariants(target)
             before_hold = _side_effect_counts(target)
             evidence["counts_before_hold"] = before_hold.as_dict()

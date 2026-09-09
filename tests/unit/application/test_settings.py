@@ -42,6 +42,7 @@ def _production_values() -> dict[str, str]:
         ),
         "public_app_url": "https://app.authorityclosers.com",
         "admin_app_url": "https://admin.authorityclosers.com",
+        "coach_app_url": "https://coach.authorityclosers.com",
         "api_url": "https://api.authorityclosers.com",
         "internal_api_host": "api.production.ac.internal.invalid",
         "session_cookie_name": "__Host-ac_session",
@@ -62,6 +63,7 @@ def _staging_values() -> dict[str, str]:
         {
             "public_app_url": "https://staging.authorityclosers.com",
             "admin_app_url": "https://admin-staging.authorityclosers.com",
+            "coach_app_url": "https://coach-staging.authorityclosers.com",
             "api_url": "https://api-staging.authorityclosers.com",
             "internal_api_host": "api.staging.ac.internal.invalid",
         }
@@ -73,17 +75,20 @@ _DEPLOYMENT_ORIGINS = {
     "staging": {
         "public_app_url": "https://staging.authorityclosers.com",
         "admin_app_url": "https://admin-staging.authorityclosers.com",
+        "coach_app_url": "https://coach-staging.authorityclosers.com",
         "api_url": "https://api-staging.authorityclosers.com",
     },
     "production": {
         "public_app_url": "https://app.authorityclosers.com",
         "admin_app_url": "https://admin.authorityclosers.com",
+        "coach_app_url": "https://coach.authorityclosers.com",
         "api_url": "https://api.authorityclosers.com",
     },
 }
 _DEPLOYMENT_URL_ENV_FIELDS = {
     "public_app_url": "AC_PUBLIC_APP_URL",
     "admin_app_url": "AC_ADMIN_APP_URL",
+    "coach_app_url": "AC_COACH_APP_URL",
     "api_url": "AC_API_URL",
 }
 
@@ -202,6 +207,7 @@ def test_staging_is_production_shaped_but_uses_isolated_origins() -> None:
     assert settings.secure_cookies is True
     assert set(settings.allowed_hosts) == {
         "admin-staging.authorityclosers.com",
+        "coach-staging.authorityclosers.com",
         "api.staging.ac.internal.invalid",
         "api-staging.authorityclosers.com",
         "staging.authorityclosers.com",

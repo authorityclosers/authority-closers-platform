@@ -6,7 +6,27 @@ export {
   PLATFORM_BRAND,
 } from "./brand-presentation";
 export type { BrandPresentation } from "./brand-presentation";
+export {
+  ActionButton,
+  actionClassName,
+  ChoiceOption,
+  FocusSession,
+  SessionStep,
+} from "./interaction-primitives";
+export type { ActionVariant } from "./interaction-primitives";
 export { AcademyMark, BrandMark, PlatformMark } from "./mark";
+export { LearningSymbol, ProgressOrbit } from "./learning-symbol";
+export { RewardReveal } from "./reward-reveal";
+export {
+  PracticeCompanion,
+  PRACTICE_COMPANIONS,
+  normalizePracticeCompanion,
+} from "./practice-companion";
+export type {
+  PracticeCompanionKind,
+  PracticeCompanionMood,
+} from "./practice-companion";
+export type { LearningSymbolKind } from "./learning-symbol";
 export {
   ActivityRow,
   ModuleCard,

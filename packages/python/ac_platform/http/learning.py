@@ -12,7 +12,7 @@ import base64
 import binascii
 import json
 import re
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from enum import Enum
 from typing import Annotated, Any, Literal, cast
@@ -21,6 +21,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, FastAPI, Header, Path, Query, Request, Response, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import and_, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from ac_platform.application.settings import Settings
@@ -67,7 +68,8 @@ ReviewerResolver = Callable[[LearningAccessContext], UUID | None]
 PolicyResolver = Callable[[LearningAccessContext], VideoEvidencePolicy]
 ActivityMediaResolver = Callable[[Session, UUID, object, object], object | None]
 MediaDescriptorResolver = Callable[
-    [Session, ActorContext, LearningAccessContext], ActivityMediaDescriptorResponse | None
+    [AsyncSession, ActorContext, LearningAccessContext],
+    Awaitable[ActivityMediaDescriptorResponse | None],
 ]
 
 
@@ -771,6 +773,9 @@ def install_learning_http(
     playback_enabled = policy_resolver is not None
     router = APIRouter(prefix="/v1", tags=["learning"])
     actor_dependency = Depends(require_actor)
+    # Only the activity descriptor read issues durable delivery grants. Do not
+    # expose its signed URLs until grant + audit commit has actually succeeded.
+    activity_read_dependency = Depends(require_actor, scope="function")
 
     def bundle_for(database: Session) -> LearningCommandBundle:
         return _bundle(
@@ -983,11 +988,11 @@ def install_learning_http(
     async def get_activity(
         activity_id: Annotated[UUID, Path()],
         response: Response,
-        auth: AuthenticatedTransaction = actor_dependency,
+        auth: AuthenticatedTransaction = activity_read_dependency,
     ) -> ActivityDetailResponse:
         actor = auth.resolved.actor
 
-        def read(database: Session) -> ActivityDetailResponse:
+        def read(database: Session) -> tuple[ActivityDetailResponse, LearningAccessContext | None]:
             enrollment, version, catalog_activity = _scope_for_activity(
                 database, actor, activity_id
             )
@@ -1031,12 +1036,7 @@ def install_learning_http(
                     activity_id=activity_id,
                 )
             )
-            media = (
-                None
-                if state is ActivityState.LOCKED or media_descriptor_resolver is None
-                else media_descriptor_resolver(database, actor, access)
-            )
-            return ActivityDetailResponse(
+            result = ActivityDetailResponse(
                 id=access.activity.id,
                 module_id=access.activity.module_id,
                 program_version_id=access.program_version_id,
@@ -1058,10 +1058,14 @@ def install_learning_http(
                 enrollment_id=enrollment.id,
                 draft_revision=draft.revision if draft is not None else 0,
                 draft_payload=dict(draft.payload) if draft is not None else None,
-                media=media,
+                media=None,
             )
+            return result, None if state is ActivityState.LOCKED else access
 
-        result = await _run_in_auth_transaction(auth, read)
+        result, media_access = await _run_in_auth_transaction(auth, read)
+        if media_access is not None and media_descriptor_resolver is not None:
+            media = await media_descriptor_resolver(auth.database, actor, media_access)
+            result = result.model_copy(update={"media": media})
         _no_store(response, kind="activity", revision=result.revision)
         return result
 

@@ -83,6 +83,11 @@ rollback_dir=''
 transaction_active=0
 transaction_committed=0
 compose_mutated=0
+application_edge_routes_root="$srv_root/application/edge-routes"
+application_root="$srv_root/application"
+application_edge_route_releases_root="$application_root/edge-route-releases"
+foundation_edge_route_projection="$application_edge_route_releases_root/$release_id"
+application_edge_routes_root_created=0
 previous_link_target=''
 previous_release_dir=''
 previous_release_mode=''
@@ -203,6 +208,9 @@ restore_failed_transaction() {
       --extract --file="$rollback_dir/host-files.tar" || rollback_failed=1
   fi
   restore_current_link || rollback_failed=1
+  if [[ "$application_edge_routes_root_created" == 1 ]]; then
+    rmdir -- "$application_edge_routes_root" || rollback_failed=1
+  fi
 
   if [[ "$test_mode" == 0 ]]; then
     systemctl daemon-reload || rollback_failed=1
@@ -282,10 +290,18 @@ begin_transaction() {
         exit 1
       }
       previous_release_mode=immutable
+      [[ -f "$previous_release_dir/RELEASE-ID" && \
+         "$(<"$previous_release_dir/RELEASE-ID")" == "$previous_id" ]]
+      [[ -f "$previous_release_dir/RELEASE-COMMIT" && \
+         "$(<"$previous_release_dir/RELEASE-COMMIT")" =~ ^[0-9a-f]{40}$ ]]
       [[ -r "$previous_release_dir/RELEASE-FILES.sha256" ]]
       (cd "$previous_release_dir" && sha256sum --check --strict RELEASE-FILES.sha256 >/dev/null)
     elif [[ "$previous_id" =~ ^foundation-[0-9a-f]{40}$ ]]; then
       previous_release_mode=immutable
+      [[ -f "$previous_release_dir/RELEASE-ID" && \
+         "$(<"$previous_release_dir/RELEASE-ID")" == "$previous_id" ]]
+      [[ -f "$previous_release_dir/RELEASE-COMMIT" && \
+         "$(<"$previous_release_dir/RELEASE-COMMIT")" == "${previous_id#foundation-}" ]]
       [[ -r "$previous_release_dir/RELEASE-FILES.sha256" ]] || {
         printf 'Existing immutable foundation release lacks checksum evidence.\n' >&2
         exit 1
@@ -316,9 +332,23 @@ begin_transaction() {
 }
 
 if [[ "$test_mode" == 1 ]]; then
-  install -d -m 0750 "$srv_root" "$releases_root"
+  install -d -m 0750 "$srv_root" "$releases_root" "$application_root"
 else
-  install -d -m 2750 -o root -g acops "$srv_root" "$releases_root"
+  install -d -m 2750 -o root -g acops "$srv_root" "$releases_root" "$application_root"
+fi
+
+# Application and foundation releases both own environment route selectors.
+# One shared lock prevents either installer from validating stale selector
+# state while the other changes Caddy mounts or links.
+shared_release_lock="$application_root/.deployment.lock"
+exec 9>>"$shared_release_lock"
+if ! flock --exclusive --nonblock 9; then
+  printf 'Another application deployment or foundation release is already active.\n' >&2
+  exit 1
+fi
+if [[ "$test_mode" == 0 ]]; then
+  chmod 0640 "$shared_release_lock"
+  chown root:acops "$shared_release_lock"
 fi
 
 if [[ -e "$release_dir" ]]; then
@@ -384,7 +414,9 @@ else
   find "$stage_dir" -type f -exec chmod 0640 {} +
   chmod 0644 \
     "$stage_dir/compose/foundation/Caddyfile" \
-    "$stage_dir/compose/foundation/otel-collector.yaml"
+    "$stage_dir/compose/foundation/otel-collector.yaml" \
+    "$stage_dir/compose/foundation/application-routes/production.caddy" \
+    "$stage_dir/compose/foundation/application-routes/staging.caddy"
   find "$stage_dir/scripts" -type f -exec chmod 0750 {} +
   if [[ "$test_mode" == 0 ]]; then
     chown -R root:acops "$stage_dir"
@@ -442,7 +474,160 @@ if [[ "$test_mode" == 0 ]]; then
     "/var/lib/authority-closers/toolchains/${release_id}.env"
   )
 fi
+
+if [[ -e "$application_edge_route_releases_root" || -L "$application_edge_route_releases_root" ]]; then
+  [[ -d "$application_edge_route_releases_root" && \
+     ! -L "$application_edge_route_releases_root" ]] || {
+    printf 'Application edge-route projection root is not a real directory.\n' >&2
+    exit 1
+  }
+fi
+install -d -m 0755 "$application_edge_route_releases_root"
+if [[ "$test_mode" == 0 ]]; then
+  chown root:root "$application_edge_route_releases_root"
+  [[ "$(stat -c '%U:%G %a' "$application_edge_route_releases_root")" == 'root:root 755' ]]
+else
+  [[ "$(stat -c '%a' "$application_edge_route_releases_root")" == 755 ]]
+fi
+if [[ ! -e "$foundation_edge_route_projection" && ! -L "$foundation_edge_route_projection" ]]; then
+  projection_stage="$(mktemp -d "$application_edge_route_releases_root/.${release_id}.XXXXXX")"
+  for route_environment in production staging; do
+    install -m 0444 \
+      "$release_dir/compose/foundation/application-routes/$route_environment.caddy" \
+      "$projection_stage/$route_environment.caddy"
+  done
+  chmod 0755 "$projection_stage"
+  if [[ "$test_mode" == 0 ]]; then
+    chown -R root:root "$projection_stage"
+  fi
+  mv --no-target-directory --no-clobber "$projection_stage" \
+    "$foundation_edge_route_projection"
+elif [[ ! -d "$foundation_edge_route_projection" || -L "$foundation_edge_route_projection" ]]; then
+  printf 'Foundation edge-route projection is not a real directory.\n' >&2
+  exit 1
+fi
+if [[ "$test_mode" == 0 ]]; then
+  [[ "$(stat -c '%U:%G %a' "$foundation_edge_route_projection")" == 'root:root 755' ]]
+else
+  [[ "$(stat -c '%a' "$foundation_edge_route_projection")" == 755 ]]
+fi
+mapfile -t foundation_projection_files < <(
+  find "$foundation_edge_route_projection" -mindepth 1 -maxdepth 1 -printf '%f\n' | LC_ALL=C sort
+)
+[[ "${foundation_projection_files[*]}" == 'production.caddy staging.caddy' ]] || {
+  printf 'Foundation edge-route projection has an unexpected file set.\n' >&2
+  exit 1
+}
+for route_environment in production staging; do
+  projection_file="$foundation_edge_route_projection/$route_environment.caddy"
+  [[ -f "$projection_file" && ! -L "$projection_file" ]]
+  [[ "$(stat -c '%a' "$projection_file")" == 444 ]]
+  if [[ "$test_mode" == 0 ]]; then
+    [[ "$(stat -c '%U:%G' "$projection_file")" == root:root ]]
+  fi
+  cmp --silent \
+    "$release_dir/compose/foundation/application-routes/$route_environment.caddy" \
+    "$projection_file"
+done
+
+validate_edge_route_selector() {
+  local route_environment="$1" route_selector="$2" route_target projection_id
+  local owner_release expected_source
+  [[ -L "$route_selector" ]] || return 1
+  route_target="$(readlink -f "$route_selector")"
+  [[ -f "$route_target" && ! -L "$route_target" ]] || return 1
+  projection_id="$(basename "$(dirname "$route_target")")"
+  case "$route_target" in
+    "$application_edge_route_releases_root"/foundation-*/"$route_environment".caddy)
+      if [[ "$test_mode" == 1 ]]; then
+        [[ "$projection_id" =~ ^foundation-(test-[a-z0-9-]+|[0-9a-f]{40})$ ]] || return 1
+      else
+        [[ "$projection_id" =~ ^foundation-[0-9a-f]{40}$ ]] || return 1
+      fi
+      owner_release="$releases_root/$projection_id"
+      expected_source="$owner_release/compose/foundation/application-routes/$route_environment.caddy"
+      ;;
+    "$application_edge_route_releases_root"/[0-9a-f]*/"$route_environment".caddy|\
+    "$application_edge_route_releases_root"/[0-9a-f]*/"$route_environment"-hold.caddy)
+      [[ "$projection_id" =~ ^[0-9a-f]{40}$ ]] || return 1
+      owner_release="$application_root/releases/$projection_id"
+      expected_source="$owner_release/edge-routes/$(basename "$route_target")"
+      ;;
+    *) return 1 ;;
+  esac
+  [[ -f "$owner_release/RELEASE-ID" || -f "$owner_release/RELEASE-COMMIT" ]] || return 1
+  if [[ "$projection_id" == foundation-* ]]; then
+    [[ -f "$owner_release/RELEASE-ID" && "$(<"$owner_release/RELEASE-ID")" == "$projection_id" ]]
+    if [[ "$test_mode" == 1 && "$projection_id" == foundation-test-* ]]; then
+      [[ -f "$owner_release/RELEASE-COMMIT" && "$(<"$owner_release/RELEASE-COMMIT")" =~ ^[0-9a-f]{40}$ ]]
+    else
+      [[ -f "$owner_release/RELEASE-COMMIT" && \
+         "$(<"$owner_release/RELEASE-COMMIT")" == "${projection_id#foundation-}" ]]
+    fi
+  else
+    [[ -f "$owner_release/RELEASE-COMMIT" && "$(<"$owner_release/RELEASE-COMMIT")" == "$projection_id" ]]
+  fi
+  (cd "$owner_release" && sha256sum --check --strict RELEASE-FILES.sha256 >/dev/null)
+  [[ -f "$expected_source" && ! -L "$expected_source" ]]
+  [[ "$(stat -c '%a' "$route_target")" == 444 ]]
+  if [[ "$test_mode" == 0 ]]; then
+    [[ "$(stat -c '%U:%G' "$route_target")" == root:root ]]
+  fi
+  cmp --silent "$expected_source" "$route_target"
+}
+
+declare -A foundation_owned_selectors=()
+if [[ -e "$application_edge_routes_root" || -L "$application_edge_routes_root" ]]; then
+  [[ -d "$application_edge_routes_root" && ! -L "$application_edge_routes_root" ]] || {
+    printf 'Application edge-route selector root is not a real directory.\n' >&2
+    exit 1
+  }
+  if [[ "$test_mode" == 0 ]]; then
+    [[ "$(stat -c '%U:%G %a' "$application_edge_routes_root")" == 'root:root 755' ]] || {
+      printf 'Application edge-route selector root has unexpected ownership or mode.\n' >&2
+      exit 1
+    }
+  fi
+fi
+for route_environment in production staging; do
+  route_selector="$application_edge_routes_root/$route_environment.caddy"
+  transaction_targets+=("$route_selector")
+  if [[ -e "$route_selector" || -L "$route_selector" ]]; then
+    [[ -L "$route_selector" ]] || {
+      printf 'Application edge-route selector is not a symbolic link: %s\n' "$route_selector" >&2
+      exit 1
+    }
+    validate_edge_route_selector "$route_environment" "$route_selector" || {
+      printf 'Application edge-route selector is not bound to a verified immutable release.\n' >&2
+      exit 1
+    }
+    route_target="$(readlink -f "$route_selector")"
+    route_projection_id="$(basename "$(dirname "$route_target")")"
+    if [[ "$route_projection_id" == foundation-* ]]; then
+      foundation_owned_selectors[$route_environment]=1
+    fi
+  fi
+done
 begin_transaction
+
+if [[ ! -d "$application_edge_routes_root" ]]; then
+  if [[ "$test_mode" == 1 ]]; then
+    install -d -m 0755 "$application_edge_routes_root"
+  else
+    install -d -m 0755 -o root -g root "$application_edge_routes_root"
+  fi
+  application_edge_routes_root_created=1
+fi
+for route_environment in production staging; do
+  route_selector="$application_edge_routes_root/$route_environment.caddy"
+  if [[ ! -L "$route_selector" || \
+        "${foundation_owned_selectors[$route_environment]:-0}" == 1 ]]; then
+    route_selector_tmp="$application_edge_routes_root/.${route_environment}-${release_id}.$$"
+    ln -s "$foundation_edge_route_projection/$route_environment.caddy" \
+      "$route_selector_tmp"
+    mv --no-target-directory --force "$route_selector_tmp" "$route_selector"
+  fi
+done
 
 if [[ "$test_mode" == 0 ]]; then
   AC_RELEASE_ID="$release_id" \

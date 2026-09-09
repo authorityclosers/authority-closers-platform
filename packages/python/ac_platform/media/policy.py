@@ -115,6 +115,7 @@ class MediaCorsPolicy:
                 raise ValueError("media CORS origins must not contain credentials or paths")
             if parsed.scheme == "http" and parsed.hostname not in {
                 "localhost",
+                "learner.localhost",
                 "127.0.0.1",
                 "::1",
             }:
@@ -230,16 +231,26 @@ class SignedMediaDeliveryPort:
         delivery_origin: str,
         playback_ttl: timedelta = timedelta(minutes=15),
         range_policy: RangePolicy | None = None,
+        allow_loopback_http: bool = False,
     ) -> None:
         origin = delivery_origin.rstrip("/")
         parsed = urlsplit(origin)
         if (
-            parsed.scheme != "https"
+            (
+                parsed.scheme != "https"
+                and not (
+                    allow_loopback_http
+                    and parsed.scheme == "http"
+                    and parsed.hostname in {"127.0.0.1", "localhost", "learner.localhost"}
+                )
+            )
             or not parsed.netloc
             or parsed.hostname is None
             or parsed.username
             or parsed.password
             or parsed.path not in {"", "/"}
+            or parsed.query
+            or parsed.fragment
         ):
             raise ValueError("media delivery origin must be an HTTPS origin")
         try:
@@ -251,6 +262,7 @@ class SignedMediaDeliveryPort:
         if playback_ttl <= timedelta(0) or playback_ttl > timedelta(hours=1):
             raise ValueError("media playback TTL must be between zero and one hour")
         self.signer = signer
+        self.allow_loopback_http = allow_loopback_http is True
         self.delivery_origin = origin
         self.playback_ttl = playback_ttl
         self.range_policy = range_policy or RangePolicy()
@@ -304,7 +316,8 @@ class SignedMediaDeliveryPort:
         encoded_key = quote(object_key, safe="")
         encoded_token = quote(token, safe="")
         url = EphemeralMediaUrl(
-            f"{self.delivery_origin}/v1/media/{kind}/{encoded_key}?token={encoded_token}"
+            f"{self.delivery_origin}/v1/media/{kind}/{encoded_key}?token={encoded_token}",
+            allow_loopback_http=self.allow_loopback_http,
         )
         return SignedMediaUrl(
             url=url,

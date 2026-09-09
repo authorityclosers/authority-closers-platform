@@ -70,18 +70,21 @@ PROFILE_KEYS = (
     "AC_STATE_ROOT",
     "AC_PUBLIC_APP_URL",
     "AC_ADMIN_APP_URL",
+    "AC_COACH_APP_URL",
     "AC_API_URL",
     "AC_API_HOST",
     "AC_TRUSTED_PROXY_ADDRESSES",
     "AC_EDGE_API_ALIAS",
     "AC_EDGE_LEARNER_ALIAS",
     "AC_EDGE_ADMIN_ALIAS",
+    "AC_EDGE_COACH_ALIAS",
     "AC_EXTERNAL_SIDE_EFFECTS_HOLD",
     "AC_EMAIL_PROVIDER",
     "AC_RELEASE_ID",
     "AC_API_IMAGE",
     "AC_LEARNER_IMAGE",
     "AC_ADMIN_IMAGE",
+    "AC_COACH_IMAGE",
 )
 SECRET_KEYS = (
     "AC_DATABASE_URL",
@@ -191,18 +194,58 @@ CAPABILITY_PARITY_CONTRACT = "ac-postgres-parity-v2"
 CAPABILITY_PARITY_TABLES = PARITY_TABLES + ("capability_grants", "capability_revocations")
 
 
+PRACTICE_PARITY_MIGRATION_HEAD = "20260908_0020"
+PRACTICE_PARITY_CONTRACT = "ac-postgres-parity-v3"
+PRACTICE_PARITY_TABLES = CAPABILITY_PARITY_TABLES + (
+    "practice_set_versions",
+    "practice_attempts",
+    "practice_profiles",
+    "practice_responses",
+    "practice_commands",
+    "practice_feedback_acks",
+    "practice_participations",
+    "practice_reward_claims",
+    "practice_ledger_entries",
+)
+FOCUS_PARITY_MIGRATION_HEAD = "20260908_0021"
+FOCUS_PARITY_CONTRACT = "ac-postgres-parity-v4"
+FOCUS_PARITY_TABLES = PRACTICE_PARITY_TABLES + ("practice_focus_runs", "practice_focus_events")
+AUTHORING_PARITY_MIGRATION_HEAD = "20260908_0022"
+AUTHORING_PARITY_CONTRACT = "ac-postgres-parity-v5"
+AUTHORING_PARITY_TABLES = FOCUS_PARITY_TABLES + ("catalog_authoring_commands",)
+# 20260909_0023 extends the immutable authoring-command operation catalogue
+# without changing the backed-up table inventory or its parity contract.
+REVISION_PARITY_MIGRATION_HEAD = "20260909_0023"
+REVISION_PARITY_CONTRACT = AUTHORING_PARITY_CONTRACT
+REVISION_PARITY_TABLES = AUTHORING_PARITY_TABLES
+VERSIONED_PARITY_CONTRACTS = {
+    CAPABILITY_PARITY_MIGRATION_HEAD: (CAPABILITY_PARITY_CONTRACT, CAPABILITY_PARITY_TABLES),
+    PRACTICE_PARITY_MIGRATION_HEAD: (PRACTICE_PARITY_CONTRACT, PRACTICE_PARITY_TABLES),
+    FOCUS_PARITY_MIGRATION_HEAD: (FOCUS_PARITY_CONTRACT, FOCUS_PARITY_TABLES),
+    AUTHORING_PARITY_MIGRATION_HEAD: (AUTHORING_PARITY_CONTRACT, AUTHORING_PARITY_TABLES),
+    REVISION_PARITY_MIGRATION_HEAD: (REVISION_PARITY_CONTRACT, REVISION_PARITY_TABLES),
+}
+
+
 def parity_tables_for_head(migration_head: str) -> tuple[str, ...]:
     if migration_head in LEGACY_PARITY_MIGRATION_HEADS:
         return PARITY_TABLES
-    if migration_head == CAPABILITY_PARITY_MIGRATION_HEAD:
-        return CAPABILITY_PARITY_TABLES
+    if migration_head in VERSIONED_PARITY_CONTRACTS:
+        return VERSIONED_PARITY_CONTRACTS[migration_head][1]
     raise BackupError("migration head has no reviewed row-count parity contract")
 
 
-def parity_metadata_fields(migration_head: str) -> dict[str, str]:
+def parity_contract_for_head(migration_head: str) -> str | None:
     parity_tables_for_head(migration_head)
-    if migration_head == CAPABILITY_PARITY_MIGRATION_HEAD:
-        return {"parity_contract": CAPABILITY_PARITY_CONTRACT, "migration_head": migration_head}
+    if migration_head in LEGACY_PARITY_MIGRATION_HEADS:
+        return None
+    return VERSIONED_PARITY_CONTRACTS[migration_head][0]
+
+
+def parity_metadata_fields(migration_head: str) -> dict[str, str]:
+    contract = parity_contract_for_head(migration_head)
+    if contract is not None:
+        return {"parity_contract": contract, "migration_head": migration_head}
     return {}
 
 
@@ -906,7 +949,7 @@ def capture_dump(
             "row_counts": row_counts,
         }
         # Old immutable application controllers accept only the legacy keys.
-        # Emit the additive V2 identity only for a capability-aware release.
+        # Every reviewed post-0018 schema requires its own exact version identity.
         metadata.update(parity_metadata_fields(target.migration_head))
         metadata_fd = os.open(
             metadata_path_tmp,

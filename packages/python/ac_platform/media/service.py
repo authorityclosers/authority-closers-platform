@@ -8,14 +8,18 @@ import json
 import math
 import re
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
+from ac_platform.audit.service import AuditRepository
+from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.media.api_contracts import (
     ActivityMediaBindingRequest,
@@ -115,7 +119,15 @@ from ac_platform.media.storage import (
 
 if TYPE_CHECKING:
     from ac_platform.learning.services import LearningAccessContext
-    from ac_platform.media.staging_fixture_manifest import VerifiedStagingFixturePack
+    from ac_platform.media.public_film_import import PublicFilmImportAuthorization
+    from ac_platform.media.public_film_manifest import (
+        VerifiedPublicFilmClip,
+        VerifiedPublicFilmPack,
+    )
+    from ac_platform.media.staging_fixture_manifest import (
+        VerifiedFixtureClip,
+        VerifiedStagingFixturePack,
+    )
 
 _CONTENT_TYPES: dict[MediaPurpose, frozenset[str]] = {
     MediaPurpose.AVATAR: frozenset({"image/jpeg", "image/png", "image/webp"}),
@@ -133,6 +145,18 @@ MediaPlaybackAuthorizer = Callable[[Session, ActorContext, MediaAsset], bool]
 _FAILURE_CODE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
 _WEBHOOK_TIMESTAMP_TOLERANCE = timedelta(minutes=5)
 _SHA256 = re.compile(r"^[0-9a-fA-F]{64}$")
+
+
+@dataclass(frozen=True, slots=True)
+class _ActivityDeliveryGrantIssued:
+    grant_id: UUID
+    predecessor_id: UUID | None
+    activity_id: UUID
+    binding_id: UUID
+    enrollment_id: UUID
+    asset_id: UUID
+    version_id: UUID
+    issued_at: datetime
 
 
 def _as_utc(value: datetime) -> datetime:
@@ -297,6 +321,41 @@ class MediaService:
         clip = next((item for item in pack.clips if item.spec.fixture_id == fixture_id), None)
         if clip is None:
             raise MediaForbidden("The staging fixture is outside the approved package.")
+        return self._register_verified_file_source(database, actor, clip)
+
+    def register_verified_public_film_source(
+        self,
+        database: Session,
+        actor: ActorContext,
+        pack: VerifiedPublicFilmPack,
+        fixture_id: str,
+        *,
+        public_film_authorization: PublicFilmImportAuthorization,
+    ) -> MediaVersion:
+        """Sealed production-capable package registration; never caller-declared READY."""
+        from ac_platform.media.public_film_import import PublicFilmImportAuthorization
+        from ac_platform.media.public_film_manifest import VerifiedPublicFilmPack
+
+        if (
+            type(pack) is not VerifiedPublicFilmPack
+            or type(public_film_authorization) is not PublicFilmImportAuthorization
+            or public_film_authorization.pack is not pack
+        ):
+            raise MediaForbidden("The exact sealed public-film authorization is required.")
+        clip = next((item for item in pack.clips if item.spec.fixture_id == fixture_id), None)
+        if clip is None:
+            raise MediaForbidden("The film is outside the approved package.")
+        public_film_authorization.require(database, actor, version_id=clip.version_id, service=self)
+        return self._register_verified_file_source(database, actor, clip)
+
+    def _register_verified_file_source(
+        self,
+        database: Session,
+        actor: ActorContext,
+        clip: VerifiedFixtureClip | VerifiedPublicFilmClip,
+    ) -> MediaVersion:
+        """Shared byte inspection/PROCESSING registration, after adapter authorization."""
+        tenant_id = self._tenant(actor)
         expected = next(
             item for item in clip.spec.objects if item.path == clip.spec.progressive_path
         )
@@ -501,6 +560,7 @@ class MediaService:
         request: ActivityMediaBindingRequest,
         *,
         idempotency_key: str,
+        public_film_authorization: PublicFilmImportAuthorization | None = None,
     ) -> ActivityMediaBindingResponse:
         """Append a human-approved, tenant-scoped activity/media binding.
 
@@ -513,9 +573,29 @@ class MediaService:
             raise MediaBadRequest(
                 "A bounded Idempotency-Key is required for activity media bindings."
             )
-        if not self._manager(actor):
+        if public_film_authorization is not None:
+            from ac_platform.media.public_film_import import PublicFilmImportAuthorization
+
+            if type(public_film_authorization) is not PublicFilmImportAuthorization:
+                raise MediaForbidden("The sealed public-film authorization is required.")
+            public_film_authorization.require(
+                database,
+                actor,
+                version_id=request.version_id,
+                request=request,
+                service=self,
+            )
+        elif not self._manager(actor):
             raise MediaForbidden("The actor is not authorized to approve activity media.")
+        from ac_platform.media.public_film_manifest import is_public_film_media_identity
+
         tenant_id = self._tenant(actor)
+        if public_film_authorization is None and is_public_film_media_identity(
+            tenant_id, request.asset_id, request.version_id
+        ):
+            raise MediaForbidden(
+                "Public test films require their dedicated demonstration authorization."
+            )
 
         from ac_platform.catalog.models import Activity as CatalogActivity
         from ac_platform.catalog.models import ProgramVersion as CatalogProgramVersion
@@ -561,7 +641,8 @@ class MediaService:
             raise MediaConflict("Only published catalog activities can receive approved media.")
 
         asset = self._asset(database, actor, request.asset_id, lock=True)
-        self._require_write(actor, purpose=MediaPurpose.VIDEO, asset=asset)
+        if public_film_authorization is None:
+            self._require_write(actor, purpose=MediaPurpose.VIDEO, asset=asset)
         if asset.purpose != MediaPurpose.VIDEO.value or asset.state == MediaLifecycle.RETIRED.value:
             raise MediaConflict("Only active video media can be approved for an activity.")
         version = database.scalar(
@@ -631,6 +712,14 @@ class MediaService:
             )
             .with_for_update()
         )
+        if (
+            public_film_authorization is None
+            and current is not None
+            and is_public_film_media_identity(tenant_id, current.asset_id, current.version_id)
+        ):
+            raise MediaForbidden(
+                "Public test films require their dedicated demonstration authorization."
+            )
         prior: ActivityMediaBinding | None = None
         if request.supersedes_binding_id is not None:
             prior = database.scalar(
@@ -670,6 +759,14 @@ class MediaService:
             prior.state = MediaBindingState.SUPERSEDED.value
             prior.superseded_at = now
             prior.updated_at = now
+        if public_film_authorization is not None:
+            public_film_authorization.require(
+                database,
+                actor,
+                version_id=request.version_id,
+                request=request,
+                service=self,
+            )
         binding = ActivityMediaBinding(
             tenant_id=tenant_id,
             activity_id=activity.id,
@@ -700,12 +797,45 @@ class MediaService:
             ) from error
         return binding_response(binding)
 
-    def resolve_activity_media_descriptor_for_learner(
+    async def resolve_activity_media_descriptor_for_learner(
+        self,
+        database: AsyncSession,
+        actor: ActorContext,
+        access: LearningAccessContext,
+    ) -> ActivityMediaDescriptorResponse:
+        """Issue delivery and append its audit in the caller-owned transaction."""
+        descriptor, issued = await database.run_sync(
+            lambda session: self._resolve_activity_media_descriptor_for_learner(
+                session, actor, access
+            )
+        )
+        if issued is not None:
+            await AuditRepository(database).append_for_actor(
+                actor,
+                action="media.activity_delivery_granted",
+                resource_type="media_playback_grant",
+                resource_id=issued.grant_id,
+                payload={
+                    "status": "issued",
+                    "predecessor_grant_id": str(issued.predecessor_id)
+                    if issued.predecessor_id is not None
+                    else None,
+                    "activity_id": str(issued.activity_id),
+                    "binding_id": str(issued.binding_id),
+                    "enrollment_id": str(issued.enrollment_id),
+                    "media_id": str(issued.asset_id),
+                    "media_version_id": str(issued.version_id),
+                },
+                now=issued.issued_at,
+            )
+        return descriptor
+
+    def _resolve_activity_media_descriptor_for_learner(
         self,
         database: Session,
         actor: ActorContext,
         access: LearningAccessContext,
-    ) -> ActivityMediaDescriptorResponse:
+    ) -> tuple[ActivityMediaDescriptorResponse, _ActivityDeliveryGrantIssued | None]:
         """Return safe media metadata after learning scope is already resolved."""
 
         activity = getattr(access, "activity", None)
@@ -716,8 +846,26 @@ class MediaService:
             return ActivityMediaDescriptorResponse(
                 state="unavailable",
                 reason="activity_media_not_available",
-            )
+            ), None
         tenant_id = self._tenant(actor)
+        if self.delivery_port is not None and self.delivery_activity_resolver is not None:
+            if access.actor != actor or access.person_id != actor.person_id:
+                raise MediaForbidden("The activity delivery actor is unavailable.")
+            # Serialize this browser session's issuance before resolving binding or
+            # querying grants. A waiting refresh must see the committed successor.
+            identity = database.scalar(
+                select(IdentitySession)
+                .where(
+                    IdentitySession.id == actor.session_id,
+                    IdentitySession.person_id == actor.person_id,
+                    IdentitySession.selected_tenant_id == tenant_id,
+                    IdentitySession.revoked_at.is_(None),
+                )
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+            if identity is None:
+                raise MediaForbidden("The activity delivery session is unavailable.")
         snapshot = resolve_activity_media_binding(
             database,
             tenant_id=tenant_id,
@@ -732,7 +880,7 @@ class MediaService:
             return ActivityMediaDescriptorResponse(
                 state="unavailable",
                 reason="approved_activity_media_binding_unavailable",
-            )
+            ), None
         version = database.scalar(
             select(MediaVersion).where(
                 MediaVersion.tenant_id == tenant_id,
@@ -744,7 +892,7 @@ class MediaService:
             return ActivityMediaDescriptorResponse(
                 state="unavailable",
                 reason="approved_media_version_unavailable",
-            )
+            ), None
         projected = self._version_response(database, version, include_sources=False)
         descriptor = ActivityMediaDescriptorResponse(
             state="approved",
@@ -763,7 +911,7 @@ class MediaService:
             playback_available=False,
         )
         if self.delivery_port is None or self.delivery_activity_resolver is None:
-            return descriptor
+            return descriptor, None
         if access.actor != actor or access.person_id != actor.person_id:
             raise MediaForbidden("The activity delivery actor is unavailable.")
         now = self._now().replace(microsecond=0)
@@ -791,7 +939,7 @@ class MediaService:
         if hls is None and progressive is None:
             return descriptor.model_copy(
                 update={"state": "blocked", "reason": "approved_media_rendition_unavailable"}
-            )
+            ), None
         fingerprint = activity_delivery_fingerprint(
             activity_delivery_scope(actor, snapshot, access.enrollment_id)
         )
@@ -802,12 +950,19 @@ class MediaService:
                 MediaPlaybackGrant.actor_person_id == actor.person_id,
                 MediaPlaybackGrant.request_fingerprint == fingerprint,
                 MediaPlaybackGrant.revoked_at.is_(None),
-                MediaPlaybackGrant.expires_at > now,
             )
-            .order_by(MediaPlaybackGrant.created_at.desc())
+            .order_by(MediaPlaybackGrant.created_at.desc(), MediaPlaybackGrant.id.desc())
             .limit(1)
+            .execution_options(populate_existing=True)
         )
-        if grant is None:
+        if grant is not None and not hmac.compare_digest(
+            grant.token_digest, self.signer.digest(grant_token(grant, self.signer))
+        ):
+            raise MediaForbidden("The activity delivery grant is unavailable.")
+        renewal_margin = min(timedelta(seconds=30), self.delivery_port.playback_ttl / 5)
+        issued = None
+        if grant is None or _as_utc(grant.expires_at) <= now + renewal_margin:
+            predecessor_id = grant.id if grant is not None else None
             grant_id = uuid4()
             grant = MediaPlaybackGrant(
                 id=grant_id,
@@ -825,10 +980,16 @@ class MediaService:
             grant.token_digest = self.signer.digest(grant_token(grant, self.signer))
             database.add(grant)
             database.flush()
-        elif not hmac.compare_digest(
-            grant.token_digest, self.signer.digest(grant_token(grant, self.signer))
-        ):
-            raise MediaForbidden("The activity delivery grant is unavailable.")
+            issued = _ActivityDeliveryGrantIssued(
+                grant.id,
+                predecessor_id,
+                activity.id,
+                snapshot.binding_id,
+                access.enrollment_id,
+                snapshot.asset_id,
+                snapshot.version_id,
+                now,
+            )
         authorized = snapshot.as_authorized_media_version(actor)
         grant_scope = PersistedMediaGrantScope(grant.id, access.enrollment_id, snapshot.binding_id)
 
@@ -877,7 +1038,7 @@ class MediaService:
                     for caption in captions
                 ],
             }
-        )
+        ), issued
 
     @staticmethod
     def _upload_key(
@@ -1245,6 +1406,9 @@ class MediaService:
                 "The private media storage adapter could not issue an upload intent."
             ) from error
         database.add(version)
+        # The upload intent references this version through a composite FK.
+        # There is no ORM relationship to impose mapper flush ordering.
+        database.flush()
         intent = MediaUploadIntent(
             tenant_id=asset.tenant_id,
             actor_person_id=actor.person_id,
@@ -1579,11 +1743,35 @@ class MediaService:
         return head.content_length
 
     def process_version(
-        self, database: Session, actor: ActorContext, version_id: UUID
+        self,
+        database: Session,
+        actor: ActorContext,
+        version_id: UUID,
+        *,
+        public_film_authorization: PublicFilmImportAuthorization | None = None,
     ) -> MediaAssetResponse:
+        if public_film_authorization is not None:
+            from ac_platform.media.public_film_import import PublicFilmImportAuthorization
+
+            if type(public_film_authorization) is not PublicFilmImportAuthorization:
+                raise MediaForbidden("The sealed public-film authorization is required.")
+            public_film_authorization.require(database, actor, version_id=version_id, service=self)
         version = self._version(database, actor, version_id, lock=True)
         asset = self._asset(database, actor, version.asset_id, lock=True)
-        self._require_write(actor, purpose=MediaPurpose(version.purpose), asset=asset)
+        if public_film_authorization is None:
+            self._require_write(actor, purpose=MediaPurpose(version.purpose), asset=asset)
+        elif (
+            version.purpose != MediaPurpose.VIDEO.value
+            or asset.purpose != MediaPurpose.VIDEO.value
+            or asset.owner_person_id != actor.person_id
+            or not any(
+                clip.version_id == version.id
+                and clip.asset_id == asset.id
+                and clip.source_key == version.object_key
+                for clip in public_film_authorization.pack.clips
+            )
+        ):
+            raise MediaForbidden("The source is outside the approved public-film identity.")
         if version.state != MediaLifecycle.PROCESSING.value:
             raise MediaConflict("The media version is not awaiting processing.")
         result = None
@@ -1807,6 +1995,10 @@ class MediaService:
             version.updated_at = self._now()
             database.flush()
             raise MediaConflict("The media processor did not complete this version.") from error
+        if public_film_authorization is not None:
+            # Verification can take time; an expired/revoked operator must not
+            # advance readiness merely because the command began while valid.
+            public_film_authorization.require(database, actor, version_id=version_id, service=self)
         version.state = MediaLifecycle.READY.value
         version.processing_error = None
         version.updated_at = self._now()

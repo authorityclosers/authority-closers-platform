@@ -17,17 +17,25 @@ _DEPLOYMENT_ORIGINS = {
     "staging": {
         "public_app_url": "https://staging.authorityclosers.com",
         "admin_app_url": "https://admin-staging.authorityclosers.com",
+        "coach_app_url": "https://coach-staging.authorityclosers.com",
         "api_url": "https://api-staging.authorityclosers.com",
     },
     "production": {
         "public_app_url": "https://app.authorityclosers.com",
         "admin_app_url": "https://admin.authorityclosers.com",
+        "coach_app_url": "https://coach.authorityclosers.com",
         "api_url": "https://api.authorityclosers.com",
     },
+}
+# Explicit transition aliases, never a wildcard or a cross-environment host.
+_DEPLOYMENT_LEARNER_ORIGINS = {
+    "staging": "https://learner-staging.authorityclosers.com",
+    "production": "https://learner.authorityclosers.com",
 }
 _DEPLOYMENT_URL_ENV_FIELDS = {
     "public_app_url": "AC_PUBLIC_APP_URL",
     "admin_app_url": "AC_ADMIN_APP_URL",
+    "coach_app_url": "AC_COACH_APP_URL",
     "api_url": "AC_API_URL",
 }
 _DEPLOYMENT_INTERNAL_API_HOSTS = {
@@ -60,6 +68,7 @@ class Settings(BaseSettings):
     otel_exporter_otlp_endpoint: AnyHttpUrl | None = None
     public_app_url: AnyHttpUrl = AnyHttpUrl("http://localhost:3000")
     admin_app_url: AnyHttpUrl = AnyHttpUrl("http://localhost:3001")
+    coach_app_url: AnyHttpUrl = AnyHttpUrl("http://coach.localhost:3102")
     api_url: AnyHttpUrl = AnyHttpUrl("http://localhost:8000")
     internal_api_host: str = "localhost"
     session_token_pepper: SecretStr = SecretStr(
@@ -116,8 +125,25 @@ class Settings(BaseSettings):
     # Separate deployment opt-in: loading diagnostic fixtures alone never mounts
     # learner delivery. This flag can serve only the package-owned two-film set.
     media_staging_public_films_delivery_enabled: bool = False
+    # Separate disposable-local opt-in; never accepted by deployed settings.
+    media_local_public_films_delivery_enabled: bool = False
+    # Release-owned, read-only technical films. This is independent of the
+    # staging stress fixture and does not activate uploads or a media provider.
+    media_public_films_delivery_enabled: bool = False
+    media_public_films_root: str | None = None
+    media_local_avatar_enabled: bool = False
+    media_local_avatar_storage_root: str | None = None
+    practice_arcade_preview_enabled: bool = False
+    # Separately reviewed deployment opt-in, never inferred from a local flag.
+    practice_pilot_enabled: bool = False
+    practice_pilot_tenant_id: UUID | None = None
 
-    @field_validator("public_learner_tenant_id", "operations_tenant_id", mode="before")
+    @field_validator(
+        "public_learner_tenant_id",
+        "operations_tenant_id",
+        "practice_pilot_tenant_id",
+        mode="before",
+    )
     @classmethod
     def blank_optional_tenant_is_unconfigured(cls, value: Any) -> Any:
         if isinstance(value, str) and not value.strip():
@@ -133,20 +159,51 @@ class Settings(BaseSettings):
         if not isinstance(environment, str) or environment not in _DEPLOYMENT_ORIGINS:
             return values
         expected_origins = _DEPLOYMENT_ORIGINS[environment]
+        # Older deployment profiles need not name the not-yet-installed third
+        # web service. Its default is still one exact environment-owned origin.
+        values.setdefault("coach_app_url", expected_origins["coach_app_url"])
         for field, environment_field in _DEPLOYMENT_URL_ENV_FIELDS.items():
             raw_value = values.get(field)
             if raw_value is None:
                 continue
             expected_origin = expected_origins[field]
+            allowed = {expected_origin}
+            if field == "public_app_url":
+                allowed.add(_DEPLOYMENT_LEARNER_ORIGINS[environment])
             if not isinstance(raw_value, str) or raw_value not in {
-                expected_origin,
-                f"{expected_origin}/",
+                candidate for origin in allowed for candidate in (origin, f"{origin}/")
             }:
                 raise ValueError(f"{environment_field} must be the canonical HTTPS origin")
         return values
 
+    @field_validator("coach_app_url", mode="before")
+    @classmethod
+    def require_coach_origin(cls, value: Any) -> Any:
+        raw = str(value)
+        parsed = AnyHttpUrl(raw)
+        if (
+            raw != raw.strip()
+            or parsed.host is None
+            or "*" in parsed.host
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.path not in {None, "/"}
+            or "?" in raw
+            or "#" in raw
+        ):
+            raise ValueError("AC_COACH_APP_URL must be an origin without credentials or path")
+        return value
+
     @model_validator(mode="after")
     def require_deployment_identity_secrets(self) -> Settings:
+        if self.coach_app_url.host in {
+            self.public_app_url.host,
+            self.admin_app_url.host,
+            self.api_url.host,
+            self.internal_api_host,
+        }:
+            raise ValueError("AC_COACH_APP_URL must use a distinct application hostname")
+        _ = self.practice_tenant_id  # Reuse the exact runtime admission configuration check.
         if self.public_learner_tenant_id is not None and self.operations_tenant_id is None:
             raise ValueError(
                 "AC_OPERATIONS_TENANT_ID is required when AC_PUBLIC_LEARNER_TENANT_ID is configured"
@@ -161,6 +218,7 @@ class Settings(BaseSettings):
                 "different tenants"
             )
         self._validate_media_stress_fixtures()
+        self._validate_public_films()
         self._validate_media_provider()
         if self.environment not in {"staging", "production"}:
             self._validate_google_oauth_pair()
@@ -189,12 +247,22 @@ class Settings(BaseSettings):
         self._validate_deployment_url(
             self.public_app_url,
             field="AC_PUBLIC_APP_URL",
-            expected_origin=expected_origins["public_app_url"],
+            expected_origin=(
+                _DEPLOYMENT_LEARNER_ORIGINS[self.environment]
+                if str(self.public_app_url).rstrip("/")
+                == _DEPLOYMENT_LEARNER_ORIGINS[self.environment]
+                else expected_origins["public_app_url"]
+            ),
         )
         self._validate_deployment_url(
             self.admin_app_url,
             field="AC_ADMIN_APP_URL",
             expected_origin=expected_origins["admin_app_url"],
+        )
+        self._validate_deployment_url(
+            self.coach_app_url,
+            field="AC_COACH_APP_URL",
+            expected_origin=expected_origins["coach_app_url"],
         )
         self._validate_deployment_url(
             self.api_url,
@@ -234,6 +302,31 @@ class Settings(BaseSettings):
         self._validate_email_provider()
         return self
 
+    @property
+    def practice_tenant_id(self) -> UUID | None:
+        """Resolve one explicit mode; this is configuration, never actor authority."""
+
+        if self.practice_arcade_preview_enabled and self.practice_pilot_enabled:
+            raise ValueError("Practice pilot and local preview cannot both be enabled.")
+        if self.practice_arcade_preview_enabled:
+            if self.environment not in {"local", "test"}:
+                raise ValueError("Editorial Practice Arcade preview is local/test only.")
+            return self.public_learner_tenant_id
+        if not self.practice_pilot_enabled:
+            return None
+        if self.environment not in {"test", "staging", "production"}:
+            raise ValueError("Practice deployment pilot requires test, staging or production.")
+        if (
+            self.practice_pilot_tenant_id is None
+            or self.practice_pilot_tenant_id != self.public_learner_tenant_id
+            or self.operations_tenant_id is None
+            or self.practice_pilot_tenant_id == self.operations_tenant_id
+        ):
+            raise ValueError(
+                "Practice pilot requires the exact public learner tenant, distinct from operations."
+            )
+        return self.practice_pilot_tenant_id
+
     def _validate_media_provider(self) -> None:
         """Validate media provider settings before runtime composition.
 
@@ -254,6 +347,23 @@ class Settings(BaseSettings):
     def _validate_media_stress_fixtures(self) -> None:
         """Keep local fixture opt-in outside production and normal local mode."""
 
+        if self.media_local_avatar_enabled and (
+            self.environment != "local"
+            or not self.media_local_public_films_delivery_enabled
+            or not self.media_local_avatar_storage_root
+        ):
+            raise ValueError("Local profile uploads require the explicit managed local sandbox.")
+        if self.media_local_public_films_delivery_enabled and (
+            self.environment != "local"
+            or not self.media_stress_fixtures_enabled
+            or self.public_learner_tenant_id is None
+            or self.media_provider_enabled
+            or self.media_staging_public_films_delivery_enabled
+        ):
+            raise ValueError(
+                "local public-film delivery requires the explicit isolated local fixture"
+            )
+
         if self.media_staging_public_films_delivery_enabled and (
             self.environment not in {"staging", "test"}
             or not self.media_stress_fixtures_enabled
@@ -267,11 +377,16 @@ class Settings(BaseSettings):
 
         if self.media_stress_fixtures_enabled and self.environment == "production":
             raise ValueError("AC_MEDIA_STRESS_FIXTURES_ENABLED is forbidden in production")
-        if self.media_stress_fixtures_enabled and self.environment not in {
-            "test",
-            "development",
-            "staging",
-        }:
+        if (
+            self.media_stress_fixtures_enabled
+            and not self.media_local_public_films_delivery_enabled
+            and self.environment
+            not in {
+                "test",
+                "development",
+                "staging",
+            }
+        ):
             raise ValueError(
                 "AC_MEDIA_STRESS_FIXTURES_ENABLED requires test, development, or staging"
             )
@@ -294,6 +409,51 @@ class Settings(BaseSettings):
                 object.__setattr__(self, "media_stress_fixtures_cache_root", cache_root)
         elif self.media_stress_fixtures_enabled:
             raise ValueError("AC_MEDIA_STRESS_FIXTURES_ENABLED requires a configured cache root")
+
+    def _validate_public_films(self) -> None:
+        enabled = self.media_public_films_delivery_enabled
+        root = self.media_public_films_root
+        if not enabled:
+            if root is not None:
+                raise ValueError("AC_MEDIA_PUBLIC_FILMS_ROOT requires explicit delivery opt-in")
+            return
+        if (
+            self.environment not in {"test", "staging", "production"}
+            or self.public_learner_tenant_id is None
+            or self.public_learner_tenant_id.int == 0
+            or re.fullmatch(r"[0-9a-f]{40}", self.release_id) is None
+            or self.media_provider_enabled
+            or self.media_stress_fixtures_enabled
+            or self.media_local_public_films_delivery_enabled
+            or self.media_staging_public_films_delivery_enabled
+            or self.media_local_avatar_enabled
+        ):
+            raise ValueError(
+                "public-film delivery requires its own release, tenant and deployment scope"
+            )
+        if (
+            not root
+            or root != root.strip()
+            or not Path(root).is_absolute()
+            or ".." in Path(root).parts
+            or "://" in root
+            or root.startswith(("//", "\\\\"))
+            or any(ord(character) < 0x20 or ord(character) == 0x7F for character in root)
+        ):
+            raise ValueError("AC_MEDIA_PUBLIC_FILMS_ROOT must be an absolute local directory")
+        # Runtime repeats this check before filesystem access. No cross-surface,
+        # wildcard, alternate-port or arbitrary public host is admitted.
+        origin = str(self.public_app_url).rstrip("/")
+        expected = {
+            "production": {"https://learner.authorityclosers.com"},
+            "staging": {"https://learner-staging.authorityclosers.com"},
+            "test": {
+                "https://learner.authorityclosers.com",
+                "https://learner-staging.authorityclosers.com",
+            },
+        }
+        if origin not in expected[self.environment]:
+            raise ValueError("public-film delivery requires the exact learner origin")
 
     def _validate_email_provider(self) -> None:
         if self.email_provider != "resend":
@@ -395,7 +555,7 @@ class Settings(BaseSettings):
     def allowed_hosts(self) -> list[str]:
         hosts = {
             value.host
-            for value in (self.public_app_url, self.admin_app_url, self.api_url)
+            for value in (self.public_app_url, self.admin_app_url, self.coach_app_url, self.api_url)
             if value.host is not None
         }
         hosts.add(self.internal_api_host)
@@ -405,7 +565,10 @@ class Settings(BaseSettings):
 
     @property
     def allowed_origins(self) -> list[str]:
-        return [str(self.public_app_url).rstrip("/"), str(self.admin_app_url).rstrip("/")]
+        return [
+            str(value).rstrip("/")
+            for value in (self.public_app_url, self.admin_app_url, self.coach_app_url)
+        ]
 
     @property
     def secure_cookies(self) -> bool:

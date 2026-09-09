@@ -147,6 +147,24 @@ def test_catalog_tables_and_migration_revision_are_present(database: Session) ->
         ledger_migration.downgrade()
 
 
+def test_revision_receipt_migration_is_forward_only_and_follows_existing_history() -> None:
+    path = (
+        Path(__file__).parents[2]
+        / "db"
+        / "migrations"
+        / "versions"
+        / "20260909_0023_studio_revision_commands.py"
+    )
+    spec = spec_from_file_location("studio_revision_migration", path)
+    assert spec is not None and spec.loader is not None
+    migration = module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    assert migration.revision == "20260909_0023"
+    assert migration.down_revision == "20260908_0022"
+    with pytest.raises(RuntimeError, match="forward-only"):
+        migration.downgrade()
+
+
 def test_publish_command_allows_one_completion_then_is_immutable(database: Session) -> None:
     tenant, _, _, version, _, _ = _tenant_catalog(database)
     actor = database.query(Person).one()
@@ -213,6 +231,7 @@ def test_publish_command_allows_one_completion_then_is_immutable(database: Sessi
 
 def test_studio_queries_are_tenant_scoped_bounded_and_truthful(database: Session) -> None:
     tenant, other_tenant, program, version, _, _ = _tenant_catalog(database)
+    access = admin_module.StudioAccess(tenant.id, True, frozenset(), True)
     other_program = Program(
         id=uuid4(),
         scope=CatalogScope.TENANT.value,
@@ -257,7 +276,7 @@ def test_studio_queries_are_tenant_scoped_bounded_and_truthful(database: Session
     )
     database.commit()
 
-    programs = admin_module._studio_programs_response(database, tenant.id)
+    programs = admin_module._studio_programs_response(database, access)
     programs_by_id = {row.id: row for row in programs.programs}
     assert set(programs_by_id) == {program.id, global_program.id}
     assert programs_by_id[program.id].version_count == 1
@@ -268,7 +287,7 @@ def test_studio_queries_are_tenant_scoped_bounded_and_truthful(database: Session
 
     detail = admin_module._studio_program_detail_response(
         database,
-        tenant.id,
+        access,
         program.id,
         allow_technical_validation_publication=False,
     )
@@ -278,7 +297,7 @@ def test_studio_queries_are_tenant_scoped_bounded_and_truthful(database: Session
 
     global_detail = admin_module._studio_program_detail_response(
         database,
-        tenant.id,
+        access,
         global_program.id,
         allow_technical_validation_publication=False,
     )
@@ -289,14 +308,14 @@ def test_studio_queries_are_tenant_scoped_bounded_and_truthful(database: Session
     with pytest.raises(admin_module.ResourceNotFound):
         admin_module._studio_program_detail_response(
             database,
-            tenant.id,
+            access,
             other_program.id,
             allow_technical_validation_publication=False,
         )
 
     readiness = admin_module._studio_readiness_response(
         database,
-        tenant.id,
+        access,
         allow_technical_validation_publication=False,
     )
     assert readiness.draft_backlog_count == 1
@@ -326,7 +345,7 @@ def test_studio_detail_keeps_every_tenant_draft_beyond_history_limit(
 
     detail = admin_module._studio_program_detail_response(
         database,
-        tenant.id,
+        admin_module.StudioAccess(tenant.id, True, frozenset(), True),
         program.id,
         allow_technical_validation_publication=False,
     )

@@ -1,0 +1,9 @@
+	@production_release_hold host app.authorityclosers.com learner.authorityclosers.com admin.authorityclosers.com coach.authorityclosers.com api.authorityclosers.com
+	handle @production_release_hold {
+		import base_security_headers
+		header X-Authority-Closers-Route "release-hold-production"
+		header Cache-Control "no-store"
+		header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+		header Retry-After "30"
+		respond "Authority Closers production is completing a reviewed release.\n" 503
+	}

@@ -6,7 +6,8 @@ const nextConfig: NextConfig = {
   output: "standalone",
   outputFileTracingRoot: path.join(__dirname, "../.."),
   reactStrictMode: true,
-  transpilePackages: ["@ac/ui"],
+  devIndicators: false,
+  transpilePackages: ["@ac/ui", "@ac/operations-web"],
   poweredByHeader: false,
 };
 

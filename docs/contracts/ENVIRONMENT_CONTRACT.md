@@ -16,6 +16,8 @@ Production configuration is injected from Infisical at process start. Git contai
 | `AC_LEARNER_CONSENT_VERSION`               | legal/product     | learner registration only | exact accepted invitation/consent document version      |
 | `AC_PUBLIC_LEARNER_TENANT_ID`              | tenancy operator  | learner registration only | exact active tenant receiving self-directed learners    |
 | `AC_OPERATIONS_TENANT_ID`                  | security/operator |    before effects release | exact control tenant for audited global job recovery    |
+| `AC_PRACTICE_PILOT_ENABLED`                | release/product   | optional; defaults false  | explicit earned-only editorial tenant pilot             |
+| `AC_PRACTICE_PILOT_TENANT_ID`              | release/tenancy   | only when pilot enabled   | exact configured public learner tenant; not authority   |
 | `AC_EXTERNAL_SIDE_EFFECTS_HOLD`            | recovery operator |                       yes | blocks provider effects after restore                   |
 | `AC_EMAIL_PROVIDER`                        | provider policy   |               worker only | `fake` until Resend is explicitly enabled               |
 | `AC_RESEND_API_KEY`                        | email provider    |        worker when Resend | worker-only Resend credential                           |
@@ -35,6 +37,32 @@ Production configuration is injected from Infisical at process start. Git contai
 | `AC_DEV_ADMIN_ACCESS_JWT`                  | local process     |                        no | ephemeral Cloudflare Access user JWT; never file-backed |
 | `AC_API_HOST`                              | edge              |                       yes | canonical public API host and health probe Host         |
 | `AC_INTERNAL_API_HOST`                     | release           |                       yes | reserved app-network-only API DNS name                  |
+
+## Earned-only Practice pilot
+
+`AC_PRACTICE_PILOT_ENABLED` is separate from the existing local/test-only
+`AC_PRACTICE_ARCADE_PREVIEW_ENABLED`. They cannot both be enabled. A deployed
+pilot requires staging or production, an explicit pilot tenant UUID matching
+`AC_PUBLIC_LEARNER_TENANT_ID`, and a distinct configured operations tenant.
+Missing/mismatched activation fails validation. A disabled pilot can retain an
+inert tenant reference, but mounts no Practice API routes. Local flags cannot
+activate a deployment pilot.
+
+API and Learner runtime configuration use these same non-secret references.
+The web image does not bake a `NEXT_PUBLIC` pilot flag: `/practice` and its
+no-store presentation-availability read resolve configuration dynamically.
+Shared navigation additionally checks the existing authenticated self Practice
+profile before showing the link. Missing configuration or unavailable/denied API
+admission hides it; every actual read/command remains authorized by the backend.
+The presentation read returns no person, tenant, session or entitlement data.
+
+This changes no reward, Focus, timezone, consent or retention policy. The existing
+10-credit/30-XP first-two-distinct-families daily award and 40-credit three-day
+weekly award remain unchanged. Definitions stay editorial drafts, not approved
+assessment/competition content. Enabling the code path is not production
+content/privacy approval. Release profiles remain disabled until a separately
+reviewed tenant-scoped activation; no provider, purchase or official progress is
+enabled by this flag.
 
 ## Media provider foundation
 

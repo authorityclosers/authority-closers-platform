@@ -334,7 +334,7 @@ describe("learning loop video runtime", () => {
     expect(withCapabilities).toContain("Video quality");
     expect(withCapabilities).toContain("720p");
     expect(withCapabilities).toContain(
-      "Watch coverage and completion remain server-determined.",
+      "Choose the picture quality and pace that suit you.",
     );
   });
 

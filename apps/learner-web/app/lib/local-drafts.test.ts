@@ -937,7 +937,9 @@ describe("scoped recoverable local learner drafts", () => {
         },
       ),
     ).toEqual({ ok: false, reason: "busy" });
-    expect(readOnboardingLocalDraft(storage, onboardingScope)).toMatchObject({
+    expect(
+      readOnboardingLocalDraft(storage, onboardingScope, now),
+    ).toMatchObject({
       status: "ready",
       envelope: { draft },
     });

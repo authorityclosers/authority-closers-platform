@@ -427,6 +427,7 @@ def test_effective_compose_override_mounts_only_api_and_keeps_other_services_ine
             "AC_API_IMAGE": "sha256:" + "a" * 64,
             "AC_LEARNER_IMAGE": "sha256:" + "b" * 64,
             "AC_ADMIN_IMAGE": "sha256:" + "c" * 64,
+            "AC_COACH_IMAGE": "sha256:" + "d" * 64,
         }
     )
     result = subprocess.run(  # noqa: S603 - trusted Compose CLI; no containers are started
@@ -493,6 +494,14 @@ def test_effective_compose_override_mounts_only_api_and_keeps_other_services_ine
     )
     assert mount["target"] == "/run/ac-staging-public-films"
     assert api["environment"]["AC_MEDIA_STAGING_PUBLIC_FILMS_DELIVERY_ENABLED"] == "true"
+    # A third web app does not inherit fixture bytes, provider secrets or media
+    # activation from the API-only override.
+    assert not services["coach-web"].get("volumes")
+    assert services["coach-web"]["image"] == values["AC_COACH_IMAGE"]
+    assert (
+        services["coach-web"]["environment"].get("AC_MEDIA_STAGING_PUBLIC_FILMS_DELIVERY_ENABLED")
+        is None
+    )
     for service in (services["worker"], services["migrate"]):
         assert not service.get("volumes")
         assert service["environment"]["AC_MEDIA_STRESS_FIXTURES_ENABLED"] == "false"

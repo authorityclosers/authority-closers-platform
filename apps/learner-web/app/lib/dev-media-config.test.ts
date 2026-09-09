@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 beforeEach(() => {
   vi.resetModules();
   vi.stubEnv("AC_DEV_AUTH_BRIDGE_ENABLED", "true");
+  vi.stubEnv("AC_DEV_LOCAL_SANDBOX_ENABLED", "false");
   vi.stubEnv("NEXT_TRACE_SPAN_THRESHOLD_MS", "9007199254740991");
   vi.stubEnv("NODE_DEBUG", "");
   vi.stubEnv("AC_DEV_AUTH_BRIDGE_ORIGIN", "http://learner.localhost:3100");
@@ -14,16 +15,45 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs());
 
 describe("opt-in media bridge logging boundary", () => {
-  it.each(["http", "HTTPS", "http,https", "*", "h*", "fs,https"])(
+  it.each([
+    "http",
+    "HTTPS",
+    "http,https",
+    "*",
+    "h*",
+    "fs,https",
+    "net",
+    "TLS",
+    "tls,net",
+    "n*",
+  ])(
     "refuses unsafe native diagnostic mask %s on direct bridge startup",
     async (mask) => {
       vi.stubEnv("NODE_ENV", "development");
       vi.stubEnv("NODE_DEBUG", mask);
       await expect(import("../../next.config")).rejects.toThrow(
-        "native HTTP diagnostics",
+        "native network diagnostics",
       );
     },
   );
+  it.each(["HTTPS", "net", "TLS", "*"])(
+    "refuses unsafe native diagnostic mask %s on direct local-sandbox startup",
+    async (mask) => {
+      vi.stubEnv("NODE_ENV", "development");
+      vi.stubEnv("AC_DEV_AUTH_BRIDGE_ENABLED", "false");
+      vi.stubEnv("AC_DEV_LOCAL_SANDBOX_ENABLED", "true");
+      vi.stubEnv("NODE_DEBUG", mask);
+      await expect(import("../../next.config")).rejects.toThrow(
+        "native network diagnostics",
+      );
+    },
+  );
+  it("allows unrelated diagnostics for private media development", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("NODE_DEBUG", "fs");
+    const { default: config } = await import("../../next.config");
+    expect(config.logging).toBe(false);
+  });
   it("does not change ordinary development diagnostic policy", async () => {
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("AC_DEV_AUTH_BRIDGE_ENABLED", "false");

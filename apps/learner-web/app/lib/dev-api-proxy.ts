@@ -1,4 +1,6 @@
 import { randomBytes } from "node:crypto";
+import { proxyLocalSandboxMedia } from "./local-media-upstream";
+import { proxyLocalSandboxAvatarUpload } from "./local-avatar-upstream";
 import { fetchDevelopmentMediaUpstream } from "./dev-media-upstream";
 import {
   DEVELOPMENT_MEDIA_MAX_BYTES,
@@ -1632,6 +1634,22 @@ export async function proxyDevelopmentLearnerApi(
       sessionStore,
       fetcher ?? fetchDevelopmentMediaUpstream,
     );
+  }
+
+  if (
+    target.mode === "local" &&
+    incomingUrl.pathname.startsWith("/v1/media/local-avatar-upload/")
+  ) {
+    return proxyLocalSandboxAvatarUpload(request);
+  }
+
+  if (
+    target.mode === "local" &&
+    (incomingUrl.pathname.startsWith("/v1/media/playback/") ||
+      (environment.AC_DEV_LOCAL_SANDBOX_ENABLED === "true" &&
+        incomingUrl.pathname.startsWith("/v1/media/read/")))
+  ) {
+    return proxyLocalSandboxMedia(request);
   }
 
   if (target.mode === "staging-public-catalog") {

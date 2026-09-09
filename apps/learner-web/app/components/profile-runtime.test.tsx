@@ -25,7 +25,7 @@ vi.mock("./avatar-crop-dialog", () => ({
     dialogFixture.latest = props;
     return (
       <div role="dialog" aria-label="Synthetic avatar adapter">
-        <button type="button" onClick={props.onClose}>
+        <button type="button" onClick={() => props.onClose()}>
           Cancel fixture
         </button>
         <button
@@ -246,6 +246,7 @@ describe("mounted profile", () => {
     expect(container.textContent).not.toContain("Profile photo updated.");
     await click("Cancel fixture");
     expect(current.src).toContain("/current.png");
+    expect(api.profileAvatar).toHaveBeenCalledTimes(1);
     const publish = vi.spyOn(window, "dispatchEvent");
     await click("Change photo");
     await click("Confirm fixture avatar");
@@ -286,6 +287,94 @@ describe("mounted profile", () => {
     ).toContain("/fresh.png");
     expect(dialogFixture.latest?.adapter).toBe(adapter);
   });
+
+  it("reconciles an uncertain editor close with a canonical read, not a success claim", async () => {
+    api.profileAvatar = vi
+      .fn()
+      .mockResolvedValueOnce(
+        readyAvatar("https://avatar.example.invalid/current.png"),
+      )
+      .mockResolvedValueOnce(
+        readyAvatar("https://avatar.example.invalid/accepted.png"),
+      );
+    await mount();
+    await click("Change photo");
+    const publish = vi.spyOn(window, "dispatchEvent");
+    await act(async () =>
+      dialogFixture.latest!.onClose({ saveMayBePending: true }),
+    );
+    expect(api.profileAvatar).toHaveBeenCalledTimes(2);
+    expect(api.me).toHaveBeenCalledTimes(1);
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    expect(
+      container.querySelector<HTMLImageElement>("section img")?.src,
+    ).toContain("/accepted.png");
+    expect(container.textContent).not.toContain("Profile photo updated.");
+    expect(
+      publish.mock.calls.filter(
+        ([event]) => event.type === "ac-profile-avatar-updated",
+      ),
+    ).toHaveLength(0);
+  });
+
+  it("retains the current photo and offers retry if the uncertain-save read fails", async () => {
+    api.profileAvatar = vi
+      .fn()
+      .mockResolvedValueOnce(
+        readyAvatar("https://avatar.example.invalid/current.png"),
+      )
+      .mockRejectedValueOnce(new ApiError(503, "Synthetic unavailable"));
+    await mount();
+    await click("Change photo");
+    await act(async () =>
+      dialogFixture.latest!.onClose({ saveMayBePending: true }),
+    );
+    expect(
+      container.querySelector<HTMLImageElement>("section img")?.src,
+    ).toContain("/current.png");
+    expect(button("Retry photo")).toBeDefined();
+    expect(container.textContent).not.toContain("Profile photo updated.");
+  });
+
+  it.each(["older photo", "no photo"])(
+    "ignores a pre-save reconciliation returning %s after a newer photo is confirmed",
+    async (value) => {
+      let finish!: (value: ProfileAvatarResponse) => void;
+      let readSignal: AbortSignal | undefined;
+      api.profileAvatar = vi
+        .fn()
+        .mockResolvedValueOnce(
+          readyAvatar("https://avatar.example.invalid/current.png"),
+        )
+        .mockImplementationOnce((options?: { signal?: AbortSignal }) => {
+          readSignal = options?.signal;
+          return new Promise<ProfileAvatarResponse>((resolve) => {
+            finish = resolve;
+          });
+        });
+      await mount();
+      await click("Change photo");
+      await act(async () =>
+        dialogFixture.latest!.onClose({ saveMayBePending: true }),
+      );
+      expect(readSignal?.aborted).toBe(false);
+      await click("Change photo");
+      await click("Confirm fixture avatar");
+      expect(readSignal?.aborted).toBe(true);
+      await act(async () =>
+        finish(
+          value === "no photo"
+            ? { avatar: null, pending: null }
+            : readyAvatar("https://avatar.example.invalid/older.png"),
+        ),
+      );
+      expect(
+        container.querySelector<HTMLImageElement>("section img")?.src,
+      ).toContain("/confirmed.png");
+      expect(container.textContent).toContain("Profile photo updated.");
+      expect(api.profileAvatar).toHaveBeenCalledTimes(2);
+    },
+  );
 
   it("does not apply a late avatar refresh from a previous identity context", async () => {
     let finishRefresh!: (value: ProfileAvatarResponse) => void;

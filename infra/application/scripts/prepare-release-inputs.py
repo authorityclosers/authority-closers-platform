@@ -28,6 +28,9 @@ MANIFEST_KEYS = (
     "AC_API_IMAGE",
     "AC_API_REGISTRY_DIGEST",
     "AC_API_TRANSPORT_DIGEST",
+    "AC_COACH_IMAGE",
+    "AC_COACH_REGISTRY_DIGEST",
+    "AC_COACH_TRANSPORT_DIGEST",
     "AC_LEARNER_IMAGE",
     "AC_LEARNER_REGISTRY_DIGEST",
     "AC_LEARNER_TRANSPORT_DIGEST",
@@ -45,6 +48,11 @@ _MANIFEST_PATTERNS = {
         r"ghcr\.io/authorityclosers/authority-closers-api@sha256:[0-9a-f]{64}"
     ),
     "AC_API_TRANSPORT_DIGEST": re.compile(r"sha256:[0-9a-f]{64}"),
+    "AC_COACH_IMAGE": re.compile(r"sha256:[0-9a-f]{64}"),
+    "AC_COACH_REGISTRY_DIGEST": re.compile(
+        r"ghcr\.io/authorityclosers/authority-closers-coach-web@sha256:[0-9a-f]{64}"
+    ),
+    "AC_COACH_TRANSPORT_DIGEST": re.compile(r"sha256:[0-9a-f]{64}"),
     "AC_LEARNER_IMAGE": re.compile(r"sha256:[0-9a-f]{64}"),
     "AC_LEARNER_REGISTRY_DIGEST": re.compile(
         r"ghcr\.io/authorityclosers/authority-closers-learner-web@sha256:[0-9a-f]{64}"
@@ -320,7 +328,7 @@ def _parse_manifest(payload: bytes, expected_release_id: str) -> dict[str, str]:
         raise ReleaseInputError("release image manifest has an incomplete key contract")
     if values["AC_RELEASE_ID"] != expected_release_id:
         raise ReleaseInputError("release image manifest does not match the source release")
-    for component in ("ADMIN", "API", "LEARNER"):
+    for component in ("ADMIN", "API", "COACH", "LEARNER"):
         runtime_identity = values[f"AC_{component}_IMAGE"]
         transport_identity = values[f"AC_{component}_TRANSPORT_DIGEST"]
         if runtime_identity != transport_identity:

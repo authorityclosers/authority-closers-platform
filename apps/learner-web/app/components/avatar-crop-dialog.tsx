@@ -3,12 +3,14 @@
 /* The preview is a local blob URL and the eventual URL is provider-owned. */
 /* eslint-disable @next/next/no-img-element */
 
+import { ActionButton, actionClassName } from "@ac/ui";
 import {
   Camera,
   CheckCircle2,
   CircleAlert,
   LoaderCircle,
-  Move,
+  Minus,
+  Plus,
   RotateCcw,
   Upload,
   X,
@@ -41,7 +43,7 @@ export type AvatarCropDialogProps = {
   currentAvatar?: AvatarPresentation | null;
   adapter?: AvatarUploadPort;
   cropShape?: "circle" | "square";
-  onClose: () => void;
+  onClose: (result?: { saveMayBePending: boolean }) => void;
   onSuccess?: (avatar: AvatarPresentation) => void;
 };
 
@@ -83,11 +85,11 @@ function describeStage(stage: string): string {
 
 function resultMessage(result: AvatarUploadResult): string {
   if (result.status === "not_available") {
-    return "Avatar upload is not connected in this slice. Your current avatar is unchanged.";
+    return "Photo upload is temporarily unavailable. Your current photo hasn’t changed. Please try again later.";
   }
   if (result.status === "retryable_error") return result.message;
   if (result.status === "terminal_error") return result.message;
-  return "Avatar upload is not available yet.";
+  return "Photo upload is unavailable. Please try again later.";
 }
 
 function previewStyle(crop: AvatarCrop): React.CSSProperties {
@@ -277,6 +279,8 @@ export function AvatarCropDialog({
   const [crop, setCrop] = useState<AvatarCrop>({ ...DEFAULT_AVATAR_CROP });
   const [status, setStatus] = useState<DialogStatus>({ status: "idle" });
   const [dragActive, setDragActive] = useState(false);
+  const [exitRequested, setExitRequested] = useState(false);
+  const [saveAttempted, setSaveAttempted] = useState(false);
   const isOnline = useSyncExternalStore(
     subscribeOnline,
     getOnlineSnapshot,
@@ -295,6 +299,15 @@ export function AvatarCropDialog({
   const activeAbortRef = useRef<AbortController | null>(null);
   const onCloseRef = useRef(onClose);
   const onlineRef = useRef(isOnline);
+  const previewRef = useRef(previewUrl);
+  const exitRequestedRef = useRef(false);
+  const saveAttemptedRef = useRef(false);
+  const exitOriginRef = useRef<HTMLElement | null>(null);
+  const keepEditingRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    previewRef.current = previewUrl;
+  }, [previewUrl]);
 
   useEffect(() => {
     cropRef.current = crop;
@@ -319,8 +332,56 @@ export function AvatarCropDialog({
   const closeDialog = useCallback(() => {
     activeAbortRef.current?.abort();
     activeAbortRef.current = null;
-    onCloseRef.current();
+    onCloseRef.current({
+      saveMayBePending:
+        saveAttemptedRef.current && statusRef.current.status !== "success",
+    });
   }, []);
+
+  const keepEditing = useCallback(() => {
+    exitRequestedRef.current = false;
+    setExitRequested(false);
+  }, []);
+
+  const requestClose = useCallback(() => {
+    if (exitRequestedRef.current) {
+      keepEditing();
+      return;
+    }
+    if (
+      statusRef.current.status !== "success" &&
+      (previewRef.current || saveAttemptedRef.current)
+    ) {
+      exitOriginRef.current =
+        document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null;
+      exitRequestedRef.current = true;
+      setExitRequested(true);
+      return;
+    }
+    closeDialog();
+  }, [closeDialog, keepEditing]);
+
+  useEffect(() => {
+    if (exitRequested) {
+      keepEditingRef.current?.focus();
+    } else if (exitOriginRef.current) {
+      const origin = exitOriginRef.current;
+      const canRestore =
+        origin.isConnected &&
+        dialogRef.current?.contains(origin) &&
+        !origin.closest("[hidden]") &&
+        !origin.matches(":disabled");
+      (canRestore
+        ? origin
+        : dialogRef.current?.querySelector<HTMLElement>(
+            '[aria-label="Close avatar editor"]',
+          )
+      )?.focus();
+      exitOriginRef.current = null;
+    }
+  }, [exitRequested]);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -350,11 +411,13 @@ export function AvatarCropDialog({
     }
 
     dialog.querySelector<HTMLElement>("button, input")?.focus();
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
 
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         event.preventDefault();
-        closeDialog();
+        requestClose();
         return;
       }
       if (event.key !== "Tab" || !dialog) return;
@@ -362,7 +425,7 @@ export function AvatarCropDialog({
         dialog.querySelectorAll<HTMLElement>(
           'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [href], [tabindex]:not([tabindex="-1"])',
         ),
-      );
+      ).filter((element) => !element.closest("[hidden]"));
       if (focusable.length === 0) {
         event.preventDefault();
         dialog.focus();
@@ -382,6 +445,7 @@ export function AvatarCropDialog({
     document.addEventListener("keydown", onKeyDown);
     return () => {
       document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
       previouslyInert.forEach((value, element) => {
         if (value === null) element.removeAttribute("inert");
         else element.setAttribute("inert", value);
@@ -393,7 +457,7 @@ export function AvatarCropDialog({
       focusOriginRef.current?.focus();
       focusOriginRef.current = null;
     };
-  }, [closeDialog]);
+  }, [requestClose]);
 
   useEffect(() => {
     // Strict Mode replays setup after cleanup on the same mounted instance.
@@ -418,7 +482,7 @@ export function AvatarCropDialog({
         setStatus({
           status: "error",
           message:
-            "You’re offline. Reconnect before uploading; your current avatar is unchanged.",
+            "You’re offline. Your preview is here. Reconnect and check your profile before trying the save again.",
         });
       }
     });
@@ -601,6 +665,8 @@ export function AvatarCropDialog({
       return;
     }
 
+    saveAttemptedRef.current = true;
+    setSaveAttempted(true);
     setStatus({ status: "uploading" });
     const controller = new AbortController();
     activeAbortRef.current = controller;
@@ -625,7 +691,7 @@ export function AvatarCropDialog({
             ? {
                 status: "error",
                 message:
-                  "You’re offline. Reconnect before uploading; your current avatar is unchanged.",
+                  "You’re offline. Your preview is here. Reconnect and check your profile before trying the save again.",
               }
             : { status: "idle" },
         );
@@ -634,7 +700,7 @@ export function AvatarCropDialog({
       setStatus({
         status: "error",
         message:
-          "The avatar service could not finish this request. Your current avatar is unchanged.",
+          "We couldn’t confirm the save. Your preview is here; check your profile before trying again.",
       });
       return;
     } finally {
@@ -709,7 +775,7 @@ export function AvatarCropDialog({
           setStatus({
             status: "error",
             message:
-              "Avatar processing could not be confirmed. Your current avatar is unchanged; try again later.",
+              "We couldn’t confirm that your photo is ready. Check your profile before trying again.",
           });
         })
         .finally(() => {
@@ -738,7 +804,7 @@ export function AvatarCropDialog({
         setStatus({
           status: "error",
           message:
-            "Avatar processing status is unavailable. Your current avatar is unchanged.",
+            "We can’t check the photo right now. Check your profile before trying again.",
         });
       });
       return () => {
@@ -768,7 +834,7 @@ export function AvatarCropDialog({
         setStatus({
           status: "error",
           message:
-            "Avatar processing could not be confirmed in time. Your current avatar is unchanged; try again later.",
+            "Your photo is taking longer than expected. Check your profile before trying again.",
         });
         return;
       }
@@ -820,7 +886,7 @@ export function AvatarCropDialog({
           setStatus({
             status: "error",
             message:
-              "Avatar processing could not be confirmed for this profile. Your current avatar is unchanged.",
+              "We couldn’t confirm this photo for your profile. Check your profile before trying again.",
           });
           return;
         }
@@ -855,7 +921,11 @@ export function AvatarCropDialog({
       className={styles.overlay}
       role="presentation"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) closeDialog();
+        if (event.target === event.currentTarget) {
+          // Don't let the backdrop take focus after the confirmation focuses.
+          event.preventDefault();
+          requestClose();
+        }
       }}
     >
       <div
@@ -865,34 +935,54 @@ export function AvatarCropDialog({
         aria-modal="true"
         aria-labelledby="avatar-dialog-title"
         aria-describedby="avatar-dialog-description"
-        aria-busy={isBusy}
+        aria-busy={isBusy && !exitRequested}
         tabIndex={-1}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <header className={styles.header}>
           <div>
-            <p className={styles.eyebrow}>Profile photo</p>
-            <h2 id="avatar-dialog-title">Adjust your avatar</h2>
+            <h2 id="avatar-dialog-title">
+              {exitRequested
+                ? saveAttempted
+                  ? "Leave photo editor?"
+                  : "Discard this photo?"
+                : "Edit profile photo"}
+            </h2>
             <p className={styles.description} id="avatar-dialog-description">
-              Preview a {cropShape === "square" ? "square" : "circular"} crop.
-              Your current avatar stays in place until the server confirms a new
-              revision.
+              {exitRequested
+                ? saveAttempted
+                  ? "Your save may have reached the photo service. Check your profile before trying again."
+                  : "Your new photo and framing haven’t been saved. Keep editing to pick up where you left off."
+                : previewUrl
+                  ? "Drag your photo to find the right frame."
+                  : "A familiar face makes this space yours."}
             </p>
           </div>
-          <button
-            className={styles.closeButton}
-            type="button"
-            onClick={closeDialog}
-            aria-label="Close avatar editor"
-          >
-            <X size={19} aria-hidden="true" />
-          </button>
+          {!exitRequested ? (
+            <button
+              className={actionClassName("icon")}
+              type="button"
+              onClick={requestClose}
+              aria-label="Close avatar editor"
+            >
+              <X size={19} aria-hidden="true" />
+            </button>
+          ) : null}
         </header>
 
-        <div className={styles.body}>
+        {exitRequested ? (
+          <div className={styles.exitPreview} aria-hidden="true">
+            {previewUrl ? (
+              <img src={previewUrl} alt="" style={previewStyle(crop)} />
+            ) : (
+              <Camera size={32} />
+            )}
+          </div>
+        ) : null}
+        <div className={styles.body} hidden={exitRequested}>
           <div className={styles.previewColumn}>
             <div
-              className={`${styles.previewFrame} ${cropShape === "square" ? styles.previewFrameSquare : ""}${dragActive ? ` ${styles.previewFrameActive}` : ""}`}
+              className={`${styles.previewFrame} ${cropShape === "square" ? styles.previewFrameSquare : ""}${previewUrl ? ` ${styles.previewFrameEditing}` : ""}${dragActive ? ` ${styles.previewFrameActive}` : ""}`}
               role="group"
               tabIndex={0}
               aria-label={`${cropShape === "square" ? "Square" : "Circular"} avatar crop preview`}
@@ -959,15 +1049,14 @@ export function AvatarCropDialog({
               <span className={styles.cropGuide} aria-hidden="true" />
             </div>
             <span className={styles.previewCaption}>
-              {previewUrl ? "Local preview" : "Current avatar"}
+              {previewUrl
+                ? "Drag to reposition · Pinch to zoom"
+                : "Your current photo"}
             </span>
-            <span
-              className={styles.directManipulationHint}
-              id="avatar-direct-manipulation-hint"
-            >
+            <span className="sr-only" id="avatar-direct-manipulation-hint">
               Drop a photo here. Drag to frame it; scroll or pinch to zoom.
             </span>
-            <span className={styles.keyboardHint} id="avatar-keyboard-hint">
+            <span className="sr-only" id="avatar-keyboard-hint">
               Keyboard: focus the preview, then use arrow keys to move, +/− to
               zoom, or Home to reset.
             </span>
@@ -975,9 +1064,11 @@ export function AvatarCropDialog({
 
           <div className={styles.controls}>
             <div className={styles.filePicker}>
-              <label className={styles.fileButton}>
+              <label
+                className={actionClassName("secondary", styles.fileButton)}
+              >
                 <Camera size={17} aria-hidden="true" />
-                {previewUrl ? "Choose a different image" : "Choose an image"}
+                {previewUrl ? "Change image" : "Choose a photo"}
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -993,8 +1084,7 @@ export function AvatarCropDialog({
                 />
               </label>
               <p className={styles.hint} id="avatar-file-hint">
-                JPEG, PNG, or WebP. The profile service validates type, size,
-                and content before accepting it.
+                JPEG, PNG or WebP.
               </p>
             </div>
 
@@ -1005,55 +1095,106 @@ export function AvatarCropDialog({
               </p>
             ) : null}
 
-            <div
-              className={styles.cropTools}
-              role="group"
-              aria-label="Avatar framing tools"
-            >
-              <div className={styles.cropToolHeader}>
-                <span className={styles.cropToolTitle}>
-                  <Move size={15} aria-hidden="true" /> Frame your photo
-                </span>
-                <span
-                  className={styles.cropReadout}
-                  aria-live="polite"
-                  aria-atomic="true"
+            {previewUrl ? (
+              <div className={styles.cropTools}>
+                <div className={styles.zoomRow}>
+                  <ActionButton
+                    variant="icon"
+                    aria-label="Zoom out"
+                    disabled={isBusy || crop.scale <= 1}
+                    onClick={() =>
+                      setCrop((current) =>
+                        clampAvatarCrop(
+                          { ...current, scale: current.scale - 0.1 },
+                          imageDimensions ?? undefined,
+                        ),
+                      )
+                    }
+                  >
+                    <Minus size={18} />
+                  </ActionButton>
+                  <input
+                    type="range"
+                    min="1"
+                    max="2"
+                    step="0.01"
+                    value={crop.scale}
+                    aria-label="Photo zoom"
+                    aria-valuetext={`${Math.round(crop.scale * 100)} percent`}
+                    disabled={isBusy}
+                    onChange={(event) => {
+                      const scale = Number(event.currentTarget.value);
+                      setCrop((current) =>
+                        clampAvatarCrop(
+                          { ...current, scale },
+                          imageDimensions ?? undefined,
+                        ),
+                      );
+                    }}
+                  />
+                  <ActionButton
+                    variant="icon"
+                    aria-label="Zoom in"
+                    disabled={isBusy || crop.scale >= 2}
+                    onClick={() =>
+                      setCrop((current) =>
+                        clampAvatarCrop(
+                          { ...current, scale: current.scale + 0.1 },
+                          imageDimensions ?? undefined,
+                        ),
+                      )
+                    }
+                  >
+                    <Plus size={18} />
+                  </ActionButton>
+                </div>
+                <div className={styles.cropToolHeader}>
+                  <span className={styles.cropReadout}>
+                    {Math.round(crop.scale * 100)}%
+                  </span>
+                  <ActionButton
+                    variant="quiet"
+                    onClick={resetCrop}
+                    disabled={isBusy || isDefaultAvatarCrop(crop)}
+                  >
+                    <RotateCcw size={15} aria-hidden="true" /> Reset framing
+                  </ActionButton>
+                </div>
+                <div
+                  className={styles.identityPreview}
+                  aria-label="How your photo will appear"
                 >
-                  {crop.scale.toFixed(2)}× · {crop.offsetX}% / {crop.offsetY}%
-                </span>
+                  <span className={styles.miniAvatar}>
+                    <img src={previewUrl} alt="" style={previewStyle(crop)} />
+                  </span>
+                  <div>
+                    <strong>{displayName}</strong>
+                    <span>Profile and learning spaces</span>
+                  </div>
+                  <span className={styles.miniAvatarSmall}>
+                    <img src={previewUrl} alt="" style={previewStyle(crop)} />
+                  </span>
+                </div>
               </div>
-              <button
-                className={styles.resetButton}
-                type="button"
-                onClick={resetCrop}
-                disabled={!previewUrl || isBusy || isDefaultAvatarCrop(crop)}
-              >
-                <RotateCcw size={15} aria-hidden="true" />
-                Reset framing
-              </button>
-              <p className={styles.hint}>
-                The crop stays local until you choose Upload avatar. Reset
-                framing restores the original crop without changing the image.
-              </p>
-            </div>
+            ) : null}
 
             {previewUrl && status.status === "idle" ? (
               <p className={styles.localOnly} role="status">
-                Local preview only. Nothing has been uploaded.
+                Only you can see this preview. Save when you’re ready.
               </p>
             ) : null}
             {!isOnline ? (
               <p className={styles.offline} role="status" aria-live="polite">
-                <CircleAlert size={16} aria-hidden="true" /> You’re offline.
-                Your preview is retained; reconnect before uploading. Your
-                current avatar is unchanged.
+                <CircleAlert size={16} aria-hidden="true" />
+                {saveAttempted
+                  ? "You’re offline. Your preview is here; reconnect and check your profile before trying the save again."
+                  : "You’re offline. Your preview is here; reconnect when you’re ready to save."}
               </p>
             ) : null}
             {status.status === "processing" ? (
               <p className={styles.processing} role="status" aria-live="polite">
                 <LoaderCircle size={16} aria-hidden="true" />
-                {status.stage}. Your current avatar is unchanged until this
-                finishes.
+                {status.stage}. Keep this open while we confirm your photo.
               </p>
             ) : null}
             {status.status === "success" ? (
@@ -1066,16 +1207,38 @@ export function AvatarCropDialog({
                 <CircleAlert size={16} aria-hidden="true" /> {status.message}
               </p>
             ) : null}
-            <div className={styles.actions}>
+          </div>
+        </div>
+        <footer className={styles.footer}>
+          {exitRequested ? (
+            <div className={styles.exitActions}>
               <button
-                className={styles.cancelButton}
+                ref={keepEditingRef}
+                className={actionClassName()}
+                type="button"
+                onClick={keepEditing}
+              >
+                Keep editing
+              </button>
+              <button
+                className={actionClassName("secondary")}
                 type="button"
                 onClick={closeDialog}
+              >
+                {saveAttempted ? "Close editor" : "Discard photo"}
+              </button>
+            </div>
+          ) : (
+            <div className={styles.actions}>
+              <button
+                className={actionClassName("secondary")}
+                type="button"
+                onClick={requestClose}
               >
                 Cancel
               </button>
               <button
-                className={styles.submitButton}
+                className={actionClassName()}
                 type="button"
                 onClick={() => void submitAvatar()}
                 disabled={
@@ -1085,24 +1248,27 @@ export function AvatarCropDialog({
                   isBusy ||
                   status.status === "success"
                 }
-                aria-describedby="avatar-upload-note"
               >
-                <Upload size={16} aria-hidden="true" />
+                {isBusy ? (
+                  <LoaderCircle
+                    className={styles.spinner}
+                    size={16}
+                    aria-hidden="true"
+                  />
+                ) : (
+                  <Upload size={16} aria-hidden="true" />
+                )}
                 {status.status === "validating"
                   ? "Checking image…"
                   : status.status === "uploading"
-                    ? "Checking availability…"
+                    ? "Saving photo…"
                     : status.status === "processing"
-                      ? "Waiting for processing…"
-                      : "Upload avatar"}
+                      ? "Finishing…"
+                      : "Save photo"}
               </button>
             </div>
-            <p className={styles.uploadNote} id="avatar-upload-note">
-              Uploads stay fail-closed until an approved profile service can
-              validate, process, and confirm the new revision.
-            </p>
-          </div>
-        </div>
+          )}
+        </footer>
       </div>
     </div>
   );

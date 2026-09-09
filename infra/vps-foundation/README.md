@@ -12,6 +12,18 @@ The VPS is a deployment target, not a source-code workstation.
 - Production workloads are OCI images promoted by immutable digest.
 - Product source is never edited on the server.
 - Public HTTP ingress uses a named Cloudflare Tunnel.
+- Application routes are selected independently for staging and production by
+  root-owned symlinks under `/srv/authority-closers/application/edge-routes`.
+  Their route-only targets under `edge-route-releases` are mode `0444` copies
+  re-compared to checksum-verified immutable foundation or application
+  releases before selection. Caddy mounts only the selector and projection
+  directories read-only, so links resolve inside its unprivileged container
+  without exposing release trees, application state, or secrets and without
+  making mutable VPS state authoritative.
+- The bootstrap route keeps new production app hosts and not-yet-released
+  Learner/Coach staging hosts on explicit no-store 503 maintenance responses.
+  Existing staging Admin/API and legacy Learner routes remain selected until
+  the staging application transaction changes only its environment selector.
 - Databases, queues, admin ports, and Docker APIs are never published to the public Internet.
 - The Docker group remains empty because membership is root-equivalent.
 - Secrets are not committed here or placed in images.

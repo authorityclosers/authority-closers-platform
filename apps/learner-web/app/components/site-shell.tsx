@@ -12,6 +12,7 @@ import {
   ChevronDown,
   Compass,
   HelpCircle,
+  Gamepad2,
   LayoutDashboard,
   Search,
   Settings,
@@ -35,6 +36,7 @@ import { NotificationPopover } from "./notifications-runtime";
 import { initialsForDisplayName } from "../lib/profile-identity";
 import { ROUTES } from "../lib/routes";
 import { SignOutControl } from "./sign-out-control";
+import { usePracticeNavigationAvailability } from "./practice-availability";
 import {
   CommandPalette,
   MobileBottomNav,
@@ -88,6 +90,7 @@ export type LearnerCurrent =
   | "learning"
   | "discover"
   | "progress"
+  | "practice"
   | "calendar"
   | "notifications"
   | "profile"
@@ -347,6 +350,7 @@ export function LearnerShell({
   navSections,
   learningChildren,
 }: LearnerShellProps) {
+  const practiceAvailable = usePracticeNavigationAvailability(current);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [notificationPopoverOpen, setNotificationPopoverOpen] = useState(false);
@@ -646,6 +650,20 @@ export function LearnerShell({
           icon: <Compass size={20} strokeWidth={1.85} aria-hidden="true" />,
           title: "Discover",
         },
+        ...(practiceAvailable
+          ? [
+              {
+                id: "practice",
+                label: "Practice Arcade",
+                href: ROUTES.arcade,
+                current: current === "practice",
+                icon: (
+                  <Gamepad2 size={20} strokeWidth={1.85} aria-hidden="true" />
+                ),
+                title: "Practice Arcade",
+              },
+            ]
+          : []),
         {
           id: "progress",
           label: "Progress",
@@ -1022,6 +1040,7 @@ export function LearnerShell({
       <MobileBottomNav
         current={current}
         learningHref={learningHref}
+        practiceAvailable={practiceAvailable}
         moreOpen={mobileDrawerOpen}
         onToggleMore={() => {
           setNotificationPopoverOpen(false);
@@ -1034,6 +1053,8 @@ export function LearnerShell({
       {/* Mobile "More" Drawer / Bottom Sheet */}
       <MobileMoreSheet
         open={mobileDrawerOpen}
+        practiceAvailable={practiceAvailable}
+        current={current}
         onClose={() => setMobileDrawerOpen(false)}
         userDisplayName={effectiveDisplayName}
         moreButtonRef={moreButtonRef}

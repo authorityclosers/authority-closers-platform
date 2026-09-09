@@ -62,6 +62,11 @@ RELEASE_IMAGE_KEYS = {
     "AC_MIGRATION_HEAD",
     "AC_RELEASE_ID",
 }
+COACH_RELEASE_IMAGE_KEYS = RELEASE_IMAGE_KEYS | {
+    "AC_COACH_IMAGE",
+    "AC_COACH_REGISTRY_DIGEST",
+    "AC_COACH_TRANSPORT_DIGEST",
+}
 PARITY_TABLES = (
     "alembic_version",
     "persons",
@@ -128,12 +133,52 @@ CAPABILITY_PARITY_CONTRACT = "ac-postgres-parity-v2"
 CAPABILITY_PARITY_TABLES = PARITY_TABLES + ("capability_grants", "capability_revocations")
 
 
+PRACTICE_PARITY_MIGRATION_HEAD = "20260908_0020"
+PRACTICE_PARITY_CONTRACT = "ac-postgres-parity-v3"
+PRACTICE_PARITY_TABLES = CAPABILITY_PARITY_TABLES + (
+    "practice_set_versions",
+    "practice_attempts",
+    "practice_profiles",
+    "practice_responses",
+    "practice_commands",
+    "practice_feedback_acks",
+    "practice_participations",
+    "practice_reward_claims",
+    "practice_ledger_entries",
+)
+FOCUS_PARITY_MIGRATION_HEAD = "20260908_0021"
+FOCUS_PARITY_CONTRACT = "ac-postgres-parity-v4"
+FOCUS_PARITY_TABLES = PRACTICE_PARITY_TABLES + ("practice_focus_runs", "practice_focus_events")
+AUTHORING_PARITY_MIGRATION_HEAD = "20260908_0022"
+AUTHORING_PARITY_CONTRACT = "ac-postgres-parity-v5"
+AUTHORING_PARITY_TABLES = FOCUS_PARITY_TABLES + ("catalog_authoring_commands",)
+# 20260909_0023 extends the immutable authoring-command operation catalogue
+# without changing the restored table inventory or its parity contract.
+REVISION_PARITY_MIGRATION_HEAD = "20260909_0023"
+REVISION_PARITY_CONTRACT = AUTHORING_PARITY_CONTRACT
+REVISION_PARITY_TABLES = AUTHORING_PARITY_TABLES
+VERSIONED_PARITY_CONTRACTS = {
+    CAPABILITY_PARITY_MIGRATION_HEAD: (CAPABILITY_PARITY_CONTRACT, CAPABILITY_PARITY_TABLES),
+    PRACTICE_PARITY_MIGRATION_HEAD: (PRACTICE_PARITY_CONTRACT, PRACTICE_PARITY_TABLES),
+    FOCUS_PARITY_MIGRATION_HEAD: (FOCUS_PARITY_CONTRACT, FOCUS_PARITY_TABLES),
+    AUTHORING_PARITY_MIGRATION_HEAD: (AUTHORING_PARITY_CONTRACT, AUTHORING_PARITY_TABLES),
+    REVISION_PARITY_MIGRATION_HEAD: (REVISION_PARITY_CONTRACT, REVISION_PARITY_TABLES),
+}
+
+
 def parity_tables_for_head(migration_head: str) -> tuple[str, ...]:
     if migration_head in LEGACY_PARITY_MIGRATION_HEADS:
         return PARITY_TABLES
-    if migration_head == CAPABILITY_PARITY_MIGRATION_HEAD:
-        return CAPABILITY_PARITY_TABLES
+    if migration_head in VERSIONED_PARITY_CONTRACTS:
+        return VERSIONED_PARITY_CONTRACTS[migration_head][1]
     raise RestoreProofError("migration head has no reviewed row-count parity contract")
+
+
+def parity_contract_for_head(migration_head: str) -> str | None:
+    parity_tables_for_head(migration_head)
+    if migration_head in LEGACY_PARITY_MIGRATION_HEADS:
+        return None
+    return VERSIONED_PARITY_CONTRACTS[migration_head][0]
 
 
 class RestoreProofError(RuntimeError):
@@ -738,19 +783,18 @@ def _validate_metadata(
         "dump_sha256",
         "row_counts",
     }
-    v2_keys = expected_keys | {"parity_contract", "migration_head"}
-    if not isinstance(payload, dict) or set(payload) not in (expected_keys, v2_keys):
+    versioned_keys = expected_keys | {"parity_contract", "migration_head"}
+    if not isinstance(payload, dict) or set(payload) not in (expected_keys, versioned_keys):
         raise RestoreProofError("logical backup metadata has an unexpected contract")
     tables = parity_tables_for_head(expected_migration_head)
-    if expected_migration_head == CAPABILITY_PARITY_MIGRATION_HEAD:
+    contract = parity_contract_for_head(expected_migration_head)
+    if contract is not None:
         if (
-            set(payload) != v2_keys
-            or payload.get("parity_contract") != CAPABILITY_PARITY_CONTRACT
+            set(payload) != versioned_keys
+            or payload.get("parity_contract") != contract
             or payload.get("migration_head") != expected_migration_head
         ):
-            raise RestoreProofError(
-                "capability backup requires exact migration and parity identity"
-            )
+            raise RestoreProofError("versioned backup requires exact migration and parity identity")
     elif set(payload) != expected_keys:
         raise RestoreProofError("legacy backup must retain its legacy parity contract")
     release_id = payload.get("release_id")
@@ -825,26 +869,26 @@ def _parse_release_env(path: Path) -> dict[str, str]:
         if separator != "=" or key in values or not re.fullmatch(r"[A-Z][A-Z0-9_]*", key):
             raise RestoreProofError("current application release images are malformed")
         values[key] = value
-    if set(values) != RELEASE_IMAGE_KEYS:
+    # Existing immutable releases have three images. Coach is an atomic extra
+    # triplet, never a partial or caller-selected image inventory.
+    if set(values) not in (RELEASE_IMAGE_KEYS, COACH_RELEASE_IMAGE_KEYS):
         raise RestoreProofError("current application release images have an unexpected contract")
-    for key in ("AC_ADMIN_IMAGE", "AC_API_IMAGE", "AC_LEARNER_IMAGE"):
+    components = ("ADMIN", "API", "LEARNER")
+    if set(values) == COACH_RELEASE_IMAGE_KEYS:
+        components += ("COACH",)
+    for component in components:
+        key = f"AC_{component}_IMAGE"
         if re.fullmatch(r"sha256:[0-9a-f]{64}", values[key]) is None:
             raise RestoreProofError("current application release image identity is unsafe")
-    for key in (
-        "AC_ADMIN_TRANSPORT_DIGEST",
-        "AC_API_TRANSPORT_DIGEST",
-        "AC_LEARNER_TRANSPORT_DIGEST",
-    ):
+    for component in components:
+        key = f"AC_{component}_TRANSPORT_DIGEST"
         if re.fullmatch(r"sha256:[0-9a-f]{64}", values[key]) is None:
             raise RestoreProofError("current application transport identity is unsafe")
-    for component in ("ADMIN", "API", "LEARNER"):
+    for component in components:
         if values[f"AC_{component}_IMAGE"] != values[f"AC_{component}_TRANSPORT_DIGEST"]:
             raise RestoreProofError("current application transport identity is inconsistent")
-    for key in (
-        "AC_ADMIN_REGISTRY_DIGEST",
-        "AC_API_REGISTRY_DIGEST",
-        "AC_LEARNER_REGISTRY_DIGEST",
-    ):
+    for component in components:
+        key = f"AC_{component}_REGISTRY_DIGEST"
         if (
             re.fullmatch(
                 r"ghcr\.io/authorityclosers/[a-z0-9-]+@sha256:[0-9a-f]{64}",
@@ -1052,6 +1096,7 @@ def _verify_row_count_parity(
     evidence_path: Path, expected: Mapping[str, int], *, expected_migration_head: str
 ) -> None:
     tables = parity_tables_for_head(expected_migration_head)
+    contract = parity_contract_for_head(expected_migration_head)
     try:
         payload = json.loads(evidence_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
@@ -1070,10 +1115,7 @@ def _verify_row_count_parity(
         or schema.get("expected_migration_head") != expected_migration_head
         or schema.get("actual_migration_versions") != [expected_migration_head]
         or schema.get("canonical_tables_checked") != len(tables)
-        or (
-            expected_migration_head == CAPABILITY_PARITY_MIGRATION_HEAD
-            and payload.get("parity_contract") != CAPABILITY_PARITY_CONTRACT
-        )
+        or (contract is not None and payload.get("parity_contract") != contract)
     ):
         raise RestoreProofError("restored critical-table row-count parity failed")
 

@@ -11,9 +11,9 @@ export default async function StudioProgramPage({
     <AdminShell
       active="catalog"
       surface="studio"
-      eyebrow="Academy Studio / program"
-      title="Program readiness"
-      description="Review version provenance, topology, publication blockers, and the exact guarded publish transition."
+      eyebrow="Academy Studio"
+      title="Course studio"
+      description="Shape your course, preview the learning experience, and prepare each version for publication."
     >
       <StudioProgram programId={programId} />
     </AdminShell>

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable
-from dataclasses import dataclass, field
+from dataclasses import InitVar, dataclass, field
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from typing import Protocol, cast, runtime_checkable
@@ -66,7 +66,7 @@ def _mime_type(value: str, *, field: str = "mime_type") -> str:
     return normalized
 
 
-def _ephemeral_url(value: str, *, field: str = "url") -> str:
+def _ephemeral_url(value: str, *, field: str = "url", allow_loopback_http: bool = False) -> str:
     if not isinstance(value, str):
         raise TypeError(f"{field} must be a string")
     if any(ord(character) < 0x20 or ord(character) == 0x7F for character in value):
@@ -78,7 +78,16 @@ def _ephemeral_url(value: str, *, field: str = "url") -> str:
         parsed = urlsplit(normalized)
     except ValueError as error:
         raise ValueError(f"{field} must be a valid HTTPS URL") from error
-    if parsed.scheme != "https" or not parsed.netloc or parsed.hostname is None:
+    loopback_http = (
+        allow_loopback_http is True
+        and parsed.scheme == "http"
+        and parsed.hostname in {"127.0.0.1", "localhost", "learner.localhost"}
+    )
+    if (
+        (parsed.scheme != "https" and not loopback_http)
+        or not parsed.netloc
+        or parsed.hostname is None
+    ):
         raise ValueError(f"{field} must be an absolute HTTPS URL")
     try:
         port = parsed.port
@@ -262,9 +271,12 @@ class EphemeralMediaUrl:
     """A non-authoritative delivery URL returned for a short-lived window."""
 
     value: str
+    allow_loopback_http: InitVar[bool] = field(default=False, kw_only=True)
 
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "value", _ephemeral_url(self.value))
+    def __post_init__(self, allow_loopback_http: bool) -> None:
+        object.__setattr__(
+            self, "value", _ephemeral_url(self.value, allow_loopback_http=allow_loopback_http)
+        )
 
     def __str__(self) -> str:
         return self.value

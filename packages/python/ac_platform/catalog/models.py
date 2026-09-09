@@ -338,6 +338,71 @@ class ProgramVersion(Base):
         return self.status in IMMUTABLE_VERSION_STATUSES
 
 
+class CatalogAuthoringCommand(Base):
+    """Completed draft command receipt; content, raw keys and prompts are not retained."""
+
+    __tablename__ = "catalog_authoring_commands"
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "actor_person_id",
+            "idempotency_key_digest",
+            name="uq_catalog_authoring_commands_actor_key",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "actor_person_id"],
+            ["memberships.tenant_id", "memberships.person_id"],
+            name="fk_catalog_authoring_commands_membership",
+        ),
+        ForeignKeyConstraint(
+            ["program_version_id", "program_id", "program_scope", "tenant_id"],
+            [
+                "program_versions.id",
+                "program_versions.program_id",
+                "program_versions.scope",
+                "program_versions.owner_key",
+            ],
+            name="fk_catalog_authoring_commands_version_scope",
+        ),
+        CheckConstraint("program_scope = 'tenant'", name="tenant_scope_only"),
+        CheckConstraint(
+            "length(idempotency_key_digest) = 64 AND length(request_fingerprint) = 64",
+            name="digest_lengths",
+        ),
+        CheckConstraint(
+            "operation IN ('module_add', 'module_update', 'activity_add', 'activity_update', "
+            "'version_revise')",
+            name="operation_supported",
+        ),
+        Index("ix_catalog_authoring_commands_version", "tenant_id", "program_version_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    actor_person_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    program_version_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    program_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    program_scope: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="tenant", server_default="tenant"
+    )
+    operation: Mapped[str] = mapped_column(String(24), nullable=False)
+    resource_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    idempotency_key_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    request_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    audit_event_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("audit_events.id"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now, server_default=func.now()
+    )
+
+
+@event.listens_for(CatalogAuthoringCommand, "before_update")
+@event.listens_for(CatalogAuthoringCommand, "before_delete")
+def _guard_catalog_authoring_command_mutation(*_args: Any) -> None:
+    raise ValueError("catalog authoring command history is immutable")
+
+
 class CatalogPublishCommand(Base):
     """Replay-safe tenant-local publication command ledger.
 

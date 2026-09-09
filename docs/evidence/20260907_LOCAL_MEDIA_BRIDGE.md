@@ -323,3 +323,29 @@ identity requests 401. The marker remained **0 before and after across three
 diagnostic files**, with **15,393 inspected bytes unchanged**. This supersedes
 the earlier startup-pending status and does not turn denial evidence into a
 successful media-playback claim.
+
+## Native-diagnostics guard revalidation — 8 September 2026
+
+The original HTTPS diagnostics correction is already present in the current
+tree: the managed staging launcher clears the learner child's `NODE_DEBUG`
+before startup, and both private-media configuration and the upstream adapter
+invoke the shared privacy guard. Existing follow-up work also covers NET/TLS
+diagnostics and local-sandbox startup. These implementation changes were
+preserved during this bounded revalidation.
+
+The first focused run found six stale configuration assertions expecting the
+old "native HTTP diagnostics" message after the guard changed to "native network
+diagnostics". The test-only correction updates those assertions, verifies NET/TLS
+and wildcard masks on direct bridge startup, verifies direct local-sandbox
+startup rejection, permits unrelated `fs` diagnostics, and explicitly isolates
+the sandbox environment between cases.
+
+On Node **24.19.0**, **140 tests / four files passed** at 02:00:52 local time:
+`dev-media-native-privacy.test.ts`, `dev-media-config.test.ts`,
+`dev-media-upstream.test.ts`, and `dev-api-proxy.test.ts`. Existing fresh-process
+negative controls reproduce the synthetic native sink; guarded controls reject
+unsafe startup, including Node's cached bootstrap mask after the environment is
+cleared. Scoped ESLint (zero warnings), formatting, and diff checks passed.
+No real credentials, signed requests, log contents, process restarts, or
+deployments were used. This result
+does not add live playback or running-process acceptance evidence.

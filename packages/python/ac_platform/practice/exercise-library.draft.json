@@ -1,0 +1,781 @@
+{
+  "status": "Draft; not published or validated assessment",
+  "sets": [
+    {
+      "id": "match",
+      "version": 1,
+      "title": "Connect the concern",
+      "kind": "match",
+      "skill": "Discovery",
+      "description": "Match what is said with a question that opens the conversation.",
+      "art": "pair-tiles",
+      "color": "cobalt",
+      "estimated_minutes": 4,
+      "items": [
+        {
+          "prompt": "Match each buyer statement to its most relevant clarifying question. These are possible next questions, not diagnoses.",
+          "pairs": [
+            [
+              "I need my partner involved.",
+              "What will your partner need to evaluate?"
+            ],
+            [
+              "We cannot start until November.",
+              "What changes for you in November?"
+            ],
+            [
+              "I am unsure it fits our team.",
+              "Which part feels least relevant to your team?"
+            ]
+          ],
+          "feedback": "You kept stakeholders, timing, and relevance separate instead of treating each as a request for a discount.",
+          "id": "match-01",
+          "kind": "match",
+          "status": "editorial_draft",
+          "source": {
+            "document": "All 4 Module Script",
+            "drive_id": "1fHlR4HEX-YtOe7MKezVdbGRDtKHmpG9CX9Z4uqIi7Ek",
+            "lines": "1091-1113;1243-1259"
+          },
+          "hint": "Look for what you know, what you do not know, and what would clarify the decision."
+        },
+        {
+          "prompt": "Connect the observation to a useful follow-up.",
+          "pairs": [
+            [
+              "The buyer asks about implementation.",
+              "Which implementation concern would you like to resolve?"
+            ],
+            [
+              "The buyer compares two approaches.",
+              "Which criteria will you use to compare them?"
+            ],
+            [
+              "The buyer says the price is high.",
+              "High compared with which option or expectation?"
+            ]
+          ],
+          "feedback": "Each question checks a specific unknown. None assumes what the buyer secretly thinks.",
+          "id": "match-02",
+          "kind": "match",
+          "status": "editorial_draft",
+          "source": {
+            "document": "All 4 Module Script",
+            "drive_id": "1fHlR4HEX-YtOe7MKezVdbGRDtKHmpG9CX9Z4uqIi7Ek",
+            "lines": "1685-1703"
+          },
+          "hint": "Look for what you know, what you do not know, and what would clarify the decision."
+        },
+        {
+          "prompt": "Connect the unsupported conclusion to the evidence still needed.",
+          "pairs": [
+            [
+              "They laughed, so they will buy.",
+              "Their explicit decision and next step"
+            ],
+            [
+              "They asked questions, so the offer fits.",
+              "Their needs and fit criteria"
+            ],
+            [
+              "They went quiet, so they dislike the price.",
+              "Their explanation of the pause"
+            ]
+          ],
+          "feedback": "Engagement, curiosity, and silence are observations. Buying intent and fit require more evidence.",
+          "id": "match-03",
+          "kind": "match",
+          "status": "editorial_draft",
+          "source": {
+            "document": "All 4 Module Script",
+            "drive_id": "1fHlR4HEX-YtOe7MKezVdbGRDtKHmpG9CX9Z4uqIi7Ek",
+            "lines": "1547-1622"
+          },
+          "hint": "Look for what you know, what you do not know, and what would clarify the decision."
+        }
+      ],
+      "review_status": "needs_Dipak_review",
+      "competition_eligible": false,
+      "assessment_eligible": false
+    },
+    {
+      "id": "gaps",
+      "version": 1,
+      "title": "Choose the missing move",
+      "kind": "gap",
+      "skill": "Clarity",
+      "description": "A small word choice can change the whole question.",
+      "art": "clarity-lens",
+      "color": "mint",
+      "estimated_minutes": 4,
+      "items": [
+        {
+          "prompt": "Before responding to an objection, first ____ what the person means.",
+          "options": [
+            "clarify",
+            "discount",
+            "defend"
+          ],
+          "answer": "clarify",
+          "feedback": "Clarify first. A useful response depends on the actual concern, not the label you give it.",
+          "id": "gaps-01",
+          "kind": "gap",
+          "status": "editorial_draft",
+          "source": {
+            "document": "All 4 Module Script",
+            "drive_id": "1fHlR4HEX-YtOe7MKezVdbGRDtKHmpG9CX9Z4uqIi7Ek",
+            "lines": "1338-1372"
+          },
+          "hint": "Look for what you know, what you do not know, and what would clarify the decision."
+        },
+        {
+          "prompt": "Information describes an offer. Decision support connects it to the buyer’s ____.",
+          "options": [
+            "situation",
+            "urgency",
+            "status"
+          ],
+          "answer": "situation",
+          "feedback": "Relevance comes from the buyer’s situation. More information alone does not establish fit.",
+          "id": "gaps-02",
+          "kind": "gap",
+          "status": "editorial_draft",
+          "source": {
+            "document": "All 4 Module Script",
+            "drive_id": "1fHlR4HEX-YtOe7MKezVdbGRDtKHmpG9CX9Z4uqIi7Ek",
+            "lines": "647-705"
+          },
+          "hint": "Look for what you know, what you do not know, and what would clarify the decision."
+        },
+        {
+          "prompt": "“Not yet” describes a skill still being developed; it is not proof of permanent ____.",
+          "options": [
+            "inability",
+            "success",
+            "readiness"
+          ],
+          "answer": "inability",
+          "feedback": "An incomplete skill is a reason to prepare and practise, not to claim either expertise or permanent inability.",
+          "id": "gaps-03",
+          "kind": "gap",
+          "status": "editorial_draft",
+          "source": {
+            "document": "All 4 Module Script",
+            "drive_id": "1fHlR4HEX-YtOe7MKezVdbGRDtKHmpG9CX9Z4uqIi7Ek",
+            "lines": "2271-2280;2420-2433"
+          },
+          "hint": "Look for what you know, what you do not know, and what would clarify the decision."
+        }
+      ],
+      "review_status": "needs_Dipak_review",
+      "competition_eligible": false,
+      "assessment_eligible": false
+    },
+    {
+      "id": "build",
+      "version": 1,
+      "title": "Build a better question",
+      "kind": "build",
+      "skill": "Questioning",
+      "description": "Assemble a respectful follow-up, then understand why it works.",
+      "art": "revision-folio",
+      "color": "lilac",
+      "estimated_minutes": 4,
+      "items": [
+        {
+          "prompt": "The buyer needs to talk with a partner. Build a question that supports that process.",
+          "pieces": [
+            "What will",
+            "your partner",
+            "need to understand",
+            "before",
+            "you decide?"
+          ],
+          "answer": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          "feedback": "This respects the buying process and helps the buyer prepare. It does not pressure them to exclude someone important.",
+          "id": "build-01",
+          "kind": "build",
+          "status": "editorial_draft",
+          "source": {
+            "document": "All 4 Module Script",
+            "drive_id": "1fHlR4HEX-YtOe7MKezVdbGRDtKHmpG9CX9Z4uqIi7Ek",
+            "lines": "1243-1259"
+          },
+          "hint": "Look for what you know, what you do not know, and what would clarify the decision."
+        },
+        {
+          "prompt": "The buyer says “I need to think.” Build an invitation to clarify.",
+          "pieces": [
+            "What specifically",
+            "would you like",
+            "to feel clearer about",
+            "before",
+            "deciding?"
+          ],
+          "answer": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          "feedback": "An open question creates room for the actual issue, including a genuine no.",
+          "id": "build-02",
+          "kind": "build",
+          "status": "editorial_draft",
+          "source": {
+            "document": "All 4 Module Script",
+            "drive_id": "1fHlR4HEX-YtOe7MKezVdbGRDtKHmpG9CX9Z4uqIi7Ek",
+            "lines": "1091-1113;1352-1372"
+          },
+          "hint": "Look for what you know, what you do not know, and what would clarify the decision."
+        },
+        {
+          "prompt": "You have not handled this situation before. Build a responsible next-action statement.",
+          "pieces": [
+            "I can",
+            "prepare one approach,",
+            "try it,",
+            "review the evidence,",
+            "and adjust."
+          ],
+          "answer": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          "feedback": "Prepared action and feedback generate evidence. Confidence alone is not proof of competence.",
+          "id": "build-03",
+          "kind": "build",
+          "status": "editorial_draft",
+          "source": {
+            "document": "All 4 Module Script",
+            "drive_id": "1fHlR4HEX-YtOe7MKezVdbGRDtKHmpG9CX9Z4uqIi7Ek",
+            "lines": "2420-2433;2455-2488"
+          },
+          "hint": "Look for what you know, what you do not know, and what would clarify the decision."
+        }
+      ],
+      "review_status": "needs_Dipak_review",
+      "competition_eligible": false,
+      "assessment_eligible": false
+    },
+    {
+      "id": "sequence",
+      "version": 1,
+      "title": "Put the conversation in order",
+      "kind": "order",
+      "skill": "Decision support",
+      "description": "Sequence the idea, without pretending all calls follow a script.",
+      "art": "league-banner",
+      "color": "amber",
+      "estimated_minutes": 4,
+      "items": [
+        {
+          "prompt": "Order this teaching scaffold for responding to an unfamiliar concern.",
+          "pieces": [
+            "Acknowledge the concern",
+            "Clarify what it means",
+            "Listen to the explanation",
+            "Respond to the actual concern"
+          ],
+          "answer": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "feedback": "This is a useful practice scaffold, not a mandatory script for every real conversation.",
+          "id": "sequence-01",
+          "kind": "order",
+          "status": "editorial_draft",
+          "source": {
+            "document": "All 4 Module Script",
+            "drive_id": "1fHlR4HEX-YtOe7MKezVdbGRDtKHmpG9CX9Z4uqIi7Ek",
+            "lines": "1352-1372"
+          },
+          "hint": "Look for what you know, what you do not know, and what would clarify the decision."
+        },
+        {
+          "prompt": "Order a productive self-review.",
+          "pieces": [
+            "Record what was said",
+            "Separate observation from interpretation",
+            "Choose one behavior to change",
+            "Try the change in a new situation"
+          ],
+          "answer": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "feedback": "Start with evidence, then select one correction and test it. Do not jump directly to a diagnosis of the buyer.",
+          "id": "sequence-02",
+          "kind": "order",
+          "status": "editorial_draft",
+          "source": {
+            "document": "All 4 Module Script",
+            "drive_id": "1fHlR4HEX-YtOe7MKezVdbGRDtKHmpG9CX9Z4uqIi7Ek",
+            "lines": "2030-2048;224-241"
+          },
+          "hint": "Look for what you know, what you do not know, and what would clarify the decision."
+        },
+        {
+          "prompt": "Order a responsible next step when you do not know an answer.",
+          "pieces": [
+            "Acknowledge the question",
+            "Say what you can and cannot verify",
+            "Agree how to get the answer",
+            "Follow through on that agreement"
+          ],
+          "answer": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "feedback": "Do not invent certainty. A transparent path to an answer protects trust.",
+          "id": "sequence-03",
+          "kind": "order",
+          "status": "editorial_draft",
+          "source": {
+            "document": "All 4 Module Script",
+            "drive_id": "1fHlR4HEX-YtOe7MKezVdbGRDtKHmpG9CX9Z4uqIi7Ek",
+            "lines": "1200-1239;2523-2528"
+          },
+          "hint": "Look for what you know, what you do not know, and what would clarify the decision."
+        }
+      ],
+      "review_status": "needs_Dipak_review",
+      "competition_eligible": false,
+      "assessment_eligible": false
+    },
+    {
+      "id": "next-move",
+      "version": 1,
+      "title": "Choose your next move",
+      "kind": "choice",
+      "skill": "Objection discovery",
+      "description": "Three plausible responses. One better question for this context.",
+      "art": "discovery-compass",
+      "color": "cobalt",
+      "estimated_minutes": 4,
+      "items": [
+        {
+          "prompt": "A prospect says: “I like it, but my partner and I make these decisions together.” What is the most useful next move?",
+          "options": [
+            "Ask what their partner needs to evaluate.",
+            "Offer a discount for deciding alone today.",
+            "Send every case study without asking."
+          ],
+          "answer": 0,
+          "feedback": "Support the actual decision process. A stakeholder is not automatically an obstacle to overcome.",
+          "id": "next-move-01",
+          "kind": "choice",
+          "status": "editorial_draft",
+          "source": {
+            "document": "All 4 Module Script",
+            "drive_id": "1fHlR4HEX-YtOe7MKezVdbGRDtKHmpG9CX9Z4uqIi7Ek",
+            "lines": "1243-1259"
+          },
+          "hint": "Look for what you know, what you do not know, and what would clarify the decision."
+        },
+        {
+          "prompt": "A buyer says: “Our current setup meets our needs and we are not looking to change.” They decline more discussion. What next?",
+          "options": [
+            "Invent a new deadline.",
+            "Respect the decision and close politely.",
+            "Keep sending proof until they reply."
+          ],
+          "answer": 1,
+          "feedback": "A genuine no is a valid outcome. Ethical qualification is not failure.",
+          "id": "next-move-02",
+          "kind": "choice",
+          "status": "editorial_draft",
+          "source": {
+            "document": "All 4 Module Script",
+            "drive_id": "1fHlR4HEX-YtOe7MKezVdbGRDtKHmpG9CX9Z4uqIi7Ek",
+            "lines": "1265-1284"
+          },
+          "hint": "Look for what you know, what you do not know, and what would clarify the decision."
+        },
+        {
+          "prompt": "You quoted a price and the buyer pauses. You do not know why. What should you avoid?",
+          "options": [
+            "Giving them a moment.",
+            "Inviting a question.",
+            "Assuming the silence proves they cannot afford it."
+          ],
+          "answer": 2,
+          "feedback": "Silence alone does not explain the buyer’s thoughts or finances. Ask without diagnosing.",
+          "id": "next-move-03",
+          "kind": "choice",
+          "status": "editorial_draft",
+          "source": {
+            "document": "All 4 Module Script",
+            "drive_id": "1fHlR4HEX-YtOe7MKezVdbGRDtKHmpG9CX9Z4uqIi7Ek",
+            "lines": "1685-1703;1928-1963"
+          },
+          "hint": "Look for what you know, what you do not know, and what would clarify the decision."
+        }
+      ],
+      "review_status": "needs_Dipak_review",
+      "competition_eligible": false,
+      "assessment_eligible": false
+    },
+    {
+      "id": "assumption",
+      "version": 1,
+      "title": "Spot the assumption",
+      "kind": "choice",
+      "skill": "Evidence",
+      "description": "Notice where a conclusion goes beyond what was observed.",
+      "art": "checkpoint-seal",
+      "color": "mint",
+      "estimated_minutes": 4,
+      "items": [
+        {
+          "prompt": "“They asked about features, therefore they are ready to sign.” Which part is not established?",
+          "options": [
+            "They asked about features.",
+            "They are ready to sign.",
+            "A conversation occurred."
+          ],
+          "answer": 1,
+          "feedback": "Curiosity does not establish commitment. Ask about decision criteria and the next step.",
+          "id": "assumption-01",
+          "kind": "choice",
+          "status": "editorial_draft",
+          "source": {
+            "document": "All 4 Module Script",
+            "drive_id": "1fHlR4HEX-YtOe7MKezVdbGRDtKHmpG9CX9Z4uqIi7Ek",
+            "lines": "1762-1797"
+          },
+          "hint": "Look for what you know, what you do not know, and what would clarify the decision."
+        },
+        {
+          "prompt": "“I explained everything, so they must understand.” What is missing?",
+          "options": [
+            "Evidence of the buyer’s understanding.",
+            "A longer feature list.",
+            "A more expensive proposal."
+          ],
+          "answer": 0,
+          "feedback": "Your explanation and their understanding are different. Invite the buyer to describe how the offer relates to their situation.",
+          "id": "assumption-02",
+          "kind": "choice",
+          "status": "editorial_draft",
+          "source": {
+            "document": "All 4 Module Script",
+            "drive_id": "1fHlR4HEX-YtOe7MKezVdbGRDtKHmpG9CX9Z4uqIi7Ek",
+            "lines": "1124-1163"
+          },
+          "hint": "Look for what you know, what you do not know, and what would clarify the decision."
+        },
+        {
+          "prompt": "“I have never closed this deal size; therefore I am incapable.” Which statement is a prediction rather than an observed fact?",
+          "options": [
+            "I have no prior deal of that size.",
+            "I can prepare for a first attempt.",
+            "I am incapable."
+          ],
+          "answer": 2,
+          "feedback": "Past experience does not establish permanent inability. Prepare within your actual competence and seek feedback.",
+          "id": "assumption-03",
+          "kind": "choice",
+          "status": "editorial_draft",
+          "source": {
+            "document": "All 4 Module Script",
+            "drive_id": "1fHlR4HEX-YtOe7MKezVdbGRDtKHmpG9CX9Z4uqIi7Ek",
+            "lines": "2271-2280;2420-2433"
+          },
+          "hint": "Look for what you know, what you do not know, and what would clarify the decision."
+        }
+      ],
+      "review_status": "needs_Dipak_review",
+      "competition_eligible": false,
+      "assessment_eligible": false
+    },
+    {
+      "id": "listen",
+      "version": 1,
+      "title": "Listen before you solve",
+      "kind": "audio",
+      "skill": "Listening",
+      "description": "Replay a fictional buyer line. The transcript is always available.",
+      "art": "listening-arc",
+      "color": "lilac",
+      "estimated_minutes": 4,
+      "items": [
+        {
+          "prompt": "Listen to the buyer, then choose a relevant follow-up.",
+          "spoken": "I am not sure how we would introduce this to our team.",
+          "options": [
+            "What part of introducing it feels most uncertain?",
+            "We have many other customers.",
+            "I can lower the price."
+          ],
+          "answer": 0,
+          "feedback": "The concern is about implementation in this statement. Explore it before introducing unrelated proof or pricing.",
+          "id": "listen-01",
+          "kind": "audio",
+          "status": "editorial_draft",
+          "source": {
+            "document": "All 4 Module Script",
+            "drive_id": "1fHlR4HEX-YtOe7MKezVdbGRDtKHmpG9CX9Z4uqIi7Ek",
+            "lines": "1167-1196"
+          },
+          "hint": "Look for what you know, what you do not know, and what would clarify the decision.",
+          "audio": "../05_Assets/audio/prospect-demo/listen-01.wav"
+        },
+        {
+          "prompt": "Listen to the buyer. Which assumption should you avoid?",
+          "spoken": "Let me discuss it with our operations head.",
+          "options": [
+            "Another person may participate.",
+            "The buyer is definitely avoiding you.",
+            "Their decision process needs clarification."
+          ],
+          "answer": 1,
+          "feedback": "An additional stakeholder can be a normal part of the process. Do not infer avoidance from this line alone.",
+          "id": "listen-02",
+          "kind": "audio",
+          "status": "editorial_draft",
+          "source": {
+            "document": "All 4 Module Script",
+            "drive_id": "1fHlR4HEX-YtOe7MKezVdbGRDtKHmpG9CX9Z4uqIi7Ek",
+            "lines": "1243-1259"
+          },
+          "hint": "Look for what you know, what you do not know, and what would clarify the decision.",
+          "audio": "../05_Assets/audio/prospect-demo/listen-02.wav"
+        },
+        {
+          "prompt": "Listen, then identify a useful next move.",
+          "spoken": "Thank you. This is not something we want to pursue.",
+          "options": [
+            "Ignore the no and pitch again.",
+            "Add a fictional shortage.",
+            "Acknowledge the decision and end respectfully."
+          ],
+          "answer": 2,
+          "feedback": "Respect a clear no. Do not train persistence that overrides the person’s stated decision.",
+          "id": "listen-03",
+          "kind": "audio",
+          "status": "editorial_draft",
+          "source": {
+            "document": "All 4 Module Script",
+            "drive_id": "1fHlR4HEX-YtOe7MKezVdbGRDtKHmpG9CX9Z4uqIi7Ek",
+            "lines": "1265-1284"
+          },
+          "hint": "Look for what you know, what you do not know, and what would clarify the decision.",
+          "audio": "../05_Assets/audio/prospect-demo/listen-03.wav"
+        }
+      ],
+      "review_status": "needs_Dipak_review",
+      "competition_eligible": false,
+      "assessment_eligible": false
+    },
+    {
+      "id": "dialogue",
+      "version": 1,
+      "title": "The branching conversation",
+      "kind": "branch",
+      "skill": "Ethical closing",
+      "description": "A small conversation with consequences, recovery, and a respectful exit.",
+      "art": "squad-orbit",
+      "color": "amber",
+      "estimated_minutes": 4,
+      "items": [
+        {
+          "prompt": "A partner joins the decision",
+          "nodes": {
+            "start": {
+              "buyer": "I need my partner involved.",
+              "options": [
+                {
+                  "text": "Ask what they need to evaluate.",
+                  "next": "clarified"
+                },
+                {
+                  "text": "Offer a special price if the buyer decides alone.",
+                  "next": "repair"
+                }
+              ]
+            },
+            "repair": {
+              "buyer": "That does not address what I said.",
+              "options": [
+                {
+                  "text": "Acknowledge the mismatch and ask permission to clarify.",
+                  "next": "clarified"
+                }
+              ]
+            },
+            "clarified": {
+              "buyer": "They are mainly worried about disruption.",
+              "options": [
+                {
+                  "text": "Ask which part of implementation feels most disruptive.",
+                  "next": "done"
+                },
+                {
+                  "text": "Repeat the feature list without addressing this information.",
+                  "next": "repair2"
+                }
+              ]
+            },
+            "repair2": {
+              "buyer": "Please respond to the concern I just described.",
+              "options": [
+                {
+                  "text": "Ask which part of implementation feels most disruptive.",
+                  "next": "done"
+                }
+              ]
+            }
+          },
+          "feedback": "The next question follows the new information rather than repeating the pitch.",
+          "id": "dialogue-01",
+          "kind": "branch",
+          "status": "editorial_draft",
+          "source": {
+            "document": "All 4 Module Script",
+            "drive_id": "1fHlR4HEX-YtOe7MKezVdbGRDtKHmpG9CX9Z4uqIi7Ek",
+            "lines": "1243-1259"
+          },
+          "hint": "Look for what you know, what you do not know, and what would clarify the decision."
+        },
+        {
+          "prompt": "Separate timing from relevance",
+          "nodes": {
+            "start": {
+              "buyer": "Not this month.",
+              "options": [
+                {
+                  "text": "Ask what changes after this month.",
+                  "next": "clarified"
+                },
+                {
+                  "text": "Assume they want a discount.",
+                  "next": "repair"
+                }
+              ]
+            },
+            "repair": {
+              "buyer": "That does not address what I said.",
+              "options": [
+                {
+                  "text": "Acknowledge the mismatch and ask permission to clarify.",
+                  "next": "clarified"
+                }
+              ]
+            },
+            "clarified": {
+              "buyer": "Our team is migrating systems until October.",
+              "options": [
+                {
+                  "text": "Ask whether a later review would be useful and agree a date only with consent.",
+                  "next": "done"
+                },
+                {
+                  "text": "Repeat the feature list without addressing this information.",
+                  "next": "repair2"
+                }
+              ]
+            },
+            "repair2": {
+              "buyer": "Please respond to the concern I just described.",
+              "options": [
+                {
+                  "text": "Ask whether a later review would be useful and agree a date only with consent.",
+                  "next": "done"
+                }
+              ]
+            }
+          },
+          "feedback": "A timing constraint is not proof of poor interest or a price problem.",
+          "id": "dialogue-02",
+          "kind": "branch",
+          "status": "editorial_draft",
+          "source": {
+            "document": "All 4 Module Script",
+            "drive_id": "1fHlR4HEX-YtOe7MKezVdbGRDtKHmpG9CX9Z4uqIi7Ek",
+            "lines": "1091-1113;1392-1408"
+          },
+          "hint": "Look for what you know, what you do not know, and what would clarify the decision."
+        },
+        {
+          "prompt": "Recognize when to stop",
+          "nodes": {
+            "start": {
+              "buyer": "It does not address the issue we are working on.",
+              "options": [
+                {
+                  "text": "Ask permission to clarify the mismatch.",
+                  "next": "clarified"
+                },
+                {
+                  "text": "Insist that every company needs this.",
+                  "next": "repair"
+                }
+              ]
+            },
+            "repair": {
+              "buyer": "That does not address what I said.",
+              "options": [
+                {
+                  "text": "Acknowledge the mismatch and ask permission to clarify.",
+                  "next": "clarified"
+                }
+              ]
+            },
+            "clarified": {
+              "buyer": "We are not interested in discussing it further.",
+              "options": [
+                {
+                  "text": "Respect the refusal and close.",
+                  "next": "done"
+                },
+                {
+                  "text": "Repeat the feature list without addressing this information.",
+                  "next": "repair2"
+                }
+              ]
+            },
+            "repair2": {
+              "buyer": "Please respond to the concern I just described.",
+              "options": [
+                {
+                  "text": "Respect the refusal and close.",
+                  "next": "done"
+                }
+              ]
+            }
+          },
+          "feedback": "The branch can end without a sale and still demonstrate a good decision.",
+          "id": "dialogue-03",
+          "kind": "branch",
+          "status": "editorial_draft",
+          "source": {
+            "document": "All 4 Module Script",
+            "drive_id": "1fHlR4HEX-YtOe7MKezVdbGRDtKHmpG9CX9Z4uqIi7Ek",
+            "lines": "1265-1284"
+          },
+          "hint": "Look for what you know, what you do not know, and what would clarify the decision."
+        }
+      ],
+      "review_status": "needs_Dipak_review",
+      "competition_eligible": false,
+      "assessment_eligible": false
+    }
+  ]
+}

@@ -26,6 +26,7 @@ PROFILE_VARIABLES = {
     "AC_STATE_ROOT",
     "AC_PUBLIC_APP_URL",
     "AC_ADMIN_APP_URL",
+    "AC_COACH_APP_URL",
     "AC_API_URL",
     "AC_API_HOST",
     "AC_INTERNAL_API_HOST",
@@ -33,11 +34,15 @@ PROFILE_VARIABLES = {
     "AC_EDGE_API_ALIAS",
     "AC_EDGE_LEARNER_ALIAS",
     "AC_EDGE_ADMIN_ALIAS",
+    "AC_EDGE_COACH_ALIAS",
     "AC_EXTERNAL_SIDE_EFFECTS_HOLD",
     "AC_EMAIL_PROVIDER",
     "AC_RESEND_API_KEY",
     "AC_RESEND_FROM",
     "AC_OPERATIONS_TENANT_ID",
+    "AC_PUBLIC_LEARNER_TENANT_ID",
+    "AC_PRACTICE_PILOT_ENABLED",
+    "AC_PRACTICE_PILOT_TENANT_ID",
 }
 
 
@@ -49,6 +54,7 @@ def _compose_environment() -> dict[str, str]:
             "AC_API_IMAGE": "sha256:" + "a" * 64,
             "AC_LEARNER_IMAGE": "sha256:" + "b" * 64,
             "AC_ADMIN_IMAGE": "sha256:" + "c" * 64,
+            "AC_COACH_IMAGE": "sha256:" + "d" * 64,
             "AC_DATABASE_URL": (
                 "postgresql+psycopg://ac_runtime:fixture-runtime-password@postgres/ac_platform"
             ),
@@ -188,7 +194,20 @@ def test_compose_binds_admin_to_exact_reserved_internal_api_alias(profile: str) 
     assert admin["environment"] == {  # type: ignore[index]
         "AC_INTERNAL_API_HOST": expected_host,
         "AC_INTERNAL_API_URL": f"http://{expected_host}:8000",
+        "AC_COACH_APP_URL": (
+            "https://coach-staging.authorityclosers.com"
+            if profile == "staging"
+            else "https://coach.authorityclosers.com"
+        ),
     }
+    coach = services["coach-web"]
+    assert isinstance(coach, dict)
+    assert coach["environment"] == {
+        "AC_INTERNAL_API_HOST": expected_host,
+        "AC_INTERNAL_API_URL": f"http://{expected_host}:8000",
+    }
+    assert "ports" not in coach
+    assert coach["depends_on"]["api"]["condition"] == "service_healthy"  # type: ignore[index]
     assert admin["depends_on"]["api"]["condition"] == "service_healthy"  # type: ignore[index]
     assert networks["app"]["internal"] is True  # type: ignore[index]
     assert "ports" not in api
@@ -197,6 +216,44 @@ def test_compose_binds_admin_to_exact_reserved_internal_api_alias(profile: str) 
         alias.endswith("authorityclosers.com")
         for alias in api["networks"]["app"]["aliases"]  # type: ignore[index]
     )
+
+
+@pytest.mark.parametrize("profile", ["staging", "production"])
+def test_practice_pilot_runtime_wiring_is_default_off_and_not_a_web_secret(profile: str) -> None:
+    default_services = _render_compose(profile, enabled_profiles=("release",))["services"]
+    assert isinstance(default_services, dict)
+    for name in ("api", "learner-web"):
+        environment = default_services[name]["environment"]
+        assert environment["AC_PRACTICE_PILOT_ENABLED"] == "false"
+        assert environment["AC_PRACTICE_PILOT_TENANT_ID"] == ""
+    tenant_id = "44444444-4444-4444-8444-444444444444"
+    services = _render_compose(
+        profile,
+        enabled_profiles=("release",),
+        environment_overrides={
+            "AC_PRACTICE_PILOT_ENABLED": "true",
+            "AC_PRACTICE_PILOT_TENANT_ID": tenant_id,
+            "AC_PUBLIC_LEARNER_TENANT_ID": tenant_id,
+        },
+    )["services"]
+    assert isinstance(services, dict)
+    for name in ("api", "learner-web"):
+        environment = services[name]["environment"]
+        assert environment["AC_PRACTICE_PILOT_ENABLED"] == "true"
+        assert environment["AC_PRACTICE_PILOT_TENANT_ID"] == tenant_id
+        assert environment["AC_PUBLIC_LEARNER_TENANT_ID"] == tenant_id
+        assert environment["AC_ENVIRONMENT"] == profile
+    assert set(services["learner-web"]["environment"]) == {
+        "AC_ENVIRONMENT",
+        "AC_PRACTICE_PILOT_ENABLED",
+        "AC_PRACTICE_PILOT_TENANT_ID",
+        "AC_PUBLIC_LEARNER_TENANT_ID",
+        "AC_OPERATIONS_TENANT_ID",
+    }
+    for name in ("admin-web", "coach-web", "worker", "migrate"):
+        environment = services[name]["environment"]
+        assert "AC_PRACTICE_PILOT_ENABLED" not in environment
+        assert "AC_PRACTICE_PILOT_TENANT_ID" not in environment
 
 
 def test_compose_requires_internal_host_and_profiles_fix_exact_environment_mapping() -> None:
@@ -233,8 +290,12 @@ def _run_docker(*arguments: str, timeout: int = 20) -> subprocess.CompletedProce
 
 def test_reserved_alias_resolves_only_while_assigned_on_real_internal_docker_network() -> None:
     if DOCKER is None:
+        if os.environ.get("CI", "").lower() == "true":
+            pytest.fail("CI requires Docker for the real internal transport proof")
         pytest.skip("Docker CLI is unavailable")
     if _run_docker("info", "--format", "{{.ServerVersion}}").returncode != 0:
+        if os.environ.get("CI", "").lower() == "true":
+            pytest.fail("CI requires a running Docker daemon for the real internal transport proof")
         pytest.skip("Docker daemon is unavailable")
 
     rendered = _render_compose("staging")
@@ -250,6 +311,10 @@ def test_reserved_alias_resolves_only_while_assigned_on_real_internal_docker_net
     assert isinstance(alias, str)
     assert re.fullmatch(r"api\.(staging|production)\.ac\.internal\.invalid", alias)
     if _run_docker("image", "inspect", image).returncode != 0:
+        if os.environ.get("CI", "").lower() == "true":
+            pytest.fail(
+                "CI requires the pinned PostgreSQL image for the real internal transport proof"
+            )
         pytest.skip("The pinned PostgreSQL image is not present; refusing a network pull")
 
     suffix = uuid4().hex[:12]

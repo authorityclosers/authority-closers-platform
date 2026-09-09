@@ -16,6 +16,23 @@ const AUTH_BRIDGE_ENV = {
   AC_DEV_AUTH_BRIDGE_ORIGIN: "http://localhost:3000",
   AC_DEV_AUTH_BRIDGE_UPSTREAM_ORIGIN: "https://staging.authorityclosers.com",
 };
+
+it("retains ordinary local private-read transport when sandbox is not opted in", async () => {
+  const fetcher = vi.fn(
+    async () =>
+      new Response("private-read", {
+        headers: { "content-type": "image/webp" },
+      }),
+  );
+  const response = await proxyDevelopmentLearnerApi(
+    new Request("http://localhost:3000/v1/media/read/existing"),
+    fetcher,
+    {},
+    "development",
+  );
+  expect(response.status).toBe(200);
+  expect(fetcher).toHaveBeenCalledOnce();
+});
 const STAGING_SESSION = "s".repeat(43);
 const LOCAL_SESSION = "l".repeat(43);
 const MEDIA_KEY =

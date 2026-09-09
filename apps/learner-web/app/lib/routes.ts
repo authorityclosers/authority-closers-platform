@@ -23,6 +23,7 @@ export const ROUTES = {
   profile: "/profile",
   settings: "/settings",
   practice: "/home#practice",
+  arcade: "/practice",
   programDetail: (slug: string) => `/programs/${routeSegment(slug)}`,
   programLearning: (slug: string) => `/learn/${routeSegment(slug)}`,
   module: (slug: string, moduleId: string) =>

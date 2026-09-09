@@ -83,6 +83,8 @@ describe("premium public catalog home", () => {
     );
 
     function cssRule(css: string, selector: string): string {
+      // Comments explain layout decisions but are not CSS declarations.
+      css = css.replace(/\/\*[\s\S]*?\*\//g, "");
       const target = `\n${selector} {`;
       let index = css.indexOf(target);
       if (index === -1) {
@@ -111,7 +113,7 @@ describe("premium public catalog home", () => {
     const bodyRule = cssRule(styles, "body");
     expect(bodyRule).not.toContain("overflow");
     expect(bodyRule).not.toContain("max-width");
-    expect(bodyRule).toContain("min-width: 320px");
+    expect(bodyRule).toContain("min-width: 0");
 
     const siteFrameRule = cssRule(styles, ".site-frame");
     expect(siteFrameRule).not.toContain("overflow");

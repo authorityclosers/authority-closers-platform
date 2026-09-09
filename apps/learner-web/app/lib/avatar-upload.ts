@@ -4,6 +4,7 @@ import {
   type AvatarCropMetadata,
   type ProfileAvatarResponse,
 } from "./learner-api";
+import { isLocalSandboxAvatarUploadUrl } from "./local-avatar-url";
 
 export const AVATAR_ACCEPTED_MIME_TYPES = [
   "image/jpeg",
@@ -649,7 +650,11 @@ export function createApiAvatarUploadPort(
                 method: "PUT",
                 headers: intent.upload_headers,
                 body: input.file,
-                credentials: "omit",
+                credentials: isLocalSandboxAvatarUploadUrl(
+                  new URL(intent.upload_url),
+                )
+                  ? "same-origin"
+                  : "omit",
                 cache: "no-store",
                 redirect: "error",
                 signal: requestSignal,

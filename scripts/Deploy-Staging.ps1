@@ -6,6 +6,9 @@ param(
     [ValidatePattern("^[0-9a-f]{40}$")]
     [string]$ReleaseSha,
 
+    [ValidateSet("staging", "production")]
+    [string]$TargetEnvironment = "staging",
+
     [ValidatePattern("^[A-Za-z0-9._-]+$")]
     [string]$SshHost = "ac",
 
@@ -18,9 +21,21 @@ param(
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 $expectedAccessTeamHost = "restless-cherry-c46f.cloudflareaccess.com"
+$environmentLabel = (Get-Culture).TextInfo.ToTitleCase($TargetEnvironment)
+$applicationHostSuffix = if ($TargetEnvironment -eq "staging") { "-staging" } else { "" }
+$learnerHost = "learner$applicationHostSuffix.authorityclosers.com"
+$adminHost = "admin$applicationHostSuffix.authorityclosers.com"
+$coachHost = "coach$applicationHostSuffix.authorityclosers.com"
+$apiHost = "api$applicationHostSuffix.authorityclosers.com"
+$legacyLearnerHost = if ($TargetEnvironment -eq "staging") {
+    "staging.authorityclosers.com"
+}
+else {
+    "app.authorityclosers.com"
+}
 $imagePartSizeBytes = 16 * 1024 * 1024
 if (-not $IsWindows) {
-    throw "The staging controller requires the trusted Windows operator host."
+    throw "The application release controller requires the trusted Windows operator host."
 }
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
@@ -361,19 +376,19 @@ function Assert-HttpRoute {
 }
 
 function Assert-AdminAccessBoundary {
-    $result = Get-HttpResult -Url "https://admin-staging.authorityclosers.com/"
+    $result = Get-HttpResult -Url "https://$adminHost/"
     if ($result.Status -ne 302 -or $null -eq $result.Location) {
-        throw "Admin staging is not redirecting through Cloudflare Access."
+        throw "$environmentLabel Admin is not redirecting through Cloudflare Access."
     }
     if (
         $result.Location.Scheme -ne "https" -or
         -not $result.Location.IsDefaultPort -or
         -not $result.Location.Host.Equals($expectedAccessTeamHost, [StringComparison]::OrdinalIgnoreCase) -or
-        $result.Location.AbsolutePath -ne "/cdn-cgi/access/login/admin-staging.authorityclosers.com"
+        $result.Location.AbsolutePath -ne "/cdn-cgi/access/login/$adminHost"
     ) {
-        throw "Admin staging returned an unexpected Access destination."
+        throw "$environmentLabel Admin returned an unexpected Access destination."
     }
-    Write-Output "PASS  Admin staging is protected by the expected Cloudflare Access route."
+    Write-Output "PASS  $environmentLabel Admin is protected by the expected Cloudflare Access route."
 }
 
 function Assert-LegacyWordPressBoundary {
@@ -394,10 +409,40 @@ function Assert-LegacyWordPressBoundary {
     Write-Output "PASS  WordPress apex and www remain on the reviewed legacy boundary."
 }
 
+function Assert-CoachSignInBoundary {
+    $result = Get-HttpResult -Url "https://$coachHost/"
+    $location = [string]$result.Location
+    if (
+        $result.Status -ne 307 -or
+        $result.Route -ne "coach-$TargetEnvironment" -or
+        $location -cnotin @("/login", "https://$coachHost/login")
+    ) {
+        throw "$environmentLabel Coach did not return its exact same-host sign-in boundary."
+    }
+    Assert-HttpRoute -Url "https://$coachHost/login" -Status 200 -Route "coach-$TargetEnvironment"
+    Write-Output "PASS  $environmentLabel Coach requires normal same-host sign-in."
+}
+
+function Assert-LegacyLearnerTransition {
+    $legacy = Get-HttpResult -Url "https://$legacyLearnerHost/"
+    if (
+        $legacy.Status -ne 302 -or
+        [string]$legacy.Location -cne "https://$learnerHost/" -or
+        $legacy.CacheControl -ne "no-store"
+    ) {
+        throw "$environmentLabel legacy learner did not return the reviewed temporary redirect."
+    }
+    $oldCallback = Get-HttpResult -Url "https://$legacyLearnerHost/v1/auth/google/callback"
+    if ($oldCallback.Status -ne 410 -or $null -ne $oldCallback.Location -or $oldCallback.CacheControl -ne "no-store") {
+        throw "Legacy learner callbacks must terminate without redirecting credentials."
+    }
+    Write-Output "PASS  Legacy learner pages redirect; old API sessions require sign-in again."
+}
+
 function Assert-GoogleOAuthStart {
     # The endpoint persists one transaction, so no-op verification never calls it.
     $oauth = Get-HttpResult -Url (
-        "https://staging.authorityclosers.com/v1/auth/google/start" +
+        "https://learner-staging.authorityclosers.com/v1/auth/google/start" +
         "?action=authenticate&surface=learner&return_path=%2Fhome"
     )
     if ($oauth.Status -ne 303 -or $null -eq $oauth.Location) {
@@ -446,7 +491,7 @@ function Assert-GoogleOAuthStart {
     if (
         $callback.Scheme -ne "https" -or
         -not $callback.IsDefaultPort -or
-        $callback.Host -ne "staging.authorityclosers.com" -or
+        $callback.Host -ne "learner-staging.authorityclosers.com" -or
         $callback.AbsolutePath -ne "/v1/auth/google/callback" -or
         $callback.Query -or
         $callback.Fragment -or
@@ -457,13 +502,13 @@ function Assert-GoogleOAuthStart {
     Write-Output "PASS  Google OAuth start is cookie-safe and exact-callback-bound."
 }
 
-function Test-Staging {
+function Test-Deployment {
     param([switch]$ProbeOAuth)
     $remoteProof = @"
 set -euo pipefail
 release_id='$ReleaseSha'
 release_dir="/srv/authority-closers/application/releases/`$release_id"
-current=/srv/authority-closers/application/current-staging
+current=/srv/authority-closers/application/current-$TargetEnvironment
 test -L "`$current"
 test "`$(readlink -f "`$current")" = "`$release_dir"
 test -f "`$release_dir/RELEASE-FILES.sha256"
@@ -493,19 +538,21 @@ assert_container() {
 api_image="`$(expected_image AC_API_IMAGE)"
 learner_image="`$(expected_image AC_LEARNER_IMAGE)"
 admin_image="`$(expected_image AC_ADMIN_IMAGE)"
+coach_image="`$(expected_image AC_COACH_IMAGE)"
 postgres_ref="`$(sed -n 's/^    image: `${AC_POSTGRES_IMAGE:-\(postgres@sha256:[0-9a-f]\{64\}\)}$/\1/p' "`$release_dir/compose.yaml")"
 test -n "`$postgres_ref"
 postgres_image="`$(sudo docker image inspect --format '{{.Id}}' "`$postgres_ref")"
-assert_container ac-application-staging-api-1 "`$api_image" healthy yes
-assert_container ac-application-staging-worker-1 "`$api_image" running yes
-assert_container ac-application-staging-learner-web-1 "`$learner_image" healthy no
-assert_container ac-application-staging-admin-web-1 "`$admin_image" healthy no
-assert_container ac-application-staging-postgres-1 "`$postgres_image" healthy no
-printf 'PASS  Staging release files and running images match exact release %s.\n' "`$release_id"
+assert_container ac-application-$TargetEnvironment-api-1 "`$api_image" healthy yes
+assert_container ac-application-$TargetEnvironment-worker-1 "`$api_image" running yes
+assert_container ac-application-$TargetEnvironment-learner-web-1 "`$learner_image" healthy no
+assert_container ac-application-$TargetEnvironment-admin-web-1 "`$admin_image" healthy no
+assert_container ac-application-$TargetEnvironment-coach-web-1 "`$coach_image" healthy no
+assert_container ac-application-$TargetEnvironment-postgres-1 "`$postgres_image" healthy no
+printf 'PASS  $environmentLabel release files and running images match exact release %s.\n' "`$release_id"
 "@
     Invoke-SshScript -Script $remoteProof
-    Assert-HttpRoute -Url "https://staging.authorityclosers.com/" -Status 200 -Route "learner-staging"
-    Assert-HttpRoute -Url "https://staging.authorityclosers.com/healthz" -Status 200
+    Assert-HttpRoute -Url "https://$learnerHost/" -Status 200 -Route "learner-$TargetEnvironment"
+    Assert-HttpRoute -Url "https://$learnerHost/healthz" -Status 200
     foreach ($asset in @(
             "apple-touch-icon.png",
             "auth-workspace-lake-v1.png",
@@ -515,18 +562,25 @@ printf 'PASS  Staging release files and running images match exact release %s.\n
             "sw.js"
         )) {
         Assert-HttpRoute `
-            -Url "https://staging.authorityclosers.com/$asset" `
+            -Url "https://$learnerHost/$asset" `
             -Status 200 `
-            -Route "learner-staging"
+            -Route "learner-$TargetEnvironment"
     }
-    Assert-HttpRoute -Url "https://api-staging.authorityclosers.com/health/live" -Status 200 -Route "api-staging"
-    Assert-HttpRoute -Url "https://api-staging.authorityclosers.com/health/ready" -Status 200 -Route "api-staging"
-    Assert-HttpRoute -Url "https://api-staging.authorityclosers.com/v1/programs" -Status 200 -Route "api-staging"
-    Assert-HttpRoute -Url "https://api-staging.authorityclosers.com/docs" -Status 404 -Route "api-staging"
-    Assert-HttpRoute -Url "https://api-staging.authorityclosers.com/openapi.json" -Status 404 -Route "api-staging"
+    Assert-HttpRoute -Url "https://$apiHost/health/live" -Status 200 -Route "api-$TargetEnvironment"
+    Assert-HttpRoute -Url "https://$apiHost/health/ready" -Status 200 -Route "api-$TargetEnvironment"
+    Assert-HttpRoute -Url "https://$apiHost/v1/programs" -Status 200 -Route "api-$TargetEnvironment"
+    Assert-HttpRoute -Url "https://$apiHost/docs" -Status 404 -Route "api-$TargetEnvironment"
+    Assert-HttpRoute -Url "https://$apiHost/openapi.json" -Status 404 -Route "api-$TargetEnvironment"
     Assert-AdminAccessBoundary
+    Assert-CoachSignInBoundary
+    Assert-LegacyLearnerTransition
     Assert-LegacyWordPressBoundary
-    if ($ProbeOAuth) { Assert-GoogleOAuthStart }
+    if ($ProbeOAuth) {
+        if ($TargetEnvironment -ne "staging") {
+            throw "Stateful OAuth probing is restricted to staging."
+        }
+        Assert-GoogleOAuthStart
+    }
 }
 
 function Expand-ExactArtifact {
@@ -728,17 +782,17 @@ if ($resolvedCommit -ne $ReleaseSha) {
 }
 
 $expectedReleasePath = "/srv/authority-closers/application/releases/$ReleaseSha"
-$currentReleaseCommand = 'readlink -f /srv/authority-closers/application/current-staging 2>/dev/null || true'
+$currentReleaseCommand = "readlink -f /srv/authority-closers/application/current-$TargetEnvironment 2>/dev/null || true"
 $sshPath = (Get-Command ssh -ErrorAction Stop).Source
 $currentRelease = ([string](
         Invoke-RetriableNative `
             -FilePath $sshPath `
             -NativeArguments @($SshHost, $currentReleaseCommand) `
-            -Operation "Current staging release lookup"
+            -Operation "Current $TargetEnvironment release lookup"
     )).Trim()
 if ($currentRelease -eq $expectedReleasePath -and -not $ReapplyConfiguration) {
-    Write-Output "SKIP  Staging already targets $ReleaseSha; running read-only proof only."
-    Test-Staging
+    Write-Output "SKIP  $environmentLabel already targets $ReleaseSha; running read-only proof only."
+    Test-Deployment
     exit 0
 }
 if ($currentRelease -eq $expectedReleasePath) {
@@ -994,7 +1048,7 @@ rm -- "`$parts_manifest"
 printf '%s  %s\n' '$archiveDigest' "`$release_archive" | sha256sum --check --status
 tar --extract --file "`$release_archive" --directory '$remoteDirectory/source' infra/application
 sudo env \
-  AC_TARGET_ENVIRONMENT=staging \
+  AC_TARGET_ENVIRONMENT=$TargetEnvironment \
   AC_RELEASE_ID="`$release_id" \
   AC_RELEASE_ARCHIVE="`$release_archive" \
   AC_RELEASE_ARCHIVE_SHA256='$archiveDigest' \
@@ -1002,8 +1056,13 @@ sudo env \
   '$remoteDirectory/source/infra/application/scripts/install-application-release.sh'
 "@
     Invoke-SshScript -Script $deployRemote
-    Test-Staging -ProbeOAuth
-    Write-Output "PASS  Staging deployment and compact smoke completed for $ReleaseSha."
+    if ($TargetEnvironment -eq "staging") {
+        Test-Deployment -ProbeOAuth
+    }
+    else {
+        Test-Deployment
+    }
+    Write-Output "PASS  $environmentLabel deployment and compact smoke completed for $ReleaseSha."
 }
 catch {
     $primaryError = $_
@@ -1032,7 +1091,7 @@ finally {
         if ($null -ne $primaryError) {
             foreach ($cleanupFailure in $cleanupFailures) {
                 $cleanupDetail = Get-BoundedNativeDetail -Value $cleanupFailure.Error.Exception.Message
-                $cleanupMessage = "Staging $($cleanupFailure.Scope) cleanup failed after the primary deployment error"
+                $cleanupMessage = "$environmentLabel $($cleanupFailure.Scope) cleanup failed after the primary deployment error"
                 if ($cleanupDetail) {
                     Write-Warning "${cleanupMessage}: $cleanupDetail"
                 }

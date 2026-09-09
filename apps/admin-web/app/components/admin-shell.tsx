@@ -1,7 +1,8 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Activity,
   BarChart3,
@@ -21,6 +22,8 @@ import { PLATFORM_BRAND, PlatformMark } from "@ac/ui";
 import {
   AdminSessionProvider,
   AdminSessionStatus,
+  canEnterStudio,
+  canUseAdminPermission,
   useAdminSession,
 } from "../lib/admin-session";
 
@@ -98,8 +101,11 @@ function AdminNavigation({
   const permissions = new Set(
     state.status === "ready" ? state.session.permissions : [],
   );
-  const visibleNavigation = navigation.filter(({ permissions: required }) =>
-    required.some((permission) => permissions.has(permission)),
+  const visibleNavigation = navigation.filter(
+    ({ area, permissions: required }) =>
+      area === "catalog"
+        ? canEnterStudio(state)
+        : required.some((permission) => permissions.has(permission)),
   );
   const visibleSupport = supportNavigation.filter(({ permission }) =>
     permissions.has(permission),
@@ -147,6 +153,56 @@ function AdminNavigation({
       ) : null}
     </>
   );
+}
+
+function AdminRouteContent({
+  active,
+  children,
+}: {
+  active: AdminArea;
+  children: ReactNode;
+}) {
+  const state = useAdminSession();
+  const router = useRouter();
+  const studioOnly =
+    state.status === "ready" && !canUseAdminPermission(state, "admin_surface");
+  useEffect(() => {
+    if (studioOnly && active === "overview") router.replace("/studio/programs");
+  }, [studioOnly, active, router]);
+  if (state.status === "loading") {
+    return (
+      <section className="panel" role="status">
+        <h2>Checking workspace access</h2>
+        <p>Your workspace will open once your session is verified.</p>
+      </section>
+    );
+  }
+  if (state.status !== "ready" || (studioOnly && active !== "catalog")) {
+    return (
+      <section className="panel" role="status">
+        <h2>
+          {studioOnly && active === "overview"
+            ? "Opening Academy Studio"
+            : "Access unavailable"}
+        </h2>
+        <p>
+          {studioOnly
+            ? "Your current access is limited to your assigned Studio work."
+            : "Your session could not be verified. Sign in again to continue."}
+        </p>
+        {studioOnly ? (
+          <Link className="button button-primary" href="/studio/programs">
+            Open Academy Studio
+          </Link>
+        ) : (
+          <Link className="button button-primary" href="/login">
+            Sign in
+          </Link>
+        )}
+      </section>
+    );
+  }
+  return children;
 }
 
 function AdminTenantContext() {
@@ -279,7 +335,7 @@ export function AdminShell({
             </div>
           </header>
 
-          {children}
+          <AdminRouteContent active={active}>{children}</AdminRouteContent>
 
           <footer className="admin-footer">
             <span>{PLATFORM_BRAND.name} / Academy operations</span>

@@ -53,6 +53,7 @@ _PRESIGNED_AWS_REQUIRED_QUERY_NAMES = frozenset(
 )
 _PRESIGNED_AWS_OPTIONAL_QUERY_NAMES = frozenset({"x-amz-security-token", "x-amz-content-sha256"})
 _LOCAL_UPLOAD_CONTRACT = object()
+_LOCAL_AVATAR_UPLOAD_CONTRACT = object()
 _S3_UPLOAD_CONTRACT = object()
 
 
@@ -102,8 +103,16 @@ class StorageUploadIntent:
             raise MediaStorageUnavailable(
                 "The private media adapter returned an invalid upload URL."
             ) from error
+        local_avatar = (
+            self._contract is _LOCAL_AVATAR_UPLOAD_CONTRACT
+            and parsed.scheme == "http"
+            and parsed.netloc == "learner.localhost:3100"
+            and parsed.path.startswith("/v1/media/local-avatar-upload/")
+        )
+        if self._contract is _LOCAL_AVATAR_UPLOAD_CONTRACT and not local_avatar:
+            raise MediaStorageUnavailable("The local avatar upload origin is invalid.")
         if (
-            parsed.scheme != "https"
+            (parsed.scheme != "https" and not local_avatar)
             or not parsed_hostname
             or parsed_username
             or parsed_password
@@ -114,8 +123,9 @@ class StorageUploadIntent:
                 "The private media adapter returned an unsafe upload URL."
             )
         normalized_host = parsed_hostname.rstrip(".").lower()
-        if normalized_host == "localhost" or normalized_host.endswith(
-            (".localhost", ".local", ".internal", ".lan")
+        if not local_avatar and (
+            normalized_host == "localhost"
+            or normalized_host.endswith((".localhost", ".local", ".internal", ".lan"))
         ):
             raise MediaStorageUnavailable("The private media adapter returned a local upload host.")
         try:
@@ -152,11 +162,18 @@ class StorageUploadIntent:
                     "The private media adapter returned an invalid or duplicate upload query."
                 )
             seen_query_names.add(normalized_name)
-        if self._contract not in {_LOCAL_UPLOAD_CONTRACT, _S3_UPLOAD_CONTRACT}:
+        if self._contract not in {
+            _LOCAL_UPLOAD_CONTRACT,
+            _LOCAL_AVATAR_UPLOAD_CONTRACT,
+            _S3_UPLOAD_CONTRACT,
+        }:
             raise MediaStorageUnavailable(
                 "The generic upload intent is not a constructible activation contract."
             )
-        if self._contract is _LOCAL_UPLOAD_CONTRACT and seen_query_names != {"token"}:
+        if self._contract in {
+            _LOCAL_UPLOAD_CONTRACT,
+            _LOCAL_AVATAR_UPLOAD_CONTRACT,
+        } and seen_query_names != {"token"}:
             raise MediaStorageUnavailable(
                 "The generic upload intent requires the bounded local token contract."
             )

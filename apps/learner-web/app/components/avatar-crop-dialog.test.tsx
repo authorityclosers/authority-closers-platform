@@ -27,11 +27,11 @@ describe("AvatarCropDialog", () => {
     expect(html).toContain("Drop a photo here");
     expect(html).toContain("scroll or pinch to zoom");
     expect(html).toContain("Keyboard: focus the preview");
-    expect(html).toContain("Reset framing");
     expect(html).not.toContain('type="range"');
-    expect(html).toContain("Your current avatar stays in place");
-    expect(html).toContain("Current avatar");
-    expect(html).toContain("fail-closed");
+    expect(html).toContain("A familiar face makes this space yours.");
+    expect(html).toContain("Your current photo");
+    expect(html).not.toContain("fail-closed");
+    expect(html).toContain("Save photo");
     expect(html).toContain(">AM<");
 
     const squareHtml = renderToStaticMarkup(
@@ -50,7 +50,7 @@ describe("AvatarCropDialog", () => {
     ).toEqual({ scale: 2, offsetX: 25, offsetY: -25 });
   });
 
-  it("keeps keyboard framing bounded without slider controls", () => {
+  it("keeps keyboard framing bounded alongside direct controls", () => {
     expect(applyAvatarKeyboard(DEFAULT_AVATAR_CROP, "ArrowLeft")).toEqual({
       scale: 1,
       offsetX: -2,
@@ -97,6 +97,21 @@ describe("AvatarCropDialog", () => {
     expect(source).toContain("You’re offline. Reconnect before uploading");
     expect(source).toContain("onPointerDown={beginPointerGesture}");
     expect(source).toContain("onWheel={(event)");
-    expect(source).not.toContain('type="range"');
+    expect(source).toContain('aria-label="Photo zoom"');
+  });
+
+  it("honors both OS and saved reduced-motion settings in crop feedback styles", () => {
+    const css = readFileSync(
+      new URL("./avatar-crop-dialog.module.css", import.meta.url),
+      "utf8",
+    );
+    expect(css).toContain("@media (prefers-reduced-motion: reduce)");
+    for (const selector of [
+      'html[data-reduced-motion="true"]',
+      'html[data-motion="reduced"]',
+    ]) {
+      expect(css).toContain(`:global(${selector}) .spinner`);
+      expect(css).toContain(`:global(${selector}) .cropGuide::after`);
+    }
   });
 });

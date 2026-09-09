@@ -29,10 +29,13 @@ from ac_platform.http.media import install_media_http
 from ac_platform.http.media_delivery import install_media_delivery_http
 from ac_platform.http.operations import install_operations_http
 from ac_platform.http.planning import install_planning_http
+from ac_platform.http.platform import install_platform_http
+from ac_platform.http.practice import install_practice_http
 from ac_platform.http.problem import problem_response, register_problem_handlers
 from ac_platform.http.rate_limits import RateLimitMiddleware
 from ac_platform.http.request_context import request_context_middleware
 from ac_platform.http.request_limits import RequestBodyLimitMiddleware
+from ac_platform.http.surfaces import CoachSurfaceMiddleware
 from ac_platform.http.telemetry import install_telemetry_http
 from ac_platform.media.runtime import MediaRuntime, create_default_media_runtime
 
@@ -120,6 +123,8 @@ def create_app(
         sessions=session_factory,
         require_actor=require_actor,
     )
+    install_practice_http(application, settings=settings, require_actor=require_actor)
+    install_platform_http(application, settings=settings, require_actor=require_actor)
     # Static planning paths are registered before the dynamic
     # /v1/learning/{program_id} route so they cannot be parsed as UUIDs.
     install_planning_http(
@@ -185,12 +190,17 @@ def create_app(
         sessions=session_factory,
         require_actor=require_actor,
     )
-    application.add_middleware(RequestBodyLimitMiddleware)
+    application.add_middleware(
+        RequestBodyLimitMiddleware,
+        local_avatar_upload_enabled=settings.environment == "local"
+        and settings.media_local_avatar_enabled,
+    )
     application.add_middleware(
         RateLimitMiddleware,
         trusted_proxy_addresses=settings.rate_limit_trusted_proxy_addresses,
     )
     application.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts)
+    application.add_middleware(CoachSurfaceMiddleware, settings=settings)
     if settings.environment in {"local", "test", "development"}:
         application.add_middleware(
             CORSMiddleware,

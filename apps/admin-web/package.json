@@ -10,6 +10,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@ac/operations-web": "workspace:*",
     "@ac/ui": "workspace:*",
     "lucide-react": "1.37.0",
     "next": "16.2.11",

@@ -1,5 +1,5 @@
 /*
- * Progress hierarchy and motivation foundations.
+ * Course progress and opt-in motivation presentation.
  *
  * These styles stay on the learner token layer so light/dark/accent settings
  * remain presentation-only. The visual treatment is intentionally quieter
@@ -9,7 +9,7 @@
 .site-frame--learner .progress-scope-panel,
 .site-frame--learner .progress-motivation-panel {
   display: grid;
-  gap: 22px;
+  gap: 18px;
   margin-top: 24px;
   padding: 24px;
   border: 1px solid var(--theme-border);
@@ -120,10 +120,9 @@
   display: grid;
   gap: 18px;
   min-width: 0;
-  padding: 18px;
-  border: 1px solid var(--theme-border);
-  border-radius: 13px;
-  background: var(--theme-canvas);
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 
 .site-frame--learner .progress-scope-snapshot__lead {
@@ -162,9 +161,9 @@
 .site-frame--learner .progress-scope-snapshot h3 {
   margin-top: 5px;
   color: var(--theme-text);
-  font-size: 1rem;
+  font-size: clamp(1.1rem, 2vw, 1.5rem);
   letter-spacing: -0.02em;
-  line-height: 1.2;
+  line-height: 1.35;
   overflow-wrap: anywhere;
 }
 
@@ -198,11 +197,11 @@
 
 .site-frame--learner .progress-scope-metric dt {
   color: var(--theme-text-muted);
-  font-size: 0.61rem;
-  font-weight: 800;
-  letter-spacing: 0.05em;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0;
   line-height: 1.25;
-  text-transform: uppercase;
+  text-transform: none;
 }
 
 .site-frame--learner .progress-scope-metric dd {
@@ -213,7 +212,7 @@
 
 .site-frame--learner .progress-scope-metric dd strong {
   color: var(--theme-text);
-  font-size: 1.25rem;
+  font-size: 1.6rem;
   font-weight: 800;
   letter-spacing: -0.04em;
   line-height: 1;
@@ -240,7 +239,19 @@
 }
 
 .site-frame--learner .progress-scope-panel__source {
-  color: var(--theme-info-text);
+  color: var(--theme-text-muted);
+}
+
+.site-frame--learner .progress-scope-continue {
+  width: fit-content;
+  min-height: 48px;
+  min-width: 180px;
+}
+
+@media (max-width: 560px) {
+  .site-frame--learner .progress-scope-continue {
+    width: 100%;
+  }
 }
 
 .site-frame--learner .progress-scope-panel__source svg {

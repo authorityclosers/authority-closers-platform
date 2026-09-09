@@ -2,7 +2,13 @@
 
 import { ArrowRight, Eye, EyeOff, ShieldCheck } from "lucide-react";
 import Link from "next/link";
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import {
+  type FormEvent,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 
 import { googleAuthStartUrl } from "../lib/auth-links";
 import {
@@ -26,6 +32,9 @@ type LoginFormProps = {
 };
 
 const STAGING_APP_ORIGIN = "https://staging.authorityclosers.com";
+const subscribeHydration = () => () => {};
+const clientHydrated = () => true;
+const serverHydrated = () => false;
 
 function stagingHref(path: string): string {
   return new URL(path, STAGING_APP_ORIGIN).toString();
@@ -41,6 +50,11 @@ export function LoginForm({
   sessionExpired = false,
   stagingBridge = false,
 }: LoginFormProps) {
+  const hydrated = useSyncExternalStore(
+    subscribeHydration,
+    clientHydrated,
+    serverHydrated,
+  );
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [verificationRequired, setVerificationRequired] = useState(false);
@@ -56,6 +70,7 @@ export function LoginForm({
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!hydrated || pending) return;
     setPending(true);
     setError(null);
     setVerificationRequired(false);
@@ -107,7 +122,7 @@ export function LoginForm({
           </span>
         </div>
       ) : null}
-      <form className="stack-form" onSubmit={submit}>
+      <form className="stack-form" method="post" onSubmit={submit}>
         <div className="field-group">
           <label htmlFor="login-email">Email address</label>
           <input
@@ -117,7 +132,7 @@ export function LoginForm({
             autoComplete="username"
             inputMode="email"
             required
-            disabled={pending}
+            disabled={pending || !hydrated}
           />
         </div>
         <div className="field-group">
@@ -129,7 +144,7 @@ export function LoginForm({
               type={passwordVisible ? "text" : "password"}
               autoComplete="current-password"
               required
-              disabled={pending}
+              disabled={pending || !hydrated}
             />
             <button
               className="auth-password-toggle"
@@ -137,7 +152,7 @@ export function LoginForm({
               aria-label={passwordVisible ? "Hide password" : "Show password"}
               aria-pressed={passwordVisible}
               onClick={() => setPasswordVisible((visible) => !visible)}
-              disabled={pending}
+              disabled={pending || !hydrated}
             >
               {passwordVisible ? (
                 <EyeOff size={18} aria-hidden="true" />
@@ -169,7 +184,10 @@ export function LoginForm({
             ) : null}
           </div>
         ) : null}
-        <button className="button button--ink button--full" disabled={pending}>
+        <button
+          className="button button--ink button--full"
+          disabled={pending || !hydrated}
+        >
           {pending ? "Signing in…" : "Sign in"}
           <ArrowRight size={17} aria-hidden="true" />
         </button>

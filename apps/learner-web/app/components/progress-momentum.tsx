@@ -9,6 +9,8 @@ import {
   Trophy,
 } from "lucide-react";
 import { useState } from "react";
+import Link from "next/link";
+import { ROUTES } from "../lib/routes";
 import type { ReactNode } from "react";
 
 import type {
@@ -192,20 +194,17 @@ function CourseScopeSnapshot({ learning }: { learning: LearningResponse }) {
         </span>
         <div>
           <p className="progress-scope-snapshot__eyebrow">
-            Canonical course projection
+            Your current course
           </p>
           <h3>{learning.program_title}</h3>
-          <p>
-            Completion is based on the required activities in your enrolled
-            course version. It is participation progress, not mastery.
-          </p>
+          <p>Each completed required step counts toward this course.</p>
         </div>
       </div>
       <dl className="progress-scope-metrics">
         <ScopeMetric
           label="Completion"
           value={percentageLabel(progress.percentage)}
-          detail="Required activities"
+          detail="of required steps"
         />
         <ScopeMetric
           label="Activities"
@@ -214,14 +213,20 @@ function CourseScopeSnapshot({ learning }: { learning: LearningResponse }) {
               ? `${progress.completed} / ${progress.denominator}`
               : "Unavailable"
           }
-          detail="Completed / required"
+          detail="steps completed"
         />
         <ScopeMetric
           label="Course version"
           value={`v${learning.version_number}`}
-          detail="Published snapshot"
+          detail="your enrolled version"
         />
       </dl>
+      <Link
+        className="button button--ink progress-scope-continue"
+        href={ROUTES.programLearning(learning.program_slug)}
+      >
+        Continue learning
+      </Link>
     </div>
   );
 }
@@ -244,10 +249,10 @@ function AllLearningSnapshot({
           <LockKeyhole size={18} />
         </span>
         <div>
-          <strong>All-learning summary unavailable</strong>
+          <strong>Your course summary couldn’t load</strong>
           <p>
-            No server-authorized course collection is available for this learner
-            context. The course projection above remains separate.
+            You can still view your current course. Try the full summary again
+            later.
           </p>
         </div>
       </div>
@@ -266,10 +271,7 @@ function AllLearningSnapshot({
         </span>
         <div>
           <strong>No enrolled courses yet</strong>
-          <p>
-            All-learning totals will appear after an enrolled course is returned
-            by the learning service.
-          </p>
+          <p>Join a course to start tracking your learning here.</p>
         </div>
       </div>
     );
@@ -283,26 +285,22 @@ function AllLearningSnapshot({
         </span>
         <div>
           <p className="progress-scope-snapshot__eyebrow">
-            Canonical learning collection
+            {rollup.hasMore ? "Partial course summary" : "Your courses"}
           </p>
           <h3>All enrolled learning</h3>
-          <p>
-            This is a display-only roll-up of the course projections returned by
-            the server. Course versions and their completion rules stay
-            distinct.
-          </p>
+          <p>A combined view of your enrolled courses and completed steps.</p>
         </div>
       </div>
       <dl className="progress-scope-metrics">
         <ScopeMetric
           label="Courses"
           value={String(rollup.courseCount)}
-          detail="Enrolled course summaries"
+          detail="enrolled courses"
         />
         <ScopeMetric
           label="Completed courses"
           value={String(rollup.completedCourseCount)}
-          detail="Server state"
+          detail="finished courses"
         />
         <ScopeMetric
           label="Activities"
@@ -312,24 +310,24 @@ function AllLearningSnapshot({
               ? `${rollup.completedActivities} / ${rollup.requiredActivities}`
               : "Unavailable"
           }
-          detail="Completed / required"
+          detail="completed / required"
         />
         <ScopeMetric
           label="Completion"
           value={percentageLabel(rollup.percentage)}
-          detail="Across returned projections"
+          detail="across shown courses"
         />
       </dl>
       {rollup.completedActivities === null ? (
         <p className="progress-scope-snapshot__note">
-          One or more returned course projections is unavailable, so aggregate
-          activity and completion totals stay unavailable.
+          Some course totals are missing, so a combined completion total isn’t
+          available yet.
         </p>
       ) : null}
       {rollup.hasMore ? (
         <p className="progress-scope-snapshot__note">
-          More course summaries are available beyond this returned page, so this
-          roll-up is intentionally labeled as partial.
+          More courses are available. These totals cover only the courses in
+          this summary.
         </p>
       ) : null}
     </div>
@@ -352,12 +350,7 @@ export function ProgressScopePanel({
     >
       <div className="progress-scope-panel__header">
         <div>
-          <p className="kicker">Progress hierarchy</p>
-          <h2 id="progress-scope-title">See the signal at the right scale.</h2>
-          <p>
-            Start with the course you are working through, then switch to all
-            learning when you need the wider picture.
-          </p>
+          <h2 id="progress-scope-title">Learning progress</h2>
         </div>
         <ScopeToggle scope={scope} onChange={setScope} />
       </div>
@@ -375,8 +368,7 @@ export function ProgressScopePanel({
       <p className="progress-scope-panel__source">
         <Info size={14} aria-hidden="true" />
         <span>
-          Source: server-authorized learning projections. Analytics does not
-          change these totals.
+          Completed steps track participation, not an assessment of your skills.
         </span>
       </p>
     </section>

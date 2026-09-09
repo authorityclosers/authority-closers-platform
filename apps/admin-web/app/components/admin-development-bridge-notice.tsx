@@ -1,11 +1,14 @@
-import { isStagingAdminBridge } from "../lib/dev-api-proxy";
+import { developmentAdminLoginMode } from "../lib/dev-api-proxy";
 
 export function AdminDevelopmentBridgeNotice() {
-  if (!isStagingAdminBridge(process.env, process.env.NODE_ENV)) return null;
+  const mode = developmentAdminLoginMode(process.env, process.env.NODE_ENV);
+  if (!mode) return null;
 
   return (
     <div className="development-bridge-notice" role="status">
-      Local UI · remote staging data · development-only admin bridge
+      {mode === "local-sandbox"
+        ? "Local sandbox · local test accounts and data · no remote staging access"
+        : "Local UI · remote staging data · development-only admin bridge"}
     </div>
   );
 }

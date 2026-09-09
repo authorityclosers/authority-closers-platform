@@ -11,7 +11,7 @@ from collections.abc import AsyncIterator, Callable, Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Annotated, Literal, cast
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request, Response, status
@@ -180,6 +180,22 @@ class MeResponse(BaseModel):
     selected_tenant_id: UUID | None
     membership_role: str | None
     permissions: list[str]
+
+
+class WorkspaceChoiceResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tenant_id: UUID
+    name: str = Field(min_length=1, max_length=200)
+
+
+class WorkspacesResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    person_id: UUID
+    session_id: UUID
+    selected_tenant_id: UUID | None
+    workspaces: list[WorkspaceChoiceResponse]
 
 
 class ContextResponse(BaseModel):
@@ -656,7 +672,12 @@ def require_safe_origin(request: Request, settings: Settings) -> None:
     normalized_origin = None if origin is None else origin.rstrip("/")
     if normalized_origin not in settings.allowed_origins:
         raise RequestOriginDenied("Cookie-authenticated state changes require an allowed Origin.")
-    if settings.environment not in {"staging", "production"}:
+    coach_origin = str(settings.coach_app_url).rstrip("/")
+    if (
+        settings.environment not in {"staging", "production"}
+        and request.url.hostname != settings.coach_app_url.host
+        and normalized_origin != coach_origin
+    ):
         return
 
     expected_origin = None
@@ -664,6 +685,8 @@ def require_safe_origin(request: Request, settings: Settings) -> None:
         expected_origin = str(settings.public_app_url).rstrip("/")
     elif request.url.hostname == settings.admin_app_url.host:
         expected_origin = str(settings.admin_app_url).rstrip("/")
+    elif request.url.hostname == settings.coach_app_url.host:
+        expected_origin = coach_origin
     if normalized_origin != expected_origin:
         raise RequestOriginDenied(
             "Cookie-authenticated state changes require a same-surface Origin."
@@ -1045,7 +1068,14 @@ async def _oauth_identity_problem_response(
 
 
 def _surface_origin(settings: Settings, surface: str) -> str:
-    value = settings.admin_app_url if surface == "admin" else settings.public_app_url
+    values = {
+        "learner": settings.public_app_url,
+        "admin": settings.admin_app_url,
+        "coach": settings.coach_app_url,
+    }
+    if surface not in values:
+        raise InvalidAuthTransaction("The requested application surface is not allowed.")
+    value = values[surface]
     return str(value).rstrip("/")
 
 
@@ -1076,11 +1106,13 @@ def _learner_oauth_recovery_response(
 
 
 def _require_surface_host(request: Request, settings: Settings, surface: str) -> None:
-    if settings.environment not in {"staging", "production"}:
+    if (
+        settings.environment not in {"staging", "production"}
+        and surface != "coach"
+        and request.url.hostname != settings.coach_app_url.host
+    ):
         return
-    expected_host = (
-        settings.admin_app_url.host if surface == "admin" else settings.public_app_url.host
-    )
+    expected_host = urlsplit(_surface_origin(settings, surface)).hostname
     if request.url.hostname != expected_host:
         raise InvalidAuthTransaction("The sign-in surface does not match the request host.")
 
@@ -1494,16 +1526,19 @@ def install_identity_http(
     async def google_auth_start(
         request: Request,
         authorization_type: Annotated[ProviderAuthorizationType, Query(alias="action")],
-        surface: Literal["learner", "admin"] = "learner",
+        surface: Literal["learner", "admin", "coach"] = "learner",
         return_path: str = "/home",
         consent: bool = False,
     ) -> Response:
         _require_surface_host(request, settings, surface)
         safe_return_path = normalize_return_path(return_path)
-        if surface == "admin" and authorization_type is ProviderAuthorizationType.REGISTER:
+        if (
+            surface in {"admin", "coach"}
+            and authorization_type is ProviderAuthorizationType.REGISTER
+        ):
             raise AdminRegistrationUnavailable(
-                "Admin identities must be provisioned through the reviewed owner and membership "
-                "bootstrap path before they can sign in with Google."
+                "Studio and admin identities must be provisioned through the reviewed identity "
+                "and membership bootstrap path before they can sign in with Google."
             )
         if surface == "learner" and authorization_type is ProviderAuthorizationType.REGISTER:
             if not consent:
@@ -1800,9 +1835,7 @@ def install_identity_http(
                 settings,
                 transaction_cookie_names=transaction_cookie_names,
             )
-        base_url = (
-            settings.admin_app_url if transaction.surface == "admin" else settings.public_app_url
-        )
+        base_url = _surface_origin(settings, transaction.surface)
         response = RedirectResponse(
             f"{str(base_url).rstrip('/')}{transaction.return_path}",
             status_code=status.HTTP_303_SEE_OTHER,
@@ -1829,6 +1862,28 @@ def install_identity_http(
             selected_tenant_id=auth.resolved.actor.tenant_id,
             membership_role=auth.resolved.membership_role,
             permissions=sorted(auth.resolved.actor.permissions),
+        )
+
+    @router.get("/me/workspaces", response_model=WorkspacesResponse)
+    async def workspaces(
+        request: Request,
+        response: Response,
+        auth: AuthenticatedTransaction = actor_dependency,
+    ) -> WorkspacesResponse:
+        if request.query_params:
+            raise DomainError("Workspaces are resolved only for the authenticated person.")
+        actor = auth.resolved.actor
+        choices = await auth.identity.repository.list_active_workspaces(actor.person_id)
+        response.headers["cache-control"] = "no-store"
+        response.headers["pragma"] = "no-cache"
+        return WorkspacesResponse(
+            person_id=actor.person_id,
+            session_id=actor.session_id,
+            selected_tenant_id=actor.tenant_id,
+            workspaces=[
+                WorkspaceChoiceResponse(tenant_id=tenant_id, name=name)
+                for tenant_id, name in choices
+            ],
         )
 
     @router.get("/context", response_model=ContextResponse)

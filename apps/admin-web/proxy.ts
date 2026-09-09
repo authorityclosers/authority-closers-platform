@@ -1,13 +1,18 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { coachAppOrigin } from "@ac/operations-web/origins";
 
 import {
   evaluateAdminAccess,
+  canAccessAdminPath,
   LOCAL_PREVIEW_ENV,
   normalizeAdminRuntime,
   renderPermissionDeniedDocument,
 } from "./app/lib/admin-access";
-import { isStagingAdminBridge } from "./app/lib/dev-api-proxy";
-import { resolveAdminServerContext } from "./app/lib/server-auth";
+import { developmentAdminLoginMode } from "./app/lib/dev-api-proxy";
+import {
+  resolveAdminServerContext,
+  resolvePlatformServerContext,
+} from "./app/lib/server-auth";
 
 const INTERNAL_HEALTH_PATH = "/healthz";
 const INTERNAL_HEALTH_HOSTS = new Set(["127.0.0.1:3001", "localhost:3001"]);
@@ -41,7 +46,64 @@ export async function proxy(request: NextRequest) {
     );
   }
 
+  // Authentication pages are public; capability checks still guard every workspace.
+  if (request.nextUrl.pathname === "/login") return NextResponse.next();
+
+  if (
+    /^\/studio(?:\/|$)/.test(request.nextUrl.pathname) ||
+    request.nextUrl.pathname === "/catalog"
+  ) {
+    const origin = coachAppOrigin(
+      process.env.AC_COACH_APP_URL,
+      process.env.NODE_ENV,
+    );
+    if (!origin)
+      return new NextResponse(
+        "Academy Studio is moving to its own workspace. Please try again shortly.",
+        { status: 503, headers: { "cache-control": "no-store" } },
+      );
+    if (!["GET", "HEAD"].includes(request.method))
+      return new NextResponse(null, {
+        status: 405,
+        headers: { "cache-control": "no-store", allow: "GET, HEAD" },
+      });
+    const path =
+      request.nextUrl.pathname === "/catalog"
+        ? "/studio/programs"
+        : request.nextUrl.pathname;
+    // Never forward query strings or cookies between application origins.
+    const redirect = NextResponse.redirect(new URL(path, origin), 302);
+    redirect.headers.set("cache-control", "no-store");
+    return redirect;
+  }
+
   const runtime = normalizeAdminRuntime(process.env.NODE_ENV);
+  if (
+    runtime === "production" &&
+    (request.nextUrl.pathname === "/platform" ||
+      request.nextUrl.pathname === "/")
+  ) {
+    const platform = await resolvePlatformServerContext({
+      cookieHeader: request.headers.get("cookie"),
+      internalApiUrl: process.env.AC_INTERNAL_API_URL,
+      internalApiHost: process.env.AC_INTERNAL_API_HOST,
+    });
+    if (platform) {
+      if (request.nextUrl.pathname === "/")
+        return new NextResponse(null, {
+          status: 307,
+          headers: { location: "/platform", "cache-control": "no-store" },
+        });
+      const response = NextResponse.next();
+      response.headers.set("cache-control", "private, no-store");
+      return response;
+    }
+    if (request.nextUrl.pathname === "/platform")
+      return new NextResponse(null, {
+        status: 307,
+        headers: { location: "/login", "cache-control": "no-store" },
+      });
+  }
   const serverContext =
     runtime === "production"
       ? await resolveAdminServerContext({
@@ -54,13 +116,30 @@ export async function proxy(request: NextRequest) {
     runtime,
     localPreviewEnabled:
       process.env[LOCAL_PREVIEW_ENV] === "1" ||
-      isStagingAdminBridge(process.env, process.env.NODE_ENV),
+      developmentAdminLoginMode(process.env, process.env.NODE_ENV) !== null,
     serverContext,
   });
 
-  if (decision.allowed) return NextResponse.next();
+  if (
+    runtime === "production" &&
+    serverContext === null &&
+    !request.nextUrl.pathname.startsWith("/v1/")
+  ) {
+    return new NextResponse(null, {
+      status: 307,
+      headers: { Location: "/login", "Cache-Control": "no-store" },
+    });
+  }
 
-  return new NextResponse(renderPermissionDeniedDocument(), {
+  const studioScopeDenied =
+    serverContext !== null &&
+    (!serverContext.permissions.includes("admin_surface") ||
+      !canAccessAdminPath(serverContext, request.nextUrl.pathname));
+  if (decision.allowed && !studioScopeDenied) {
+    return NextResponse.next();
+  }
+
+  return new NextResponse(renderPermissionDeniedDocument(studioScopeDenied), {
     status: 403,
     headers: {
       "Cache-Control": "no-store",
