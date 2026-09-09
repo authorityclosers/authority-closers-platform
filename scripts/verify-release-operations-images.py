@@ -30,6 +30,28 @@ class GateError(RuntimeError):
     """Only fixed, credential-free errors may cross the CLI boundary."""
 
 
+def docker_operation(arguments: list[str]) -> str:
+    """Return a fixed diagnostic label without rendering Docker arguments."""
+
+    prefix = tuple(arguments[:2])
+    if prefix == ("context", "inspect"):
+        return "local-context inspection"
+    if arguments[:1] == ["info"]:
+        return "engine inspection"
+    if prefix == ("image", "inspect"):
+        return "image inspection"
+    if prefix == ("container", "ls"):
+        return "proof-container lookup"
+    if prefix == ("container", "inspect"):
+        return "proof-container inspection"
+    return {
+        "create": "proof-container creation",
+        "start": "proof-container startup",
+        "exec": "runtime HTTP probe",
+        "rm": "proof-container cleanup",
+    }.get(arguments[0] if arguments else "", "command")
+
+
 class Docker:
     def __init__(self) -> None:
         # Never inherit tokens, application credentials, DOCKER_HOST or a remote context.
@@ -37,6 +59,7 @@ class Docker:
         self.environment["LC_ALL"] = "C"
 
     def run(self, arguments: list[str], *, input_text: str | None = None, timeout: int = 20) -> str:
+        operation = docker_operation(arguments)
         try:
             result = subprocess.run(  # noqa: S603 - fixed docker binary/argv, never a shell
                 ["docker", "--context", "default", *arguments],  # noqa: S607
@@ -49,9 +72,9 @@ class Docker:
                 check=False,
             )
         except (OSError, subprocess.TimeoutExpired) as error:
-            raise GateError("Local Docker command did not complete.") from error
+            raise GateError(f"Local Docker {operation} did not complete.") from error
         if result.returncode != 0 or len(result.stdout) > 1_000_000:
-            raise GateError("Local Docker command failed; no runtime pass was recorded.")
+            raise GateError(f"Local Docker {operation} failed; no runtime pass was recorded.")
         return result.stdout.strip()
 
 
@@ -295,7 +318,13 @@ def main() -> int:
     args = parser.parse_args()
     try:
         proof = verify(Docker(), args.admin_image, args.coach_image, args.release_id)
-    except (GateError, OSError, ValueError, TypeError, KeyError):
+    except GateError as error:
+        print(
+            f"Release image runtime gate failed: {error} No auth/API proof claimed.",
+            file=sys.stderr,
+        )
+        return 1
+    except (OSError, ValueError, TypeError, KeyError):
         print(
             "Release image runtime gate failed; publication is blocked. No auth/API proof claimed.",
             file=sys.stderr,

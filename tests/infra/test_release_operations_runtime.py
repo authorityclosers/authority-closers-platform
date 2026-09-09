@@ -322,6 +322,75 @@ def test_real_subprocess_adapter_bounds_calls_and_sanitizes_failures(monkeypatch
     assert set(observed["env"]) <= {"HOME", "PATH", "LC_ALL"}
 
 
+@pytest.mark.parametrize(
+    ("arguments", "label"),
+    [
+        (["context", "inspect"], "local-context inspection"),
+        (["info"], "engine inspection"),
+        (["image", "inspect"], "image inspection"),
+        (["container", "ls"], "proof-container lookup"),
+        (["container", "inspect"], "proof-container inspection"),
+        (["create"], "proof-container creation"),
+        (["start"], "proof-container startup"),
+        (["exec"], "runtime HTTP probe"),
+        (["rm"], "proof-container cleanup"),
+        ([], "command"),
+    ],
+)
+def test_docker_diagnostic_labels_are_fixed_and_do_not_render_arguments(arguments, label):
+    assert gate.docker_operation(arguments + ["synthetic-never-print"]) == label
+
+
+def test_cli_surfaces_only_fixed_gate_errors(monkeypatch, capsys):
+    monkeypatch.setattr(
+        gate,
+        "verify",
+        lambda *_args: (_ for _ in ()).throw(gate.GateError("fixed runtime phase")),
+    )
+    monkeypatch.setattr(
+        gate.sys,
+        "argv",
+        [
+            "verify-release-operations-images.py",
+            "--admin-image",
+            ADMIN,
+            "--coach-image",
+            COACH,
+            "--release-id",
+            RELEASE,
+        ],
+    )
+
+    assert gate.main() == 1
+    assert capsys.readouterr().err == (
+        "Release image runtime gate failed: fixed runtime phase No auth/API proof claimed.\n"
+    )
+
+
+def test_cli_does_not_surface_unexpected_exception_details(monkeypatch, capsys):
+    monkeypatch.setattr(
+        gate,
+        "verify",
+        lambda *_args: (_ for _ in ()).throw(ValueError("synthetic-never-print")),
+    )
+    monkeypatch.setattr(
+        gate.sys,
+        "argv",
+        [
+            "verify-release-operations-images.py",
+            "--admin-image",
+            ADMIN,
+            "--coach-image",
+            COACH,
+            "--release-id",
+            RELEASE,
+        ],
+    )
+
+    assert gate.main() == 1
+    assert "synthetic-never-print" not in capsys.readouterr().err
+
+
 def test_ci_gate_is_before_publish_and_images_have_baked_revision_labels():
     workflow = (ROOT / ".github/workflows/application.yml").read_text()
     start = workflow.index("- name: Prove exact Linux operations image startup before publication")

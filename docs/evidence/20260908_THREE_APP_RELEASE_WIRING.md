@@ -126,3 +126,15 @@ Actual focused checks after the correction:
 
 No image was packaged from the failed run, and no VPS installation or DNS change
 was attempted from that candidate.
+
+Workflow run `34367814630` then validated replacement candidate
+`90e40001bc93527d686bdd51a8498f0a4b35af70`, including the complete aggregate
+suite, and built all four release images. Publication stopped at the exact Linux
+operations-image runtime proof, before tags or an artifact, but that controller
+collapsed every already-fixed `GateError` reason into one generic message. The
+diagnostic boundary now maps Docker argument prefixes to fixed phase labels and
+prints only those internal `GateError` messages. It still never renders Docker
+arguments, subprocess output, runtime responses, environment values, or
+unexpected exception details. The focused controller/probe suite passed
+**50 tests**; scoped Ruff format/lint and `git diff --check` also passed. This is
+diagnostic hardening, not an image-runtime pass or release approval.
