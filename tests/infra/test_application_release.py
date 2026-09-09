@@ -616,7 +616,9 @@ def test_caddy_imports_independent_release_owned_environment_routes() -> None:
     assert "root:root 444" in INSTALLER
     projection_guard = '[[ -d "$edge_route_releases_root" && ! -L "$edge_route_releases_root" ]]'
     projection_install = 'install -d -m 0755 -o root -g root "$edge_route_releases_root"'
+    projection_chmod = 'chmod 0755 "$edge_route_releases_root"'
     assert INSTALLER.index(projection_guard) < INSTALLER.index(projection_install)
+    assert INSTALLER.index(projection_install) < INSTALLER.index(projection_chmod)
     for environment, hold in (
         ("production", PRODUCTION_HOLD_ROUTE),
         ("staging", STAGING_HOLD_ROUTE),

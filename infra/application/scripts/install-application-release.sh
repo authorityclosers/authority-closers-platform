@@ -579,6 +579,11 @@ if [[ -e "$edge_route_releases_root" || -L "$edge_route_releases_root" ]]; then
   }
 fi
 install -d -m 0755 -o root -g root "$edge_route_releases_root"
+# A setgid application parent makes GNU install inherit the setgid bit. Keep
+# this projection boundary an ordinary root-owned 755 directory before
+# validating or adding the immutable route projection.
+chmod 0755 "$edge_route_releases_root"
+chmod a-s "$edge_route_releases_root"
 if [[ ! -e "$edge_route_projection" && ! -L "$edge_route_projection" ]]; then
   edge_projection_stage="$(mktemp -d "$edge_route_releases_root/.${release_id}.XXXXXX")"
   for projection_environment in production staging; do
