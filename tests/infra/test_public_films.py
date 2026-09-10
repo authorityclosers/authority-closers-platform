@@ -412,6 +412,9 @@ def test_dispatch_uses_target_policy_scrubs_flags_and_rejects_legacy_overlap(
     if os.name == "nt":
         binary_path = "/" + binary_path[0].lower() + binary_path[2:]
     function = _installer_function("compose_for", '\n\ncompose_for "$release_dir" config --quiet')
+    practice_scope = _installer_function(
+        "with_practice_pilot_scope", "\n\nvalidate_practice_pilot_references() {"
+    )
     script = f"""set -euo pipefail
 export PATH={shlex.quote(binary_path)}:"$PATH"
 export AC_MEDIA_PUBLIC_FILMS_DELIVERY_ENABLED=true
@@ -420,6 +423,7 @@ release_dir={shlex.quote(latest.as_posix())}
 target_environment={shlex.quote(environment)}
 compose_project=test-public-films
 with_release_secrets() {{ "$@"; }}
+{practice_scope}
 python3() {{
   [[ "$2" == compose-file && "$4" == "$target_environment" ]]
   if [[ "$1" == "$release_dir/scripts/public-films.py" ]]; then

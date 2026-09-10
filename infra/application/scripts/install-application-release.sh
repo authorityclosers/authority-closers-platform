@@ -338,7 +338,6 @@ validate_release_profile() {
     "AC_COMPOSE_PROJECT=ac-application-$target_environment"
     "AC_ENVIRONMENT=$target_environment"
     "AC_STATE_ROOT=/srv/authority-closers/state/application/$target_environment"
-    "AC_PRACTICE_PILOT_ENABLED=false"
   )
   case "$target_environment" in
     staging)
@@ -357,6 +356,7 @@ validate_release_profile() {
         "AC_EXTERNAL_SIDE_EFFECTS_HOLD=false"
         "AC_EMAIL_PROVIDER=resend"
         "AC_LEARNER_CONSENT_VERSION=staging-test-document-v1"
+        "AC_PRACTICE_PILOT_ENABLED=true"
       )
       ;;
     production)
@@ -374,6 +374,7 @@ validate_release_profile() {
         "AC_EDGE_COACH_ALIAS=ac-production-coach"
         "AC_EXTERNAL_SIDE_EFFECTS_HOLD=true"
         "AC_EMAIL_PROVIDER=fake"
+        "AC_PRACTICE_PILOT_ENABLED=false"
       )
       ;;
   esac
@@ -428,9 +429,59 @@ with_release_secrets() {
     -u AC_EMAIL_CHALLENGE_SECRET \
     -u AC_PUBLIC_LEARNER_TENANT_ID \
     -u AC_OPERATIONS_TENANT_ID \
+    -u AC_PRACTICE_PILOT_TENANT_ID \
     AC_INFISICAL_ENVIRONMENT="$secret_environment" \
     AC_INFISICAL_PATH="$secret_path" \
     /usr/local/sbin/ac-infisical-run -- "$@"
+}
+
+with_practice_pilot_scope() {
+  # AC_PRACTICE_PILOT_TENANT_ID is derived only after the managed environment
+  # has supplied the canonical public learner reference. A host or managed
+  # value under the pilot-specific name can therefore never select scope.
+  with_release_secrets \
+    sh -euc '
+      AC_PRACTICE_PILOT_TENANT_ID="${AC_PUBLIC_LEARNER_TENANT_ID:-}"
+      export AC_PRACTICE_PILOT_TENANT_ID
+      exec "$@"
+    ' sh "$@"
+}
+
+validate_practice_pilot_references() {
+  # The release profile owns whether the pilot is enabled. Its tenant scope is
+  # derived from the separately managed, non-secret public learner reference.
+  with_practice_pilot_scope \
+    env AC_RELEASE_PRACTICE_PILOT_ENABLED="$(profile_value AC_PRACTICE_PILOT_ENABLED)" \
+    python3 -c '
+import os
+from uuid import UUID
+
+enabled = os.environ["AC_RELEASE_PRACTICE_PILOT_ENABLED"] == "true"
+if enabled:
+    names = (
+        "AC_PRACTICE_PILOT_TENANT_ID",
+        "AC_PUBLIC_LEARNER_TENANT_ID",
+        "AC_OPERATIONS_TENANT_ID",
+    )
+    parsed = {}
+    for name in names:
+        raw = os.environ.get(name, "")
+        if not raw or raw != raw.strip():
+            raise SystemExit("Practice pilot requires exact managed tenant references.")
+        try:
+            parsed[name] = UUID(raw)
+        except ValueError:
+            raise SystemExit("Practice pilot requires exact managed tenant references.") from None
+    if (
+        parsed["AC_PRACTICE_PILOT_TENANT_ID"]
+        != parsed["AC_PUBLIC_LEARNER_TENANT_ID"]
+        or parsed["AC_PRACTICE_PILOT_TENANT_ID"]
+        == parsed["AC_OPERATIONS_TENANT_ID"]
+    ):
+        raise SystemExit(
+            "Practice pilot tenant must match public learner and differ from operations."
+        )
+'
 }
 
 # Infisical may supply a syntactically present but whitespace-only value that
@@ -438,6 +489,7 @@ with_release_secrets() {
 # images, creating environment state, or issuing any Docker Compose command.
 with_release_secrets \
   python3 "$release_dir/scripts/validate-google-oauth-secrets.py"
+validate_practice_pilot_references
 
 gzip --decompress --stdout "$image_bundle_dir/application-images.tar.gz" | docker load >/dev/null
 for image_id in "$AC_API_IMAGE" "$AC_LEARNER_IMAGE" "$AC_ADMIN_IMAGE" "$AC_COACH_IMAGE"; do
@@ -513,7 +565,7 @@ compose_for() {
       fixture_compose_files=(--file "$public_film_override")
     fi
   fi
-  with_release_secrets \
+  with_practice_pilot_scope \
     env \
         -u COMPOSE_PROJECT_NAME \
         -u COMPOSE_FILE \
@@ -538,7 +590,6 @@ compose_for() {
         -u AC_EXTERNAL_SIDE_EFFECTS_HOLD \
         -u AC_EMAIL_PROVIDER \
         -u AC_PRACTICE_PILOT_ENABLED \
-        -u AC_PRACTICE_PILOT_TENANT_ID \
         -u AC_LEARNER_CONSENT_VERSION \
         -u AC_LOG_LEVEL \
         -u AC_OTEL_EXPORTER_OTLP_ENDPOINT \
