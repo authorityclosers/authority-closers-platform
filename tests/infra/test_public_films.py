@@ -123,11 +123,40 @@ def test_thin_archive_manifest_is_identical_to_the_api_and_compiled_pin(harness)
     assert raw == SOURCE_MANIFEST.read_bytes()
     assert hashlib.sha256(raw).hexdigest() == module.MANIFEST_SHA256
     assert json.loads((APPLICATION / module.POLICY_RELATIVE).read_bytes())["enabled"] == {
-        "staging": False,
+        "staging": True,
         "production": False,
     }
     files = module.load_manifest(harness.release())
     assert len(files) == 30 and sum(item.length for item in files) == 54_274_209
+
+
+def test_source_policy_is_staging_only_and_legacy_delivery_stays_off(harness):
+    module = harness.module
+    source_policy = json.loads((APPLICATION / module.POLICY_RELATIVE).read_bytes())
+    assert source_policy["enabled"] == {"staging": True, "production": False}
+    assert source_policy["manifest_sha256"] == module.MANIFEST_SHA256
+    assert source_policy["learner_origins"] == module.LEARNER_ORIGINS
+
+    legacy_policy = json.loads(
+        (APPLICATION / "capabilities/staging-public-films.json").read_bytes()
+    )
+    assert legacy_policy["enabled"] is False
+
+    release = harness.release()
+    release_policy = release / module.POLICY_RELATIVE
+    value = json.loads(release_policy.read_bytes())
+    value["enabled"] = source_policy["enabled"]
+    release_policy.write_text(json.dumps(value), encoding="utf-8")
+    assert module.load_policy(release, "staging") is True
+    assert module.load_policy(release, "production") is False
+    assert module.compose_file(release, "staging") == str(release / module.OVERRIDE_RELATIVE)
+    assert module.compose_file(release, "production") == ""
+
+    overlay = (APPLICATION / module.OVERRIDE_RELATIVE).read_text(encoding="utf-8")
+    legacy_overlay = (APPLICATION / "compose.staging-public-films.yaml").read_text(encoding="utf-8")
+    assert 'AC_MEDIA_PUBLIC_FILMS_DELIVERY_ENABLED: "true"' in overlay
+    assert 'AC_MEDIA_STAGING_PUBLIC_FILMS_DELIVERY_ENABLED: "false"' in overlay
+    assert 'AC_MEDIA_STAGING_PUBLIC_FILMS_DELIVERY_ENABLED: "true"' in legacy_overlay
 
 
 @pytest.mark.parametrize("environment", ["staging", "production"])
