@@ -439,6 +439,7 @@ with_practice_pilot_scope() {
   # AC_PRACTICE_PILOT_TENANT_ID is derived only after the managed environment
   # has supplied the canonical public learner reference. A host or managed
   # value under the pilot-specific name can therefore never select scope.
+  # shellcheck disable=SC2016  # The nested shell expands "$@" after secrets are loaded.
   with_release_secrets \
     sh -euc '
       AC_PRACTICE_PILOT_TENANT_ID="${AC_PUBLIC_LEARNER_TENANT_ID:-}"
