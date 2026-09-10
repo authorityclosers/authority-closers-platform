@@ -1,15 +1,18 @@
 # Staging public-film activation boundary — 2026-09-11
 
 Status: candidate policy-on release only. This record supersedes the earlier
-policy-disabled status for the next reviewed staging slice; it does not claim
-that PR48 or this stacked change has merged, that a release has been deployed,
+policy-disabled status for the next reviewed staging slice. PR48 has merged as
+`87e71857a29eb4a6996e937a6047aa30e93bec4d`; this record does not claim that
+this activation change has merged, that a policy-on release has been deployed,
 that a pack has been installed, or that catalog/media state has been imported.
 
 ## Candidate scope
 
-The candidate is stacked on PR48’s repaired head (`e27ad7f`), which must merge before this PR
-can be retargeted to `main` or considered for merge. The only capability change
-is `infra/application/capabilities/public-films.json`:
+The candidate is rebased directly on the PR48 merge commit
+(`87e71857a29eb4a6996e937a6047aa30e93bec4d`). The activation patch is identical
+to the independently reviewed stacked candidate (`93a1303` = `c8e73a4` by
+`git range-diff`). The only capability change is
+`infra/application/capabilities/public-films.json`:
 
 ```json
 "enabled": {
@@ -40,8 +43,9 @@ to this PR and no source URL is fetched.
 
 ## Gates before merge or deployment
 
-- PR48 must be merged; then this stack must be rebased or retargeted to the
-  resulting `origin/main` commit and revalidated as one immutable release.
+- PR48 is merged. This activation commit must still pass fresh exact-head CI,
+  independent evidence review, and immutable-release packaging before merge or
+  deployment.
 - The exact release archive must pass commit-marker, archive SHA, image-digest,
   file-inventory, and migration-head verification. The candidate and rollback
   releases must pass public-film preflight before writers stop.
@@ -72,5 +76,5 @@ release gates pass.
 ## Candidate validation
 
 This branch has only the source policy flip, one focused policy/legacy-overlay
-test, and this additive boundary record beyond PR48. Local validation must be
-repeated after PR48 merge and before any deployment decision.
+test, and this additive boundary record beyond the PR48 merge. Local and CI
+validation must pass on the exact rebased head before any deployment decision.
