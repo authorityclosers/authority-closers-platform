@@ -33,6 +33,12 @@ html {
   --theme-warning-text: #6f4b00;
   --theme-danger-surface: #fff0f0;
   --theme-danger-text: #9f2535;
+  /* Decorative practice families follow the same editable brand/state palette.
+     They never encode correctness, completion, eligibility or rank. */
+  --theme-practice-cobalt: var(--theme-action);
+  --theme-practice-mint: var(--theme-success-text);
+  --theme-practice-lilac: var(--theme-info-text);
+  --theme-practice-amber: var(--theme-warning-text);
   --theme-shadow: 0 8px 28px rgba(15, 27, 51, 0.07);
   color-scheme: light;
   background: var(--theme-canvas);

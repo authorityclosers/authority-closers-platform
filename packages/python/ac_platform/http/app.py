@@ -17,6 +17,7 @@ from ac_platform.db.session import engine, session_factory
 from ac_platform.http.admin_learning import install_admin_learning_http
 from ac_platform.http.auth import install_identity_http
 from ac_platform.http.certificates import install_certificate_http
+from ac_platform.http.community import install_community_http
 from ac_platform.http.course import install_course_http
 from ac_platform.http.identity_provider import OAuthIdentityProvider, create_google_provider
 from ac_platform.http.learning import (
@@ -124,6 +125,7 @@ def create_app(
         require_actor=require_actor,
     )
     install_practice_http(application, settings=settings, require_actor=require_actor)
+    install_community_http(application, settings=settings, require_actor=require_actor)
     install_platform_http(application, settings=settings, require_actor=require_actor)
     # Static planning paths are registered before the dynamic
     # /v1/learning/{program_id} route so they cannot be parsed as UUIDs.

@@ -6,17 +6,34 @@
   text-decoration: none;
 }
 .featured {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   display: flex;
   align-items: center;
   gap: 24px;
   padding: 24px;
-  border: 1px solid var(--theme-border);
+  border: 1px solid
+    color-mix(in srgb, var(--theme-action) 28%, var(--theme-border));
   border-radius: 20px;
-  background: var(--theme-surface);
+  background: color-mix(in srgb, var(--theme-action) 7%, var(--theme-surface));
   margin: 24px 0 32px;
+}
+.featured::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  width: 200px;
+  height: 200px;
+  right: -100px;
+  top: -120px;
+  border: 26px solid color-mix(in srgb, var(--theme-action) 7%, transparent);
+  border-radius: 50%;
+  pointer-events: none;
 }
 .featured > div {
   flex: 1;
+  min-width: 0;
 }
 .featuredArt {
   width: 80px;
@@ -24,12 +41,14 @@
   object-fit: contain;
 }
 .featured h2 {
-  font-size: 1.25rem;
+  overflow-wrap: anywhere;
+  font-size: clamp(1.125rem, 1.9vw, 1.5rem);
   line-height: 1.4;
   letter-spacing: -0.025em;
   margin: 4px 0 6px;
 }
 .featured p {
+  overflow-wrap: anywhere;
   color: var(--theme-text-muted);
   font-size: 0.875rem;
   line-height: 1.6;
@@ -68,21 +87,43 @@
   gap: 16px;
 }
 .setCard {
+  --practice-ink: var(--theme-practice-cobalt);
   display: flex;
   align-items: center;
   gap: 16px;
   padding: 20px;
-  border: 1px solid var(--theme-border);
-  border-radius: 16px;
-  background: var(--theme-surface);
+  border: 1px solid
+    color-mix(in srgb, var(--practice-ink) 22%, var(--theme-border));
+  border-radius: 20px;
+  background: linear-gradient(
+    115deg,
+    color-mix(in srgb, var(--practice-ink) 8%, var(--theme-surface)),
+    var(--theme-surface) 75%
+  );
   color: inherit;
   transition:
+    transform var(--theme-transition-duration, 140ms) ease,
     border-color var(--theme-transition-duration, 140ms) ease,
-    background-color var(--theme-transition-duration, 140ms) ease;
+    box-shadow var(--theme-transition-duration, 140ms) ease;
 }
-.setCard:hover {
-  border-color: var(--theme-border-strong);
-  background: var(--theme-surface-subtle);
+.setCard[data-color="mint"] {
+  --practice-ink: var(--theme-practice-mint);
+}
+.setCard[data-color="lilac"] {
+  --practice-ink: var(--theme-practice-lilac);
+}
+.setCard[data-color="amber"] {
+  --practice-ink: var(--theme-practice-amber);
+}
+@media (hover: hover) and (pointer: fine) {
+  .setCard:hover {
+    border-color: var(--practice-ink);
+    box-shadow: var(--theme-shadow);
+    transform: translateY(-2px);
+  }
+}
+.setCard:active {
+  transform: translateY(1px);
 }
 .setCard:focus-visible {
   outline: 3px solid var(--theme-focus);
@@ -91,8 +132,10 @@
 .artTile {
   display: grid;
   place-items: center;
-  flex: 0 0 64px;
+  flex: 0 0 72px;
   height: 72px;
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--practice-ink) 12%, var(--theme-surface));
 }
 .artTile img {
   width: 64px;
@@ -103,7 +146,29 @@
   flex: 1;
   min-width: 0;
 }
+.cardLabels {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-bottom: 10px;
+}
+.cardLabels .skill {
+  margin: 0;
+}
+.format {
+  color: var(--practice-ink);
+  background: var(--theme-surface);
+  border: 1px solid
+    color-mix(in srgb, var(--practice-ink) 22%, var(--theme-border));
+  border-radius: 6px;
+  padding: 3px 7px;
+  font-size: 0.6875rem;
+  line-height: 1.4;
+  font-weight: 600;
+}
 .skill {
+  overflow-wrap: anywhere;
   display: block;
   color: var(--theme-text-muted);
   font-size: 0.75rem;
@@ -111,12 +176,14 @@
   margin-bottom: 6px;
 }
 .setCopy h3 {
+  overflow-wrap: anywhere;
   margin: 0 0 6px;
   font-size: 1rem;
   line-height: 1.4;
   letter-spacing: -0.02em;
 }
 .setCopy p {
+  overflow-wrap: anywhere;
   font-size: 0.8125rem;
   line-height: 1.55;
   margin: 0 0 12px;
@@ -135,8 +202,26 @@
   font-size: 0.6875rem;
 }
 .cardArrow {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
   flex-shrink: 0;
+  color: var(--practice-ink);
+  background: color-mix(in srgb, var(--practice-ink) 10%, var(--theme-surface));
+}
+.emptyLibrary {
+  padding: 28px 0;
+  max-width: 520px;
+}
+.emptyLibrary h2 {
+  font-size: 1.25rem;
+}
+.emptyLibrary p {
   color: var(--theme-text-muted);
+  line-height: 1.6;
+  margin-bottom: 20px;
 }
 .previewNote {
   margin: 24px 0 0;
@@ -600,14 +685,16 @@
   }
   .artTile {
     flex-basis: 48px;
-    height: 60px;
+    height: 48px;
+    border-radius: 14px;
   }
   .artTile img {
     width: 48px;
     height: 48px;
   }
   .cardArrow {
-    width: 16px;
+    width: 24px;
+    height: 24px;
   }
   .promptHeading {
     margin-bottom: 18px;
@@ -650,12 +737,21 @@
     flex-direction: column;
   }
 }
+:global(html[data-reduced-motion="true"]) .setCard,
+:global(html[data-motion="reduced"]) .setCard {
+  transform: none;
+  transition: none;
+}
 @media (prefers-reduced-motion: reduce) {
-  .setCard,
-  .meter span {
+  :global(html:not([data-motion="full"])) .setCard:hover,
+  :global(html:not([data-motion="full"])) .setCard:active {
+    transform: none;
+  }
+  :global(html:not([data-motion="full"])) .setCard,
+  :global(html:not([data-motion="full"])) .meter span {
     transition: none;
   }
-  .feedback {
+  :global(html:not([data-motion="full"])) .feedback {
     animation: none;
   }
 }

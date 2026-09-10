@@ -809,6 +809,28 @@ describe("version-pinned Studio authoring", () => {
 });
 
 describe("same-origin admin API composition", () => {
+  it.each([401, 403])(
+    "marks definitive HTTP %s session rejection as denied",
+    async (status) => {
+      const fetcher = vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(new Response("", { status }));
+      await expect(loadAdminSession(fetcher)).rejects.toMatchObject({
+        code: "admin_session_denied",
+      });
+    },
+  );
+  it("preserves server and network failures as retryable errors, not signed-out evidence", async () => {
+    const server = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response("", { status: 503 }));
+    await expect(loadAdminSession(server)).rejects.toMatchObject({
+      status: 503,
+    });
+    const offline = new TypeError("Network unavailable");
+    const network = vi.fn<typeof fetch>().mockRejectedValue(offline);
+    await expect(loadAdminSession(network)).rejects.toBe(offline);
+  });
   it("admits an assigned learner through the separate canonical Studio projection", async () => {
     const capability = {
       permission: "catalog_read",
@@ -838,13 +860,16 @@ describe("same-origin admin API composition", () => {
     });
   });
   it("requires both canonical product identity and selected admin context", async () => {
+    const controller = new AbortController();
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(Response.json(me))
       .mockResolvedValueOnce(Response.json(context))
       .mockResolvedValueOnce(Response.json(studioAccess));
 
-    await expect(loadAdminSession(fetcher)).resolves.toMatchObject({
+    await expect(
+      loadAdminSession(fetcher, controller.signal),
+    ).resolves.toMatchObject({
       personId,
       sessionId,
       tenantId,
@@ -857,7 +882,9 @@ describe("same-origin admin API composition", () => {
     ]);
     expect(
       fetcher.mock.calls.every(
-        ([, init]) => init?.credentials === "same-origin",
+        ([, init]) =>
+          init?.credentials === "same-origin" &&
+          init.signal === controller.signal,
       ),
     ).toBe(true);
   });

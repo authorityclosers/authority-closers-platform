@@ -21,6 +21,7 @@ import {
   Lightbulb,
   LoaderCircle,
   RotateCcw,
+  Trophy,
   X,
 } from "lucide-react";
 import {
@@ -45,6 +46,17 @@ const labels = {
   branch: "Try the conversation",
 };
 const practiceHref = (id: string) => `/practice?set=${encodeURIComponent(id)}`;
+const formats: Record<PracticeSummary["kind"], string> = {
+  choice: "Next move",
+  gap: "Fill the gap",
+  match: "Matching pairs",
+  build: "Question builder",
+  order: "Sequence",
+  audio: "Listening",
+  branch: "Conversation",
+};
+const cardTone = (color: string) =>
+  ["cobalt", "mint", "lilac", "amber"].includes(color) ? color : "cobalt";
 
 function LoadFailure({ error, retry }: { error: unknown; retry: () => void }) {
   const signIn = error instanceof PracticeRequestError && error.status === 401;
@@ -135,77 +147,122 @@ export function PracticeArcade({
         Getting your practice ready…
       </div>,
     );
+  // Feature content returned by this academy's catalog, never an assumed set.
+  const featured =
+    catalog.find((item) => item.id === "next-move") ?? catalog[0];
   return (
     <div className={styles.arcade}>
       <RouteHeader
         title="Practice Arcade"
         titleId="practice-title"
         description="Build confidence, one conversation at a time."
-        aside={<span className={styles.previewBadge}>Preview</span>}
+        aside={
+          durable ? (
+            <Link
+              className={actionClassName("secondary")}
+              href="/profile#community-identity-title"
+            >
+              <Trophy size={17} aria-hidden="true" /> Username & leaderboard
+            </Link>
+          ) : (
+            <span className={styles.previewBadge}>Preview</span>
+          )
+        }
       />
       {recognition}
-      <section
-        className={styles.featured}
-        aria-labelledby="practice-featured-title"
-      >
-        <Image
-          src="/arcade-v02/discovery-compass.svg"
-          width={88}
-          height={88}
-          alt=""
-          className={styles.featuredArt}
-        />
-        <div>
-          <p className={styles.skill}>A good place to start</p>
-          <h2 id="practice-featured-title">Find your next move</h2>
-          <p>Three small decisions. A fresh way to listen.</p>
-        </div>
-        <Link className={actionClassName()} href={practiceHref("next-move")}>
-          Start practice <ArrowRight size={18} />
-        </Link>
-      </section>
-      <section aria-labelledby="practice-library-title">
-        <div className={styles.sectionHeading}>
+      {featured ? (
+        <section
+          className={styles.featured}
+          aria-labelledby="practice-featured-title"
+        >
+          <Image
+            src={`/arcade-v02/${featured.art}.svg`}
+            width={88}
+            height={88}
+            alt=""
+            className={styles.featuredArt}
+          />
           <div>
-            <h2 id="practice-library-title">What would you like to work on?</h2>
-            <p>Choose one skill. Every set has three short prompts.</p>
+            <p className={styles.skill}>Your next small win</p>
+            <h2 id="practice-featured-title">{featured.title}</h2>
+            <p>
+              {featured.item_count} prompts · About {featured.estimated_minutes}{" "}
+              min · At your pace
+            </p>
           </div>
-          <span>{catalog.length} sets to explore</span>
-        </div>
-        <div className={styles.library}>
-          {catalog.map((item) => (
-            <Link
-              key={item.id}
-              href={practiceHref(item.id)}
-              className={styles.setCard}
-              data-color={item.color}
-            >
-              <div className={styles.artTile}>
-                <Image
-                  src={`/arcade-v02/${item.art}.svg`}
-                  width={96}
-                  height={96}
-                  alt=""
-                  loading="lazy"
-                />
-              </div>
-              <div className={styles.setCopy}>
-                <span className={styles.skill}>{item.skill}</span>
-                <h3>{item.title}</h3>
-                <p>{item.description}</p>
-                <div className={styles.setMeta}>
-                  <span>
-                    <Clock3 size={14} />
-                    About {item.estimated_minutes} min
-                  </span>
-                  <span>{item.item_count} prompts</span>
+          <Link className={actionClassName()} href={practiceHref(featured.id)}>
+            Start practice <ArrowRight size={18} />
+          </Link>
+        </section>
+      ) : (
+        <section
+          className={styles.emptyLibrary}
+          aria-labelledby="practice-empty-title"
+        >
+          <h2 id="practice-empty-title">Your next practice is on its way</h2>
+          <p>
+            There are no practice sets available here yet. Keep going with your
+            academy’s lessons.
+          </p>
+          <Link className={actionClassName("secondary")} href="/learning">
+            Continue learning <ArrowRight size={18} />
+          </Link>
+        </section>
+      )}
+      {catalog.length > 0 ? (
+        <section aria-labelledby="practice-library-title">
+          <div className={styles.sectionHeading}>
+            <div>
+              <h2 id="practice-library-title">
+                What would you like to work on?
+              </h2>
+              <p>Choose a skill. Try a new way to practise.</p>
+            </div>
+            <span>
+              {catalog.length} {catalog.length === 1 ? "set" : "sets"} to
+              explore
+            </span>
+          </div>
+          <div className={styles.library}>
+            {catalog.map((item) => (
+              <Link
+                key={item.id}
+                href={practiceHref(item.id)}
+                className={styles.setCard}
+                data-color={cardTone(item.color)}
+              >
+                <div className={styles.artTile}>
+                  <Image
+                    src={`/arcade-v02/${item.art}.svg`}
+                    width={96}
+                    height={96}
+                    alt=""
+                    loading="lazy"
+                  />
                 </div>
-              </div>
-              <ChevronRight className={styles.cardArrow} size={20} />
-            </Link>
-          ))}
-        </div>
-      </section>
+                <div className={styles.setCopy}>
+                  <div className={styles.cardLabels}>
+                    <span className={styles.skill}>{item.skill}</span>
+                    <span className={styles.format}>{formats[item.kind]}</span>
+                  </div>
+                  <h3>{item.title}</h3>
+                  <p>{item.description}</p>
+                  <div className={styles.setMeta}>
+                    <span>
+                      <Clock3 size={14} />
+                      About {item.estimated_minutes} min
+                    </span>
+                    <span>{item.item_count} prompts</span>
+                  </div>
+                </div>
+                <span className={styles.cardArrow} aria-hidden="true">
+                  <ChevronRight size={20} />
+                </span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      ) : null}
       <p className={styles.previewNote}>
         {durable
           ? "Draft practice content is awaiting coach review. Your practice responses and earned rewards are saved separately from course progress and assessments."
