@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { proxyLocalSandboxMedia } from "./local-media-upstream";
 import { proxyLocalSandboxAvatarUpload } from "./local-avatar-upstream";
+import { fetchDevelopmentLocalApiUpstream } from "./dev-local-api-upstream";
 import { fetchDevelopmentMediaUpstream } from "./dev-media-upstream";
 import {
   DEVELOPMENT_MEDIA_MAX_BYTES,
@@ -649,8 +650,12 @@ function proxyRequestHeaders(
     for (const header of [
       "connection",
       "content-length",
+      "forwarded",
       "host",
       "transfer-encoding",
+      "x-forwarded-host",
+      "x-forwarded-port",
+      "x-forwarded-proto",
     ]) {
       headers.delete(header);
     }
@@ -1664,12 +1669,11 @@ export async function proxyDevelopmentLearnerApi(
     }
   }
 
-  return (
-    await proxyUpstream(
-      request,
-      target,
-      fetcher ?? globalThis.fetch.bind(globalThis),
-      null,
-    )
-  ).response;
+  const upstreamFetcher =
+    fetcher ??
+    (target.mode === "local"
+      ? fetchDevelopmentLocalApiUpstream
+      : globalThis.fetch.bind(globalThis));
+
+  return (await proxyUpstream(request, target, upstreamFetcher, null)).response;
 }

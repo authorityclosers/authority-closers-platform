@@ -47,6 +47,15 @@ def test_launcher_uses_distinct_loopback_hosts_for_browser_cookie_isolation() ->
     assert urlparse(admin_origin).hostname.endswith(".localhost")
 
 
+def test_launcher_keeps_virtual_browser_hosts_out_of_node_dns_and_hosts_file() -> None:
+    # The browser aliases are a cookie-isolation surface only. Next itself
+    # still binds to a literal loopback address, and startup must not mutate a
+    # machine-wide hosts file to make Node resolve the aliases.
+    assert START.count('"--hostname", "127.0.0.1"') == 2
+    assert "System32\\drivers\\etc\\hosts" not in START
+    assert "etc/hosts" not in START
+
+
 def test_launcher_allows_free_alternate_ports_without_widening_hosts() -> None:
     assert "Where-Object { $_.LocalPort -in @($LearnerPort, $AdminPort) }" in START
     assert "select free -LearnerPort and -AdminPort values" in START
