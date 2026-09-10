@@ -30,6 +30,17 @@ IMAGE = f"clamav/clamav@{DIGEST}"
 PREFIX = "infra/media-safety/"
 FILES = {"manage.py", "compose.yaml", "clamd.conf", "freshclam.conf"}
 MIB = 1024 * 1024
+EXPECTED_BIND_DESTINATIONS = {
+    "/etc/clamav/clamd.conf",
+    "/etc/clamav/freshclam.conf",
+    "/var/lib/clamav",
+}
+EXPECTED_TMPFS_DESTINATION = "/tmp"  # noqa: S108 - fixed container tmpfs mount
+EXPECTED_TMPFS_OPTIONS = frozenset(
+    {"rw", "noexec", "nosuid", "nodev", "size=268435456", "uid=100", "gid=100", "mode=0700"}
+)
+EXPECTED_LOG_DRIVER = "local"
+EXPECTED_LOG_CONFIG = {"max-size": "5m", "max-file": "2"}
 
 
 def require(condition: bool, message: str) -> None:
@@ -144,15 +155,44 @@ def validate_container(value: dict, release: str, installed: Path) -> None:
         "Scanner memory bound",
     )
     require(host["NanoCpus"] == 2_000_000_000 and host["PidsLimit"] == 96, "Scanner resource drift")
-    mounts = {item["Destination"]: item for item in value["Mounts"] if item["Type"] == "bind"}
+    log_config = host.get("LogConfig")
     require(
-        set(mounts) == {"/etc/clamav/clamd.conf", "/etc/clamav/freshclam.conf", "/var/lib/clamav"},
+        isinstance(log_config, dict)
+        and log_config.get("Type") == EXPECTED_LOG_DRIVER
+        and log_config.get("Config") == EXPECTED_LOG_CONFIG,
+        "Scanner logging is missing or unbounded",
+    )
+    raw_mounts = value.get("Mounts")
+    require(isinstance(raw_mounts, list), "Unexpected scanner mounts")
+    mounts = {}
+    for item in raw_mounts:
+        require(isinstance(item, dict), "Unexpected scanner mount entry")
+        destination = item.get("Destination")
+        require(
+            isinstance(destination, str) and destination not in mounts,
+            "Unexpected or duplicate scanner mount",
+        )
+        mounts[destination] = item
+    require(
+        set(mounts) == EXPECTED_BIND_DESTINATIONS | {EXPECTED_TMPFS_DESTINATION},
         "Unexpected scanner mounts",
+    )
+    tmpfs = mounts[EXPECTED_TMPFS_DESTINATION]
+    mode = tmpfs.get("Mode")
+    options = mode.split(",") if isinstance(mode, str) else []
+    require(
+        tmpfs.get("Type") == "tmpfs"
+        and tmpfs.get("RW") is True
+        and len(options) == len(set(options))
+        and set(options) == EXPECTED_TMPFS_OPTIONS,
+        "Scanner tmpfs drift",
     )
     for name in ("clamd.conf", "freshclam.conf"):
         mount = mounts[f"/etc/clamav/{name}"]
         require(
-            mount["Source"] == str(installed / name) and not mount["RW"],
+            mount.get("Type") == "bind"
+            and mount.get("Source") == str(installed / name)
+            and mount.get("RW") is False,
             "Scanner config mount drift",
         )
         require(
@@ -160,8 +200,13 @@ def validate_container(value: dict, release: str, installed: Path) -> None:
             == sha((installed / name).read_bytes()),
             "Running config mismatch",
         )
-    require(mounts["/var/lib/clamav"]["Source"] == str(DATABASE), "Signature storage drift")
-    require(mounts["/var/lib/clamav"]["RW"] is True, "Signature updates are not writable")
+    database_mount = mounts["/var/lib/clamav"]
+    require(
+        database_mount.get("Type") == "bind"
+        and database_mount.get("Source") == str(DATABASE)
+        and database_mount.get("RW") is True,
+        "Signature storage is not writable or drifted",
+    )
 
 
 def command(payload: bytes) -> bytes:

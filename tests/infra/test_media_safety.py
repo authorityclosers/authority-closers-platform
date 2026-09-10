@@ -106,6 +106,10 @@ def _container(module: ModuleType, installed: Path) -> dict:
             "MemorySwap": 4 * 1024 * module.MIB,
             "NanoCpus": 2_000_000_000,
             "PidsLimit": 96,
+            "LogConfig": {
+                "Type": module.EXPECTED_LOG_DRIVER,
+                "Config": dict(module.EXPECTED_LOG_CONFIG),
+            },
         },
         "Mounts": [
             {
@@ -124,6 +128,13 @@ def _container(module: ModuleType, installed: Path) -> dict:
                 "Type": "bind",
                 "Source": str(module.DATABASE),
                 "Destination": "/var/lib/clamav",
+                "RW": True,
+            },
+            {
+                "Type": "tmpfs",
+                "Source": "",
+                "Destination": "/tmp",  # noqa: S108 - fixed container tmpfs test fixture
+                "Mode": ",".join(sorted(module.EXPECTED_TMPFS_OPTIONS)),
                 "RW": True,
             },
         ],
@@ -283,9 +294,63 @@ def test_validate_container_requires_writable_signature_store(
     installed = _installed(tmp_path)
     monkeypatch.setattr(safety_module, "run", _hash_command(safety_module, installed))
     container = _container(safety_module, installed)
-    container["Mounts"][-1]["RW"] = False
+    database_mount = next(
+        item for item in container["Mounts"] if item["Destination"] == "/var/lib/clamav"
+    )
+    database_mount["RW"] = False
 
     with pytest.raises(ValueError, match="signature storage|writable"):
+        safety_module.validate_container(container, RELEASE, installed)
+
+
+def test_validate_container_rejects_extra_rw_volume(
+    safety_module: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    installed = _installed(tmp_path)
+    monkeypatch.setattr(safety_module, "run", _hash_command(safety_module, installed))
+    container = _container(safety_module, installed)
+    container["Mounts"].append(
+        {
+            "Type": "volume",
+            "Source": "untrusted-volume",
+            "Destination": "/var/lib/untrusted",
+            "RW": True,
+        }
+    )
+
+    with pytest.raises(ValueError, match="mount"):
+        safety_module.validate_container(container, RELEASE, installed)
+
+
+def test_validate_container_rejects_extra_tmpfs(
+    safety_module: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    installed = _installed(tmp_path)
+    monkeypatch.setattr(safety_module, "run", _hash_command(safety_module, installed))
+    container = _container(safety_module, installed)
+    container["Mounts"].append(
+        {
+            "Type": "tmpfs",
+            "Source": "",
+            "Destination": "/var/cache",
+            "Mode": ",".join(sorted(safety_module.EXPECTED_TMPFS_OPTIONS)),
+            "RW": True,
+        }
+    )
+
+    with pytest.raises(ValueError, match="mount"):
+        safety_module.validate_container(container, RELEASE, installed)
+
+
+def test_validate_container_rejects_unbounded_json_file_logging(
+    safety_module: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    installed = _installed(tmp_path)
+    monkeypatch.setattr(safety_module, "run", _hash_command(safety_module, installed))
+    container = _container(safety_module, installed)
+    container["HostConfig"]["LogConfig"] = {"Type": "json-file", "Config": {}}
+
+    with pytest.raises(ValueError, match="logging|unbounded"):
         safety_module.validate_container(container, RELEASE, installed)
 
 
