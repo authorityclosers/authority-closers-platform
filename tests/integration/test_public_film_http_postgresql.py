@@ -424,6 +424,12 @@ def test_real_asgi_session_binding_and_absent_watch_policy(
                 and unchanged["allowed_actions"] == body["allowed_actions"] == ["save_draft"],
                 "Byte delivery or refused evidence changed canonical learning state",
             )
+            logout = await _request(client, "POST", "/v1/auth/logout", expected=204)
+            _check(
+                'ac_session=""' in logout.headers.get("set-cookie", ""),
+                "Logout must clear the session cookie",
+            )
+            await _media(client, "GET", urls[0], expected=401)
             async with h.sessions() as database, database.begin():
                 for model in (
                     ActivityProgress,

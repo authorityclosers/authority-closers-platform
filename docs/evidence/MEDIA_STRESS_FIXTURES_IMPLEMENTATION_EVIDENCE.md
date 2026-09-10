@@ -33,23 +33,29 @@ playable source. Production settings and composition reject the opt-in.
 
 ## Open-source fixture provenance
 
-The external fixtures are official Blender Foundation Big Buck Bunny archives.
-The [Blender film/about page](https://peach.blender.org/about/) identifies the
-Peach open movie as Creative Commons Attribution 3.0. The checked-in manifest
-also records the official [Blender download index](https://download.blender.org/demo/movies/BBB/),
-the exact archive URL, source-page URL, source index, the source index date with
-an explicit basis (not an HTTP `Last-Modified` assertion), retrieval date,
-attribution, and both archive/extracted SHA-256 values.
-The recorded license URL is the [Creative Commons Attribution 3.0 deed](https://creativecommons.org/licenses/by/3.0/).
+The external fixtures are official Blender Foundation Big Buck Bunny archives
+and the official Blender Studio Caminandes 2 archive. The [Blender
+film/about page](https://peach.blender.org/about/) identifies the Peach open
+movie as Creative Commons Attribution 3.0, and the [Caminandes 2 film
+page](https://studio.blender.org/projects/api/assets/2363/) identifies that
+film as Creative Commons Attribution 4.0. The checked-in manifest records each
+official download index, exact archive URL, source-page URL, source index, the
+source index date with an explicit basis (not an HTTP `Last-Modified`
+assertion), retrieval date, attribution, and both archive/extracted SHA-256
+values. The recorded license URLs are the [Creative Commons Attribution 3.0
+deed](https://creativecommons.org/licenses/by/3.0/) and [Creative Commons
+Attribution 4.0 deed](https://creativecommons.org/licenses/by/4.0/).
 
 | Fixture            | Exact source archive                                                                                                                | License / attribution                                           | Archive SHA-256                                                    | Extracted video SHA-256                                            |
 | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------ |
 | `bbb-4k-30-normal` | [`bbb_sunflower_2160p_30fps_normal.mp4.zip`](https://download.blender.org/demo/movies/BBB/bbb_sunflower_2160p_30fps_normal.mp4.zip) | CC BY 3.0; Blender Foundation 2008, Janus Bager Kristensen 2013 | `750b255c6d9fee1e2a03a6716d4f358bca56e9115bf3e06a66162fc5272ae151` | `37f0ff251a606c2dcfa26c19fe6bf843234b4e7a8889cfab50bc26f644e55520` |
 | `bbb-320x180-24`   | [`BigBuckBunny_320x180.mp4.zip`](https://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_320x180.mp4.zip)               | CC BY 3.0; Blender Foundation / Big Buck Bunny                  | `109e3ede8790bd633f374ca311d9cc61dce8d7f98f5b0797ca98199c9fbceedf` | `f78f39603e6774907f2faafabf26a667f4a6fc31769ec304a8a8f7c62d280508` |
+| `caminandes-gran-dillama-1080p` | [`caminandes_gran_dillama.mp4.zip`](https://download.blender.org/demo/movies/caminandes_gran_dillama.mp4.zip) | CC BY 4.0; Blender Foundation / Blender Studio; directed by Pablo Vazquez | `2e54abfb18dcb0a25d41e7b5d97fd51b226cec58d2fbcad101cf6deecea8c48b` | `468e6743c674689a728726bbe4bb4b2a65bd8702a89f021af26a8bb4d450eebd` |
 
-The 4K fixture is 3840×2160 at 30 fps; the low-resolution fixture is 320×180
-at 24 fps. Both remain test inputs only and must never be labeled as course
-media. The manifest's download allowlist contains only the two exact
+The 4K fixture is 3840×2160 at 30 fps; the low-resolution Big Buck Bunny
+fixture is 320×180 at 24 fps; and the Caminandes fixture is 1920×1080 at 24
+fps. All remain test inputs only and must never be labeled as course media.
+The manifest's download allowlist contains only the three exact
 `download.blender.org` archive paths; arbitrary public URLs, HTTP, non-443
 ports, redirects outside the exact path, URL credentials, query strings, and
 fragments are rejected.
@@ -120,15 +126,52 @@ HLS generation, provider access, or production readiness.
 
 ## Checks performed in this worktree
 
+### Current-registry revalidation (2026-09-10)
+
 - `uv run python tools/media-player-stress/acquire_media_fixtures.py manifest`
   validated the exact checked-in registry and emitted manifest SHA-256
-  `ee4da2e4039d458ecaf933aaa9a019fee29eb813addbe85b61ef7d78254859ae` with
-  the five fixture IDs and six rendition profile IDs.
+  `fc61c87d5428d53d35b82061a53fbdbd9967b8bf658c6d0425a78a07bc106290` with
+  fixture IDs `bbb-4k-30-normal`, `bbb-320x180-24`,
+  `caminandes-gran-dillama-1080p`, `generated-16x9-4s`,
+  `generated-4x3-6s`, and `generated-wide-3s`, plus six rendition profile IDs.
+- `uv run pytest -q tests/unit/media/test_stress_fixture_manifests.py
+  tests/unit/media/test_stress_fixture_composition.py` passes the focused
+  registry/composition suite: `25 passed`. The suite includes the wall-clock
+  download deadline, production/local denial, typed provider/grant verifiers,
+  exact cache/path and checksum/provenance checks, caption/FFmpeg allowlists,
+  redirect handling, and network-manifest checks.
+- `uv run pytest -q tests/infra/test_public_films.py
+  tests/infra/test_staging_public_films.py` passes the public-film packaging
+  and staging-boundary checks: `87 passed, 7 skipped` on Windows. The skipped
+  cases require POSIX atomic-install semantics unavailable on this host.
+- `uv run pytest -q tests/integration/test_public_film_http_postgresql.py`
+  collected the two real ASGI/PostgreSQL playback checks but skipped both
+  because the guarded staging PostgreSQL URL is not configured locally. Once
+  that isolated target and the actual pack are supplied, the second check also
+  proves `/v1/auth/logout` clears the cookie and denies a previously issued
+  playback URL; the skip is not staging acceptance.
+- The staging capability remains source-disabled in
+  [`staging-public-films.json`](../../infra/application/capabilities/staging-public-films.json):
+  no policy-on release was selected, no current VPS state was changed, and no
+  external media was downloaded during this revalidation. The implementation
+  is staging-prepared but not staging-activated; activation still requires an
+  explicit reviewed policy-on release, Linux install/preflight evidence, and
+  import/playback QA.
+
+The following fixture acquisition, fresh-cache generation, and six-profile HLS
+render checks are historical evidence from the earlier implementation passes;
+they are retained below with their original scope. They are not a claim of
+current staging activation.
+
+- `uv run python tools/media-player-stress/acquire_media_fixtures.py manifest`
+  (historical 2026-09-07 run) validated the pre-Caminandes registry and emitted
+  the then-current five fixture IDs and six rendition profile IDs.
 - `uv run python tools/media-player-stress/acquire_media_fixtures.py verify`
-  verified both downloaded Blender archives/extractions and all three
-  generated MP4s with ffprobe dimensions, frame rates, durations, codecs, and
-  MP4 container metadata; all five fixture records passed their pinned
-  archive/extracted SHA-256 checks.
+  (historical 2026-09-07 run) verified both downloaded Blender
+  archives/extractions and all three generated MP4s with ffprobe dimensions,
+  frame rates, durations, codecs, and MP4 container metadata; all five
+  pre-Caminandes fixture records passed their pinned archive/extracted SHA-256
+  checks.
 - Fresh-cache generation was also exercised with the three `generate` commands
   under `tools/media-player-stress/.artifacts/fresh-generation`; all emitted
   hashes matched the pinned manifest and the FFmpeg 8.1.1 generator prefix,
