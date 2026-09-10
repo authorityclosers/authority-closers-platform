@@ -8,8 +8,10 @@ manifest="$foundation/config/release/install-manifest.tsv"
 grep -q 'AC_APPROVED_LEGACY_RELEASE_ID' "$foundation/scripts/install-foundation-release.sh"
 grep -q 'legacy-foundation.sha256' "$foundation/scripts/install-foundation-release.sh"
 grep -q 'reconcile_legacy_foundation' "$foundation/scripts/install-foundation-release.sh"
+# shellcheck disable=SC2016  # This static assertion intentionally matches a literal variable reference.
 grep -Fq 'shared_release_lock="$application_root/.deployment.lock"' \
   "$foundation/scripts/install-foundation-release.sh"
+# shellcheck disable=SC2016  # This static assertion intentionally matches a literal variable reference.
 grep -Fq 'deployment_lock="$application_root/.deployment.lock"' \
   "$repo_root/infra/application/scripts/install-application-release.sh"
 
