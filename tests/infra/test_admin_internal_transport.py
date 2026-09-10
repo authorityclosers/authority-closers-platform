@@ -219,12 +219,18 @@ def test_compose_binds_admin_to_exact_reserved_internal_api_alias(profile: str) 
 
 
 @pytest.mark.parametrize("profile", ["staging", "production"])
-def test_practice_pilot_runtime_wiring_is_default_off_and_not_a_web_secret(profile: str) -> None:
+def test_practice_pilot_runtime_wiring_is_profile_owned_and_not_a_web_secret(
+    profile: str,
+) -> None:
     default_services = _render_compose(profile, enabled_profiles=("release",))["services"]
     assert isinstance(default_services, dict)
     for name in ("api", "learner-web"):
         environment = default_services[name]["environment"]
-        assert environment["AC_PRACTICE_PILOT_ENABLED"] == "false"
+        assert environment["AC_PRACTICE_PILOT_ENABLED"] == (
+            "true" if profile == "staging" else "false"
+        )
+        # Raw Compose has no authority to derive this scope. The canonical
+        # installer supplies it only inside the managed configuration wrapper.
         assert environment["AC_PRACTICE_PILOT_TENANT_ID"] == ""
     tenant_id = "44444444-4444-4444-8444-444444444444"
     services = _render_compose(

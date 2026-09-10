@@ -144,12 +144,21 @@ printf '%s,%s\n' "$external_side_effects_status" "$email_provider"
     )
 
 
-def _run_compose_for_probe(tmp_path: Path) -> subprocess.CompletedProcess[str]:
+def _run_compose_for_probe(
+    tmp_path: Path,
+    *,
+    practice_enabled: bool = True,
+    rollback_practice_enabled: bool | None = None,
+) -> subprocess.CompletedProcess[str]:
     release = tmp_path / "release"
     (release / "environments").mkdir(parents=True)
-    (release / "environments" / "staging.env").write_bytes(
-        (APPLICATION / "environments" / "staging.env").read_bytes()
-    )
+    profile = (APPLICATION / "environments" / "staging.env").read_bytes()
+    if not practice_enabled:
+        profile = profile.replace(
+            b"AC_PRACTICE_PILOT_ENABLED=true\n",
+            b"AC_PRACTICE_PILOT_ENABLED=false\n",
+        )
+    (release / "environments" / "staging.env").write_bytes(profile)
     (release / "release-images.env").write_text("", encoding="utf-8")
     (release / "compose.yaml").write_text(
         """name: ${AC_COMPOSE_PROJECT:?AC_COMPOSE_PROJECT is required}
@@ -159,29 +168,121 @@ services:
     environment:
       hold: ${AC_EXTERNAL_SIDE_EFFECTS_HOLD:-true}
       provider: ${AC_EMAIL_PROVIDER:-fake}
+      practice_enabled: ${AC_PRACTICE_PILOT_ENABLED:-false}
+      practice_tenant: ${AC_PRACTICE_PILOT_TENANT_ID:-}
+      public_tenant: ${AC_PUBLIC_LEARNER_TENANT_ID:-}
+      operations_tenant: ${AC_OPERATIONS_TENANT_ID:-}
 """,
         encoding="utf-8",
     )
+    rollback_compose = ""
+    if rollback_practice_enabled is not None:
+        rollback = tmp_path / "rollback"
+        (rollback / "environments").mkdir(parents=True)
+        rollback_profile = (APPLICATION / "environments" / "staging.env").read_bytes()
+        if not rollback_practice_enabled:
+            rollback_profile = rollback_profile.replace(
+                b"AC_PRACTICE_PILOT_ENABLED=true\n",
+                b"AC_PRACTICE_PILOT_ENABLED=false\n",
+            )
+        (rollback / "environments" / "staging.env").write_bytes(rollback_profile)
+        (rollback / "release-images.env").write_text("", encoding="utf-8")
+        (rollback / "compose.yaml").write_bytes((release / "compose.yaml").read_bytes())
+        rollback_compose = f"compose_for {shlex.quote(rollback.as_posix())} config\n"
     compose_for = _installer_function(
         "compose_for", '\n\ncompose_for "$release_dir" config --quiet'
+    )
+    practice_scope = _installer_function(
+        "with_practice_pilot_scope", "\n\nvalidate_practice_pilot_references() {"
     )
     script = f"""#!/usr/bin/env bash
 set -euo pipefail
 target_environment=staging
 release_dir={shlex.quote(release.as_posix())}
 compose_project=ac-application-staging
-with_release_secrets() {{ "$@"; }}
+with_release_secrets() {{
+  AC_PRACTICE_PILOT_TENANT_ID=30000000-0000-4000-8000-000000000003 \
+  AC_PUBLIC_LEARNER_TENANT_ID=10000000-0000-4000-8000-000000000001 \
+  AC_OPERATIONS_TENANT_ID=20000000-0000-4000-8000-000000000002 \
+  "$@"
+}}
+{practice_scope}
 export AC_EXTERNAL_SIDE_EFFECTS_HOLD=true
 export AC_EMAIL_PROVIDER=fake
+export AC_PRACTICE_PILOT_ENABLED=false
+export AC_PRACTICE_PILOT_TENANT_ID=30000000-0000-4000-8000-000000000003
 export COMPOSE_PROJECT_NAME=ac-application-production
 {compose_for}
 compose_for "$release_dir" config
+{rollback_compose}
 """
     return subprocess.run(  # noqa: S603 - executable and compose fixture are test-controlled
         [_bash_executable(), "-s"],
         input=script,
         capture_output=True,
         check=False,
+        text=True,
+    )
+
+
+def _run_practice_pilot_preflight(
+    *,
+    enabled: bool,
+    pilot_tenant: str | None,
+    public_tenant: str | None,
+    operations_tenant: str | None,
+    ambient_pilot_tenant: str | None = None,
+) -> subprocess.CompletedProcess[str]:
+    validator = _installer_function(
+        "validate_practice_pilot_references",
+        "\n\n# Infisical may supply",
+    )
+    practice_scope = _installer_function(
+        "with_practice_pilot_scope", "\n\nvalidate_practice_pilot_references() {"
+    )
+    script = f"""#!/usr/bin/env bash
+set -euo pipefail
+profile_enabled={"true" if enabled else "false"}
+profile_value() {{
+  [[ "$1" == AC_PRACTICE_PILOT_ENABLED ]]
+  printf '%s' "$profile_enabled"
+}}
+with_release_secrets() {{
+  local -a managed=()
+  [[ -z "${{AC_MANAGED_PILOT_TENANT_ID+x}}" ]] || \
+    managed+=("AC_PRACTICE_PILOT_TENANT_ID=$AC_MANAGED_PILOT_TENANT_ID")
+  [[ -z "${{AC_MANAGED_PUBLIC_TENANT_ID+x}}" ]] || \
+    managed+=("AC_PUBLIC_LEARNER_TENANT_ID=$AC_MANAGED_PUBLIC_TENANT_ID")
+  [[ -z "${{AC_MANAGED_OPERATIONS_TENANT_ID+x}}" ]] || \
+    managed+=("AC_OPERATIONS_TENANT_ID=$AC_MANAGED_OPERATIONS_TENANT_ID")
+  env \
+    -u AC_PRACTICE_PILOT_TENANT_ID \
+    -u AC_PUBLIC_LEARNER_TENANT_ID \
+    -u AC_OPERATIONS_TENANT_ID \
+    "${{managed[@]}}" \
+    "$@"
+}}
+{practice_scope}
+{validator}
+validate_practice_pilot_references
+"""
+    environment = os.environ.copy()
+    for name, value in (
+        ("AC_MANAGED_PILOT_TENANT_ID", pilot_tenant),
+        ("AC_MANAGED_PUBLIC_TENANT_ID", public_tenant),
+        ("AC_MANAGED_OPERATIONS_TENANT_ID", operations_tenant),
+        ("AC_PRACTICE_PILOT_TENANT_ID", ambient_pilot_tenant),
+    ):
+        if value is None:
+            environment.pop(name, None)
+        else:
+            environment[name] = value
+    return subprocess.run(  # noqa: S603 - executable and settings are test-controlled
+        [_bash_executable(), "-s"],
+        input=script,
+        capture_output=True,
+        check=False,
+        env=environment,
         text=True,
     )
 
@@ -531,6 +632,17 @@ def test_oauth_secret_preflight_runs_before_image_loading_and_compose_mutation()
     assert "-u AC_OPERATIONS_TENANT_ID" in secret_wrapper
 
 
+def test_practice_scope_preflight_runs_before_image_loading_and_mutation() -> None:
+    preflight = "\nvalidate_practice_pilot_references\n"
+    image_load = 'gzip --decompress --stdout "$image_bundle_dir/application-images.tar.gz"'
+    compose_config = 'compose_for "$release_dir" config --quiet'
+    mutation_start = "mutation_started=1"
+
+    assert INSTALLER.index(preflight) < INSTALLER.index(image_load)
+    assert INSTALLER.index(preflight) < INSTALLER.index(compose_config)
+    assert INSTALLER.index(preflight) < INSTALLER.index(mutation_start)
+
+
 def test_database_and_edge_networks_are_explicitly_separated() -> None:
     assert "/postgres:/var/lib/postgresql\n" in COMPOSE
     assert "/postgres:/var/lib/postgresql/data" not in COMPOSE
@@ -866,10 +978,18 @@ def test_environment_profiles_isolate_state_hosts_and_edge_aliases() -> None:
     assert "AC_EMAIL_PROVIDER=resend" in staging
     assert "AC_EXTERNAL_SIDE_EFFECTS_HOLD=true" in production
     assert "AC_EMAIL_PROVIDER=fake" in production
-    assert "AC_PRACTICE_PILOT_ENABLED=false" in staging
+    assert "AC_PRACTICE_PILOT_ENABLED=true" in staging
     assert "AC_PRACTICE_PILOT_ENABLED=false" in production
     assert "-u AC_PRACTICE_PILOT_ENABLED" in INSTALLER
     assert "-u AC_PRACTICE_PILOT_TENANT_ID" in INSTALLER
+    secret_wrapper = INSTALLER.split("with_release_secrets() {", maxsplit=1)[1].split(
+        "\n}", maxsplit=1
+    )[0]
+    compose_for = _installer_function(
+        "compose_for", '\n\ncompose_for "$release_dir" config --quiet'
+    )
+    assert "-u AC_PRACTICE_PILOT_TENANT_ID" in secret_wrapper
+    assert "-u AC_PRACTICE_PILOT_TENANT_ID" not in compose_for
     assert "* text=auto eol=lf" in GIT_ATTRIBUTES
     assert "Released environment profile must use canonical LF line endings" in INSTALLER
 
@@ -987,7 +1107,7 @@ def test_installer_profile_parser_reports_effective_profile_policy(
         (lambda profile: profile + b"AC_RESEND_API_KEY=secret-like-value\n", "unexpected key"),
         (
             lambda profile: profile.replace(
-                b"AC_PRACTICE_PILOT_ENABLED=false\n", b"AC_PRACTICE_PILOT_ENABLED=true\n"
+                b"AC_PRACTICE_PILOT_ENABLED=true\n", b"AC_PRACTICE_PILOT_ENABLED=false\n"
             ),
             "unexpected value for AC_PRACTICE_PILOT_ENABLED",
         ),
@@ -1018,6 +1138,79 @@ def test_installer_profile_parser_rejects_crlf_profiles(tmp_path: Path) -> None:
     assert "canonical LF line endings" in result.stderr
 
 
+def test_installer_rejects_production_practice_pilot_enablement(tmp_path: Path) -> None:
+    profile = (
+        (APPLICATION / "environments" / "production.env")
+        .read_bytes()
+        .replace(b"AC_PRACTICE_PILOT_ENABLED=false\n", b"AC_PRACTICE_PILOT_ENABLED=true\n")
+    )
+
+    result = _run_profile_parser(tmp_path, profile, target_environment="production")
+
+    assert result.returncode != 0
+    assert "unexpected value for AC_PRACTICE_PILOT_ENABLED" in result.stderr
+
+
+PUBLIC_TENANT = "10000000-0000-4000-8000-000000000001"
+OPERATIONS_TENANT = "20000000-0000-4000-8000-000000000002"
+FOREIGN_TENANT = "30000000-0000-4000-8000-000000000003"
+
+
+@pytest.mark.parametrize(
+    ("enabled", "pilot_tenant", "public_tenant", "operations_tenant", "expected_error"),
+    (
+        (False, None, None, None, None),
+        (True, None, PUBLIC_TENANT, OPERATIONS_TENANT, None),
+        (True, FOREIGN_TENANT, PUBLIC_TENANT, OPERATIONS_TENANT, None),
+        (True, None, None, OPERATIONS_TENANT, "exact managed tenant references"),
+        (True, None, "not-a-uuid", OPERATIONS_TENANT, "exact managed tenant references"),
+        (
+            True,
+            PUBLIC_TENANT,
+            PUBLIC_TENANT,
+            PUBLIC_TENANT,
+            "must match public learner and differ from operations",
+        ),
+    ),
+)
+def test_practice_pilot_preflight_requires_exact_managed_tenant_scope(
+    enabled: bool,
+    pilot_tenant: str | None,
+    public_tenant: str | None,
+    operations_tenant: str | None,
+    expected_error: str | None,
+) -> None:
+    result = _run_practice_pilot_preflight(
+        enabled=enabled,
+        pilot_tenant=pilot_tenant,
+        public_tenant=public_tenant,
+        operations_tenant=operations_tenant,
+    )
+
+    if expected_error is None:
+        assert result.returncode == 0, result.stderr
+        assert result.stdout == ""
+    else:
+        assert result.returncode != 0
+        assert expected_error in result.stderr
+    output = result.stdout + result.stderr
+    for reference in (PUBLIC_TENANT, OPERATIONS_TENANT, FOREIGN_TENANT):
+        assert reference not in output
+
+
+def test_practice_pilot_preflight_does_not_accept_ambient_tenant_scope() -> None:
+    result = _run_practice_pilot_preflight(
+        enabled=True,
+        pilot_tenant=FOREIGN_TENANT,
+        public_tenant=PUBLIC_TENANT,
+        operations_tenant=OPERATIONS_TENANT,
+        ambient_pilot_tenant=FOREIGN_TENANT,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == ""
+
+
 def test_compose_for_uses_profile_policy_over_ambient_environment(tmp_path: Path) -> None:
     result = _run_compose_for_probe(tmp_path)
 
@@ -1025,6 +1218,36 @@ def test_compose_for_uses_profile_policy_over_ambient_environment(tmp_path: Path
     assert "name: ac-application-staging" in result.stdout
     assert 'hold: "false"' in result.stdout
     assert "provider: resend" in result.stdout
+    assert 'practice_enabled: "true"' in result.stdout
+    assert f"practice_tenant: {PUBLIC_TENANT}" in result.stdout
+    assert f"public_tenant: {PUBLIC_TENANT}" in result.stdout
+    assert f"operations_tenant: {OPERATIONS_TENANT}" in result.stdout
+    assert FOREIGN_TENANT not in result.stdout
+
+
+def test_policy_off_rollback_target_preserves_practice_history(tmp_path: Path) -> None:
+    result = _run_compose_for_probe(
+        tmp_path,
+        practice_enabled=True,
+        rollback_practice_enabled=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    enabled = result.stdout.index('practice_enabled: "true"')
+    disabled = result.stdout.index('practice_enabled: "false"')
+    assert enabled < disabled
+    assert result.stdout.count(f"practice_tenant: {PUBLIC_TENANT}") == 2
+    assert (
+        'compose_for "$previous_release" up --detach --remove-orphans --wait --wait-timeout 180'
+        in INSTALLER
+    )
+    assert "alembic downgrade" not in INSTALLER
+    for immutable_history in (
+        "practice_participations",
+        "practice_reward_claims",
+        "practice_ledger_entries",
+    ):
+        assert immutable_history not in INSTALLER
 
 
 def test_release_is_built_off_host_and_installed_with_backup_and_rollback() -> None:
