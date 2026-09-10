@@ -17,6 +17,7 @@ import re
 import shutil
 import stat
 import subprocess
+import time
 import urllib.error
 import urllib.request
 import zipfile
@@ -1169,6 +1170,34 @@ def _assert_source_url(url: str) -> None:
     )
 
 
+def _stream_response_to_file(
+    response: Any,
+    destination: Path,
+    *,
+    deadline: float,
+    max_bytes: int,
+) -> int:
+    """Copy an approved response with a wall-clock and byte budget."""
+
+    written = 0
+    if time.monotonic() >= deadline:
+        raise FixtureHarnessError("fixture source archive download exceeded its deadline")
+    with destination.open("xb") as target:
+        while True:
+            if time.monotonic() >= deadline:
+                raise FixtureHarnessError("fixture source archive download exceeded its deadline")
+            chunk = response.read(_CHUNK_BYTES)
+            if not chunk:
+                break
+            written += len(chunk)
+            if written > max_bytes:
+                raise FixtureHarnessError("fixture source archive exceeds its byte limit")
+            target.write(chunk)
+            if time.monotonic() >= deadline:
+                raise FixtureHarnessError("fixture source archive download exceeded its deadline")
+    return written
+
+
 class _AllowlistedRedirectHandler(urllib.request.HTTPRedirectHandler):
     """Validate each redirect target before urllib opens it."""
 
@@ -1235,6 +1264,7 @@ def acquire_external_fixture(
             source_url,
             headers={"User-Agent": "authority-closers-media-fixture-harness/1.0"},
         )
+        download_deadline = time.monotonic() + timeout_seconds
         try:
             opener = urllib.request.build_opener(
                 _AllowlistedRedirectHandler(expected_path=urlsplit(source_url).path)
@@ -1266,18 +1296,12 @@ def acquire_external_fixture(
                         raise FixtureHarnessError(
                             "fixture source archive length is invalid"
                         ) from error
-                written = 0
-                with partial.open("xb") as target:
-                    while True:
-                        chunk = response.read(_CHUNK_BYTES)
-                        if not chunk:
-                            break
-                        written += len(chunk)
-                        if written > int(registry.source_policy["max_archive_bytes"]):
-                            raise FixtureHarnessError(
-                                "fixture source archive exceeds its byte limit"
-                            )
-                        target.write(chunk)
+                _stream_response_to_file(
+                    response,
+                    partial,
+                    deadline=download_deadline,
+                    max_bytes=int(registry.source_policy["max_archive_bytes"]),
+                )
         except FixtureHarnessError:
             if partial.exists():
                 partial.unlink()

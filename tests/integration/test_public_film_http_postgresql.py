@@ -184,6 +184,7 @@ async def _http_scenario(schema_url, pack, monkeypatch):
                     clients=clients,
                     learner=learner,
                     imported=imported,
+                    session_cookie_name=settings.session_cookie_name,
                 )
 
 
@@ -396,6 +397,11 @@ def test_real_asgi_session_binding_and_absent_watch_policy(
             )
 
             client = proof.clients["learner"]
+            pre_logout_token = client.cookies.get(proof.session_cookie_name)
+            _check(
+                isinstance(pre_logout_token, str) and bool(pre_logout_token),
+                "The learner client must retain its pre-logout session cookie",
+            )
             for action in ("start", "heartbeat", "finish"):
                 await _request(
                     client,
@@ -423,6 +429,19 @@ def test_real_asgi_session_binding_and_absent_watch_policy(
                 and unchanged["state"] == body["state"]
                 and unchanged["allowed_actions"] == body["allowed_actions"] == ["save_draft"],
                 "Byte delivery or refused evidence changed canonical learning state",
+            )
+            logout = await _request(client, "POST", "/v1/auth/logout", expected=204)
+            _check(
+                'ac_session=""' in logout.headers.get("set-cookie", ""),
+                "Logout must clear the session cookie",
+            )
+            await _media(client, "GET", urls[0], expected=401)
+            await _media(
+                proof.clients["anonymous"],
+                "GET",
+                urls[0],
+                expected=401,
+                headers={"Cookie": f"{proof.session_cookie_name}={pre_logout_token}"},
             )
             async with h.sessions() as database, database.begin():
                 for model in (

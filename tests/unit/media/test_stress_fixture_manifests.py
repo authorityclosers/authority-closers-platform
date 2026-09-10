@@ -16,6 +16,7 @@ if str(TOOLS) not in sys.path:
     sys.path.insert(0, str(TOOLS))
 
 import build_hls_ladder as hls  # noqa: E402
+import fixture_harness as harness  # noqa: E402
 from fixture_harness import (  # noqa: E402
     _ALLOWED_DOWNLOAD_HOSTS,
     EXPECTED_CAPTIONS_MANIFEST_SHA256,
@@ -25,6 +26,7 @@ from fixture_harness import (  # noqa: E402
     FixtureHarnessError,
     FixtureManifestError,
     _AllowlistedRedirectHandler,
+    _stream_response_to_file,
     _validate_url,
     _validate_zip_archive,
     acquire_external_fixture,
@@ -151,6 +153,33 @@ def test_invalid_fixture_timeouts_are_bounded_harness_errors() -> None:
         acquire_external_fixture(registry, "bbb-320x180-24", timeout_seconds=1)
     with pytest.raises(FixtureHarnessError, match="timeout_seconds"):
         generate_fixture(registry, "generated-16x9-4s", timeout_seconds=1)
+
+
+def test_download_stream_enforces_wall_clock_deadline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class _Clock:
+        values = iter((100.0, 100.0, 101.0))
+
+        def monotonic(self) -> float:
+            return next(self.values)
+
+    class _Response:
+        def read(self, _size: int) -> bytes:
+            return b"fixture bytes"
+
+    monkeypatch.setattr(harness.time, "monotonic", _Clock().monotonic)
+    partial = tmp_path / "archive.part"
+
+    with pytest.raises(FixtureHarnessError, match="exceeded its deadline"):
+        _stream_response_to_file(
+            _Response(),
+            partial,
+            deadline=100.5,
+            max_bytes=1024,
+        )
+
+    assert partial.read_bytes() == b"fixture bytes"
 
 
 def test_cli_cache_root_is_bounded_to_the_ignored_repository_boundary(tmp_path: Path) -> None:
