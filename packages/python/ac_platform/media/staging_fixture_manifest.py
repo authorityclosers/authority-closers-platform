@@ -11,7 +11,7 @@ import hashlib
 import json
 import math
 import re
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
@@ -227,13 +227,18 @@ def _validate_probe(storage: ReadOnlyFileMediaStorage, key: str, clip: FixtureCl
 
 
 def _verify_clip(
-    storage: ReadOnlyFileMediaStorage, tenant_id: UUID, digest: str, clip: FixtureClip
+    storage: ReadOnlyFileMediaStorage,
+    tenant_id: UUID,
+    digest: str,
+    clip: FixtureClip,
+    *,
+    identity_factory: Callable[[UUID, str, str], tuple[UUID, UUID]] = fixture_media_identity,
 ) -> VerifiedFixtureClip:
-    asset, version = fixture_media_identity(tenant_id, digest, clip.fixture_id)
+    asset, version = identity_factory(tenant_id, digest, clip.fixture_id)
     source_key = f"tenants/{tenant_id}/media/video/{asset}/{version}/original"
 
     def key(path: str) -> str:
-        return _object_key(tenant_id, digest, clip, path)
+        return f"{source_key}/renditions/{path.split('/', 1)[1]}"
 
     progressive = next(item for item in clip.objects if item.path == clip.progressive_path)
     source = storage.head(source_key)

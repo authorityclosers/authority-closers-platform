@@ -97,8 +97,14 @@ async def _send_too_large(scope: Scope, send: Send) -> None:
 class RequestBodyLimitMiddleware:
     """Reject oversized request bodies before Starlette/FastAPI parses them."""
 
-    def __init__(self, app: Callable[[Scope, Receive, Send], Awaitable[None]]) -> None:
+    def __init__(
+        self,
+        app: Callable[[Scope, Receive, Send], Awaitable[None]],
+        *,
+        local_avatar_upload_enabled: bool = False,
+    ) -> None:
         self.app = app
+        self.local_avatar_upload_enabled = local_avatar_upload_enabled is True
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope.get("type") != "http" or scope.get("method", "").upper() in SAFE_METHODS:
@@ -106,6 +112,12 @@ class RequestBodyLimitMiddleware:
             return
 
         limit = request_body_limit(scope)
+        if (
+            self.local_avatar_upload_enabled
+            and scope.get("method") == "PUT"
+            and scope.get("path", "").startswith("/v1/media/local-avatar-upload/")
+        ):
+            limit = 5 * 1024 * 1024
         if (_declared_length(scope) or 0) > limit:
             await _send_too_large(scope, send)
             return

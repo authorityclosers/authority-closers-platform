@@ -250,7 +250,10 @@ async def test_orchestrator_returns_at_deadline_when_provider_ignores_cancel() -
     generation = asyncio.create_task(IntelligenceOrchestrator(port, profile()).generate(req))
     started_at = time.monotonic()
     try:
-        await port.started.wait()
+        # If scheduling consumes the short request deadline, the orchestrator
+        # correctly refuses before entering the provider. Fail this sample
+        # within a bound instead of waiting forever for an impossible start.
+        await asyncio.wait_for(port.started.wait(), timeout=0.2)
         with pytest.raises(ProviderTimeoutError):
             await asyncio.wait_for(generation, timeout=0.2)
         assert time.monotonic() - started_at < 0.2
@@ -259,6 +262,9 @@ async def test_orchestrator_returns_at_deadline_when_provider_ignores_cancel() -
         if port.task is not None and not port.task.done():
             with suppress(RuntimeError):
                 await asyncio.wait_for(asyncio.shield(port.task), timeout=0.2)
+        if not generation.done():
+            generation.cancel()
+        await asyncio.gather(generation, return_exceptions=True)
 
 
 async def test_elapsed_deadline_is_rejected_before_provider_call() -> None:

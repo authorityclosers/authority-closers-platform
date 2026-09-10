@@ -322,7 +322,7 @@ describe("learner Clarity Grid slice", () => {
     );
 
     expect(available).toContain("Reflect on the signal");
-    expect(available).toContain("REFLECTION");
+    expect(available).toContain("Reflect</span>");
     expect(available).toContain('href="/activity/reflection-1"');
     expect(locked).toContain('aria-disabled="true"');
     expect(locked).not.toContain("href=");

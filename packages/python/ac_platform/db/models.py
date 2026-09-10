@@ -11,6 +11,7 @@ from __future__ import annotations
 from sqlalchemy import MetaData
 
 from ac_platform.audit import models as audit_models
+from ac_platform.authorization import models as authorization_models
 from ac_platform.catalog import models as catalog_models
 from ac_platform.certificates import models as certificate_models
 from ac_platform.db.base import Base
@@ -21,12 +22,15 @@ from ac_platform.learning import models as learning_models
 from ac_platform.learning import planning_models
 from ac_platform.media import models as media_models
 from ac_platform.outbox import models as outbox_models
+from ac_platform.practice import focus_models
+from ac_platform.practice import models as practice_models
 from ac_platform.providers import models as provider_models
 from ac_platform.tenancy import models as tenancy_models
 
 MODEL_MODULES = (
     identity_models,
     tenancy_models,
+    authorization_models,
     knowledge_models,
     catalog_models,
     enrollment_models,
@@ -36,6 +40,8 @@ MODEL_MODULES = (
     certificate_models,
     outbox_models,
     provider_models,
+    practice_models,
+    focus_models,
     audit_models,
 )
 

@@ -1,0 +1,85 @@
+.coach-workspace {
+  min-height: 100dvh;
+}
+.coach-header {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  padding: 1rem clamp(1rem, 4vw, 4rem);
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+.coach-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 1rem;
+  font-weight: 700;
+}
+.coach-brand small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+  margin-top: 0.2rem;
+}
+.coach-header nav {
+  margin-inline: auto;
+}
+.coach-header nav a {
+  display: block;
+  padding: 0.75rem;
+  border-radius: 0.75rem;
+  background: var(--panel-raised);
+}
+.coach-account {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  font-size: 0.85rem;
+}
+.coach-account button {
+  padding: 0.6rem 1rem;
+  color: var(--text);
+  background: var(--panel-raised);
+  border: 1px solid var(--line);
+  border-radius: 0.7rem;
+  cursor: pointer;
+}
+.coach-content {
+  max-width: 1500px;
+  margin-inline: auto;
+  padding: clamp(1rem, 3vw, 3rem);
+}
+.coach-page-heading {
+  margin-bottom: 1.5rem;
+}
+.coach-page-heading h1 {
+  font-size: clamp(1.7rem, 3vw, 2.5rem);
+  margin: 0.5rem 0;
+  letter-spacing: -0.04em;
+}
+.coach-page-heading p {
+  color: var(--quiet);
+  line-height: 1.6;
+}
+@media (max-width: 640px) {
+  .coach-header {
+    gap: 0.5rem;
+    padding: 0.85rem 1rem;
+  }
+  .coach-brand {
+    font-size: 0.9rem;
+    gap: 0.5rem;
+  }
+  .coach-brand svg {
+    width: 30px;
+  }
+  .coach-account {
+    margin-left: auto;
+  }
+  .coach-account > span,
+  .coach-header nav {
+    display: none;
+  }
+}

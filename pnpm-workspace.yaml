@@ -1,6 +1,7 @@
 packages:
   - apps/learner-web
   - apps/admin-web
+  - apps/coach-web
   - packages/typescript/*
 
 overrides:

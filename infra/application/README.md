@@ -7,14 +7,18 @@ only valid release ID is the full reviewed Git commit from a verified archive.
 
 ## Trust and state boundaries
 
-- The learner, admin, API, worker, and PostgreSQL containers expose no host
+- The learner, admin, coach, API, worker, and PostgreSQL containers expose no host
   ports. Only the existing loopback Caddy service can reach web/API services on
   the external `ac_edge` Docker network.
-- Staging uses `staging.authorityclosers.com`,
-  `admin-staging.authorityclosers.com`, and
+- Staging uses `learner-staging.authorityclosers.com`,
+  `admin-staging.authorityclosers.com`, `coach-staging.authorityclosers.com`, and
   `api-staging.authorityclosers.com`. These are first-level names so they remain
   inside Cloudflare Universal SSL coverage. Production uses the canonical
-  `app`, `admin`, and `api` names.
+  `learner`, `admin`, `coach`, and `api` names. Legacy `app.authorityclosers.com`
+  and `staging.authorityclosers.com` browser pages redirect temporarily (302)
+  to the selected learner host. Old `/v1` requests and unsafe methods return
+  no-store 410 and require sign-in again; credentials are never proxied or
+  replayed across the host-only cookie boundary. The WordPress apex is unchanged.
 - Environment profiles fix distinct Compose project names, state roots, public
   origins, trusted API hosts, and `ac_edge` aliases. No generic alias is shared
   between staging and production.
@@ -51,8 +55,8 @@ only valid release ID is the full reviewed Git commit from a verified archive.
   `__Host-ac_oauth_transaction`. Both are `Secure`, `HttpOnly`, `SameSite=Lax`,
   scoped to `Path=/`, and carry no `Domain` attribute. The API reads raw Cookie
   fields and rejects missing, malformed, or duplicate security cookies before
-  actor or callback resolution. Caddy routes `/v1/*` on
-  `app.authorityclosers.com` and `admin.authorityclosers.com` to the API before
+  actor or callback resolution. Caddy routes `/v1/*` on each environment's
+  `learner`, `admin`, and `coach` hosts to the API before
   their Next.js fallbacks, so Google callbacks return to the initiating
   surface without extending trust to the WordPress apex or the other surface.
 - Google authorization state is persisted before redirect as a one-time,
@@ -132,12 +136,15 @@ git archive --format=tar --output="ac-application-${release_sha}.tar" \
 sha256sum "ac-application-${release_sha}.tar"
 ```
 
-For routine staging releases, the trusted Windows controller performs that
-exact flow plus artifact/CI binding, transfer, installation, and the compact
-public security smoke in one idempotent command:
+For reviewed staging or production releases, the trusted Windows controller
+performs that exact flow plus artifact/CI binding, transfer, installation, and
+the compact public security smoke in one idempotent command:
 
 ```powershell
 pwsh -NoProfile -File .\scripts\Deploy-Staging.ps1 -ReleaseSha <full-reviewed-commit>
+# Production is a separate invocation of the same immutable artifact:
+pwsh -NoProfile -File .\scripts\Deploy-Staging.ps1 `
+  -ReleaseSha <full-reviewed-commit> -TargetEnvironment production
 ```
 
 The controller requires PowerShell 7.4 or newer so native binary artifact
@@ -145,19 +152,20 @@ downloads remain byte-exact. Its random local stage is immediately reduced to
 the current operating-system identity and the verified ZIP remains exclusively
 open from digest calculation through extraction.
 
-If staging already runs that exact commit, the command downloads and mutates
+If the selected environment already runs that exact commit, the command downloads and mutates
 nothing; it only re-proves the exact release path and checksums, running image
-identities (including the pinned PostgreSQL image), all five service states,
-learner/API route identities, protected Admin ingress on the reviewed
+identities (including the pinned PostgreSQL image), all six service states,
+Learner/API/Coach route identities, protected Admin ingress on the reviewed
 `restless-cherry-c46f.cloudflareaccess.com` tenant, disabled public API docs,
 and the unchanged WordPress apex/`www`.
-The Google OAuth start proof runs only after a real deployment because issuing
+The Google OAuth start proof runs only after a real staging deployment because issuing
 an authorization transaction is intentionally stateful. A new deployment uses
 a private fresh local and remote stage, validates the GitHub artifact ZIP
 against the API's SHA-256 before inspecting its own checksum manifest, creates
 the Git archive fresh from the exact commit, and removes both stages. The
-command never targets production, accepts no secret values, and does not
-release external side effects.
+command accepts no secret values and cannot override either environment's
+reviewed side-effect/provider profile. Production remains on the fake provider
+with external effects held.
 
 After the archive and downloaded image bundle are transferred to the VPS, run
 the installer from the verified archive. The invocation is permitted only after
@@ -178,31 +186,37 @@ under `/srv/authority-closers/application/artifacts/<commit>`, and loads only
 exact OCI manifest IDs. The workflow separately proves that every transport
 manifest references the reviewed image config and records registry provenance;
 the runtime IDs use the transport manifests imported by the foundation's
-containerd image store. Before the pre-migration PostgreSQL custom-format backup, it
-stops the live API and worker, revokes database `CONNECT` from the runtime and
-migrator roles, terminates any remaining sessions, and proves the writer count
-is zero. Only the migrator regains access for the forward migration; the
-runtime role regains access only after migration succeeds. The installer then
-starts the hardened services according to the exact environment profile: the
-reviewed staging profile uses Resend with external effects released, while the
-reviewed production profile uses the fake provider with effects held. It then
-proves the loopback Caddy route identity and atomically advances
-`current-<environment>`.
+containerd image store. The installer first selects and verifies the target
+environment's release-owned maintenance route while the other environment's
+independently selected route remains unchanged. It then stops the live API and
+worker, revokes database `CONNECT` from runtime and migrator roles, terminates
+remaining sessions, proves zero writers, creates and verifies a unique
+pre-migration PostgreSQL custom-format backup, and runs the forward migration.
+Runtime access and the API/Learner/Admin/Coach services start only behind the
+re-proven maintenance route; the worker remains stopped. A unique immutable
+`PREPARED_BEFORE_WRITE_EXPOSURE` record is committed before the application
+release link and active route are selected. Only then can ingress accept writes,
+after which the worker starts and committed evidence is recorded.
 
-A catchable command failure or `HUP`/`INT`/`TERM` stops the candidate and fences
-database writers again before restoring the backup. It reopens runtime access,
-restores the previous release link, and restarts the previous services only
-after the restore succeeds. A failed restore or access grant remains fenced and
-does not restart an application against an uncertain database. `SIGKILL`,
-kernel failure, and abrupt host power loss are outside shell-trap rollback; keep
-external effects held and perform the documented restore/reconciliation check
-before treating an interrupted deployment as committed. Deployment evidence
-contains no secret values.
+A catchable failure or `HUP`/`INT`/`TERM` before write exposure stops the
+candidate, fences writers, restores the verified backup, restores both the
+previous application link and its matching route selector, and restarts the
+previous services only after the restore succeeds. A failure after exposure
+never restores that backup or selects an older application: it moves ingress
+back to the candidate's maintenance route, stops all application services,
+fences database writers, and appends `FORWARD_RECOVERY_REQUIRED` evidence. The
+recovery action is to reapply the exact immutable release and reconcile forward,
+preserving every accepted write and audit effect. Evidence filenames include a
+unique suffix and use no-clobber atomic moves, so retries supersede rather than
+overwrite history.
 
-Alembic revisions are forward-only by project policy. Release rollback never
-uses `alembic downgrade`; it restores the immutable previous application
-artifact together with the installer-created pre-migration database backup,
-then runs the documented reconciliation proof before side effects are released.
+`SIGKILL`, kernel failure, and abrupt host power loss remain outside shell-trap
+handling. Treat an interrupted attempt as unavailable until the selected route,
+application link, writer fence, prepared/committed evidence, and exact release
+are reconciled. Alembic revisions are forward-only. Before exposure, rollback
+may use the installer-created pre-migration database backup; no path uses
+`alembic downgrade`, and no post-exposure path uses database restore. Deployment
+evidence contains no secret values.
 
 Staging is promoted by invoking the installer for production with the same
 source archive and the same `release-images.env`; images are never rebuilt
@@ -218,13 +232,16 @@ or partial pair without printing either value. Compose, settings validation,
 and application composition provide additional fail-closed checks. Deployment
 composition constructs the Google adapter only from validated settings and
 rejects disabled or custom injected providers. The Google web client must
-register both same-surface callbacks:
+register the exact same-surface callbacks for each activated app:
 
-- `https://app.authorityclosers.com/v1/auth/google/callback`
+- `https://learner.authorityclosers.com/v1/auth/google/callback`
 - `https://admin.authorityclosers.com/v1/auth/google/callback`
+- `https://coach.authorityclosers.com/v1/auth/google/callback`
+- `https://learner-staging.authorityclosers.com/v1/auth/google/callback`
+- `https://admin-staging.authorityclosers.com/v1/auth/google/callback`
+- `https://coach-staging.authorityclosers.com/v1/auth/google/callback`
 
-Staging uses the equivalent callbacks on `staging.authorityclosers.com` and
-`admin-staging.authorityclosers.com`. The preflight proves configuration
+The preflight proves configuration
 presence only; credential rotation and a real Google login/callback remain
 deployment-time operational evidence. The reviewed staging profile selects
 `AC_EMAIL_PROVIDER=resend` and releases `AC_EXTERNAL_SIDE_EFFECTS_HOLD` only
@@ -256,6 +273,7 @@ Only an owner who has selected that exact tenant receives the global
 job-retry/recovery permissions. This keeps tenantless identity email out of
 ordinary tenant administration while retaining an attributable, idempotent
 audit path.
+
 # Staging public-film fixture mount (default off)
 
 `capabilities/staging-public-films.json` is a source-controlled, release-local

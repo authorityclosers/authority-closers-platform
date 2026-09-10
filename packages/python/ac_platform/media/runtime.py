@@ -7,7 +7,7 @@ import hmac
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.orm import Session
 
@@ -43,6 +43,9 @@ from ac_platform.media.storage import (
 from ac_platform.media.telemetry import MediaTelemetryExporter, MediaTelemetryRecorder
 from ac_platform.telemetry import TelemetryEvent, TelemetryRecorder
 
+if TYPE_CHECKING:
+    from ac_platform.media.local_avatar_runtime import LocalAvatarRuntime
+
 
 class NullTelemetrySink:
     """Explicit no-export sink used until an approved telemetry exporter is configured."""
@@ -55,6 +58,7 @@ class NullTelemetrySink:
 class MediaRuntime:
     service: MediaService
     telemetry: TelemetryRecorder
+    local_avatar_runtime: LocalAvatarRuntime | None = None
     environment: str = "local"
     media_config: MediaProviderConfig | None = None
     activation_verifier: MediaProviderActivationVerifier | None = None
@@ -262,6 +266,19 @@ def create_default_media_runtime(settings: Settings) -> MediaRuntime:
     """Build the application runtime with its fail-closed composition defaults."""
 
     runtime = create_media_runtime(settings)
+    if settings.media_public_films_delivery_enabled:
+        from ac_platform.media.public_film_runtime import compose_public_film_delivery
+
+        return compose_public_film_delivery(settings, runtime)
+    if settings.media_local_public_films_delivery_enabled:
+        from ac_platform.media.staging_fixture_runtime import compose_local_fixture_delivery
+
+        runtime = compose_local_fixture_delivery(settings, runtime)
+        if settings.media_local_avatar_enabled:
+            from ac_platform.media.local_avatar_runtime import compose_local_avatar_runtime
+
+            runtime = compose_local_avatar_runtime(settings, runtime)
+        return runtime
     if settings.media_staging_public_films_delivery_enabled:
         from ac_platform.media.staging_fixture_runtime import compose_staging_fixture_delivery
 

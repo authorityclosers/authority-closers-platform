@@ -52,6 +52,9 @@ jobs:
       # owner so they can create and drop their isolated search paths. The CI
       # service itself is ephemeral; production never exposes this credential.
       AC_TEST_DATABASE_URL: postgresql+psycopg://ac_owner:local-owner-only@localhost:5432/ac_platform
+      # Studio authoring/revision suites use the same disposable owner target
+      # through their dedicated production-parity harness.
+      AC_MEDIA_DELIVERY_RENEWAL_POSTGRES_TEST_URL: postgresql+psycopg://ac_owner:local-owner-only@localhost:5432/ac_platform
       AC_OPERATIONS_POSTGRES_TEST_URL: postgresql+psycopg://ac_owner:local-owner-only@localhost:5432/ac_platform
       AC_EXTERNAL_SIDE_EFFECTS_HOLD: "true"
       AC_EMAIL_PROVIDER: fake
@@ -171,6 +174,13 @@ jobs:
           tests/integration/test_catalog_publication_migration_postgresql.py
           tests/integration/test_database_runtime_privileges_postgresql.py
           tests/integration/test_learning_http_postgresql.py
+      - name: Prove Studio draft and revision PostgreSQL production parity
+        env:
+          AC_REQUIRE_MEDIA_DELIVERY_RENEWAL_POSTGRES_TEST: "1"
+        run: >-
+          uv run pytest
+          tests/integration/test_studio_draft_authoring_postgresql.py
+          tests/integration/test_studio_revision_postgresql.py
       - name: Validate application
         env:
           AC_REQUIRE_RESTORE_INPUT_DOCKER_TEST: "1"
@@ -192,6 +202,7 @@ jobs:
       API_IMAGE: ghcr.io/authorityclosers/authority-closers-api:${{ github.sha }}
       LEARNER_IMAGE: ghcr.io/authorityclosers/authority-closers-learner-web:${{ github.sha }}
       ADMIN_IMAGE: ghcr.io/authorityclosers/authority-closers-admin-web:${{ github.sha }}
+      COACH_IMAGE: ghcr.io/authorityclosers/authority-closers-coach-web:${{ github.sha }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
@@ -235,8 +246,31 @@ jobs:
           platforms: linux/amd64
           load: true
           tags: ${{ env.ADMIN_IMAGE }}
+          build-args: |
+            AC_RELEASE_ID=${{ github.sha }}
           cache-from: type=gha,scope=application-web
           cache-to: type=gha,mode=max,scope=application-web
+      - name: Build coach release image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        with:
+          context: .
+          file: infra/application/Dockerfile.web
+          target: coach
+          platforms: linux/amd64
+          load: true
+          tags: ${{ env.COACH_IMAGE }}
+          build-args: |
+            AC_RELEASE_ID=${{ github.sha }}
+          cache-from: type=gha,scope=application-web
+          cache-to: type=gha,mode=max,scope=application-web
+      - name: Prove exact Linux operations image startup before publication
+        run: |
+          set -euo pipefail
+          admin_id="$(docker image inspect --format '{{.Id}}' "$ADMIN_IMAGE")"
+          coach_id="$(docker image inspect --format '{{.Id}}' "$COACH_IMAGE")"
+          python3 scripts/verify-release-operations-images.py \
+            --admin-image "$admin_id" --coach-image "$coach_id" \
+            --release-id "$GITHUB_SHA"
       - name: Publish immutable SHA tags
         run: |
           set -euo pipefail
@@ -258,6 +292,7 @@ jobs:
           publish_once "$API_IMAGE"
           publish_once "$LEARNER_IMAGE"
           publish_once "$ADMIN_IMAGE"
+          publish_once "$COACH_IMAGE"
       - name: Create transport archives and reviewed manifest
         run: |
           set -euo pipefail
@@ -266,10 +301,10 @@ jobs:
           transport_index="$RUNNER_TEMP/ac-application-${GITHUB_SHA}-index.json"
           mkdir -p "$artifact_dir"
           # One archive deduplicates the shared Node image layers used by the
-          # learner and admin runtimes. This keeps the one-day transport
+          # learner, admin and coach runtimes. This keeps the one-day transport
           # artifact inside the GitHub Free storage allowance.
           docker save --output "$transport_tar" \
-            "$API_IMAGE" "$LEARNER_IMAGE" "$ADMIN_IMAGE"
+            "$API_IMAGE" "$LEARNER_IMAGE" "$ADMIN_IMAGE" "$COACH_IMAGE"
           tar --extract --to-stdout --file "$transport_tar" index.json > "$transport_index"
 
           transport_digest_for() {
@@ -309,9 +344,11 @@ jobs:
           api_id="$(docker image inspect --format '{{.Id}}' "$API_IMAGE")"
           learner_id="$(docker image inspect --format '{{.Id}}' "$LEARNER_IMAGE")"
           admin_id="$(docker image inspect --format '{{.Id}}' "$ADMIN_IMAGE")"
+          coach_id="$(docker image inspect --format '{{.Id}}' "$COACH_IMAGE")"
           api_digest="$(docker image inspect --format '{{index .RepoDigests 0}}' "$API_IMAGE")"
           learner_digest="$(docker image inspect --format '{{index .RepoDigests 0}}' "$LEARNER_IMAGE")"
           admin_digest="$(docker image inspect --format '{{index .RepoDigests 0}}' "$ADMIN_IMAGE")"
+          coach_digest="$(docker image inspect --format '{{index .RepoDigests 0}}' "$COACH_IMAGE")"
           api_release_id="$(
             docker run --rm --network none --entrypoint /bin/sh "$api_id" \
               -c 'cat /app/.ac-release-id'
@@ -333,9 +370,11 @@ jobs:
           api_transport_digest="$(transport_digest_for "$API_IMAGE")"
           learner_transport_digest="$(transport_digest_for "$LEARNER_IMAGE")"
           admin_transport_digest="$(transport_digest_for "$ADMIN_IMAGE")"
+          coach_transport_digest="$(transport_digest_for "$COACH_IMAGE")"
           verify_transport_config "$api_transport_digest" "$api_id"
           verify_transport_config "$learner_transport_digest" "$learner_id"
           verify_transport_config "$admin_transport_digest" "$admin_id"
+          verify_transport_config "$coach_transport_digest" "$coach_id"
           gzip -9 < "$transport_tar" > "$artifact_dir/application-images.tar.gz"
           {
             printf 'AC_RELEASE_ID=%s\n' "$GITHUB_SHA"
@@ -352,6 +391,9 @@ jobs:
             printf 'AC_ADMIN_IMAGE=%s\n' "$admin_transport_digest"
             printf 'AC_ADMIN_REGISTRY_DIGEST=%s\n' "$admin_digest"
             printf 'AC_ADMIN_TRANSPORT_DIGEST=%s\n' "$admin_transport_digest"
+            printf 'AC_COACH_IMAGE=%s\n' "$coach_transport_digest"
+            printf 'AC_COACH_REGISTRY_DIGEST=%s\n' "$coach_digest"
+            printf 'AC_COACH_TRANSPORT_DIGEST=%s\n' "$coach_transport_digest"
           } > "$artifact_dir/release-images.env"
           (
             cd "$artifact_dir"

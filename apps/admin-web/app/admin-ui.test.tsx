@@ -28,6 +28,8 @@ import {
 import { AuditPanel, CapabilityBoundary } from "./components/ops-primitives";
 import { DevAdminLoginForm } from "./components/dev-admin-login-form";
 
+vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: vi.fn() }) }));
+
 const previewForms = [
   createElement(LearnerLookupForm),
   createElement(CorrectionForm),
@@ -212,6 +214,22 @@ describe("G1 admin inert form seams", () => {
 });
 
 describe("G1 admin permissions and semantic boundaries", () => {
+  it("labels a local sandbox and requests its real tenant without embedding account defaults", () => {
+    const markup = renderToStaticMarkup(
+      createElement(DevAdminLoginForm, { mode: "local-sandbox" }),
+    );
+    expect(markup).toContain("Local sandbox session");
+    expect(markup).toContain('name="tenant_id"');
+    expect(markup).toContain("No staging account or remote data is used");
+    expect(markup).not.toContain("Cloudflare Access");
+    expect(markup).not.toContain('value="');
+    expect(markup).toContain('method="post"');
+    expect(
+      [...markup.matchAll(/<(?:input|button)\b[^>]*>/g)].every(([tag]) =>
+        tag.includes("disabled"),
+      ),
+    ).toBe(true);
+  });
   it("renders a password-only local bridge login without embedding credentials", () => {
     const markup = renderToStaticMarkup(createElement(DevAdminLoginForm));
 
@@ -230,11 +248,8 @@ describe("G1 admin permissions and semantic boundaries", () => {
     expect(markup).toContain("Organization overview");
     expect(markup).toContain("Tenant pending");
     expect(markup).toContain("Waiting for session verification");
-    expect(markup).toContain("Active learners");
-    expect(markup).toContain("Not measured");
-    expect(markup).toContain(
-      "No learner, catalog, job, or audit record is seeded here",
-    );
+    expect(markup).toContain("Checking workspace access");
+    expect(markup).not.toContain("Active learners");
     expect(markup).not.toContain(">248<");
     expect(markup).not.toContain(">68%<");
   });
@@ -243,12 +258,9 @@ describe("G1 admin permissions and semantic boundaries", () => {
     const markup = renderToStaticMarkup(createElement(PeoplePage));
 
     expect(markup).toContain("clarity-shell surface-people");
-    expect(markup).toContain("No learner records available");
-    expect(markup).toContain(
-      "No names, assignments, or progress values are fabricated",
-    );
-    expect(markup).toContain("Create assignment (unavailable)");
-    expect(markup).toMatch(/<button[^>]*disabled[^>]*>Create assignment/);
+    expect(markup).toContain("Checking workspace access");
+    expect(markup).not.toContain("No learner records available");
+    expect(markup).not.toContain("Create assignment");
   });
 
   it("renders the Academy Studio shell without requesting before session verification", () => {
@@ -257,10 +269,10 @@ describe("G1 admin permissions and semantic boundaries", () => {
 
     expect(markup).toContain("clarity-shell surface-studio");
     expect(markup).toContain("Today’s content work");
-    expect(markup).toContain("Checking Academy Studio access");
-    expect(markup).toContain("No catalog data is requested");
+    expect(markup).toContain("Checking workspace access");
+    expect(markup).not.toContain("studio-detail-stack");
     expect(programs).toContain("Programs and versions");
-    expect(programs).toContain("another tenant’s drafts");
+    expect(programs).toContain("within your current Studio access");
   });
 
   it("keeps the former catalog URL as one permanent Studio redirect", () => {
@@ -306,8 +318,9 @@ describe("G1 admin permissions and semantic boundaries", () => {
 
       expect(buttons.length).toBeGreaterThan(0);
       expect(buttons.every((button) => button.includes("disabled"))).toBe(true);
-      expect(markup).toContain(permission);
-      expect(markup).toContain("NOT WRITTEN");
+      expect(markup).not.toContain(permission);
+      expect(markup).toContain("Checking workspace access");
+      expect(markup).not.toContain("<form");
     }
   });
 
@@ -358,7 +371,10 @@ describe("G1 admin permissions and semantic boundaries", () => {
 
   it("keeps Studio capacity metrics explicitly unavailable", () => {
     const runtime = readFileSync(
-      new URL("./components/studio/studio-runtime.tsx", import.meta.url),
+      new URL(
+        "../../../packages/typescript/operations-web/src/studio/studio-runtime.tsx",
+        import.meta.url,
+      ),
       "utf8",
     );
 
@@ -410,25 +426,40 @@ describe("G1 admin permissions and semantic boundaries", () => {
     expect(markup).not.toContain("ERROR_RETRYABLE");
     expect(markup).not.toContain(">OFFLINE<");
     expect(markup).not.toContain(">HELD<");
-    expect(markup).toContain("No queue state is asserted.");
-    expect(markup).toContain("Unknown — no response or record is asserted");
+    expect(markup).toContain("Checking workspace access");
+    expect(markup).not.toContain("No queue state is asserted.");
   });
 
   it("keeps quiet text above 4.5:1 on actual panel backgrounds", () => {
     const styles = readFileSync(
-      new URL("./styles.css", import.meta.url),
+      new URL(
+        "../../../packages/typescript/operations-web/src/styles.css",
+        import.meta.url,
+      ),
       "utf8",
     );
-    const quiet = "#aab3a4";
-
-    expect(styles).toContain("--quiet: " + quiet);
-    expect(contrastRatio(quiet, "#10130f")).toBeGreaterThanOrEqual(4.5);
-    expect(contrastRatio(quiet, "#171b16")).toBeGreaterThanOrEqual(4.5);
+    const pair = (name: string) => {
+      const values = styles.match(
+        new RegExp(`--${name}: light-dark\\((#[a-f0-9]{6}), (#[a-f0-9]{6})\\)`),
+      );
+      if (!values) throw new Error("Missing shared light/dark token");
+      return values.slice(1);
+    };
+    for (const mode of [0, 1]) {
+      for (const surface of ["bg", "panel", "panel-soft"]) {
+        expect(
+          contrastRatio(pair("quiet")[mode], pair(surface)[mode]),
+        ).toBeGreaterThanOrEqual(4.5);
+      }
+    }
   });
 
   it("keeps Clarity Grid navigation touch targets at least 44px high", () => {
     const styles = readFileSync(
-      new URL("./styles.css", import.meta.url),
+      new URL(
+        "../../../packages/typescript/operations-web/src/styles.css",
+        import.meta.url,
+      ),
       "utf8",
     );
 

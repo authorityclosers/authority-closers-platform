@@ -1,0 +1,413 @@
+.overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 240px;
+  gap: 32px;
+  align-items: center;
+  padding: 12px 0 32px;
+  color: var(--theme-text);
+}
+.overview h1 {
+  margin: 10px 0 12px;
+  max-width: 850px;
+  font-size: clamp(1.6rem, 3vw, 2.65rem);
+  line-height: 1.16;
+  letter-spacing: -0.04em;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+.overview p {
+  margin: 0;
+  color: var(--theme-text-muted);
+  line-height: 1.6;
+}
+.overview .eyebrow {
+  color: var(--theme-action);
+  margin-top: 24px;
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+.overview .actions {
+  margin-top: 22px;
+}
+.overview > div {
+  min-width: 0;
+}
+.progress {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 16px;
+  border: 1px solid var(--theme-border);
+  border-radius: 20px;
+  background: var(--theme-surface);
+}
+.progress > div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.progress strong {
+  color: var(--theme-text);
+}
+.progress p,
+.progress span {
+  font-size: 0.78rem;
+  color: var(--theme-text-muted);
+}
+.section {
+  border-top: 1px solid var(--theme-border);
+  padding: 28px 0 40px;
+}
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.sectionHeader h2 {
+  margin: 0;
+  font-size: 1.2rem;
+  letter-spacing: -0.025em;
+  color: var(--theme-text);
+}
+.sectionHeader p {
+  margin: 5px 0 0;
+  font-size: 0.875rem;
+  color: var(--theme-text-muted);
+}
+.sectionHeader > span {
+  color: var(--theme-text-muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.chapters {
+  display: grid;
+  gap: 22px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.chapter {
+  min-width: 0;
+  position: relative;
+  padding-left: 54px;
+}
+.chapter:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  left: 19px;
+  top: 45px;
+  bottom: -19px;
+  width: 2px;
+  background: var(--theme-border);
+}
+.chapterMarker {
+  position: absolute;
+  left: 0;
+  top: 20px;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 2px solid var(--theme-border);
+  border-radius: 50%;
+  background: var(--theme-surface);
+  color: var(--theme-text-muted);
+  font-weight: 750;
+  font-size: 0.8rem;
+}
+.chapter[data-active] .chapterMarker {
+  border-color: var(--theme-action);
+  color: var(--theme-action);
+}
+.chapter[data-complete] .chapterMarker {
+  border-color: var(--theme-success-text);
+  background: var(--theme-success-surface);
+  color: var(--theme-success-text);
+}
+.chapter article {
+  border: 1px solid var(--theme-border);
+  border-radius: 20px;
+  background: var(--theme-surface);
+}
+.chapter[data-active] article {
+  border-color: color-mix(
+    in srgb,
+    var(--theme-action) 40%,
+    var(--theme-border)
+  );
+}
+.chapterSummary {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) 20px;
+  gap: 16px;
+  align-items: center;
+  min-height: 104px;
+  padding: 20px;
+  cursor: pointer;
+  list-style: none;
+  border-radius: 20px;
+  color: var(--theme-text);
+}
+.chapterSummary::-webkit-details-marker {
+  display: none;
+}
+.chapterSummary:focus-visible {
+  outline: 3px solid var(--theme-focus);
+  outline-offset: 4px;
+}
+.chapterSummary h3 {
+  margin: 4px 0 8px;
+  font-size: 1.08rem;
+  line-height: 1.35;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+.chapterSummary p {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--theme-text-muted);
+  line-height: 1.4;
+}
+.chapterSummary .chapterLabel {
+  color: var(--theme-action);
+  font-weight: 750;
+}
+.chapterSummary .chevron {
+  transition: transform var(--theme-transition-duration, 150ms);
+}
+.chapter details[open] > summary .chevron {
+  transform: rotate(90deg);
+}
+.chapterBody {
+  padding: 0 20px 20px;
+}
+.chapterFooter {
+  padding-top: 14px;
+  border-top: 1px solid var(--theme-border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--theme-text-muted);
+  font-size: 0.8rem;
+}
+.activityList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.activity {
+  min-width: 0;
+  position: relative;
+}
+.activity:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  left: 30px;
+  top: 62px;
+  bottom: -14px;
+  width: 2px;
+  background: var(--theme-border);
+}
+.activityLink {
+  position: relative;
+  display: grid;
+  grid-template-columns: 60px minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 14px 8px 14px 0;
+  border-radius: 14px;
+  color: var(--theme-text);
+  text-decoration: none;
+  transition: background var(--theme-transition-duration, 150ms);
+}
+a.activityLink:hover {
+  background: var(--theme-surface-subtle);
+}
+a.activityLink:focus-visible {
+  outline: 3px solid var(--theme-focus);
+  outline-offset: 2px;
+}
+.activityIcon {
+  width: 60px;
+  height: 60px;
+  position: relative;
+}
+.activityIcon > svg {
+  transition: transform var(--theme-transition-duration, 150ms);
+}
+a.activityLink:hover .activityIcon > svg {
+  transform: translateY(-2px);
+}
+.stateMark {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 21px;
+  height: 21px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--theme-surface);
+  color: var(--theme-text-muted);
+  border: 1px solid var(--theme-border);
+}
+.activity[data-complete] .stateMark {
+  color: var(--theme-success-text);
+  background: var(--theme-success-surface);
+  border-color: var(--theme-success-text);
+}
+.activityCopy {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.activityCopy strong {
+  font-size: 0.94rem;
+  font-weight: 650;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.activityLabel {
+  color: var(--theme-text-muted);
+  font-size: 0.73rem;
+  line-height: 1.4;
+}
+.activityReason {
+  color: var(--theme-text-muted);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+.activityStatus {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--theme-text-muted);
+  font-size: 0.75rem;
+}
+.activityStatus > span {
+  max-width: 130px;
+}
+.activity[data-complete] .activityStatus {
+  color: var(--theme-success-text);
+}
+.moduleBody {
+  max-width: 900px;
+}
+.empty {
+  color: var(--theme-text-muted);
+  padding: 16px 0;
+}
+@media (max-width: 900px) {
+  .overview {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+  }
+  .progress {
+    padding: 14px 16px;
+    width: fit-content;
+    max-width: 100%;
+  }
+}
+@media (max-width: 600px) {
+  .moduleOverview .progress {
+    padding: 0;
+    border: 0;
+    background: none;
+  }
+  .moduleOverview .progress > svg {
+    width: 40px;
+    height: 40px;
+  }
+  .overview {
+    padding-top: 0;
+    gap: 20px;
+  }
+  .overview h1 {
+    font-size: 1.7rem;
+  }
+  .overview .eyebrow {
+    margin-top: 20px;
+  }
+  .section {
+    padding-top: 22px;
+  }
+  .sectionHeader {
+    align-items: start;
+  }
+  .sectionHeader p {
+    font-size: 0.8rem;
+  }
+  .sectionHeader > span {
+    display: none;
+  }
+  .chapter {
+    padding-left: 0;
+  }
+  .chapterMarker,
+  .chapter:not(:last-child)::before {
+    display: none;
+  }
+  .chapterSummary {
+    grid-template-columns: 48px minmax(0, 1fr) 16px;
+    padding: 16px 12px;
+    gap: 10px;
+  }
+  .chapterSummary > svg:first-child {
+    width: 48px;
+    height: 48px;
+  }
+  .chapterSummary h3 {
+    font-size: 1rem;
+  }
+  .chapterBody {
+    padding: 0 12px 14px;
+  }
+  .activityLink {
+    grid-template-columns: 48px minmax(0, 1fr) 16px;
+    column-gap: 10px;
+    padding: 12px 0;
+  }
+  .activityIcon,
+  .activityIcon > svg {
+    width: 48px;
+    height: 48px;
+  }
+  .activity:not(:last-child)::before {
+    left: 24px;
+    top: 56px;
+  }
+  .activityStatus {
+    display: contents;
+  }
+  .activityStatus > span {
+    grid-column: 2;
+    max-width: none;
+    font-size: 0.73rem;
+    margin-top: 5px;
+  }
+  .activityStatus > svg {
+    grid-column: 3;
+    grid-row: 1;
+  }
+  .activityCopy strong {
+    font-size: 0.9rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chapterSummary .chevron,
+  .activityIcon > svg,
+  .activityLink {
+    transition: none;
+  }
+  a.activityLink:hover .activityIcon > svg {
+    transform: none;
+  }
+}
+:global(html[data-reduced-motion="true"])
+  a.activityLink:hover
+  .activityIcon
+  > svg {
+  transform: none;
+}

@@ -23,8 +23,39 @@ PYTHON_DOCKERFILE = (APPLICATION / "Dockerfile.python").read_text(encoding="utf-
 CADDYFILE = (ROOT / "infra" / "vps-foundation" / "compose" / "foundation" / "Caddyfile").read_text(
     encoding="utf-8"
 )
+PRODUCTION_EDGE_ROUTE = (APPLICATION / "edge-routes" / "production.caddy").read_text(
+    encoding="utf-8"
+)
+STAGING_EDGE_ROUTE = (APPLICATION / "edge-routes" / "staging.caddy").read_text(encoding="utf-8")
+PRODUCTION_HOLD_ROUTE = (APPLICATION / "edge-routes" / "production-hold.caddy").read_text(
+    encoding="utf-8"
+)
+STAGING_HOLD_ROUTE = (APPLICATION / "edge-routes" / "staging-hold.caddy").read_text(
+    encoding="utf-8"
+)
+ACTIVE_CADDYFILE = CADDYFILE.replace(
+    "\timport /etc/caddy/application-routes/production.caddy", PRODUCTION_EDGE_ROUTE.rstrip()
+).replace("\timport /etc/caddy/application-routes/staging.caddy", STAGING_EDGE_ROUTE.rstrip())
 FOUNDATION_COMPOSE = (
     ROOT / "infra" / "vps-foundation" / "compose" / "foundation" / "compose.yaml"
+).read_text(encoding="utf-8")
+FOUNDATION_PRODUCTION_EDGE_ROUTE = (
+    ROOT
+    / "infra"
+    / "vps-foundation"
+    / "compose"
+    / "foundation"
+    / "application-routes"
+    / "production.caddy"
+).read_text(encoding="utf-8")
+FOUNDATION_STAGING_EDGE_ROUTE = (
+    ROOT
+    / "infra"
+    / "vps-foundation"
+    / "compose"
+    / "foundation"
+    / "application-routes"
+    / "staging.caddy"
 ).read_text(encoding="utf-8")
 FOUNDATION_BOOTSTRAP = (
     ROOT / "infra" / "vps-foundation" / "scripts" / "bootstrap-host.sh"
@@ -196,7 +227,7 @@ def test_runtime_containers_are_not_privileged_or_host_published() -> None:
     assert '"--no-access-log"' in PYTHON_DOCKERFILE
     assert "container_name:" not in COMPOSE
     assert "build:" not in COMPOSE
-    assert COMPOSE.count("pull_policy: never") == 5
+    assert COMPOSE.count("pull_policy: never") == 6
 
 
 def test_edge_and_application_logs_redact_oauth_and_media_credentials() -> None:
@@ -287,7 +318,7 @@ def adapted_foundation_caddy_config() -> dict:
         ]
     result = subprocess.run(  # noqa: S603 - fixed parser; stdin source, no server/listener or mounted files
         command,
-        input=CADDYFILE,
+        input=ACTIVE_CADDYFILE,
         text=True,
         capture_output=True,
         check=False,
@@ -374,6 +405,7 @@ def test_release_fails_closed_on_identity_and_database_secrets() -> None:
         "AC_API_IMAGE:?",
         "AC_LEARNER_IMAGE:?",
         "AC_ADMIN_IMAGE:?",
+        "AC_COACH_IMAGE:?",
     )
 
     for marker in required_markers:
@@ -524,35 +556,273 @@ def test_rate_limit_proxy_boundary_uses_one_deterministic_edge_address() -> None
 
 
 def test_caddy_routes_only_named_application_hosts() -> None:
+    application_routes = PRODUCTION_EDGE_ROUTE + STAGING_EDGE_ROUTE
     for hostname, upstream in (
-        ("app.authorityclosers.com", "ac-production-learner:3000"),
+        ("learner.authorityclosers.com", "ac-production-learner:3000"),
         ("admin.authorityclosers.com", "ac-production-admin:3001"),
+        ("coach.authorityclosers.com", "ac-production-coach:3002"),
         ("api.authorityclosers.com", "ac-production-api:8000"),
-        ("staging.authorityclosers.com", "ac-staging-learner:3000"),
+        ("learner-staging.authorityclosers.com", "ac-staging-learner:3000"),
         ("admin-staging.authorityclosers.com", "ac-staging-admin:3001"),
+        ("coach-staging.authorityclosers.com", "ac-staging-coach:3002"),
         ("api-staging.authorityclosers.com", "ac-staging-api:8000"),
     ):
-        assert f"host {hostname}" in CADDYFILE
-        assert f"reverse_proxy {upstream}" in CADDYFILE
+        assert f"host {hostname}" in application_routes
+        assert f"reverse_proxy {upstream}" in application_routes
 
     assert "Strict-Transport-Security" in CADDYFILE
     assert "X-Content-Type-Options" in CADDYFILE
-    assert CADDYFILE.count("path /v1/*") == 4
-    assert CADDYFILE.count("reverse_proxy ac-production-api:8000") == 3
-    assert CADDYFILE.count("reverse_proxy ac-staging-api:8000") == 3
-    assert CADDYFILE.index("\thandle @learner_api {") < CADDYFILE.index("\thandle @learner {")
-    assert CADDYFILE.index("\thandle @admin_api {") < CADDYFILE.index("\thandle @admin {")
-    assert CADDYFILE.count("connect-src 'self';") == 4
-    assert "connect-src 'self' https://api.authorityclosers.com" not in CADDYFILE
+    assert application_routes.count("path /v1/*") == 6
+    assert application_routes.count("reverse_proxy ac-production-api:8000") == 4
+    assert application_routes.count("reverse_proxy ac-staging-api:8000") == 4
+    assert PRODUCTION_EDGE_ROUTE.index("\thandle @learner_api {") < PRODUCTION_EDGE_ROUTE.index(
+        "\thandle @learner {"
+    )
+    assert PRODUCTION_EDGE_ROUTE.index("\thandle @admin_api {") < PRODUCTION_EDGE_ROUTE.index(
+        "\thandle @admin {"
+    )
+    assert application_routes.count("connect-src 'self';") == 6
+    assert "connect-src 'self' https://api.authorityclosers.com" not in application_routes
     for route in (
         "learner-production",
         "admin-production",
+        "coach-production",
         "api-production",
         "learner-staging",
         "admin-staging",
+        "coach-staging",
         "api-staging",
     ):
-        assert f'X-Authority-Closers-Route "{route}"' in CADDYFILE
+        assert f'X-Authority-Closers-Route "{route}"' in application_routes
+
+
+def test_caddy_imports_independent_release_owned_environment_routes() -> None:
+    assert CADDYFILE.count("/etc/caddy/application-routes/") == 2
+    assert "production.caddy" in CADDYFILE and "staging.caddy" in CADDYFILE
+    assert (
+        "/srv/authority-closers/application/edge-routes:/etc/caddy/application-routes:ro"
+        in FOUNDATION_COMPOSE
+    )
+    route_projection = "/srv/authority-closers/application/edge-route-releases"
+    assert f"{route_projection}:{route_projection}:ro" in FOUNDATION_COMPOSE
+    assert "/srv/authority-closers/releases:/srv/authority-closers/releases:ro" not in (
+        FOUNDATION_COMPOSE
+    )
+    assert "/srv/authority-closers/application/releases:" not in FOUNDATION_COMPOSE
+    assert "docker exec ac-edge-router caddy validate" in INSTALLER
+    assert "validate_released_edge_route_target" in INSTALLER
+    assert "for selector_environment in production staging" in INSTALLER
+    assert "sha256sum --check --strict RELEASE-FILES.sha256" in INSTALLER
+    assert "root:root 444" in INSTALLER
+    projection_guard = '[[ -d "$edge_route_releases_root" && ! -L "$edge_route_releases_root" ]]'
+    projection_install = 'install -d -m 0755 -o root -g root "$edge_route_releases_root"'
+    assert INSTALLER.index(projection_guard) < INSTALLER.index(projection_install)
+    for environment, hold in (
+        ("production", PRODUCTION_HOLD_ROUTE),
+        ("staging", STAGING_HOLD_ROUTE),
+    ):
+        assert f"release-hold-{environment}" in hold
+        assert 'Cache-Control "no-store"' in hold
+        assert 'header Retry-After "30"' in hold
+        assert " 503" in hold
+        assert "edge-routes/$target_environment.caddy" in INSTALLER
+        assert "edge-routes/$target_environment-hold.caddy" in INSTALLER
+    assert "restore_edge_route" in INSTALLER
+    assert "previous_edge_route_target" in INSTALLER
+    assert "up --detach --no-deps --force-recreate --wait" in INSTALLER
+
+
+def test_foundation_bootstrap_holds_unreleased_canonical_hosts() -> None:
+    for hostname in (
+        "learner.authorityclosers.com",
+        "admin.authorityclosers.com",
+        "coach.authorityclosers.com",
+        "api.authorityclosers.com",
+    ):
+        assert hostname in FOUNDATION_PRODUCTION_EDGE_ROUTE
+    assert 'X-Authority-Closers-Route "release-hold-production"' in (
+        FOUNDATION_PRODUCTION_EDGE_ROUTE
+    )
+    for hostname in (
+        "learner-staging.authorityclosers.com",
+        "coach-staging.authorityclosers.com",
+    ):
+        assert hostname in FOUNDATION_STAGING_EDGE_ROUTE
+    assert 'X-Authority-Closers-Route "release-hold-staging"' in FOUNDATION_STAGING_EDGE_ROUTE
+    for route in (FOUNDATION_PRODUCTION_EDGE_ROUTE, FOUNDATION_STAGING_EDGE_ROUTE):
+        assert 'Cache-Control "no-store"' in route
+        assert 'header Retry-After "30"' in route
+        assert " 503" in route
+
+
+def test_unprivileged_caddy_resolves_absolute_route_projection_selectors(tmp_path: Path) -> None:
+    docker = shutil.which("docker")
+    if docker is None or sys.platform == "win32":
+        if os.environ.get("CI", "").lower() == "true":
+            pytest.fail("Linux CI with Docker is required for route selector mount proof")
+        pytest.skip("Linux Docker is required for route selector mount proof")
+    try:
+        docker_ready = (
+            subprocess.run(  # noqa: S603 - fixed read-only daemon probe
+                [docker, "info", "--format", "{{.ServerVersion}}"],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=15,
+            ).returncode
+            == 0
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        docker_ready = False
+    if not docker_ready:
+        if os.environ.get("CI", "").lower() == "true":
+            pytest.fail("CI requires Docker for route selector mount proof")
+        pytest.skip("Docker daemon is unavailable")
+
+    images = (ROOT / "infra/vps-foundation/config/release/foundation-images.env").read_text(
+        encoding="utf-8"
+    )
+    image = re.search(r"^CADDY_IMAGE=(caddy@sha256:[0-9a-f]{64})$", images, re.MULTILINE)
+    assert image
+    projection_id = "foundation-" + "a" * 40
+    selectors = tmp_path / "selectors"
+    projections = tmp_path / "projections" / projection_id
+    selectors.mkdir()
+    projections.mkdir(parents=True)
+    for environment, route in (
+        ("production", FOUNDATION_PRODUCTION_EDGE_ROUTE),
+        ("staging", FOUNDATION_STAGING_EDGE_ROUTE),
+    ):
+        (projections / f"{environment}.caddy").write_text(route, encoding="utf-8", newline="\n")
+        (selectors / f"{environment}.caddy").symlink_to(
+            f"/srv/authority-closers/application/edge-route-releases/"
+            f"{projection_id}/{environment}.caddy"
+        )
+    caddyfile = tmp_path / "Caddyfile"
+    caddyfile.write_text(CADDYFILE, encoding="utf-8", newline="\n")
+    command = [
+        docker,
+        "run",
+        "--rm",
+        "--pull",
+        "never",
+        "--network",
+        "none",
+        "--read-only",
+        "--security-opt",
+        "no-new-privileges:true",
+        "--cap-drop",
+        "ALL",
+        "--cap-add",
+        "NET_BIND_SERVICE",
+        "--user",
+        "1000:1000",
+        "--tmpfs",
+        "/config:rw,noexec,nosuid,nodev,size=16m,uid=1000,gid=1000",
+        "--tmpfs",
+        "/data:rw,noexec,nosuid,nodev,size=16m,uid=1000,gid=1000",
+        "--tmpfs",
+        "/tmp:rw,noexec,nosuid,nodev,size=16m,uid=1000,gid=1000",  # noqa: S108
+        "--volume",
+        f"{caddyfile}:/etc/caddy/Caddyfile:ro",
+        "--volume",
+        f"{selectors}:/etc/caddy/application-routes:ro",
+        "--volume",
+        f"{tmp_path / 'projections'}:/srv/authority-closers/application/edge-route-releases:ro",
+        "--entrypoint",
+        "caddy",
+        image[1],
+        "validate",
+        "--config",
+        "/etc/caddy/Caddyfile",
+        "--adapter",
+        "caddyfile",
+    ]
+    result = subprocess.run(  # noqa: S603 - exact pinned image and bounded local fixtures
+        command, capture_output=True, text=True, check=False, timeout=120
+    )
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize(
+    "prefix,legacy,canonical",
+    [
+        ("legacy_learner", "app.authorityclosers.com", "learner.authorityclosers.com"),
+        (
+            "legacy_staging_learner",
+            "staging.authorityclosers.com",
+            "learner-staging.authorityclosers.com",
+        ),
+    ],
+)
+def test_legacy_learner_transition_never_proxies_credentials_or_redirects_unsafe_methods(
+    prefix: str, legacy: str, canonical: str
+) -> None:
+    route = PRODUCTION_EDGE_ROUTE if prefix == "legacy_learner" else STAGING_EDGE_ROUTE
+    api_matcher = route.split(f"\t@{prefix}_api {{", 1)[1].split("\n\t}", 1)[0]
+    api_handler = route.split(f"\thandle @{prefix}_api {{", 1)[1].split("\n\t}", 1)[0]
+    pages_matcher = route.split(f"\t@{prefix}_pages {{", 1)[1].split("\n\t}", 1)[0]
+    pages_handler = route.split(f"\thandle @{prefix}_pages {{", 1)[1].split("\n\t}", 1)[0]
+    unsafe_handler = route.split(f"\thandle @{prefix} {{", 1)[1].split("\n\t}", 1)[0]
+    assert f"host {legacy}" in api_matcher and "path /v1 /v1/*" in api_matcher
+    # The same path matcher catches /v1/auth/google/callback?code=...&state=...
+    # before the GET/HEAD redirect; no sensitive query is forwarded anywhere.
+    assert route.index(f"handle @{prefix}_api") < route.index(f"handle @{prefix}_pages")
+    assert "method GET HEAD" in pages_matcher
+    assert f"redir https://{canonical}{{uri}} 302" in pages_handler
+    for closed in (api_handler, unsafe_handler):
+        assert "410" in closed and "sign in again" in closed.lower()
+        assert 'Cache-Control "no-store"' in closed
+        assert "redir " not in closed and "reverse_proxy " not in closed
+    assert "host authorityclosers.com" not in route
+    assert "host www.authorityclosers.com" not in route
+
+
+@pytest.mark.parametrize(
+    "location,status,accepted",
+    [
+        ("/login", 307, True),
+        ("https://coach-staging.authorityclosers.com/login", 307, True),
+        ("https://evil.example/login", 307, False),
+        ("//evil.example/login", 307, False),
+        ("http://coach-staging.authorityclosers.com/login", 307, False),
+        ("/login?next=https://evil.example", 307, False),
+        ("/login\r\nLocation: /other", 307, False),
+        ("", 307, False),
+        ("/login", 302, False),
+    ],
+)
+def test_installer_sign_in_probe_enforces_exact_location_without_following_redirects(
+    tmp_path: Path, location: str, status: int, accepted: bool
+) -> None:
+    headers_file = tmp_path / "headers-fixture"
+    lines = "HTTP/1.1 307 Temporary Redirect\r\nX-Authority-Closers-Route: coach-staging\r\n"
+    if location:
+        lines += f"Location: {location}\r\n"
+    headers_file.write_bytes((lines + "\r\n").encode("ascii"))
+    function = _installer_function("check_route", "\n\nset_database_writer_access() {")
+    harness = f"""set -euo pipefail
+curl() {{
+  local headers='' body=''
+  while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+      --dump-header) shift; headers="$1" ;;
+      --output) shift; body="$1" ;;
+      --location|-L) return 99 ;;
+    esac
+    shift
+  done
+  cp -- {shlex.quote(headers_file.as_posix())} "$headers"
+  printf '' > "$body"
+  printf '%s' {status}
+}}
+{function}
+check_route coach-staging.authorityclosers.com / 307 coach-staging /login
+"""
+    result = subprocess.run(  # noqa: S603 - extracted function with a no-network curl fixture
+        [_bash_executable(), "-s"], input=harness, text=True, capture_output=True, check=False
+    )
+    assert (result.returncode == 0) is accepted, result.stderr
 
 
 def test_api_and_admin_adapter_use_canonical_trusted_internal_dns() -> None:
@@ -594,6 +864,10 @@ def test_environment_profiles_isolate_state_hosts_and_edge_aliases() -> None:
     assert "AC_EMAIL_PROVIDER=resend" in staging
     assert "AC_EXTERNAL_SIDE_EFFECTS_HOLD=true" in production
     assert "AC_EMAIL_PROVIDER=fake" in production
+    assert "AC_PRACTICE_PILOT_ENABLED=false" in staging
+    assert "AC_PRACTICE_PILOT_ENABLED=false" in production
+    assert "-u AC_PRACTICE_PILOT_ENABLED" in INSTALLER
+    assert "-u AC_PRACTICE_PILOT_TENANT_ID" in INSTALLER
     assert "* text=auto eol=lf" in GIT_ATTRIBUTES
     assert "Released environment profile must use canonical LF line endings" in INSTALLER
 
@@ -703,12 +977,18 @@ def test_installer_profile_parser_reports_effective_profile_policy(
         ),
         (
             lambda profile: profile.replace(
-                b"AC_PUBLIC_APP_URL=https://staging.authorityclosers.com\n",
-                b"AC_PUBLIC_APP_URL=https://app.authorityclosers.com\n",
+                b"AC_PUBLIC_APP_URL=https://learner-staging.authorityclosers.com\n",
+                b"AC_PUBLIC_APP_URL=https://learner.authorityclosers.com\n",
             ),
             "unexpected value for AC_PUBLIC_APP_URL",
         ),
         (lambda profile: profile + b"AC_RESEND_API_KEY=secret-like-value\n", "unexpected key"),
+        (
+            lambda profile: profile.replace(
+                b"AC_PRACTICE_PILOT_ENABLED=false\n", b"AC_PRACTICE_PILOT_ENABLED=true\n"
+            ),
+            "unexpected value for AC_PRACTICE_PILOT_ENABLED",
+        ),
     ),
 )
 def test_installer_profile_parser_rejects_bad_profiles_before_mutation(
@@ -748,7 +1028,7 @@ def test_compose_for_uses_profile_policy_over_ambient_environment(tmp_path: Path
 def test_release_is_built_off_host_and_installed_with_backup_and_rollback() -> None:
     assert "workflow_dispatch:" in WORKFLOW
     assert "packages: write" in WORKFLOW
-    assert WORKFLOW.count("load: true") == 3
+    assert WORKFLOW.count("load: true") == 4
     assert "Refusing to overwrite immutable release tag" in WORKFLOW
     assert "release-images.env" in WORKFLOW
     assert 'tar --extract --to-stdout --file "$transport_tar" index.json' in WORKFLOW
@@ -795,6 +1075,10 @@ def test_release_is_built_off_host_and_installed_with_backup_and_rollback() -> N
     assert "Prove staging seed PostgreSQL serialization" in WORKFLOW
     assert 'AC_REQUIRE_STAGING_SEED_POSTGRES_TEST: "1"' in WORKFLOW
     assert "pytest tests/integration/test_staging_seed_postgresql.py" in WORKFLOW
+    assert "Prove Studio draft and revision PostgreSQL production parity" in WORKFLOW
+    assert 'AC_REQUIRE_MEDIA_DELIVERY_RENEWAL_POSTGRES_TEST: "1"' in WORKFLOW
+    assert "tests/integration/test_studio_draft_authoring_postgresql.py" in WORKFLOW
+    assert "tests/integration/test_studio_revision_postgresql.py" in WORKFLOW
     assert 'AC_REQUIRE_RESTORE_INPUT_DOCKER_TEST: "1"' in WORKFLOW
     assert "docker build" not in INSTALLER
     assert "docker load" in INSTALLER
@@ -815,15 +1099,112 @@ def test_release_is_built_off_host_and_installed_with_backup_and_rollback() -> N
     assert 'readlink -f "$current_link"' in INSTALLER
     assert 'rm -- "$current_link"' in INSTALLER
     assert 'mktemp "$evidence_root/.deployment-${release_id}.XXXXXX"' in INSTALLER
-    assert 'mv --no-target-directory "$evidence_tmp" "$evidence_file"' in INSTALLER
+    assert 'mv --no-target-directory --no-clobber "$evidence_tmp" "$evidence_file"' in INSTALLER
+    assert "forward-recovery-required-${recovery_suffix}.env" in INSTALLER
+    assert "${release_id}-prepared-${attempt_tmp##*.}.env" in INSTALLER
     assert "AC_EXTERNAL_SIDE_EFFECTS_HOLD" in COMPOSE
     assert "/usr/local/sbin/ac-infisical-run" in INSTALLER
     assert 'find "$stage_dir/postgres/init" -type d -exec chmod 0755' in INSTALLER
     assert 'find "$stage_dir/postgres/init" -type f -exec chmod 0644' in INSTALLER
+    deployment = INSTALLER.split("trap finish EXIT", maxsplit=1)[1]
+    assert deployment.index('activate_edge_route "$edge_hold_source"') < deployment.index(
+        "set_database_writer_access migrator"
+    )
+    assert deployment.index("AC_STATUS=PREPARED_BEFORE_WRITE_EXPOSURE") < deployment.index(
+        "set_database_writer_access runtime"
+    )
+    assert deployment.index("set_database_writer_access runtime") < deployment.index(
+        "api learner-web admin-web coach-web"
+    )
+    assert deployment.index("api learner-web admin-web coach-web") < deployment.index(
+        "write_exposure_started=1"
+    )
+    assert deployment.index("write_exposure_started=1") < deployment.index(
+        'activate_edge_route "$edge_route_source"'
+    )
+    assert deployment.index('activate_edge_route "$edge_route_source"') < deployment.index(
+        "up --detach --no-deps --wait --wait-timeout 180 worker"
+    )
+    rollback = _installer_function("rollback_release", "\n\ncontain_forward_recovery() {")
+    assert '[[ "$write_exposure_started" == 0 ]]' in rollback
+    assert "pg_restore" in rollback
+    finish = _installer_function("finish", "\ntrap finish EXIT")
+    assert '[[ "$write_exposure_started" == 0 ]]' in finish
+    assert "record_forward_recovery_required" in finish
     postgres_bootstrap = (APPLICATION / "postgres" / "init" / "001-roles.sh").read_text(
         encoding="utf-8"
     )
     assert "GRANT USAGE, SELECT ON SEQUENCES TO ac_backup" in postgres_bootstrap
+
+
+def test_late_failure_after_an_accepted_write_is_forward_only(tmp_path: Path) -> None:
+    """Failure injection proves accepted writes are never erased by backup restore."""
+    accepted_write = tmp_path / "accepted-write"
+    rollback_called = tmp_path / "rollback-called"
+    recovery_recorded = tmp_path / "forward-recovery"
+    events = tmp_path / "containment-events"
+    containment = _installer_function(
+        "contain_forward_recovery", "\n\nrecord_forward_recovery_required() {"
+    )
+    finish = _installer_function("finish", "\ntrap finish EXIT")
+    harness = f"""set -euo pipefail
+mutation_started=1
+release_committed=0
+write_exposure_started=1
+forward_recovery_ingress_held=false
+forward_recovery_services_stopped=false
+forward_recovery_writers_fenced=false
+edge_hold_source=/immutable/staging-hold.caddy
+api_host=api-staging.authorityclosers.com
+target_environment=staging
+release_dir=/immutable/release
+activate_edge_route() {{
+  test "$1" = "$edge_hold_source"
+  printf 'edge:hold\n' >> {shlex.quote(events.as_posix())}
+}}
+check_route() {{
+  test "$*" = "api-staging.authorityclosers.com /health/ready 503 release-hold-staging"
+  printf 'edge:verified\n' >> {shlex.quote(events.as_posix())}
+}}
+compose_for() {{
+  test "$*" = "/immutable/release stop --timeout 30 api worker learner-web admin-web coach-web"
+  printf 'services:stopped\n' >> {shlex.quote(events.as_posix())}
+}}
+set_database_writer_access() {{
+  test "$1" = fence
+  printf 'writers:fenced\n' >> {shlex.quote(events.as_posix())}
+}}
+rollback_release() {{ printf called > {shlex.quote(rollback_called.as_posix())}; }}
+record_forward_recovery_required() {{
+  test -f {shlex.quote(accepted_write.as_posix())}
+  test "$forward_recovery_ingress_held" = true
+  test "$forward_recovery_services_stopped" = true
+  test "$forward_recovery_writers_fenced" = true
+  printf 'recovery:recorded\n' >> {shlex.quote(events.as_posix())}
+  printf recorded > {shlex.quote(recovery_recorded.as_posix())}
+}}
+cleanup_stages() {{ return 0; }}
+{containment}
+{finish}
+trap finish EXIT
+printf accepted > {shlex.quote(accepted_write.as_posix())}
+# Inject a late finalization failure after a runtime write was accepted.
+false
+"""
+    result = subprocess.run(  # noqa: S603 - fixed failure harness and extracted function
+        [_bash_executable(), "-s"], input=harness, text=True, capture_output=True, check=False
+    )
+    assert result.returncode != 0
+    assert accepted_write.read_text(encoding="utf-8") == "accepted"
+    assert recovery_recorded.read_text(encoding="utf-8") == "recorded"
+    assert not rollback_called.exists(), "late failure must not invoke destructive restore"
+    assert events.read_text(encoding="utf-8").splitlines() == [
+        "edge:hold",
+        "edge:verified",
+        "services:stopped",
+        "writers:fenced",
+        "recovery:recorded",
+    ]
 
 
 def test_api_image_bakes_a_root_owned_read_only_release_marker() -> None:

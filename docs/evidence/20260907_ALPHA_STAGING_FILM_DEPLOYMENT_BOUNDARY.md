@@ -135,3 +135,30 @@ Local follow-up: **126 passed, 3 POSIX-only skipped** in 21.26 seconds;
 Ruff formatting and lint passed. A new full Linux CI run is required after the
 fix. The committed capability is still off; no VPS installation or streaming
 acceptance is inferred from this compatibility correction.
+
+## Superseding VPS installation evidence — September 7
+
+The policy-off implementation subsequently shipped in application release
+`a5eef0df4b340070ac6e58f9912d73a3bf1d2f18`. Its exact Linux packaging/validation
+completed before deployment. The root rehashed all 30 local technical fixture
+files, transferred a fresh archive, verified its SHA-256 on the VPS and invoked
+the immutable released `scripts/staging-public-films.py install` command.
+
+- Media bytes: **54,274,209**, fixed manifest
+  `d693acc73dc3f66c1b13ad6e68d5e41cba8478dc719f4b68211ce829442b0222`.
+- Transfer archive: **54,304,256 bytes**, SHA-256
+  `e28f13c6d377d67cd32dafcecf495b405b9b19f7395569532ef2bac76ab7ad66`.
+- New private upload stage: `/var/tmp/ac-public-films-12s.zkSlY4`.
+- Canonical immutable destination:
+  `/srv/authority-closers/application/media-staging/d693acc73dc3f66c1b13ad6e68d5e41cba8478dc719f4b68211ce829442b0222`.
+- First command returned `installed`; exact replay returned `already_installed`.
+  Destination inventory is 30 files, root-owned 0444, directories 0555.
+- A fresh read-only `compose-file` evaluation for the still-current a5 release
+  returned no override: **policy remains off**.
+
+No binding, catalog publication, learner enrollment, runtime-flag override or
+application restart was performed by installation. These are attributed
+12-second technical excerpts, not Dipak's teaching content. The separately
+captured actual learner activity still says no video is available. A reviewed
+policy-on release, persisted authorized content operator, canonical fixture
+import/publication and actual signed playback remain required.

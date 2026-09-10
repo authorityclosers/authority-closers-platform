@@ -17,7 +17,9 @@ import {
   isFreeEnrollmentProgram,
   learnerHomeMode,
   LearningActivityNavigation,
+  LearningModules,
   LearnerHomeEnrollmentCard,
+  learningPathContinueTarget,
   learningPathMatchesActivity,
   loadActivityEntryState,
   refreshActivityLearningSnapshots,
@@ -107,6 +109,7 @@ import {
   writeOnboardingLocalDraft,
   type OnboardingRecoveryLockManager,
 } from "./local-drafts";
+import { markOfflineRead } from "./offline-read-cache";
 
 function h1Count(html: string): number {
   return html.match(/<h1(?:\s|>)/g)?.length ?? 0;
@@ -1533,6 +1536,267 @@ describe("connected learner ready states", () => {
     expect(locked).toContain('aria-disabled="true"');
     expect(locked).not.toContain("href=");
     expect(available).toContain('href="/activity/activity-1"');
+  });
+
+  function learningModulesFixture(): LearningResponse {
+    const activity = (
+      id: string,
+      moduleId: string,
+      position: number,
+      state: string,
+      title: string,
+    ) => ({
+      ...baseActivity,
+      id,
+      module_id: moduleId,
+      position,
+      title,
+      state,
+      explanation: {
+        ...baseActivity.explanation,
+        activity_id: id,
+        state,
+        missing_activity_ids: state === "locked" ? ["earlier-required"] : [],
+      },
+    });
+    return {
+      program_id: "program-1",
+      program_version_id: "version-1",
+      program_slug: "server-owned-learning-path",
+      program_title: "An explicitly enrolled course",
+      version_number: 1,
+      enrollment_id: "enrollment-1",
+      modules: [
+        {
+          id: "locked-chapter",
+          position: 1,
+          title: "Opening decisions",
+          activities: [
+            activity(
+              "locked-step",
+              "locked-chapter",
+              1,
+              "locked",
+              "A gated opening",
+            ),
+          ],
+        },
+        {
+          id: "current-chapter",
+          position: 4,
+          title: "Discovery decisions",
+          activities: [
+            activity(
+              "finished-step",
+              "current-chapter",
+              2,
+              "completed",
+              "A completed reflection",
+            ),
+            activity(
+              "review-step",
+              "current-chapter",
+              5,
+              "awaiting_review",
+              "A submitted reflection",
+            ),
+            activity(
+              "available-step",
+              "current-chapter",
+              8,
+              "available",
+              "The next question",
+            ),
+          ],
+        },
+        {
+          id: "empty-chapter",
+          position: 9,
+          title: "A not-yet-published chapter",
+          activities: [],
+        },
+      ],
+      projection: {
+        scope_type: "course",
+        scope_id: "program-1",
+        program_version: "1",
+        projection_version: "1",
+        denominator: 12,
+        completed_count: 1,
+        percentage: 1 / 12,
+        predicate: "required activities completed",
+        missing_module_ids: ["locked-chapter", "current-chapter"],
+        activity_reasons: [],
+      },
+    };
+  }
+
+  it("renders the mounted course outline in server order with exact activity and module routes", () => {
+    const learning = learningModulesFixture();
+    const before = JSON.stringify(learning);
+    const html = renderToStaticMarkup(
+      createElement(LearningModules, { learning }),
+    );
+    const titles = [
+      "Opening decisions",
+      "A gated opening",
+      "Discovery decisions",
+      "A completed reflection",
+      "A submitted reflection",
+      "The next question",
+      "A not-yet-published chapter",
+    ];
+    const offsets = titles.map((title) => html.indexOf(title));
+    expect(offsets.every((offset) => offset >= 0)).toBe(true);
+    expect(offsets).toEqual([...offsets].sort((a, b) => a - b));
+    const hrefs = [...html.matchAll(/href="([^"]+)"/g)].map(
+      (match) => match[1],
+    );
+    expect(hrefs).toEqual([
+      ROUTES.activity("finished-step"),
+      ROUTES.activity("review-step"),
+      ROUTES.activity("available-step"),
+      ROUTES.module(learning.program_slug, "current-chapter"),
+    ]);
+    expect(JSON.stringify(learning)).toBe(before);
+    expect(html).not.toContain("authority-closers-free-course");
+  });
+
+  it("does not make locked or unpublished chapters navigable", () => {
+    const learning = learningModulesFixture();
+    const html = renderToStaticMarkup(
+      createElement(LearningModules, { learning }),
+    );
+    expect(html).toContain('aria-disabled="true"');
+    expect(html).toContain("Complete 1 earlier required activity to unlock.");
+    expect(html).not.toContain(`href="${ROUTES.activity("locked-step")}"`);
+    expect(html).not.toContain(
+      `href="${ROUTES.module(learning.program_slug, "locked-chapter")}"`,
+    );
+    expect(html).not.toContain(
+      `href="${ROUTES.module(learning.program_slug, "empty-chapter")}"`,
+    );
+    expect(html).toContain("No activities are published for this module yet.");
+  });
+
+  it("opens the first actionable chapter and preserves the other native disclosures", () => {
+    const html = renderToStaticMarkup(
+      createElement(LearningModules, { learning: learningModulesFixture() }),
+    );
+    const chapters = [
+      ...html.matchAll(/<details([^>]*)>([\s\S]*?)<\/details>/g),
+    ];
+    expect(chapters).toHaveLength(3);
+    expect(chapters[0][1]).not.toMatch(/\bopen\b/);
+    expect(chapters[1][1]).toMatch(/\bopen\b/);
+    expect(chapters[2][1]).not.toMatch(/\bopen\b/);
+    for (const chapter of chapters) expect(chapter[2]).toContain("<summary");
+    expect(chapters[1][2]).toContain("Discovery decisions");
+    expect(chapters[1][2]).toContain("1 of 3 activities complete");
+    expect(chapters[1][2]).not.toContain("2 of 3 activities complete");
+  });
+
+  it("keeps the primary continue action on the canonical actionable activity", () => {
+    const learning = learningModulesFixture();
+    expect(learningPathContinueTarget(learning)).toEqual({
+      href: ROUTES.activity("available-step"),
+      label: "Continue learning",
+    });
+    learning.modules[1].activities[1].state = "in_progress";
+    expect(learningPathContinueTarget(learning)).toEqual({
+      href: ROUTES.activity("review-step"),
+      label: "Continue learning",
+    });
+  });
+
+  it("uses a reviewable chapter rather than a locked first chapter when no activity is actionable", () => {
+    const learning = learningModulesFixture();
+    learning.modules[1].activities[2].state = "locked";
+    expect(learningPathContinueTarget(learning)).toEqual({
+      href: ROUTES.module(learning.program_slug, "current-chapter"),
+      label: "Open Module 4",
+    });
+  });
+
+  it.each(["locked", "unpublished", "empty"])(
+    "keeps the primary action in the outline when all course content is %s",
+    (state) => {
+      const learning = learningModulesFixture();
+      if (state === "empty") learning.modules = [];
+      else {
+        for (const chapter of learning.modules) {
+          if (state === "unpublished") chapter.activities = [];
+          else
+            for (const activity of chapter.activities)
+              activity.state = "locked";
+        }
+      }
+      expect(learningPathContinueTarget(learning)).toEqual({
+        href: "#course-outline-title",
+        label: "View course outline",
+      });
+    },
+  );
+
+  it("keeps review-pending navigation readable without pretending that no mutation means locked", () => {
+    const activity = learningModulesFixture().modules[1].activities[1];
+    expect(activity.allowed_actions).toEqual([]);
+    const html = renderToStaticMarkup(
+      createElement(LearningActivityNavigation, { activity }),
+    );
+    expect(html).toContain(`href="${ROUTES.activity(activity.id)}"`);
+    expect(html).toMatch(/awaiting review/i);
+    expect(html).not.toContain('aria-disabled="true"');
+    expect(html).not.toMatch(/\bcompleted\b/i);
+  });
+
+  it("removes both activity and chapter links for a cached learning response", () => {
+    const learning = markOfflineRead(learningModulesFixture(), 7_000);
+    const html = renderToStaticMarkup(
+      createElement(LearningModules, { learning }),
+    );
+    expect(html).toMatch(/reconnect/i);
+    expect(html).toContain('aria-disabled="true"');
+    expect(html).not.toContain("href=");
+    expect(html).toContain("Discovery decisions");
+    expect(html).toContain("The next question");
+  });
+
+  it("blocks a fresh outline when the enclosing identity or program read is offline", () => {
+    const learning = learningModulesFixture();
+    const html = renderToStaticMarkup(
+      createElement(LearningModules, { learning, disabled: true }),
+    );
+    expect(html).toMatch(/reconnect/i);
+    expect(html).not.toContain("href=");
+    expect(html).toContain("A completed reflection");
+  });
+
+  it.each(["available", "in_progress", "completed", "awaiting_review"])(
+    "does not allow an offline %s activity to regain a link from its state",
+    (state) => {
+      const activity = markOfflineRead({ ...baseActivity, state }, 7_000);
+      const html = renderToStaticMarkup(
+        createElement(LearningActivityNavigation, { activity }),
+      );
+      expect(html).toContain('aria-disabled="true"');
+      expect(html).toMatch(/reconnect/i);
+      expect(html).not.toContain("href=");
+    },
+  );
+
+  it("does not invent chapters, progress, rewards or recognition for an empty outline", () => {
+    const learning = { ...learningModulesFixture(), modules: [] };
+    const html = renderToStaticMarkup(
+      createElement(LearningModules, { learning }),
+    );
+    expect(html).not.toContain("href=");
+    expect(html).not.toContain("Module 1");
+    expect(html).not.toMatch(
+      /\b(?:XP|streak|mastery|achievement|badge)\b|100%|certificate earned/i,
+    );
+    expect(learning.projection.completed_count).toBe(1);
+    expect(learning.projection.denominator).toBe(12);
   });
 
   it("shows the published Free Course until an enrollment is selected", () => {

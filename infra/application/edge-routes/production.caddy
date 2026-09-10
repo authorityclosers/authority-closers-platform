@@ -1,0 +1,94 @@
+	# Legacy host transition never replays an API request or moves OAuth
+	# credentials across host-only cookie scopes.
+	@legacy_learner_api {
+		host app.authorityclosers.com
+		path /v1 /v1/*
+	}
+	handle @legacy_learner_api {
+		import base_security_headers
+		header Cache-Control "no-store"
+		respond "The learner application has moved. Open https://learner.authorityclosers.com and sign in again.\n" 410
+	}
+	@legacy_learner_pages {
+		host app.authorityclosers.com
+		method GET HEAD
+	}
+	handle @legacy_learner_pages {
+		import base_security_headers
+		header Cache-Control "no-store"
+		redir https://learner.authorityclosers.com{uri} 302
+	}
+	@legacy_learner host app.authorityclosers.com
+	handle @legacy_learner {
+		import base_security_headers
+		header Cache-Control "no-store"
+		respond "The learner application has moved. Sign in again on the new learner host.\n" 410
+	}
+
+	@learner host learner.authorityclosers.com
+	@learner_api {
+		host learner.authorityclosers.com
+		path /v1/*
+	}
+	handle @learner_api {
+		import base_security_headers
+		header X-Authority-Closers-Route "api-production"
+		header Cache-Control "no-store"
+		header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+		reverse_proxy ac-production-api:8000
+	}
+	handle @learner {
+		import base_security_headers
+		header X-Authority-Closers-Route "learner-production"
+		header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; media-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests"
+		reverse_proxy ac-production-learner:3000
+	}
+
+	@admin host admin.authorityclosers.com
+	@admin_api {
+		host admin.authorityclosers.com
+		path /v1/*
+	}
+	handle @admin_api {
+		import base_security_headers
+		header X-Authority-Closers-Route "api-production"
+		header Cache-Control "no-store"
+		header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+		reverse_proxy ac-production-api:8000
+	}
+	handle @admin {
+		import base_security_headers
+		header X-Authority-Closers-Route "admin-production"
+		header Cache-Control "no-store"
+		header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests"
+		reverse_proxy ac-production-admin:3001
+	}
+
+	@coach host coach.authorityclosers.com
+	@coach_api {
+		host coach.authorityclosers.com
+		path /v1/*
+	}
+	handle @coach_api {
+		import base_security_headers
+		header X-Authority-Closers-Route "api-production"
+		header Cache-Control "no-store"
+		header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+		reverse_proxy ac-production-api:8000
+	}
+	handle @coach {
+		import base_security_headers
+		header X-Authority-Closers-Route "coach-production"
+		header Cache-Control "no-store"
+		header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests"
+		reverse_proxy ac-production-coach:3002
+	}
+
+	@api host api.authorityclosers.com
+	handle @api {
+		import base_security_headers
+		header X-Authority-Closers-Route "api-production"
+		header Cache-Control "no-store"
+		header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+		reverse_proxy ac-production-api:8000
+	}

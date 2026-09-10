@@ -6,6 +6,21 @@
   "status": "in_progress",
   "planned_iterations": 3,
   "current_iteration": 1,
+  "release_sequence": {
+    "contract": "../00-start-here/alpha-to-arcade-release-sequence-2026-09-07.md",
+    "next_release": "v0.2 Practice Arcade",
+    "status": "source_intake_verified_implementation_pending",
+    "does_not_replace_unfinished_v01": true,
+    "priority": [
+      "working_video_and_course_workspace",
+      "studio_and_platform_console_parity",
+      "versioned_practice_engine",
+      "identity_personal_progress_and_rhythm",
+      "earned_only_cosmetics_after_policy_approval",
+      "cooperative_social_then_approved_ranked_event"
+    ],
+    "evidence": "../../../evidence/20260907_PRACTICE_ARCADE_HANDOFF_INTAKE.md"
+  },
   "persistent_goal": {
     "status_observed": "active",
     "replacement_created": true,
@@ -19,7 +34,7 @@
   },
   "candidate": {
     "release_sha": "a5eef0df4b340070ac6e58f9912d73a3bf1d2f18",
-    "staging": "deployed_2026-09-07; controller smoke passed; authenticated route verification in progress",
+    "staging": "deployed_2026-09-07; controller smoke passed; 10 settled authenticated route/viewport captures and 14/14 after uploads read back; video remains unavailable",
     "production": "blocked"
   },
   "scope": {
@@ -123,14 +138,14 @@
         "https://drive.google.com/file/d/1O6Rdy9M_ciUKzWkak3oUaNLFemqovp9s/view",
         "https://drive.google.com/file/d/1bs6YeI5qDo5TItacLCwb0iLWVleDTow1/view"
       ],
-      "observed": "Release 851ebc8 has verified BEFORE, local fixture and STAGING LIVE Drive folders. Eight new anonymous public Home/login mobile/desktop light/dark captures plus manifest uploaded/readback 9/9. Existing native ledger appended and readback verified with all earlier structured history and image preserved. Authenticated changed-route live screenshots remain pending. See 20260907_STAGING_ALPHA_FOUNDATION_RELEASE.md."
+      "observed": "a5eef0d: BEFORE 11/11 and STAGING LIVE 14/14 items uploaded/readback; ten settled authenticated Home/Profile/Settings/activity/Notifications views at390/1440 Light, three historical non-pass frames preserved. Full-page captures timed out. Native Docs ledger append for a5 remains pending because trusted-read bridge rejected Windows workspace; existing ledger preserved. See20260907_STAGING_A5_LEARNER_REFINEMENT_RELEASE.md. Earlier851ebc8 documentation remains retained."
     },
     {
       "id": "A12",
       "name": "Environment promotion",
       "status": "blocked",
       "evidence": [],
-      "observed": "Staging851ebc8 installed with exact artifact/hash, health/OAuth/Access smoke, migration backup and retained31aee3c. Production unchanged: independent DNS/ingress, secrets/bootstrap, admin Access and backup/restore evidence incomplete."
+      "observed": "Staging a5eef0d installed with exact artifact/hash and retained851ebc8. Foundation a6d8472 installed with actual two-sink synthetic redaction proof. Canonical a5 staging logical backup/off-site restore passed16:21UTC, observed backup age293.341s and defined restore boundary6.939s on small staging dataset. Production unchanged: independent DNS/ingress, secrets/bootstrap, admin Access and backup/restore evidence incomplete."
     },
     {
       "id": "A13",
@@ -140,14 +155,14 @@
         "../../../evidence/20260907_ALPHA_FOUNDATION_INTEGRATION.md",
         "../../../evidence/20260907_ALPHA_SECOND_MEDIA_FIXTURE.md"
       ],
-      "observed": "Official pinned BBB 4K and distinct Caminandes 1080p downloaded and hash/probe verified. Local 12-second HLS ladders and diagnostic captions built; decoder/filter/encoder pools bounded. Nothing uploaded/bound to a VPS course; authorized delivery/player/evidence and VPS resource tests pending."
+      "observed": "Official pinned BBB4K and distinct Caminandes1080p downloaded/hash/probe verified.30-file12-second technical film pack installed immutably on VPS with exact replay verified; policy remainsOFF and actual learner video unavailable. No course binding/publication/enrollment performed. Authorized adaptive delivery/player/evidence and VPS resource tests pending."
     },
     {
       "id": "A14",
       "name": "Tenant-authorized Studio authoring",
       "status": "pending",
       "evidence": [],
-      "observed": "Existing Studio reads and audited publication are implemented. Image placement, course/lesson/quiz editor and end-to-end Dipak workflows remain required; no admin enrollment bypass."
+      "observed": "Existing Studio reads/publication depend on owner/admin membership. Explicit platform and tenant/program grant/revocation persistence passes PR43 CI at 35c658b, including 10 PostgreSQL capability cases. No live grants or membership changes. HTTP/catalog/fixture and admin frontend integration, capability-aware restore proof and exact-runtime access remain gates. Image placement, course/lesson/quiz editor and end-to-end Dipak workflows remain required; Studio and Platform Console carry the same UI/UX quality standard as learner."
     },
     {
       "id": "A15",

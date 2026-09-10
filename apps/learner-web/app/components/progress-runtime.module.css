@@ -1,0 +1,105 @@
+.subtitle {
+  margin: 7px 0 0;
+  color: var(--theme-text-muted);
+  font-size: 14px;
+}
+.moduleSummary {
+  cursor: pointer;
+  list-style: none;
+  min-height: 60px;
+  gap: 12px;
+  margin: 0;
+}
+.moduleSummary::-webkit-details-marker {
+  display: none;
+}
+.moduleSummary > div {
+  flex: 1;
+  min-width: 0;
+}
+.moduleSummary h3 {
+  margin: 6px 0 0;
+  font-size: 16px;
+  line-height: 1.5;
+  letter-spacing: -0.025em;
+  overflow-wrap: anywhere;
+}
+.moduleSummary > strong {
+  flex: none;
+}
+.moduleSummary:focus-visible {
+  outline: 3px solid var(--theme-focus);
+  outline-offset: 8px;
+  border-radius: 4px;
+}
+.chevron {
+  flex: none;
+  color: var(--theme-text-muted);
+  transition: transform 180ms ease;
+}
+.module[open] .chevron {
+  transform: rotate(180deg);
+}
+.module:not([open]) > .moduleSummary {
+  margin-bottom: 0;
+}
+.insights {
+  margin-top: 28px;
+  border-top: 1px solid var(--theme-border);
+}
+.insightToggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 0;
+  border: 0;
+  color: var(--theme-text);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+.insightToggle > span {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 650;
+}
+.insightToggle small {
+  display: block;
+  color: var(--theme-text-muted);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  margin-top: 5px;
+}
+.insightToggle:focus-visible {
+  outline: 3px solid var(--theme-focus);
+  outline-offset: 2px;
+}
+.insightToggle[aria-expanded="true"] > svg:last-child {
+  transform: rotate(180deg);
+}
+@media (max-width: 560px) {
+  .moduleSummary {
+    flex-wrap: wrap;
+  }
+  .moduleSummary > div {
+    flex-basis: calc(100% - 32px);
+  }
+  .moduleSummary > strong {
+    order: 3;
+  }
+  .moduleSummary .chevron {
+    align-self: flex-start;
+    margin-top: 7px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chevron {
+    transition: none;
+  }
+}
+:global(html[data-motion="reduced"]) .chevron,
+:global(html[data-reduced-motion="true"]) .chevron {
+  transition: none;
+}

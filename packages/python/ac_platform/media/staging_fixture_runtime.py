@@ -10,8 +10,10 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import timedelta
 from pathlib import Path
+from urllib.parse import urlsplit
 from uuid import UUID
 
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from ac_platform.application.settings import Settings
@@ -33,11 +35,11 @@ from ac_platform.media.service import MediaService
 from ac_platform.media.signing import MediaSigner
 from ac_platform.media.staging_fixture_manifest import (
     MANIFEST_SHA256,
+    VerifiedStagingFixturePack,
     load_verified_staging_fixture_pack,
 )
+from ac_platform.seed.application import _stable_id
 from ac_platform.seed.technical_media_fixture_v2 import (
-    FILM_ACTIVITY_PROMPTS,
-    FILM_ACTIVITY_TITLES,
     technical_media_identity,
     technical_media_seed,
 )
@@ -58,7 +60,10 @@ def compose_staging_fixture_delivery(settings: Settings, base: MediaRuntime) -> 
     ):
         raise MediaConfigurationError("staging public-film delivery configuration is unavailable")
     origin = str(settings.public_app_url).rstrip("/")
-    if origin != "https://staging.authorityclosers.com":
+    if origin not in {
+        "https://staging.authorityclosers.com",
+        "https://learner-staging.authorityclosers.com",
+    }:
         raise MediaConfigurationError("staging public films require the exact learner origin")
     pack = load_verified_staging_fixture_pack(
         environment=settings.environment,
@@ -72,16 +77,83 @@ def compose_staging_fixture_delivery(settings: Settings, base: MediaRuntime) -> 
         release_id=settings.release_id,
         tenant_id=settings.public_learner_tenant_id,
     )
-    program_id, version_id, module_id, activity_ids = technical_media_identity(settings.release_id)
+    return _compose_verified_delivery(settings, base, pack, origin)
+
+
+def compose_local_fixture_delivery(settings: Settings, base: MediaRuntime) -> MediaRuntime:
+    """Explicit loopback sandbox, reusing the exact isolated-test film bytes.
+
+    Does not accept live sessions, enrollments, source URLs or remote storage.
+    Staging entrypoint and deployed provider gates remain unchanged.
+    """
+    origin = str(settings.public_app_url).rstrip("/")
+    parsed = urlsplit(origin)
+    if (
+        settings.environment != "local"
+        or base.environment != "local"
+        or not settings.media_local_public_films_delivery_enabled
+        or not settings.media_stress_fixtures_enabled
+        or settings.media_staging_public_films_delivery_enabled
+        or settings.media_provider_enabled
+        or base.provider_activation_verified
+        or base.media_delivery is not None
+        or settings.public_learner_tenant_id is None
+        or not settings.media_stress_fixtures_cache_root
+        or parsed.scheme != "http"
+        or parsed.hostname not in {"127.0.0.1", "localhost", "learner.localhost"}
+        or parsed.username
+        or parsed.password
+        or parsed.path
+        or parsed.query
+        or parsed.fragment
+        or parsed.port is None
+    ):
+        raise MediaConfigurationError("local public films require the explicit loopback sandbox")
+    pack = load_verified_staging_fixture_pack(
+        environment="test",
+        release_id=settings.release_id,
+        tenant_id=settings.public_learner_tenant_id,
+        root=Path(settings.media_stress_fixtures_cache_root),
+        expected_manifest_sha256=MANIFEST_SHA256,
+    )
+    pack.require_scope(
+        environment="test",
+        release_id=settings.release_id,
+        tenant_id=settings.public_learner_tenant_id,
+    )
+    return _compose_verified_delivery(settings, base, pack, origin, local=True)
+
+
+def _compose_verified_delivery(
+    settings: Settings,
+    base: MediaRuntime,
+    pack: VerifiedStagingFixturePack,
+    origin: str,
+    *,
+    local: bool = False,
+) -> MediaRuntime:
+    program_id, version_id, _, activity_ids = technical_media_identity(settings.release_id)
     seed = technical_media_seed(settings.release_id)
     clips = dict(zip(activity_ids, pack.clips, strict=True))
+    # Access evaluation loads the complete prerequisite graph, not only the
+    # requested video. Resolve exact package metadata for that graph while
+    # keeping all actual media binding/delivery limited to the two film clips.
+    catalog_entries = {
+        _stable_id("activity", f"{seed.content_digest}:{module.position}:{activity.position}"): (
+            _stable_id("module", f"{seed.content_digest}:{module.position}"),
+            activity,
+        )
+        for module in seed.modules
+        for activity in module.activities
+    }
 
     def matching_catalog(row: object, version: object) -> bool:
         if not isinstance(row, Activity) or not isinstance(version, ProgramVersion):
             return False
-        if row.id not in clips:
+        entry = catalog_entries.get(row.id)
+        if entry is None:
             return False
-        index = activity_ids.index(row.id)
+        module_id, expected_activity = entry
         return (
             row.program_id == version.program_id == program_id
             and row.program_version_id == version.id == version_id
@@ -90,9 +162,11 @@ def compose_staging_fixture_delivery(settings: Settings, base: MediaRuntime) -> 
             and row.owner_key == version.owner_key == GLOBAL_CATALOG_OWNER_KEY
             and row.tenant_id is None
             and version.tenant_id is None
-            and row.kind == "VIDEO"
-            and row.title == FILM_ACTIVITY_TITLES[index]
-            and row.prompt == FILM_ACTIVITY_PROMPTS[index]
+            and row.kind == expected_activity.kind
+            and row.title == expected_activity.title
+            and row.prompt == expected_activity.prompt
+            and row.position == expected_activity.position
+            and row.is_required == expected_activity.is_required
             and version.content_digest == seed.content_digest
             and version.content_source_ref == seed.source_ref
             and version.content_seed_kind == "technical-validation"
@@ -106,7 +180,12 @@ def compose_staging_fixture_delivery(settings: Settings, base: MediaRuntime) -> 
     def binding_resolver(
         database: Session, tenant_id: UUID, row: object, version: object
     ) -> ActivityMediaBindingSnapshot | None:
-        if tenant_id != pack.tenant_id or not matching_catalog(row, version):
+        if (
+            tenant_id != pack.tenant_id
+            or not matching_catalog(row, version)
+            or not isinstance(row, Activity)
+            or row.id not in clips
+        ):
             return None
         binding = resolve_activity_media_binding_for_learning(database, tenant_id, row, version)
         if binding is None:
@@ -124,6 +203,7 @@ def compose_staging_fixture_delivery(settings: Settings, base: MediaRuntime) -> 
         delivery_origin=origin,
         playback_ttl=ttl,
         range_policy=RangePolicy(max_bytes=128 * 1024**2),
+        allow_loopback_http=local,
     )
     cors = MediaCorsPolicy((origin,))
     service = MediaService(
@@ -136,8 +216,8 @@ def compose_staging_fixture_delivery(settings: Settings, base: MediaRuntime) -> 
         media_config=base.media_config,
     )
 
-    def descriptor_resolver(
-        database: Session, actor: ActorContext, access: LearningAccessContext
+    async def descriptor_resolver(
+        database: AsyncSession, actor: ActorContext, access: LearningAccessContext
     ) -> ActivityMediaDescriptorResponse:
         clip = clips.get(access.activity.id)
         if (
@@ -150,10 +230,10 @@ def compose_staging_fixture_delivery(settings: Settings, base: MediaRuntime) -> 
         ):
             # Other courses retain their normal inert metadata and never receive
             # this fixture-only port or a persisted delivery grant.
-            return base.service.resolve_activity_media_descriptor_for_learner(
+            return await base.service.resolve_activity_media_descriptor_for_learner(
                 database, actor, access
             )
-        return service.resolve_activity_media_descriptor_for_learner(database, actor, access)
+        return await service.resolve_activity_media_descriptor_for_learner(database, actor, access)
 
     def handler_factory(database: Session, actor: ActorContext) -> PrivateMediaDeliveryHandler:
         if actor.tenant_id != pack.tenant_id:

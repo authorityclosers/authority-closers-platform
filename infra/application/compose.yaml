@@ -36,6 +36,7 @@ x-application-environment: &application-environment
   AC_OTEL_EXPORTER_OTLP_ENDPOINT: ${AC_OTEL_EXPORTER_OTLP_ENDPOINT:-http://ac-telemetry-collector:4318}
   AC_PUBLIC_APP_URL: ${AC_PUBLIC_APP_URL:?AC_PUBLIC_APP_URL is required}
   AC_ADMIN_APP_URL: ${AC_ADMIN_APP_URL:?AC_ADMIN_APP_URL is required}
+  AC_COACH_APP_URL: ${AC_COACH_APP_URL:?AC_COACH_APP_URL is required}
   AC_API_URL: ${AC_API_URL:?AC_API_URL is required}
   AC_API_HOST: ${AC_API_HOST:?AC_API_HOST is required}
   AC_INTERNAL_API_HOST: ${AC_INTERNAL_API_HOST:?AC_INTERNAL_API_HOST is required}
@@ -43,11 +44,12 @@ x-application-environment: &application-environment
   AC_OAUTH_TRANSACTION_COOKIE_NAME: __Host-ac_oauth_transaction
   AC_TRUSTED_PROXY_ADDRESSES: ${AC_TRUSTED_PROXY_ADDRESSES:?AC_TRUSTED_PROXY_ADDRESSES must contain the exact edge-router IP}
   # Inert defaults apply to API, worker and migrator. Only the release-owned
-  # staging/API override may expose the exact immutable public-film fixture.
+  # API-only release overrides may expose their exact immutable film package.
   AC_MEDIA_PROVIDER_ENABLED: "false"
   AC_MEDIA_STRESS_FIXTURES_ENABLED: "false"
   AC_MEDIA_STRESS_FIXTURES_CACHE_ROOT: ""
   AC_MEDIA_STAGING_PUBLIC_FILMS_DELIVERY_ENABLED: "false"
+  AC_MEDIA_PUBLIC_FILMS_DELIVERY_ENABLED: "false"
 
 x-migration-environment: &migration-environment
   <<: *application-environment
@@ -133,6 +135,8 @@ services:
     restart: unless-stopped
     environment:
       <<: *application-environment
+      AC_PRACTICE_PILOT_ENABLED: ${AC_PRACTICE_PILOT_ENABLED:-false}
+      AC_PRACTICE_PILOT_TENANT_ID: ${AC_PRACTICE_PILOT_TENANT_ID:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -194,6 +198,14 @@ services:
     image: ${AC_LEARNER_IMAGE:?AC_LEARNER_IMAGE must be the reviewed immutable image reference}
     pull_policy: never
     restart: unless-stopped
+    # Presentation only: the authenticated API independently admits each action.
+    # Runtime configuration lets the same immutable image serve both environments.
+    environment:
+      AC_ENVIRONMENT: ${AC_ENVIRONMENT:?AC_ENVIRONMENT must be staging or production}
+      AC_PRACTICE_PILOT_ENABLED: ${AC_PRACTICE_PILOT_ENABLED:-false}
+      AC_PRACTICE_PILOT_TENANT_ID: ${AC_PRACTICE_PILOT_TENANT_ID:-}
+      AC_PUBLIC_LEARNER_TENANT_ID: ${AC_PUBLIC_LEARNER_TENANT_ID:-}
+      AC_OPERATIONS_TENANT_ID: ${AC_OPERATIONS_TENANT_ID:-}
     expose:
       - "3000"
     networks:
@@ -221,6 +233,7 @@ services:
     pull_policy: never
     restart: unless-stopped
     environment:
+      AC_COACH_APP_URL: ${AC_COACH_APP_URL:?AC_COACH_APP_URL is required}
       AC_INTERNAL_API_URL: "http://${AC_INTERNAL_API_HOST:?AC_INTERNAL_API_HOST is required}:8000"
       AC_INTERNAL_API_HOST: ${AC_INTERNAL_API_HOST:?AC_INTERNAL_API_HOST is required}
     depends_on:
@@ -239,6 +252,38 @@ services:
         - node
         - -e
         - "fetch('http://127.0.0.1:3001/healthz').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    pids_limit: 256
+    cpus: 1.0
+    mem_limit: 512m
+
+  coach-web:
+    <<: *service-security
+    image: ${AC_COACH_IMAGE:?AC_COACH_IMAGE must be the reviewed immutable image reference}
+    pull_policy: never
+    restart: unless-stopped
+    environment:
+      AC_INTERNAL_API_URL: "http://${AC_INTERNAL_API_HOST:?AC_INTERNAL_API_HOST is required}:8000"
+      AC_INTERNAL_API_HOST: ${AC_INTERNAL_API_HOST:?AC_INTERNAL_API_HOST is required}
+    depends_on:
+      api:
+        condition: service_healthy
+    expose:
+      - "3002"
+    networks:
+      app: {}
+      edge:
+        aliases:
+          - ${AC_EDGE_COACH_ALIAS:?AC_EDGE_COACH_ALIAS is required}
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3002/healthz').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"
       interval: 15s
       timeout: 5s
       retries: 5

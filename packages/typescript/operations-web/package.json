@@ -1,0 +1,38 @@
+{
+  "name": "@ac/operations-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./api": "./src/admin-api.ts",
+    "./identity": "./src/admin-identity.ts",
+    "./platform-identity": "./src/platform-identity.ts",
+    "./session": "./src/admin-session.tsx",
+    "./access": "./src/admin-access.ts",
+    "./origins": "./src/app-origins.ts",
+    "./server-auth": "./src/server-auth.ts",
+    "./dev-proxy": "./src/dev-api-proxy.ts",
+    "./local-transport": "./src/local-admin-transport.ts",
+    "./local-login": "./src/local-admin-login.ts",
+    "./login": "./src/operations-login.tsx",
+    "./workspaces": "./src/operations-workspaces.ts",
+    "./studio": "./src/studio/studio-runtime.tsx",
+    "./studio-editor": "./src/studio/studio-course-editor.tsx",
+    "./studio-recovery": "./src/studio/studio-draft-recovery.ts",
+    "./styles.css": "./src/styles.css"
+  },
+  "dependencies": {
+    "@ac/ui": "workspace:*",
+    "zod": "4.5.4",
+    "lucide-react": "1.37.0"
+  },
+  "peerDependencies": {
+    "next": "16.2.11",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.14",
+    "typescript": "5.9.3"
+  }
+}

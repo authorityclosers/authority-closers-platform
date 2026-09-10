@@ -229,6 +229,29 @@ def test_deployment_composition_does_not_enable_cross_surface_browser_cors(
     )
 
 
+def test_deployment_coach_host_is_trusted_but_restricted_before_identity_resolution(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(app_module, "settings", _deployment_settings("staging"))
+    with TestClient(create_app()) as client:
+        allowed = client.get("/health/live", headers={"host": "coach-staging.authorityclosers.com"})
+        identity = client.get("/v1/me", headers={"host": "coach-staging.authorityclosers.com"})
+        denied = client.post(
+            "/v1/admin/corrections",
+            headers={
+                "host": "coach-staging.authorityclosers.com",
+                "x-forwarded-host": "admin-staging.authorityclosers.com",
+            },
+        )
+        impostor = client.get(
+            "/health/live", headers={"host": "coach-staging.authorityclosers.com.attacker.example"}
+        )
+    assert allowed.status_code == 200
+    assert identity.status_code == 401
+    assert denied.status_code == 403 and denied.json()["code"] == "coach_surface_route_denied"
+    assert impostor.status_code == 400
+
+
 @pytest.mark.parametrize(
     ("environment", "internal_api_host", "public_api_host"),
     [

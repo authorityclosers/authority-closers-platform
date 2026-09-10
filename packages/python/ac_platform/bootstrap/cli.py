@@ -7,6 +7,7 @@ import json
 import os
 import sys
 from dataclasses import asdict
+from uuid import UUID
 
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -20,6 +21,7 @@ from ac_platform.bootstrap.application import (
     BootstrapApplication,
     BootstrapError,
     BootstrapResult,
+    OperationsTenantBootstrapResult,
     PublicLearnerTenantBootstrapResult,
 )
 
@@ -30,11 +32,22 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--tenant-slug", default=os.getenv("AC_BOOTSTRAP_TENANT_SLUG"))
     parser.add_argument("--tenant-name", default=os.getenv("AC_BOOTSTRAP_TENANT_NAME"))
     parser.add_argument("--environment", default=os.getenv("AC_ENVIRONMENT"))
-    parser.add_argument(
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
         "--public-learner",
         action="store_true",
         help="bootstrap only the dedicated public learner tenant; creates no membership",
     )
+    mode.add_argument(
+        "--operations-only",
+        action="store_true",
+        help="bootstrap only the operations tenant and audit; creates no identity or membership",
+    )
+    parser.add_argument("--command-id", type=UUID, help="stable UUID for this operator intent")
+    parser.add_argument(
+        "--operator-reference", help="non-secret accountable operator/change reference"
+    )
+    parser.add_argument("--reason", help="non-secret reason for the operations-only bootstrap")
     parser.add_argument(
         "--allow-production",
         action="store_true",
@@ -64,6 +77,17 @@ async def _run(args: argparse.Namespace) -> int:
 
     tenant_slug = _required(args.tenant_slug, "--tenant-slug")
     tenant_name = _required(args.tenant_name, "--tenant-name")
+    if args.operations_only:
+        if args.email:
+            raise BootstrapError("--operations-only does not accept an identity email")
+        if args.command_id is None:
+            raise BootstrapError("--command-id is required for --operations-only")
+        operator_reference = _required(args.operator_reference, "--operator-reference")
+        reason = _required(args.reason, "--reason")
+    elif any(
+        value is not None for value in (args.command_id, args.operator_reference, args.reason)
+    ):
+        raise BootstrapError("operator intent flags require --operations-only")
     settings = Settings(environment=environment)
     if environment in {"staging", "production"}:
         require_baked_release_id(settings.release_id)
@@ -75,8 +99,21 @@ async def _run(args: argparse.Namespace) -> int:
         sessions = async_sessionmaker(engine, expire_on_commit=False)
         async with sessions() as session, session.begin():
             application = BootstrapApplication(session)
-            result: BootstrapResult | PublicLearnerTenantBootstrapResult
-            if args.public_learner:
+            result: (
+                BootstrapResult
+                | PublicLearnerTenantBootstrapResult
+                | OperationsTenantBootstrapResult
+            )
+            if args.operations_only:
+                result = await application.bootstrap_operations_tenant(
+                    command_id=args.command_id,
+                    operator_reference=operator_reference,
+                    reason=reason,
+                    tenant_slug=tenant_slug,
+                    tenant_name=tenant_name,
+                    operations_tenant_id=settings.operations_tenant_id,
+                )
+            elif args.public_learner:
                 result = await application.bootstrap_public_learner_tenant(
                     tenant_slug=tenant_slug,
                     tenant_name=tenant_name,

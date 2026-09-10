@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, FastAPI, Header, Path, Request, Response, status
+from fastapi import APIRouter, Depends, FastAPI, Header, Path, Query, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ac_platform.application.settings import Settings
@@ -80,6 +80,55 @@ def install_media_http(
             request_id=_request_id(request),
         )
 
+    local_avatar = runtime.local_avatar_runtime
+    if local_avatar is not None:
+        if settings.environment != "local" or not settings.media_local_avatar_enabled:
+            raise ValueError("Local profile upload routes require the explicit sandbox opt-in.")
+
+        @router.put("/media/local-avatar-upload/{object_key:path}", status_code=204)
+        async def local_avatar_upload(
+            object_key: Annotated[str, Path(min_length=1, max_length=512)],
+            token: Annotated[str, Query(min_length=1, max_length=4096)],
+            request: Request,
+            auth: AuthenticatedTransaction = actor_dependency,
+        ) -> Response:
+            from ac_platform.media.errors import MediaBadRequest
+            from ac_platform.media.local_avatar_storage import LOCAL_AVATAR_ORIGIN, MAX_AVATAR_BYTES
+
+            require_safe_origin(request, settings)
+            if (
+                request.headers.get("origin") != LOCAL_AVATAR_ORIGIN
+                or list(request.query_params.multi_items()) != [("token", token)]
+                or request.headers.get("content-encoding") not in {None, "identity"}
+            ):
+                raise MediaBadRequest("The local profile upload request is invalid.")
+            body = await request.body()
+            if not 0 < len(body) <= MAX_AVATAR_BYTES or request.headers.getlist(
+                "content-length"
+            ) != [str(len(body))]:
+                raise MediaBadRequest("The local profile upload length is invalid.")
+            version_id = await auth.database.run_sync(
+                lambda database: local_avatar.accept_upload(
+                    database,
+                    auth.resolved.actor,
+                    key=object_key,
+                    token=token,
+                    body=body,
+                    content_type=request.headers.get("content-type", ""),
+                    declared_length=request.headers.get("content-length", ""),
+                    checksum=request.headers.get("x-content-sha256", ""),
+                )
+            )
+            await record_person_audit(
+                auth,
+                request,
+                action="profile.avatar_bytes_uploaded_locally",
+                resource_type="media_version",
+                resource_id=version_id,
+                status_value="uploaded",
+            )
+            return Response(status_code=204, headers={"cache-control": "no-store"})
+
     @router.post(
         "/media/uploads", response_model=UploadIntentResponse, status_code=status.HTTP_201_CREATED
     )
@@ -107,9 +156,7 @@ def install_media_http(
             resource_id=result.media_version_id,
             status_value=result.state.value,
         )
-        runtime.telemetry.emit(
-            "media.upload.created", {"status": result.state.value, "outcome": "succeeded"}
-        )
+        runtime.telemetry.emit("media.upload.created", {"outcome": "succeeded"})
         _no_store(response)
         return result
 
@@ -146,9 +193,7 @@ def install_media_http(
             resource_id=result.media_version_id,
             status_value=result.state.value,
         )
-        runtime.telemetry.emit(
-            "media.upload.created", {"status": result.state.value, "outcome": "succeeded"}
-        )
+        runtime.telemetry.emit("media.upload.created", {"outcome": "succeeded"})
         _no_store(response)
         return result
 
@@ -185,6 +230,18 @@ def install_media_http(
                 expected_purpose=MediaPurpose.AVATAR if avatar_only else None,
             )
         )
+        if avatar_only and local_avatar is not None:
+            result = await auth.database.run_sync(
+                lambda database: local_avatar.finish(database, actor, upload_id)
+            )
+            await record_person_audit(
+                auth,
+                request,
+                action="profile.avatar_processing_finished_locally",
+                resource_type="media",
+                resource_id=result.id,
+                status_value=result.state.value,
+            )
         await record_person_audit(
             auth,
             request,
@@ -193,9 +250,7 @@ def install_media_http(
             resource_id=result.id,
             status_value=result.state.value,
         )
-        runtime.telemetry.emit(
-            "media.upload.completed", {"status": result.state.value, "outcome": "succeeded"}
-        )
+        runtime.telemetry.emit("media.upload.completed", {"outcome": "succeeded"})
         _no_store(response)
         return result
 

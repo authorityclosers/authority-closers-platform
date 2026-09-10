@@ -23,6 +23,15 @@ services:
       - "127.0.0.1:8080:8080"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Per-environment selectors are switched only by the immutable
+      # application installer. Mounting the directory keeps selector changes
+      # visible to a Caddy reload without recreating the foundation container.
+      - /srv/authority-closers/application/edge-routes:/etc/caddy/application-routes:ro
+      # Selectors resolve only within this root-owned, route-only projection.
+      # Its files are copied from checksum-verified immutable releases and
+      # re-compared by the installers before selection. No release data,
+      # application state, or secrets are exposed to Caddy.
+      - /srv/authority-closers/application/edge-route-releases:/srv/authority-closers/application/edge-route-releases:ro
     tmpfs:
       - /config:rw,noexec,nosuid,nodev,size=16m,uid=1000,gid=1000
       - /data:rw,noexec,nosuid,nodev,size=32m,uid=1000,gid=1000

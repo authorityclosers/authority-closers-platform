@@ -28,6 +28,52 @@ importers:
 
   apps/admin-web:
     dependencies:
+      '@ac/operations-web':
+        specifier: workspace:*
+        version: link:../../packages/typescript/operations-web
+      '@ac/ui':
+        specifier: workspace:*
+        version: link:../../packages/typescript/ui
+      lucide-react:
+        specifier: 1.37.0
+        version: 1.37.0(react@19.2.8)
+      next:
+        specifier: 16.2.11
+        version: 16.2.11(@babel/core@7.29.7(supports-color@8.1.1))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      react:
+        specifier: 19.2.8
+        version: 19.2.8
+      react-dom:
+        specifier: 19.2.8
+        version: 19.2.8(react@19.2.8)
+      zod:
+        specifier: 4.5.4
+        version: 4.5.4
+    devDependencies:
+      '@types/react':
+        specifier: 19.2.14
+        version: 19.2.14
+      '@types/react-dom':
+        specifier: 19.2.3
+        version: 19.2.3(@types/react@19.2.14)
+      eslint:
+        specifier: 9.39.5
+        version: 9.39.5(supports-color@8.1.1)
+      eslint-config-next:
+        specifier: 16.2.11
+        version: 16.2.11(@typescript-eslint/parser@8.68.0(eslint@9.39.5(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3))(eslint@9.39.5(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 4.1.11
+        version: 4.1.11(@types/node@24.10.1)(happy-dom@20.14.0)(vite@8.2.2(@types/node@24.10.1))
+
+  apps/coach-web:
+    dependencies:
+      '@ac/operations-web':
+        specifier: workspace:*
+        version: link:../../packages/typescript/operations-web
       '@ac/ui':
         specifier: workspace:*
         version: link:../../packages/typescript/ui
@@ -71,6 +117,9 @@ importers:
       '@ac/ui':
         specifier: workspace:*
         version: link:../../packages/typescript/ui
+      hls.js:
+        specifier: 1.7.2
+        version: 1.7.2
       lucide-react:
         specifier: 1.37.0
         version: 1.37.0(react@19.2.8)
@@ -110,6 +159,34 @@ importers:
         version: 4.1.11(@types/node@24.10.1)(happy-dom@20.14.0)(vite@8.2.2(@types/node@24.10.1))
 
   packages/typescript/config: {}
+
+  packages/typescript/operations-web:
+    dependencies:
+      '@ac/ui':
+        specifier: workspace:*
+        version: link:../ui
+      lucide-react:
+        specifier: 1.37.0
+        version: 1.37.0(react@19.2.8)
+      next:
+        specifier: 16.2.11
+        version: 16.2.11(@babel/core@7.29.7(supports-color@8.1.1))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      react:
+        specifier: 19.2.8
+        version: 19.2.8
+      react-dom:
+        specifier: 19.2.8
+        version: 19.2.8(react@19.2.8)
+      zod:
+        specifier: 4.5.4
+        version: 4.5.4
+    devDependencies:
+      '@types/react':
+        specifier: 19.2.14
+        version: 19.2.14
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
 
   packages/typescript/ui:
     dependencies:
@@ -1450,6 +1527,9 @@ packages:
   hermes-parser@0.25.1:
     resolution: {integrity: sha512-6pEjquH3rqaI6cYAXYPcz9MS4rY6R4ngRgrgfDshRptUZIc3lw0MCIJIGDj9++mfySOuPTHB4nrSW99BCvOPIA==}
 
+  hls.js@1.7.2:
+    resolution: {integrity: sha512-CW/pPvSOFIRsosbwxrYaE9ERmpTo5fbTqL7wCvuCFlqW1Bmb1K5fXsY7yiH95rmlr4rVuA7UXHbM/cIXQ6AXwg==}
+
   ignore@5.3.2:
     resolution: {integrity: sha512-hsBTNUqQTDwkWtcdYI2i06Y/nUBEsNEDJKjWdigLvegy8kDuJAS8uRlpkkcQpyEXL0Z/pjDy5HBmMjRCJ2gq+g==}
     engines: {node: '>= 4'}
@@ -2357,9 +2437,6 @@ packages:
     engines: {node: '>=18.0.0'}
     peerDependencies:
       zod: ^3.25.0 || ^4.0.0
-
-  zod@4.5.1:
-    resolution: {integrity: sha512-P3GqeAEOEDqKvafVGLezbg+39YW/ze4xrD4qdS0adOY8eoI3zfjv1PQM4UwQzgT8mZKXEbqtVt8K+ZKGqkMFKg==}
 
   zod@4.5.4:
     resolution: {integrity: sha512-sC95tT5iHHH9gtpj6A81kh+NEaRAUFN+qlUPDUbRfOMvNf5QCBqsb3WgvnpVtK5Y+4UfA6KqufotuTvMGiTlsA==}
@@ -3510,8 +3587,8 @@ snapshots:
       '@babel/parser': 7.29.8
       eslint: 9.39.5(supports-color@8.1.1)
       hermes-parser: 0.25.1
-      zod: 4.5.1
-      zod-validation-error: 4.0.2(zod@4.5.1)
+      zod: 4.5.4
+      zod-validation-error: 4.0.2(zod@4.5.4)
     transitivePeerDependencies:
       - supports-color
 
@@ -3769,6 +3846,8 @@ snapshots:
   hermes-parser@0.25.1:
     dependencies:
       hermes-estree: 0.25.1
+
+  hls.js@1.7.2: {}
 
   ignore@5.3.2: {}
 
@@ -4732,10 +4811,8 @@ snapshots:
 
   yocto-queue@0.1.0: {}
 
-  zod-validation-error@4.0.2(zod@4.5.1):
+  zod-validation-error@4.0.2(zod@4.5.4):
     dependencies:
-      zod: 4.5.1
-
-  zod@4.5.1: {}
+      zod: 4.5.4
 
   zod@4.5.4: {}

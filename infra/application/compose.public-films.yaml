@@ -1,0 +1,18 @@
+# Selected only by the target release's reviewed public-film capability policy.
+# API-only, immutable bytes; no upload/provider, worker or migrator activation.
+services:
+  api:
+    environment:
+      AC_MEDIA_PROVIDER_ENABLED: "false"
+      AC_MEDIA_STRESS_FIXTURES_ENABLED: "false"
+      AC_MEDIA_STRESS_FIXTURES_CACHE_ROOT: ""
+      AC_MEDIA_STAGING_PUBLIC_FILMS_DELIVERY_ENABLED: "false"
+      AC_MEDIA_PUBLIC_FILMS_DELIVERY_ENABLED: "true"
+      AC_MEDIA_PUBLIC_FILMS_ROOT: /run/ac-public-films
+    volumes:
+      - type: bind
+        source: /srv/authority-closers/application/media-public-films/dc8f635df33432aee83c461535823881286ded1577a8f8a72dc5b10f0ad86b42
+        target: /run/ac-public-films
+        read_only: true
+        bind:
+          create_host_path: false

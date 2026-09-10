@@ -12,7 +12,7 @@ const mono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Cohorva · Academy Operations",
+  title: "Cohorva · Platform Admin",
   icons: {
     icon: [{ url: "/brand/cohorva-v0.1/icon.svg", type: "image/svg+xml" }],
     apple: [{ url: "/brand/cohorva-v0.1/icon-180.png", sizes: "180x180" }],

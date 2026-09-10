@@ -1,0 +1,9 @@
+	@staging_release_hold host staging.authorityclosers.com learner-staging.authorityclosers.com admin-staging.authorityclosers.com coach-staging.authorityclosers.com api-staging.authorityclosers.com
+	handle @staging_release_hold {
+		import base_security_headers
+		header X-Authority-Closers-Route "release-hold-staging"
+		header Cache-Control "no-store"
+		header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+		header Retry-After "30"
+		respond "Authority Closers staging is completing a reviewed release.\n" 503
+	}

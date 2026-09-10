@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "prepared_on": "2026-09-08",
+  "license": "CC0-1.0",
+  "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+  "credit": "Kenney (Kenney.nl)",
+  "auditioned": false,
+  "selection_basis": "Source category, measured duration, decoded PCM integrity and restrained peak level; not a subjective listening review.",
+  "total_audio_bytes": 70306,
+  "runtime_delivery": "Bundled same-origin files only; no external playback request.",
+  "encoding": {
+    "container": "RIFF/WAVE",
+    "codec": "pcm_s16le",
+    "sample_rate_hz": 44100,
+    "channels": 1,
+    "bits_per_sample": 16,
+    "encoder": "ffmpeg 8.1.1-full_build-www.gyan.dev",
+    "arguments": "-vn -sn -dn -ac 1 -ar 44100 -af FILTER -map_metadata -1 -c:a pcm_s16le -fflags +bitexact -flags:a +bitexact"
+  },
+  "sources": {
+    "interface-sounds": {
+      "title": "Interface Sounds 1.0",
+      "author": "Kenney",
+      "page_url": "https://opengameart.org/content/interface-sounds",
+      "download_url": "https://opengameart.org/sites/default/files/kenney_interfaceSounds.zip",
+      "archive_name": "kenney_interfaceSounds.zip",
+      "archive_sha256": "f2193d072726d6758a5f7871b2dcc54dcce0d5c35c6f0a62f92549b327c81232",
+      "license_entry": "License.txt",
+      "license": "CC0-1.0"
+    },
+    "music-jingles": {
+      "title": "Music Jingles",
+      "author": "Kenney Vleugels (Kenney.nl)",
+      "page_url": "https://kenney.nl/assets/music-jingles",
+      "download_url": "https://kenney.nl/media/pages/assets/music-jingles/f37e530b9e-1677590399/kenney_music-jingles.zip",
+      "archive_name": "kenney_music-jingles.zip",
+      "archive_sha256": "b729ba57959bd58793d2c5cafa348aaf2655d354f3da35ec4729e03ec77197b8",
+      "license_entry": "License.txt",
+      "license": "CC0-1.0"
+    }
+  },
+  "assets": [
+    {
+      "cue": "select",
+      "file": "select.wav",
+      "url": "/audio/practice/select.wav",
+      "source": "interface-sounds",
+      "source_entry": "Audio/click_002.ogg",
+      "source_sha256": "adcd1f4adc35f1b41bc1b5bbefeff7aa44f2f3f0d96d3199b544140c7c1e761c",
+      "sha256": "12bbfde9fec219439ae042c11aa66b50dc10121452a62e4e8ad33c0293de4697",
+      "bytes": 1068,
+      "frames": 512,
+      "duration_ms": 11.61,
+      "measured_peak_dbfs": -10.9,
+      "filter": "volume=-10dB,afade=t=in:st=0:d=0.0005,afade=t=out:st=0.008023:d=0.002"
+    },
+    {
+      "cue": "confirm",
+      "file": "confirm.wav",
+      "url": "/audio/practice/confirm.wav",
+      "source": "interface-sounds",
+      "source_entry": "Audio/confirmation_001.ogg",
+      "source_sha256": "063564703b6094d70718a3e787a55cc9141611e4ecd6b6637f8828f79b4a8c3a",
+      "sha256": "fb30cc1cda28b8e4450ec05cf6737b34a6fb938e3fdcaa45dbaee5a262981d1e",
+      "bytes": 25608,
+      "frames": 12782,
+      "duration_ms": 289.841,
+      "measured_peak_dbfs": -11.0,
+      "filter": "volume=-10dB,afade=t=in:st=0:d=0.001,afade=t=out:st=0.279841:d=0.010"
+    },
+    {
+      "cue": "reward",
+      "file": "reward.wav",
+      "url": "/audio/practice/reward.wav",
+      "source": "music-jingles",
+      "source_entry": "Audio/Pizzicato jingles/jingles_PIZZI00.ogg",
+      "source_sha256": "b442ade3308a2bbda4b8c572c86f9f1071c7bdbcfb1e6f915d35c605b61bd475",
+      "sha256": "d15ff5364db61db28d9ce4373931cfa60cec414d8f56cdb42aa1aead719c8eb1",
+      "bytes": 43630,
+      "frames": 21793,
+      "duration_ms": 494.172,
+      "measured_peak_dbfs": -11.1,
+      "filter": "volume=-5dB,afade=t=in:st=0:d=0.001,afade=t=out:st=0.474172:d=0.020"
+    }
+  ]
+}

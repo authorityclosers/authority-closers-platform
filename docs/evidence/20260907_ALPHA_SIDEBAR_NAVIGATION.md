@@ -68,3 +68,51 @@ pnpm exec prettier --check apps/learner-web/app/components/learner-sidebar/sideb
 
 No staging/production changes, credential operations, commits, or deployments
 were performed for this fix.
+
+## Dated addendum — 2026-09-09 — mobile Arcade navigation
+
+The mobile navigation follow-up changed `apps/learner-web/app/components/learner-sidebar/mobile-navigation.tsx`,
+`apps/learner-web/app/components/site-shell.tsx`, and
+`apps/learner-web/app/lib/routes.ts`. Focused coverage in
+`learner-sidebar.dom.test.tsx`, `practice-availability.test.tsx`, and
+`local-drafts.test.ts` passed **80 tests**. Full learner TypeScript and scoped
+ESLint checks also passed with the 768MB memory limit.
+
+Read-only authenticated local browser verification at 320px light and 390px
+light/dark showed Arcade as the capability-gated third bottom tab, Discover
+under More, and `/practice?set=gaps` with zero chrome. Five touch targets were
+at least 44px. The run observed zero blocked requests or mutations. Its
+screenshots and proof remain temporary files under `.tmp` and were not staged.
+This is local implementation/QA evidence only; it does not establish staging
+or production acceptance.
+
+## Dated addendum — 2026-09-09 — Admin mobile navigation overflow
+
+The late Clarity `@media (max-width: 1180px)` rule in the shared operations
+stylesheet now keeps the Admin primary navigation as a two-column grid with
+visible overflow, 44px link targets, shrink-safe icons, and wrapping labels.
+Desktop navigation and the Coach shell were not changed. The focused
+`operations-theme.test.ts` regression and the existing `admin-ui.test.tsx`
+layout suite passed together: **2 files / 26 tests** (the Admin UI file retains
+35+ layout assertions).
+
+The first browser attempt used the existing Playwright CDP helper with
+`--baseline` and timed out at the 180-second CDP attach; no baseline was
+captured. The same existing helper was then rerun without `--baseline`; its
+Playwright Chromium CDP connection and new page succeeded, with exact
+Admin-origin GET/HEAD-only interception applied before navigation. The command
+was:
+
+```powershell
+python .tmp/local-platform/verify-admin-mobile-nav.py
+```
+
+All **8 local-dev cases** (320/390/768/1440px × light/dark) passed: four
+primary links were visible, targets measured at least 44px, the long
+`Learning operations` label wrapped at narrow widths, navigation and document
+horizontal overflow were absent, and keyboard focus assertions passed. No
+requests were blocked and the owned tab was closed. Proof and captures remain
+temporary under
+`.tmp/local-platform/admin-nav-after-ut3l7ogb/` and were not staged. This is
+local implementation/browser evidence only; it does not establish staging or
+production acceptance.

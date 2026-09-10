@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 import { act, StrictMode } from "react";
+import { readFileSync } from "node:fs";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -237,6 +238,294 @@ function noWrites() {
   for (const name of writes) expect(api[name], name).not.toHaveBeenCalled();
   expect(onCommitted).not.toHaveBeenCalled();
 }
+
+describe("in-frame player presentation", () => {
+  let stylesheet: HTMLStyleElement;
+  beforeEach(() => {
+    container.classList.add("site-frame--learner");
+    stylesheet = document.createElement("style");
+    stylesheet.textContent = readFileSync(
+      "app/learning-loop-runtime.css",
+      "utf8",
+    );
+    document.head.append(stylesheet);
+  });
+  afterEach(() => {
+    stylesheet.remove();
+    vi.unstubAllGlobals();
+  });
+
+  async function openSettings() {
+    const trigger = container.querySelector<HTMLButtonElement>(
+      ".momentum-video-controls__settings",
+    )!;
+    await act(async () => trigger.click());
+    return trigger;
+  }
+
+  it("plays and pauses from the actual video picture without replacing media or writing preview progress", async () => {
+    const video = (await mount())!;
+    const surface = container.querySelector<HTMLButtonElement>(
+      ".momentum-video-player__surface",
+    )!;
+    await act(async () => surface.click());
+    expect(video.paused).toBe(false);
+    expect(surface.getAttribute("aria-label")).toBe("Pause video");
+    await act(async () => surface.click());
+    expect(video.paused).toBe(true);
+    expect(container.querySelector("video")).toBe(video);
+    expect(getComputedStyle(surface).position).toBe("absolute");
+    noWrites();
+  });
+
+  it("touching the picture dismisses settings without click-through playback", async () => {
+    const video = (await mount())!;
+    await openSettings();
+    const surface = container.querySelector<HTMLButtonElement>(
+      ".momentum-video-player__surface",
+    )!;
+    await act(async () =>
+      surface.dispatchEvent(
+        new PointerEvent("pointerdown", {
+          bubbles: true,
+          pointerType: "touch",
+          isPrimary: true,
+        }),
+      ),
+    );
+    await act(async () =>
+      surface.dispatchEvent(
+        new MouseEvent("click", { bubbles: true, detail: 1 }),
+      ),
+    );
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    expect(video.paused).toBe(true);
+    noWrites();
+  });
+
+  it("keeps controls and the bounded settings dialog inside the uncropped 16:9 stage", async () => {
+    const video = (await mount())!;
+    const stage = video.closest<HTMLElement>(".momentum-video-player__stage")!;
+    const controls = container.querySelector<HTMLElement>(
+      ".momentum-video-controls",
+    )!;
+    expect(stage.contains(controls)).toBe(true);
+    expect(getComputedStyle(stage).aspectRatio).toBe("16 / 9");
+    expect(getComputedStyle(video).objectFit).toBe("contain");
+    expect(getComputedStyle(controls).position).toBe("absolute");
+    const trigger = await openSettings();
+    const panel = container.querySelector<HTMLElement>('[role="dialog"]')!;
+    expect(stage.contains(panel)).toBe(true);
+    expect(trigger.getAttribute("aria-haspopup")).toBe("dialog");
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(getComputedStyle(panel).position).toBe("absolute");
+    expect(getComputedStyle(panel).maxHeight).toBe("calc(100% - 16px)");
+    expect(getComputedStyle(panel).overflowY).toBe("auto");
+    // Computed-style contracts supplement, not replace, native viewport QA.
+    expect(container.querySelector("video")).toBe(video);
+    noWrites();
+  });
+
+  it("moves focus into Settings and Escape from a select dismisses it and restores its trigger", async () => {
+    await mount();
+    const trigger = await openSettings();
+    const panel = container.querySelector<HTMLElement>('[role="dialog"]')!;
+    expect(document.activeElement).toBe(panel.querySelector("button"));
+    const rate = panel.querySelector<HTMLSelectElement>(
+      'select[aria-label="Playback speed"]',
+    )!;
+    await act(async () => {
+      rate.focus();
+      rate.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+      );
+    });
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    noWrites();
+  });
+
+  it("ignores inside pointers and dismisses on an outside pointer without changing playback", async () => {
+    const video = (await mount())!;
+    const trigger = await openSettings();
+    const panel = container.querySelector<HTMLElement>('[role="dialog"]')!;
+    await act(async () =>
+      panel.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true })),
+    );
+    expect(container.querySelector('[role="dialog"]')).toBe(panel);
+    await act(async () =>
+      trigger.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true })),
+    );
+    expect(container.querySelector('[role="dialog"]')).toBe(panel);
+    await act(async () =>
+      video.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true })),
+    );
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+    expect(video.paused).toBe(true);
+    noWrites();
+  });
+
+  it("keeps selected speed and secondary skip controls functional without reloading the source", async () => {
+    const video = (await mount())!;
+    await fire(video, "timeupdate", 1);
+    const source = video.src;
+    const loads = vi.mocked(HTMLMediaElement.prototype.load).mock.calls.length;
+    await openSettings();
+    const panel = container.querySelector<HTMLElement>('[role="dialog"]')!;
+    const rate = panel.querySelector<HTMLSelectElement>(
+      'select[aria-label="Playback speed"]',
+    )!;
+    await act(async () => {
+      rate.value = "1.5";
+      rate.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(rate.value).toBe("1.5");
+    expect(video.playbackRate).toBe(1.5);
+    const forward = [...panel.querySelectorAll("button")].find((button) =>
+      button.textContent?.includes("Forward 10s"),
+    )!;
+    await act(async () => forward.click());
+    expect(video.currentTime).toBe(11);
+    expect(video.src).toBe(source);
+    expect(HTMLMediaElement.prototype.load).toHaveBeenCalledTimes(loads);
+    expect(container.querySelector("video")).toBe(video);
+    noWrites();
+  });
+
+  it("actually hides the quiet preview status while retaining its error recovery state", async () => {
+    const video = (await mount())!;
+    const status = container.querySelector<HTMLElement>(
+      ".momentum-video-viewer__status-row",
+    )!;
+    expect(status.hidden).toBe(true);
+    expect(getComputedStyle(status).display).toBe("none");
+    await fire(video, "error");
+    expect(status.hidden).toBe(false);
+    expect(getComputedStyle(status).display).toBe("flex");
+    expect(status.textContent).toContain("Retry media");
+    noWrites();
+  });
+
+  it("opens secondary keyboard help without stealing focus and returns to a visible control", async () => {
+    await mount();
+    const trigger = await openSettings();
+    // Browser container queries hide this toolbar counterpart on narrow players.
+    container.querySelector<HTMLElement>(
+      '[aria-label="Show keyboard shortcuts"]',
+    )!.style.display = "none";
+    const panel = container.querySelector<HTMLElement>(
+      '[aria-labelledby="momentum-video-settings-title"]',
+    )!;
+    const help = [...panel.querySelectorAll("button")].find((button) =>
+      button.textContent?.includes("Shortcuts"),
+    )!;
+    await act(async () => help.click());
+    const close = container.querySelector<HTMLButtonElement>(
+      '[aria-label="Close keyboard shortcuts"]',
+    )!;
+    expect(document.activeElement).toBe(close);
+    expect(
+      container.querySelector(
+        '[aria-labelledby="momentum-video-settings-title"]',
+      ),
+    ).toBeNull();
+    await act(async () =>
+      close.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+      ),
+    );
+    expect(
+      container.querySelector('[aria-label="Player keyboard shortcuts"]'),
+    ).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+    noWrites();
+  });
+
+  it("clears controls with auto captions, preserves authored placement, and restores cues after replacement or unmount", async () => {
+    const cue = () => ({
+      line: "auto" as number | "auto",
+      lineAlign: "start",
+      snapToLines: true,
+      text: "Synthetic caption",
+    });
+    const automatic = cue();
+    const authored = { ...cue(), line: 88 };
+    const first = Object.assign(new EventTarget(), {
+      mode: "showing",
+      activeCues: [automatic, authored],
+    });
+    const entries = [first];
+    const list = Object.assign(new EventTarget(), {
+      0: first,
+      length: 1,
+      [Symbol.iterator]: () => entries[Symbol.iterator](),
+    });
+    vi.spyOn(HTMLMediaElement.prototype, "textTracks", "get").mockReturnValue(
+      list as unknown as TextTrackList,
+    );
+    let frameHeight = 360;
+    let controlsTop = 280;
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
+      function (this: HTMLElement) {
+        return this.classList.contains("momentum-video-player__stage")
+          ? new DOMRect(0, 0, 640, frameHeight)
+          : this.classList.contains("momentum-video-controls")
+            ? new DOMRect(0, controlsTop, 640, frameHeight - controlsTop)
+            : new DOMRect();
+      },
+    );
+    let resized: ResizeObserverCallback | undefined;
+    const disconnect = vi.fn();
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(callback: ResizeObserverCallback) {
+          resized = callback;
+        }
+        observe() {}
+        disconnect = disconnect;
+      },
+    );
+    const video = (await mount())!;
+    expect(automatic.line).toBeCloseTo((272 / 360) * 100);
+    expect(automatic.snapToLines).toBe(false);
+    expect(automatic.lineAlign).toBe("end");
+    expect(authored.line).toBe(88);
+    expect(authored.snapToLines).toBe(true);
+    frameHeight = 180;
+    controlsTop = 100;
+    resized?.([], {} as ResizeObserver);
+    expect(automatic.line).toBeCloseTo((92 / 180) * 100);
+
+    const replacementCue = cue();
+    const replacement = Object.assign(new EventTarget(), {
+      mode: "showing",
+      activeCues: [replacementCue],
+    });
+    entries[0] = replacement;
+    list[0] = replacement;
+    list.dispatchEvent(new Event("removetrack"));
+    list.dispatchEvent(new Event("addtrack"));
+    await fire(video, "load");
+    expect(automatic).toEqual(cue());
+    expect(replacementCue.line).toBeCloseTo((92 / 180) * 100);
+    expect(replacementCue.text).toBe("Synthetic caption");
+    replacement.activeCues = [];
+    replacement.dispatchEvent(new Event("cuechange"));
+    expect(replacementCue).toEqual(cue());
+    replacement.activeCues = [replacementCue];
+    replacement.dispatchEvent(new Event("cuechange"));
+    expect(replacementCue.line).not.toBe("auto");
+    await act(async () => root.unmount());
+    unmounted = true;
+    expect(replacementCue).toEqual(cue());
+    expect(authored.line).toBe(88);
+    expect(disconnect).toHaveBeenCalledOnce();
+    noWrites();
+  });
+});
 
 const BRIDGE_ORIGIN = "http://learner.localhost:3100";
 const STAGING_ORIGIN = "https://staging.authorityclosers.com";
@@ -547,6 +836,61 @@ function deferred<T>() {
 }
 
 describe("mounted approved playback without completion policy", () => {
+  it("starts from the central control and changes viewing speed without writing learning evidence", async () => {
+    const video = (await mount())!;
+    await act(async () =>
+      container
+        .querySelector<HTMLButtonElement>('[aria-label="Start video"]')!
+        .click(),
+    );
+    expect(video.paused).toBe(false);
+    await act(async () =>
+      container
+        .querySelector<HTMLButtonElement>(
+          '[aria-label="Open playback settings"]',
+        )!
+        .click(),
+    );
+    const rate = container.querySelector<HTMLSelectElement>(
+      'select[aria-label="Playback speed"]',
+    )!;
+    expect([...rate.options].map((option) => option.value)).toEqual([
+      "0.5",
+      "0.75",
+      "1",
+      "1.25",
+      "1.5",
+      "2",
+    ]);
+    await act(async () => {
+      rate.value = "1.5";
+      rate.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(video.playbackRate).toBe(1.5);
+    await fire(video, "ended", 12);
+    await act(async () => video.pause());
+    expect(
+      container
+        .querySelector('[aria-label="Replay video"]')
+        ?.getAttribute("aria-disabled"),
+    ).toBe("true");
+    await act(async () =>
+      container
+        .querySelector<HTMLButtonElement>(
+          '[aria-label="Close playback settings"]',
+        )!
+        .click(),
+    );
+    await act(async () =>
+      container
+        .querySelector<HTMLButtonElement>('[aria-label="Replay video"]')!
+        .click(),
+    );
+    expect(video.currentTime).toBe(0);
+    expect(video.paused).toBe(false);
+    noWrites();
+  });
+
   it("retains its delivery source through StrictMode's effect cleanup replay", async () => {
     await act(async () =>
       root.render(
@@ -576,7 +920,7 @@ describe("mounted approved playback without completion policy", () => {
         container.querySelector('[data-playback-mode="read-only"]'),
       ).not.toBeNull();
       expect(container.textContent).toContain(
-        "Playback only — progress is not recorded for this lesson.",
+        "Video preview · Watching here won’t change your course progress.",
       );
       await play();
       expect(video.paused).toBe(false);

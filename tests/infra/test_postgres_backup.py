@@ -45,7 +45,7 @@ def _write_release(root: Path, environment: str = "staging") -> Path:
     (release / "environments").mkdir(parents=True)
     (release / "compose.yaml").write_text("name: ${AC_COMPOSE_PROJECT}\n", encoding="utf-8")
     (release / "release-images.env").write_text(
-        "AC_RELEASE_ID=" + "a" * 40 + "\n", encoding="utf-8"
+        "AC_RELEASE_ID=" + "a" * 40 + "\nAC_MIGRATION_HEAD=20260904_0018\n", encoding="utf-8"
     )
     source_profile = ROOT / "infra" / "application" / "environments" / f"{environment}.env"
     (release / "environments" / f"{environment}.env").write_text(
@@ -218,6 +218,7 @@ def test_dump_command_is_custom_format_ac_backup_and_does_not_contain_a_password
         state_root=tmp_path / "state",
         compose_project="ac-application-staging",
         secret_environment="staging",  # noqa: S106
+        migration_head="20260904_0018",
     )
     snapshot_id = "00000003-0000001B-1"
     command = " ".join(backup.dump_command(target, snapshot_id))
@@ -254,6 +255,7 @@ def test_source_parity_query_is_fixed_to_the_canonical_table_set(
         state_root=tmp_path / "state",
         compose_project="ac-application-staging",
         secret_environment="staging",  # noqa: S106
+        migration_head="20260904_0018",
     )
     snapshot_id = "00000003-0000001B-1"
     command_parts = backup.parity_command(target, snapshot_id)
@@ -270,7 +272,9 @@ def test_source_parity_query_is_fixed_to_the_canonical_table_set(
     assert f"SET TRANSACTION SNAPSHOT '{snapshot_id}'" in command_parts[-1]
     assert "UNION ALL" in command_parts[-1]
 
-    output = "\n".join(f"{table}|0" for table in backup.PARITY_TABLES)
+    output = "__migration_head__|20260904_0018\n" + "\n".join(
+        f"{table}|0" for table in backup.PARITY_TABLES
+    )
     monkeypatch.setattr(
         backup,
         "run_checked",
@@ -377,6 +381,7 @@ def test_exported_snapshot_identity_is_validated_before_command_binding(
         state_root=tmp_path / "state",
         compose_project="ac-application-staging",
         secret_environment="staging",  # noqa: S106
+        migration_head="20260904_0018",
     )
     for builder in (backup.dump_command, backup.parity_command):
         with pytest.raises(backup.BackupError, match="snapshot identity"):
@@ -526,6 +531,7 @@ def test_database_backup_continues_when_non_database_services_are_unhealthy(
         state_root=tmp_path / "state",
         compose_project="ac-application-staging",
         secret_environment="staging",  # noqa: S106
+        migration_head="20260904_0018",
     )
     compose_calls: list[list[str]] = []
 

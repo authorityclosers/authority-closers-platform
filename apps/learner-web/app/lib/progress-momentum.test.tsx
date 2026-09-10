@@ -151,17 +151,17 @@ describe("learner progress motivation foundations", () => {
       createElement(ProgressScopePanel, { learning, collection }),
     );
 
-    expect(html).toContain("Progress hierarchy");
+    expect(html).toContain("Learning progress");
     expect(html).toContain('role="group" aria-label="Progress scope"');
     expect(html).toContain('aria-pressed="true"');
-    expect(html).toContain("Canonical course projection");
+    expect(html).toContain("Your current course");
     expect(html).toContain(
-      "<dd><strong>40%</strong><span>Required activities</span></dd>",
+      "<dd><strong>40%</strong><span>of required steps</span></dd>",
     );
     expect(html).not.toContain("</dd><span>");
-    expect(html).toContain("participation progress, not mastery");
+    expect(html).toContain("Continue learning");
     expect(html).toContain(
-      "Source: server-authorized learning projections. Analytics does not change these totals.",
+      "Completed steps track participation, not an assessment of your skills.",
     );
     expect(html).not.toContain("XP");
     expect(html).not.toContain("leaderboard");

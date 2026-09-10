@@ -5,14 +5,17 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/../.." && pwd)"
 
 run_root_restore_proof_tests() {
-  local test_file="$script_dir/test_postgres_restore_proof.py"
+  local test_files=(
+    "$script_dir/test_postgres_restore_proof.py"
+    "$script_dir/test_capability_backup_parity.py"
+  )
   local python="$repo_root/.venv/bin/python"
   if [[ ! -x "$python" ]]; then
     printf 'The locked project Python environment is required for root restore-proof tests.\n' >&2
     return 1
   fi
   if ((EUID == 0)); then
-    PYTHONDONTWRITEBYTECODE=1 "$python" -m pytest -p no:cacheprovider "$test_file"
+    PYTHONDONTWRITEBYTECODE=1 "$python" -m pytest -p no:cacheprovider "${test_files[@]}"
     return
   fi
   command -v sudo >/dev/null 2>&1 || {
@@ -20,7 +23,7 @@ run_root_restore_proof_tests() {
     return 1
   }
   sudo env PYTHONDONTWRITEBYTECODE=1 \
-    "$python" -m pytest -p no:cacheprovider "$test_file"
+    "$python" -m pytest -p no:cacheprovider "${test_files[@]}"
 }
 
 bash "$script_dir/test-r2-usage-evaluate.sh"

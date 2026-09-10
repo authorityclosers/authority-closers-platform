@@ -36,8 +36,9 @@ def test_staging_controller_is_exact_sha_and_idempotent() -> None:
 
 
 def test_staging_controller_preserves_environment_and_provider_gates() -> None:
-    assert "AC_TARGET_ENVIRONMENT=staging" in CONTROLLER
-    assert "AC_TARGET_ENVIRONMENT=production" not in CONTROLLER
+    assert '[ValidateSet("staging", "production")]' in CONTROLLER
+    assert '[string]$TargetEnvironment = "staging"' in CONTROLLER
+    assert "AC_TARGET_ENVIRONMENT=$TargetEnvironment" in CONTROLLER
     assert "install-application-release.sh" in CONTROLLER
     assert "AC_RELEASE_ARCHIVE_SHA256" in CONTROLLER
     assert "AC_IMAGE_BUNDLE_DIR" in CONTROLLER
@@ -54,22 +55,24 @@ def test_staging_controller_preserves_environment_and_provider_gates() -> None:
 
 def test_staging_controller_has_compact_security_smoke() -> None:
     required_urls = (
-        "https://staging.authorityclosers.com/",
-        "https://staging.authorityclosers.com/$asset",
-        "https://api-staging.authorityclosers.com/health/live",
-        "https://api-staging.authorityclosers.com/health/ready",
-        "https://api-staging.authorityclosers.com/v1/programs",
-        "https://api-staging.authorityclosers.com/docs",
-        "https://api-staging.authorityclosers.com/openapi.json",
-        "https://admin-staging.authorityclosers.com/",
+        "https://$learnerHost/",
+        "https://$learnerHost/$asset",
+        "https://$coachHost/",
+        "https://$coachHost/login",
+        "https://$apiHost/health/live",
+        "https://$apiHost/health/ready",
+        "https://$apiHost/v1/programs",
+        "https://$apiHost/docs",
+        "https://$apiHost/openapi.json",
+        "https://$adminHost/",
         "https://authorityclosers.com/",
         "https://www.authorityclosers.com/",
     )
     for url in required_urls:
         assert url in CONTROLLER
-    assert '"learner-staging"' in CONTROLLER
-    assert '"api-staging"' in CONTROLLER
-    assert "ac-application-staging-worker-1" in CONTROLLER
+    assert '"learner-$TargetEnvironment"' in CONTROLLER
+    assert '"api-$TargetEnvironment"' in CONTROLLER
+    assert "ac-application-$TargetEnvironment-worker-1" in CONTROLLER
     assert 'test "`$(readlink -f "`$current")" = "`$release_dir"' in CONTROLLER
     for asset in (
         "apple-touch-icon.png",
@@ -83,9 +86,58 @@ def test_staging_controller_has_compact_security_smoke() -> None:
     assert "RELEASE-FILES.sha256" in CONTROLLER
     assert "{{.Image}}" in CONTROLLER
     assert "restless-cherry-c46f.cloudflareaccess.com" in CONTROLLER
-    assert "/cdn-cgi/access/login/admin-staging.authorityclosers.com" in CONTROLLER
+    assert '"/cdn-cgi/access/login/$adminHost"' in CONTROLLER
     assert "wp-content|wp-includes" in CONTROLLER
     assert "162.210.70.199" in CONTROLLER
+    assert "ac-application-$TargetEnvironment-coach-web-1" in CONTROLLER
+    assert "AC_COACH_IMAGE" in CONTROLLER
+
+
+@pytest.mark.parametrize(
+    "location,status,accepted",
+    [
+        ("/login", 307, True),
+        ("https://coach-staging.authorityclosers.com/login", 307, True),
+        ("https://other.example/login", 307, False),
+        ("/login?token=synthetic", 307, False),
+        ("/login", 302, False),
+    ],
+)
+def test_staging_coach_probe_only_accepts_same_host_login(
+    location: str, status: int, accepted: bool
+) -> None:
+    pwsh = shutil.which("pwsh")
+    if pwsh is None:
+        pytest.skip("PowerShell is required for the Windows controller behavior test")
+    function = (
+        "function Assert-CoachSignInBoundary"
+        + CONTROLLER.split("function Assert-CoachSignInBoundary", 1)[1].split(
+            "function Assert-LegacyLearnerTransition", 1
+        )[0]
+    )
+    script = f'''$ErrorActionPreference = "Stop"
+$TargetEnvironment = "staging"
+$environmentLabel = "Staging"
+$coachHost = "coach-staging.authorityclosers.com"
+function Get-HttpResult {{
+    param([string]$Url)
+    if ($Url -cne "https://coach-staging.authorityclosers.com/") {{ throw "unexpected request" }}
+    return [pscustomobject]@{{Status={status}; Route="coach-staging"; Location="{location}"}}
+}}
+function Assert-HttpRoute {{
+    param([string]$Url, [int]$Status, [string]$Route)
+    if (
+        $Url -cne "https://coach-staging.authorityclosers.com/login" -or
+        $Status -ne 200 -or $Route -cne "coach-staging"
+    ) {{ throw "unexpected login probe" }}
+}}
+{function}
+Assert-CoachSignInBoundary
+'''
+    result = subprocess.run(  # noqa: S603 - only extracted function and no-network fixture
+        [pwsh, "-NoProfile", "-Command", script], capture_output=True, text=True, check=False
+    )
+    assert (result.returncode == 0) is accepted, result.stderr
 
 
 def test_staging_controller_does_not_embed_secrets_or_enable_side_effects() -> None:
@@ -110,7 +162,7 @@ def test_staging_controller_uses_private_bounded_stages_and_read_only_noop() -> 
     assert "SetAccessRuleProtection($true, $false)" in CONTROLLER
     assert "FileShare]::None" in CONTROLLER
     assert "Expand-ExactArtifact -ZipStream $artifactStream" in CONTROLLER
-    assert "assert_container ac-application-staging-postgres-1" in CONTROLLER
+    assert "assert_container ac-application-$TargetEnvironment-postgres-1" in CONTROLLER
     assert "function Invoke-RetriableNative" in CONTROLLER
     assert "[ValidateRange(1, 5)][int]$MaxAttempts = 4" in CONTROLLER
     assert "$exitCode -ne 255" in CONTROLLER
@@ -119,7 +171,7 @@ def test_staging_controller_uses_private_bounded_stages_and_read_only_noop() -> 
     assert "$startInfo.RedirectStandardError = $true" in CONTROLLER
     assert "return $standardOutput" in CONTROLLER
     assert "return $output" not in CONTROLLER
-    assert "Current staging release lookup" in CONTROLLER
+    assert '"Current $TargetEnvironment release lookup"' in CONTROLLER
     assert "Release archive transfer" in CONTROLLER
     assert "Release bundle transfer: $name" in CONTROLLER
     assert "Private remote staging cleanup" in CONTROLLER
@@ -132,7 +184,7 @@ def test_staging_controller_uses_private_bounded_stages_and_read_only_noop() -> 
         "if ($currentRelease -eq $expectedReleasePath -and -not $ReapplyConfiguration)",
         maxsplit=1,
     )[1].split("$artifactName", maxsplit=1)[0]
-    assert "Test-Staging" in noop
+    assert "Test-Deployment" in noop
     assert "ProbeOAuth" not in noop
     assert (
         "Get-Command scp"

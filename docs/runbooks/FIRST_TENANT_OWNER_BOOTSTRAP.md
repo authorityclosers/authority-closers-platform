@@ -18,14 +18,34 @@ Bootstrap it without inventing one or editing SQL:
    Keep `AC_EXTERNAL_SIDE_EFFECTS_HOLD=true`; omit both tenant references.
 2. Deploy the reviewed artifact. The held worker remains unavailable and all
    tenantless operations fail closed while the control tenant is absent.
-3. Use the admin-surface Google `register` flow to create the first verified
-   canonical person. Learner registration remains unavailable until the public
-   tenant and reviewed consent context exist.
-4. Run the owner bootstrap below for that exact verified email. Record the
-   returned tenant UUID without recording any session token or secret.
-5. Store that exact active tenant UUID as `AC_OPERATIONS_TENANT_ID` in the
-   target Infisical environment.
-6. Create or validate the separate public learner context with the same
+3. Create or validate only the explicitly approved operations tenant using the
+   new tenant-only command below. It creates no identity, verification,
+   membership, role, capability, consent or session. The command ID, operator
+   reference, reason, slug and name form one immutable audited intent; keep
+   those exact inputs for replay and never include credentials in them:
+
+   ```sh
+   python -m ac_platform.bootstrap \
+     --environment staging \
+     --operations-only \
+     --command-id <stable-reviewed-command-uuid> \
+     --operator-reference <non-secret-approved-operator-reference> \
+     --reason "Approved empty-environment operations tenant bootstrap" \
+     --tenant-slug <approved-operations-slug> \
+     --tenant-name "<approved-operations-name>"
+   ```
+
+   For production, use `--environment production --allow-production`. The
+   reviewed baked release and explicit database configuration remain required.
+   Successful output contains only `tenant_id`, `tenant_created`, and `replayed`,
+   after the tenant and canonical audit commit together. A different later
+   command or changed intent fails closed; this is not a general tenant-creation
+   or tenant-repair command.
+
+4. Store that exact active tenant UUID as `AC_OPERATIONS_TENANT_ID` in the
+   target Infisical environment. Supply the updated configuration to the next
+   canonical command through the same reviewed deployment environment.
+5. Create or validate the separate public learner context with the same
    reviewed artifact. This command creates no person or membership:
 
    ```sh
@@ -39,8 +59,19 @@ Bootstrap it without inventing one or editing SQL:
    Store its returned UUID as `AC_PUBLIC_LEARNER_TENANT_ID`. Do not reuse the
    operations tenant: one person has one role per tenant, so an operations
    owner cannot simultaneously satisfy the public tenant's learner-role gate.
-7. Reapply the same reviewed staging artifact so containers receive the new
-   references, then run the controlled catalog seed and runtime acceptance:
+
+6. Configure the exact reviewed consent version and reapply the same reviewed
+   artifact so containers receive both tenant references and that consent
+   version. Staging legal text is not production consent approval.
+7. The explicitly approved person completes normal learner-surface Google
+   registration with current consent (or email verification followed by normal
+   authenticated Google linking). Admin and Coach registration are forbidden;
+   authentication alone must not create a new identity. Run the existing owner
+   command below only for the exact verified OAuth identity explicitly approved
+   to be the operations owner. Naming another administrator does not silently
+   authorize another owner. The separate public membership remains `learner`.
+8. For staging only, run the controlled catalog seed and runtime acceptance
+   after the reviewed configuration reapplication:
 
    ```powershell
    pwsh -File scripts/Deploy-Staging.ps1 `
@@ -53,6 +84,11 @@ digest-bound artifact, takes a pre-migration backup, runs the idempotent
 migration path, restarts the exact images, and reruns release/route/OAuth proof.
 Without `-ReapplyConfiguration`, an already-current SHA remains a read-only
 verification no-op.
+
+An installed but held empty environment is not a completed production launch.
+Email activation, production consent/content, additional membership and scoped
+capability provisioning, and enabled media/practice providers remain separate
+reviewed prerequisites. This tenant-only command does not enable any of them.
 
 Example staging invocation (replace the values for the intended verified
 person and tenant):

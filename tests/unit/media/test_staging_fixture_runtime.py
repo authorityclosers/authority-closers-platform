@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 import pytest
@@ -16,6 +18,7 @@ import ac_platform.media.staging_fixture_runtime as composition
 from ac_platform.application.settings import Settings
 from ac_platform.catalog.models import GLOBAL_CATALOG_OWNER_KEY, Activity, ProgramVersion
 from ac_platform.kernel.authz import ActorContext
+from ac_platform.media.contracts import MediaAssetVersion, create_media_authorization_context
 from ac_platform.media.database_delivery_authorizer import DatabaseMediaDeliveryAuthorizer
 from ac_platform.media.errors import (
     MediaConfigurationError,
@@ -25,6 +28,7 @@ from ac_platform.media.errors import (
 from ac_platform.media.runtime import create_default_media_runtime, create_media_runtime
 from ac_platform.media.signing import MediaSigner
 from ac_platform.media.storage import InMemoryPrivateObjectStorage
+from ac_platform.seed.application import _stable_id
 from ac_platform.seed.technical_media_fixture_v2 import (
     FILM_ACTIVITY_PROMPTS,
     FILM_ACTIVITY_TITLES,
@@ -49,9 +53,11 @@ def fixture_settings(tmp_path: Path, **overrides: object) -> Settings:
     return Settings.model_validate(values | overrides)
 
 
-@pytest.fixture
-def composed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    settings = fixture_settings(tmp_path)
+@pytest.fixture(
+    params=["https://staging.authorityclosers.com", "https://learner-staging.authorityclosers.com"]
+)
+def composed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, request):
+    settings = fixture_settings(tmp_path, public_app_url=request.param)
     calls: list[dict[str, object]] = []
     storage = InMemoryPrivateObjectStorage(MediaSigner(b"fixture-test-only-key-32-bytes-long"))
     clips = tuple(SimpleNamespace(asset_id=uuid4(), version_id=uuid4()) for _ in range(2))
@@ -167,10 +173,47 @@ def test_loader_pins_release_tenant_and_package_without_general_activation(compo
     assert not runtime.learning_playback_composed
     assert runtime.playback_policy_resolver is None
     assert runtime.media_delivery.playback_ttl.total_seconds() == 300
-    assert runtime.media_cors_policy.allowed_origins == ("https://staging.authorityclosers.com",)
+    origin = str(settings.public_app_url).rstrip("/")
+    assert runtime.media_cors_policy.allowed_origins == (origin,)
+    assert runtime.media_delivery.delivery_origin == origin
 
 
-@pytest.mark.parametrize("origin", ["https://evil.test", "http://localhost:3100"])
+def test_fixture_signed_delivery_uses_only_selected_staging_origin_with_same_ttl(composed):
+    settings, runtime, _, clips = composed
+    issued_at = datetime(2026, 9, 8, tzinfo=UTC)
+    authorization = create_media_authorization_context(
+        tenant_id=str(settings.public_learner_tenant_id),
+        person_id=str(uuid4()),
+        session_id=str(uuid4()),
+    )
+    signed = runtime.media_delivery.issue(
+        authorization=authorization,
+        activity_id=str(uuid4()),
+        activity_version="fixture-v1",
+        media_version=MediaAssetVersion(str(clips[0].asset_id), str(clips[0].version_id)),
+        object_key="tenants/fixture/master.m3u8",
+        now=issued_at,
+    )
+    parsed = urlsplit(signed.url.value)
+    assert f"{parsed.scheme}://{parsed.netloc}" == str(settings.public_app_url).rstrip("/")
+    assert (signed.expires_at - issued_at).total_seconds() == 300
+    assert not runtime.learning_playback_composed
+
+
+@pytest.mark.parametrize(
+    "origin",
+    [
+        "https://evil.test",
+        "http://localhost:3100",
+        "https://learner.authorityclosers.com",
+        "https://app.authorityclosers.com",
+        "https://coach-staging.authorityclosers.com",
+        "https://*.authorityclosers.com",
+        "https://learner-staging.authorityclosers.com.evil.test",
+        "http://learner-staging.authorityclosers.com",
+        "https://learner-staging.authorityclosers.com/path",
+    ],
+)
 def test_composition_refuses_cross_origin_before_loading(tmp_path: Path, monkeypatch, origin):
     def unexpected(**_values: object) -> None:
         pytest.fail("invalid origin must precede filesystem IO")
@@ -193,6 +236,42 @@ def test_both_exact_catalog_videos_use_shared_learning_facts(composed, index):
     assert definition.id == row.id
     assert definition.version == f"activity:{row.id}"
     assert definition.video_duration_seconds is None  # binding supplies observed duration
+
+
+def test_full_package_prerequisite_graph_resolves_without_granting_nonfilm_media(composed):
+    settings, runtime, _, _ = composed
+    _, version = catalog_pair()
+    seed = technical_media_seed(RELEASE)
+    resolved = 0
+    for module in seed.modules:
+        for expected in module.activities:
+            row = Activity(
+                id=_stable_id(
+                    "activity", f"{seed.content_digest}:{module.position}:{expected.position}"
+                ),
+                program_id=version.program_id,
+                program_version_id=version.id,
+                module_id=_stable_id("module", f"{seed.content_digest}:{module.position}"),
+                scope="global",
+                owner_key=GLOBAL_CATALOG_OWNER_KEY,
+                tenant_id=None,
+                kind=expected.kind,
+                title=expected.title,
+                prompt=expected.prompt,
+                position=expected.position,
+                is_required=expected.is_required,
+            )
+            assert runtime.service.delivery_activity_resolver(row, version).id == row.id
+            resolved += 1
+            if expected.kind != "VIDEO":
+                with Session() as database:
+                    assert (
+                        runtime.activity_media_resolver(
+                            database, settings.public_learner_tenant_id, row, version
+                        )
+                        is None
+                    )
+    assert resolved == 6
 
 
 @pytest.mark.parametrize(

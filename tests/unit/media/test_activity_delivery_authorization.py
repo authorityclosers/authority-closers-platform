@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator, Iterator
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlsplit
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi import FastAPI, Request
@@ -16,17 +17,20 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session
 
+from ac_platform.application.settings import Settings
+from ac_platform.audit.models import AuditEvent
+from ac_platform.audit.service import AuditRepository, verify_audit_chain_sync
 from ac_platform.catalog.models import Activity, Module, Program, ProgramVersion
 from ac_platform.db.models import model_metadata
 from ac_platform.enrollment.models import Enrollment, Entitlement
 from ac_platform.http.auth import AuthenticatedTransaction, AuthenticationRequired
-from ac_platform.http.learning import _default_activity_resolver
+from ac_platform.http.learning import _default_activity_resolver, install_learning_http
 from ac_platform.http.media_delivery import install_media_delivery_http
 from ac_platform.http.problem import register_problem_handlers
 from ac_platform.identity.models import Person
 from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.kernel.authz import ActorContext
-from ac_platform.learning.models import PlaybackSession
+from ac_platform.learning.models import ActivityProgress, PlaybackSession
 from ac_platform.learning.services import SqlAlchemyLearningRepository
 from ac_platform.media.api_contracts import ActivityMediaBindingRequest
 from ac_platform.media.bindings import resolve_activity_media_binding_for_learning
@@ -48,6 +52,34 @@ from ac_platform.media.storage import InMemoryPrivateObjectStorage
 from ac_platform.tenancy.models import Membership, Tenant
 
 PLAYBACK = "playback"
+
+
+class AwaitableDatabase:
+    """Exercise the real async audit repository over this SQLite transaction."""
+
+    def __init__(self, database: Session) -> None:
+        self.database = database
+
+    def get_bind(self) -> Any:
+        return self.database.get_bind()
+
+    def add(self, row: Any) -> None:
+        self.database.add(row)
+
+    async def run_sync(self, operation: Any) -> Any:
+        return operation(self.database)
+
+    async def scalar(self, statement: Any) -> Any:
+        return self.database.scalar(statement)
+
+    async def scalars(self, statement: Any) -> Any:
+        return self.database.scalars(statement)
+
+    async def execute(self, statement: Any) -> Any:
+        return self.database.execute(statement)
+
+    async def flush(self) -> None:
+        self.database.flush()
 
 
 @pytest.fixture
@@ -239,7 +271,11 @@ def harness() -> Iterator[Any]:
 
 
 def descriptor(h: Any) -> Any:
-    return h.service.resolve_activity_media_descriptor_for_learner(h.database, h.actor, h.access)
+    return asyncio.run(
+        h.service.resolve_activity_media_descriptor_for_learner(
+            AwaitableDatabase(h.database), h.actor, h.access
+        )
+    )
 
 
 def split_url(url: str) -> tuple[str, str]:
@@ -433,6 +469,173 @@ def test_expiry_boundary_and_refresh_append_a_new_grant(harness: Any) -> None:
     assert refreshed["delivery_grant_id"] != claims["delivery_grant_id"]
     assert authorizer(h).authorize(refreshed, PLAYBACK)
     assert h.database.scalar(select(func.count()).select_from(MediaPlaybackGrant)) == 2
+
+
+@pytest.mark.parametrize("ttl_seconds", [10, 100, 300, 900])
+def test_early_renewal_threshold_reuse_scope_and_immutable_predecessor(
+    harness: Any, ttl_seconds: int
+) -> None:
+    h = harness
+    h.port.playback_ttl = timedelta(seconds=ttl_seconds)
+    h.service._now = lambda: h.now
+    first = descriptor(h)
+    claims = claims_for(h, first.delivery.progressive_url)
+    predecessor = h.database.get(MediaPlaybackGrant, UUID(claims["delivery_grant_id"]))
+    before = {
+        column.name: getattr(predecessor, column.name) for column in predecessor.__table__.columns
+    }
+    margin = min(timedelta(seconds=30), h.port.playback_ttl / 5)
+    h.now = predecessor.expires_at.replace(tzinfo=UTC) - margin - timedelta(seconds=1)
+    reused_claims = claims_for(h, descriptor(h).delivery.progressive_url)
+    assert reused_claims["delivery_grant_id"] == claims["delivery_grant_id"]
+    assert (reused_claims["iat"], reused_claims["exp"]) == (claims["iat"], claims["exp"])
+    h.now += timedelta(seconds=1)
+    renewed = descriptor(h)
+    renewed_claims = claims_for(h, renewed.delivery.progressive_url)
+    assert renewed_claims["delivery_grant_id"] != claims["delivery_grant_id"]
+    for field in (
+        "tenant_id",
+        "person_id",
+        "session_id",
+        "activity_id",
+        "activity_version",
+        "asset_id",
+        "version_id",
+        "enrollment_id",
+        "binding_id",
+    ):
+        assert renewed_claims[field] == claims[field]
+    assert renewed_claims["exp"] - renewed_claims["iat"] == ttl_seconds
+    assert authorizer(h).authorize(claims, PLAYBACK)
+    assert (
+        claims_for(h, descriptor(h).delivery.progressive_url)["delivery_grant_id"]
+        == renewed_claims["delivery_grant_id"]
+    )
+    h.database.refresh(predecessor)
+    assert {
+        column.name: getattr(predecessor, column.name) for column in predecessor.__table__.columns
+    } == before
+    events = h.database.scalars(select(AuditEvent).order_by(AuditEvent.sequence_no)).all()
+    assert len(events) == 2
+    assert all(event.action == "media.activity_delivery_granted" for event in events)
+    assert events[1].resource_id == renewed_claims["delivery_grant_id"]
+    assert events[1].payload["predecessor_grant_id"] == str(predecessor.id)
+    assert events[1].payload["binding_id"] == str(h.binding.id)
+    assert all(event.session_id == h.actor.session_id for event in events)
+    assert verify_audit_chain_sync(h.database, h.actor.tenant_id).valid
+    assert all(
+        "token" not in str(event.payload) and "http" not in str(event.payload) for event in events
+    )
+    assert h.database.scalar(select(func.count()).select_from(PlaybackSession)) == 0
+    h.now = predecessor.expires_at.replace(tzinfo=UTC)
+    assert not authorizer(h).authorize(claims, PLAYBACK)
+    assert authorizer(h).authorize(renewed_claims, PLAYBACK)
+
+
+def test_renewal_audit_failure_rolls_back_new_grant(harness: Any, monkeypatch: Any) -> None:
+    h = harness
+    h.service._now = lambda: h.now
+    first = descriptor(h)
+    first_claims = claims_for(h, first.delivery.progressive_url)
+    old = h.database.get(MediaPlaybackGrant, UUID(first_claims["delivery_grant_id"]))
+    h.now = old.expires_at.replace(tzinfo=UTC) - timedelta(seconds=30)
+
+    async def fail_append(*_args: Any, **_kwargs: Any) -> Any:
+        raise RuntimeError("synthetic audit failure")
+
+    monkeypatch.setattr(AuditRepository, "append_for_actor", fail_append)
+    with pytest.raises(RuntimeError, match="synthetic audit failure"), h.database.begin_nested():
+        descriptor(h)
+    assert h.database.scalar(select(func.count()).select_from(MediaPlaybackGrant)) == 1
+    assert h.database.scalar(select(func.count()).select_from(AuditEvent)) == 1
+    assert authorizer(h).authorize(first_claims, PLAYBACK)
+
+
+@pytest.mark.parametrize("change", ["session", "membership", "enrollment", "binding"])
+def test_renewal_rechecks_current_authority_before_issuing_or_auditing(
+    harness: Any, change: str
+) -> None:
+    h = harness
+    h.service._now = lambda: h.now
+    claims = claims_for(h, descriptor(h).delivery.progressive_url)
+    predecessor = h.database.get(MediaPlaybackGrant, UUID(claims["delivery_grant_id"]))
+    h.now = predecessor.expires_at.replace(tzinfo=UTC) - timedelta(seconds=30)
+    if change == "session":
+        h.database.get(IdentitySession, h.actor.session_id).revoked_at = h.now
+    elif change == "membership":
+        membership = h.database.scalar(
+            select(Membership).where(Membership.person_id == h.actor.person_id)
+        )
+        membership.status, membership.ended_at = "inactive", h.now
+    elif change == "enrollment":
+        h.enrollment.status = "revoked"
+    else:
+        binding = h.database.get(ActivityMediaBinding, h.binding.id)
+        binding.state, binding.superseded_at = "superseded", h.now
+    h.database.flush()
+    if change == "binding":
+        assert not descriptor(h).playback_available
+    else:
+        from ac_platform.kernel.errors import DomainError
+
+        with pytest.raises(DomainError):
+            descriptor(h)
+    assert h.database.scalar(select(func.count()).select_from(MediaPlaybackGrant)) == 1
+    assert h.database.scalar(select(func.count()).select_from(AuditEvent)) == 1
+
+
+def test_activity_get_commits_grant_and_audit_before_exposing_signed_delivery(harness: Any) -> None:
+    h = harness
+    commit_failure = True
+    commit_attempts = 0
+
+    async def require_actor(request: Request) -> AsyncIterator[AuthenticatedTransaction]:
+        nonlocal commit_attempts
+        if request.headers.get("x-test-session") != "learner":
+            raise AuthenticationRequired("An authenticated test session is required.")
+        with h.database.begin_nested():
+            yield AuthenticatedTransaction(
+                database=AwaitableDatabase(h.database),
+                identity=None,
+                resolved=SimpleNamespace(actor=h.actor),
+                token="isolated-test-session",  # noqa: S106 - synthetic dependency
+            )
+            commit_attempts += 1
+            if commit_failure:
+                raise RuntimeError("synthetic deferred commit failure")
+
+    app = FastAPI()
+    register_problem_handlers(app)
+    install_learning_http(
+        app,
+        settings=Settings(_env_file=None, environment="test"),
+        require_actor=require_actor,
+        activity_media_resolver=resolve_activity_media_binding_for_learning,
+        media_descriptor_resolver=h.service.resolve_activity_media_descriptor_for_learner,
+    )
+    route = f"/v1/activities/{h.access.activity.id}"
+    with TestClient(app, base_url="https://app.test", raise_server_exceptions=False) as client:
+        assert client.get(route).status_code == 401
+        failed = client.get(route, headers={"x-test-session": "learner"})
+        assert failed.status_code == 500 and "AC-MEDIA" not in failed.text
+        assert commit_attempts == 1
+        assert h.database.scalar(select(func.count()).select_from(MediaPlaybackGrant)) == 0
+        assert h.database.scalar(select(func.count()).select_from(AuditEvent)) == 0
+        commit_failure = False
+        result = client.get(route, headers={"x-test-session": "learner"})
+        assert result.status_code == 200
+        assert result.json()["media"]["playback_available"] is True
+        assert result.headers["cache-control"] == "no-store"
+        assert "complete_video" not in result.json()["allowed_actions"]
+        assert h.database.scalar(select(func.count()).select_from(MediaPlaybackGrant)) == 1
+        assert h.database.scalar(select(func.count()).select_from(AuditEvent)) == 1
+        reused = client.get(route, headers={"x-test-session": "learner"})
+        assert reused.status_code == 200
+        assert h.database.scalar(select(func.count()).select_from(MediaPlaybackGrant)) == 1
+        assert h.database.scalar(select(func.count()).select_from(AuditEvent)) == 1
+        assert h.database.scalar(select(func.count()).select_from(ActivityProgress)) == 0
+        assert h.database.scalar(select(func.count()).select_from(PlaybackSession)) == 0
+        assert verify_audit_chain_sync(h.database, h.actor.tenant_id).valid
 
 
 def test_hls_children_preserve_grant_scope_expiry_and_deny_after_revoke(harness: Any) -> None:

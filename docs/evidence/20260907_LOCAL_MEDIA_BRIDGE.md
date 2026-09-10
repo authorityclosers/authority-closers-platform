@@ -303,3 +303,49 @@ claim. The managed startup settings still need to be applied before that QA;
 normal sign-in, approved source delivery, GET/HEAD/206 seek, captions, playback,
 reconnect/expiry and safe diagnostic observations remain live gates. The
 anonymous 401 proof above remains accurately limited to rejection behavior.
+
+## Merge and managed-runtime verification — 16:16–16:22 UTC
+
+PR #42 passed exact candidate Application validation `34142421351` and
+Control-plane validation `34142421368`, then merged at 16:22:09Z as
+`ec0009ec0ea0333d7cfa266d2c353d07ddaf1268`. The same implementation worktree
+integrated main without discarding its unrelated files.
+
+The managed pair was stopped through its PID/start-time-verified controller;
+old logs were retained in a private ignored timestamped directory. The normal
+launcher restarted localhost only. Both health checks passed, with learner
+3100 and admin 3101 bound to loopback; memory-only sessions require normal
+sign-in again. Staging was not restarted by this local operation.
+
+The final running learner passed `Test-LocalMediaPrivacy.ps1`: synthetic
+anonymous registration 401/no-store, opaque GET/HEAD 401/401, 55/55 anonymous
+identity requests 401. The marker remained **0 before and after across three
+diagnostic files**, with **15,393 inspected bytes unchanged**. This supersedes
+the earlier startup-pending status and does not turn denial evidence into a
+successful media-playback claim.
+
+## Native-diagnostics guard revalidation — 8 September 2026
+
+The original HTTPS diagnostics correction is already present in the current
+tree: the managed staging launcher clears the learner child's `NODE_DEBUG`
+before startup, and both private-media configuration and the upstream adapter
+invoke the shared privacy guard. Existing follow-up work also covers NET/TLS
+diagnostics and local-sandbox startup. These implementation changes were
+preserved during this bounded revalidation.
+
+The first focused run found six stale configuration assertions expecting the
+old "native HTTP diagnostics" message after the guard changed to "native network
+diagnostics". The test-only correction updates those assertions, verifies NET/TLS
+and wildcard masks on direct bridge startup, verifies direct local-sandbox
+startup rejection, permits unrelated `fs` diagnostics, and explicitly isolates
+the sandbox environment between cases.
+
+On Node **24.19.0**, **140 tests / four files passed** at 02:00:52 local time:
+`dev-media-native-privacy.test.ts`, `dev-media-config.test.ts`,
+`dev-media-upstream.test.ts`, and `dev-api-proxy.test.ts`. Existing fresh-process
+negative controls reproduce the synthetic native sink; guarded controls reject
+unsafe startup, including Node's cached bootstrap mask after the environment is
+cleared. Scoped ESLint (zero warnings), formatting, and diff checks passed.
+No real credentials, signed requests, log contents, process restarts, or
+deployments were used. This result
+does not add live playback or running-process acceptance evidence.

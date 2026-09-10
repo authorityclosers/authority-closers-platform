@@ -9,11 +9,15 @@ const developmentBridge = resolveDevAuthBridgeConfig(
   process.env,
   process.env.NODE_ENV,
 );
+const localSandbox =
+  process.env.NODE_ENV === "development" &&
+  process.env.AC_DEV_LOCAL_SANDBOX_ENABLED === "true";
+const privateMediaDevelopment = Boolean(developmentBridge || localSandbox);
 
-if (developmentBridge) assertDevelopmentMediaNativePrivacy();
+if (privateMediaDevelopment) assertDevelopmentMediaNativePrivacy();
 
 if (
-  developmentBridge &&
+  privateMediaDevelopment &&
   (nextPackage.version !== "16.2.11" ||
     process.env.NEXT_TRACE_SPAN_THRESHOLD_MS !== "9007199254740991")
 ) {
@@ -29,11 +33,14 @@ const nextConfig: NextConfig = {
   output: "standalone",
   outputFileTracingRoot: path.join(__dirname, "../.."),
   reactStrictMode: true,
+  // Keep framework chrome off the viewport while reviewing the actual app UI.
+  devIndicators: false,
   transpilePackages: ["@ac/ui"],
   poweredByHeader: false,
   // Next logs fetch warnings separately from incoming-request ignore rules.
   // Disable framework URL logging only for this validated opt-in dev bridge.
-  logging: developmentBridge ? false : undefined,
+  logging: privateMediaDevelopment ? false : undefined,
+  experimental: { serverComponentsHmrCache: !privateMediaDevelopment },
 };
 
 export default nextConfig;

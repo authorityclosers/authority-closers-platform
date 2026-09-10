@@ -70,11 +70,21 @@ function adminContext(
   };
 }
 
+function studioAccess() {
+  return {
+    person_id: ADMIN_PERSON,
+    session_id: ADMIN_SESSION,
+    tenant_id: ADMIN_TENANT,
+    studio_capabilities: [],
+  };
+}
+
 function successfulLoginFetcher(
   role: "owner" | "admin" | "support" | "learner" = "owner",
   identity: {
     me?: ReturnType<typeof adminMe>;
     context?: ReturnType<typeof adminContext>;
+    access?: unknown;
   } = {},
 ) {
   return vi.fn<DevAdminFetch>().mockImplementation((input, init) => {
@@ -104,6 +114,9 @@ function successfulLoginFetcher(
       return Promise.resolve(
         Response.json(identity.context ?? adminContext(role)),
       );
+    }
+    if (url.pathname === "/v1/me/studio-access") {
+      return Promise.resolve(Response.json(identity.access ?? studioAccess()));
     }
     if (url.pathname === "/v1/auth/logout") {
       return Promise.resolve(new Response(null, { status: 204 }));
@@ -186,9 +199,11 @@ describe("admin bridge route allowlist", () => {
     ["POST", "/v1/auth/logout"],
     ["GET", "/v1/me"],
     ["GET", "/v1/context"],
+    ["GET", "/v1/me/studio-access"],
     ["GET", "/v1/admin/studio/readiness"],
     ["GET", "/v1/admin/studio/programs"],
     ["GET", `/v1/admin/studio/programs/${TARGET_ID}`],
+    ["POST", `/v1/admin/studio/program-versions/${TARGET_ID}/revision`],
     ["POST", "/v1/admin/corrections"],
     ["POST", "/v1/admin/enrollment-grants"],
     ["POST", `/v1/admin/program-versions/${TARGET_ID}/publish`],
@@ -203,9 +218,17 @@ describe("admin bridge route allowlist", () => {
   it.each([
     ["GET", "/v1/admin/corrections"],
     ["POST", "/v1/context"],
+    ["POST", "/v1/me/studio-access"],
     ["POST", "/v1/admin/studio/readiness"],
     ["POST", "/v1/admin/studio/programs"],
     ["POST", `/v1/admin/studio/programs/${TARGET_ID}`],
+    ["GET", `/v1/admin/studio/program-versions/${TARGET_ID}/revision`],
+    ["PATCH", `/v1/admin/studio/program-versions/${TARGET_ID}/revision`],
+    [
+      "POST",
+      `/v1/admin/studio/program-versions/${TARGET_ID}/revision?copy=all`,
+    ],
+    ["POST", "/v1/admin/studio/program-versions/not-a-uuid/revision"],
     ["GET", "/v1/admin/studio/programs/not-a-uuid"],
     ["GET", `/v1/admin/studio/programs/${TARGET_ID}?include=drafts`],
     ["GET", "/v1/auth/google/start"],
@@ -287,7 +310,7 @@ describe("authenticated staging admin bridge", () => {
     expect(cookie).toContain("SameSite=Lax");
     expect(cookie).not.toContain(STAGING_SESSION);
     expect(store.get(localHandle(response))).toBe(STAGING_SESSION);
-    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(fetcher).toHaveBeenCalledTimes(4);
   });
 
   it("rejects learner credentials and revokes the unmapped upstream session", async () => {
@@ -307,10 +330,36 @@ describe("authenticated staging admin bridge", () => {
       code: "admin_bridge_authorization_denied",
     });
     expect(response.headers.get("set-cookie")).toBeNull();
-    expect(fetcher).toHaveBeenCalledTimes(4);
-    expect(new URL(String(fetcher.mock.calls[3][0])).pathname).toBe(
+    expect(fetcher).toHaveBeenCalledTimes(5);
+    expect(new URL(String(fetcher.mock.calls[4][0])).pathname).toBe(
       "/v1/auth/logout",
     );
+  });
+
+  it("maps a learner session only when its current Studio assignment is verified", async () => {
+    const access = {
+      ...studioAccess(),
+      studio_capabilities: [
+        {
+          permission: "catalog_read",
+          scope_kind: "program",
+          tenant_id: ADMIN_TENANT,
+          program_id: TARGET_ID,
+        },
+      ],
+    };
+    const fetcher = successfulLoginFetcher("learner", { access });
+    const store = new InMemoryDevelopmentAdminSessionStore();
+    const response = await proxyDevelopmentAdminApi(
+      mutation("/v1/auth/password/login"),
+      fetcher,
+      bridgeEnvironment,
+      "development",
+      store,
+    );
+    expect(response.status).toBe(200);
+    expect(store.get(localHandle(response))).toBe(STAGING_SESSION);
+    expect(fetcher).toHaveBeenCalledTimes(4);
   });
 
   it.each([
@@ -345,8 +394,8 @@ describe("authenticated staging admin bridge", () => {
       code: "admin_bridge_authorization_denied",
     });
     expect(response.headers.get("set-cookie")).toBeNull();
-    expect(fetcher).toHaveBeenCalledTimes(4);
-    expect(new URL(String(fetcher.mock.calls[3][0])).pathname).toBe(
+    expect(fetcher).toHaveBeenCalledTimes(5);
+    expect(new URL(String(fetcher.mock.calls[4][0])).pathname).toBe(
       "/v1/auth/logout",
     );
   });

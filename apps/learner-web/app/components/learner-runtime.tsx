@@ -1,7 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ModuleCard } from "@ac/ui";
+import {
+  ModuleCard,
+  LearningSymbol,
+  ProgressOrbit,
+  actionClassName,
+  type LearningSymbolKind,
+} from "@ac/ui";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -69,6 +75,8 @@ import {
   type MembershipDraftCleanup,
 } from "./membership-availability";
 import { VideoViewer } from "./learning-loop-runtime";
+import { LessonHeading } from "./lesson-heading";
+import journey from "./learning-journey.module.css";
 
 const defaultApi = createLearnerApi();
 export const FREE_COURSE_SLUG = "authority-closers-free-course";
@@ -915,6 +923,29 @@ function firstActionableActivity(
   );
 }
 
+export function learningPathContinueTarget(learning: LearningResponse): {
+  href: string;
+  label: string;
+} {
+  const nextActivity = firstActionableActivity(learning);
+  if (nextActivity)
+    return {
+      href: ROUTES.activity(nextActivity.id),
+      label: "Continue learning",
+    };
+  const reviewableModule = learning.modules.find((module) =>
+    module.activities.some(
+      (activity) => activity.state.toLowerCase() !== "locked",
+    ),
+  );
+  return reviewableModule
+    ? {
+        href: ROUTES.module(learning.program_slug, reviewableModule.id),
+        label: `Open Module ${reviewableModule.position}`,
+      }
+    : { href: "#course-outline-title", label: "View course outline" };
+}
+
 function learnerDisplayName(me: MeResponse): string {
   const displayName = me.display_name?.trim();
   return displayName ? displayName.split(/\s+/)[0] : "Learner";
@@ -1424,28 +1455,33 @@ export function LearningActivityNavigation({
   const unavailableReason = offlineRead
     ? "Reconnect to open this activity."
     : lockedReason;
+  const locked = activity.state.toLowerCase() === "locked";
+  const completed = activity.state.toLowerCase() === "completed";
   const content = (
     <>
-      <span className="activity-row__order">
-        {String(activity.position).padStart(2, "0")}
-      </span>
-      <span className="activity-row__icon" aria-hidden="true">
-        {activity.state.toLowerCase() === "locked" ? (
-          <LockKeyhole size={14} />
-        ) : (
-          activityIcon(activity.kind)
-        )}
-      </span>
-      <span className="activity-row__copy">
-        <strong>{activity.title}</strong>
-        <span className="activity-row__objective">
-          {activity.kind.replaceAll("_", " ")}
-        </span>
-        {lockedReason ? (
-          <span className="activity-row__reason">{lockedReason}</span>
+      <span className={journey.activityIcon} aria-hidden="true">
+        <LearningSymbol
+          kind={learningSymbolKind(activity.kind)}
+          size={60}
+          muted={locked || offlineRead}
+        />
+        {completed || locked ? (
+          <span className={journey.stateMark}>
+            {completed ? <CheckCircle2 size={14} /> : <LockKeyhole size={12} />}
+          </span>
         ) : null}
       </span>
-      <span className="activity-row__status">
+      <span className={journey.activityCopy}>
+        <span className={journey.activityLabel}>
+          {String(activity.position).padStart(2, "0")} ·{" "}
+          {activityKindLabel(activity.kind)}
+        </span>
+        <strong>{activity.title}</strong>
+        {lockedReason ? (
+          <span className={journey.activityReason}>{lockedReason}</span>
+        ) : null}
+      </span>
+      <span className={journey.activityStatus}>
         <span>
           {offlineRead
             ? "Reconnect to open"
@@ -1459,20 +1495,27 @@ export function LearningActivityNavigation({
       </span>
     </>
   );
-  if (activity.state.toLowerCase() === "locked" || offlineRead) {
+  if (locked || offlineRead) {
     return (
-      <li
-        className={`activity-row activity-row--locked${offlineRead ? " activity-row--offline" : ""}`}
-      >
-        <div aria-disabled="true" title={unavailableReason ?? undefined}>
+      <li className={journey.activity} data-complete={completed || undefined}>
+        <div
+          className={journey.activityLink}
+          aria-disabled="true"
+          title={unavailableReason ?? undefined}
+        >
           {content}
         </div>
       </li>
     );
   }
   return (
-    <li className="activity-row">
-      <Link href={ROUTES.activity(activity.id)}>{content}</Link>
+    <li className={journey.activity} data-complete={completed || undefined}>
+      <Link
+        className={journey.activityLink}
+        href={ROUTES.activity(activity.id)}
+      >
+        {content}
+      </Link>
     </li>
   );
 }
@@ -1489,6 +1532,17 @@ const ACTIVITY_LOOP = [
   { kind: "REVIEW", label: "Review" },
   { kind: "IMPROVE", label: "Improve" },
 ] as const;
+
+function learningSymbolKind(kind: string): LearningSymbolKind {
+  const kinds: Record<string, LearningSymbolKind> = {
+    VIDEO: "watch",
+    REFLECTION: "reflect",
+    IMPLEMENTATION_CHALLENGE: "implement",
+    REVIEW: "review",
+    IMPROVE: "improve",
+  };
+  return kinds[kind.toUpperCase()] ?? "course";
+}
 
 function activityKindLabel(kind: string): string {
   return (
@@ -2562,6 +2616,41 @@ export function ConnectedActivityWorkspace({
     URL.revokeObjectURL(href);
     setRecoveryMessage("Recovery file downloaded on this device.");
   }
+  const mobilePath = (
+    <details className="activity-mobile-path">
+      <summary>
+        <span>View module path</span>
+        <span className="activity-mobile-path__summary-meta">
+          {currentStepLabel}
+          <ChevronRight size={16} aria-hidden="true" />
+        </span>
+      </summary>
+      <div>
+        <p className="kicker">{moduleLabel}</p>
+        <h2>{moduleTitle}</h2>
+        <ActivityLoop
+          activities={moduleActivities}
+          currentActivityId={activity.id}
+          label={`${moduleLabel} learning path`}
+        />
+        {learningPathStatus === "error" ||
+        learningPathStatus === "forbidden" ? (
+          <div className="activity-path-recovery" role="alert">
+            <p>{errorText(learningPathError)}</p>
+            {isSessionExpiredError(learningPathError) ? (
+              <Link href={ROUTES.sessionExpired}>Sign in again</Link>
+            ) : isForbiddenError(learningPathError) ? (
+              <a href={LEARNER_SUPPORT_HREF}>Contact learner support</a>
+            ) : onRetryLearningPath ? (
+              <button type="button" onClick={onRetryLearningPath}>
+                Retry module path
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    </details>
+  );
   return (
     <div
       className={`activity-workspace activity-workspace--${activity.kind.toLowerCase().replaceAll("_", "-")}`}
@@ -2579,20 +2668,29 @@ export function ConnectedActivityWorkspace({
             <span>Loading course path…</span>
           ) : null}
         </div>
-        <div className="activity-shell__header">
-          <div>
-            <p className="activity-shell__type">
-              <span className="activity-shell__type-icon" aria-hidden="true">
-                {activityIcon(activity.kind)}
-              </span>
-              {kindLabel} · {currentStepLabel}
-            </p>
-            <h1 id={`activity-title-${activity.id}`}>{activity.title}</h1>
+        {isVideo ? (
+          <LessonHeading
+            id={`activity-title-${activity.id}`}
+            title={activity.title}
+            stepLabel={currentStepLabel}
+            stateLabel={activityStateLabel(activity.state)}
+          />
+        ) : (
+          <div className="activity-shell__header">
+            <div>
+              <p className="activity-shell__type">
+                <span className="activity-shell__type-icon" aria-hidden="true">
+                  {activityIcon(activity.kind)}
+                </span>
+                {kindLabel} · {currentStepLabel}
+              </p>
+              <h1 id={`activity-title-${activity.id}`}>{activity.title}</h1>
+            </div>
+            <span className="status-pill">
+              {activityStateLabel(activity.state)}
+            </span>
           </div>
-          <span className="status-pill">
-            {activityStateLabel(activity.state)}
-          </span>
-        </div>
+        )}
         {prompt && !isVideo ? (
           <section className="activity-prompt" aria-labelledby="prompt-title">
             <p className="kicker" id="prompt-title">
@@ -2650,39 +2748,7 @@ export function ConnectedActivityWorkspace({
             ) : null}
           </aside>
         ) : null}
-        <details className="activity-mobile-path">
-          <summary>
-            <span>View module path</span>
-            <span className="activity-mobile-path__summary-meta">
-              {currentStepLabel}
-              <ChevronRight size={16} aria-hidden="true" />
-            </span>
-          </summary>
-          <div>
-            <p className="kicker">{moduleLabel}</p>
-            <h2>{moduleTitle}</h2>
-            <ActivityLoop
-              activities={moduleActivities}
-              currentActivityId={activity.id}
-              label={`${moduleLabel} learning path`}
-            />
-            {learningPathStatus === "error" ||
-            learningPathStatus === "forbidden" ? (
-              <div className="activity-path-recovery" role="alert">
-                <p>{errorText(learningPathError)}</p>
-                {isSessionExpiredError(learningPathError) ? (
-                  <Link href={ROUTES.sessionExpired}>Sign in again</Link>
-                ) : isForbiddenError(learningPathError) ? (
-                  <a href={LEARNER_SUPPORT_HREF}>Contact learner support</a>
-                ) : onRetryLearningPath ? (
-                  <button type="button" onClick={onRetryLearningPath}>
-                    Retry module path
-                  </button>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
-        </details>
+        {!isVideo || staleLocalDraft ? mobilePath : null}
         {staleLocalDraft ? (
           <section
             className="activity-mutation-message"
@@ -2756,6 +2822,7 @@ export function ConnectedActivityWorkspace({
                 refreshCommittedMutationState("evidence")
               }
             />
+            {mobilePath}
             {prompt ? (
               <details className="lesson-context">
                 <summary>About this lesson</summary>
@@ -3079,13 +3146,10 @@ function CourseProgressSummary({ learning }: { learning: LearningResponse }) {
     Math.min(1, Math.max(0, learning.projection.percentage)) * 100,
   );
   return (
-    <aside className="course-progress-card" aria-label="Course progress">
-      <div className="course-progress-card__ring" aria-hidden="true">
-        <strong>{percentage}%</strong>
-        <span>complete</span>
-      </div>
+    <aside className={journey.progress} aria-label="Course progress">
+      <ProgressOrbit value={percentage} label="Course completion" />
       <div>
-        <p className="kicker">Your progress</p>
+        <p>Your progress</p>
         <strong>
           {learning.projection.completed_count} of{" "}
           {learning.projection.denominator}
@@ -3113,17 +3177,29 @@ function moduleStateLabel(module: LearningResponse["modules"][number]): string {
   return "Available";
 }
 
-function LearningModules({ learning }: { learning: LearningResponse }) {
+export function LearningModules({
+  learning,
+  disabled = false,
+}: {
+  learning: LearningResponse;
+  disabled?: boolean;
+}) {
+  const offlineRead = disabled || Boolean(getOfflineReadMetadata(learning));
+  const nextActivity = firstActionableActivity(learning);
+  const currentModule = learning.modules.find((module) =>
+    module.activities.some((activity) => activity.id === nextActivity?.id),
+  );
+  const expandedId = currentModule?.id ?? learning.modules[0]?.id;
   return (
-    <section className="course-outline" aria-labelledby="course-outline-title">
-      <div className="course-outline__heading">
+    <section className={journey.section} aria-labelledby="course-outline-title">
+      <div className={journey.sectionHeader}>
         <div>
-          <p className="kicker">Free Course path</p>
-          <h2 id="course-outline-title">Course outline</h2>
+          <h2 id="course-outline-title">Your learning path</h2>
+          <p>A clear next step, one module at a time.</p>
         </div>
         <span>{learning.modules.length} modules</span>
       </div>
-      <div className="course-path">
+      <ol className={journey.chapters}>
         {learning.modules.map((module) => {
           const completed = module.activities.filter(
             (activity) => activity.state.toLowerCase() === "completed",
@@ -3133,54 +3209,93 @@ function LearningModules({ learning }: { learning: LearningResponse }) {
             (activity) => activity.state.toLowerCase() === "locked",
           );
           return (
-            <article
-              className={`module-card${moduleState === "Locked" ? " module-card--locked" : ""}`}
+            <li
+              className={journey.chapter}
               key={module.id}
+              data-active={module.id === currentModule?.id || undefined}
+              data-complete={moduleState === "Complete" || undefined}
             >
-              <div className="module-card__header">
-                <div>
-                  <p className="module-card__number">
-                    Module {module.position}
-                  </p>
-                  <h3>{module.title}</h3>
-                </div>
-                <span className="module-card__count">
-                  {module.activities.length > 0
-                    ? `${completed}/${module.activities.length}`
-                    : moduleState}
-                </span>
-              </div>
-              {module.activities.length > 0 ? (
-                <ol className="activity-list">
-                  {module.activities.map((activity) => (
-                    <LearningActivityNavigation
-                      activity={activity}
-                      key={activity.id}
+              <span className={journey.chapterMarker} aria-hidden="true">
+                {moduleState === "Complete" ? (
+                  <CheckCircle2 size={20} />
+                ) : (
+                  module.position
+                )}
+              </span>
+              <article
+                aria-label={`Module ${module.position}: ${module.title}`}
+              >
+                <details open={module.id === expandedId}>
+                  <summary className={journey.chapterSummary}>
+                    <LearningSymbol
+                      kind="course"
+                      size={64}
+                      muted={moduleState === "Locked" || offlineRead}
                     />
-                  ))}
-                </ol>
-              ) : (
-                <p className="module-card__empty">
-                  No activities are published for this module yet.
-                </p>
-              )}
-              {moduleState === "Locked" && firstLocked ? (
-                <p className="module-card__lock-reason">
-                  <LockKeyhole size={14} aria-hidden="true" />
-                  {activityLockReason(firstLocked)}
-                </p>
-              ) : module.activities.length > 0 ? (
-                <Link
-                  className="module-card__footer-link"
-                  href={ROUTES.module(learning.program_slug, module.id)}
-                >
-                  Open module <ArrowRight size={15} aria-hidden="true" />
-                </Link>
-              ) : null}
-            </article>
+                    <div>
+                      <p className={journey.chapterLabel}>
+                        Module {module.position} ·{" "}
+                        {offlineRead ? "Saved view" : moduleState}
+                      </p>
+                      <h3>{module.title}</h3>
+                      <p>
+                        {module.activities.length > 0
+                          ? `${completed} of ${module.activities.length} activities complete`
+                          : "No published activities"}
+                      </p>
+                    </div>
+                    <ChevronRight
+                      className={journey.chevron}
+                      size={18}
+                      aria-hidden="true"
+                    />
+                  </summary>
+                  <div className={journey.chapterBody}>
+                    {module.activities.length > 0 ? (
+                      <ol className={journey.activityList}>
+                        {module.activities.map((activity) => (
+                          <LearningActivityNavigation
+                            activity={activity}
+                            disabled={offlineRead}
+                            key={activity.id}
+                          />
+                        ))}
+                      </ol>
+                    ) : (
+                      <p className={journey.empty}>
+                        No activities are published for this module yet.
+                      </p>
+                    )}
+                    {offlineRead ? (
+                      <p className={journey.chapterFooter}>
+                        Reconnect to open this module.
+                      </p>
+                    ) : moduleState === "Locked" && firstLocked ? (
+                      <p className={journey.chapterFooter}>
+                        <LockKeyhole size={14} aria-hidden="true" />
+                        {activityLockReason(firstLocked)}
+                      </p>
+                    ) : module.activities.length > 0 ? (
+                      <div className={journey.chapterFooter}>
+                        <Link
+                          className={actionClassName("quiet")}
+                          href={ROUTES.module(learning.program_slug, module.id)}
+                        >
+                          Open module{" "}
+                          <ArrowRight size={15} aria-hidden="true" />
+                        </Link>
+                      </div>
+                    ) : null}
+                  </div>
+                </details>
+              </article>
+            </li>
           );
         })}
-      </div>
+      </ol>
+      {learning.modules.length === 0 ? (
+        <p className={journey.empty}>No modules are published yet.</p>
+      ) : null}
     </section>
   );
 }
@@ -3215,8 +3330,7 @@ export function LiveLearningPath({
           state.value.learning,
         )
       : null;
-  const nextActivity = learning ? firstActionableActivity(learning) : undefined;
-  const firstModule = learning?.modules[0];
+  const continueTarget = learning ? learningPathContinueTarget(learning) : null;
   return (
     <>
       <StateMessage
@@ -3235,8 +3349,11 @@ export function LiveLearningPath({
               {offlineReadNotice(offlineRead)}
             </div>
           ) : null}
-          <section className="course-overview" aria-labelledby="learning-title">
-            <div className="course-overview__main">
+          <section
+            className={journey.overview}
+            aria-labelledby="learning-title"
+          >
+            <div>
               <div
                 className="breadcrumbs breadcrumbs--clarity"
                 aria-label="Course location"
@@ -3244,16 +3361,16 @@ export function LiveLearningPath({
                 <Link href={ROUTES.learnerHome}>Home</Link>
                 <span aria-hidden="true">/</span> My learning
               </div>
-              <p className="eyebrow">Authority Closers · Free Course</p>
+              <p className={journey.eyebrow}>Your course</p>
               <h1 id="learning-title">
                 {learning?.program_title ?? state.value.program.title}
               </h1>
               <p>
-                Work through the published Module 1 sequence. Access and
-                progress below reflect your current learner enrollment.
+                Learn the idea. Put it into practice. Come back with a new
+                perspective.
               </p>
               {learning ? (
-                <div className="course-overview__actions">
+                <div className={journey.actions}>
                   {offlineRead ? (
                     <span
                       className="button button--ink is-disabled"
@@ -3263,35 +3380,20 @@ export function LiveLearningPath({
                     </span>
                   ) : (
                     <Link
-                      className="button button--ink"
-                      href={
-                        nextActivity
-                          ? ROUTES.activity(nextActivity.id)
-                          : firstModule
-                            ? ROUTES.module(
-                                learning.program_slug,
-                                firstModule.id,
-                              )
-                            : ROUTES.programLearning(learning.program_slug)
-                      }
+                      className={actionClassName()}
+                      href={continueTarget!.href}
                     >
-                      {nextActivity
-                        ? "Continue learning"
-                        : firstModule
-                          ? "Open Module 1"
-                          : "View course"}
+                      {continueTarget!.label}
                       <ArrowRight size={16} aria-hidden="true" />
                     </Link>
                   )}
                 </div>
               ) : (
                 <div className="enrollment-required" role="status">
-                  <strong>
-                    Start the Free Course before opening Module 1.
-                  </strong>
+                  <strong>Enroll in this course to begin learning.</strong>
                   <span>
-                    Enrollment is controlled by the server and is not inferred
-                    from this public course page.
+                    Open your learning home to see your available courses and
+                    enrollment options.
                   </span>
                   <Link
                     className="button button--ink"
@@ -3304,7 +3406,12 @@ export function LiveLearningPath({
             </div>
             {learning ? <CourseProgressSummary learning={learning} /> : null}
           </section>
-          {learning ? <LearningModules learning={learning} /> : null}
+          {learning ? (
+            <LearningModules
+              learning={learning}
+              disabled={Boolean(offlineRead)}
+            />
+          ) : null}
         </>
       ) : null}
     </>
@@ -3350,8 +3457,8 @@ export function LiveModule({
       >
         <strong>This course is not enrolled for the current learner.</strong>
         <span>
-          Start the published Free Course from learner home. The interface will
-          not manufacture module access.
+          Open your learning home to see your available courses and enrollment
+          options.
         </span>
         <Link
           className="button button--ink"
@@ -3385,9 +3492,22 @@ export function LiveModule({
   const completed = courseModule.activities.filter(
     (activity) => activity.state.toLowerCase() === "completed",
   ).length;
+  const offlineRead = getEarliestOfflineReadMetadata(
+    state.value.me,
+    state.value.program,
+    state.value.learning,
+  );
   return (
     <>
-      <section className="module-overview" aria-labelledby="module-title">
+      {offlineRead ? (
+        <div className="offline-read-notice" role="status">
+          {offlineReadNotice(offlineRead)}
+        </div>
+      ) : null}
+      <section
+        className={`${journey.overview} ${journey.moduleOverview}`}
+        aria-labelledby="module-title"
+      >
         <div>
           <div
             className="breadcrumbs breadcrumbs--clarity"
@@ -3400,31 +3520,40 @@ export function LiveModule({
             </Link>
             <span aria-hidden="true">/</span> Module {courseModule.position}
           </div>
-          <p className="eyebrow">Module {courseModule.position}</p>
+          <p className={journey.eyebrow}>Module {courseModule.position}</p>
           <h1 id="module-title">{courseModule.title}</h1>
-          <p>
-            Open only the activities available to this enrollment. Locked rows
-            explain what the server still requires.
-          </p>
+          <p>Choose an activity to pick up where you left off.</p>
         </div>
-        <aside className="module-progress-card">
-          <span>{completed}</span>
-          <p>of {courseModule.activities.length} activities complete</p>
+        <aside className={journey.progress}>
+          <LearningSymbol kind="course" size={64} />
+          <div>
+            <strong>
+              {completed} of {courseModule.activities.length}
+            </strong>
+            <p>activities complete</p>
+          </div>
         </aside>
       </section>
-      <section className="module-activities" aria-labelledby="activities-title">
-        <div className="course-outline__heading">
+      <section
+        className={`${journey.section} ${journey.moduleBody}`}
+        aria-labelledby="activities-title"
+      >
+        <div className={journey.sectionHeader}>
           <div>
-            <p className="kicker">Ordered activities</p>
-            <h2 id="activities-title">Module 1 learning loop</h2>
+            <h2 id="activities-title">Your next steps</h2>
+            <p>
+              Module {courseModule.position} · {courseModule.activities.length}{" "}
+              activities
+            </p>
           </div>
           <span>{moduleStateLabel(courseModule)}</span>
         </div>
         {courseModule.activities.length > 0 ? (
-          <ol className="activity-list activity-list--large">
+          <ol className={journey.activityList}>
             {courseModule.activities.map((activity) => (
               <LearningActivityNavigation
                 activity={activity}
+                disabled={Boolean(offlineRead)}
                 key={activity.id}
               />
             ))}

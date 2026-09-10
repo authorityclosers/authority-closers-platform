@@ -1,0 +1,60 @@
+.heading {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+  margin: 12px 0 20px;
+  color: var(--theme-text);
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.step {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  color: var(--theme-text-muted);
+  font-weight: 600;
+}
+
+.step svg {
+  flex: none;
+  color: var(--theme-action);
+}
+
+.state {
+  color: var(--theme-text-muted);
+}
+
+.heading h1 {
+  max-width: 42ch;
+  margin: 0;
+  color: inherit;
+  font-family: var(--font-sans), sans-serif;
+  font-size: clamp(1.375rem, 2.2vw, 1.875rem);
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+}
+
+@media (max-width: 560px) {
+  .heading {
+    gap: 8px;
+    margin: 6px 0 16px;
+  }
+
+  .heading h1 {
+    font-size: 1.25rem;
+    line-height: 1.3;
+  }
+}

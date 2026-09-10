@@ -24,7 +24,7 @@ PREPARE_INPUT_ROOT_SCRIPT = (
     ROOT / "infra" / "vps-foundation" / "scripts" / "prepare-restore-drill-input-root.py"
 )
 FOUNDATION = ROOT / "infra" / "vps-foundation"
-MIGRATION_HEAD_FIXTURE = "20000101_0001"
+MIGRATION_HEAD_FIXTURE = "20260904_0018"
 
 spec = importlib.util.spec_from_file_location("ac_restic_postgres_restore_proof", SCRIPT)
 assert spec and spec.loader
@@ -61,6 +61,14 @@ def _snapshot(
             }
         ]
     )
+
+
+def _schema_evidence(head: str) -> dict[str, object]:
+    return {
+        "expected_migration_head": head,
+        "actual_migration_versions": [head],
+        "canonical_tables_checked": len(proof.parity_tables_for_head(head)),
+    }
 
 
 def _tree(
@@ -326,7 +334,9 @@ def test_snapshot_pair_rejects_extra_files_symlinks_and_multiple_captures() -> N
 
 def test_metadata_verification_is_exact_and_digest_bound(tmp_path: Path) -> None:
     dump, metadata = _write_pair(tmp_path)
-    release_id, captured_at, row_counts = proof._validate_metadata(metadata, dump, "staging")
+    release_id, captured_at, row_counts = proof._validate_metadata(
+        metadata, dump, "staging", expected_migration_head=MIGRATION_HEAD_FIXTURE
+    )
     assert release_id == "a" * 40
     assert captured_at.tzinfo is not None
     assert set(row_counts) == set(proof.PARITY_TABLES)
@@ -335,23 +345,30 @@ def test_metadata_verification_is_exact_and_digest_bound(tmp_path: Path) -> None
     payload["dump_sha256"] = "0" * 64
     metadata.write_text(json.dumps(payload), encoding="utf-8")
     with pytest.raises(proof.RestoreProofError, match="digest"):
-        proof._validate_metadata(metadata, dump, "staging")
+        proof._validate_metadata(
+            metadata, dump, "staging", expected_migration_head=MIGRATION_HEAD_FIXTURE
+        )
 
     payload["dump_sha256"] = hashlib.sha256(dump.read_bytes()).hexdigest()
     payload["unexpected"] = "unsafe"
     metadata.write_text(json.dumps(payload), encoding="utf-8")
     with pytest.raises(proof.RestoreProofError, match="unexpected contract"):
-        proof._validate_metadata(metadata, dump, "staging")
+        proof._validate_metadata(
+            metadata, dump, "staging", expected_migration_head=MIGRATION_HEAD_FIXTURE
+        )
 
 
 def test_capture_and_restic_timestamps_are_fresh_and_ordered(tmp_path: Path) -> None:
     dump, metadata = _write_pair(tmp_path)
-    _release_id, captured_at, _row_counts = proof._validate_metadata(metadata, dump, "staging")
+    _release_id, captured_at, _row_counts = proof._validate_metadata(
+        metadata, dump, "staging", expected_migration_head=MIGRATION_HEAD_FIXTURE
+    )
     with pytest.raises(proof.RestoreProofError, match="timestamps"):
         proof._validate_metadata(
             metadata,
             dump,
             "staging",
+            expected_migration_head=MIGRATION_HEAD_FIXTURE,
             now=captured_at + dt.timedelta(minutes=16),
         )
 
@@ -405,6 +422,7 @@ def test_stable_pair_satisfies_the_real_restore_drill_metadata_contract(tmp_path
                 backup=stable_dump,
                 environment="staging",
                 workspace_root=ROOT,
+                expected_migration_head=MIGRATION_HEAD_FIXTURE,
             )
         )
         assert stable_dump.name == "backup.dump"
@@ -463,6 +481,7 @@ def test_restore_drill_invocation_is_execute_only_and_uses_immutable_image(
         tmp_path / ("a" * 40),
         tmp_path / "scripts" / "restore-drill.py",
         "sha256:" + "b" * 64,
+        MIGRATION_HEAD_FIXTURE,
     )
     calls: list[tuple[str, ...]] = []
 
@@ -489,11 +508,18 @@ def test_restore_drill_invocation_is_execute_only_and_uses_immutable_image(
 def test_restored_row_count_parity_is_fail_closed(tmp_path: Path) -> None:
     evidence = tmp_path / "restore-drill.json"
     expected = {table: 0 for table in proof.PARITY_TABLES}
-    evidence.write_text(json.dumps({"row_counts": expected}), encoding="utf-8")
-    proof._verify_row_count_parity(evidence, expected)
+    evidence.write_text(
+        json.dumps({"row_counts": expected, "schema": _schema_evidence(MIGRATION_HEAD_FIXTURE)}),
+        encoding="utf-8",
+    )
+    proof._verify_row_count_parity(
+        evidence, expected, expected_migration_head=MIGRATION_HEAD_FIXTURE
+    )
     expected["persons"] = 1
     with pytest.raises(proof.RestoreProofError, match="parity"):
-        proof._verify_row_count_parity(evidence, expected)
+        proof._verify_row_count_parity(
+            evidence, expected, expected_migration_head=MIGRATION_HEAD_FIXTURE
+        )
 
 
 def test_run_restores_pair_then_delegates_and_always_cleans_temp(
@@ -503,7 +529,11 @@ def test_run_restores_pair_then_delegates_and_always_cleans_temp(
     restore_root = tmp_path / "restore-root"
     evidence_root = tmp_path / "evidence-root"
     release = proof.ApplicationRelease(
-        "staging", tmp_path / ("a" * 40), tmp_path / "restore-drill.py", "sha256:" + "b" * 64
+        "staging",
+        tmp_path / ("a" * 40),
+        tmp_path / "restore-drill.py",
+        "sha256:" + "b" * 64,
+        MIGRATION_HEAD_FIXTURE,
     )
     monkeypatch.setattr(proof, "resolve_current_release", lambda _environment: release)
     monkeypatch.setattr(proof, "_validate_drill_evidence", lambda *_args: None)
@@ -528,7 +558,12 @@ def test_run_restores_pair_then_delegates_and_always_cleans_temp(
         evidence_dir.mkdir(parents=True)
         evidence_path = evidence_dir / "restore-drill-0123456789ab.json"
         evidence_path.write_text(
-            json.dumps({"row_counts": {table: 0 for table in proof.PARITY_TABLES}}),
+            json.dumps(
+                {
+                    "row_counts": {table: 0 for table in proof.PARITY_TABLES},
+                    "schema": _schema_evidence(MIGRATION_HEAD_FIXTURE),
+                }
+            ),
             encoding="utf-8",
         )
         return json.dumps({"result": "passed", "evidence": str(evidence_path)})
@@ -559,7 +594,11 @@ def test_run_rejects_backup_from_a_different_immutable_release(
     restore_root = tmp_path / "restore-root"
     evidence_root = tmp_path / "evidence-root"
     release = proof.ApplicationRelease(
-        "staging", tmp_path / ("b" * 40), tmp_path / "restore-drill.py", "sha256:" + "b" * 64
+        "staging",
+        tmp_path / ("b" * 40),
+        tmp_path / "restore-drill.py",
+        "sha256:" + "b" * 64,
+        MIGRATION_HEAD_FIXTURE,
     )
     monkeypatch.setattr(proof, "resolve_current_release", lambda _environment: release)
 

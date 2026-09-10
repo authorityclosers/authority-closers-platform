@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
+from sqlalchemy import BigInteger, func, literal, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import SessionTransactionOrigin
 
+from ac_platform.audit.models import AuditEvent
+from ac_platform.audit.service import AuditRepository
 from ac_platform.identity.models import PersonStatus
 from ac_platform.identity.repositories import AsyncSqlAlchemyIdentityRepository
 from ac_platform.identity.services import normalize_email
@@ -43,6 +47,23 @@ class PublicLearnerTenantBootstrapResult:
 
     tenant_id: UUID
     tenant_created: bool
+
+
+@dataclass(frozen=True, slots=True)
+class OperationsTenantBootstrapResult:
+    """Committed tenant-only bootstrap summary; never an identity credential."""
+
+    tenant_id: UUID
+    tenant_created: bool
+    replayed: bool
+
+
+_OPERATIONS_BOOTSTRAP_ACTION = "tenancy.operations_tenant_bootstrapped"
+_OPERATIONS_BOOTSTRAP_LOCK = int.from_bytes(
+    hashlib.sha256(b"ac.operations-tenant-bootstrap:v1").digest()[:8],
+    byteorder="big",
+    signed=True,
+)
 
 
 def _required_text(value: str, field_name: str, maximum: int) -> str:
@@ -88,6 +109,113 @@ class BootstrapApplication:
             raise BootstrapError(
                 "bootstrap requires an explicit caller-owned AsyncSession transaction"
             )
+
+    async def bootstrap_operations_tenant(
+        self,
+        *,
+        command_id: UUID,
+        operator_reference: str,
+        reason: str,
+        tenant_slug: str,
+        tenant_name: str,
+        operations_tenant_id: UUID | None = None,
+    ) -> OperationsTenantBootstrapResult:
+        """Create only the control tenant, once, under an immutable operator intent.
+
+        This operator-only boundary breaks the empty-environment tenant cycle.
+        It never registers a person or changes identity, membership, capability,
+        session, consent or enrollment state. References/reasons must contain
+        reviewed, non-secret operator/change references, not credentials.
+        """
+
+        self._require_transaction()
+        if not isinstance(command_id, UUID):
+            raise BootstrapError("command_id must be an explicit UUID")
+        slug = _required_text(tenant_slug, "tenant_slug", 63)
+        name = _required_text(tenant_name, "tenant_name", 200)
+        operator = _required_text(operator_reference, "operator_reference", 160)
+        normalized_reason = _required_text(reason, "reason", 500)
+        if any(
+            ord(character) < 32 or ord(character) == 127
+            for text in (slug, name, operator, normalized_reason)
+            for character in text
+        ):
+            raise BootstrapError("operations bootstrap intent must not contain control characters")
+        payload = {
+            "schema_version": 1,
+            "command_id": str(command_id),
+            "operator_reference": operator,
+            "tenant_slug": slug,
+            "tenant_name": name,
+        }
+        # The target row does not exist yet. Fence the *whole* operator intent
+        # before checking history, so concurrent empty-environment calls cannot
+        # create different control tenants or acknowledge before the winner commits.
+        if self._session.get_bind().dialect.name == "postgresql":
+            await self._session.execute(
+                select(func.pg_advisory_xact_lock(literal(_OPERATIONS_BOOTSTRAP_LOCK, BigInteger)))
+            )
+        prior = await self._session.get(AuditEvent, command_id)
+        history_id = await self._session.scalar(
+            select(AuditEvent.id).where(AuditEvent.action == _OPERATIONS_BOOTSTRAP_ACTION).limit(1)
+        )
+        if prior is not None:
+            if (
+                history_id != command_id
+                or prior.action != _OPERATIONS_BOOTSTRAP_ACTION
+                or prior.actor_type != "operator_bootstrap"
+                or prior.actor_person_id is not None
+                or prior.session_id is not None
+                or prior.resource_type != "tenant"
+                or prior.resource_id != str(prior.tenant_id)
+                or prior.payload != payload
+                or prior.reason != normalized_reason
+            ):
+                raise BootstrapError("operations bootstrap command conflicts with immutable intent")
+            tenant = await self._tenancy.get_tenant_by_slug_for_update(slug)
+            if tenant is None or tenant.id != prior.tenant_id:
+                raise BootstrapError("the original operations tenant is unavailable")
+            _validate_tenant(tenant, slug=slug, name=name)
+            if operations_tenant_id is not None and operations_tenant_id != tenant.id:
+                raise BootstrapError("configured operations tenant does not match the command")
+            return OperationsTenantBootstrapResult(tenant.id, False, True)
+        if history_id is not None:
+            raise BootstrapError("operations bootstrap history exists; replay the original command")
+
+        tenant = await self._tenancy.get_tenant_by_slug_for_update(slug)
+        if operations_tenant_id is not None and (
+            tenant is None or tenant.id != operations_tenant_id
+        ):
+            raise BootstrapError("configured operations tenant does not match the command")
+        created = tenant is None
+        if tenant is None:
+            candidate = TenantSnapshot(id=uuid4(), slug=slug, name=name)
+            try:
+                await self._tenancy.save_tenant(candidate)
+            except TenantServiceError:
+                # Existing owner/public-learner commands retain their own locks.
+                # If one wins this slug, revalidate it without repairing state.
+                tenant = await self._tenancy.get_tenant_by_slug_for_update(slug)
+                if tenant is None:
+                    raise BootstrapError(
+                        "operations tenant creation could not be resolved"
+                    ) from None
+                created = False
+            else:
+                tenant = candidate
+        _validate_tenant(tenant, slug=slug, name=name)
+        await AuditRepository(self._session).append(
+            event_id=command_id,
+            tenant_id=tenant.id,
+            actor_person_id=None,
+            actor_type="operator_bootstrap",
+            action=_OPERATIONS_BOOTSTRAP_ACTION,
+            resource_type="tenant",
+            resource_id=tenant.id,
+            payload=payload,
+            reason=normalized_reason,
+        )
+        return OperationsTenantBootstrapResult(tenant.id, created, False)
 
     async def bootstrap_owner(
         self,
@@ -260,5 +388,6 @@ __all__ = [
     "BootstrapApplication",
     "BootstrapError",
     "BootstrapResult",
+    "OperationsTenantBootstrapResult",
     "PublicLearnerTenantBootstrapResult",
 ]

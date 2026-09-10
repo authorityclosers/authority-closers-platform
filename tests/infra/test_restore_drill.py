@@ -76,6 +76,12 @@ def _write_backup_pair(
                 "capture_clock": "CLOCK_REALTIME",
                 "dump_bytes": backup.stat().st_size,
                 "dump_sha256": hashlib.sha256(backup.read_bytes()).hexdigest(),
+                "parity_contract": restore_drill.parity_contract_for_head(CURRENT_MIGRATION_HEAD),
+                "migration_head": CURRENT_MIGRATION_HEAD,
+                "row_counts": {
+                    table: 0
+                    for table in restore_drill.parity_tables_for_head(CURRENT_MIGRATION_HEAD)
+                },
             }
         ),
         encoding="utf-8",

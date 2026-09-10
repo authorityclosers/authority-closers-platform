@@ -6,6 +6,7 @@ import {
   BookOpen,
   CalendarDays,
   Compass,
+  Gamepad2,
   HelpCircle,
   LayoutDashboard,
   MoreHorizontal,
@@ -24,6 +25,7 @@ const SUPPORT_MAILTO =
 export type MobileBottomNavProps = {
   current?: string;
   learningHref?: string;
+  practiceAvailable?: boolean;
   moreOpen: boolean;
   onToggleMore: () => void;
   moreButtonRef: React.RefObject<HTMLButtonElement | null>;
@@ -32,6 +34,7 @@ export type MobileBottomNavProps = {
 export function MobileBottomNav({
   current = "dashboard",
   learningHref = ROUTES.learning,
+  practiceAvailable = false,
   moreOpen,
   onToggleMore,
   moreButtonRef,
@@ -44,7 +47,15 @@ export function MobileBottomNav({
   const isNotifications = current === "notifications";
   const isProfile = current === "profile";
   const isSettings = current === "settings";
-  const isMore = isCalendar || isNotifications || isProfile || isSettings;
+  const isMore =
+    isCalendar ||
+    isNotifications ||
+    isProfile ||
+    isSettings ||
+    (practiceAvailable && isDiscover);
+  const isThirdCurrent = practiceAvailable
+    ? current === "practice"
+    : isDiscover;
 
   return (
     <nav className="learner-bottom-nav" aria-label="Learner mobile navigation">
@@ -73,15 +84,18 @@ export function MobileBottomNav({
       </Link>
 
       <Link
-        className={`learner-nav__link${isDiscover ? " is-current" : ""}`}
-        href={ROUTES.discover}
+        className={`learner-nav__link${isThirdCurrent ? " is-current" : ""}`}
+        href={practiceAvailable ? ROUTES.arcade : ROUTES.discover}
         prefetch={false}
-        aria-current={isDiscover ? "page" : undefined}
+        aria-current={isThirdCurrent ? "page" : undefined}
+        aria-label={practiceAvailable ? "Practice Arcade" : undefined}
       >
         <span className="learner-nav__icon" aria-hidden="true">
-          <Compass size={20} />
+          {practiceAvailable ? <Gamepad2 size={20} /> : <Compass size={20} />}
         </span>
-        <span className="learner-nav__label">Discover</span>
+        <span className="learner-nav__label">
+          {practiceAvailable ? "Arcade" : "Discover"}
+        </span>
       </Link>
 
       <Link
@@ -118,6 +132,8 @@ export function MobileBottomNav({
 
 export type MobileMoreSheetProps = {
   open: boolean;
+  practiceAvailable?: boolean;
+  current?: string;
   onClose: () => void;
   userDisplayName?: string;
   avatarSlot?: React.ReactNode;
@@ -126,6 +142,8 @@ export type MobileMoreSheetProps = {
 
 export function MobileMoreSheet({
   open,
+  practiceAvailable = false,
+  current,
   onClose,
   userDisplayName = "Learner",
   avatarSlot,
@@ -253,10 +271,19 @@ export function MobileMoreSheet({
           </button>
         </div>
 
-        <nav
-          className="mobile-drawer-nav"
-          aria-label="Account and support navigation"
-        >
+        <nav className="mobile-drawer-nav" aria-label="More learner navigation">
+          {practiceAvailable ? (
+            <Link
+              href={ROUTES.discover}
+              prefetch={false}
+              className="mobile-drawer-link"
+              aria-current={current === "discover" ? "page" : undefined}
+              onClick={onClose}
+            >
+              <Compass size={18} aria-hidden="true" />
+              <span>Discover courses</span>
+            </Link>
+          ) : null}
           <Link
             href={ROUTES.profile}
             prefetch={false}

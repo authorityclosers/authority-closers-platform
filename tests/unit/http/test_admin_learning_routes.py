@@ -42,6 +42,10 @@ class _Database:
     def __init__(self, row: object | None) -> None:
         self.row = row
         self.run_sync_calls = 0
+        self.program_id = uuid4()
+
+    async def scalar(self, _statement: object) -> UUID:
+        return self.program_id
 
     async def execute(self, _statement: object) -> _Result:
         return _Result(self.row)
@@ -49,6 +53,35 @@ class _Database:
     async def run_sync(self, operation: Any) -> Any:
         self.run_sync_calls += 1
         return operation(SimpleNamespace())
+
+
+class _StudioAuthorization:
+    """Legacy route harness adapter; persisted scope policy has relational tests."""
+
+    def __init__(self, database: _Database) -> None:
+        self.database = database
+
+    async def access(self, actor: ActorContext, permission: str) -> admin_module.StudioAccess:
+        row = cast(tuple[Any, Any, Any], self.database.row)
+        person, tenant, membership = row
+        if (
+            permission not in actor.permissions
+            or person.status != "active"
+            or tenant.status != "active"
+            or membership.status != "active"
+            or membership.ended_at is not None
+            or not admin_module._role_allows_permission(membership.role, permission)
+        ):
+            raise admin_module.AdminAuthorizationDenied("The persisted permission is unavailable.")
+        assert actor.tenant_id is not None
+        return admin_module.StudioAccess(
+            actor.tenant_id, True, frozenset(), permission == "catalog_read"
+        )
+
+    async def require(
+        self, actor: ActorContext, permission: str, *, program_id: UUID | None = None
+    ) -> None:
+        await self.access(actor, permission)
 
 
 class _CatalogApplication:
@@ -205,6 +238,7 @@ def harness(monkeypatch: pytest.MonkeyPatch) -> tuple[TestClient, ActorContext, 
         application.state.publish_completions.append(kwargs)
 
     monkeypatch.setattr(admin_module, "AsyncCatalogApplication", _CatalogApplication)
+    monkeypatch.setattr(admin_module, "StudioAuthorization", _StudioAuthorization)
     monkeypatch.setattr(admin_module, "AsyncEnrollmentApplication", _EnrollmentApplication)
     monkeypatch.setattr(admin_module, "_bundle", lambda *_args, **_kwargs: _Bundle())
     monkeypatch.setattr(admin_module, "_append_admin_audit", record_audit)
@@ -474,7 +508,8 @@ def test_studio_get_routes_use_tenant_derived_catalog_read_and_no_store(
     program_id = uuid4()
     calls: list[tuple[str, UUID]] = []
 
-    def readiness(_database: object, tenant_id: UUID, **_kwargs: Any) -> object:
+    def readiness(_database: object, access: admin_module.StudioAccess, **_kwargs: Any) -> object:
+        tenant_id = access.tenant_id
         calls.append(("readiness", tenant_id))
         unavailable = admin_module.StudioUnavailableMetric(reason="No canonical queue data.")
         return admin_module.StudioReadinessResponse(
@@ -490,7 +525,8 @@ def test_studio_get_routes_use_tenant_derived_catalog_read_and_no_store(
             planned_capacity=unavailable,
         )
 
-    def programs(_database: object, tenant_id: UUID) -> object:
+    def programs(_database: object, access: admin_module.StudioAccess) -> object:
+        tenant_id = access.tenant_id
         calls.append(("programs", tenant_id))
         return admin_module.StudioProgramsResponse(
             tenant_id=tenant_id,
@@ -500,10 +536,11 @@ def test_studio_get_routes_use_tenant_derived_catalog_read_and_no_store(
 
     def detail(
         _database: object,
-        tenant_id: UUID,
+        access: admin_module.StudioAccess,
         requested_program_id: UUID,
         **_kwargs: Any,
     ) -> object:
+        tenant_id = access.tenant_id
         calls.append(("detail", tenant_id))
         return admin_module.StudioProgramDetailResponse(
             tenant_id=tenant_id,
@@ -540,6 +577,7 @@ def test_missing_named_permission_is_denied_before_domain_service(
     harness: tuple[TestClient, ActorContext, _Database],
 ) -> None:
     client, actor, database = harness
+    database.row = _membership_row(actor, role="learner")
     auth = AuthenticatedTransaction(
         database=cast(Any, database),
         identity=cast(Any, object()),

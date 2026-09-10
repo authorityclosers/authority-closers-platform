@@ -25,6 +25,9 @@ from sqlalchemy.orm import Session
 
 from ac_platform.application.settings import Settings
 from ac_platform.audit.service import AuditRepository
+from ac_platform.authorization.models import STUDIO_CAPABILITIES
+from ac_platform.authorization.policy import CapabilityDenied
+from ac_platform.authorization.studio import StudioAccess, StudioAuthorization
 from ac_platform.catalog.models import (
     IMMUTABLE_VERSION_STATUSES,
     Activity,
@@ -40,12 +43,14 @@ from ac_platform.catalog.services import (
     AsyncCatalogApplication,
     CatalogAccessDeniedError,
     CatalogConflictError,
+    CatalogDraftPreconditionError,
     CatalogNotFoundError,
     CatalogPublicationPreconditionError,
     CatalogPublicationReadiness,
     CatalogService,
     CatalogServiceError,
     CatalogValidationError,
+    DraftOperation,
     DraftRequiredError,
     ProgramVersionSnapshot,
     SqlAlchemyCatalogStore,
@@ -167,6 +172,40 @@ class PublishRequest(BaseModel):
     reason: str = Field(min_length=1, max_length=MAX_AUDIT_REASON_LENGTH)
 
 
+class StudioDraftPreconditionFailed(DomainError):
+    code = "studio_draft_precondition_failed"
+    title = "The draft has changed"
+    status = 412
+
+
+class StudioDraftConflict(DomainError):
+    code = "studio_draft_conflict"
+    title = "The draft command conflicts with saved state"
+    status = 409
+
+
+class StudioDraftInvalid(DomainError):
+    code = "studio_draft_invalid"
+    title = "The draft command is invalid"
+    status = 422
+
+
+class StudioModuleWriteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    title: str = Field(min_length=1, max_length=200)
+
+
+class StudioActivityWriteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    title: str = Field(min_length=1, max_length=240)
+    prompt: str | None = Field(min_length=1, max_length=2000)
+
+
+class StudioActivityCreateRequest(StudioActivityWriteRequest):
+    kind: Literal["VIDEO", "REFLECTION", "IMPLEMENTATION_CHALLENGE", "REVIEW", "IMPROVE"]
+    is_required: bool = Field(strict=True)
+
+
 class CorrectionRequest(BaseModel):
     """Strict append-only correction input; actor and tenant are server-owned."""
 
@@ -205,6 +244,26 @@ class StudioUnavailableMetric(BaseModel):
     status: Literal["unavailable"] = "unavailable"
     value: None = None
     reason: str
+
+
+class StudioCapabilityResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    permission: Literal[
+        "catalog_read", "catalog_write", "catalog_publish", "learner_diagnose", "learning_review"
+    ]
+    scope_kind: Literal["tenant", "program"]
+    tenant_id: UUID
+    program_id: UUID | None
+
+
+class AdminAccessResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    person_id: UUID
+    session_id: UUID
+    tenant_id: UUID
+    studio_capabilities: list[StudioCapabilityResponse]
 
 
 class StudioDraftReadinessResponse(BaseModel):
@@ -323,6 +382,17 @@ class StudioProgramDetailResponse(BaseModel):
     versions_truncated: bool
 
 
+class StudioDraftWriteResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    program: StudioProgramDetailResponse
+    resource_id: UUID
+    replayed: bool
+
+
+class StudioRevisionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+
 class CorrectionResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -399,6 +469,7 @@ async def _require_named_admin(
     *,
     permission: str,
     lock: bool = True,
+    program_id: UUID | None = None,
 ) -> tuple[ActorContext, UUID]:
     """Revalidate the selected tenant and canonical membership under row locks."""
 
@@ -406,6 +477,15 @@ async def _require_named_admin(
     tenant_id = actor.tenant_id
     if tenant_id is None:
         raise AdminTenantContextRequired("Select an active tenant before using admin commands.")
+    if permission in STUDIO_CAPABILITIES:
+        try:
+            await StudioAuthorization(auth.database).require(
+                actor, permission, program_id=program_id
+            )
+        except CapabilityDenied as error:
+            # Preserve the admin problem contract; a denial never selects a fallback policy.
+            raise AdminAuthorizationDenied(error.detail) from error
+        return actor, tenant_id
     if "admin_surface" not in actor.permissions or permission not in actor.permissions:
         raise AdminAuthorizationDenied(f"The actor lacks the {permission} permission.")
 
@@ -565,16 +645,36 @@ async def _append_admin_audit(
     )
 
 
-def _studio_visibility(tenant_id: UUID) -> Any:
-    immutable_global_version = exists().where(
-        ProgramVersion.program_id == Program.id,
-        ProgramVersion.status.in_(IMMUTABLE_VERSION_STATUSES),
+async def _studio_access(
+    auth: AuthenticatedTransaction, *, permission: str = "catalog_read"
+) -> StudioAccess:
+    if auth.resolved.actor.tenant_id is None:
+        raise AdminTenantContextRequired("Select an active tenant before using Studio.")
+    try:
+        return await StudioAuthorization(auth.database).access(auth.resolved.actor, permission)
+    except CapabilityDenied as error:
+        raise AdminAuthorizationDenied(error.detail) from error
+
+
+def _studio_visibility(access: StudioAccess) -> Any:
+    tenant_programs = and_(
+        Program.scope == CatalogScope.TENANT.value,
+        Program.tenant_id == access.tenant_id,
+    )
+    if not access.all_programs:
+        tenant_programs = and_(tenant_programs, Program.id.in_(access.program_ids))
+    if not access.include_global:
+        return tenant_programs
+    immutable_global_version = (
+        exists()
+        .where(
+            ProgramVersion.program_id == Program.id,
+            ProgramVersion.status.in_(IMMUTABLE_VERSION_STATUSES),
+        )
+        .correlate(Program)
     )
     return or_(
-        and_(
-            Program.scope == CatalogScope.TENANT.value,
-            Program.tenant_id == tenant_id,
-        ),
+        tenant_programs,
         and_(
             Program.scope == CatalogScope.GLOBAL.value,
             Program.tenant_id.is_(None),
@@ -652,11 +752,11 @@ def _studio_detail_versions(
     return visible_versions, immutable_truncated
 
 
-def _studio_programs_response(database: Session, tenant_id: UUID) -> StudioProgramsResponse:
+def _studio_programs_response(database: Session, access: StudioAccess) -> StudioProgramsResponse:
     rows = tuple(
         database.scalars(
             select(Program)
-            .where(_studio_visibility(tenant_id))
+            .where(_studio_visibility(access))
             .order_by(Program.scope.desc(), Program.title.asc(), Program.id.asc())
             .limit(STUDIO_COLLECTION_LIMIT + 1)
         ).all()
@@ -703,7 +803,7 @@ def _studio_programs_response(database: Session, tenant_id: UUID) -> StudioProgr
             )
         )
     return StudioProgramsResponse(
-        tenant_id=tenant_id,
+        tenant_id=access.tenant_id,
         programs=programs,
         truncated=len(rows) > STUDIO_COLLECTION_LIMIT,
     )
@@ -765,26 +865,39 @@ def _version_modules(
 
 def _studio_program_detail_response(
     database: Session,
-    tenant_id: UUID,
+    access: StudioAccess,
     program_id: UUID,
     *,
     allow_technical_validation_publication: bool,
+    required_version_id: UUID | None = None,
 ) -> StudioProgramDetailResponse:
     program = database.scalar(
         select(Program).where(
             Program.id == program_id,
-            _studio_visibility(tenant_id),
+            _studio_visibility(access),
         )
     )
     if program is None:
         raise ResourceNotFound("The Studio program is unavailable.")
     versions, immutable_versions_truncated = _studio_detail_versions(database, program)
+    # An old successful authoring replay still identifies its original resource.
+    # Include that single authorized version even beyond the bounded history page.
+    if required_version_id is not None and all(v.id != required_version_id for v in versions):
+        required = database.scalar(
+            select(ProgramVersion).where(
+                ProgramVersion.id == required_version_id, ProgramVersion.program_id == program.id
+            )
+        )
+        if required is None:
+            raise ResourceNotFound("The command's catalog version is unavailable.")
+        versions = tuple(sorted((*versions, required), key=lambda v: (-v.version_number, v.id.hex)))
     catalog = CatalogService(
         SqlAlchemyCatalogStore(database),
         allow_technical_validation_publication=allow_technical_validation_publication,
     )
     version_responses: list[StudioProgramVersionResponse] = []
     for version in versions:
+        version_etag: str | None = None
         if program.scope == CatalogScope.GLOBAL.value:
             readiness_state: Literal["ready", "blocked", "immutable", "global_read_only"] = (
                 "global_read_only"
@@ -793,12 +906,17 @@ def _studio_program_detail_response(
         elif version.status == ProgramVersionStatus.DRAFT.value:
             readiness = catalog.assess_publication_readiness(
                 version.id,
-                tenant_id=tenant_id,
+                tenant_id=access.tenant_id,
             )
             readiness_state = "ready" if readiness.ready else "blocked"
+            version_etag = readiness.etag
         else:
             readiness = None
             readiness_state = "immutable"
+            if version.status == ProgramVersionStatus.PUBLISHED.value:
+                version_etag = catalog.publication_etag(
+                    catalog.get_version(version.id, tenant_id=access.tenant_id)
+                )
         version_responses.append(
             StudioProgramVersionResponse(
                 id=version.id,
@@ -813,14 +931,14 @@ def _studio_program_detail_response(
                 release_id=version.release_id,
                 content_seed_kind=version.content_seed_kind,
                 content_digest=version.content_digest,
-                etag=readiness.etag if readiness is not None else None,
+                etag=version_etag,
                 readiness=readiness_state,
                 blockers=list(readiness.blockers) if readiness is not None else [],
                 modules=_version_modules(database, version),
             )
         )
     return StudioProgramDetailResponse(
-        tenant_id=tenant_id,
+        tenant_id=access.tenant_id,
         id=program.id,
         slug=program.slug,
         title=program.title,
@@ -835,7 +953,7 @@ def _studio_program_detail_response(
 
 def _studio_readiness_response(
     database: Session,
-    tenant_id: UUID,
+    access: StudioAccess,
     *,
     allow_technical_validation_publication: bool,
 ) -> StudioReadinessResponse:
@@ -847,7 +965,7 @@ def _studio_readiness_response(
 
     filters = (
         Program.scope == CatalogScope.TENANT.value,
-        Program.tenant_id == tenant_id,
+        _studio_visibility(access),
         ProgramVersion.status == ProgramVersionStatus.DRAFT.value,
     )
     total = database.scalar(
@@ -880,7 +998,7 @@ def _studio_readiness_response(
             etag=(
                 readiness := catalog.assess_publication_readiness(
                     version.id,
-                    tenant_id=tenant_id,
+                    tenant_id=access.tenant_id,
                 )
             ).etag,
             ready=readiness.ready,
@@ -893,7 +1011,7 @@ def _studio_readiness_response(
     )
     total_count = int(total or 0)
     return StudioReadinessResponse(
-        tenant_id=tenant_id,
+        tenant_id=access.tenant_id,
         draft_backlog_count=total_count,
         as_of=as_of,
         oldest_draft_created_at=drafts[0].created_at if drafts else None,
@@ -1026,16 +1144,63 @@ def install_admin_learning_http(
     def require_admin_route_surface(request: Request) -> None:
         require_admin_surface(request, settings)
 
+    def require_studio_route_surface(request: Request) -> None:
+        if request.url.hostname != settings.coach_app_url.host:
+            require_admin_surface(request, settings)
+
     router = APIRouter(
         prefix="/v1",
         tags=["admin-learning"],
         dependencies=[Depends(require_admin_route_surface)],
     )
     actor_dependency = Depends(require_actor)
+    studio_router = APIRouter(
+        prefix="/v1",
+        tags=["admin-learning"],
+        dependencies=[Depends(require_studio_route_surface)],
+    )
+    # New authoring responses must not escape a failed outer commit.
+    authoring_dependency = Depends(require_actor, scope="function")
+    projection_router = APIRouter(prefix="/v1", tags=["identity"])
     resolved_activity = activity_resolver or _default_activity_resolver
     resolved_reviewer = reviewer_resolver or (lambda _access: None)
 
-    @router.get(
+    @projection_router.get("/me/studio-access", response_model=AdminAccessResponse)
+    async def admin_access(
+        request: Request,
+        response: Response,
+        auth: AuthenticatedTransaction = actor_dependency,
+    ) -> AdminAccessResponse:
+        if request.query_params:
+            raise DomainError("Studio access is resolved only for the authenticated context.")
+        actor = auth.resolved.actor
+        if actor.tenant_id is None:
+            raise AdminTenantContextRequired("Select an active tenant before using Studio.")
+        try:
+            projection = await StudioAuthorization(auth.database).projection(actor)
+        except CapabilityDenied as error:
+            raise AdminAuthorizationDenied(error.detail) from error
+        capabilities = [
+            StudioCapabilityResponse(
+                permission=cast(Any, permission),
+                scope_kind="tenant" if access.all_programs else "program",
+                tenant_id=access.tenant_id,
+                program_id=program_id,
+            )
+            for permission, access in sorted(projection.items())
+            for program_id in (
+                (None,) if access.all_programs else tuple(sorted(access.program_ids, key=str))
+            )
+        ]
+        _no_store(response)
+        return AdminAccessResponse(
+            person_id=actor.person_id,
+            session_id=actor.session_id,
+            tenant_id=actor.tenant_id,
+            studio_capabilities=capabilities,
+        )
+
+    @studio_router.get(
         "/admin/studio/readiness",
         response_model=StudioReadinessResponse,
     )
@@ -1043,22 +1208,18 @@ def install_admin_learning_http(
         response: Response,
         auth: AuthenticatedTransaction = actor_dependency,
     ) -> StudioReadinessResponse:
-        _actor, tenant_id = await _require_named_admin(
-            auth,
-            permission="catalog_read",
-            lock=False,
-        )
+        access = await _studio_access(auth)
         result = await auth.database.run_sync(
             lambda database: _studio_readiness_response(
                 database,
-                tenant_id,
+                access,
                 allow_technical_validation_publication=settings.environment == "staging",
             )
         )
         _no_store(response)
         return result
 
-    @router.get(
+    @studio_router.get(
         "/admin/studio/programs",
         response_model=StudioProgramsResponse,
     )
@@ -1066,18 +1227,14 @@ def install_admin_learning_http(
         response: Response,
         auth: AuthenticatedTransaction = actor_dependency,
     ) -> StudioProgramsResponse:
-        _actor, tenant_id = await _require_named_admin(
-            auth,
-            permission="catalog_read",
-            lock=False,
-        )
+        access = await _studio_access(auth)
         result = await auth.database.run_sync(
-            lambda database: _studio_programs_response(database, tenant_id)
+            lambda database: _studio_programs_response(database, access)
         )
         _no_store(response)
         return result
 
-    @router.get(
+    @studio_router.get(
         "/admin/studio/programs/{program_id}",
         response_model=StudioProgramDetailResponse,
     )
@@ -1086,15 +1243,21 @@ def install_admin_learning_http(
         response: Response,
         auth: AuthenticatedTransaction = actor_dependency,
     ) -> StudioProgramDetailResponse:
-        _actor, tenant_id = await _require_named_admin(
+        access = await _studio_access(auth)
+        visible_program_id = await auth.database.scalar(
+            select(Program.id).where(Program.id == program_id, _studio_visibility(access))
+        )
+        if visible_program_id is None:
+            raise ResourceNotFound("The Studio program is unavailable.")
+        await _require_named_admin(
             auth,
             permission="catalog_read",
-            lock=False,
+            program_id=visible_program_id,
         )
         result = await auth.database.run_sync(
             lambda database: _studio_program_detail_response(
                 database,
-                tenant_id,
+                access,
                 program_id,
                 allow_technical_validation_publication=settings.environment == "staging",
             )
@@ -1102,7 +1265,257 @@ def install_admin_learning_http(
         _no_store(response)
         return result
 
-    @router.post(
+    async def author_draft(
+        version_id: UUID,
+        request: Request,
+        response: Response,
+        auth: AuthenticatedTransaction,
+        operation: DraftOperation,
+        body: StudioModuleWriteRequest | StudioActivityWriteRequest,
+        if_match: str | None,
+        idempotency_key: str | None,
+        target_id: UUID | None = None,
+    ) -> StudioDraftWriteResponse:
+        require_safe_origin(request, settings)
+        # Returning the existing full Studio representation requires its independent
+        # read capability; write never becomes an implicit read/publication grant.
+        access = await _studio_access(auth)
+        program_id = await auth.database.scalar(
+            select(ProgramVersion.program_id)
+            .join(Program, Program.id == ProgramVersion.program_id)
+            .where(
+                ProgramVersion.id == version_id,
+                ProgramVersion.scope == "tenant",
+                ProgramVersion.tenant_id == access.tenant_id,
+                _studio_visibility(access),
+            )
+        )
+        if program_id is None:
+            raise ResourceNotFound("The draft is unavailable.")
+        actor, tenant_id = await _require_named_admin(
+            auth, permission="catalog_write", program_id=program_id
+        )
+        expected_etag = _program_version_etag(if_match)
+        command_key = _idempotency_key(idempotency_key)
+        try:
+            result = await AsyncCatalogApplication(auth.database).author_draft(
+                actor=actor,
+                tenant_id=tenant_id,
+                program_version_id=version_id,
+                operation=operation,
+                target_id=target_id,
+                title=body.title,
+                prompt=body.prompt if isinstance(body, StudioActivityWriteRequest) else None,
+                kind=body.kind if isinstance(body, StudioActivityCreateRequest) else None,
+                is_required=body.is_required
+                if isinstance(body, StudioActivityCreateRequest)
+                else None,
+                expected_etag=expected_etag,
+                idempotency_key=command_key,
+                request_id=_request_id(request),
+            )
+        except CatalogDraftPreconditionError as error:
+            raise StudioDraftPreconditionFailed(
+                "Reload the saved draft before changing it."
+            ) from error
+        except (CatalogConflictError, DraftRequiredError) as error:
+            raise StudioDraftConflict(
+                "The command cannot change this saved draft state."
+            ) from error
+        except CatalogNotFoundError as error:
+            raise ResourceNotFound("The resource is unavailable in this draft.") from error
+        except CatalogAccessDeniedError as error:
+            raise AdminAuthorizationDenied("The draft command is not authorized.") from error
+        except CatalogValidationError as error:
+            raise StudioDraftInvalid("The draft command failed catalog validation.") from error
+        detail = await auth.database.run_sync(
+            lambda database: _studio_program_detail_response(
+                database,
+                access,
+                result.program_id,
+                allow_technical_validation_publication=settings.environment == "staging",
+                required_version_id=version_id,
+            )
+        )
+        _no_store(response)
+        return StudioDraftWriteResponse(
+            program=detail, resource_id=result.resource_id, replayed=result.replayed
+        )
+
+    @studio_router.post(
+        "/admin/studio/program-versions/{version_id}/revision",
+        response_model=StudioDraftWriteResponse,
+    )
+    async def revise_published_version(
+        version_id: UUID,
+        request: Request,
+        response: Response,
+        body: StudioRevisionRequest,
+        if_match: Annotated[str | None, Header(alias="If-Match", max_length=96)] = None,
+        idempotency_key: Annotated[
+            str | None, Header(alias="Idempotency-Key", max_length=128)
+        ] = None,
+        auth: AuthenticatedTransaction = authoring_dependency,
+    ) -> StudioDraftWriteResponse:
+        del body  # Explicit empty object; no caller-supplied identity or provenance.
+        require_safe_origin(request, settings)
+        access = await _studio_access(auth)
+        program_id = await auth.database.scalar(
+            select(ProgramVersion.program_id)
+            .join(Program, Program.id == ProgramVersion.program_id)
+            .where(
+                ProgramVersion.id == version_id,
+                ProgramVersion.scope == CatalogScope.TENANT.value,
+                ProgramVersion.tenant_id == access.tenant_id,
+                _studio_visibility(access),
+            )
+        )
+        if program_id is None:
+            raise ResourceNotFound("The published course is unavailable.")
+        actor, tenant_id = await _require_named_admin(
+            auth, permission="catalog_write", program_id=program_id
+        )
+        try:
+            result = await AsyncCatalogApplication(auth.database).revise_published_version(
+                actor=actor,
+                tenant_id=tenant_id,
+                program_version_id=version_id,
+                expected_etag=_program_version_etag(if_match),
+                idempotency_key=_idempotency_key(idempotency_key),
+                request_id=_request_id(request),
+            )
+        except CatalogDraftPreconditionError as error:
+            raise StudioDraftPreconditionFailed(
+                "Reload the published course before revising it."
+            ) from error
+        except CatalogConflictError as error:
+            raise StudioDraftConflict(
+                "The revision cannot be created from this version."
+            ) from error
+        except CatalogNotFoundError as error:
+            raise ResourceNotFound("The published course is unavailable.") from error
+        except CatalogAccessDeniedError as error:
+            raise AdminAuthorizationDenied("The revision is not authorized.") from error
+        except CatalogValidationError as error:
+            raise StudioDraftInvalid("The revision failed catalog validation.") from error
+        detail = await auth.database.run_sync(
+            lambda database: _studio_program_detail_response(
+                database,
+                access,
+                result.program_id,
+                allow_technical_validation_publication=settings.environment == "staging",
+                required_version_id=result.resource_id,
+            )
+        )
+        _no_store(response)
+        return StudioDraftWriteResponse(
+            program=detail, resource_id=result.resource_id, replayed=result.replayed
+        )
+
+    @studio_router.post(
+        "/admin/studio/program-versions/{version_id}/modules",
+        response_model=StudioDraftWriteResponse,
+    )
+    async def append_draft_module(
+        version_id: UUID,
+        request: Request,
+        response: Response,
+        body: StudioModuleWriteRequest,
+        if_match: Annotated[str | None, Header(alias="If-Match", max_length=96)] = None,
+        idempotency_key: Annotated[
+            str | None, Header(alias="Idempotency-Key", max_length=128)
+        ] = None,
+        auth: AuthenticatedTransaction = authoring_dependency,
+    ) -> StudioDraftWriteResponse:
+        return await author_draft(
+            version_id, request, response, auth, "module_add", body, if_match, idempotency_key
+        )
+
+    @studio_router.patch(
+        "/admin/studio/program-versions/{version_id}/modules/{module_id}",
+        response_model=StudioDraftWriteResponse,
+    )
+    async def update_draft_module(
+        version_id: UUID,
+        module_id: UUID,
+        request: Request,
+        response: Response,
+        body: StudioModuleWriteRequest,
+        if_match: Annotated[str | None, Header(alias="If-Match", max_length=96)] = None,
+        idempotency_key: Annotated[
+            str | None, Header(alias="Idempotency-Key", max_length=128)
+        ] = None,
+        auth: AuthenticatedTransaction = authoring_dependency,
+    ) -> StudioDraftWriteResponse:
+        return await author_draft(
+            version_id,
+            request,
+            response,
+            auth,
+            "module_update",
+            body,
+            if_match,
+            idempotency_key,
+            module_id,
+        )
+
+    @studio_router.post(
+        "/admin/studio/program-versions/{version_id}/modules/{module_id}/activities",
+        response_model=StudioDraftWriteResponse,
+    )
+    async def append_draft_activity(
+        version_id: UUID,
+        module_id: UUID,
+        request: Request,
+        response: Response,
+        body: StudioActivityCreateRequest,
+        if_match: Annotated[str | None, Header(alias="If-Match", max_length=96)] = None,
+        idempotency_key: Annotated[
+            str | None, Header(alias="Idempotency-Key", max_length=128)
+        ] = None,
+        auth: AuthenticatedTransaction = authoring_dependency,
+    ) -> StudioDraftWriteResponse:
+        return await author_draft(
+            version_id,
+            request,
+            response,
+            auth,
+            "activity_add",
+            body,
+            if_match,
+            idempotency_key,
+            module_id,
+        )
+
+    @studio_router.patch(
+        "/admin/studio/program-versions/{version_id}/activities/{activity_id}",
+        response_model=StudioDraftWriteResponse,
+    )
+    async def update_draft_activity(
+        version_id: UUID,
+        activity_id: UUID,
+        request: Request,
+        response: Response,
+        body: StudioActivityWriteRequest,
+        if_match: Annotated[str | None, Header(alias="If-Match", max_length=96)] = None,
+        idempotency_key: Annotated[
+            str | None, Header(alias="Idempotency-Key", max_length=128)
+        ] = None,
+        auth: AuthenticatedTransaction = authoring_dependency,
+    ) -> StudioDraftWriteResponse:
+        return await author_draft(
+            version_id,
+            request,
+            response,
+            auth,
+            "activity_update",
+            body,
+            if_match,
+            idempotency_key,
+            activity_id,
+        )
+
+    @studio_router.post(
         "/admin/program-versions/{program_version_id}/publish",
         response_model=ProgramVersionPublishResponse,
     )
@@ -1118,9 +1531,25 @@ def install_admin_learning_http(
         auth: AuthenticatedTransaction = actor_dependency,
     ) -> ProgramVersionPublishResponse:
         require_safe_origin(request, settings)
+        if auth.resolved.actor.tenant_id is None:
+            raise AdminTenantContextRequired("Select an active tenant before using admin commands.")
+        access = await _studio_access(auth, permission="catalog_publish")
+        program_id = await auth.database.scalar(
+            select(ProgramVersion.program_id)
+            .join(Program, Program.id == ProgramVersion.program_id)
+            .where(
+                ProgramVersion.id == program_version_id,
+                ProgramVersion.scope == CatalogScope.TENANT.value,
+                ProgramVersion.tenant_id == access.tenant_id,
+                _studio_visibility(access),
+            )
+        )
+        if program_id is None:
+            raise ResourceNotFound("The program version is unavailable.")
         actor, tenant_id = await _require_named_admin(
             auth,
             permission="catalog_publish",
+            program_id=program_id,
         )
         expected_etag = _program_version_etag(if_match)
         command_key = _idempotency_key(idempotency_key)
@@ -1316,6 +1745,8 @@ def install_admin_learning_http(
         )
 
     application.include_router(router)
+    application.include_router(studio_router)
+    application.include_router(projection_router)
 
 
 __all__ = [

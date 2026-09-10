@@ -15,7 +15,7 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from hashlib import sha256
 from json import dumps
-from typing import Any, Protocol, Self, TypeVar, cast
+from typing import Any, Literal, Protocol, Self, TypeVar, cast
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
@@ -23,6 +23,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session, SessionTransactionOrigin
 
+from ac_platform.audit.service import AuditRepository
+from ac_platform.authorization.policy import CapabilityDenied
+from ac_platform.authorization.studio import StudioAuthorization
 from ac_platform.catalog.content import (
     CanonicalActivityContent,
     CanonicalModuleContent,
@@ -33,6 +36,7 @@ from ac_platform.catalog.models import (
     GLOBAL_CATALOG_OWNER_KEY,
     Activity,
     ActivityKind,
+    CatalogAuthoringCommand,
     CatalogScope,
     LearnerVersionPin,
     Module,
@@ -184,6 +188,20 @@ class SupersessionRequiredError(CatalogServiceError):
 
 class CatalogPublicationPreconditionError(CatalogConflictError):
     """Publication addressed a stale canonical version representation."""
+
+
+class CatalogDraftPreconditionError(CatalogConflictError):
+    """Authoring addressed a stale whole-draft representation."""
+
+
+DraftOperation = Literal["module_add", "module_update", "activity_add", "activity_update"]
+
+
+@dataclass(frozen=True, slots=True)
+class DraftAuthoringResult:
+    program_id: UUID
+    resource_id: UUID
+    replayed: bool
 
 
 class InvalidActivityKindError(CatalogValidationError):
@@ -374,11 +392,15 @@ class CatalogStore(Protocol):
 
     def save_module(self, module: ModuleSnapshot) -> None: ...
 
+    def replace_module(self, module: ModuleSnapshot) -> None: ...
+
     def get_activity(self, activity_id: UUID) -> ActivitySnapshot | None: ...
 
     def list_activities(self, module_id: UUID) -> Sequence[ActivitySnapshot]: ...
 
     def save_activity(self, activity: ActivitySnapshot) -> None: ...
+
+    def replace_activity(self, activity: ActivitySnapshot) -> None: ...
 
     def list_prerequisites(self, module_id: UUID) -> Sequence[ModulePrerequisiteSnapshot]: ...
 
@@ -517,6 +539,11 @@ class InMemoryCatalogStore:
             raise OrderingConflictError("module position already exists in this version")
         self.modules[module.id] = module
 
+    def replace_module(self, module: ModuleSnapshot) -> None:
+        if module.id not in self.modules:
+            raise CatalogNotFoundError("module does not exist")
+        self.modules[module.id] = module
+
     def get_activity(self, activity_id: UUID) -> ActivitySnapshot | None:
         return self.activities.get(activity_id)
 
@@ -537,6 +564,11 @@ class InMemoryCatalogStore:
             for existing in self.activities.values()
         ):
             raise OrderingConflictError("activity position already exists in this module")
+        self.activities[activity.id] = activity
+
+    def replace_activity(self, activity: ActivitySnapshot) -> None:
+        if activity.id not in self.activities:
+            raise CatalogNotFoundError("activity does not exist")
         self.activities[activity.id] = activity
 
     def list_prerequisites(self, module_id: UUID) -> Sequence[ModulePrerequisiteSnapshot]:
@@ -922,6 +954,22 @@ class SqlAlchemyCatalogStore:
         row = self._session.get(Activity, activity_id)
         return _activity_snapshot(row) if row is not None else None
 
+    def replace_module(self, module: ModuleSnapshot) -> None:
+        self._lock_draft_version_for_authoring(module.program_version_id)
+        row = self._session.get(Module, module.id)
+        if row is None or row.program_version_id != module.program_version_id:
+            raise CatalogNotFoundError("module does not exist in this version")
+        row.title = module.title
+        self._session.flush()
+
+    def replace_activity(self, activity: ActivitySnapshot) -> None:
+        self._lock_draft_version_for_authoring(activity.program_version_id)
+        row = self._session.get(Activity, activity.id)
+        if row is None or row.program_version_id != activity.program_version_id:
+            raise CatalogNotFoundError("activity does not exist in this version")
+        row.title, row.prompt = activity.title, activity.prompt
+        self._session.flush()
+
     def list_activities(self, module_id: UUID) -> Sequence[ActivitySnapshot]:
         rows = self._session.scalars(
             select(Activity)
@@ -1222,6 +1270,60 @@ class CatalogService:
 
         return self.create_version(*args, **kwargs)  # type: ignore[arg-type]
 
+    def revise_published_version(
+        self, source_version_id: UUID, *, tenant_id: UUID
+    ) -> ProgramVersionSnapshot:
+        """Copy current published content into a separately reviewed tenant draft.
+
+        Identity references outside the catalog (media, pins, enrollments and
+        progress) deliberately do not follow this copy. The caller serializes
+        Program -> Version before calling this method in a shared transaction.
+        """
+        source = self._require_version(source_version_id, tenant_id=tenant_id, writing=True)
+        if source.scope != CatalogScope.TENANT.value or source.tenant_id != tenant_id:
+            raise CatalogAccessDeniedError("revision requires the selected tenant catalog")
+        current = tuple(
+            version
+            for version in self._store.list_versions(source.program_id)
+            if version.status == ProgramVersionStatus.PUBLISHED.value
+        )
+        if len(current) != 1 or current[0].id != source.id:
+            raise CatalogConflictError("revision requires the current published version")
+        draft = self.create_version(
+            source.program_id,
+            tenant_id=tenant_id,
+            supersedes_version_id=source.id,
+            content_source_ref=source.content_source_ref,
+            content_seed_kind=source.content_seed_kind,
+        )
+        modules = tuple(self._store.list_modules(source.id))
+        module_ids = {module.id: uuid4() for module in modules}
+        for module in modules:
+            self._store.save_module(
+                replace(module, id=module_ids[module.id], program_version_id=draft.id)
+            )
+            for activity in self._store.list_activities(module.id):
+                self._store.save_activity(
+                    replace(
+                        activity,
+                        id=uuid4(),
+                        module_id=module_ids[module.id],
+                        program_version_id=draft.id,
+                    )
+                )
+        for module in modules:
+            for edge in self._store.list_prerequisites(module.id):
+                self._store.save_prerequisite(
+                    replace(
+                        edge,
+                        id=uuid4(),
+                        program_version_id=draft.id,
+                        module_id=module_ids[edge.module_id],
+                        prerequisite_module_id=module_ids[edge.prerequisite_module_id],
+                    )
+                )
+        return draft
+
     def add_module(
         self,
         program_version_id: UUID,
@@ -1312,6 +1414,32 @@ class CatalogService:
         """Vocabulary alias for :meth:`add_activity`."""
 
         return self.add_activity(*args, **kwargs)  # type: ignore[arg-type]
+
+    def update_module(self, module_id: UUID, *, tenant_id: UUID, title: str) -> ModuleSnapshot:
+        module = self._require_module(module_id, tenant_id=tenant_id, writing=True)
+        self._require_draft(
+            self._require_version(module.program_version_id, tenant_id=tenant_id, writing=True)
+        )
+        updated = replace(module, title=_required_text(title, "title", 200))
+        self._store.replace_module(updated)
+        return updated
+
+    def update_activity(
+        self, activity_id: UUID, *, tenant_id: UUID, title: str, prompt: str | None
+    ) -> ActivitySnapshot:
+        activity = self._store.get_activity(activity_id)
+        if activity is None:
+            raise CatalogNotFoundError("activity does not exist")
+        self._require_draft(
+            self._require_version(activity.program_version_id, tenant_id=tenant_id, writing=True)
+        )
+        updated = replace(
+            activity,
+            title=_required_text(title, "title", 240),
+            prompt=_optional_text(prompt, "prompt", ACTIVITY_PROMPT_MAX_LENGTH),
+        )
+        self._store.replace_activity(updated)
+        return updated
 
     def add_module_prerequisite(
         self,
@@ -1916,8 +2044,46 @@ class AsyncCatalogApplication:
         *,
         tenant_id: UUID | None,
         permission: str,
-    ) -> None:
+        program_id: UUID | None = None,
+        program_version_id: UUID | None = None,
+        module_id: UUID | None = None,
+    ) -> UUID | None:
         self._require_transaction()
+        if tenant_id is not None:
+            if actor.tenant_id != tenant_id:
+                raise CatalogAccessDeniedError("catalog actor selected another tenant")
+            # Resolve only IDs inside the selected academy. Neither existence
+            # nor ownership of another academy's resource is exposed here.
+            if program_version_id is not None:
+                program_id = await self._session.scalar(
+                    select(ProgramVersion.program_id).where(
+                        ProgramVersion.id == program_version_id,
+                        ProgramVersion.tenant_id == tenant_id,
+                        ProgramVersion.scope == CatalogScope.TENANT.value,
+                    )
+                )
+                if program_id is None:
+                    raise CatalogAccessDeniedError("catalog resource is unavailable")
+            elif module_id is not None:
+                program_id = await self._session.scalar(
+                    select(Module.program_id).where(
+                        Module.id == module_id,
+                        Module.tenant_id == tenant_id,
+                        Module.scope == CatalogScope.TENANT.value,
+                    )
+                )
+                if program_id is None:
+                    raise CatalogAccessDeniedError("catalog resource is unavailable")
+            try:
+                await StudioAuthorization(self._session).require(
+                    actor, permission, program_id=program_id
+                )
+            except CapabilityDenied as exc:
+                raise CatalogAccessDeniedError("catalog command is not authorized") from exc
+            return program_id
+
+        # The existing global seed/authoring contract is deliberately separate:
+        # platform capability strings never become generic catalog authority.
         if permission not in actor.permissions:
             raise CatalogAccessDeniedError(f"catalog command requires {permission}")
         person = await self._session.scalar(
@@ -1925,32 +2091,34 @@ class AsyncCatalogApplication:
         )
         if person is None or person.status != PersonStatus.ACTIVE.value:
             raise CatalogAccessDeniedError("catalog actor is unavailable")
-        if tenant_id is None:
-            if actor.tenant_id is not None:
-                raise CatalogAccessDeniedError("global catalog authoring requires global context")
-            return
-        if actor.tenant_id != tenant_id:
-            raise CatalogAccessDeniedError("catalog actor selected another tenant")
-        tenant = await self._session.scalar(
-            select(Tenant).where(Tenant.id == tenant_id).with_for_update()
-        )
-        membership = await self._session.scalar(
-            select(Membership)
-            .where(
-                Membership.tenant_id == tenant_id,
-                Membership.person_id == actor.person_id,
+        if actor.tenant_id is not None:
+            raise CatalogAccessDeniedError("global catalog authoring requires global context")
+        return None
+
+    async def _require_same_program_reference(
+        self,
+        *,
+        tenant_id: UUID,
+        program_id: UUID,
+        version_id: UUID | None = None,
+        module_id: UUID | None = None,
+    ) -> None:
+        if version_id is not None:
+            statement = select(ProgramVersion.id).where(
+                ProgramVersion.id == version_id,
+                ProgramVersion.program_id == program_id,
+                ProgramVersion.tenant_id == tenant_id,
+                ProgramVersion.scope == CatalogScope.TENANT.value,
             )
-            .with_for_update()
-        )
-        if (
-            tenant is None
-            or tenant.status != TenantStatus.ACTIVE.value
-            or membership is None
-            or membership.status != MembershipStatus.ACTIVE.value
-            or membership.ended_at is not None
-            or membership.role not in {"admin", "owner"}
-        ):
-            raise CatalogAccessDeniedError("catalog command requires active admin membership")
+        else:
+            statement = select(Module.id).where(
+                Module.id == module_id,
+                Module.program_id == program_id,
+                Module.tenant_id == tenant_id,
+                Module.scope == CatalogScope.TENANT.value,
+            )
+        if await self._session.scalar(statement) is None:
+            raise CatalogAccessDeniedError("catalog reference is unavailable")
 
     async def _execute(self, operation: Callable[[CatalogService], _T]) -> _T:
         async with self._session.begin_nested():
@@ -1971,6 +2139,275 @@ class AsyncCatalogApplication:
                 result = await transaction.run_sync(invoke)
                 await transaction.commit()
                 return result
+
+    async def author_draft(
+        self,
+        *,
+        actor: ActorContext,
+        tenant_id: UUID,
+        program_version_id: UUID,
+        operation: DraftOperation,
+        target_id: UUID | None,
+        title: str,
+        expected_etag: str,
+        idempotency_key: str,
+        prompt: str | None = None,
+        kind: str | None = None,
+        is_required: bool | None = None,
+        request_id: str | None = None,
+    ) -> DraftAuthoringResult:
+        """Apply one bounded command and append its immutable receipt/audit atomically.
+
+        Program -> Version locks precede ETag/child reads. Studio authorization
+        locks Person first, serializing even keys reused across distinct courses.
+        Exact replay deliberately precedes the draft/ETag check, but never fresh
+        authorization: a successful old command may now reference published content.
+        """
+        await self._authorize_admin(
+            actor,
+            tenant_id=tenant_id,
+            permission=CATALOG_WRITE_PERMISSION,
+            program_version_id=program_version_id,
+        )
+        if (
+            not isinstance(idempotency_key, str)
+            or not 1 <= len(idempotency_key) <= 128
+            or any(ord(character) < 32 or ord(character) == 127 for character in idempotency_key)
+            or re.fullmatch(r'"program-version-[0-9a-f]{64}"', expected_etag) is None
+        ):
+            raise CatalogValidationError("authoring requires bounded command key and draft ETag")
+        if operation not in {"module_add", "module_update", "activity_add", "activity_update"}:
+            raise CatalogValidationError("unsupported draft command")
+        if (operation == "module_add") != (target_id is None):
+            raise CatalogValidationError("draft command target is invalid")
+        if operation == "activity_add":
+            if kind is None or type(is_required) is not bool:
+                raise CatalogValidationError("activity creation requires kind and required state")
+            _activity_kind_value(kind)
+        elif kind is not None or is_required is not None:
+            raise CatalogValidationError(
+                "this command cannot change activity kind or required state"
+            )
+        if operation.startswith("module") and prompt is not None:
+            raise CatalogValidationError("modules do not accept activity prompts")
+        title = _required_text(title, "title", 200 if operation.startswith("module") else 240)
+        prompt = _optional_text(prompt, "prompt", ACTIVITY_PROMPT_MAX_LENGTH)
+        digest = sha256(idempotency_key.encode("utf-8")).hexdigest()
+        fingerprint = sha256(
+            dumps(
+                {
+                    "actor": str(actor.person_id),
+                    "tenant": str(tenant_id),
+                    "version": str(program_version_id),
+                    "operation": operation,
+                    "target": str(target_id) if target_id else None,
+                    "title": title,
+                    "prompt": prompt,
+                    "kind": kind,
+                    "is_required": is_required,
+                    "expected_etag": expected_etag,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        async with self._session.begin_nested():
+
+            def apply(database: Session) -> DraftAuthoringResult:
+                store = SqlAlchemyCatalogStore(database)
+                version = store.lock_for_publication(program_version_id)
+                if version.tenant_id != tenant_id or version.scope != "tenant":
+                    raise CatalogAccessDeniedError("draft is unavailable")
+                receipt = database.scalar(
+                    select(CatalogAuthoringCommand)
+                    .where(
+                        CatalogAuthoringCommand.tenant_id == tenant_id,
+                        CatalogAuthoringCommand.actor_person_id == actor.person_id,
+                        CatalogAuthoringCommand.idempotency_key_digest == digest,
+                    )
+                    .execution_options(populate_existing=True)
+                )
+                if receipt is not None:
+                    if receipt.request_fingerprint != fingerprint:
+                        raise CatalogConflictError("the draft command key has another intent")
+                    return DraftAuthoringResult(version.program_id, receipt.resource_id, True)
+                catalog = CatalogService(store, clock=self._clock)
+                catalog._require_draft(version)
+                if expected_etag != catalog.publication_etag(version):
+                    raise CatalogDraftPreconditionError("the draft changed after it was loaded")
+                if operation in {"module_update", "activity_add"}:
+                    target = database.scalar(
+                        select(Module).where(
+                            Module.id == target_id, Module.program_version_id == version.id
+                        )
+                    )
+                    if target is None:
+                        raise CatalogNotFoundError("module is unavailable in this draft")
+                elif operation == "activity_update":
+                    target_activity = database.scalar(
+                        select(Activity).where(
+                            Activity.id == target_id, Activity.program_version_id == version.id
+                        )
+                    )
+                    if target_activity is None:
+                        raise CatalogNotFoundError("activity is unavailable in this draft")
+                resource: ModuleSnapshot | ActivitySnapshot
+                if operation == "module_add":
+                    resource = catalog.add_module(version.id, tenant_id=tenant_id, title=title)
+                elif operation == "module_update":
+                    resource = catalog.update_module(
+                        cast(UUID, target_id), tenant_id=tenant_id, title=title
+                    )
+                elif operation == "activity_add":
+                    resource = catalog.add_activity(
+                        cast(UUID, target_id),
+                        tenant_id=tenant_id,
+                        title=title,
+                        prompt=prompt,
+                        kind=cast(str, kind),
+                        is_required=cast(bool, is_required),
+                    )
+                else:
+                    resource = catalog.update_activity(
+                        cast(UUID, target_id), tenant_id=tenant_id, title=title, prompt=prompt
+                    )
+                return DraftAuthoringResult(version.program_id, resource.id, False)
+
+            result = await self._session.run_sync(apply)
+            if result.replayed:
+                return result
+            audit = await AuditRepository(self._session).append_for_actor(
+                actor,
+                action="audit.catalog.draft.authored.v1",
+                resource_type="program_version",
+                resource_id=program_version_id,
+                payload={
+                    "operation": operation,
+                    "program_id": str(result.program_id),
+                    "resource_id": str(result.resource_id),
+                },
+                request_id=request_id,
+            )
+            self._session.add(
+                CatalogAuthoringCommand(
+                    tenant_id=tenant_id,
+                    actor_person_id=actor.person_id,
+                    program_version_id=program_version_id,
+                    program_id=result.program_id,
+                    operation=operation,
+                    resource_id=result.resource_id,
+                    idempotency_key_digest=digest,
+                    request_fingerprint=fingerprint,
+                    audit_event_id=audit.id,
+                )
+            )
+            await self._session.flush()
+            return result
+
+    async def revise_published_version(
+        self,
+        *,
+        actor: ActorContext,
+        tenant_id: UUID,
+        program_version_id: UUID,
+        expected_etag: str,
+        idempotency_key: str,
+        request_id: str | None = None,
+    ) -> DraftAuthoringResult:
+        """Create one review-required revision, or return the original receipt.
+
+        Both persisted capabilities are rechecked before replay. Person locks
+        serialize actor keys across programs; the stable Program lock serializes
+        version numbering against other authors and publication.
+        """
+        # Take final Program lock strength first; SHARE -> UPDATE upgrades can
+        # deadlock two independently authorized coaches revising one course.
+        for permission in (CATALOG_WRITE_PERMISSION, CATALOG_READ_PERMISSION):
+            await self._authorize_admin(
+                actor,
+                tenant_id=tenant_id,
+                permission=permission,
+                program_version_id=program_version_id,
+            )
+        if (
+            not isinstance(idempotency_key, str)
+            or not 1 <= len(idempotency_key) <= 128
+            or any(ord(character) < 32 or ord(character) == 127 for character in idempotency_key)
+            or re.fullmatch(r'"program-version-[0-9a-f]{64}"', expected_etag) is None
+        ):
+            raise CatalogValidationError("revision requires a bounded command key and version ETag")
+        digest = sha256(idempotency_key.encode("utf-8")).hexdigest()
+        fingerprint = sha256(
+            dumps(
+                {
+                    "actor": str(actor.person_id),
+                    "tenant": str(tenant_id),
+                    "version": str(program_version_id),
+                    "operation": "version_revise",
+                    "expected_etag": expected_etag,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        async with self._session.begin_nested():
+
+            def apply(database: Session) -> DraftAuthoringResult:
+                store = SqlAlchemyCatalogStore(database)
+                source = store.lock_for_publication(program_version_id)
+                if source.tenant_id != tenant_id or source.scope != CatalogScope.TENANT.value:
+                    raise CatalogAccessDeniedError("revision source is unavailable")
+                receipt = database.scalar(
+                    select(CatalogAuthoringCommand)
+                    .where(
+                        CatalogAuthoringCommand.tenant_id == tenant_id,
+                        CatalogAuthoringCommand.actor_person_id == actor.person_id,
+                        CatalogAuthoringCommand.idempotency_key_digest == digest,
+                    )
+                    .execution_options(populate_existing=True)
+                )
+                if receipt is not None:
+                    if receipt.request_fingerprint != fingerprint:
+                        raise CatalogConflictError("the command key has another intent")
+                    return DraftAuthoringResult(source.program_id, receipt.resource_id, True)
+                catalog = CatalogService(store, clock=self._clock)
+                if source.status != ProgramVersionStatus.PUBLISHED.value:
+                    raise CatalogConflictError("revision requires the current published version")
+                if expected_etag != catalog.publication_etag(source):
+                    raise CatalogDraftPreconditionError("the published version changed")
+                draft = catalog.revise_published_version(source.id, tenant_id=tenant_id)
+                return DraftAuthoringResult(source.program_id, draft.id, False)
+
+            result = await self._session.run_sync(apply)
+            if result.replayed:
+                return result
+            audit = await AuditRepository(self._session).append_for_actor(
+                actor,
+                action="audit.catalog.draft.authored.v1",
+                resource_type="program_version",
+                resource_id=program_version_id,
+                payload={
+                    "operation": "version_revise",
+                    "program_id": str(result.program_id),
+                    "resource_id": str(result.resource_id),
+                },
+                request_id=request_id,
+            )
+            self._session.add(
+                CatalogAuthoringCommand(
+                    tenant_id=tenant_id,
+                    actor_person_id=actor.person_id,
+                    program_version_id=program_version_id,
+                    program_id=result.program_id,
+                    operation="version_revise",
+                    resource_id=result.resource_id,
+                    idempotency_key_digest=digest,
+                    request_fingerprint=fingerprint,
+                    audit_event_id=audit.id,
+                )
+            )
+            await self._session.flush()
+            return result
 
     async def create_program(
         self,
@@ -2012,7 +2449,13 @@ class AsyncCatalogApplication:
         content_seed_kind: str | None = None,
         now: datetime | None = None,
     ) -> ProgramVersionSnapshot:
-        await self._authorize_admin(actor, tenant_id=tenant_id, permission=CATALOG_WRITE_PERMISSION)
+        await self._authorize_admin(
+            actor, tenant_id=tenant_id, permission=CATALOG_WRITE_PERMISSION, program_id=program_id
+        )
+        if tenant_id is not None and supersedes_version_id is not None:
+            await self._require_same_program_reference(
+                tenant_id=tenant_id, program_id=program_id, version_id=supersedes_version_id
+            )
         return await self._execute(
             lambda catalog: catalog.create_version(
                 program_id,
@@ -2040,7 +2483,12 @@ class AsyncCatalogApplication:
         position: int | None = None,
         module_id: UUID | None = None,
     ) -> ModuleSnapshot:
-        await self._authorize_admin(actor, tenant_id=tenant_id, permission=CATALOG_WRITE_PERMISSION)
+        await self._authorize_admin(
+            actor,
+            tenant_id=tenant_id,
+            permission=CATALOG_WRITE_PERMISSION,
+            program_version_id=program_version_id,
+        )
         return await self._execute(
             lambda catalog: catalog.add_module(
                 program_version_id,
@@ -2064,7 +2512,9 @@ class AsyncCatalogApplication:
         activity_id: UUID | None = None,
         is_required: bool = True,
     ) -> ActivitySnapshot:
-        await self._authorize_admin(actor, tenant_id=tenant_id, permission=CATALOG_WRITE_PERMISSION)
+        await self._authorize_admin(
+            actor, tenant_id=tenant_id, permission=CATALOG_WRITE_PERMISSION, module_id=module_id
+        )
         return await self._execute(
             lambda catalog: catalog.add_activity(
                 module_id,
@@ -2087,7 +2537,13 @@ class AsyncCatalogApplication:
         tenant_id: UUID | None,
         prerequisite_id: UUID | None = None,
     ) -> ModulePrerequisiteSnapshot:
-        await self._authorize_admin(actor, tenant_id=tenant_id, permission=CATALOG_WRITE_PERMISSION)
+        program_id = await self._authorize_admin(
+            actor, tenant_id=tenant_id, permission=CATALOG_WRITE_PERMISSION, module_id=module_id
+        )
+        if tenant_id is not None and program_id is not None:
+            await self._require_same_program_reference(
+                tenant_id=tenant_id, program_id=program_id, module_id=prerequisite_module_id
+            )
         return await self._execute(
             lambda catalog: catalog.add_module_prerequisite(
                 module_id,
@@ -2110,6 +2566,7 @@ class AsyncCatalogApplication:
             actor,
             tenant_id=tenant_id,
             permission=CATALOG_PUBLISH_PERMISSION,
+            program_version_id=program_version_id,
         )
         return await self._execute(
             lambda catalog: catalog.publish_version(

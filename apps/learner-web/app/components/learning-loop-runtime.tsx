@@ -1,12 +1,19 @@
 "use client";
 
+import { isLocalSandboxMediaUrl } from "../lib/local-sandbox";
+import { activityMediaIdentity } from "../lib/activity-media-identity";
+
 import {
   useCallback,
   useEffect,
+  useEffectEvent,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type CSSProperties,
+  type ReactNode,
+  type RefObject,
 } from "react";
 import Link from "next/link";
 import {
@@ -14,8 +21,8 @@ import {
   CheckCircle2,
   CirclePlay,
   FileText,
-  Gauge,
   HelpCircle,
+  LoaderCircle,
   Maximize2,
   Pause,
   PictureInPicture2,
@@ -39,6 +46,14 @@ import {
   type PlaybackEventInput,
 } from "../lib/learner-api";
 import { useDevelopmentMediaTransport } from "./development-media-bridge";
+import { VideoPlaybackSurface } from "./video-playback-surface";
+import {
+  attachAdaptiveVideo,
+  authorizedHlsRequestPredicate,
+  type AdaptiveVideo,
+  type AdaptiveQuality,
+  type AdaptiveMode,
+} from "../lib/adaptive-video";
 
 /**
  * Non-canonical video telemetry events. These are downstream observation hooks
@@ -102,9 +117,10 @@ export interface AuthorizedVideoQuality {
 }
 
 export interface AuthorizedVideoMedia {
-  protocol: "progressive";
+  protocol: "progressive" | "hls";
   contentType: string;
   src: string;
+  fallback?: { protocol: "progressive"; contentType: string; src: string };
   poster?: string;
   captions?: AuthorizedCaptionTrack[];
   transcript?: AuthorizedTranscriptSegment[];
@@ -294,6 +310,7 @@ export function normalizeQualityOptions(
 export function resolveApprovedMedia(
   activity: ActivityResponse,
   explicitMedia?: AuthorizedVideoMedia | null,
+  preferAdaptive = true,
 ): {
   media: AuthorizedVideoMedia | null;
   state: "approved" | "blocked" | "unavailable";
@@ -346,14 +363,20 @@ export function resolveApprovedMedia(
     };
   }
 
-  // A separately supplied progressive fallback is usable even when HLS is
-  // primary. Never pass a manifest to native video or claim adaptive playback.
+  const manifestUrl =
+    descriptor.delivery?.protocol === "hls"
+      ? descriptor.delivery.manifest_url
+      : null;
+  const adaptive =
+    preferAdaptive &&
+    typeof manifestUrl === "string" &&
+    authorizedHlsRequestPredicate(manifestUrl)(manifestUrl);
   const streamUrl =
     descriptor.delivery?.protocol === "progressive" ||
     descriptor.delivery?.protocol === "hls"
       ? descriptor.delivery.progressive_url
       : null;
-  if (!streamUrl) {
+  if (!streamUrl && !adaptive) {
     return {
       media: null,
       state: "unavailable",
@@ -364,9 +387,10 @@ export function resolveApprovedMedia(
   const source = {
     protocol: "progressive" as const,
     contentType: descriptor.content_type || "",
-    src: streamUrl,
+    src: streamUrl ?? "",
   };
-  if (!isApprovedProgressiveMediaSource(source)) {
+  const progressive = isApprovedProgressiveMediaSource(source);
+  if (!progressive && !adaptive) {
     return {
       media: null,
       state: "unavailable",
@@ -396,9 +420,12 @@ export function resolveApprovedMedia(
 
   return {
     media: {
-      protocol: source.protocol,
-      contentType: source.contentType,
-      src: streamUrl,
+      protocol: adaptive ? "hls" : "progressive",
+      contentType: adaptive
+        ? "application/vnd.apple.mpegurl"
+        : source.contentType,
+      src: adaptive ? manifestUrl! : source.src,
+      fallback: adaptive && progressive ? source : undefined,
       poster: undefined,
       captions: captions.length > 0 ? captions : undefined,
       transcript: undefined,
@@ -418,14 +445,32 @@ type VideoPlaybackMode = "tracked" | "read-only" | "unavailable";
  */
 export function approvedDeliveryExpiresAt(
   activity: ActivityResponse,
+  preferAdaptive = true,
 ): number | null {
   const descriptor = activity.media;
-  const source = descriptor?.delivery?.progressive_url;
+  const manifest =
+    descriptor?.delivery?.protocol === "hls"
+      ? descriptor.delivery.manifest_url
+      : null;
+  const source =
+    preferAdaptive &&
+    manifest &&
+    authorizedHlsRequestPredicate(manifest)(manifest)
+      ? manifest
+      : descriptor?.delivery?.progressive_url;
+  return source ? approvedSourceExpiresAt(activity, source) : null;
+}
+
+function approvedSourceExpiresAt(
+  activity: ActivityResponse,
+  source: string,
+): number | null {
+  const descriptor = activity.media;
   if (!source || source.length > 8192) return null;
   try {
     const url = new URL(source);
     if (
-      url.protocol !== "https:" ||
+      (url.protocol !== "https:" && !isLocalSandboxMediaUrl(url)) ||
       url.username ||
       url.password ||
       url.hash ||
@@ -488,10 +533,16 @@ function playbackMode(
     !source
   )
     return "unavailable";
-  const expiresAt = approvedDeliveryExpiresAt(activity);
+  const expiresAt = approvedDeliveryExpiresAt(
+    activity,
+    source.protocol === "hls",
+  );
   // A malformed/expired application token is never rescued by complete_video.
   if (
-    activity.media?.delivery?.progressive_url?.includes("/v1/media/") &&
+    [
+      activity.media?.delivery?.manifest_url,
+      activity.media?.delivery?.progressive_url,
+    ].some((value) => value?.includes("/v1/media/")) &&
     (expiresAt === null || expiresAt <= Date.now())
   )
     return "unavailable";
@@ -506,6 +557,8 @@ function playbackContext(
   media: AuthorizedVideoMedia | null,
   mode: VideoPlaybackMode,
 ): string {
+  const envelope = activityMediaIdentity(activity, media, mode);
+  if (envelope) return envelope.identity;
   return JSON.stringify([
     activity.id,
     activity.enrollment_id,
@@ -515,6 +568,7 @@ function playbackContext(
     activity.media?.media_version_id,
     activity.media?.activity_version,
     media?.src,
+    media?.fallback?.src,
   ]);
 }
 
@@ -865,10 +919,13 @@ export interface PlaybackSettingsPanelProps {
   playbackRates: readonly number[];
   playbackRate: number;
   onChangeRate: (rate: number) => void;
-  qualities: readonly AuthorizedVideoQuality[];
+  qualities: readonly (AuthorizedVideoQuality | AdaptiveQuality)[];
+  autoQualityLabel?: string;
   qualityId: string;
   onChangeQuality: (qualityId: string) => void;
   onClose: () => void;
+  triggerRef?: RefObject<HTMLButtonElement | null>;
+  children?: ReactNode;
 }
 
 /**
@@ -881,10 +938,15 @@ export function PlaybackSettingsPanel({
   onChangeRate,
   qualities,
   qualityId,
+  autoQualityLabel = "Auto",
   onChangeQuality,
   onClose,
+  triggerRef,
+  children,
 }: PlaybackSettingsPanelProps) {
+  const panelRef = useRef<HTMLElement | null>(null);
   const closeRef = useRef<HTMLButtonElement | null>(null);
+  const dismiss = useEffectEvent(onClose);
   const hasRates = playbackRates.length > 0;
   const hasQualities = qualities.length > 0;
 
@@ -892,17 +954,39 @@ export function PlaybackSettingsPanel({
     closeRef.current?.focus();
   }, []);
 
+  useEffect(() => {
+    const outside = (event: PointerEvent) => {
+      const target = event.target;
+      if (
+        target instanceof Node &&
+        !panelRef.current?.contains(target) &&
+        !triggerRef?.current?.contains(target)
+      )
+        dismiss();
+    };
+    document.addEventListener("pointerdown", outside);
+    return () => document.removeEventListener("pointerdown", outside);
+  }, [triggerRef]);
+
   if (!hasRates && !hasQualities) return null;
 
   return (
     <section
+      ref={panelRef}
       id="momentum-video-settings"
       className="momentum-video-settings"
+      role="dialog"
       aria-labelledby="momentum-video-settings-title"
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+          onClose();
+        }
+      }}
     >
       <div className="momentum-video-settings__header">
         <div>
-          <p className="momentum-video-settings__eyebrow">Player settings</p>
           <h3 id="momentum-video-settings-title">Playback settings</h3>
         </div>
         <button
@@ -944,7 +1028,7 @@ export function PlaybackSettingsPanel({
               onChange={(event) => onChangeQuality(event.target.value)}
               aria-label="Video quality"
             >
-              <option value="auto">Auto</option>
+              <option value="auto">{autoQualityLabel}</option>
               {qualities.map((quality) => (
                 <option key={quality.id} value={quality.id}>
                   {quality.label}
@@ -954,9 +1038,9 @@ export function PlaybackSettingsPanel({
           </label>
         ) : null}
       </div>
-      <p className="momentum-video-settings__note">
-        These settings change presentation only. Watch coverage and completion
-        remain server-determined.
+      {children}
+      <p className="momentum-video-settings__note sr-only">
+        Choose the picture quality and pace that suit you.
       </p>
     </section>
   );
@@ -996,6 +1080,13 @@ export function VideoKeyboardShortcutsDialog({
       role="dialog"
       aria-label="Player keyboard shortcuts"
       aria-modal="false"
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+          onClose();
+        }
+      }}
     >
       <div className="momentum-video-shortcuts__header">
         <strong>Keyboard shortcuts</strong>
@@ -1020,6 +1111,108 @@ export function VideoKeyboardShortcutsDialog({
   );
 }
 
+/** Keep native, automatically positioned captions clear of our overlay controls.
+ * Authored cue placement/content is untouched; this never changes track modes.
+ */
+function VideoCaptionClearance({
+  videoRef,
+}: {
+  videoRef: RefObject<HTMLVideoElement | null>;
+}) {
+  useEffect(() => {
+    const video = videoRef.current;
+    const stage = video?.closest<HTMLElement>(".momentum-video-player__stage");
+    const controls = stage?.querySelector<HTMLElement>(
+      ".momentum-video-controls",
+    );
+    if (!video || !stage || !controls) return;
+    const originals = new Map<
+      VTTCue,
+      {
+        line: VTTCue["line"];
+        lineAlign: VTTCue["lineAlign"];
+        snapToLines: boolean;
+      }
+    >();
+    const tracks = new Set<TextTrack>();
+    const restore = (cue: VTTCue) => {
+      const original = originals.get(cue);
+      if (original) Object.assign(cue, original);
+      originals.delete(cue);
+    };
+    const update = () => {
+      const frame = stage.getBoundingClientRect();
+      if (frame.height <= 0) return;
+      const line = Math.max(
+        0,
+        Math.min(
+          100,
+          ((controls.getBoundingClientRect().top - frame.top - 8) /
+            frame.height) *
+            100,
+        ),
+      );
+      const active = new Set<VTTCue>();
+      for (const track of Array.from(video.textTracks)) {
+        if (track.mode !== "showing") continue;
+        for (const candidate of Array.from(track.activeCues ?? [])) {
+          const cue = candidate as VTTCue;
+          if (cue.line !== "auto" && !originals.has(cue)) continue;
+          active.add(cue);
+          if (!originals.has(cue))
+            originals.set(cue, {
+              line: cue.line,
+              lineAlign: cue.lineAlign,
+              snapToLines: cue.snapToLines,
+            });
+          cue.snapToLines = false;
+          cue.lineAlign = "end";
+          cue.line = line;
+        }
+      }
+      // Retain only active cues; long lessons do not accumulate a second cue ledger.
+      for (const cue of originals.keys()) if (!active.has(cue)) restore(cue);
+    };
+    const subscribe = () => {
+      const current = new Set(Array.from(video.textTracks));
+      for (const track of tracks) {
+        if (!current.has(track)) {
+          track.removeEventListener("cuechange", update);
+          tracks.delete(track);
+        }
+      }
+      for (const track of current) {
+        if (!tracks.has(track)) {
+          track.addEventListener("cuechange", update);
+          tracks.add(track);
+        }
+      }
+      update();
+    };
+    video.textTracks.addEventListener("addtrack", subscribe);
+    video.textTracks.addEventListener("removetrack", subscribe);
+    video.textTracks.addEventListener("change", subscribe);
+    video.addEventListener("loadedmetadata", subscribe);
+    video.addEventListener("load", subscribe, true);
+    const resize = new ResizeObserver(update);
+    resize.observe(stage);
+    resize.observe(controls);
+    subscribe();
+    return () => {
+      resize.disconnect();
+      video.textTracks.removeEventListener("addtrack", subscribe);
+      video.textTracks.removeEventListener("removetrack", subscribe);
+      video.textTracks.removeEventListener("change", subscribe);
+      video.removeEventListener("loadedmetadata", subscribe);
+      video.removeEventListener("load", subscribe, true);
+      for (const track of tracks)
+        track.removeEventListener("cuechange", update);
+      for (const cue of originals.keys()) restore(cue);
+    };
+  }, [videoRef]);
+  return null;
+}
+
 function VideoViewerHeading({
   activity,
   labelledBy,
@@ -1038,27 +1231,75 @@ function VideoViewerHeading({
 }
 
 export function VideoViewer(props: VideoViewerProps) {
-  const resolution = resolveApprovedMedia(props.activity, props.media);
-  const mode = playbackMode(props.activity, resolution.media);
+  const [renewed, setRenewed] = useState<ActivityResponse | null>(null);
+  const deliveryIdentity = (value: ActivityResponse) => {
+    const delivery = value.media?.delivery;
+    const adaptive = delivery?.protocol === "hls" && delivery.manifest_url;
+    const source = adaptive || delivery?.progressive_url;
+    return source
+      ? activityMediaIdentity(
+          value,
+          {
+            protocol: adaptive ? "hls" : "progressive",
+            src: source,
+            fallback:
+              adaptive && delivery?.progressive_url
+                ? { src: delivery.progressive_url }
+                : undefined,
+          },
+          canStartPlayback(value) ? "tracked" : "read-only",
+        )
+      : null;
+  };
+  const suppliedIdentity = deliveryIdentity(props.activity);
+  const renewedIdentity = renewed ? deliveryIdentity(renewed) : null;
+  const effectiveActivity =
+    renewed &&
+    suppliedIdentity &&
+    renewedIdentity &&
+    suppliedIdentity.identity === renewedIdentity.identity &&
+    renewedIdentity.issuedAt >= suppliedIdentity.issuedAt
+      ? { ...props.activity, media: renewed.media }
+      : props.activity;
+  const effectiveProps = { ...props, activity: effectiveActivity };
+  const initialResolution = resolveApprovedMedia(
+    effectiveActivity,
+    props.media,
+  );
+  const initialMode = playbackMode(effectiveActivity, initialResolution.media);
   const transport = useDevelopmentMediaTransport(
-    mode !== "unavailable" && resolution.media
+    initialMode !== "unavailable" && initialResolution.media
       ? [
-          resolution.media.src,
-          ...(resolution.media.captions ?? []).map((track) => track.src),
-          ...(resolution.media.qualities ?? []).map((quality) => quality.src),
+          ...(initialResolution.media.protocol === "hls"
+            ? initialResolution.media.fallback
+              ? [initialResolution.media.fallback.src]
+              : []
+            : [initialResolution.media.src]),
+          ...(initialResolution.media.captions ?? []).map((track) => track.src),
+          ...(initialResolution.media.qualities ?? []).map(
+            (quality) => quality.src,
+          ),
         ]
       : [],
   );
+  // The older staging-over-localhost locator bridge remains progressive-only.
+  const resolution = resolveApprovedMedia(
+    effectiveActivity,
+    props.media,
+    !transport.enabled,
+  );
+  const mode = playbackMode(effectiveActivity, resolution.media);
   const transportSource = resolution.media
     ? transport.resolveUrl(resolution.media.src)
     : null;
   return (
     <VideoViewerSession
       key={JSON.stringify([
-        playbackContext(props.activity, resolution.media, mode),
-        transportSource,
+        playbackContext(effectiveActivity, resolution.media, mode),
+        transport.enabled ? transportSource : null,
       ])}
-      {...props}
+      {...effectiveProps}
+      onDeliveryRenewed={setRenewed}
       mode={mode}
       transport={transport}
     />
@@ -1075,13 +1316,15 @@ function VideoViewerSession({
   onTelemetryEvent,
   mode,
   transport,
+  onDeliveryRenewed,
 }: VideoViewerProps & {
   mode: VideoPlaybackMode;
   transport: ReturnType<typeof useDevelopmentMediaTransport>;
+  onDeliveryRenewed: (activity: ActivityResponse) => void;
 }) {
   const mediaResolution = useMemo(
-    () => resolveApprovedMedia(activity, media),
-    [activity, media],
+    () => resolveApprovedMedia(activity, media, !transport.enabled),
+    [activity, media, transport.enabled],
   );
   const approvedMedia = mediaResolution.media;
   // Preserve the original approved HTTPS descriptor for every authorization
@@ -1093,6 +1336,14 @@ function VideoViewerSession({
     return {
       ...approvedMedia,
       src,
+      fallback:
+        approvedMedia.fallback &&
+        transport.resolveUrl(approvedMedia.fallback.src)
+          ? {
+              ...approvedMedia.fallback,
+              src: transport.resolveUrl(approvedMedia.fallback.src)!,
+            }
+          : undefined,
       captions: approvedMedia.captions?.flatMap((track) => {
         const source = transport.resolveUrl(track.src);
         return source ? [{ ...track, src: source }] : [];
@@ -1106,15 +1357,65 @@ function VideoViewerSession({
   const isBlocked = mediaResolution.state === "blocked";
   const authorized = mode !== "unavailable" && activeMedia !== null;
   const tracked = mode === "tracked";
-  const deliveryExpiresAt = approvedDeliveryExpiresAt(activity);
-  const playbackRates = useMemo(
-    () => normalizePlaybackRates(activeMedia?.playbackRates),
-    [activeMedia?.playbackRates],
+  const deliveryExpiresAt = approvedDeliveryExpiresAt(
+    activity,
+    approvedMedia?.protocol === "hls",
   );
-  const qualityOptions = useMemo(
+  const latestDeliveryRef = useRef({
+    activity,
+    media: approvedMedia,
+    mode,
+    expiresAt: deliveryExpiresAt,
+  });
+  useLayoutEffect(() => {
+    latestDeliveryRef.current = {
+      activity,
+      media: approvedMedia,
+      mode,
+      expiresAt: deliveryExpiresAt,
+    };
+  }, [activity, approvedMedia, mode, deliveryExpiresAt]);
+  const playbackRates = useMemo(
+    // Read-only viewing has no watch-evidence policy to modify. These are
+    // browser presentation controls, not grants of completion or media access.
+    // Tracked lessons retain their existing explicit playback-rate contract.
+    () =>
+      normalizePlaybackRates(
+        activeMedia?.playbackRates ??
+          (mode === "read-only" ? [0.5, 0.75, 1, 1.25, 1.5, 2] : []),
+      ),
+    [activeMedia?.playbackRates, mode],
+  );
+  const progressiveQualityOptions = useMemo(
     () => normalizeQualityOptions(activeMedia?.qualities),
     [activeMedia?.qualities],
   );
+  const [adaptiveQualities, setAdaptiveQualities] = useState<AdaptiveQuality[]>(
+    [],
+  );
+  const [adaptiveMode, setAdaptiveMode] = useState<AdaptiveMode | null>(null);
+  const [actualAdaptiveQuality, setActualAdaptiveQuality] = useState<
+    string | null
+  >(null);
+  const [adaptiveEpoch, setAdaptiveEpoch] = useState(0);
+  const adaptiveRef = useRef<AdaptiveVideo | null>(null);
+  const adaptiveResumeRef = useRef<{
+    position: number;
+    rate: number;
+    muted: boolean;
+    volume: number;
+    resumePlaying?: boolean;
+    preserveWatchCursor?: boolean;
+    userSeek?: boolean;
+  } | null>(null);
+  const deliveryRotationRef = useRef(false);
+  const restoredDeliveryPositionRef = useRef<number | null>(null);
+  const resumeAfterDeliveryRef = useRef(false);
+  const deliveryRefreshRequestRef = useRef<Promise<boolean> | null>(null);
+  const qualityOptions =
+    activeMedia?.protocol === "hls"
+      ? adaptiveQualities
+      : progressiveQualityOptions;
   const hasPlaybackSettings =
     playbackRates.length > 0 || qualityOptions.length > 0;
 
@@ -1148,6 +1449,8 @@ function VideoViewerSession({
   const [canPictureInPicture, setCanPictureInPicture] = useState(false);
   const [hasEnded, setHasEnded] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
+  const [authorizationRefreshRequired, setAuthorizationRefreshRequired] =
+    useState(false);
   const [authorizationStopped, setAuthorizationStopped] = useState(false);
   const authorizationStoppedRef = useRef(false);
   const [playbackSessionNeedsRetry, setPlaybackSessionNeedsRetry] =
@@ -1173,6 +1476,15 @@ function VideoViewerSession({
   const shortcutsTriggerRef = useRef<HTMLButtonElement | null>(null);
   const fullscreenTriggerRef = useRef<HTMLButtonElement | null>(null);
   const pictureInPictureTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const focusPlayerTrigger = useCallback(
+    (trigger: HTMLButtonElement | null) => {
+      // Narrow players move secondary actions into Settings. Never return keyboard
+      // focus to their hidden toolbar counterpart after a presentation surface closes.
+      const visible = trigger && getComputedStyle(trigger).display !== "none";
+      (visible ? trigger : settingsTriggerRef.current)?.focus();
+    },
+    [],
+  );
   const qualitySwitchRef = useRef(0);
   const settingsWasOpenRef = useRef(false);
   const shortcutsWasOpenRef = useRef(false);
@@ -1225,7 +1537,8 @@ function VideoViewerSession({
         authorized &&
         mountedRef.current &&
         !authorizationStoppedRef.current &&
-        (deliveryExpiresAt === null || deliveryExpiresAt > Date.now()) &&
+        (latestDeliveryRef.current.expiresAt === null ||
+          latestDeliveryRef.current.expiresAt > Date.now()) &&
         isPlaybackConnectionCurrent(
           epoch,
           connectionEpochRef.current,
@@ -1234,7 +1547,7 @@ function VideoViewerSession({
         )
       );
     },
-    [authorized, deliveryExpiresAt],
+    [authorized],
   );
 
   const isCanonicalWriteAllowed = useCallback(
@@ -1248,9 +1561,13 @@ function VideoViewerSession({
     authorizationStoppedRef.current = true;
     connectionEpochRef.current += 1;
     sessionRef.current = null;
+    adaptiveResumeRef.current = null;
+    resumeAfterDeliveryRef.current = false;
     setAuthorizationStopped(true);
     setIsPlaying(false);
     const video = videoRef.current;
+    adaptiveRef.current?.destroy();
+    adaptiveRef.current = null;
     video?.pause();
     // Drop buffered delivery as well: an expired grant cannot keep playing a
     // fully buffered object while the next authenticated request is pending.
@@ -1262,6 +1579,83 @@ function VideoViewerSession({
       "Playback authorization changed or expired. Reopen the lesson to continue.",
     );
   }, [updateStatus]);
+
+  const captureAdaptivePosition = useCallback(
+    (resumePlaying = false, preserveWatchCursor = false) => {
+      const video = videoRef.current;
+      if (video && !adaptiveResumeRef.current) {
+        adaptiveResumeRef.current = {
+          position: video.currentTime,
+          rate: video.playbackRate,
+          muted: video.muted,
+          volume: video.volume,
+          resumePlaying: resumePlaying && !video.paused && !video.ended,
+          preserveWatchCursor,
+        };
+      }
+    },
+    [],
+  );
+
+  const acceptRefreshedDelivery = useCallback(
+    (refreshed: ActivityResponse, continuePlaying = false) => {
+      const latest = latestDeliveryRef.current;
+      const resolution = resolveApprovedMedia(
+        refreshed,
+        media,
+        !transport.enabled,
+      );
+      const refreshedMode = playbackMode(refreshed, resolution.media);
+      if (
+        resolution.state !== "approved" ||
+        playbackContext(refreshed, resolution.media, refreshedMode) !==
+          playbackContext(latest.activity, latest.media, latest.mode)
+      ) {
+        stopAuthorization();
+        return false;
+      }
+      const previous = activityMediaIdentity(
+        latest.activity,
+        latest.media,
+        latest.mode,
+      );
+      const next = activityMediaIdentity(
+        refreshed,
+        resolution.media,
+        refreshedMode,
+      );
+      if (
+        !transport.enabled &&
+        previous &&
+        next &&
+        next.grantId !== previous.grantId
+      ) {
+        if (next.issuedAt < previous.issuedAt || next.expiresAt <= Date.now())
+          return false;
+        captureAdaptivePosition(continuePlaying, true);
+        deliveryRotationRef.current = true;
+        latestDeliveryRef.current = {
+          activity: refreshed,
+          media: resolution.media,
+          mode: refreshedMode,
+          expiresAt: next.expiresAt,
+        };
+        onDeliveryRenewed(refreshed);
+      }
+      activityRevisionRef.current = Math.max(
+        activityRevisionRef.current,
+        refreshed.revision,
+      );
+      return true;
+    },
+    [
+      captureAdaptivePosition,
+      media,
+      onDeliveryRenewed,
+      stopAuthorization,
+      transport.enabled,
+    ],
+  );
 
   const resetPlaybackSession = useCallback((needsRetry = false) => {
     sessionRef.current = null;
@@ -1422,21 +1816,7 @@ function VideoViewerSession({
           if (!isConnectionEpochCurrent(refreshEpoch)) return false;
           activityRevisionRef.current = refreshedActivity.revision;
 
-          const refreshedResolution = resolveApprovedMedia(
-            refreshedActivity,
-            media,
-          );
-          const mediaStillAuthorized =
-            refreshedResolution.state === "approved" &&
-            playbackContext(
-              refreshedActivity,
-              refreshedResolution.media,
-              playbackMode(refreshedActivity, refreshedResolution.media),
-            ) === playbackContext(activity, approvedMedia, mode);
-          if (!mediaStillAuthorized) {
-            stopAuthorization();
-            return false;
-          }
+          if (!acceptRefreshedDelivery(refreshedActivity)) return false;
 
           if (transport.enabled) {
             // Reconnect invalidates the local byte mapping only after the
@@ -1447,6 +1827,7 @@ function VideoViewerSession({
           }
 
           reconnectRefreshRequiredRef.current = false;
+          setAuthorizationRefreshRequired(false);
           setPlaybackSessionNeedsRetry(false);
           const video = videoRef.current;
           const canResume = Boolean(video && video.readyState >= 3);
@@ -1487,127 +1868,137 @@ function VideoViewerSession({
       reconnectRefreshRequestRef.current = request;
       return request;
     }, [
-      approvedMedia,
+      acceptRefreshedDelivery,
       activity,
       api,
       isConnectionEpochCurrent,
-      media,
-      mode,
       transport,
       stopAuthorization,
       updateStatus,
     ]);
 
-  const ensurePlaybackSession = useCallback(async (): Promise<boolean> => {
-    if (reconnectRefreshRequiredRef.current) {
-      const refreshed = await refreshPlaybackAuthorization();
-      if (!refreshed) return false;
-    }
-    if (!tracked) return isPlaybackAllowed(connectionEpochRef.current);
-    if (sessionRef.current?.closed) {
-      updateStatus("submitted", "Watch progress has already been submitted.");
-      return false;
-    }
-    if (sessionRef.current) {
-      if (
-        sessionRef.current.expiresAt > 0 &&
-        sessionRef.current.expiresAt <= Date.now()
-      ) {
-        resetPlaybackSession();
-      } else {
-        return true;
+  const ensurePlaybackSession = useCallback(
+    async (restart = false): Promise<boolean> => {
+      if (reconnectRefreshRequiredRef.current) {
+        const refreshed = await refreshPlaybackAuthorization();
+        if (!refreshed) return false;
       }
-    }
-    const startEpoch = connectionEpochRef.current;
-    if (!authorized || !isCanonicalWriteAllowed(startEpoch)) {
-      updateStatus(
-        "error",
-        !isLearnerOnline() || offlineRef.current
-          ? "Offline — watch progress was not submitted. Reconnect to continue."
-          : "Playback is not currently authorized for this activity.",
-      );
-      return false;
-    }
-    if (startRequestRef.current) return startRequestRef.current;
-
-    const request = (async () => {
-      updateStatus("starting", "Requesting a server playback session…");
-      try {
-        if (!isCanonicalWriteAllowed(startEpoch)) return false;
-        const started = await api.startPlayback(
-          activity.id,
-          activityRevisionRef.current,
-        );
-        if (!isConnectionEpochCurrent(startEpoch)) return false;
-        if (!started.session_token) {
-          throw new Error(
-            "The server did not return a playback authorization token.",
-          );
-        }
-        const expiresAt = Date.parse(started.expires_at);
-        if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
-          throw new Error("The server did not return a valid playback expiry.");
-        }
-        if (!isConnectionEpochCurrent(startEpoch)) return false;
-        const currentActivity = await api.activity(activity.id);
-        if (!isCanonicalWriteAllowed(startEpoch)) return false;
-        const currentMedia = resolveApprovedMedia(currentActivity, media).media;
-        if (
-          playbackContext(
-            currentActivity,
-            currentMedia,
-            playbackMode(currentActivity, currentMedia),
-          ) !== playbackContext(activity, approvedMedia, mode)
-        ) {
-          stopAuthorization();
-          return false;
-        }
-        activityRevisionRef.current = currentActivity.revision;
-        sessionRef.current = {
-          id: started.session_id,
-          token: started.session_token,
-          revision: started.revision,
-          activityRevision: currentActivity.revision,
-          expiresAt,
-          closed: false,
-        };
-        setPlaybackSessionNeedsRetry(false);
-        sequenceRef.current = 0;
-        pendingHeartbeatRef.current = null;
-        watchCursorRef.current = 0;
-        finishReadyRef.current = false;
-        if (started.duration_seconds > 0) setDuration(started.duration_seconds);
+      if (!tracked) return isPlaybackAllowed(connectionEpochRef.current);
+      if (playbackSessionNeedsRetry && !restart) {
         updateStatus(
-          "watching",
-          "Watch progress is being recorded by the server.",
+          "error",
+          "Your watch session needs to restart. Use Restart lesson to record a new viewing.",
         );
-        return true;
-      } catch (error) {
-        if (!isConnectionEpochCurrent(startEpoch)) return false;
-        updateStatus("error", playbackErrorMessage(error));
         return false;
-      } finally {
-        startRequestRef.current = null;
       }
-    })();
-    startRequestRef.current = request;
-    return request;
-  }, [
-    activity,
-    approvedMedia,
-    api,
-    authorized,
-    isCanonicalWriteAllowed,
-    isConnectionEpochCurrent,
-    isPlaybackAllowed,
-    media,
-    mode,
-    refreshPlaybackAuthorization,
-    resetPlaybackSession,
-    stopAuthorization,
-    tracked,
-    updateStatus,
-  ]);
+      if (sessionRef.current?.closed) {
+        updateStatus("submitted", "Watch progress has already been submitted.");
+        return false;
+      }
+      if (sessionRef.current) {
+        if (
+          sessionRef.current.expiresAt > 0 &&
+          sessionRef.current.expiresAt <= Date.now()
+        ) {
+          resetPlaybackSession(true);
+          if (!restart) {
+            updateStatus(
+              "error",
+              "Your watch session expired. Use Restart lesson to record a new viewing.",
+            );
+            return false;
+          }
+        } else {
+          return true;
+        }
+      }
+      const startEpoch = connectionEpochRef.current;
+      if (!authorized || !isCanonicalWriteAllowed(startEpoch)) {
+        updateStatus(
+          "error",
+          !isLearnerOnline() || offlineRef.current
+            ? "Offline — watch progress was not submitted. Reconnect to continue."
+            : "Playback is not currently authorized for this activity.",
+        );
+        return false;
+      }
+      if (startRequestRef.current) return startRequestRef.current;
+
+      const request = (async () => {
+        updateStatus("starting", "Requesting a server playback session…");
+        try {
+          if (!isCanonicalWriteAllowed(startEpoch)) return false;
+          // The server's new-session clock starts at zero. A restored presentation
+          // offset cannot be treated as an authorized evidence-session resume.
+          if (videoRef.current) videoRef.current.currentTime = 0;
+          setCurrentTime(0);
+          const started = await api.startPlayback(
+            activity.id,
+            activityRevisionRef.current,
+          );
+          if (!isConnectionEpochCurrent(startEpoch)) return false;
+          if (!started.session_token) {
+            throw new Error(
+              "The server did not return a playback authorization token.",
+            );
+          }
+          const expiresAt = Date.parse(started.expires_at);
+          if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+            throw new Error(
+              "The server did not return a valid playback expiry.",
+            );
+          }
+          if (!isConnectionEpochCurrent(startEpoch)) return false;
+          const currentActivity = await api.activity(activity.id);
+          if (!isCanonicalWriteAllowed(startEpoch)) return false;
+          if (!acceptRefreshedDelivery(currentActivity)) return false;
+          activityRevisionRef.current = currentActivity.revision;
+          sessionRef.current = {
+            id: started.session_id,
+            token: started.session_token,
+            revision: started.revision,
+            activityRevision: currentActivity.revision,
+            expiresAt,
+            closed: false,
+          };
+          setPlaybackSessionNeedsRetry(false);
+          sequenceRef.current = 0;
+          pendingHeartbeatRef.current = null;
+          watchCursorRef.current = 0;
+          finishReadyRef.current = false;
+          if (started.duration_seconds > 0)
+            setDuration(started.duration_seconds);
+          updateStatus(
+            "watching",
+            "Watch progress is being recorded by the server.",
+          );
+          return true;
+        } catch (error) {
+          if (!isConnectionEpochCurrent(startEpoch)) return false;
+          updateStatus("error", playbackErrorMessage(error));
+          return false;
+        } finally {
+          startRequestRef.current = null;
+        }
+      })();
+      startRequestRef.current = request;
+      return request;
+    },
+    [
+      acceptRefreshedDelivery,
+      activity,
+      api,
+      authorized,
+      isCanonicalWriteAllowed,
+      isConnectionEpochCurrent,
+      isPlaybackAllowed,
+      playbackSessionNeedsRetry,
+      refreshPlaybackAuthorization,
+      resetPlaybackSession,
+      tracked,
+      updateStatus,
+    ],
+  );
 
   const startPlaybackAndPlay = useCallback(async () => {
     const video = videoRef.current;
@@ -1677,17 +2068,7 @@ function VideoViewerSession({
         if (!isConnectionEpochCurrent(completionEpoch)) return;
         const currentActivity = await api.activity(activity.id);
         if (!isCanonicalWriteAllowed(completionEpoch)) return;
-        const currentMedia = resolveApprovedMedia(currentActivity, media).media;
-        if (
-          playbackContext(
-            currentActivity,
-            currentMedia,
-            playbackMode(currentActivity, currentMedia),
-          ) !== playbackContext(activity, approvedMedia, mode)
-        ) {
-          stopAuthorization();
-          return;
-        }
+        if (!acceptRefreshedDelivery(currentActivity)) return;
         activityRevisionRef.current = currentActivity.revision;
         if (!isCanonicalWriteAllowed(completionEpoch)) return;
         await api.submitEvidence(
@@ -1718,18 +2099,15 @@ function VideoViewerSession({
     completionRequestRef.current = request;
     return request;
   }, [
+    acceptRefreshedDelivery,
     activity,
-    approvedMedia,
     api,
     duration,
     flushWatch,
     isCanonicalWriteAllowed,
     isConnectionEpochCurrent,
-    media,
-    mode,
     onPlaybackCommitted,
     resetPlaybackSession,
-    stopAuthorization,
     updateStatus,
   ]);
 
@@ -1745,7 +2123,7 @@ function VideoViewerSession({
     setCurrentTime(0);
     setMediaState("loading");
     setMediaMessage("Starting a fresh approved playback session…");
-    const started = await ensurePlaybackSession();
+    const started = await ensurePlaybackSession(true);
     if (!started) return;
     try {
       await video.play();
@@ -1815,18 +2193,18 @@ function VideoViewerSession({
   }, [emitTelemetry]);
 
   useEffect(() => {
-    if (!settingsOpen && settingsWasOpenRef.current) {
+    if (!settingsOpen && settingsWasOpenRef.current && !shortcutsOpen) {
       settingsTriggerRef.current?.focus();
     }
     settingsWasOpenRef.current = settingsOpen;
-  }, [settingsOpen]);
+  }, [settingsOpen, shortcutsOpen]);
 
   useEffect(() => {
     if (!shortcutsOpen && shortcutsWasOpenRef.current) {
-      shortcutsTriggerRef.current?.focus();
+      focusPlayerTrigger(shortcutsTriggerRef.current);
     }
     shortcutsWasOpenRef.current = shortcutsOpen;
-  }, [shortcutsOpen]);
+  }, [shortcutsOpen, focusPlayerTrigger]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -1836,7 +2214,7 @@ function VideoViewerSession({
       emitTelemetry("video_pip_change", { pip: inPictureInPicture });
       if (!inPictureInPicture) {
         window.requestAnimationFrame(() =>
-          pictureInPictureTriggerRef.current?.focus(),
+          focusPlayerTrigger(pictureInPictureTriggerRef.current),
         );
       }
     };
@@ -1859,7 +2237,7 @@ function VideoViewerSession({
       );
       video.removeEventListener("webkitendfullscreen", onWebkitEndFullscreen);
     };
-  }, [emitTelemetry]);
+  }, [emitTelemetry, focusPlayerTrigger]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -1870,6 +2248,8 @@ function VideoViewerSession({
       mountedRef.current = false;
       connectionEpochRef.current += 1;
       qualitySwitchRef.current += 1;
+      adaptiveRef.current?.destroy();
+      adaptiveRef.current = null;
       video?.pause();
     };
   }, []);
@@ -1877,11 +2257,90 @@ function VideoViewerSession({
   useEffect(() => {
     if (!authorized || deliveryExpiresAt === null) return;
     const timer = window.setTimeout(
-      stopAuthorization,
+      () => {
+        if (latestDeliveryRef.current.expiresAt === deliveryExpiresAt)
+          stopAuthorization();
+      },
       Math.max(0, deliveryExpiresAt - Date.now()),
     );
     return () => window.clearTimeout(timer);
   }, [authorized, deliveryExpiresAt, stopAuthorization]);
+
+  // A normal authenticated descriptor read may rotate delivery, never the
+  // canonical watch session. The old grant's hard deadline remains in force
+  // until a fresh, same-scope response has actually been installed.
+  const renewDelivery = useEffectEvent(async (): Promise<boolean> => {
+    if (deliveryRefreshRequestRef.current)
+      return deliveryRefreshRequestRef.current;
+    const epoch = connectionEpochRef.current;
+    if (!isPlaybackAllowed(epoch) || reconnectRefreshRequiredRef.current)
+      return false;
+    const request = (async () => {
+      try {
+        const refreshed = await api.activity(activity.id);
+        if (!isPlaybackAllowed(epoch)) return false;
+        return acceptRefreshedDelivery(refreshed, true);
+      } catch (error) {
+        if (
+          isConnectionEpochCurrent(epoch) &&
+          error instanceof ApiError &&
+          [401, 403, 404, 410].includes(error.status)
+        )
+          stopAuthorization();
+        return false;
+      }
+    })();
+    deliveryRefreshRequestRef.current = request;
+    try {
+      return await request;
+    } finally {
+      if (deliveryRefreshRequestRef.current === request)
+        deliveryRefreshRequestRef.current = null;
+    }
+  });
+
+  useEffect(() => {
+    if (!authorized || authorizationStopped || transport.enabled) return;
+    const envelope = activityMediaIdentity(activity, approvedMedia, mode);
+    if (!envelope) return; // Legacy adapters retain their exact-source contract.
+    let disposed = false;
+    let attempts = 0;
+    let timer: number;
+    const refresh = async () => {
+      if (disposed) return;
+      attempts += 1;
+      await renewDelivery();
+      // A changed grant re-renders and cleans up this generation's timer.
+      // Bound failures/unchanged responses; never poll indefinitely on denial.
+      if (
+        !disposed &&
+        !authorizationStoppedRef.current &&
+        attempts < 3 &&
+        envelope.expiresAt - Date.now() > 5_000
+      ) {
+        timer = window.setTimeout(() => void refresh(), 5_000);
+      }
+    };
+    const margin = Math.min(
+      20_000,
+      (envelope.expiresAt - envelope.issuedAt) / 6,
+    );
+    timer = window.setTimeout(
+      () => void refresh(),
+      Math.max(0, envelope.expiresAt - margin - Date.now()),
+    );
+    return () => {
+      disposed = true;
+      window.clearTimeout(timer);
+    };
+  }, [
+    activity,
+    approvedMedia,
+    mode,
+    authorized,
+    authorizationStopped,
+    transport.enabled,
+  ]);
 
   useEffect(() => {
     activityRevisionRef.current = activity.revision;
@@ -1900,9 +2359,13 @@ function VideoViewerSession({
         if (!offlineRef.current) connectionEpochRef.current += 1;
         offlineRef.current = true;
         reconnectRefreshRequiredRef.current = true;
+        setAuthorizationRefreshRequired(true);
         reconnectRefreshRequestRef.current = null;
-        resetPlaybackSession(false);
+        captureAdaptivePosition(false, Boolean(sessionRef.current));
+        setIsPlaying(false);
         setIsOffline(true);
+        adaptiveRef.current?.destroy();
+        adaptiveRef.current = null;
         const video = videoRef.current;
         if (video && !video.paused) video.pause();
         setMediaState("offline");
@@ -1921,6 +2384,7 @@ function VideoViewerSession({
       offlineRef.current = false;
       setIsOffline(false);
       reconnectRefreshRequiredRef.current = true;
+      setAuthorizationRefreshRequired(true);
       const video = videoRef.current;
       video?.pause();
       setMediaState("loading");
@@ -1938,8 +2402,8 @@ function VideoViewerSession({
     };
   }, [
     authorized,
+    captureAdaptivePosition,
     refreshPlaybackAuthorization,
-    resetPlaybackSession,
     updateStatus,
   ]);
 
@@ -2007,6 +2471,7 @@ function VideoViewerSession({
 
   const handlePause = useCallback(() => {
     if (!mountedRef.current) return;
+    if (deliveryRotationRef.current) return;
     setIsPlaying(false);
     if (offlineRef.current || !isLearnerOnline()) {
       setMediaState("offline");
@@ -2035,6 +2500,12 @@ function VideoViewerSession({
     const video = videoRef.current;
     if (!video) return;
     const nextPosition = Math.max(0, video.currentTime);
+    if (deliveryRotationRef.current) return;
+    if (restoredDeliveryPositionRef.current !== null) {
+      const restored = restoredDeliveryPositionRef.current;
+      restoredDeliveryPositionRef.current = null;
+      if (Math.abs(nextPosition - restored) < 0.05) return;
+    }
     const previousPosition = watchCursorRef.current;
     watchCursorRef.current = nextPosition;
     if (
@@ -2052,6 +2523,7 @@ function VideoViewerSession({
   const handleTimeUpdate = useCallback(() => {
     const video = videoRef.current;
     if (!video) return;
+    if (deliveryRotationRef.current) return;
     setCurrentTime(video.currentTime);
     if (offlineRef.current || !isLearnerOnline()) return;
     const start = watchCursorRef.current;
@@ -2074,6 +2546,31 @@ function VideoViewerSession({
         "Offline — playback is paused. Reconnect to resume; no watch progress was submitted.",
       );
       return;
+    }
+    const resume = adaptiveResumeRef.current;
+    if (
+      resume &&
+      !reconnectRefreshRequiredRef.current &&
+      !authorizationStoppedRef.current
+    ) {
+      video.pause();
+      video.currentTime = Math.min(
+        Math.max(0, resume.position),
+        video.duration,
+      );
+      video.playbackRate = resume.rate;
+      video.muted = resume.muted;
+      video.volume = resume.volume;
+      // Restoring a cursor is presentation only, never evidence for the gap.
+      if (!resume.preserveWatchCursor && !resume.userSeek)
+        watchCursorRef.current = video.currentTime;
+      restoredDeliveryPositionRef.current = resume.userSeek
+        ? null
+        : video.currentTime;
+      resumeAfterDeliveryRef.current = resume.resumePlaying === true;
+      setCurrentTime(video.currentTime);
+      adaptiveResumeRef.current = null;
+      deliveryRotationRef.current = false;
     }
     if (!backgroundedRef.current && !isPlaying) {
       setMediaState("ready");
@@ -2101,6 +2598,19 @@ function VideoViewerSession({
       );
       return;
     }
+    if (resumeAfterDeliveryRef.current) {
+      resumeAfterDeliveryRef.current = false;
+      if (
+        !backgroundedRef.current &&
+        isPlaybackAllowed(connectionEpochRef.current)
+      ) {
+        void videoRef.current?.play().catch(() => {
+          setIsPlaying(false);
+          setMediaState("paused");
+          setMediaMessage("Ready to continue. Press Play to resume.");
+        });
+      }
+    }
     if (!backgroundedRef.current && !isPlaying) {
       setMediaState("ready");
       setMediaMessage("Approved lesson media is ready to play.");
@@ -2108,7 +2618,7 @@ function VideoViewerSession({
     emitTelemetry("video_loaded", {
       duration: videoRef.current?.duration ?? duration,
     });
-  }, [duration, emitTelemetry, isPlaying]);
+  }, [duration, emitTelemetry, isPlaying, isPlaybackAllowed]);
 
   const handleWaiting = useCallback(() => {
     if (offlineRef.current || !isLearnerOnline()) {
@@ -2125,7 +2635,9 @@ function VideoViewerSession({
   const handleMediaError = useCallback(() => {
     // Media elements do not expose HTTP status. Revalidate the descriptor
     // before retrying any failed delivery, including an expired/denied URL.
+    captureAdaptivePosition();
     reconnectRefreshRequiredRef.current = true;
+    setAuthorizationRefreshRequired(true);
     videoRef.current?.pause();
     setIsPlaying(false);
     if (offlineRef.current || !isLearnerOnline()) {
@@ -2151,7 +2663,55 @@ function VideoViewerSession({
     emitTelemetry("video_error", {
       message: "Approved lesson media could not be loaded.",
     });
-  }, [emitTelemetry, updateStatus]);
+  }, [captureAdaptivePosition, emitTelemetry, updateStatus]);
+
+  const onAdaptiveError = useEffectEvent(handleMediaError);
+  const onAdaptiveQualities = useEffectEvent((qualities: AdaptiveQuality[]) => {
+    setAdaptiveQualities(qualities);
+    if (
+      selectedQualityId !== "auto" &&
+      !adaptiveRef.current?.selectQuality(selectedQualityId)
+    ) {
+      setSelectedQualityId("auto");
+    }
+  });
+  useEffect(() => {
+    if (
+      !authorized ||
+      authorizationStopped ||
+      isOffline ||
+      authorizationRefreshRequired ||
+      reconnectRefreshRequiredRef.current ||
+      activeMedia?.protocol !== "hls" ||
+      !videoRef.current
+    )
+      return;
+    const controller = attachAdaptiveVideo({
+      video: videoRef.current,
+      manifestUrl: activeMedia.src,
+      fallbackUrl: activeMedia.fallback?.src,
+      onMode: setAdaptiveMode,
+      onQualities: onAdaptiveQualities,
+      onQuality: setActualAdaptiveQuality,
+      onError: onAdaptiveError,
+      onDenied: stopAuthorization,
+    });
+    adaptiveRef.current = controller;
+    return () => {
+      controller.destroy();
+      if (adaptiveRef.current === controller) adaptiveRef.current = null;
+    };
+  }, [
+    authorized,
+    authorizationStopped,
+    authorizationRefreshRequired,
+    isOffline,
+    activeMedia?.protocol,
+    activeMedia?.src,
+    activeMedia?.fallback?.src,
+    adaptiveEpoch,
+    stopAuthorization,
+  ]);
 
   const retryMedia = useCallback(async () => {
     const video = videoRef.current;
@@ -2167,17 +2727,22 @@ function VideoViewerSession({
       );
       return;
     }
-    if (
-      reconnectRefreshRequiredRef.current &&
-      !(await refreshPlaybackAuthorization())
-    )
-      return;
+    const requiredRefresh = reconnectRefreshRequiredRef.current;
+    if (requiredRefresh && !(await refreshPlaybackAuthorization())) return;
     if (!isPlaybackAllowed(connectionEpochRef.current)) return;
     updateStatus("idle", "Loading approved lesson media…");
     setMediaState("loading");
     setMediaMessage("Retrying approved lesson media…");
-    video.load();
-  }, [isPlaybackAllowed, refreshPlaybackAuthorization, updateStatus]);
+    if (activeMedia?.protocol === "hls") {
+      // Reauthorization already reopens the reactive attachment gate.
+      if (!requiredRefresh) setAdaptiveEpoch((value) => value + 1);
+    } else video.load();
+  }, [
+    activeMedia?.protocol,
+    isPlaybackAllowed,
+    refreshPlaybackAuthorization,
+    updateStatus,
+  ]);
 
   useEffect(() => {
     function handleVisibilityChange() {
@@ -2185,6 +2750,9 @@ function VideoViewerSession({
       if (!video) return;
       if (document.hidden) {
         backgroundedRef.current = true;
+        resumeAfterDeliveryRef.current = false;
+        if (adaptiveResumeRef.current)
+          adaptiveResumeRef.current.resumePlaying = false;
         if (!video.paused) video.pause();
         if (offlineRef.current || !isLearnerOnline()) {
           setMediaState("offline");
@@ -2238,17 +2806,28 @@ function VideoViewerSession({
       );
       return;
     }
+    if (deliveryRotationRef.current || resumeAfterDeliveryRef.current) {
+      const next = !isPlaying;
+      if (adaptiveResumeRef.current)
+        adaptiveResumeRef.current.resumePlaying = next;
+      else resumeAfterDeliveryRef.current = next;
+      setIsPlaying(next);
+      if (!next) video.pause();
+      return;
+    }
     if (video.paused) {
       void startPlaybackAndPlay();
     } else {
       video.pause();
     }
-  }, [startPlaybackAndPlay, updateStatus]);
+  }, [isPlaying, startPlaybackAndPlay, updateStatus]);
 
   const toggleMute = useCallback(() => {
     const video = videoRef.current;
     if (!video) return;
-    video.muted = !video.muted;
+    video.muted = !(adaptiveResumeRef.current?.muted ?? video.muted);
+    if (adaptiveResumeRef.current)
+      adaptiveResumeRef.current.muted = video.muted;
     setIsMuted(video.muted);
     emitTelemetry("video_volume_change", {
       muted: video.muted,
@@ -2263,6 +2842,10 @@ function VideoViewerSession({
       const normalized = Math.min(1, Math.max(0, next));
       video.volume = normalized;
       video.muted = normalized === 0;
+      if (adaptiveResumeRef.current) {
+        adaptiveResumeRef.current.volume = normalized;
+        adaptiveResumeRef.current.muted = video.muted;
+      }
       setVolume(normalized);
       setIsMuted(video.muted);
       emitTelemetry("video_volume_change", {
@@ -2278,6 +2861,7 @@ function VideoViewerSession({
       const video = videoRef.current;
       if (!video || !playbackRates.includes(next)) return;
       video.playbackRate = next;
+      if (adaptiveResumeRef.current) adaptiveResumeRef.current.rate = next;
       setPlaybackRate(next);
       emitTelemetry("video_rate_change", { rate: next });
     },
@@ -2304,10 +2888,17 @@ function VideoViewerSession({
         }
         return;
       }
+      if (activeMedia?.protocol === "hls") {
+        if (adaptiveRef.current?.selectQuality(nextQualityId))
+          setSelectedQualityId(nextQualityId);
+        return;
+      }
       const targetSrc =
         nextQualityId === "auto"
           ? activeMedia?.src
-          : qualityOptions.find((quality) => quality.id === nextQualityId)?.src;
+          : progressiveQualityOptions.find(
+              (quality) => quality.id === nextQualityId,
+            )?.src;
       if (!targetSrc || targetSrc === video.currentSrc) {
         setSelectedQualityId(nextQualityId);
         return;
@@ -2344,23 +2935,42 @@ function VideoViewerSession({
       setMediaMessage("Loading the selected approved quality…");
       video.load();
     },
-    [activeMedia?.src, qualityOptions, updateStatus],
+    [
+      activeMedia?.src,
+      activeMedia?.protocol,
+      qualityOptions,
+      progressiveQualityOptions,
+      updateStatus,
+    ],
   );
 
-  const seek = useCallback((next: number) => {
-    const video = videoRef.current;
-    if (!video || !Number.isFinite(next)) return;
-    video.currentTime = Math.min(Math.max(0, next), video.duration || next);
-    setCurrentTime(video.currentTime);
-  }, []);
+  const seek = useCallback(
+    (next: number) => {
+      const video = videoRef.current;
+      if (!video || !Number.isFinite(next)) return;
+      if (adaptiveResumeRef.current) {
+        adaptiveResumeRef.current.position = Math.min(
+          Math.max(0, next),
+          duration || next,
+        );
+        adaptiveResumeRef.current.userSeek = true;
+        setCurrentTime(adaptiveResumeRef.current.position);
+        return;
+      }
+      video.currentTime = Math.min(Math.max(0, next), video.duration || next);
+      setCurrentTime(video.currentTime);
+    },
+    [duration],
+  );
 
   const skipTime = useCallback(
     (delta: number) => {
       const video = videoRef.current;
       if (!video) return;
+      const position = adaptiveResumeRef.current?.position ?? video.currentTime;
       const target = Math.min(
-        Math.max(0, video.currentTime + delta),
-        video.duration || duration || video.currentTime + delta,
+        Math.max(0, position + delta),
+        duration || video.duration || position + delta,
       );
       seek(target);
       emitTelemetry("video_seek", { delta, target });
@@ -2408,7 +3018,7 @@ function VideoViewerSession({
   const togglePictureInPicture = useCallback(() => {
     const video = videoRef.current;
     if (!video || typeof video.requestPictureInPicture !== "function") return;
-    pictureInPictureTriggerRef.current?.focus();
+    focusPlayerTrigger(pictureInPictureTriggerRef.current);
     void video
       .requestPictureInPicture()
       .then(() => {
@@ -2418,7 +3028,7 @@ function VideoViewerSession({
       .catch((error: unknown) => {
         updateStatus("error", playbackErrorMessage(error));
       });
-  }, [updateStatus]);
+  }, [updateStatus, focusPlayerTrigger]);
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
@@ -2694,11 +3304,6 @@ function VideoViewerSession({
       aria-labelledby={labelledBy ?? `video-title-${activity.id}`}
     >
       <VideoViewerHeading activity={activity} labelledBy={labelledBy} />
-      {!tracked ? (
-        <p role="note">
-          Playback only — progress is not recorded for this lesson.
-        </p>
-      ) : null}
 
       <div
         ref={playerRef}
@@ -2708,7 +3313,13 @@ function VideoViewerSession({
         role="region"
         aria-label={`Video player for ${activity.title}`}
         data-fullscreen-target="player"
+        data-settings-available={hasPlaybackSettings}
         data-playback-mode={mode}
+        data-delivery-mode={
+          activeMedia.protocol === "hls"
+            ? (adaptiveMode ?? "loading")
+            : "progressive"
+        }
       >
         <div
           className="momentum-video-player__stage"
@@ -2720,7 +3331,7 @@ function VideoViewerSession({
           <video
             ref={videoRef}
             className="momentum-video-player__video"
-            src={activeMedia.src}
+            src={activeMedia.protocol === "hls" ? undefined : activeMedia.src}
             poster={activeMedia.poster}
             playsInline
             preload="metadata"
@@ -2764,8 +3375,40 @@ function VideoViewerSession({
               />
             ))}
           </video>
+          <VideoCaptionClearance videoRef={videoRef} />
+          <VideoPlaybackSurface
+            key={`${activity.id}:${activity.media?.media_version_id ?? "preview"}`}
+            isPlaying={isPlaying}
+            hasEnded={hasEnded}
+            blocked={
+              ["error", "offline"].includes(mediaState) ||
+              settingsOpen ||
+              shortcutsOpen
+            }
+            onActivate={() => {
+              if (hasEnded) seek(0);
+              void togglePlay();
+            }}
+          />
+          {mediaState === "buffering" ? (
+            <span
+              className="momentum-video-player__buffering"
+              aria-hidden="true"
+            >
+              <LoaderCircle size={30} />
+            </span>
+          ) : null}
           <div
             className="momentum-video-player__live-state"
+            data-quiet={
+              ![
+                "error",
+                "offline",
+                "loading",
+                "buffering",
+                "backgrounded",
+              ].includes(mediaState)
+            }
             role="status"
             aria-live="polite"
           >
@@ -2775,212 +3418,286 @@ function VideoViewerSession({
             isOpen={shortcutsOpen}
             onClose={() => setShortcutsOpen(false)}
           />
-        </div>
 
-        <div
-          className="momentum-video-controls"
-          role="group"
-          aria-label="Video controls"
-        >
-          <button
-            className="momentum-video-controls__play"
-            type="button"
-            onClick={togglePlay}
-            aria-label={isPlaying ? "Pause lesson" : "Play lesson"}
-            aria-keyshortcuts="k Space"
+          <div
+            className="momentum-video-controls"
+            role="group"
+            aria-label="Video controls"
           >
-            {isPlaying ? (
-              <Pause size={18} aria-hidden="true" />
-            ) : (
-              <Play size={18} aria-hidden="true" />
-            )}
-            <span>{isPlaying ? "Pause" : "Play"}</span>
-          </button>
-          <button
-            className="momentum-video-controls__icon momentum-video-controls__skip"
-            type="button"
-            onClick={() => skipTime(-10)}
-            aria-label="Skip back 10 seconds (J)"
-            aria-keyshortcuts="j"
-          >
-            <RotateCcw size={16} aria-hidden="true" />
-          </button>
-          <button
-            className="momentum-video-controls__icon momentum-video-controls__skip"
-            type="button"
-            onClick={() => skipTime(10)}
-            aria-label="Skip forward 10 seconds (L)"
-            aria-keyshortcuts="l"
-          >
-            <RotateCw size={16} aria-hidden="true" />
-          </button>
-          <span className="momentum-video-controls__time" aria-live="off">
-            {formatMediaTime(currentTime)} / {formatMediaTime(duration)}
-          </span>
-          <input
-            className="momentum-video-controls__timeline"
-            type="range"
-            min={0}
-            max={duration || 0}
-            step={0.1}
-            value={Math.min(currentTime, duration || currentTime)}
-            style={{ "--video-progress": `${progress}%` } as CSSProperties}
-            onChange={(event) => seek(Number(event.target.value))}
-            aria-label="Lesson position"
-            aria-valuemin={0}
-            aria-valuemax={duration || 0}
-            aria-valuenow={Math.round(currentTime)}
-            aria-valuetext={`${formatMediaTime(currentTime)} of ${formatMediaTime(duration)}`}
-          />
-          <button
-            className="momentum-video-controls__icon"
-            type="button"
-            onClick={toggleMute}
-            aria-label={isMuted ? "Unmute lesson" : "Mute lesson"}
-            aria-keyshortcuts="m"
-          >
-            {isMuted ? (
-              <VolumeX size={18} aria-hidden="true" />
-            ) : (
-              <Volume2 size={18} aria-hidden="true" />
-            )}
-          </button>
-          <input
-            className="momentum-video-controls__volume"
-            type="range"
-            min={0}
-            max={1}
-            step={0.05}
-            value={isMuted ? 0 : volume}
-            onChange={(event) => changeVolume(Number(event.target.value))}
-            aria-label="Lesson volume"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={Math.round((isMuted ? 0 : volume) * 100)}
-          />
-          {playbackRates.length > 0 ? (
-            <label className="momentum-video-controls__rate">
-              <Gauge size={16} aria-hidden="true" />
-              <span className="sr-only">Playback speed</span>
-              <select
-                value={effectivePlaybackRate}
-                onChange={(event) => changeRate(Number(event.target.value))}
-                aria-label="Playback speed"
-              >
-                {playbackRates.map((rate) => (
-                  <option key={rate} value={rate}>
-                    {rate}×
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : null}
-          {activeMedia.captions?.length ? (
             <button
-              className={`momentum-video-controls__icon${captionsEnabled ? " is-active" : ""}`}
+              className="momentum-video-controls__play"
               type="button"
-              onClick={() => {
-                const next = !captionsEnabled;
-                setCaptionsEnabled(next);
-                emitTelemetry("video_captions_toggle", { enabled: next });
-              }}
-              aria-pressed={captionsEnabled}
-              aria-label={captionsEnabled ? "Hide captions" : "Show captions"}
-              aria-keyshortcuts="c"
+              onClick={togglePlay}
+              aria-label={isPlaying ? "Pause lesson" : "Play lesson"}
+              aria-keyshortcuts="k Space"
             >
-              <Captions size={18} aria-hidden="true" />
-              <span className="sr-only">
-                {captionsEnabled ? "Captions on" : "Captions off"}
+              {isPlaying ? (
+                <Pause size={18} aria-hidden="true" />
+              ) : (
+                <Play size={18} aria-hidden="true" />
+              )}
+              <span>{isPlaying ? "Pause" : "Play"}</span>
+            </button>
+            <button
+              className="momentum-video-controls__icon momentum-video-controls__skip momentum-video-controls__secondary"
+              type="button"
+              onClick={() => skipTime(-10)}
+              aria-label="Skip back 10 seconds (J)"
+              aria-keyshortcuts="j"
+            >
+              <RotateCcw size={16} aria-hidden="true" />
+            </button>
+            <button
+              className="momentum-video-controls__icon momentum-video-controls__skip momentum-video-controls__secondary"
+              type="button"
+              onClick={() => skipTime(10)}
+              aria-label="Skip forward 10 seconds (L)"
+              aria-keyshortcuts="l"
+            >
+              <RotateCw size={16} aria-hidden="true" />
+            </button>
+            <span className="momentum-video-controls__time" aria-live="off">
+              {formatMediaTime(currentTime)}
+              <span className="momentum-video-controls__duration">
+                {" "}
+                / {formatMediaTime(duration)}
               </span>
-            </button>
-          ) : null}
-          {activeMedia.transcript?.length || activeMedia.captions?.length ? (
+            </span>
+            <input
+              className="momentum-video-controls__timeline"
+              type="range"
+              min={0}
+              max={duration || 0}
+              step={0.1}
+              value={Math.min(currentTime, duration || currentTime)}
+              style={{ "--video-progress": `${progress}%` } as CSSProperties}
+              onChange={(event) => seek(Number(event.target.value))}
+              aria-label="Lesson position"
+              aria-valuemin={0}
+              aria-valuemax={duration || 0}
+              aria-valuenow={Math.round(currentTime)}
+              aria-valuetext={`${formatMediaTime(currentTime)} of ${formatMediaTime(duration)}`}
+            />
             <button
-              className={`momentum-video-controls__icon${transcriptOpen ? " is-active" : ""}`}
-              type="button"
-              onClick={() => {
-                const next = !transcriptOpen;
-                setTranscriptOpen(next);
-                emitTelemetry("video_transcript_toggle", { open: next });
-              }}
-              aria-expanded={transcriptOpen}
-              aria-controls="momentum-video-transcript"
-              aria-label={
-                transcriptOpen ? "Close transcript" : "Open transcript"
-              }
-              aria-keyshortcuts="t"
-            >
-              <FileText size={18} aria-hidden="true" />
-            </button>
-          ) : null}
-          {canPictureInPicture ? (
-            <button
-              ref={pictureInPictureTriggerRef}
               className="momentum-video-controls__icon"
               type="button"
-              onClick={togglePictureInPicture}
-              aria-label="Open picture in picture"
+              onClick={toggleMute}
+              aria-label={isMuted ? "Unmute lesson" : "Mute lesson"}
+              aria-keyshortcuts="m"
             >
-              <PictureInPicture2 size={18} aria-hidden="true" />
+              {isMuted ? (
+                <VolumeX size={18} aria-hidden="true" />
+              ) : (
+                <Volume2 size={18} aria-hidden="true" />
+              )}
             </button>
-          ) : null}
-          {canFullscreen ? (
+            {activeMedia.captions?.length ? (
+              <button
+                className={`momentum-video-controls__icon momentum-video-controls__secondary${captionsEnabled ? " is-active" : ""}`}
+                type="button"
+                onClick={() => {
+                  const next = !captionsEnabled;
+                  setCaptionsEnabled(next);
+                  emitTelemetry("video_captions_toggle", { enabled: next });
+                }}
+                aria-pressed={captionsEnabled}
+                aria-label={captionsEnabled ? "Hide captions" : "Show captions"}
+                aria-keyshortcuts="c"
+              >
+                <Captions size={18} aria-hidden="true" />
+                <span className="sr-only">
+                  {captionsEnabled ? "Captions on" : "Captions off"}
+                </span>
+              </button>
+            ) : null}
+            {activeMedia.transcript?.length || activeMedia.captions?.length ? (
+              <button
+                className={`momentum-video-controls__icon momentum-video-controls__secondary${transcriptOpen ? " is-active" : ""}`}
+                type="button"
+                onClick={() => {
+                  const next = !transcriptOpen;
+                  setTranscriptOpen(next);
+                  emitTelemetry("video_transcript_toggle", { open: next });
+                }}
+                aria-expanded={transcriptOpen}
+                aria-controls="momentum-video-transcript"
+                aria-label={
+                  transcriptOpen ? "Close transcript" : "Open transcript"
+                }
+                aria-keyshortcuts="t"
+              >
+                <FileText size={18} aria-hidden="true" />
+              </button>
+            ) : null}
+            {canPictureInPicture ? (
+              <button
+                ref={pictureInPictureTriggerRef}
+                className="momentum-video-controls__icon momentum-video-controls__secondary"
+                type="button"
+                onClick={togglePictureInPicture}
+                aria-label="Open picture in picture"
+              >
+                <PictureInPicture2 size={18} aria-hidden="true" />
+              </button>
+            ) : null}
+            {canFullscreen ? (
+              <button
+                ref={fullscreenTriggerRef}
+                className="momentum-video-controls__icon"
+                type="button"
+                onClick={toggleFullscreen}
+                aria-label={
+                  isFullscreen ? "Exit fullscreen" : "Enter fullscreen"
+                }
+                aria-keyshortcuts="f"
+              >
+                <Maximize2 size={18} aria-hidden="true" />
+              </button>
+            ) : null}
+            {hasPlaybackSettings ? (
+              <button
+                ref={settingsTriggerRef}
+                className={`momentum-video-controls__settings${settingsOpen ? " is-active" : ""}`}
+                type="button"
+                onClick={() => setSettingsOpen((prev) => !prev)}
+                aria-expanded={settingsOpen}
+                aria-haspopup="dialog"
+                aria-controls="momentum-video-settings"
+                aria-label={
+                  settingsOpen
+                    ? "Close playback settings"
+                    : "Open playback settings"
+                }
+              >
+                <Settings2 size={17} aria-hidden="true" />
+                <span>Settings</span>
+              </button>
+            ) : null}
             <button
-              ref={fullscreenTriggerRef}
-              className="momentum-video-controls__icon"
+              ref={shortcutsTriggerRef}
+              className={`momentum-video-controls__icon momentum-video-controls__secondary${shortcutsOpen ? " is-active" : ""}`}
               type="button"
-              onClick={toggleFullscreen}
-              aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
-              aria-keyshortcuts="f"
+              onClick={() => setShortcutsOpen((prev) => !prev)}
+              aria-label="Show keyboard shortcuts"
+              aria-expanded={shortcutsOpen}
+              aria-controls="momentum-video-shortcuts"
             >
-              <Maximize2 size={18} aria-hidden="true" />
+              <HelpCircle size={17} aria-hidden="true" />
             </button>
-          ) : null}
-          {hasPlaybackSettings ? (
-            <button
-              ref={settingsTriggerRef}
-              className={`momentum-video-controls__settings${settingsOpen ? " is-active" : ""}`}
-              type="button"
-              onClick={() => setSettingsOpen((prev) => !prev)}
-              aria-expanded={settingsOpen}
-              aria-controls="momentum-video-settings"
-              aria-label={
-                settingsOpen
-                  ? "Close playback settings"
-                  : "Open playback settings"
-              }
-            >
-              <Settings2 size={17} aria-hidden="true" />
-              <span>Settings</span>
-            </button>
-          ) : null}
-          <button
-            ref={shortcutsTriggerRef}
-            className={`momentum-video-controls__icon${shortcutsOpen ? " is-active" : ""}`}
-            type="button"
-            onClick={() => setShortcutsOpen((prev) => !prev)}
-            aria-label="Show keyboard shortcuts"
-            aria-expanded={shortcutsOpen}
-            aria-controls="momentum-video-shortcuts"
-          >
-            <HelpCircle size={17} aria-hidden="true" />
-          </button>
-        </div>
+          </div>
 
-        {settingsOpen && hasPlaybackSettings ? (
-          <PlaybackSettingsPanel
-            playbackRates={playbackRates}
-            playbackRate={effectivePlaybackRate}
-            onChangeRate={changeRate}
-            qualities={qualityOptions}
-            qualityId={effectiveQualityId}
-            onChangeQuality={changeQuality}
-            onClose={() => setSettingsOpen(false)}
-          />
-        ) : null}
+          {settingsOpen && hasPlaybackSettings ? (
+            <PlaybackSettingsPanel
+              playbackRates={playbackRates}
+              playbackRate={effectivePlaybackRate}
+              onChangeRate={changeRate}
+              qualities={qualityOptions}
+              qualityId={effectiveQualityId}
+              autoQualityLabel={
+                activeMedia.protocol === "hls" && actualAdaptiveQuality
+                  ? `Auto · ${adaptiveQualities.find((item) => item.id === actualAdaptiveQuality)?.label ?? "adaptive"}`
+                  : "Auto"
+              }
+              onChangeQuality={changeQuality}
+              onClose={() => setSettingsOpen(false)}
+              triggerRef={settingsTriggerRef}
+            >
+              <label className="momentum-video-settings__field">
+                <span>Volume</span>
+                <input
+                  className="momentum-video-settings__volume"
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={isMuted ? 0 : volume}
+                  onChange={(event) => changeVolume(Number(event.target.value))}
+                  aria-label="Lesson volume"
+                  aria-valuetext={`${Math.round((isMuted ? 0 : volume) * 100)} percent`}
+                />
+              </label>
+              <div
+                className="momentum-video-settings__extras"
+                role="group"
+                aria-label="More video controls"
+              >
+                <button type="button" onClick={() => skipTime(-10)}>
+                  <RotateCcw size={17} aria-hidden="true" /> Back 10s
+                </button>
+                <button type="button" onClick={() => skipTime(10)}>
+                  <RotateCw size={17} aria-hidden="true" /> Forward 10s
+                </button>
+                {activeMedia.captions?.length ? (
+                  <button
+                    type="button"
+                    aria-pressed={captionsEnabled}
+                    onClick={() => {
+                      const next = !captionsEnabled;
+                      setCaptionsEnabled(next);
+                      emitTelemetry("video_captions_toggle", { enabled: next });
+                    }}
+                  >
+                    <Captions size={17} aria-hidden="true" /> Captions{" "}
+                    {captionsEnabled ? "on" : "off"}
+                  </button>
+                ) : null}
+                {activeMedia.transcript?.length ||
+                activeMedia.captions?.length ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSettingsOpen(false);
+                      const next = !transcriptOpen;
+                      setTranscriptOpen(next);
+                      emitTelemetry("video_transcript_toggle", { open: next });
+                    }}
+                  >
+                    <FileText size={17} aria-hidden="true" /> Transcript
+                  </button>
+                ) : null}
+                {canPictureInPicture ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSettingsOpen(false);
+                      togglePictureInPicture();
+                    }}
+                  >
+                    <PictureInPicture2 size={17} aria-hidden="true" /> Picture
+                    in picture
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSettingsOpen(false);
+                    setShortcutsOpen(true);
+                  }}
+                >
+                  <HelpCircle size={17} aria-hidden="true" /> Shortcuts
+                </button>
+              </div>
+            </PlaybackSettingsPanel>
+          ) : null}
+        </div>
       </div>
 
-      <div className="momentum-video-viewer__status-row">
+      {!tracked ? (
+        <p className="momentum-video-viewer__preview-note" role="note">
+          <CirclePlay size={15} aria-hidden="true" />
+          Video preview · Watching here won’t change your course progress.
+        </p>
+      ) : null}
+
+      <div
+        className="momentum-video-viewer__status-row"
+        hidden={
+          !tracked &&
+          status !== "error" &&
+          !hasEnded &&
+          mediaState !== "offline"
+        }
+      >
         <div>
           <span
             className={`momentum-video-viewer__status momentum-video-viewer__status--${mediaState === "offline" ? "offline" : status}`}
@@ -3015,7 +3732,9 @@ function VideoViewerSession({
                 !hasEnded &&
                 !playbackSessionNeedsRetry)
                 ? "Retry media"
-                : "Retry server save"}
+                : playbackSessionNeedsRetry
+                  ? "Restart lesson"
+                  : "Retry server save"}
             </button>
           ) : null}
           <Link href={moduleHref}>Return to module</Link>

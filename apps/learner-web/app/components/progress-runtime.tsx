@@ -1,9 +1,8 @@
 "use client";
 
-import { ArrowRight, BarChart3, LockKeyhole } from "lucide-react";
+import { ArrowRight, BarChart3, ChevronDown, LockKeyhole } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { CSSProperties } from "react";
 
 import {
   ApiError,
@@ -30,11 +29,9 @@ import {
   MembershipUnavailable,
 } from "./membership-availability";
 import { LearnerInsightsRuntime } from "./learner-insights";
-import {
-  ProgressMotivationPanel,
-  ProgressScopePanel,
-} from "./progress-momentum";
+import { ProgressScopePanel } from "./progress-momentum";
 import { ProgressSkeleton } from "./skeletons";
+import styles from "./progress-runtime.module.css";
 
 type ProgressState =
   | { status: "loading" }
@@ -96,6 +93,7 @@ export async function loadProgressData(
 
 export function ProgressRuntime({ api = defaultApi }: { api?: LearnerApi }) {
   const [state, setState] = useState<ProgressState>({ status: "loading" });
+  const [showInsights, setShowInsights] = useState(false);
   const generationRef = useRef(0);
   const mountedRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
@@ -206,7 +204,7 @@ export function ProgressRuntime({ api = defaultApi }: { api?: LearnerApi }) {
         <p className="eyebrow">Progress</p>
         <h1 id="progress-title">Start the Free Course to track progress.</h1>
         <p>
-          Progress appears after the enrollment service authorizes your course.
+          Join a course to see the steps you’ve completed and what comes next.
         </p>
         <Link
           className="button button--ink"
@@ -219,12 +217,6 @@ export function ProgressRuntime({ api = defaultApi }: { api?: LearnerApi }) {
   }
 
   const learning = state.learning;
-  const percentage = Math.round(
-    Math.min(1, Math.max(0, learning.projection.percentage)) * 100,
-  );
-  const progressRingStyle = {
-    "--progress-percentage": `${percentage}%`,
-  } as CSSProperties;
 
   return (
     <>
@@ -238,59 +230,25 @@ export function ProgressRuntime({ api = defaultApi }: { api?: LearnerApi }) {
         </div>
       ) : null}
       <header className="progress-heading">
-        <p className="eyebrow">Your progress</p>
-        <h1>{learning.program_title}</h1>
-        <p>
-          Completion and access below reflect your current enrolled course
-          version.
-        </p>
+        <p className="eyebrow">Your learning</p>
+        <h1>Every step moves you forward.</h1>
+        <p>See what you’ve completed. Find your next step.</p>
       </header>
-      <section
-        className="progress-summary"
-        aria-label="Course progress summary"
-      >
-        <div className="progress-summary__number" style={progressRingStyle}>
-          <strong>{percentage}%</strong>
-          <span>complete</span>
-        </div>
-        <dl>
-          <div>
-            <dt>Completed</dt>
-            <dd>{learning.projection.completed_count}</dd>
-          </div>
-          <div>
-            <dt>Required</dt>
-            <dd>{learning.projection.denominator}</dd>
-          </div>
-          <div>
-            <dt>Course version</dt>
-            <dd>{learning.version_number}</dd>
-          </div>
-        </dl>
-        <Link
-          className="button button--ink"
-          href={ROUTES.programLearning(learning.program_slug)}
-        >
-          Open course <ArrowRight size={16} aria-hidden="true" />
-        </Link>
-      </section>
       <ProgressScopePanel
         learning={learning}
         collection={state.learningCollection}
       />
-      <LearnerInsightsRuntime api={api} />
-      <ProgressMotivationPanel />
       <section
         className="progress-modules"
         aria-labelledby="module-progress-title"
       >
         <div className="course-outline__heading">
           <div>
-            <p className="kicker">Module detail</p>
-            <h2 id="module-progress-title">Activity progress</h2>
+            <h2 id="module-progress-title">Your course path</h2>
+            <p className={styles.subtitle}>Open a module to see each step.</p>
           </div>
         </div>
-        {learning.modules.map((module) => {
+        {learning.modules.map((module, index) => {
           const completed = module.activities.filter(
             (activity) => activity.state.toLowerCase() === "completed",
           ).length;
@@ -298,16 +256,29 @@ export function ProgressRuntime({ api = defaultApi }: { api?: LearnerApi }) {
             (activity) => activity.state.toLowerCase() === "locked",
           );
           return (
-            <article className="progress-card" key={module.id}>
-              <div className="progress-card__heading">
+            <details
+              className={`progress-card ${styles.module}`}
+              key={module.id}
+              open={index === 0}
+            >
+              <summary
+                className={`progress-card__heading ${styles.moduleSummary}`}
+              >
                 <div>
                   <p className="kicker">Module {module.position}</p>
-                  <h2>{module.title}</h2>
+                  <h3>{module.title}</h3>
                 </div>
                 <strong>
-                  {completed}/{module.activities.length}
+                  {module.activities.length
+                    ? `${completed}/${module.activities.length}`
+                    : "Coming soon"}
                 </strong>
-              </div>
+                <ChevronDown
+                  size={18}
+                  className={styles.chevron}
+                  aria-hidden="true"
+                />
+              </summary>
               {module.activities.length > 0 ? (
                 <ol className="activity-list">
                   {module.activities.map((activity) => (
@@ -329,9 +300,30 @@ export function ProgressRuntime({ api = defaultApi }: { api?: LearnerApi }) {
                   {activityLockReason(firstLocked)}
                 </p>
               ) : null}
-            </article>
+            </details>
           );
         })}
+      </section>
+      <section className={styles.insights}>
+        <button
+          type="button"
+          className={styles.insightToggle}
+          aria-expanded={showInsights}
+          aria-controls="progress-activity-insights"
+          onClick={() => setShowInsights(!showInsights)}
+        >
+          <BarChart3 size={19} aria-hidden="true" />
+          <span>
+            Activity insights
+            <small>
+              Explore your learning activity separately from course completion.
+            </small>
+          </span>
+          <ChevronDown size={18} aria-hidden="true" />
+        </button>
+        <div id="progress-activity-insights" hidden={!showInsights}>
+          {showInsights ? <LearnerInsightsRuntime api={api} /> : null}
+        </div>
       </section>
     </>
   );

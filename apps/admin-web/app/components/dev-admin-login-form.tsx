@@ -1,7 +1,16 @@
 "use client";
 
 import { ArrowRight, ShieldCheck } from "lucide-react";
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import {
+  type FormEvent,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
+import { loginLocalAdmin } from "../lib/local-admin-login";
+
+const subscribeHydration = () => () => {};
 
 function safeError(payload: unknown): string {
   if (typeof payload !== "object" || payload === null) {
@@ -13,8 +22,17 @@ function safeError(payload: unknown): string {
     : "The admin sign-in request was rejected.";
 }
 
-export function DevAdminLoginForm() {
+export function DevAdminLoginForm({
+  mode = "staging-authenticated",
+}: {
+  mode?: "local-sandbox" | "staging-authenticated";
+}) {
   const [pending, setPending] = useState(false);
+  const hydrated = useSyncExternalStore(
+    subscribeHydration,
+    () => true,
+    () => false,
+  );
   const [error, setError] = useState<string | null>(null);
   const errorRef = useRef<HTMLDivElement>(null);
 
@@ -28,6 +46,15 @@ export function DevAdminLoginForm() {
     setError(null);
     const values = new FormData(event.currentTarget);
     try {
+      if (mode === "local-sandbox") {
+        await loginLocalAdmin(
+          String(values.get("email") ?? ""),
+          String(values.get("password") ?? ""),
+          String(values.get("tenant_id") ?? ""),
+        );
+        window.location.assign("/");
+        return;
+      }
       const response = await fetch("/v1/auth/password/login", {
         method: "POST",
         credentials: "same-origin",
@@ -62,15 +89,18 @@ export function DevAdminLoginForm() {
   }
 
   return (
-    <form className="dev-admin-login-card" onSubmit={submit}>
+    <form className="dev-admin-login-card" method="post" onSubmit={submit}>
       <div className="dev-admin-login-kicker">
         <ShieldCheck size={18} aria-hidden="true" />
-        Verified staging admin session
+        {mode === "local-sandbox"
+          ? "Local sandbox session"
+          : "Verified staging admin session"}
       </div>
       <h1>Sign in to the local admin workspace.</h1>
       <p>
-        Use the normal staging admin email and password. Cloudflare Access stays
-        server-side; this browser receives only an ephemeral localhost cookie.
+        {mode === "local-sandbox"
+          ? "Use a local test account and its tenant ID. Your real local session determines which Studio or admin actions are available. No staging account or remote data is used."
+          : "Use the normal staging admin email and password. Cloudflare Access stays server-side; this browser receives only an ephemeral localhost cookie."}
       </p>
       <label htmlFor="admin-login-email">Email address</label>
       <input
@@ -79,7 +109,7 @@ export function DevAdminLoginForm() {
         type="email"
         autoComplete="username"
         required
-        disabled={pending}
+        disabled={pending || !hydrated}
       />
       <label htmlFor="admin-login-password">Password</label>
       <input
@@ -88,8 +118,25 @@ export function DevAdminLoginForm() {
         type="password"
         autoComplete="current-password"
         required
-        disabled={pending}
+        disabled={pending || !hydrated}
       />
+      {mode === "local-sandbox" ? (
+        <>
+          <label htmlFor="admin-login-tenant">Local tenant ID</label>
+          <input
+            id="admin-login-tenant"
+            name="tenant_id"
+            type="text"
+            autoComplete="off"
+            required
+            disabled={pending || !hydrated}
+            aria-describedby="admin-login-tenant-help"
+          />
+          <p id="admin-login-tenant-help">
+            Use the tenant ID from your local sandbox account setup.
+          </p>
+        </>
+      ) : null}
       {error ? (
         <div
           className="dev-admin-login-error"
@@ -100,7 +147,10 @@ export function DevAdminLoginForm() {
           {error}
         </div>
       ) : null}
-      <button className="dev-admin-login-submit" disabled={pending}>
+      <button
+        className="dev-admin-login-submit"
+        disabled={pending || !hydrated}
+      >
         {pending ? "Verifying…" : "Sign in"}
         <ArrowRight size={17} aria-hidden="true" />
       </button>

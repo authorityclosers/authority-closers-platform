@@ -613,6 +613,22 @@ class AsyncSqlAlchemyIdentityRepository:
         )
         return tenant_ids[0] if len(tenant_ids) == 1 else None
 
+    async def list_active_workspaces(self, person_id: UUID) -> Sequence[tuple[UUID, str]]:
+        """Presentation-only choices; selecting a context revalidates lifecycle."""
+
+        rows = await self._session.execute(
+            select(Tenant.id, Tenant.name)
+            .join(Membership, Membership.tenant_id == Tenant.id)
+            .where(
+                Membership.person_id == person_id,
+                Membership.status == MembershipStatus.ACTIVE.value,
+                Membership.ended_at.is_(None),
+                Tenant.status == TenantStatus.ACTIVE.value,
+            )
+            .order_by(Tenant.name, Tenant.id)
+        )
+        return tuple((row.id, row.name) for row in rows)
+
     async def select_tenant_for_active_sessions(
         self,
         person_id: UUID,

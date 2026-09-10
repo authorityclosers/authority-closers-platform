@@ -33,7 +33,13 @@ afterEach(async () => {
   document.body.replaceChildren();
 });
 
-function MoreHarness() {
+function MoreHarness({
+  current = "calendar",
+  practiceAvailable = false,
+}: {
+  current?: string;
+  practiceAvailable?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const moreButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -43,13 +49,16 @@ function MoreHarness() {
         <button type="button">Background action</button>
       </main>
       <MobileBottomNav
-        current="calendar"
+        current={current}
+        practiceAvailable={practiceAvailable}
         moreOpen={open}
         onToggleMore={() => setOpen((current) => !current)}
         moreButtonRef={moreButtonRef}
       />
       <MobileMoreSheet
         open={open}
+        current={current}
+        practiceAvailable={practiceAvailable}
         onClose={() => setOpen(false)}
         userDisplayName="Learner"
         moreButtonRef={moreButtonRef}
@@ -91,6 +100,71 @@ function PaletteHarness() {
 }
 
 describe("learner shell modal interactions", () => {
+  it("gives admitted Arcade a primary tab without crowding out the five-slot layout", async () => {
+    await act(async () =>
+      root.render(<MoreHarness current="practice" practiceAvailable />),
+    );
+    const nav = container.querySelector(".learner-bottom-nav")!;
+    expect(nav.children).toHaveLength(5);
+    expect(Array.from(nav.children).map((item) => item.textContent)).toEqual([
+      "Home",
+      "Learning",
+      "Arcade",
+      "Progress",
+      "More",
+    ]);
+    const arcade = nav.querySelector('a[href="/practice"]');
+    expect(arcade?.getAttribute("aria-label")).toBe("Practice Arcade");
+    expect(arcade?.getAttribute("aria-current")).toBe("page");
+    expect(nav.querySelectorAll('[aria-current="page"]')).toHaveLength(1);
+    expect(nav.querySelector('a[href="/discover"]')).toBeNull();
+  });
+
+  it("keeps Discover reachable through More and returns focus after choosing it", async () => {
+    await act(async () =>
+      root.render(<MoreHarness current="discover" practiceAvailable />),
+    );
+    const more = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="More navigation options"]',
+    )!;
+    expect(more.getAttribute("aria-current")).toBe("page");
+    await act(async () => more.click());
+    await settleEffects();
+    const discover = container.querySelector<HTMLAnchorElement>(
+      '.mobile-drawer-nav a[href="/discover"]',
+    )!;
+    expect(discover.textContent).toBe("Discover courses");
+    expect(discover.getAttribute("aria-current")).toBe("page");
+    // Keep the test on this page; exercise the real drawer close callback.
+    discover.addEventListener("click", (event) => event.preventDefault());
+    await act(async () => discover.click());
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.activeElement).toBe(more);
+    expect(container.querySelector("[inert]")).toBeNull();
+  });
+
+  it("restores Discover and removes Arcade when admission is revoked", async () => {
+    await act(async () =>
+      root.render(<MoreHarness current="discover" practiceAvailable />),
+    );
+    await act(async () => root.render(<MoreHarness current="discover" />));
+    const nav = container.querySelector(".learner-bottom-nav")!;
+    expect(nav.children).toHaveLength(5);
+    expect(nav.querySelector('a[href="/practice"]')).toBeNull();
+    expect(
+      nav.querySelector('a[href="/discover"]')?.getAttribute("aria-current"),
+    ).toBe("page");
+    expect(nav.querySelector("button")?.hasAttribute("aria-current")).toBe(
+      false,
+    );
+    await act(async () =>
+      nav.querySelector<HTMLButtonElement>("button")?.click(),
+    );
+    expect(
+      container.querySelector('.mobile-drawer-nav a[href="/discover"]'),
+    ).toBeNull();
+  });
+
   it("lets MobileMoreSheet solely clean inert state and restore focus to More", async () => {
     await act(async () => root.render(<MoreHarness />));
     const moreButton = container.querySelector<HTMLButtonElement>(

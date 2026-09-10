@@ -8,6 +8,12 @@ manifest="$foundation/config/release/install-manifest.tsv"
 grep -q 'AC_APPROVED_LEGACY_RELEASE_ID' "$foundation/scripts/install-foundation-release.sh"
 grep -q 'legacy-foundation.sha256' "$foundation/scripts/install-foundation-release.sh"
 grep -q 'reconcile_legacy_foundation' "$foundation/scripts/install-foundation-release.sh"
+# shellcheck disable=SC2016  # This static assertion intentionally matches a literal variable reference.
+grep -Fq 'shared_release_lock="$application_root/.deployment.lock"' \
+  "$foundation/scripts/install-foundation-release.sh"
+# shellcheck disable=SC2016  # This static assertion intentionally matches a literal variable reference.
+grep -Fq 'deployment_lock="$application_root/.deployment.lock"' \
+  "$repo_root/infra/application/scripts/install-application-release.sh"
 
 [[ -r "$manifest" ]]
 
@@ -117,12 +123,92 @@ AC_RELEASE_GIT_SHA="$release_sha" \
 
 release="$tmp_dir/root/srv/authority-closers/releases/foundation-test-ci"
 current="$tmp_dir/root/srv/authority-closers/current"
+[[ -f "$tmp_dir/root/srv/authority-closers/application/.deployment.lock" ]]
 [[ -L "$current" ]]
 [[ "$(readlink -f "$current")" == "$release" ]]
 (cd "$release" && sha256sum --check --strict RELEASE-FILES.sha256 >/dev/null)
 [[ "$(<"$release/RELEASE-COMMIT")" == "$release_sha" ]]
 [[ "$(stat -c '%a' "$release/compose/foundation/Caddyfile")" == 644 ]]
 [[ "$(stat -c '%a' "$release/compose/foundation/otel-collector.yaml")" == 644 ]]
+for route_environment in production staging; do
+  route_template="$release/compose/foundation/application-routes/$route_environment.caddy"
+  route_projection="$tmp_dir/root/srv/authority-closers/application/edge-route-releases/foundation-test-ci/$route_environment.caddy"
+  route_selector="$tmp_dir/root/srv/authority-closers/application/edge-routes/$route_environment.caddy"
+  [[ "$(stat -c '%a' "$route_template")" == 644 ]]
+  [[ "$(stat -c '%a' "$route_projection")" == 444 ]]
+  cmp --silent "$route_template" "$route_projection"
+  [[ -L "$route_selector" ]]
+  [[ "$(readlink -f "$route_selector")" == "$route_projection" ]]
+done
+
+# The foundation and application installers share one non-blocking release
+# lock, so a concurrent edge owner cannot validate then overwrite stale state.
+shared_lock="$tmp_dir/root/srv/authority-closers/application/.deployment.lock"
+exec 8>>"$shared_lock"
+flock --exclusive --nonblock 8
+if AC_TEST_MODE=1 \
+  AC_INSTALL_ROOT="$tmp_dir/root" \
+  AC_RELEASE_ID=foundation-test-ci \
+  AC_RELEASE_GIT_SHA="$release_sha" \
+  AC_RELEASE_ARCHIVE="$archive" \
+  AC_RELEASE_ARCHIVE_SHA256="$archive_sha" \
+    bash "$installer" >/dev/null 2>&1; then
+  printf 'Foundation installer ignored the shared application release lock.\n' >&2
+  exit 1
+fi
+flock --unlock 8
+
+# A staging selector may never preserve a production route, even when both
+# files belong to the same otherwise valid immutable release.
+staging_selector="$tmp_dir/root/srv/authority-closers/application/edge-routes/staging.caddy"
+staging_projection="$tmp_dir/root/srv/authority-closers/application/edge-route-releases/foundation-test-ci/staging.caddy"
+production_projection="$tmp_dir/root/srv/authority-closers/application/edge-route-releases/foundation-test-ci/production.caddy"
+rm -- "$staging_selector"
+ln -s "$production_projection" "$staging_selector"
+if AC_TEST_MODE=1 \
+  AC_INSTALL_ROOT="$tmp_dir/root" \
+  AC_RELEASE_ID=foundation-test-ci \
+  AC_RELEASE_GIT_SHA="$release_sha" \
+  AC_RELEASE_ARCHIVE="$archive" \
+  AC_RELEASE_ARCHIVE_SHA256="$archive_sha" \
+    bash "$installer" >/dev/null 2>&1; then
+  printf 'Foundation installer preserved a cross-environment edge selector.\n' >&2
+  exit 1
+fi
+rm -- "$staging_selector"
+ln -s "$staging_projection" "$staging_selector"
+
+# A new foundation advances only selectors still owned by the previous
+# foundation. A selector already owned by an application release is preserved.
+application_release_id="$(printf 'a%.0s' {1..40})"
+application_release="$tmp_dir/root/srv/authority-closers/application/releases/$application_release_id"
+application_projection="$tmp_dir/root/srv/authority-closers/application/edge-route-releases/$application_release_id"
+mkdir -p "$application_release/edge-routes" "$application_projection"
+cp "$production_projection" "$application_release/edge-routes/production.caddy"
+printf '%s\n' "$application_release_id" > "$application_release/RELEASE-COMMIT"
+(
+  cd "$application_release"
+  sha256sum RELEASE-COMMIT edge-routes/production.caddy > RELEASE-FILES.sha256
+)
+cp "$application_release/edge-routes/production.caddy" \
+  "$application_projection/production.caddy"
+chmod 0444 "$application_projection/production.caddy"
+production_selector="$tmp_dir/root/srv/authority-closers/application/edge-routes/production.caddy"
+rm -- "$production_selector"
+ln -s "$application_projection/production.caddy" "$production_selector"
+
+AC_TEST_MODE=1 \
+AC_INSTALL_ROOT="$tmp_dir/root" \
+AC_RELEASE_ID=foundation-test-next \
+AC_RELEASE_GIT_SHA="$release_sha" \
+AC_RELEASE_ARCHIVE="$archive" \
+AC_RELEASE_ARCHIVE_SHA256="$archive_sha" \
+  bash "$installer" >/dev/null
+next_projection_root="$tmp_dir/root/srv/authority-closers/application/edge-route-releases/foundation-test-next"
+next_release="$tmp_dir/root/srv/authority-closers/releases/foundation-test-next"
+[[ "$(readlink -f "$production_selector")" == "$application_projection/production.caddy" ]]
+[[ "$(readlink -f "$staging_selector")" == "$next_projection_root/staging.caddy" ]]
+
 if grep -q 'UNTRACKED-WORKTREE-MUTATION' "$release/compose/foundation/Caddyfile"; then
   printf 'Release included content outside the exact Git commit.\n' >&2
   exit 1
@@ -221,6 +307,21 @@ if AC_TEST_MODE=1 \
   exit 1
 fi
 
+projection_symlink_root="$tmp_dir/projection-symlink-root"
+mkdir -p "$projection_symlink_root/srv/authority-closers/application"
+ln -s "$tmp_dir" \
+  "$projection_symlink_root/srv/authority-closers/application/edge-route-releases"
+if AC_TEST_MODE=1 \
+  AC_INSTALL_ROOT="$projection_symlink_root" \
+  AC_RELEASE_ID=foundation-test-projection-symlink \
+  AC_RELEASE_GIT_SHA="$release_sha" \
+  AC_RELEASE_ARCHIVE="$archive" \
+  AC_RELEASE_ARCHIVE_SHA256="$archive_sha" \
+    bash "$installer" >/dev/null 2>&1; then
+  printf 'Foundation installer followed a projection-root symlink.\n' >&2
+  exit 1
+fi
+
 tampered_installer="$source_foundation/scripts/install-foundation-release-tampered.sh"
 cp "$installer" "$tampered_installer"
 printf '# working-tree mutation\n' >> "$tampered_installer"
@@ -250,7 +351,7 @@ if AC_TEST_MODE=1 \
   printf 'Injected post-install failure unexpectedly succeeded.\n' >&2
   exit 1
 fi
-[[ "$(readlink -f "$current")" == "$release" ]]
+[[ "$(readlink -f "$current")" == "$next_release" ]]
 [[ "$(sha256sum "$installed_health" | awk '{print $1}')" == "$installed_health_sha" ]]
 if AC_TEST_MODE=1 \
   AC_TEST_FAIL_AFTER_ACTIVATE=1 \
@@ -261,7 +362,7 @@ if AC_TEST_MODE=1 \
   printf 'Injected post-activation failure unexpectedly succeeded.\n' >&2
   exit 1
 fi
-[[ "$(readlink -f "$current")" == "$release" ]]
+[[ "$(readlink -f "$current")" == "$next_release" ]]
 [[ "$(sha256sum "$installed_health" | awk '{print $1}')" == "$installed_health_sha" ]]
 
 bash "$foundation/scripts/validate-images-pinned.sh" >/dev/null

@@ -8,7 +8,7 @@ export default function StudioProgramsPage() {
       surface="studio"
       eyebrow="Academy Studio / content"
       title="Programs and versions"
-      description="Inspect selected-tenant working versions and the immutable global library without exposing another tenant’s drafts."
+      description="Review the programs and versions available within your current Studio access."
     >
       <StudioProgramList />
     </AdminShell>

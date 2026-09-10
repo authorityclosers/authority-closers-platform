@@ -3149,6 +3149,10 @@ a.learning-list-card:hover {
   box-shadow: 0 12px 36px rgba(15, 27, 51, 0.055);
 }
 
+.site-frame--learner .activity-workspace--video .activity-shell {
+  padding: 20px 24px 24px;
+}
+
 .activity-shell__breadcrumb {
   display: flex;
   min-height: 44px;
@@ -3267,6 +3271,53 @@ a.learning-list-card:hover {
 
 .activity-mobile-path {
   display: none;
+  margin: 10px 0 14px;
+  border: 1px solid var(--clarity-border);
+  border-radius: 11px;
+  background: #fff;
+}
+
+.activity-mobile-path > summary {
+  display: flex;
+  min-height: 52px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 14px;
+  cursor: pointer;
+  color: var(--clarity-ink);
+  font-size: 0.76rem;
+  font-weight: 800;
+  list-style: none;
+}
+
+.activity-mobile-path > summary::-webkit-details-marker {
+  display: none;
+}
+
+.activity-mobile-path__summary-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.activity-mobile-path__summary-meta svg {
+  transition: transform 160ms ease;
+}
+
+.activity-mobile-path[open] .activity-mobile-path__summary-meta svg {
+  transform: rotate(90deg);
+}
+
+.activity-mobile-path > div {
+  padding: 4px 14px 14px;
+  border-top: 1px solid var(--clarity-border);
+}
+
+.activity-mobile-path h2 {
+  margin-top: 5px;
+  color: var(--clarity-ink);
+  font-size: 1rem;
 }
 
 .activity-path-recovery {
@@ -3557,6 +3608,14 @@ a.learning-list-card:hover {
     grid-template-columns: 1fr;
   }
 
+  .activity-workspace--video .activity-mobile-path {
+    display: block;
+  }
+
+  .site-frame--learner .activity-workspace--video .activity-authority-panel {
+    display: none;
+  }
+
   .site-frame--learner .learner-bottom-nav {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
@@ -3578,6 +3637,18 @@ a.learning-list-card:hover {
     border-width: 0;
     border-radius: 0;
     box-shadow: none;
+  }
+
+  /* Video has one 16px content inset, not nested page/card gutters. */
+  .site-frame--learner
+    .learner-main
+    .activity-page:has(.activity-workspace--video) {
+    width: 100%;
+    padding-inline: 0;
+  }
+
+  .site-frame--learner .activity-workspace--video .activity-shell {
+    padding: 8px 16px 24px;
   }
 
   .activity-shell__breadcrumb {
@@ -3632,53 +3703,6 @@ a.learning-list-card:hover {
 
   .activity-mobile-path {
     display: block;
-    margin: 10px 0 14px;
-    border: 1px solid var(--clarity-border);
-    border-radius: 11px;
-    background: #fff;
-  }
-
-  .activity-mobile-path > summary {
-    display: flex;
-    min-height: 52px;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    padding: 0 14px;
-    cursor: pointer;
-    color: var(--clarity-ink);
-    font-size: 0.76rem;
-    font-weight: 800;
-    list-style: none;
-  }
-
-  .activity-mobile-path > summary::-webkit-details-marker {
-    display: none;
-  }
-
-  .activity-mobile-path__summary-meta {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .activity-mobile-path__summary-meta svg {
-    transition: transform 160ms ease;
-  }
-
-  .activity-mobile-path[open] .activity-mobile-path__summary-meta svg {
-    transform: rotate(90deg);
-  }
-
-  .activity-mobile-path > div {
-    padding: 4px 14px 14px;
-    border-top: 1px solid var(--clarity-border);
-  }
-
-  .activity-mobile-path h2 {
-    margin-top: 5px;
-    color: var(--clarity-ink);
-    font-size: 1rem;
   }
 
   .site-frame--learner .activity-response-form {

@@ -44,6 +44,29 @@ AUTHORIZATION = create_media_authorization_context(
 )
 
 
+@pytest.mark.parametrize("host", ["localhost", "127.0.0.1", "learner.localhost"])
+def test_ephemeral_http_requires_explicit_loopback_opt_in(host):
+    url = f"http://{host}:3100/v1/media/playback/fixture"
+    with pytest.raises(ValueError):
+        EphemeralMediaUrl(url)
+    assert str(EphemeralMediaUrl(url, allow_loopback_http=True)) == url
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://remote.example/video",
+        "http://localhost.evil/video",
+        "http://user@localhost:3100/video",
+        "http://localhost:3100/video#fragment",
+        "http://localhost:99999/video",
+    ],
+)
+def test_loopback_opt_in_never_opens_remote_or_malformed_http(url):
+    with pytest.raises(ValueError):
+        EphemeralMediaUrl(url, allow_loopback_http=True)
+
+
 def _request(
     *,
     authorization: MediaAuthorizationContext = AUTHORIZATION,

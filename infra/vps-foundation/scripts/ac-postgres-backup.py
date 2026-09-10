@@ -70,18 +70,21 @@ PROFILE_KEYS = (
     "AC_STATE_ROOT",
     "AC_PUBLIC_APP_URL",
     "AC_ADMIN_APP_URL",
+    "AC_COACH_APP_URL",
     "AC_API_URL",
     "AC_API_HOST",
     "AC_TRUSTED_PROXY_ADDRESSES",
     "AC_EDGE_API_ALIAS",
     "AC_EDGE_LEARNER_ALIAS",
     "AC_EDGE_ADMIN_ALIAS",
+    "AC_EDGE_COACH_ALIAS",
     "AC_EXTERNAL_SIDE_EFFECTS_HOLD",
     "AC_EMAIL_PROVIDER",
     "AC_RELEASE_ID",
     "AC_API_IMAGE",
     "AC_LEARNER_IMAGE",
     "AC_ADMIN_IMAGE",
+    "AC_COACH_IMAGE",
 )
 SECRET_KEYS = (
     "AC_DATABASE_URL",
@@ -166,6 +169,86 @@ PARITY_TABLES = (
     "audit_events",
     "audit_chain_heads",
 )
+
+# Explicit compatibility catalogue, not a lexical version comparison or table
+# presence heuristic. Any later migration needs a reviewed parity decision.
+LEGACY_PARITY_MIGRATION_HEADS = frozenset(
+    {
+        "20260830_0006",
+        "20260830_0007",
+        "20260830_0008",
+        "20260830_0009",
+        "20260830_0010",
+        "20260830_0011",
+        "20260901_0012",
+        "20260902_0013",
+        "20260902_0014",
+        "20260903_0015",
+        "20260903_0016",
+        "20260904_0017",
+        "20260904_0018",
+    }
+)
+CAPABILITY_PARITY_MIGRATION_HEAD = "20260907_0019"
+CAPABILITY_PARITY_CONTRACT = "ac-postgres-parity-v2"
+CAPABILITY_PARITY_TABLES = PARITY_TABLES + ("capability_grants", "capability_revocations")
+
+
+PRACTICE_PARITY_MIGRATION_HEAD = "20260908_0020"
+PRACTICE_PARITY_CONTRACT = "ac-postgres-parity-v3"
+PRACTICE_PARITY_TABLES = CAPABILITY_PARITY_TABLES + (
+    "practice_set_versions",
+    "practice_attempts",
+    "practice_profiles",
+    "practice_responses",
+    "practice_commands",
+    "practice_feedback_acks",
+    "practice_participations",
+    "practice_reward_claims",
+    "practice_ledger_entries",
+)
+FOCUS_PARITY_MIGRATION_HEAD = "20260908_0021"
+FOCUS_PARITY_CONTRACT = "ac-postgres-parity-v4"
+FOCUS_PARITY_TABLES = PRACTICE_PARITY_TABLES + ("practice_focus_runs", "practice_focus_events")
+AUTHORING_PARITY_MIGRATION_HEAD = "20260908_0022"
+AUTHORING_PARITY_CONTRACT = "ac-postgres-parity-v5"
+AUTHORING_PARITY_TABLES = FOCUS_PARITY_TABLES + ("catalog_authoring_commands",)
+# 20260909_0023 extends the immutable authoring-command operation catalogue
+# without changing the backed-up table inventory or its parity contract.
+REVISION_PARITY_MIGRATION_HEAD = "20260909_0023"
+REVISION_PARITY_CONTRACT = AUTHORING_PARITY_CONTRACT
+REVISION_PARITY_TABLES = AUTHORING_PARITY_TABLES
+VERSIONED_PARITY_CONTRACTS = {
+    CAPABILITY_PARITY_MIGRATION_HEAD: (CAPABILITY_PARITY_CONTRACT, CAPABILITY_PARITY_TABLES),
+    PRACTICE_PARITY_MIGRATION_HEAD: (PRACTICE_PARITY_CONTRACT, PRACTICE_PARITY_TABLES),
+    FOCUS_PARITY_MIGRATION_HEAD: (FOCUS_PARITY_CONTRACT, FOCUS_PARITY_TABLES),
+    AUTHORING_PARITY_MIGRATION_HEAD: (AUTHORING_PARITY_CONTRACT, AUTHORING_PARITY_TABLES),
+    REVISION_PARITY_MIGRATION_HEAD: (REVISION_PARITY_CONTRACT, REVISION_PARITY_TABLES),
+}
+
+
+def parity_tables_for_head(migration_head: str) -> tuple[str, ...]:
+    if migration_head in LEGACY_PARITY_MIGRATION_HEADS:
+        return PARITY_TABLES
+    if migration_head in VERSIONED_PARITY_CONTRACTS:
+        return VERSIONED_PARITY_CONTRACTS[migration_head][1]
+    raise BackupError("migration head has no reviewed row-count parity contract")
+
+
+def parity_contract_for_head(migration_head: str) -> str | None:
+    parity_tables_for_head(migration_head)
+    if migration_head in LEGACY_PARITY_MIGRATION_HEADS:
+        return None
+    return VERSIONED_PARITY_CONTRACTS[migration_head][0]
+
+
+def parity_metadata_fields(migration_head: str) -> dict[str, str]:
+    contract = parity_contract_for_head(migration_head)
+    if contract is not None:
+        return {"parity_contract": contract, "migration_head": migration_head}
+    return {}
+
+
 HEALTH_CHECK_COMMAND_TIMEOUT_SECONDS = 30
 HEALTH_CHECKS_PER_ENVIRONMENT = 2
 BACKUP_SAFETY_MARGIN_SECONDS = 5 * 60
@@ -207,6 +290,7 @@ class ApplicationTarget:
     state_root: Path
     compose_project: str
     secret_environment: str
+    migration_head: str
 
 
 @dataclass
@@ -444,6 +528,11 @@ def resolve_application_release(
         raise BackupError(f"The current {environment} application state root is absent or unsafe.")
     if not images_file.is_file() or not (release_dir / "compose.yaml").is_file():
         raise BackupError(f"The current {environment} application compose release is incomplete.")
+    images = parse_env_file(images_file)
+    migration_head = images.get("AC_MIGRATION_HEAD", "")
+    parity_tables_for_head(migration_head)
+    if images.get("AC_RELEASE_ID") != release_dir.name:
+        raise BackupError("The current application release identity is inconsistent.")
     return ApplicationTarget(
         environment=environment,
         current_link=current_link,
@@ -453,6 +542,7 @@ def resolve_application_release(
         state_root=state_root,
         compose_project=profile["AC_COMPOSE_PROJECT"],
         secret_environment="prod" if environment == "production" else environment,
+        migration_head=migration_head,
     )
 
 
@@ -627,9 +717,13 @@ def dump_command(target: ApplicationTarget, snapshot_id: str) -> list[str]:
 
 def parity_command(target: ApplicationTarget, snapshot_id: str) -> list[str]:
     snapshot_id = validate_exported_snapshot_id(snapshot_id)
+    tables = parity_tables_for_head(target.migration_head)
     query = " UNION ALL ".join(
-        f"SELECT '{table}', count(*)::bigint FROM \"{table}\""  # noqa: S608 - table names are fixed above
-        for table in PARITY_TABLES
+        f"SELECT '{table}', count(*)::text FROM \"{table}\""  # noqa: S608 - fixed table allowlist
+        for table in tables
+    )
+    query = (
+        "SELECT '__migration_head__', version_num FROM alembic_version UNION ALL " + query  # noqa: S608 - fixed allowlist
     )
     snapshot_query = (
         "BEGIN ISOLATION LEVEL REPEATABLE READ, READ ONLY; "
@@ -653,18 +747,25 @@ def parity_command(target: ApplicationTarget, snapshot_id: str) -> list[str]:
 
 
 def source_row_counts(target: ApplicationTarget, snapshot_id: str) -> dict[str, int]:
+    tables = parity_tables_for_head(target.migration_head)
     result = run_checked(
         parity_command(target, snapshot_id),
         target=target,
         timeout_seconds=PG_RESTORE_LIST_TIMEOUT_SECONDS,
     ).stdout.splitlines()
     counts: dict[str, int] = {}
+    migration_versions: list[str] = []
     for line in result:
         table, separator, count = line.partition("|")
-        if not separator or table not in PARITY_TABLES or table in counts or not count.isdigit():
+        if separator and table == "__migration_head__":
+            migration_versions.append(count)
+            continue
+        if not separator or table not in tables or table in counts or not count.isdigit():
             raise BackupError("The source PostgreSQL parity query returned an unsafe result.")
         counts[table] = int(count)
-    if set(counts) != set(PARITY_TABLES):
+    if migration_versions != [target.migration_head]:
+        raise BackupError("The source snapshot migration head differs from the exact release.")
+    if set(counts) != set(tables):
         raise BackupError("The source PostgreSQL parity query was incomplete.")
     return counts
 
@@ -847,6 +948,9 @@ def capture_dump(
             "dump_sha256": digest,
             "row_counts": row_counts,
         }
+        # Old immutable application controllers accept only the legacy keys.
+        # Every reviewed post-0018 schema requires its own exact version identity.
+        metadata.update(parity_metadata_fields(target.migration_head))
         metadata_fd = os.open(
             metadata_path_tmp,
             os.O_WRONLY | os.O_CREAT | os.O_EXCL,

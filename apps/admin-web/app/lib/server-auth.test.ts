@@ -11,6 +11,9 @@ const STAGING_INTERNAL_API_HOST = "api.staging.ac.internal.invalid";
 const STAGING_INTERNAL_API_URL = `http://${STAGING_INTERNAL_API_HOST}:8000`;
 const VALID_SESSION_TOKEN = "s".repeat(43);
 const SECOND_VALID_SESSION_TOKEN = "t".repeat(43);
+// Keep the real wire-Host proof off the managed local API's 127.0.0.1:8000.
+// The application URL/port stay canonical; only this fixture's DNS is isolated.
+const WIRE_TEST_ADDRESS = "127.0.0.2";
 
 const verifiedContext = {
   person_id: "11111111-1111-4111-8111-111111111111",
@@ -30,11 +33,18 @@ const verifiedMe = {
   permissions: ["catalog_publish", "admin_surface"],
 };
 
+const verifiedAccess = {
+  person_id: verifiedContext.person_id,
+  session_id: verifiedContext.session_id,
+  tenant_id: verifiedContext.tenant_id,
+  studio_capabilities: [],
+};
+
 async function listenOnInternalApiPort(server: Server): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const onError = (error: Error) => reject(error);
     server.once("error", onError);
-    server.listen(8000, "127.0.0.1", () => {
+    server.listen(8000, WIRE_TEST_ADDRESS, () => {
       server.off("error", onError);
       resolve();
     });
@@ -50,12 +60,51 @@ async function closeServer(server: Server): Promise<void> {
 afterEach(() => vi.restoreAllMocks());
 
 describe("server-owned admin context adapter", () => {
+  it("admits only the assigned Studio scope for a learner session", async () => {
+    const capability = {
+      permission: "catalog_read",
+      scope_kind: "program",
+      tenant_id: verifiedContext.tenant_id,
+      program_id: "44444444-4444-4444-8444-444444444444",
+    };
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        Response.json({
+          ...verifiedMe,
+          membership_role: "learner",
+          permissions: [],
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          ...verifiedContext,
+          membership_role: "learner",
+          permissions: [],
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({ ...verifiedAccess, studio_capabilities: [capability] }),
+      );
+    await expect(
+      resolveAdminServerContext({
+        cookieHeader: `__Host-ac_session=${VALID_SESSION_TOKEN}`,
+        internalApiUrl: PRODUCTION_INTERNAL_API_URL,
+        internalApiHost: PRODUCTION_INTERNAL_API_HOST,
+        fetcher,
+      }),
+    ).resolves.toMatchObject({
+      permissions: [],
+      studioCapabilities: [capability],
+    });
+  });
   it("forwards only __Host-ac_session to both canonical identity endpoints", async () => {
     const timeout = vi.spyOn(AbortSignal, "timeout");
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(Response.json(verifiedMe))
-      .mockResolvedValueOnce(Response.json(verifiedContext));
+      .mockResolvedValueOnce(Response.json(verifiedContext))
+      .mockResolvedValueOnce(Response.json(verifiedAccess));
 
     const context = await resolveAdminServerContext({
       cookieHeader: `attacker_role=owner; CF_Authorization=cloudflare-token; __Host-ac_session=${VALID_SESSION_TOKEN}`,
@@ -71,12 +120,14 @@ describe("server-owned admin context adapter", () => {
       actorId: verifiedContext.person_id,
       tenantId: verifiedContext.tenant_id,
       permissions: ["admin_surface", "catalog_publish"],
+      studioCapabilities: [],
     });
-    expect(fetcher).toHaveBeenCalledTimes(2);
-    expect(timeout.mock.calls).toEqual([[3_000], [3_000]]);
+    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(timeout.mock.calls).toEqual([[3_000], [3_000], [3_000]]);
     expect(fetcher.mock.calls.map(([url]) => url.toString())).toEqual([
       `${PRODUCTION_INTERNAL_API_URL}/v1/me`,
       `${PRODUCTION_INTERNAL_API_URL}/v1/context`,
+      `${PRODUCTION_INTERNAL_API_URL}/v1/me/studio-access`,
     ]);
     for (const [, init] of fetcher.mock.calls) {
       expect(init?.method).toBe("GET");
@@ -105,6 +156,8 @@ describe("server-owned admin context adapter", () => {
         response.end(JSON.stringify(verifiedMe));
       } else if (request.url === "/v1/context") {
         response.end(JSON.stringify(verifiedContext));
+      } else if (request.url === "/v1/me/studio-access") {
+        response.end(JSON.stringify(verifiedAccess));
       } else {
         response.statusCode = 404;
         response.end("{}");
@@ -130,9 +183,9 @@ describe("server-owned admin context adapter", () => {
         "all" in options &&
         options.all === true;
       if (all) {
-        callback(null, [{ address: "127.0.0.1", family: 4 }]);
+        callback(null, [{ address: WIRE_TEST_ADDRESS, family: 4 }]);
       } else {
-        callback(null, "127.0.0.1", 4);
+        callback(null, WIRE_TEST_ADDRESS, 4);
       }
     }) as typeof dns.lookup;
     const lookup = vi
@@ -153,6 +206,7 @@ describe("server-owned admin context adapter", () => {
         actorId: verifiedContext.person_id,
         tenantId: verifiedContext.tenant_id,
         permissions: ["admin_surface", "catalog_publish"],
+        studioCapabilities: [],
       });
     } finally {
       lookup.mockRestore();
@@ -169,6 +223,11 @@ describe("server-owned admin context adapter", () => {
         host: `${PRODUCTION_INTERNAL_API_HOST}:8000`,
         cookie: `__Host-ac_session=${VALID_SESSION_TOKEN}`,
         path: "/v1/context",
+      },
+      {
+        host: `${PRODUCTION_INTERNAL_API_HOST}:8000`,
+        cookie: `__Host-ac_session=${VALID_SESSION_TOKEN}`,
+        path: "/v1/me/studio-access",
       },
     ]);
   });
@@ -233,7 +292,8 @@ describe("server-owned admin context adapter", () => {
     if (response.status === 200) {
       fetcher
         .mockResolvedValueOnce(Response.json(verifiedMe))
-        .mockResolvedValueOnce(response);
+        .mockResolvedValueOnce(response)
+        .mockResolvedValueOnce(Response.json(verifiedAccess));
     } else {
       fetcher.mockResolvedValueOnce(response);
     }
@@ -363,7 +423,8 @@ describe("server-owned admin context adapter", () => {
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(Response.json(verifiedMe))
-      .mockResolvedValueOnce(Response.json(verifiedContext));
+      .mockResolvedValueOnce(Response.json(verifiedContext))
+      .mockResolvedValueOnce(Response.json(verifiedAccess));
 
     await resolveAdminServerContext({
       cookieHeader: `__Host-ac_session=${VALID_SESSION_TOKEN}`,
@@ -375,6 +436,7 @@ describe("server-owned admin context adapter", () => {
     expect(fetcher.mock.calls.map(([url]) => url.toString())).toEqual([
       `${STAGING_INTERNAL_API_URL}/v1/me`,
       `${STAGING_INTERNAL_API_URL}/v1/context`,
+      `${STAGING_INTERNAL_API_URL}/v1/me/studio-access`,
     ]);
     for (const [, init] of fetcher.mock.calls) {
       expect(new Headers(init?.headers).has("host")).toBe(false);
