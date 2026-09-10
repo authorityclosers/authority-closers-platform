@@ -22,6 +22,10 @@ import {
 } from "../lib/notifications";
 import { ROUTES } from "../lib/routes";
 import styles from "./notifications-runtime.module.css";
+import { useAppUpdates } from "./app-updates-provider";
+import { AppUpdatesInbox, AppUpdatePopoverContent } from "./app-updates-inbox";
+import { ownedTargetHref } from "./notification-target";
+export { ownedTargetHref } from "./notification-target";
 
 type NotificationsRuntimeProps = {
   resource?: NotificationResource;
@@ -40,14 +44,15 @@ const defaultResource: NotificationResource = {
 };
 
 /**
- * The compact bell surface mirrors the route's unavailable state until a
- * server-backed notification/read-state port is activated. It owns no unread
- * count and performs no read mutation.
+ * The compact bell shares the mounted app-update provider with the inbox.
+ * Opening it never marks a release read. Isolated legacy notification previews
+ * retain their explicit unavailable state when no provider is installed.
  */
 export function NotificationPopover({
   panelRef,
   onClose,
 }: NotificationPopoverProps) {
+  const updates = useAppUpdates();
   return (
     <div
       id="learner-notifications-popover"
@@ -70,30 +75,35 @@ export function NotificationPopover({
         </button>
       </div>
 
-      <div className={styles.popoverBody}>
-        <div className={styles.popoverIcon} aria-hidden="true">
-          <Bell size={20} />
+      {updates ? (
+        <AppUpdatePopoverContent />
+      ) : (
+        <div className={styles.popoverBody}>
+          <div className={styles.popoverIcon} aria-hidden="true">
+            <Bell size={20} />
+          </div>
+          <div>
+            <p className={styles.popoverStateTitle}>
+              {NOTIFICATION_SOURCE_UNAVAILABLE_COPY.heading}
+            </p>
+            <p
+              id="learner-notifications-popover-description"
+              className={styles.popoverCopy}
+            >
+              {NOTIFICATION_SOURCE_UNAVAILABLE_COPY.message}
+            </p>
+          </div>
         </div>
-        <div>
-          <p className={styles.popoverStateTitle}>
-            {NOTIFICATION_SOURCE_UNAVAILABLE_COPY.heading}
-          </p>
-          <p
-            id="learner-notifications-popover-description"
-            className={styles.popoverCopy}
-          >
-            {NOTIFICATION_SOURCE_UNAVAILABLE_COPY.message}
-          </p>
-        </div>
-      </div>
+      )}
 
       <div className={styles.popoverFooter}>
         <Link
-          href={ROUTES.learning}
+          href={updates ? ROUTES.notifications : ROUTES.learning}
           className={styles.popoverAction}
           onClick={onClose}
         >
-          Go to My Learning <ArrowRight size={14} aria-hidden="true" />
+          {updates ? "View all updates" : "Go to My Learning"}{" "}
+          <ArrowRight size={14} aria-hidden="true" />
         </Link>
       </div>
     </div>
@@ -108,23 +118,6 @@ function StateIcon({ tone = "info" }: { tone?: "info" | "warning" | "error" }) {
       <Icon size={22} />
     </span>
   );
-}
-
-export function ownedTargetHref(href: string | null): string | null {
-  if (!href || !href.startsWith("/") || href.startsWith("//")) return null;
-  // Backslashes are treated as forward slashes by browser URL parsers. Reject
-  // literal and encoded separators before resolving against an origin so a
-  // value such as /\\evil.example cannot become an external navigation.
-  if (/[\\\u0000-\u001f\u007f]/.test(href) || /%(?:2f|5c)/i.test(href)) {
-    return null;
-  }
-  try {
-    const parsed = new URL(href, "https://learner.invalid");
-    if (parsed.origin !== "https://learner.invalid") return null;
-    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
-  } catch {
-    return null;
-  }
 }
 
 function NotificationRow({ item }: { item: NotificationItem }) {
@@ -291,9 +284,12 @@ function StatusBanner({ resource }: { resource: NotificationResource }) {
 }
 
 export function NotificationsRuntime({
-  resource = defaultResource,
+  resource: providedResource,
   onRetry,
 }: NotificationsRuntimeProps) {
+  const updates = useAppUpdates();
+  if (updates && providedResource === undefined) return <AppUpdatesInbox />;
+  const resource = providedResource ?? defaultResource;
   const items =
     resource.status === "ready" ||
     resource.status === "partial" ||

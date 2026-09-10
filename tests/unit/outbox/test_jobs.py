@@ -388,6 +388,66 @@ def test_job_claim_and_dispatch_fences_compile_for_postgresql() -> None:
     assert "lease_token" in sql[5]
 
 
+def test_job_claim_kind_filter_applies_to_select_and_take() -> None:
+    job_id = uuid4()
+    allowed = ("email.enrollment_welcome.v1", "email.password_reset.v1")
+    claim_sql = str(
+        build_job_claim_statement(
+            now=datetime(2026, 8, 30, 12, tzinfo=UTC),
+            recovery_generation=3,
+            kinds=allowed,
+        ).compile(dialect=postgresql.dialect())
+    )
+    take_sql = str(
+        build_job_take_statement(
+            job_id=job_id,
+            lease_token=uuid4(),
+            lease_for=timedelta(seconds=30),
+            recovery_generation=3,
+            kinds=allowed,
+        ).compile(dialect=postgresql.dialect())
+    )
+
+    assert "jobs.kind IN" in claim_sql
+    assert "jobs.kind IN" in take_sql
+
+
+@pytest.mark.parametrize(
+    "kinds",
+    [(), ("",), ("   ",), ("x" * 129,)],
+)
+def test_job_claim_kind_filter_rejects_empty_or_invalid_allowlists(
+    kinds: tuple[str, ...],
+) -> None:
+    with pytest.raises(ValueError):
+        build_job_claim_statement(
+            now=datetime(2026, 8, 30, 12, tzinfo=UTC),
+            recovery_generation=3,
+            kinds=kinds,
+        )
+
+
+def test_job_claim_kind_filter_rejects_oversized_allowlists() -> None:
+    with pytest.raises(ValueError, match="at most"):
+        build_job_take_statement(
+            job_id=uuid4(),
+            lease_token=uuid4(),
+            lease_for=timedelta(seconds=30),
+            recovery_generation=3,
+            kinds=tuple(f"internal.test.{index}" for index in range(65)),
+        )
+
+
+@pytest.mark.parametrize("kinds", ["email.example.v1", (1,)])
+def test_job_claim_kind_filter_rejects_bare_strings_and_non_strings(kinds: object) -> None:
+    with pytest.raises(ValueError):
+        build_job_claim_statement(
+            now=datetime(2026, 8, 30, 12, tzinfo=UTC),
+            recovery_generation=3,
+            kinds=kinds,  # type: ignore[arg-type]
+        )
+
+
 def test_expired_external_dispatch_is_excluded_and_quarantined_by_sql_contract() -> None:
     job_id = uuid4()
     claim_sql = str(

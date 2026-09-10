@@ -1,9 +1,14 @@
 [CmdletBinding()]
-param([switch]$Stop)
+param([switch]$Stop, [switch]$StudioVideo)
+
+$ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'Local-RuntimeBootstrap.ps1')
+if (Invoke-LocalRuntimeRelaunch -ScriptPath $PSCommandPath -Parameters $PSBoundParameters) { return }
 
 # Private disposable localhost API. Leaves the existing staging UI bridge alone.
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'Get-LocalTcpListeners.ps1')
 $Repository = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $Runtime = Join-Path $Repository '.tmp/local-platform'
 $PidPath = Join-Path $Runtime 'api-process.json'
@@ -36,12 +41,16 @@ if (Test-Path -LiteralPath $PidPath) {
             Write-Host 'Stopped only the managed local API; database and UI are preserved.'
             return
         }
+        if ($StudioVideo -and
+            (-not $Record.PSObject.Properties['studio_video_enabled'] -or -not $Record.studio_video_enabled)) {
+            throw 'Local API is running without Studio upload. Stop the managed API before explicitly enabling it.'
+        }
         Write-Host 'Managed local API is already running at http://127.0.0.1:8000.'
         return
     }
 }
 if ($Stop) { Write-Host 'No managed local API is running.'; return }
-if (Get-NetTCPConnection -LocalPort $ApiPort -State Listen -ErrorAction SilentlyContinue) {
+if (Get-LocalTcpListeners -Port $ApiPort) {
     throw 'Port 8000 is occupied; no existing process will be stopped.'
 }
 if (-not (Test-Path -LiteralPath $Python)) { throw 'Run uv sync before starting the local API.' }
@@ -121,11 +130,20 @@ try {
         $env:AC_MEDIA_LOCAL_PUBLIC_FILMS_DELIVERY_ENABLED = 'true'
         $env:AC_MEDIA_LOCAL_AVATAR_ENABLED = 'true'
         Remove-Item Env:AC_LOCAL_TEST_PASSWORD
+        $ApiTarget = 'ac_platform.http.app:app'
+        $FactoryArguments = @()
+        if ($StudioVideo) {
+            # The opt-in factory verifies managed policy and the live scanner
+            # before accepting uploads. No test scanner is used in local mode.
+            $env:AC_LOCAL_STUDIO_VIDEO_ENABLED = 'true'
+            $ApiTarget = 'ac_platform.development.studio_video_app:create_app'
+            $FactoryArguments = @('--factory')
+        }
         # Tokens and signed media locators must never enter the HTTP access log.
-        $Api = Start-Process -FilePath $Python -ArgumentList @(
-            '-m', 'uvicorn', 'ac_platform.http.app:app', '--host', '127.0.0.1', '--port', "$ApiPort",
+        $Api = Start-Process -FilePath $Python -ArgumentList (@(
+            '-m', 'uvicorn', $ApiTarget, '--host', '127.0.0.1', '--port', "$ApiPort",
             '--no-access-log', '--loop', 'ac_platform.application.asyncio_runtime:compatible_event_loop_factory'
-        ) -WorkingDirectory $Repository -WindowStyle Hidden -PassThru `
+        ) + $FactoryArguments) -WorkingDirectory $Repository -WindowStyle Hidden -PassThru `
             -RedirectStandardOutput (Join-Path $Runtime 'api.stdout.log') `
             -RedirectStandardError (Join-Path $Runtime 'api.stderr.log')
         [ordered]@{
@@ -133,6 +151,7 @@ try {
             id = $Api.Id
             started_at = $Api.StartTime.ToFileTimeUtc()
             source_revision = $Release
+            studio_video_enabled = [bool]$StudioVideo
         } | ConvertTo-Json | Set-Content -LiteralPath $PidPath
     }
     finally { Pop-Location }

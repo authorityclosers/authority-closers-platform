@@ -3,28 +3,6 @@
   width: fit-content;
   margin: 0 auto 12px;
 }
-.toggle {
-  position: absolute;
-  right: -28px;
-  bottom: 0;
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  border: 0;
-  border-radius: 50%;
-  color: var(--theme-text-muted);
-  background: transparent;
-  cursor: pointer;
-}
-.toggle:hover {
-  background: var(--theme-surface-subtle);
-  color: var(--theme-action);
-}
-.toggle:focus-visible {
-  outline: 3px solid var(--theme-focus);
-  outline-offset: 2px;
-}
 @media (max-height: 600px) {
   .stage > svg {
     width: 90px;

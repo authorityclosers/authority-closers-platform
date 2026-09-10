@@ -10,8 +10,12 @@ import { LearnerShell } from "./site-shell";
 vi.mock("../lib/practice-navigation", () => ({
   loadPracticeNavigationAvailability: vi.fn(),
 }));
-vi.mock("../lib/learner-api", () => ({
+vi.mock("../lib/learner-api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/learner-api")>()),
   createLearnerApi: () => ({
+    request: async () => {
+      throw new Error("Notifications unavailable in navigation test");
+    },
     me: async () => {
       throw new Error("Identity unavailable in navigation test");
     },

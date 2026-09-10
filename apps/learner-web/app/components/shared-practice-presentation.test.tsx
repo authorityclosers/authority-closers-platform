@@ -313,7 +313,7 @@ function pointer(clientX: number, clientY: number, pointerType = "mouse") {
   );
 }
 describe("PracticeCompanion mounted motion lifecycle", () => {
-  it("provides an accessible pause/resume control that synchronizes all mounted characters", async () => {
+  it("uses finite once motion without rendering a character pause control", async () => {
     const env = motionEnvironment();
     localStorage.setItem("ac-practice-companion-motion", "on");
     const { host } = await mountCompanion(
@@ -327,28 +327,13 @@ describe("PracticeCompanion mounted motion lifecycle", () => {
         [{ isIntersecting: true } as IntersectionObserverEntry],
         {} as IntersectionObserver,
       );
-    const buttons = host.querySelectorAll("button");
-    expect(buttons).toHaveLength(2);
-    expect(buttons[0].getAttribute("aria-label")).toBe(
-      "Pause character animation",
-    );
-    buttons[0].focus();
-    await act(() => buttons[0].click());
-    expect(document.activeElement).toBe(buttons[0]);
-    expect(localStorage.getItem("ac-practice-companion-motion")).toBe("off");
+    expect(host.querySelector("button")).toBeNull();
     for (const svg of host.querySelectorAll("svg[data-companion]")) {
-      expect((svg as SVGSVGElement).dataset.motion).toBe("off");
-      expect((svg as SVGSVGElement).dataset.play).toBe("paused");
+      expect((svg as SVGSVGElement).dataset.motion).toBe("once");
     }
-    expect(buttons[1].getAttribute("aria-label")).toBe(
-      "Resume character animation",
-    );
-    await act(() => buttons[1].click());
     expect(localStorage.getItem("ac-practice-companion-motion")).toBe("on");
-    for (const svg of host.querySelectorAll("svg[data-companion]"))
-      expect((svg as SVGSVGElement).dataset.motion).toBe("alive");
   });
-  it("honors saved pause on mount and never lets resume override OS reduced motion", async () => {
+  it("honors saved and operating-system reduced motion without an override", async () => {
     const env = motionEnvironment();
     localStorage.setItem("ac-practice-companion-motion", "off");
     const { host, svg } = await mountCompanion(
@@ -357,13 +342,13 @@ describe("PracticeCompanion mounted motion lifecycle", () => {
     env.intersect(true);
     expect(svg.dataset.motion).toBe("off");
     expect(svg.dataset.play).toBe("paused");
+    expect(host.querySelector("button")).toBeNull();
     env.reduced(true);
-    await act(() => host.querySelector("button")!.click());
     env.intersect(true);
-    expect(svg.dataset.motion).toBe("alive");
+    expect(svg.dataset.motion).toBe("off");
     expect(svg.dataset.play).toBe("paused");
     env.reduced(false);
-    expect(svg.dataset.play).toBe("running");
+    expect(svg.dataset.play).toBe("paused");
   });
   it("waits for intersection and pauses whenever hidden or outside the viewport", async () => {
     const env = motionEnvironment();

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { fetchLocalLearnerWire } from "./local-api-upstream";
 import {
   InMemoryDevelopmentBridgeSessionStore,
   isStagingAuthenticatedBridge,
@@ -10,6 +11,10 @@ import {
   resolveDevAuthBridgeConfig,
   resolveDevApiTarget,
 } from "./dev-api-proxy";
+
+vi.mock("./local-api-upstream", () => ({
+  fetchLocalLearnerWire: vi.fn(),
+}));
 
 const AUTH_BRIDGE_ENV = {
   AC_DEV_AUTH_BRIDGE_ENABLED: "true",
@@ -32,6 +37,58 @@ it("retains ordinary local private-read transport when sandbox is not opted in",
   );
   expect(response.status).toBe(200);
   expect(fetcher).toHaveBeenCalledOnce();
+});
+
+describe("managed local learner wire selection", () => {
+  it("uses the numeric loopback wire only for the exact learner sandbox", async () => {
+    const nativeWire = vi.mocked(fetchLocalLearnerWire);
+    nativeWire.mockResolvedValueOnce(Response.json({ accepted: true }));
+
+    const response = await proxyDevelopmentLearnerApi(
+      new Request("http://127.0.0.1:3100/v1/me", {
+        headers: { host: "learner.localhost:3100" },
+      }),
+      undefined,
+      {
+        AC_DEV_API_ORIGIN: "http://127.0.0.1:8000",
+        AC_DEV_LOCAL_SANDBOX_ENABLED: "true",
+      },
+      "development",
+    );
+
+    expect(response.status).toBe(200);
+    expect(nativeWire).toHaveBeenCalledOnce();
+    const [input, init] = nativeWire.mock.calls[0] ?? [];
+    expect(String(input)).toBe("http://127.0.0.1:8000/v1/me");
+    expect(init?.redirect).toBe("manual");
+    expect(new Headers(init?.headers).has("host")).toBe(false);
+    expect(new Headers(init?.headers).has("x-forwarded-host")).toBe(false);
+  });
+
+  it("retains the ordinary global fetch path for non-sandbox local development", async () => {
+    const nativeWire = vi.mocked(fetchLocalLearnerWire);
+    nativeWire.mockClear();
+    const globalFetch = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(Response.json({ accepted: true }));
+    try {
+      const response = await proxyDevelopmentLearnerApi(
+        new Request("http://127.0.0.1:3100/v1/me"),
+        undefined,
+        { AC_DEV_API_ORIGIN: "http://127.0.0.1:8000" },
+        "development",
+      );
+
+      expect(response.status).toBe(200);
+      expect(nativeWire).not.toHaveBeenCalled();
+      expect(globalFetch).toHaveBeenCalledOnce();
+      expect(String(globalFetch.mock.calls[0]?.[0])).toBe(
+        "http://127.0.0.1:8000/v1/me",
+      );
+    } finally {
+      globalFetch.mockRestore();
+    }
+  });
 });
 const STAGING_SESSION = "s".repeat(43);
 const LOCAL_SESSION = "l".repeat(43);
@@ -749,6 +806,8 @@ describe("development learner API proxy", () => {
       ["POST", "/v1/auth/password/login"],
       ["POST", "/v1/auth/logout"],
       ["GET", "/v1/me"],
+      ["GET", "/v1/me/app-updates"],
+      ["POST", "/v1/me/app-updates/app-updates-v0-2-alpha/read"],
       ["GET", "/v1/context"],
       ["POST", "/v1/context"],
       ["GET", "/v1/onboarding"],
@@ -797,6 +856,14 @@ describe("development learner API proxy", () => {
       ["GET", "/v1/learning/insights?period=year"],
       ["GET", "/v1/learning/insights?period=week&subject_person_id=other"],
       ["GET", "/v1/me?include=admin"],
+      ["POST", "/v1/me/app-updates"],
+      ["GET", "/v1/me/app-updates/app-updates-v0-2-alpha/read"],
+      [
+        "POST",
+        "/v1/me/app-updates/app-updates-v0-2-alpha/read?person_id=another",
+      ],
+      ["POST", "/v1/me/app-updates/%2foutside/read"],
+      ["POST", `/v1/me/app-updates/${"a".repeat(129)}/read`],
       ["POST", "/v1/programs"],
     ] as const) {
       expect(
@@ -1507,6 +1574,63 @@ describe("development learner API proxy", () => {
     );
     expect(response.status).toBe(200);
     expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it("preserves the package-owned learner Host across the managed local API hop", async () => {
+    const fetcher = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const headers = new Headers(init?.headers);
+        expect(String(input)).toBe(
+          "http://learner.localhost:8000/v1/me/app-updates",
+        );
+        expect(headers.has("host")).toBe(false);
+        expect(headers.has("forwarded")).toBe(false);
+        expect(headers.has("x-forwarded-host")).toBe(false);
+        expect(headers.has("x-forwarded-port")).toBe(false);
+        expect(headers.has("x-forwarded-proto")).toBe(false);
+        return Response.json({ accepted: true });
+      },
+    );
+    const response = await proxyDevelopmentLearnerApi(
+      new Request("http://127.0.0.1:3100/v1/me/app-updates", {
+        headers: {
+          host: "learner.localhost:3100",
+        },
+      }),
+      fetcher,
+      {
+        AC_DEV_API_ORIGIN: "http://127.0.0.1:8000",
+        AC_DEV_LOCAL_SANDBOX_ENABLED: "true",
+      },
+      "development",
+    );
+
+    expect(response.status).toBe(200);
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it("never derives the managed local learner Host from forwarded authority", async () => {
+    const fetcher = vi.fn(async () => Response.json({ accepted: true }));
+    const response = await proxyDevelopmentLearnerApi(
+      new Request("http://127.0.0.1:3100/v1/me/app-updates", {
+        headers: {
+          host: "attacker.example",
+          forwarded: "host=learner.localhost:3100;proto=http",
+          "x-forwarded-host": "learner.localhost:3100",
+          "x-forwarded-port": "3100",
+          "x-forwarded-proto": "http",
+        },
+      }),
+      fetcher,
+      {
+        AC_DEV_API_ORIGIN: "http://127.0.0.1:8000",
+        AC_DEV_LOCAL_SANDBOX_ENABLED: "true",
+      },
+      "development",
+    );
+
+    expect(response.status).toBe(403);
+    expect(fetcher).not.toHaveBeenCalled();
   });
 
   it("accepts loopback requests with Host matching learner.localhost origin", async () => {

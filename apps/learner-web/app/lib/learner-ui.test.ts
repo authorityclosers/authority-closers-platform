@@ -1694,6 +1694,7 @@ describe("connected learner ready states", () => {
     expect(chapters[1][2]).toContain("Discovery decisions");
     expect(chapters[1][2]).toContain("1 of 3 activities complete");
     expect(chapters[1][2]).not.toContain("2 of 3 activities complete");
+    expect(chapters[1][2]).not.toContain("· Available");
   });
 
   it("keeps the primary continue action on the canonical actionable activity", () => {
@@ -1748,6 +1749,16 @@ describe("connected learner ready states", () => {
     expect(html).toMatch(/awaiting review/i);
     expect(html).not.toContain('aria-disabled="true"');
     expect(html).not.toMatch(/\bcompleted\b/i);
+  });
+
+  it("keeps ready activity rows action-first without repeating a ready label", () => {
+    const activity = learningModulesFixture().modules[1].activities[2];
+    const html = renderToStaticMarkup(
+      createElement(LearningActivityNavigation, { activity }),
+    );
+
+    expect(html).toContain(`href="${ROUTES.activity(activity.id)}"`);
+    expect(html).not.toMatch(/>Available<|>available<|· Available/);
   });
 
   it("removes both activity and chapter links for a cached learning response", () => {

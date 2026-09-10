@@ -2409,6 +2409,104 @@ class AsyncCatalogApplication:
             await self._session.flush()
             return result
 
+    async def create_program_draft(
+        self,
+        *,
+        actor: ActorContext,
+        tenant_id: UUID,
+        title: str,
+        idempotency_key: str,
+        request_id: str | None = None,
+    ) -> DraftAuthoringResult:
+        """Create one tenant course and its empty first draft as a single command.
+
+        A course-specific assignment cannot create unrelated courses. Both
+        academy-wide capabilities are rechecked before looking up receipts.
+        The existing Person lock serializes this actor's command keys, including
+        reuse against other catalog operations. No publication, enrollment,
+        review provenance or new capability assignment is implied by creation.
+        """
+        if tenant_id is None:
+            raise CatalogAccessDeniedError("course creation requires an academy")
+        for permission in (CATALOG_WRITE_PERMISSION, CATALOG_READ_PERMISSION):
+            await self._authorize_admin(actor, tenant_id=tenant_id, permission=permission)
+        normalized_title = _required_text(title, "title", 200)
+        if (
+            not isinstance(idempotency_key, str)
+            or not 1 <= len(idempotency_key) <= 128
+            or any(ord(character) < 32 or ord(character) == 127 for character in idempotency_key)
+        ):
+            raise CatalogValidationError("course creation requires a bounded command key")
+        digest = sha256(idempotency_key.encode("utf-8")).hexdigest()
+        fingerprint = sha256(
+            dumps(
+                {
+                    "actor": str(actor.person_id),
+                    "tenant": str(tenant_id),
+                    "operation": "program_create",
+                    "title": normalized_title,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        async with self._session.begin_nested():
+
+            def apply(database: Session) -> DraftAuthoringResult:
+                receipt = database.scalar(
+                    select(CatalogAuthoringCommand).where(
+                        CatalogAuthoringCommand.tenant_id == tenant_id,
+                        CatalogAuthoringCommand.actor_person_id == actor.person_id,
+                        CatalogAuthoringCommand.idempotency_key_digest == digest,
+                    )
+                )
+                if receipt is not None:
+                    if receipt.request_fingerprint != fingerprint:
+                        raise CatalogConflictError("the command key has another intent")
+                    return DraftAuthoringResult(receipt.program_id, receipt.resource_id, True)
+                catalog = CatalogService(SqlAlchemyCatalogStore(database), clock=self._clock)
+                program_id = uuid4()
+                program = catalog.create_program(
+                    tenant_id=tenant_id,
+                    scope=CatalogScope.TENANT,
+                    program_id=program_id,
+                    slug=f"course-{program_id.hex}",
+                    title=normalized_title,
+                )
+                version = catalog.create_version(program.id, tenant_id=tenant_id)
+                return DraftAuthoringResult(program.id, version.id, False)
+
+            result = await self._session.run_sync(apply)
+            if result.replayed:
+                return result
+            audit = await AuditRepository(self._session).append_for_actor(
+                actor,
+                action="audit.catalog.draft.authored.v1",
+                resource_type="program_version",
+                resource_id=result.resource_id,
+                payload={
+                    "operation": "program_create",
+                    "program_id": str(result.program_id),
+                    "resource_id": str(result.resource_id),
+                },
+                request_id=request_id,
+            )
+            self._session.add(
+                CatalogAuthoringCommand(
+                    tenant_id=tenant_id,
+                    actor_person_id=actor.person_id,
+                    program_version_id=result.resource_id,
+                    program_id=result.program_id,
+                    operation="program_create",
+                    resource_id=result.resource_id,
+                    idempotency_key_digest=digest,
+                    request_fingerprint=fingerprint,
+                    audit_event_id=audit.id,
+                )
+            )
+            await self._session.flush()
+            return result
+
     async def create_program(
         self,
         *,

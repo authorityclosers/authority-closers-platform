@@ -161,12 +161,14 @@ async function requestJson<T>(
 async function requestSessionJson<T>(
   path: "/v1/me" | "/v1/context" | "/v1/me/studio-access",
   fetcher: Fetcher,
+  signal?: AbortSignal,
 ) {
   const response = await fetcher(path, {
     method: "GET",
     cache: "no-store",
     credentials: "same-origin",
     headers: { accept: "application/json" },
+    signal,
   });
   if (!response.ok) throw await parseProblem(response);
   return response.json() as Promise<T>;
@@ -174,26 +176,31 @@ async function requestSessionJson<T>(
 
 export async function loadAdminSession(
   fetcher: Fetcher = fetch,
+  signal?: AbortSignal,
 ): Promise<AdminSession> {
   let me: AdminMe;
   let context: AdminContext;
   let studioAccess: unknown;
   try {
-    me = meSchema.parse(await requestSessionJson<unknown>("/v1/me", fetcher));
+    me = meSchema.parse(
+      await requestSessionJson<unknown>("/v1/me", fetcher, signal),
+    );
     context = contextSchema.parse(
-      await requestSessionJson<unknown>("/v1/context", fetcher),
+      await requestSessionJson<unknown>("/v1/context", fetcher, signal),
     );
     studioAccess = await requestSessionJson<unknown>(
       "/v1/me/studio-access",
       fetcher,
+      signal,
     );
   } catch (error) {
-    if (error instanceof AdminApiProblem) {
+    if (error instanceof AdminApiProblem && [401, 403].includes(error.status)) {
       throw new AdminSessionDenied(
         "The product session could not be verified.",
       );
     }
-    throw new AdminSessionDenied();
+    if (error instanceof z.ZodError) throw new AdminSessionDenied();
+    throw error;
   }
 
   const identity = verifyAdminIdentity(me, context, studioAccess);
@@ -664,6 +671,10 @@ function validateStudioCommand(input: StudioDraftCommandInput) {
   z.string()
     .regex(/^"program-version-[0-9a-f]{64}"$/)
     .parse(input.ifMatch);
+  validateStudioKey(input.idempotencyKey);
+}
+
+function validateStudioKey(key: string) {
   z.string()
     .min(1)
     .max(128)
@@ -675,7 +686,52 @@ function validateStudioCommand(input: StudioDraftCommandInput) {
           return code >= 32 && code !== 127;
         }),
     )
-    .parse(input.idempotencyKey);
+    .parse(key);
+}
+
+export function createStudioCourse(input: {
+  title: string;
+  tenantId: string;
+  idempotencyKey: string;
+  signal?: AbortSignal;
+  origin?: string;
+  fetcher?: Fetcher;
+}): Promise<StudioDraftMutationResponse> {
+  const tenantId = uuidPath(input.tenantId, "tenantId").toLowerCase();
+  const title = z.string().trim().min(1).max(200).parse(input.title);
+  validateStudioKey(input.idempotencyKey);
+  return requestJson(
+    "/v1/admin/studio/programs",
+    {
+      method: "POST",
+      headers: mutationHeaders({
+        origin: input.origin ?? currentOrigin(),
+        idempotencyKey: input.idempotencyKey,
+        hasBody: true,
+      }),
+      body: body({ title }),
+      signal: input.signal,
+    },
+    studioDraftMutationResponseSchema.refine(
+      ({ program, resource_id: resultId, replayed }) => {
+        const versions = program.versions.filter(
+          (version) => version.id === resultId,
+        );
+        return (
+          program.tenant_id === tenantId &&
+          program.scope === "tenant" &&
+          program.access === "selected_tenant" &&
+          versions.length === 1 &&
+          versions[0].version_number === 1 &&
+          versions[0].supersedes_version_id === null &&
+          (replayed ||
+            (program.title === title && versions[0].status === "draft"))
+        );
+      },
+      "The new course response does not match this academy and request.",
+    ),
+    input.fetcher,
+  );
 }
 
 export function createStudioRevision(input: CreateStudioRevisionInput) {

@@ -1,0 +1,478 @@
+{
+  "status": "passed",
+  "environment": "fresh isolated local Chrome context",
+  "origin": "http://coach.localhost:3102",
+  "route": "/studio/programs/a980466f-9152-57df-ac31-6bb9ab5f0471",
+  "identity": "synthetic local Coach (credential not recorded)",
+  "live_records": [
+    {
+      "name": "live-1440-light",
+      "width": 1440,
+      "height": 1000,
+      "scheme": "light",
+      "reduced_motion": false,
+      "overflow": {
+        "viewport": 1440,
+        "document": 1440,
+        "body": 1440,
+        "horizontalOverflow": false,
+        "visibleActionsOutsideViewport": 0
+      },
+      "buttons": [
+        "Content",
+        "Preview",
+        "Publication",
+        "Check upload availability",
+        "01\nDraft workspace",
+        "Synthetic draft reflection\nReflection",
+        "Local video approval UI check\nVideo lesson",
+        "Add lesson\nto Draft workspace",
+        "02\nLocal release proof 2026-09-07T23:29:23",
+        "Add lesson\nto Local release proof 2026-09-07T23:29:23",
+        "Add module",
+        "Save changes"
+      ],
+      "has_upload_input": false,
+      "input_label": null,
+      "state_copy": [
+        "Upload availability couldn\u2019t be checked. Reopen the course or try again.",
+        "Check upload availability"
+      ],
+      "screenshot": "C:\\Users\\Suyash\\.codex\\worktrees\\d2de\\authority-closers-platform\\.tmp\\local-platform\\coach-video-upload-ui-qa-20260910-083535-129272\\live-1440-light.png"
+    },
+    {
+      "name": "live-390-light",
+      "width": 390,
+      "height": 844,
+      "scheme": "light",
+      "reduced_motion": false,
+      "overflow": {
+        "viewport": 390,
+        "document": 390,
+        "body": 390,
+        "horizontalOverflow": false,
+        "visibleActionsOutsideViewport": 0
+      },
+      "buttons": [
+        "Content",
+        "Preview",
+        "Publication",
+        "Check upload availability",
+        "Course outline \u00b7 2 modules",
+        "Save changes"
+      ],
+      "has_upload_input": false,
+      "input_label": null,
+      "state_copy": [
+        "Upload availability couldn\u2019t be checked. Reopen the course or try again.",
+        "Check upload availability"
+      ],
+      "screenshot": "C:\\Users\\Suyash\\.codex\\worktrees\\d2de\\authority-closers-platform\\.tmp\\local-platform\\coach-video-upload-ui-qa-20260910-083535-129272\\live-390-light.png"
+    }
+  ],
+  "fixture_records": [
+    {
+      "name": "fixture-idle-1440-light",
+      "width": 1440,
+      "height": 1000,
+      "scheme": "light",
+      "reduced_motion": false,
+      "overflow": {
+        "viewport": 1440,
+        "document": 1440,
+        "body": 1440,
+        "horizontalOverflow": false,
+        "visibleActionsOutsideViewport": 0
+      },
+      "buttons": [
+        "Content",
+        "Preview",
+        "Publication",
+        "Choose video",
+        "01\nDraft workspace",
+        "Synthetic draft reflection\nReflection",
+        "Local video approval UI check\nVideo lesson",
+        "Add lesson\nto Draft workspace",
+        "02\nLocal release proof 2026-09-07T23:29:23",
+        "Add lesson\nto Local release proof 2026-09-07T23:29:23",
+        "Add module",
+        "Save changes"
+      ],
+      "has_upload_input": true,
+      "input_label": "Choose a course video",
+      "state_copy": [
+        "MP4 or WebM, up to 10.0 MB. Upload once, then choose the video for a lesson."
+      ],
+      "screenshot": "C:\\Users\\Suyash\\.codex\\worktrees\\d2de\\authority-closers-platform\\.tmp\\local-platform\\coach-video-upload-ui-qa-20260910-083535-129272\\fixture-idle-1440-light.png"
+    },
+    {
+      "name": "fixture-processing-1440-dark",
+      "width": 1440,
+      "height": 1000,
+      "scheme": "dark",
+      "reduced_motion": false,
+      "overflow": {
+        "viewport": 1440,
+        "document": 1440,
+        "body": 1440,
+        "horizontalOverflow": false,
+        "visibleActionsOutsideViewport": 0
+      },
+      "buttons": [
+        "Content",
+        "Preview",
+        "Publication",
+        "Check video status",
+        "01\nDraft workspace",
+        "Synthetic draft reflection\nReflection",
+        "Local video approval UI check\nVideo lesson",
+        "Add lesson\nto Draft workspace",
+        "02\nLocal release proof 2026-09-07T23:29:23",
+        "Add lesson\nto Local release proof 2026-09-07T23:29:23",
+        "Add module",
+        "Save changes"
+      ],
+      "has_upload_input": true,
+      "input_label": "Choose a course video",
+      "state_copy": [
+        "Preparing playback",
+        "Your upload is saved. We\u2019re preparing playback; you can keep editing."
+      ],
+      "screenshot": "C:\\Users\\Suyash\\.codex\\worktrees\\d2de\\authority-closers-platform\\.tmp\\local-platform\\coach-video-upload-ui-qa-20260910-083535-129272\\fixture-processing-1440-dark.png"
+    },
+    {
+      "name": "fixture-processing-320-reduced",
+      "width": 320,
+      "height": 844,
+      "scheme": "dark",
+      "reduced_motion": true,
+      "overflow": {
+        "viewport": 320,
+        "document": 320,
+        "body": 320,
+        "horizontalOverflow": false,
+        "visibleActionsOutsideViewport": 0
+      },
+      "buttons": [
+        "Content",
+        "Preview",
+        "Publication",
+        "Check video status",
+        "Course outline \u00b7 2 modules",
+        "Save changes"
+      ],
+      "has_upload_input": true,
+      "input_label": "Choose a course video",
+      "state_copy": [
+        "Preparing playback",
+        "Your upload is saved. We\u2019re preparing playback; you can keep editing."
+      ],
+      "screenshot": "C:\\Users\\Suyash\\.codex\\worktrees\\d2de\\authority-closers-platform\\.tmp\\local-platform\\coach-video-upload-ui-qa-20260910-083535-129272\\fixture-processing-320-reduced.png"
+    },
+    {
+      "name": "fixture-processing-390-reduced",
+      "width": 390,
+      "height": 844,
+      "scheme": "dark",
+      "reduced_motion": true,
+      "overflow": {
+        "viewport": 390,
+        "document": 390,
+        "body": 390,
+        "horizontalOverflow": false,
+        "visibleActionsOutsideViewport": 0
+      },
+      "buttons": [
+        "Content",
+        "Preview",
+        "Publication",
+        "Check video status",
+        "Course outline \u00b7 2 modules",
+        "Save changes"
+      ],
+      "has_upload_input": true,
+      "input_label": "Choose a course video",
+      "state_copy": [
+        "Preparing playback",
+        "Your upload is saved. We\u2019re preparing playback; you can keep editing."
+      ],
+      "screenshot": "C:\\Users\\Suyash\\.codex\\worktrees\\d2de\\authority-closers-platform\\.tmp\\local-platform\\coach-video-upload-ui-qa-20260910-083535-129272\\fixture-processing-390-reduced.png"
+    },
+    {
+      "name": "fixture-processing-768-reduced",
+      "width": 768,
+      "height": 900,
+      "scheme": "dark",
+      "reduced_motion": true,
+      "overflow": {
+        "viewport": 768,
+        "document": 768,
+        "body": 768,
+        "horizontalOverflow": false,
+        "visibleActionsOutsideViewport": 0
+      },
+      "buttons": [
+        "Content",
+        "Preview",
+        "Publication",
+        "Check video status",
+        "Course outline \u00b7 2 modules",
+        "Save changes"
+      ],
+      "has_upload_input": true,
+      "input_label": "Choose a course video",
+      "state_copy": [
+        "Preparing playback",
+        "Your upload is saved. We\u2019re preparing playback; you can keep editing."
+      ],
+      "screenshot": "C:\\Users\\Suyash\\.codex\\worktrees\\d2de\\authority-closers-platform\\.tmp\\local-platform\\coach-video-upload-ui-qa-20260910-083535-129272\\fixture-processing-768-reduced.png"
+    },
+    {
+      "name": "fixture-ready-390-light",
+      "width": 390,
+      "height": 844,
+      "scheme": "light",
+      "reduced_motion": false,
+      "overflow": {
+        "viewport": 390,
+        "document": 390,
+        "body": 390,
+        "horizontalOverflow": false,
+        "visibleActionsOutsideViewport": 0
+      },
+      "buttons": [
+        "Content",
+        "Preview",
+        "Publication",
+        "Choose video",
+        "Course outline \u00b7 2 modules",
+        "Save changes"
+      ],
+      "has_upload_input": true,
+      "input_label": "Choose a course video",
+      "state_copy": [
+        "Your video is ready",
+        "Ready in your video library. Choose it in a lesson and approve that selection before learners can watch it."
+      ],
+      "screenshot": "C:\\Users\\Suyash\\.codex\\worktrees\\d2de\\authority-closers-platform\\.tmp\\local-platform\\coach-video-upload-ui-qa-20260910-083535-129272\\fixture-ready-390-light.png"
+    },
+    {
+      "name": "fixture-failed-1440-light",
+      "width": 1440,
+      "height": 1000,
+      "scheme": "light",
+      "reduced_motion": false,
+      "overflow": {
+        "viewport": 1440,
+        "document": 1440,
+        "body": 1440,
+        "horizontalOverflow": false,
+        "visibleActionsOutsideViewport": 0
+      },
+      "buttons": [
+        "Content",
+        "Preview",
+        "Publication",
+        "Choose video",
+        "01\nDraft workspace",
+        "Synthetic draft reflection\nReflection",
+        "Local video approval UI check\nVideo lesson",
+        "Add lesson\nto Draft workspace",
+        "02\nLocal release proof 2026-09-07T23:29:23",
+        "Add lesson\nto Local release proof 2026-09-07T23:29:23",
+        "Add module",
+        "Save changes"
+      ],
+      "has_upload_input": true,
+      "input_label": "Choose a course video",
+      "state_copy": [
+        "This video couldn\u2019t be processed",
+        "This file is not available for lessons. Check that the video plays on your device, then choose another file."
+      ],
+      "screenshot": "C:\\Users\\Suyash\\.codex\\worktrees\\d2de\\authority-closers-platform\\.tmp\\local-platform\\coach-video-upload-ui-qa-20260910-083535-129272\\fixture-failed-1440-light.png"
+    }
+  ],
+  "fixture_calls": [
+    {
+      "method": "GET",
+      "path": "capability"
+    },
+    {
+      "method": "GET",
+      "path": "capability"
+    },
+    {
+      "method": "GET",
+      "path": "capability"
+    },
+    {
+      "method": "POST",
+      "path": "intent"
+    },
+    {
+      "method": "GET",
+      "path": "status:uploading"
+    },
+    {
+      "method": "PUT",
+      "path": "bytes"
+    },
+    {
+      "method": "POST",
+      "path": "complete"
+    },
+    {
+      "method": "GET",
+      "path": "status:processing"
+    },
+    {
+      "method": "GET",
+      "path": "status:ready"
+    },
+    {
+      "method": "GET",
+      "path": "capability"
+    },
+    {
+      "method": "GET",
+      "path": "capability"
+    },
+    {
+      "method": "GET",
+      "path": "capability"
+    },
+    {
+      "method": "POST",
+      "path": "intent"
+    },
+    {
+      "method": "GET",
+      "path": "status:uploading"
+    },
+    {
+      "method": "PUT",
+      "path": "bytes"
+    },
+    {
+      "method": "POST",
+      "path": "complete"
+    },
+    {
+      "method": "GET",
+      "path": "status:failed"
+    }
+  ],
+  "allowed_path_sample": [
+    "GET /login",
+    "GET /_next/static/css/app/layout.css",
+    "GET /_next/static/css/app/login/page.css",
+    "GET /_next/static/chunks/webpack.js",
+    "GET /_next/static/chunks/main-app.js",
+    "GET /_next/static/chunks/app-pages-internals.js",
+    "GET /_next/static/chunks/app/login/page.js",
+    "GET /_next/static/media/e4af272ccee01ff0-s.p.woff2",
+    "GET /_next/static/media/d3ebbfd689654d3a-s.p.woff2",
+    "POST /v1/auth/password/login",
+    "POST /v1/context",
+    "GET /v1/me",
+    "GET /v1/context",
+    "GET /v1/me/studio-access",
+    "GET /v1/me",
+    "GET /v1/context",
+    "GET /v1/me/studio-access",
+    "GET /studio",
+    "GET /_next/static/css/app/layout.css",
+    "GET /_next/static/css/app/studio/layout.css",
+    "GET /_next/static/css/app/studio/page.css",
+    "GET /_next/static/chunks/webpack.js",
+    "GET /_next/static/chunks/main-app.js",
+    "GET /_next/static/chunks/app-pages-internals.js",
+    "GET /_next/static/chunks/app/studio/layout.js",
+    "GET /_next/static/chunks/app/studio/page.js",
+    "GET /_next/static/media/e4af272ccee01ff0-s.p.woff2",
+    "GET /v1/me",
+    "GET /v1/context",
+    "GET /v1/me/studio-access",
+    "GET /v1/admin/studio/programs",
+    "GET /v1/admin/studio/programs",
+    "GET /studio/programs/a980466f-9152-57df-ac31-6bb9ab5f0471",
+    "GET /_next/static/css/app/layout.css",
+    "GET /_next/static/css/app/studio/layout.css",
+    "GET /_next/static/css/app/studio/programs/%5BprogramId%5D/page.css",
+    "GET /_next/static/chunks/webpack.js",
+    "GET /_next/static/chunks/main-app.js",
+    "GET /_next/static/chunks/app-pages-internals.js",
+    "GET /_next/static/chunks/app/studio/layout.js",
+    "GET /_next/static/chunks/app/studio/programs/%5BprogramId%5D/page.js",
+    "GET /_next/static/media/e4af272ccee01ff0-s.p.woff2",
+    "GET /v1/me",
+    "GET /v1/context",
+    "GET /v1/me/studio-access",
+    "GET /v1/admin/studio/programs/a980466f-9152-57df-ac31-6bb9ab5f0471",
+    "GET /v1/admin/studio/programs/a980466f-9152-57df-ac31-6bb9ab5f0471",
+    "GET /v1/admin/studio/programs/a980466f-9152-57df-ac31-6bb9ab5f0471/video-upload-capability",
+    "GET /v1/admin/studio/programs/a980466f-9152-57df-ac31-6bb9ab5f0471/video-upload-capability",
+    "GET /v1/admin/studio/programs/a980466f-9152-57df-ac31-6bb9ab5f0471/video-upload-capability",
+    "GET /studio/programs/a980466f-9152-57df-ac31-6bb9ab5f0471",
+    "GET /_next/static/css/app/layout.css",
+    "GET /_next/static/css/app/studio/layout.css",
+    "GET /_next/static/css/app/studio/programs/%5BprogramId%5D/page.css",
+    "GET /_next/static/chunks/webpack.js",
+    "GET /_next/static/chunks/main-app.js",
+    "GET /_next/static/chunks/app-pages-internals.js",
+    "GET /_next/static/chunks/app/studio/layout.js",
+    "GET /_next/static/chunks/app/studio/programs/%5BprogramId%5D/page.js",
+    "GET /_next/static/media/e4af272ccee01ff0-s.p.woff2",
+    "GET /v1/me",
+    "GET /v1/context",
+    "GET /v1/me/studio-access",
+    "GET /v1/admin/studio/programs/a980466f-9152-57df-ac31-6bb9ab5f0471",
+    "GET /v1/admin/studio/programs/a980466f-9152-57df-ac31-6bb9ab5f0471",
+    "GET /v1/me",
+    "GET /v1/context",
+    "GET /v1/me/studio-access",
+    "GET /studio/programs/a980466f-9152-57df-ac31-6bb9ab5f0471",
+    "GET /_next/static/css/app/layout.css",
+    "GET /_next/static/css/app/studio/layout.css",
+    "GET /_next/static/css/app/studio/programs/%5BprogramId%5D/page.css",
+    "GET /_next/static/chunks/webpack.js",
+    "GET /_next/static/chunks/main-app.js",
+    "GET /_next/static/chunks/app-pages-internals.js",
+    "GET /_next/static/chunks/app/studio/layout.js",
+    "GET /_next/static/chunks/app/studio/programs/%5BprogramId%5D/page.js",
+    "GET /_next/static/media/e4af272ccee01ff0-s.p.woff2",
+    "GET /v1/me",
+    "GET /v1/context"
+  ],
+  "complete_calls": 2,
+  "keyboard": {
+    "focus_sequence": [
+      {
+        "tag": "BUTTON",
+        "role": null,
+        "aria": null,
+        "text": "Course outline \u00b7 2 modules"
+      },
+      {
+        "tag": "INPUT",
+        "role": null,
+        "aria": null,
+        "text": ""
+      },
+      {
+        "tag": "TEXTAREA",
+        "role": null,
+        "aria": null,
+        "text": "Local editor test content only. Replace this text while testing Studio."
+      }
+    ],
+    "file_input_label": "Choose a course video"
+  },
+  "blocked": [],
+  "console_issue_types": [
+    "error"
+  ],
+  "console_issue_messages": [
+    "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+  ]
+}

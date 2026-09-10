@@ -1,0 +1,43 @@
+name: ac-media-safety
+services:
+  scanner:
+    image: clamav/clamav@sha256:5a7c486fc98339860373284f48a670b74b1f25f15812b327fbe5b684061cf42f
+    container_name: ac-media-safety-scanner
+    user: "100:100"
+    entrypoint: /init-unprivileged
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    cpus: 2
+    mem_limit: 4g
+    memswap_limit: 4g
+    pids_limit: 96
+    environment:
+      TZ: Etc/UTC
+      CLAMAV_NO_MILTERD: "true"
+      FRESHCLAM_CHECKS: "12"
+    ports:
+      - "127.0.0.1:13310:3310"
+    volumes:
+      - ./clamd.conf:/etc/clamav/clamd.conf:ro
+      - ./freshclam.conf:/etc/clamav/freshclam.conf:ro
+      - /srv/authority-closers/volumes/media-safety-signatures:/var/lib/clamav
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=268435456,uid=100,gid=100,mode=0700
+    healthcheck:
+      # The pinned image's clamdcheck.sh resolves localhost to ::1 first,
+      # while this service intentionally exposes only the IPv4 listener.
+      test: ["CMD-SHELL", "echo PING | nc 127.0.0.1 3310 | grep -qx PONG"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 6m
+    logging:
+      driver: local
+      options:
+        max-size: 5m
+        max-file: "2"
+    labels:
+      ac.scope: local-studio-video-safety
+      ac.release: ${AC_MEDIA_SAFETY_RELEASE:?exact reviewed release required}

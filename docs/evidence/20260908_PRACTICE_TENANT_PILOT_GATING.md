@@ -60,5 +60,39 @@ retain explicit error/recovery states; no mock or local-preview fallback is used
 This evidence records source and automated tests only. No environment activation,
 runtime restart, browser interaction, production/staging account or database
 write, provider call, deployment, content approval, retention policy or consent
-change was performed. Release profiles remain disabled. A tenant-specific
-activation and production content/privacy approval are separate decisions.
+change was performed. At that verification point, release profiles remained
+disabled. A tenant-specific activation and production content/privacy approval
+are separate decisions.
+
+## Staging release-contract correction candidate — 2026-09-10
+
+The reviewed earned-only pilot decision is now represented by the source-owned
+staging profile: staging requires `AC_PRACTICE_PILOT_ENABLED=true`, while the
+production profile and installer continue to require `false`. The installer
+does not accept a separately selected pilot tenant. It clears any ambient value,
+enters the managed environment, derives the pilot scope from the canonical
+public learner tenant reference, and validates exact UUID shape and distinction
+from the operations tenant before image loading or deployment mutation. Failure
+messages contain no tenant references.
+
+Compose resolves the target release's own profile for every call. A prior
+immutable policy-off release therefore remounts neither Practice API nor
+presentation routes. Deactivation does not downgrade schema, restore a live
+database, delete balanced ledger rows, or rewrite immutable practice/audit
+history.
+
+Focused release, internal-transport, archive, settings, Practice pilot and
+Practice HTTP regression: **358 passed, 6 skipped**. The skips require unavailable
+local Caddy/Linux Docker integration surfaces; Bash syntax validation and Python
+lint/format validation passed separately. This is source and test evidence only.
+No managed setting, running flag, service, database, release artifact, deployment
+or production state was changed by this correction.
+
+Final independent review reported no Critical, Important or actionable Minor
+findings. Its rollback regression composes separate current-on and previous-off
+release directories and checks the canonical previous-release restart path.
+Root's adjacent controller/internal-transport/film checks passed 109 with eight
+explicit Windows POSIX/Docker skips after including the real scope helper in
+the extracted-function test harnesses. The release archive suite passed 56.
+Python lint/format and Git whitespace checks passed. Packaging and actual
+staging activation are subsequent evidence, not implied by these local checks.

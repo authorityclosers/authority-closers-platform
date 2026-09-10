@@ -88,6 +88,132 @@ def test_launcher_process_and_file_guards_remain_explicit():
     assert "unknown processes are not stopped" in source
 
 
+def test_launcher_proves_anonymous_api_route_after_login_on_reuse_and_fresh_start():
+    source = LAUNCHER.read_text(encoding="utf-8")
+    helper_start = source.index("function Assert-LocalAnonymousApiRoute")
+    helper_end = source.index("\ntry {", helper_start)
+    helper = source[helper_start:helper_end]
+
+    assert "$Handler.UseCookies = $false" in helper
+    assert "$Handler.UseProxy = $false" in helper
+    assert "$Handler.AllowAutoRedirect = $false" in helper
+    assert "$Client.Timeout = [TimeSpan]::FromSeconds(5)" in helper
+    assert '"http://127.0.0.1:$($Surface.port)/v1/me"' in helper
+    assert '$Request.Headers.Host = "$($Surface.name).localhost:$($Surface.port)"' in helper
+    assert "[Net.Http.HttpMethod]::Get" in helper
+    assert "$Status -ne 401" in helper
+    assert "$CacheControl.Private" in helper
+    assert "$CacheControl.NoStore" in helper
+    assert "$Response.Headers.Contains('Set-Cookie')" in helper
+    assert "$Client.SendAsync(" in helper
+    assert "ResponseHeadersRead" in helper
+
+    reuse_login = source.index('Write-Host "Local $($Surface.name) already ready')
+    reuse_check = source.index(
+        "Assert-LocalAnonymousApiRoute -Surface $Surface", helper_end, reuse_login
+    )
+    assert reuse_check < reuse_login
+
+    fresh_login = source.index("if ($Response.StatusCode -eq 200) {", reuse_login)
+    fresh_check = source.index("Assert-LocalAnonymousApiRoute -Surface $Surface", fresh_login)
+    fresh_success = source.index("$Ready = $true", fresh_check)
+    assert fresh_check < fresh_success
+    assert "[DateTime]::UtcNow.AddSeconds(60)" in source
+    assert "Start-Sleep -Milliseconds 500" in source
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required for launcher parsing")
+def test_anonymous_api_probe_helper_is_syntax_valid_without_running_launcher():
+    source = LAUNCHER.read_text(encoding="utf-8")
+    start = source.index("function Assert-LocalAnonymousApiRoute")
+    end = source.index("\ntry {", start)
+    helper = source[start:end]
+    command = (
+        "$errors = $null; $tokens = $null; "
+        f"[System.Management.Automation.Language.Parser]::ParseInput("
+        f"'{helper.replace(chr(39), chr(39) * 2)}', [ref]$tokens, [ref]$errors) "
+        "| Out-Null; if ($errors.Count) { exit 1 }"
+    )
+    result = subprocess.run(  # noqa: S603 - fixed offline parser invocation
+        [POWERSHELL, "-NoProfile", "-NonInteractive", "-Command", command],
+        capture_output=True,
+        check=False,
+        timeout=15,
+    )
+    assert result.returncode == 0
+
+
+def test_local_launchers_keep_scanner_opt_in_and_private_scope() -> None:
+    scanner = (ROOT / "scripts" / "Start-LocalStudioVideoScanner.ps1").read_text(encoding="utf-8")
+    api = (ROOT / "scripts" / "Start-LocalApi.ps1").read_text(encoding="utf-8")
+    platform = (ROOT / "scripts" / "Start-LocalPlatform.ps1").read_text(encoding="utf-8")
+
+    assert "[Parameter(Mandatory)]" in scanner
+    assert "127.0.0.1:13310:127.0.0.1:13310" in scanner
+    assert "ExitOnForwardFailure=yes" in scanner
+    assert "sudo -n python3 $RemoteRoot/releases/$ReleaseSha/manage.py prove" in scanner
+    assert "scanner-readiness.json" in scanner
+
+    assert "param([switch]$Stop, [switch]$StudioVideo)" in api
+    assert "$ApiTarget = 'ac_platform.http.app:app'" in api
+    assert "ac_platform.development.studio_video_app:create_app" in api
+    assert "$env:AC_LOCAL_STUDIO_VIDEO_ENABLED = 'true'" in api
+    assert "AC_EXTERNAL_SIDE_EFFECTS_HOLD = 'true'" in api
+    assert "AC_MEDIA_PROVIDER_ENABLED = 'false'" in api
+    assert "AC_INTERNAL_API_HOST = '127.0.0.1'" in api
+
+    assert "[switch]$StudioVideo" in platform
+    assert "Start-LocalApi.ps1') -StudioVideo:$StudioVideo" in platform
+    assert (
+        "AC_DEV_STUDIO_VIDEO_UPLOAD_ENABLED'] = if ($StudioVideo) { 'true' } else { 'false' }"
+        in platform
+    )
+    assert "AC_DEV_AUTH_BRIDGE_ENABLED'] = 'false'" in platform
+    assert "AC_DEV_ADMIN_AUTH_BRIDGE_ENABLED'] = 'false'" in platform
+    assert "AC_DEV_ADMIN_ACCESS_JWT'] = ''" in platform
+    assert "http://127.0.0.1:8000" in platform
+
+
+@pytest.mark.skipif(POWERSHELL is None, reason="PowerShell is required for opt-in evaluation")
+@pytest.mark.parametrize("enabled", [False, True])
+def test_studio_upload_transport_and_api_factory_are_explicit_opt_ins(enabled):
+    ui_source = LAUNCHER.read_text(encoding="utf-8")
+    api_source = (ROOT / "scripts/Start-LocalApi.ps1").read_text(encoding="utf-8")
+    configuration = ui_source.split("    $ChildEnvironment = @{}", 1)[1].split(
+        "    $Started = @()", 1
+    )[0]
+    factory = api_source.split("        $ApiTarget = 'ac_platform.http.app:app'", 1)[1].split(
+        "        # Tokens and signed media locators", 1
+    )[0]
+    command = (
+        f"$StudioVideo = ${str(enabled).lower()}\n$ChildEnvironment = @{{}}\n"
+        + configuration
+        + "\n$ApiTarget = 'ac_platform.http.app:app'\n"
+        + factory
+        + "\n@{target=$ApiTarget; factory=@($FactoryArguments); "
+        "upload=$ChildEnvironment['AC_DEV_STUDIO_VIDEO_UPLOAD_ENABLED']; "
+        "opt_in=$env:AC_LOCAL_STUDIO_VIDEO_ENABLED} | ConvertTo-Json -Compress"
+    )
+    environment = {key: value for key, value in os.environ.items() if not key.startswith("AC_")}
+    result = subprocess.run(  # noqa: S603 - only extracted configuration, no runtime operations
+        [POWERSHELL, "-NoProfile", "-NonInteractive", "-Command", command],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=15,
+        env=environment,
+    )
+    observed = json.loads(result.stdout)
+    assert observed["upload"] == str(enabled).lower()
+    assert observed["target"] == (
+        "ac_platform.development.studio_video_app:create_app"
+        if enabled
+        else "ac_platform.http.app:app"
+    )
+    assert observed["factory"] == (["--factory"] if enabled else [])
+    assert observed["opt_in"] == ("true" if enabled else None)
+
+
 def test_individual_surface_restart_preserves_the_other_managed_process():
     source = LAUNCHER.read_text(encoding="utf-8")
     assert "[ValidateSet('all', 'both', 'learner', 'admin', 'coach')]" in source

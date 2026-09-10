@@ -4,10 +4,15 @@ param(
     [switch]$Stop
 )
 
+$ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'Local-RuntimeBootstrap.ps1')
+if (Invoke-LocalRuntimeRelaunch -ScriptPath $PSCommandPath -Parameters $PSBoundParameters) { return }
+
 # Disposable localhost development only. Never accepts a remote host, an
 # arbitrary data directory, a production connection string, or an existing cluster.
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'Get-LocalTcpListeners.ps1')
 if (-not $IsWindows) { throw 'This portable runtime launcher requires Windows PowerShell 7.' }
 
 $RepositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
@@ -162,7 +167,7 @@ if ($Stop) {
 }
 
 New-Item -ItemType Directory -Path $StateRoot -Force | Out-Null
-$Listeners = @(Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue)
+$Listeners = @(Get-LocalTcpListeners -Port $Port)
 if ($Listeners.Count -gt 0 -and -not $Marker) {
     throw 'The requested port is already occupied; no existing service will be changed.'
 }
@@ -241,7 +246,7 @@ foreach ($Role in @('ac_migrator', 'ac_runtime', 'ac_backup')) {
     $SandboxResult = Invoke-LocalQuery $Role ac_local_sandbox 'SELECT current_user;'
     if ($SandboxResult -ne $Role) { throw 'Local sandbox database role readiness failed.' }
 }
-$Listeners = @(Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue)
+$Listeners = @(Get-LocalTcpListeners -Port $Port)
 if ($Listeners.Count -ne 1 -or $Listeners[0].LocalAddress -ne '127.0.0.1') {
     throw 'The managed local database is not exclusively loopback-bound.'
 }

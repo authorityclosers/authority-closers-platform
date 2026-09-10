@@ -10,10 +10,12 @@ from __future__ import annotations
 
 from sqlalchemy import MetaData
 
+from ac_platform.app_updates import models as app_update_models
 from ac_platform.audit import models as audit_models
 from ac_platform.authorization import models as authorization_models
 from ac_platform.catalog import models as catalog_models
 from ac_platform.certificates import models as certificate_models
+from ac_platform.community import models as community_models
 from ac_platform.db.base import Base
 from ac_platform.enrollment import models as enrollment_models
 from ac_platform.identity import models as identity_models
@@ -30,6 +32,8 @@ from ac_platform.tenancy import models as tenancy_models
 MODEL_MODULES = (
     identity_models,
     tenancy_models,
+    app_update_models,
+    community_models,
     authorization_models,
     knowledge_models,
     catalog_models,

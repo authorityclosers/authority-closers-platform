@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from sqlalchemy import UniqueConstraint
 
 from ac_platform.db.models import model_metadata
@@ -18,6 +20,10 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "identity_command_idempotency",
         "tenants",
         "memberships",
+        "academy_public_profiles",
+        "community_public_profiles",
+        "academy_leaderboard_preferences",
+        "app_update_read_receipts",
         "capability_grants",
         "capability_revocations",
         "programs",
@@ -60,6 +66,7 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "media_assets",
         "media_versions",
         "media_upload_intents",
+        "studio_video_uploads",
         "media_renditions",
         "media_caption_tracks",
         "media_playback_grants",
@@ -103,3 +110,64 @@ def test_media_upload_intent_model_keeps_fail_closed_checks() -> None:
 
     assert "ck_media_upload_intents_request_fingerprint_sha256" in check_names
     assert "ck_media_upload_intents_state_supported" in check_names
+
+
+def test_academy_public_profile_migration_is_forward_only() -> None:
+    migration = (
+        Path(__file__).parents[2]
+        / "db"
+        / "migrations"
+        / "versions"
+        / "20260910_0027_academy_public_profiles.py"
+    ).read_text(encoding="utf-8")
+
+    downgrade = migration.split("def downgrade() -> None:", 1)[1]
+    assert "raise RuntimeError" in downgrade
+    assert "drop_table" not in downgrade
+
+
+def test_global_community_identity_migration_is_forward_only_and_collision_safe() -> None:
+    migration = (
+        Path(__file__).parents[2]
+        / "db"
+        / "migrations"
+        / "versions"
+        / "20260910_0028_global_community_identity.py"
+    ).read_text(encoding="utf-8")
+
+    downgrade = migration.split("def downgrade() -> None:", 1)[1]
+    assert "raise RuntimeError" in downgrade
+    assert "drop_table" not in downgrade
+    assert "count(DISTINCT username) > 1" in migration
+    assert "count(DISTINCT person_id) > 1" in migration
+    assert "No username was selected or renamed" in migration
+
+
+def test_app_update_receipts_are_unique_append_only_and_forward_only() -> None:
+    table = model_metadata().tables["app_update_read_receipts"]
+    unique_columns = {
+        tuple(column.name for column in constraint.columns)
+        for constraint in table.constraints
+        if isinstance(constraint, UniqueConstraint)
+    }
+    assert ("tenant_id", "person_id", "release_id") in unique_columns
+    indexes = {
+        (index.name, tuple(column.name for column in index.columns)) for index in table.indexes
+    }
+    assert (
+        "ix_app_update_read_receipts_learner_read_at",
+        ("tenant_id", "person_id", "read_at"),
+    ) in indexes
+
+    migration = (
+        Path(__file__).parents[2]
+        / "db"
+        / "migrations"
+        / "versions"
+        / "20260910_0029_app_update_read_receipts.py"
+    ).read_text(encoding="utf-8")
+    downgrade = migration.split("def downgrade() -> None:", 1)[1]
+    assert "raise RuntimeError" in downgrade
+    assert "drop_table" not in downgrade
+    assert "BEFORE UPDATE OR DELETE" in migration
+    assert "app_update_read_receipts_append_only" in migration

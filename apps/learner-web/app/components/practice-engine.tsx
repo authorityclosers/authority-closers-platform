@@ -6,14 +6,12 @@ import {
   ActionButton,
   actionClassName,
   FocusSession,
-  LearningSymbol,
   PracticeCompanion,
-  PRACTICE_COMPANIONS,
   type PracticeCompanionKind,
   RewardReveal,
   SessionStep,
 } from "@ac/ui";
-import { ArrowRight, LoaderCircle, X } from "lucide-react";
+import { ArrowRight, Clock3, Layers3, LoaderCircle, X } from "lucide-react";
 import {
   createPracticeSoundPlayer,
   readPracticeSounds,
@@ -23,7 +21,6 @@ import {
 } from "../lib/practice-sounds";
 import {
   readPracticeCompanion,
-  savePracticeCompanion,
   subscribePracticeCompanion,
 } from "../lib/practice-presentation";
 import {
@@ -46,6 +43,9 @@ import {
 import styles from "./practice-engine.module.css";
 import { PracticeCompanionStage } from "./practice-companion-stage";
 import { PracticeSoundControls } from "./practice-sound-controls";
+import { PracticeRewards } from "./practice-rewards";
+import { PracticeBrief } from "./practice-brief";
+import { PracticeArt } from "./practice-art";
 import {
   usePracticeFocus,
   PracticeFocusStatus,
@@ -107,28 +107,6 @@ function Failure({ error, retry }: { error: unknown; retry: () => void }) {
         </ActionButton>
       )}
     </div>
-  );
-}
-
-function RewardsExplainer() {
-  return (
-    <details className={styles.explainer}>
-      <summary>How practice rewards work</summary>
-      <p>
-        Earn 10 credits and 30 XP for each of your first two eligible practice
-        families each day. Complete every prompt and read its feedback. You
-        don’t need a perfect answer.
-      </p>
-      <p>
-        Practise on three days in the same week to earn a further 40 credits.
-        Replays and hints are free. Credits cannot be purchased, and leaving a
-        game does not take any away.
-      </p>
-      <p>
-        Practice rewards are separate from course progress, assessments and
-        certificates.
-      </p>
-    </details>
   );
 }
 
@@ -275,163 +253,106 @@ export function PracticeRecognition({
   );
   return (
     <section className={styles.recognition} aria-label="Your saved practice">
-      <div className={styles.wallet}>
-        <div>
-          <LearningSymbol kind="credits" size={46} />
-          <p>
-            <strong>{number(progress.credits_balance)}</strong>
-            <span>Earned credits</span>
-          </p>
-        </div>
-        <div>
-          <LearningSymbol kind="experience" size={46} />
-          <p>
-            <strong>{number(progress.xp_total)}</strong>
-            <span>Practice XP</span>
-          </p>
-        </div>
-        <div>
-          <LearningSymbol kind="rhythm" size={46} />
-          <p>
-            <strong>{progress.actual_practice_days_this_week}</strong>
-            <span>Practice days this week</span>
-          </p>
-        </div>
-      </div>
-      <div className={styles.rhythm}>
-        <p>
-          <strong>Make room for a little practice.</strong>
-          <span>Three practice days in a week earn 40 bonus credits.</span>
-        </p>
-        <div
-          className={styles.rhythmSteps}
-          role="progressbar"
-          aria-label="Practice days towards the weekly bonus"
-          aria-valuemin={0}
-          aria-valuemax={3}
-          aria-valuenow={Math.min(3, progress.actual_practice_days_this_week)}
-        >
-          {[1, 2, 3].map((day) => (
-            <span
-              key={day}
-              aria-hidden="true"
-              data-filled={progress.actual_practice_days_this_week >= day}
-            />
-          ))}
-        </div>
-      </div>
+      <PracticeRewards
+        progress={progress}
+        timezoneControls={
+          <>
+            <div className={styles.zoneSummary}>
+              <span>
+                {progress.profile.timezone
+                  ? `Practice timezone: ${progress.profile.timezone}`
+                  : "Choose your timezone when you start your first practice."}
+              </span>
+              <ActionButton
+                variant="quiet"
+                onClick={() => setEditZone((value) => !value)}
+                disabled={saving}
+              >
+                Change timezone
+              </ActionButton>
+            </div>
+            {progress.profile.pending_timezone ? (
+              <p className={styles.note} role="status">
+                {progress.profile.pending_timezone} is scheduled for{" "}
+                {new Date(
+                  progress.profile.pending_effective_at!,
+                ).toLocaleDateString("en", {
+                  dateStyle: "medium",
+                  timeZone: progress.profile.timezone ?? "UTC",
+                })}
+                .
+              </p>
+            ) : null}
+            {editZone ? (
+              <div className={styles.zoneEditor}>
+                <TimezoneInput
+                  value={zone}
+                  onChange={setZone}
+                  disabled={saving || zoneLocked}
+                />
+                <ActionButton
+                  onClick={() => void saveZone()}
+                  disabled={saving || !zone.trim()}
+                >
+                  {saving ? "Saving…" : "Save timezone"}
+                </ActionButton>
+                {zoneInvalid ? (
+                  <p role="alert">
+                    Choose a valid timezone, such as Asia/Kolkata, then save
+                    again.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+            {error ? (
+              <div className={styles.error} role="alert">
+                <p>
+                  That change could not be confirmed. Retry the same change, or
+                  reload your saved preferences.
+                </p>
+                <ActionButton
+                  variant="quiet"
+                  onClick={() => {
+                    pending.current = null;
+                    setZoneLocked(false);
+                    setZoneInvalid(false);
+                    setEpoch((n) => n + 1);
+                  }}
+                >
+                  Reload saved preferences
+                </ActionButton>
+              </div>
+            ) : null}
+          </>
+        }
+      />
       {active ? (
         <Link
-          className={styles.resume}
+          className={styles.resumeCard}
           href={attemptHref(active.set_id, active.id)}
         >
+          <div className={styles.resumeCharacter} aria-hidden="true">
+            <PracticeCompanion size={90} mood="encourage" motion="once" />
+          </div>
           <span>
-            <strong>Pick up where you left off</strong>
+            <small>Continue practice</small>
+            <strong>{active.title}</strong>
             <small>
-              {active.title} · {active.acknowledged_count} of{" "}
-              {active.item_count} prompts saved
+              {active.acknowledged_count} of {active.item_count} prompts saved
             </small>
+            <span className={styles.resumeMeter} aria-hidden="true">
+              <span
+                style={{
+                  width: `${Math.min(100, active.item_count > 0 ? (active.acknowledged_count / active.item_count) * 100 : 0)}%`,
+                }}
+              />
+            </span>
           </span>
-          <ArrowRight size={20} aria-hidden="true" />
+          <span className={styles.resumePlay}>
+            <ArrowRight size={20} aria-hidden="true" />
+            <small>Resume</small>
+          </span>
         </Link>
-      ) : null}
-      <RewardsExplainer />
-      {progress.recent_awards.length ? (
-        <details className={styles.explainer}>
-          <summary>Your recent rewards</summary>
-          <ul className={styles.rewardHistory}>
-            {progress.recent_awards.slice(0, 5).map((award) => (
-              <li key={award.id}>
-                <span>
-                  <strong>
-                    {award.kind === "weekly_rhythm"
-                      ? "Three-day rhythm"
-                      : "Practice complete"}
-                  </strong>
-                  <small>
-                    {new Date(
-                      `${award.local_day}T12:00:00Z`,
-                    ).toLocaleDateString("en", {
-                      month: "short",
-                      day: "numeric",
-                      timeZone: "UTC",
-                    })}
-                  </small>
-                </span>
-                <span>
-                  +{number(award.credits)} credits
-                  {award.xp ? ` · +${number(award.xp)} XP` : ""}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </details>
-      ) : null}
-      <div className={styles.zoneSummary}>
-        <span>
-          {progress.profile.timezone
-            ? `Practice timezone: ${progress.profile.timezone}`
-            : "Choose your timezone when you start your first practice."}
-        </span>
-        <ActionButton
-          variant="quiet"
-          onClick={() => setEditZone((value) => !value)}
-          disabled={saving}
-        >
-          Change timezone
-        </ActionButton>
-      </div>
-      {progress.profile.pending_timezone ? (
-        <p className={styles.note} role="status">
-          {progress.profile.pending_timezone} is scheduled for{" "}
-          {new Date(progress.profile.pending_effective_at!).toLocaleDateString(
-            "en",
-            {
-              dateStyle: "medium",
-              timeZone: progress.profile.timezone ?? "UTC",
-            },
-          )}
-          .
-        </p>
-      ) : null}
-      {editZone ? (
-        <div className={styles.zoneEditor}>
-          <TimezoneInput
-            value={zone}
-            onChange={setZone}
-            disabled={saving || zoneLocked}
-          />
-          <ActionButton
-            onClick={() => void saveZone()}
-            disabled={saving || !zone.trim()}
-          >
-            {saving ? "Saving…" : "Save timezone"}
-          </ActionButton>
-          {zoneInvalid ? (
-            <p role="alert">
-              Choose a valid timezone, such as Asia/Kolkata, then save again.
-            </p>
-          ) : null}
-        </div>
-      ) : null}
-      {error ? (
-        <div className={styles.error} role="alert">
-          <p>
-            That change could not be confirmed. Retry the same change, or reload
-            your saved preferences.
-          </p>
-          <ActionButton
-            variant="quiet"
-            onClick={() => {
-              pending.current = null;
-              setZoneLocked(false);
-              setZoneInvalid(false);
-              setEpoch((n) => n + 1);
-            }}
-          >
-            Reload saved preferences
-          </ActionButton>
-        </div>
       ) : null}
     </section>
   );
@@ -748,6 +669,7 @@ export function PracticeEngine({
           )
         ) : (
           <SessionStep
+            className={styles.introStep}
             labelledBy="practice-start-title"
             footer={
               <ActionButton
@@ -768,26 +690,35 @@ export function PracticeEngine({
             }
           >
             <section className={styles.start}>
-              <PracticeCompanionStage
-                variant={companion}
-                mood="ready"
-                size={132}
-                active={!exitOpen}
-              />
-              <p className={styles.eyebrow}>A few focused minutes</p>
+              <div className={styles.introScene} aria-hidden="true">
+                <span className={styles.introArt}>
+                  <PracticeArt kind={set.kind} />
+                </span>
+                <PracticeCompanionStage
+                  variant={companion}
+                  mood="ready"
+                  size={150}
+                  active={!exitOpen}
+                />
+              </div>
               <h1 id="practice-start-title">{set.title}</h1>
-              <p>{set.description}</p>
-              <p className={styles.note}>
-                {set.items.length} prompts · Your responses and feedback
-                acknowledgement will be saved to your academy account.
-              </p>
+              <div className={styles.introMeta}>
+                <span>
+                  <Layers3 size={16} aria-hidden="true" />
+                  {set.items.length} prompts
+                </span>
+                <span>
+                  <Clock3 size={16} aria-hidden="true" />
+                  {set.estimated_minutes} min
+                </span>
+              </div>
               {active ? (
                 <Link
-                  className={styles.resume}
+                  className={styles.introResume}
                   href={attemptHref(setId, active.id)}
                 >
                   <span>
-                    <strong>Resume your saved practice</strong>
+                    <strong>Continue your practice</strong>
                     <small>
                       {active.acknowledged_count} of {active.item_count} prompts
                       saved
@@ -802,40 +733,12 @@ export function PracticeEngine({
                   onChange={setZone}
                   disabled={starting || startLocked}
                 />
-              ) : (
-                <p className={styles.note}>
-                  Daily rewards follow {profile.timezone}.
-                </p>
-              )}
-              <RewardsExplainer />
-              <details className={styles.explainer}>
-                <summary>Choose your practice companion</summary>
-                <div
-                  className={styles.companionChoices}
-                  role="group"
-                  aria-label="Practice companion"
-                >
-                  {PRACTICE_COMPANIONS.map((choice) => (
-                    <button
-                      key={choice.id}
-                      aria-pressed={companion === choice.id}
-                      onClick={() => savePracticeCompanion(choice.id)}
-                      title={choice.description}
-                    >
-                      <PracticeCompanion
-                        variant={choice.id}
-                        size={80}
-                        motion="off"
-                      />
-                      <span>{choice.name}</span>
-                    </button>
-                  ))}
-                </div>
-                <p>
-                  Just your companion on this browser. Your academy content and
-                  rewards stay the same.
-                </p>
-              </details>
+              ) : null}
+              <PracticeBrief
+                set={set}
+                timezone={profile.timezone}
+                companion={companion}
+              />
               {zoneInvalid ? (
                 <p className={styles.error} role="alert">
                   Choose a valid timezone, such as Asia/Kolkata, then start
@@ -938,6 +841,7 @@ export function PracticeEngine({
           initialState={initialState}
           disabled={needsRefresh || focus.busy || focus.uncertain}
           onInteraction={interact}
+          companion={companion}
           onNext={() => undefined}
           checkResponse={async (selections, signal) => {
             const latest = current.current!;
@@ -961,10 +865,22 @@ export function PracticeEngine({
               const feedback = savedResponse?.feedback;
               if (!feedback) throw new Error("Response feedback unavailable");
               install(value);
-              if (!exitDialog.current?.open && savedResponse?.response_id)
+              const referenceMatch =
+                feedback.kind === "feedback" ? feedback.reference_match : null;
+              const feedbackCue =
+                referenceMatch === true
+                  ? "confirm"
+                  : referenceMatch === false
+                    ? "retry"
+                    : null;
+              if (
+                !exitDialog.current?.open &&
+                savedResponse?.response_id &&
+                feedbackCue
+              )
                 soundPlayer.current?.play(
-                  "confirm",
-                  `response:${savedResponse.response_id}`,
+                  feedbackCue,
+                  `response:${savedResponse.response_id}:reference:${referenceMatch}`,
                 );
               return feedback as PracticeEditorialResult;
             } catch (reason) {

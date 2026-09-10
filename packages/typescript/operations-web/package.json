@@ -17,6 +17,7 @@
     "./login": "./src/operations-login.tsx",
     "./workspaces": "./src/operations-workspaces.ts",
     "./studio": "./src/studio/studio-runtime.tsx",
+    "./studio-workspace": "./src/studio/studio-workspace.tsx",
     "./studio-editor": "./src/studio/studio-course-editor.tsx",
     "./studio-recovery": "./src/studio/studio-draft-recovery.ts",
     "./styles.css": "./src/styles.css"

@@ -1,0 +1,675 @@
+"""Exact-archive, private scanner pilot. Never changes application routes or databases.
+
+Run on the VPS as root from the checksum-verified Git archive. `start` is an
+idempotent FIRST install of one exact release; it refuses replacement of an
+existing different release. `transition` is the only upgrade/rollback seam and
+requires an exact installed source release plus an exact immutable target.
+`prove` emits short-lived local readiness evidence. No arbitrary image,
+endpoint, source size, container name or service overrides exist.
+"""
+
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import hashlib
+import io
+import json
+import os
+import re
+import socket
+import stat
+import struct
+import subprocess
+import tarfile
+import time
+from pathlib import Path, PurePosixPath
+
+ROOT = Path("/srv/authority-closers/media-safety")
+DATABASE = Path("/srv/authority-closers/volumes/media-safety-signatures")
+CONTAINER = "ac-media-safety-scanner"
+DOCKER_HOST = "unix:///var/run/docker.sock"
+DIGEST = "sha256:5a7c486fc98339860373284f48a670b74b1f25f15812b327fbe5b684061cf42f"
+IMAGE = f"clamav/clamav@{DIGEST}"
+PREFIX = "infra/media-safety/"
+FILES = {"manage.py", "compose.yaml", "clamd.conf", "freshclam.conf"}
+MIB = 1024 * 1024
+HEALTH_COMMAND = "echo PING | nc 127.0.0.1 3310 | grep -qx PONG"
+HEALTH_TEST = ["CMD-SHELL", HEALTH_COMMAND]
+LEGACY_HEALTH_TEST = ["CMD", "clamdcheck.sh"]
+# The sole installed pilot release predates the explicit IPv4 health repair.
+# It may be validated only as a named transition source or emergency rollback
+# target; it can never mint a new readiness proof under this controller.
+LEGACY_HEALTH_RELEASES = frozenset({"3eb24da05caced66f15dcfe58ffc086014da8b0d"})
+HEALTH_TIMEOUT_SECONDS = 7 * 60
+HEALTH_POLL_SECONDS = 2
+
+
+class ScannerTransitionFailed(Exception):
+    """A bounded release transition failed, with explicit restore status."""
+
+    def __init__(self, source_release: str, target_release: str, *, restored: bool) -> None:
+        super().__init__("scanner release transition failed")
+        self.source_release = source_release
+        self.target_release = target_release
+        self.restored = restored
+
+
+def require(condition: bool, message: str) -> None:
+    if not condition:
+        raise ValueError(message)
+
+
+def sha(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def archive_files(raw: bytes, release: str, checksum: str) -> dict[str, bytes]:
+    require(bool(re.fullmatch(r"[0-9a-f]{40}", release)), "Invalid release identity")
+    require(bool(re.fullmatch(r"[0-9a-f]{64}", checksum)), "Invalid archive checksum")
+    require(len(raw) <= 2 * MIB and sha(raw) == checksum, "Archive checksum/size mismatch")
+    result: dict[str, bytes] = {}
+    with tarfile.open(fileobj=io.BytesIO(raw), mode="r:") as archive:
+        for member in archive:
+            path = PurePosixPath(member.name)
+            require(not path.is_absolute() and ".." not in path.parts, "Unsafe archive path")
+            if member.isdir():
+                require(
+                    member.name.rstrip("/") in {"infra", "infra/media-safety"}, "Extra directory"
+                )
+                continue
+            require(member.isfile() and member.name.startswith(PREFIX), "Unsafe archive member")
+            name = member.name.removeprefix(PREFIX)
+            require(name in FILES and name not in result, "Unexpected or duplicate archive file")
+            require(0 < member.size <= MIB, "Archive member size")
+            stream = archive.extractfile(member)
+            assert stream is not None
+            result[name] = stream.read(MIB + 1)
+        require(archive.pax_headers.get("comment") == release, "Not the named Git archive")
+    require(set(result) == FILES, "Incomplete scanner release")
+    return result
+
+
+def trusted(path: Path, *, directory: bool = True, immutable: bool = False) -> None:
+    info = path.lstat()
+    require(not stat.S_ISLNK(info.st_mode), "Symlink in managed path")
+    require(info.st_uid == 0 and not info.st_mode & 0o022, "Untrusted managed path")
+    require(
+        stat.S_ISDIR(info.st_mode) if directory else stat.S_ISREG(info.st_mode), "Wrong file type"
+    )
+    if immutable:
+        require(not info.st_mode & 0o222, "Release file is writable")
+
+
+def run(*command: str, timeout: int = 60, env: dict | None = None) -> str:
+    # Argument arrays only: callers supply fixed binaries/paths and validated
+    # release values, never shell fragments or arbitrary user commands.
+    if command and command[0] == "docker":
+        require(
+            not any(
+                item in {"--host", "-H", "--context", "context"}
+                or item.startswith(("--host=", "--context="))
+                for item in command[1:]
+            ),
+            "Docker endpoint override is forbidden",
+        )
+        # An active context in Docker's CLI config survives a stripped
+        # environment. The explicit local Unix socket takes precedence and
+        # prevents inspect/prove/transition from mixing or mutating hosts.
+        command = ("docker", "--host", DOCKER_HOST, *command[1:])
+    value = subprocess.run(  # noqa: S603
+        command,
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        env=env if env is not None else {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin"},
+    )
+    return value.stdout.strip()
+
+
+def inspect() -> dict | None:
+    names = run("docker", "ps", "-a", "--filter", f"name=^/{CONTAINER}$", "--format", "{{.Names}}")
+    if not names:
+        return None
+    require(names == CONTAINER, "Ambiguous scanner container")
+    return json.loads(run("docker", "inspect", CONTAINER))[0]
+
+
+def expected_health_test(installed: Path, *, allow_legacy: bool = False) -> list[str]:
+    """Read the one supported health contract from an immutable release."""
+
+    compose = (installed / "compose.yaml").read_text(encoding="utf-8")
+    ipv4_marker = "nc 127.0.0.1 3310"
+    legacy_marker = "test: [CMD, clamdcheck.sh]"
+    if compose.count(ipv4_marker) == 1 and legacy_marker not in compose:
+        return HEALTH_TEST
+    if allow_legacy and compose.count(legacy_marker) == 1 and ipv4_marker not in compose:
+        return LEGACY_HEALTH_TEST
+    raise ValueError("Scanner release health contract is invalid")
+
+
+def validate_container(
+    value: dict,
+    release: str,
+    installed: Path,
+    *,
+    allow_legacy_health: bool = False,
+) -> None:
+    require(value["Config"]["Image"] == IMAGE, "Unexpected scanner image")
+    require(
+        value["Config"]["Entrypoint"] == ["/init-unprivileged"] and not value["Config"]["Cmd"],
+        "Scanner command drift",
+    )
+    environment = dict(item.split("=", 1) for item in value["Config"]["Env"])
+    require(
+        environment.get("CLAMAV_NO_MILTERD") == "true"
+        and environment.get("FRESHCLAM_CHECKS") == "12",
+        "Scanner updater drift",
+    )
+    require(
+        environment.get("CLAMAV_NO_FRESHCLAMD", "false") == "false"
+        and environment.get("CLAMAV_NO_CLAMD", "false") == "false",
+        "Disabled scanner/updater",
+    )
+    labels = value["Config"].get("Labels", {})
+    require(
+        labels.get("ac.release") == release,
+        "Different release already installed; no implicit upgrade",
+    )
+    require(labels.get("ac.scope") == "local-studio-video-safety", "Unmanaged scanner")
+    host = value["HostConfig"]
+    require(
+        not host["Privileged"] and not host.get("CapAdd") and not host.get("Devices"),
+        "Scanner capabilities drift",
+    )
+    require(
+        host["NetworkMode"] == "ac-media-safety_default" and not host.get("PidMode"),
+        "Scanner namespace drift",
+    )
+    require(
+        host["PortBindings"] == {"3310/tcp": [{"HostIp": "127.0.0.1", "HostPort": "13310"}]},
+        "Scanner port exposure",
+    )
+    require(host["ReadonlyRootfs"] and host["CapDrop"] == ["ALL"], "Scanner privilege drift")
+    require("no-new-privileges:true" in host["SecurityOpt"], "Scanner privilege escalation")
+    require(value["Config"]["User"] == "100:100", "Scanner user drift")
+    require(
+        value["Config"].get("Healthcheck", {}).get("Test")
+        == expected_health_test(
+            installed,
+            allow_legacy=allow_legacy_health and release in LEGACY_HEALTH_RELEASES,
+        ),
+        "Scanner healthcheck drift",
+    )
+    require(
+        host["Memory"] == 4 * 1024 * MIB and host["MemorySwap"] == host["Memory"],
+        "Scanner memory bound",
+    )
+    require(host["NanoCpus"] == 2_000_000_000 and host["PidsLimit"] == 96, "Scanner resource drift")
+    mounts = {item["Destination"]: item for item in value["Mounts"] if item["Type"] == "bind"}
+    require(
+        set(mounts) == {"/etc/clamav/clamd.conf", "/etc/clamav/freshclam.conf", "/var/lib/clamav"},
+        "Unexpected scanner mounts",
+    )
+    for name in ("clamd.conf", "freshclam.conf"):
+        mount = mounts[f"/etc/clamav/{name}"]
+        require(
+            mount["Source"] == str(installed / name) and not mount["RW"],
+            "Scanner config mount drift",
+        )
+        require(
+            run("docker", "exec", CONTAINER, "sha256sum", f"/etc/clamav/{name}").split()[0]
+            == sha((installed / name).read_bytes()),
+            "Running config mismatch",
+        )
+    require(mounts["/var/lib/clamav"]["Source"] == str(DATABASE), "Signature storage drift")
+    require(mounts["/var/lib/clamav"]["RW"] is True, "Signature updates are not writable")
+
+
+def command(payload: bytes) -> bytes:
+    with socket.create_connection(("127.0.0.1", 13310), timeout=10) as connection:
+        connection.settimeout(20)
+        connection.sendall(payload)
+        result = bytearray()
+        while True:
+            part = connection.recv(2049 - len(result))
+            if not part:
+                break
+            result.extend(part)
+            require(len(result) <= 2048, "Unbounded scanner response")
+        return bytes(result)
+
+
+def scan(body: bytes) -> bytes:
+    return command(b"zINSTREAM\0" + struct.pack(">I", len(body)) + body + b"\0\0\0\0")
+
+
+def definitions() -> dict:
+    result = {}
+    for name in ("daily", "main", "bytecode"):
+        candidates = [DATABASE / f"{name}.{suffix}" for suffix in ("cvd", "cld")]
+        present = [path for path in candidates if path.is_file() and not path.is_symlink()]
+        require(len(present) == 1, "Ambiguous or missing signature database")
+        path = f"/var/lib/clamav/{present[0].name}"
+        info = run("docker", "exec", CONTAINER, "sigtool", "--info", path)
+        version = re.search(r"^Version: (\d+)$", info, re.MULTILINE)
+        created = re.search(r"^Build time: (.+)$", info, re.MULTILINE)
+        require(version is not None and created is not None, "Invalid signature header")
+        assert version and created
+        date = dt.datetime.strptime(created[1], "%d %b %Y %H:%M %z").astimezone(dt.UTC)
+        result[name] = {
+            "version": int(version[1]),
+            "updated_at": date.isoformat(),
+            "sha256": run("docker", "exec", CONTAINER, "sha256sum", path).split()[0],
+        }
+    return result
+
+
+def validate_policy(installed: Path) -> None:
+    """Validate the immutable scanning/updater policy for one release."""
+
+    policy = {}
+    for line in (installed / "clamd.conf").read_text().splitlines():
+        if line.strip() and not line.lstrip().startswith("#"):
+            key, setting = line.split(maxsplit=1)
+            require(key not in policy, "Duplicate scanner setting")
+            policy[key] = setting
+    require(
+        all(
+            policy.get(key) == setting
+            for key, setting in {
+                "StreamMaxLength": "100M",
+                "MaxFileSize": "100M",
+                "MaxScanSize": "200M",
+                "AlertExceedsMax": "yes",
+                "BytecodeSecurity": "TrustSigned",
+            }.items()
+        ),
+        "Scanner limits differ from admitted policy",
+    )
+    updater = {}
+    for line in (installed / "freshclam.conf").read_text().splitlines():
+        if line.strip() and not line.lstrip().startswith("#"):
+            key, setting = line.split(maxsplit=1)
+            require(key not in updater, "Duplicate signature updater setting")
+            updater[key] = setting
+    require(
+        all(
+            updater.get(key) == setting
+            for key, setting in {
+                "DatabaseOwner": "clamav",
+                "DatabaseDirectory": "/var/lib/clamav",
+                "DatabaseMirror": "database.clamav.net",
+                "DNSDatabaseInfo": "current.cvd.clamav.net",
+                "ScriptedUpdates": "yes",
+                "TestDatabases": "yes",
+                "NotifyClamd": "/etc/clamav/clamd.conf",
+                "Checks": "12",
+            }.items()
+        ),
+        "Signature updater differs from managed policy",
+    )
+
+
+def live_probe() -> tuple[bytes, dict]:
+    """Exercise the exact loopback scanner without trusting Docker health."""
+
+    require(command(b"zPING\0") == b"PONG\0", "Scanner PING failed")
+    version = command(b"zVERSION\0")
+    require(
+        scan(b"AC local Studio media safety clean probe\n") == b"stream: OK\0",
+        "Clean scanner probe failed",
+    )
+    # Standard harmless antivirus test string, never a live malware sample/file.
+    eicar = b"X5O!P%@AP[4\\PZX54(P^)7CC)7}$" + b"EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"
+    require(
+        re.fullmatch(
+            rb"stream: [^\x00\r\n]*Eicar[^\x00\r\n]* FOUND\x00", scan(eicar), re.IGNORECASE
+        )
+        is not None,
+        "Antivirus test probe failed",
+    )
+    evidence = definitions()
+    require(command(b"zVERSION\0") == version, "Signatures changed during proof; retry")
+    expected = f"ClamAV 1.5.4/{evidence['daily']['version']}/".encode()
+    require(version.startswith(expected), "Scanner engine/database identity mismatch")
+    now = dt.datetime.now(dt.UTC)
+    daily = dt.datetime.fromisoformat(evidence["daily"]["updated_at"])
+    require(dt.timedelta(0) <= now - daily <= dt.timedelta(hours=48), "Stale daily signatures")
+    return version, evidence
+
+
+def prove(release: str, installed: Path) -> dict:
+    value = inspect()
+    require(value is not None and value["State"]["Running"], "Scanner is not running")
+    assert value
+    require(
+        value["State"].get("Health", {}).get("Status") == "healthy",
+        "Scanner health is not accepted",
+    )
+    validate_container(value, release, installed)
+    validate_policy(installed)
+    _, evidence = live_probe()
+    final = inspect()
+    require(
+        final is not None
+        and final["Id"] == value["Id"]
+        and final["State"].get("Running")
+        and final["State"].get("Health", {}).get("Status") == "healthy",
+        "Scanner identity or health changed during proof",
+    )
+    validate_container(final, release, installed)
+    now = dt.datetime.now(dt.UTC)
+    config_hash = sha(
+        (installed / "clamd.conf").read_bytes() + (installed / "freshclam.conf").read_bytes()
+    )
+    receipt = {
+        "release": release,
+        "container_id": value["Id"],
+        "image": IMAGE,
+        "definitions": evidence,
+        "config_sha256": config_hash,
+        "clean": True,
+        "eicar_rejected": True,
+    }
+    return {
+        "schema_version": "ac.local-studio-video-scanner-readiness.v1",
+        "environment": "local",
+        "host": "127.0.0.1",
+        "port": 13310,
+        "max_source_bytes": 100 * MIB,
+        "stream_max_length": 100 * MIB,
+        "max_file_size": 100 * MIB,
+        "max_scan_size": 200 * MIB,
+        "alert_exceeds_max": True,
+        "verified_at": now.isoformat(),
+        "expires_at": (now + dt.timedelta(hours=12)).isoformat(),
+        "clamd_version": "1.5.4",
+        "scanner_image_digest": DIGEST,
+        "managed_config_sha256": config_hash,
+        "evidence_sha256": sha(json.dumps(receipt, sort_keys=True).encode()),
+        "definitions": evidence,
+    }
+
+
+def validate_installed_release(release: str, checksum: str) -> tuple[Path, dict[str, bytes]]:
+    """Load one already-retained immutable release by exact identity."""
+
+    retained = ROOT / "archives" / f"{release}.tar"
+    trusted(retained, directory=False, immutable=True)
+    raw = retained.read_bytes()
+    files = archive_files(raw, release, checksum)
+    installed = ROOT / "releases" / release
+    trusted(installed, immutable=True)
+    require({path.name for path in installed.iterdir()} == FILES, "Release file drift")
+    for name, body in files.items():
+        target = installed / name
+        trusted(target, directory=False, immutable=True)
+        require(target.read_bytes() == body, "Release differs from archive")
+    return installed, files
+
+
+def compose_up(release: str, installed: Path) -> None:
+    """Reconcile only the exact named scanner service for one release."""
+
+    env = {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "AC_MEDIA_SAFETY_RELEASE": release}
+    run(
+        "docker",
+        "compose",
+        "--project-name",
+        "ac-media-safety",
+        "--file",
+        str(installed / "compose.yaml"),
+        "up",
+        "--detach",
+        "--no-build",
+        "scanner",
+        timeout=120,
+        env=env,
+    )
+
+
+def wait_healthy(release: str, installed: Path) -> None:
+    """Wait for the new exact container and its corrected health contract."""
+
+    deadline = time.monotonic() + HEALTH_TIMEOUT_SECONDS
+    while time.monotonic() < deadline:
+        value = inspect()
+        if value is not None and value["State"].get("Running"):
+            validate_container(value, release, installed)
+            if value["State"].get("Health", {}).get("Status") == "healthy":
+                return
+        time.sleep(HEALTH_POLL_SECONDS)
+    raise ValueError("Scanner did not become healthy")
+
+
+def wait_live(release: str, installed: Path) -> None:
+    """Wait for exact live scanning, including the one named legacy rollback."""
+
+    deadline = time.monotonic() + HEALTH_TIMEOUT_SECONDS
+    while time.monotonic() < deadline:
+        value = inspect()
+        if value is not None and value["State"].get("Running"):
+            validate_container(value, release, installed, allow_legacy_health=True)
+            validate_policy(installed)
+            try:
+                live_probe()
+            except (ValueError, OSError, subprocess.SubprocessError):
+                pass
+            else:
+                return
+        time.sleep(HEALTH_POLL_SECONDS)
+    raise ValueError("Scanner source release could not be restored")
+
+
+def restore_release(release: str, installed: Path) -> None:
+    """Restore the exact source container and prove live scanning before returning."""
+
+    compose_up(release, installed)
+    wait_live(release, installed)
+
+
+def transition_release(
+    *,
+    mode: str,
+    source_release: str,
+    source_checksum: str,
+    target_release: str,
+    target_installed: Path,
+) -> dict:
+    """Replace one exact scanner release and automatically restore on failure."""
+
+    require(mode in {"upgrade", "rollback"}, "Invalid scanner transition mode")
+    require(source_release != target_release, "Scanner transition requires two releases")
+    require(
+        target_release not in LEGACY_HEALTH_RELEASES or mode == "rollback",
+        "Legacy scanner release is available only for rollback",
+    )
+    source_installed, source_files = validate_installed_release(source_release, source_checksum)
+    if mode == "rollback":
+        require(
+            source_files["manage.py"] == Path(__file__).read_bytes(),
+            "Rollback controller is not the installed source release",
+        )
+    current = inspect()
+    require(
+        current is not None and current["State"].get("Running"),
+        "Scanner transition source is not running",
+    )
+    assert current is not None
+    validate_container(
+        current,
+        source_release,
+        source_installed,
+        allow_legacy_health=True,
+    )
+    if source_release not in LEGACY_HEALTH_RELEASES:
+        require(
+            current["State"].get("Health", {}).get("Status") == "healthy",
+            "Scanner transition source is not healthy",
+        )
+    validate_policy(source_installed)
+    live_probe()
+    try:
+        compose_up(target_release, target_installed)
+        if target_release in LEGACY_HEALTH_RELEASES:
+            wait_live(target_release, target_installed)
+            readiness: dict | None = None
+            readiness_status = "functional_only_health_unaccepted"
+        else:
+            wait_healthy(target_release, target_installed)
+            readiness = prove(target_release, target_installed)
+            readiness_status = "verified"
+    except Exception:
+        try:
+            restore_release(source_release, source_installed)
+        except Exception:
+            raise ScannerTransitionFailed(source_release, target_release, restored=False) from None
+        raise ScannerTransitionFailed(source_release, target_release, restored=True) from None
+    return {
+        "transitioned": True,
+        "mode": mode,
+        "from_release": source_release,
+        "release": target_release,
+        "scanner_readiness": readiness_status,
+        "readiness": readiness,
+    }
+
+
+def main() -> None:
+    # This controller runs on Linux. Import here so its pure validators can be
+    # exercised on the Windows development host without claiming POSIX checks.
+    import fcntl
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("action", choices=("start", "prove", "upgrade", "rollback"))
+    parser.add_argument("archive", type=Path)
+    parser.add_argument("release")
+    parser.add_argument("checksum")
+    parser.add_argument("--from-release")
+    parser.add_argument("--from-checksum")
+    args = parser.parse_args()
+    transitioning = args.action in {"upgrade", "rollback"}
+    require(
+        transitioning == (args.from_release is not None and args.from_checksum is not None),
+        "Exact source release and checksum are required only for transitions",
+    )
+    require(os.geteuid() == 0, "Root is required for this fixed-scope installer")
+    require(args.archive.stat().st_size <= 2 * MIB, "Archive too large")
+    raw = args.archive.read_bytes()
+    files = archive_files(raw, args.release, args.checksum)
+    if args.action != "rollback":
+        require(
+            files["manage.py"] == Path(__file__).read_bytes(),
+            "Installer differs from reviewed archive",
+        )
+    for path in (*reversed(ROOT.parents),):
+        trusted(path)
+    ROOT.mkdir(mode=0o755, exist_ok=True)
+    trusted(ROOT)
+    lock_path = ROOT / "install.lock"
+    descriptor = os.open(lock_path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(descriptor, "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        archives = ROOT / "archives"
+        archives.mkdir(mode=0o755, exist_ok=True)
+        trusted(archives)
+        retained = archives / f"{args.release}.tar"
+        if not retained.exists():
+            require(
+                args.action in {"start", "upgrade", "rollback"},
+                "Scanner release archive is missing",
+            )
+            with retained.open("xb") as output:
+                output.write(raw)
+            retained.chmod(0o444)
+        trusted(retained, directory=False, immutable=True)
+        require(retained.read_bytes() == raw, "Retained archive differs from approved release")
+        releases = ROOT / "releases"
+        releases.mkdir(mode=0o755, exist_ok=True)
+        trusted(releases)
+        installed = releases / args.release
+        if not installed.exists():
+            require(args.action in {"start", "upgrade", "rollback"}, "Release is not installed")
+            installed.mkdir(mode=0o755)
+            for name, body in files.items():
+                target = installed / name
+                target.write_bytes(body)
+                target.chmod(0o444)
+            installed.chmod(0o555)
+        trusted(installed, immutable=True)
+        require({path.name for path in installed.iterdir()} == FILES, "Release file drift")
+        for name, body in files.items():
+            target = installed / name
+            trusted(target, directory=False, immutable=True)
+            require(target.read_bytes() == body, "Release differs from archive")
+        if args.action == "start":
+            current = inspect()
+            if current is not None:
+                validate_container(current, args.release, installed)
+            else:
+                memory = re.search(
+                    r"^MemAvailable:\s+(\d+) kB$", Path("/proc/meminfo").read_text(), re.MULTILINE
+                )
+                require(
+                    memory is not None and int(memory[1]) >= 6 * 1024 * 1024,
+                    "Insufficient spare memory",
+                )
+                with socket.socket() as probe:
+                    probe.bind(("127.0.0.1", 13310))
+                trusted(DATABASE.parent)
+                if not DATABASE.exists():
+                    DATABASE.mkdir(mode=0o700)
+                    os.chown(DATABASE, 100, 100)
+                info = DATABASE.lstat()
+                require(
+                    stat.S_ISDIR(info.st_mode) and info.st_uid == 100 and not info.st_mode & 0o077,
+                    "Untrusted signature directory",
+                )
+                run("docker", "pull", IMAGE, timeout=300)
+            compose_up(args.release, installed)
+            print(
+                json.dumps(
+                    {
+                        "started": True,
+                        "release": args.release,
+                        "scanner_readiness": "not_yet_verified",
+                    }
+                )
+            )
+        elif args.action == "prove":
+            print(json.dumps(prove(args.release, installed), sort_keys=True))
+        else:
+            assert args.from_release is not None and args.from_checksum is not None
+            result = transition_release(
+                mode=args.action,
+                source_release=args.from_release,
+                source_checksum=args.from_checksum,
+                target_release=args.release,
+                target_installed=installed,
+            )
+            print(json.dumps(result, sort_keys=True))
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except ScannerTransitionFailed as error:
+        print(
+            json.dumps(
+                {
+                    "transitioned": False,
+                    "from_release": error.source_release,
+                    "release": error.target_release,
+                    "source_restored": error.restored,
+                    "scanner_readiness": "not_verified",
+                },
+                sort_keys=True,
+            )
+        )
+        raise SystemExit(1) from None
+    except (ValueError, OSError, subprocess.SubprocessError):
+        raise SystemExit(
+            "Media safety action refused; inspect verified configuration and service health."
+        ) from None

@@ -146,6 +146,12 @@ it("never consults Platform Admin admission for a Coach login", async () => {
   await mount({ surface: "coach" });
   expect(platform.loadPlatformIdentity).not.toHaveBeenCalled();
 });
+it("lands an explicitly selected Coach workspace on the dashboard", async () => {
+  await mount({ surface: "coach" });
+  await choose();
+  await submit();
+  expect(navigate).toHaveBeenCalledWith("/studio");
+});
 
 it("does not navigate from late platform admission after unmount", async () => {
   const late = deferred<platform.PlatformIdentity | null>();

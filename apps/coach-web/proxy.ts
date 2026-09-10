@@ -68,6 +68,9 @@ export async function proxy(request: NextRequest) {
 }
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml).*)",
+    // This API already bypasses the page-session gate above. Exclude its raw
+    // byte route before Next clones/truncates the body at 10 MiB. The route
+    // handler and API still enforce origin, session, scope and upload limits.
+    "/((?!v1/admin/studio/programs/[^/]+/video-uploads/[^/]+/bytes/?$|_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml).*)",
   ],
 };
