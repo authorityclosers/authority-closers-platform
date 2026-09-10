@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 set -euo pipefail
-set -x
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 foundation="$repo_root/infra/vps-foundation"
@@ -206,6 +205,7 @@ AC_RELEASE_ARCHIVE="$archive" \
 AC_RELEASE_ARCHIVE_SHA256="$archive_sha" \
   bash "$installer" >/dev/null
 next_projection_root="$tmp_dir/root/srv/authority-closers/application/edge-route-releases/foundation-test-next"
+next_release="$tmp_dir/root/srv/authority-closers/releases/foundation-test-next"
 [[ "$(readlink -f "$production_selector")" == "$application_projection/production.caddy" ]]
 [[ "$(readlink -f "$staging_selector")" == "$next_projection_root/staging.caddy" ]]
 
@@ -351,7 +351,7 @@ if AC_TEST_MODE=1 \
   printf 'Injected post-install failure unexpectedly succeeded.\n' >&2
   exit 1
 fi
-[[ "$(readlink -f "$current")" == "$release" ]]
+[[ "$(readlink -f "$current")" == "$next_release" ]]
 [[ "$(sha256sum "$installed_health" | awk '{print $1}')" == "$installed_health_sha" ]]
 if AC_TEST_MODE=1 \
   AC_TEST_FAIL_AFTER_ACTIVATE=1 \
@@ -362,7 +362,7 @@ if AC_TEST_MODE=1 \
   printf 'Injected post-activation failure unexpectedly succeeded.\n' >&2
   exit 1
 fi
-[[ "$(readlink -f "$current")" == "$release" ]]
+[[ "$(readlink -f "$current")" == "$next_release" ]]
 [[ "$(sha256sum "$installed_health" | awk '{print $1}')" == "$installed_health_sha" ]]
 
 bash "$foundation/scripts/validate-images-pinned.sh" >/dev/null
