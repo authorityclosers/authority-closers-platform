@@ -65,10 +65,10 @@ def _archive(
     return output.getvalue()
 
 
-def _installed(tmp_path: Path) -> Path:
-    installed = tmp_path / "release"
+def _installed(tmp_path: Path, name: str = "release") -> Path:
+    installed = tmp_path / name
     installed.mkdir()
-    for name in ("clamd.conf", "freshclam.conf"):
+    for name in ("clamd.conf", "compose.yaml", "freshclam.conf"):
         (installed / name).write_bytes((SAFETY / name).read_bytes())
     return installed
 
@@ -91,6 +91,7 @@ def _container(module: ModuleType, installed: Path) -> dict:
                 "ac.scope": "local-studio-video-safety",
             },
             "User": "100:100",
+            "Healthcheck": {"Test": module.HEALTH_TEST},
         },
         "HostConfig": {
             "Privileged": False,
@@ -106,9 +107,10 @@ def _container(module: ModuleType, installed: Path) -> dict:
             "MemorySwap": 4 * 1024 * module.MIB,
             "NanoCpus": 2_000_000_000,
             "PidsLimit": 96,
+            "Tmpfs": {"/tmp": ",".join(sorted(module.EXPECTED_TMPFS_OPTIONS))},  # noqa: S108
             "LogConfig": {
                 "Type": module.EXPECTED_LOG_DRIVER,
-                "Config": dict(module.EXPECTED_LOG_CONFIG),
+                "Config": {**module.EXPECTED_LOG_CONFIG, "compress": "true"},
             },
         },
         "Mounts": [
@@ -130,14 +132,8 @@ def _container(module: ModuleType, installed: Path) -> dict:
                 "Destination": "/var/lib/clamav",
                 "RW": True,
             },
-            {
-                "Type": "tmpfs",
-                "Source": "",
-                "Destination": "/tmp",  # noqa: S108 - fixed container tmpfs test fixture
-                "Mode": ",".join(sorted(module.EXPECTED_TMPFS_OPTIONS)),
-                "RW": True,
-            },
         ],
+        "State": {"Running": True, "Health": {"Status": "healthy"}},
     }
 
 
@@ -250,6 +246,138 @@ def test_validate_container_accepts_pinned_shape(
     safety_module.validate_container(_container(safety_module, installed), RELEASE, installed)
 
 
+def test_compose_healthcheck_targets_exact_ipv4_scanner(safety_module: ModuleType) -> None:
+    compose = (SAFETY / "compose.yaml").read_text(encoding="utf-8")
+
+    assert "nc 127.0.0.1 3310" in compose
+    assert "test: [CMD, clamdcheck.sh]" not in compose
+    assert safety_module.expected_health_test(SAFETY) == safety_module.HEALTH_TEST
+
+
+def test_docker_commands_are_pinned_to_local_unix_socket(
+    safety_module: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[tuple[tuple[str, ...], dict[str, object]]] = []
+
+    class Result:
+        stdout = "container-id\n"
+
+    def subprocess_run(command: tuple[str, ...], **options: object) -> Result:
+        calls.append((command, options))
+        return Result()
+
+    monkeypatch.setattr(safety_module.subprocess, "run", subprocess_run)
+
+    assert safety_module.run("docker", "inspect", safety_module.CONTAINER) == "container-id"
+    command, options = calls[0]
+    assert command == (
+        "docker",
+        "--host",
+        "unix:///var/run/docker.sock",
+        "inspect",
+        safety_module.CONTAINER,
+    )
+    assert options["env"] == {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin"}
+
+
+@pytest.mark.parametrize(
+    "override",
+    (
+        ("--host", "ssh://other"),
+        ("-H", "tcp://other:2375"),
+        ("--host=ssh://other",),
+        ("--context", "remote"),
+        ("--context=remote",),
+        ("context", "use", "remote"),
+    ),
+)
+def test_docker_commands_reject_endpoint_or_context_override(
+    safety_module: ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    override: tuple[str, ...],
+) -> None:
+    called = False
+
+    def subprocess_run(*_: object, **__: object) -> None:
+        nonlocal called
+        called = True
+
+    monkeypatch.setattr(safety_module.subprocess, "run", subprocess_run)
+
+    with pytest.raises(ValueError, match="endpoint override"):
+        safety_module.run("docker", *override, "ps")
+    assert not called
+
+
+def test_compose_reconciliation_targets_only_exact_scanner_service(
+    safety_module: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    installed = _installed(tmp_path)
+    calls: list[tuple[tuple[str, ...], dict[str, object]]] = []
+
+    def run(*command: str, **options: object) -> str:
+        calls.append((command, options))
+        return ""
+
+    monkeypatch.setattr(safety_module, "run", run)
+    safety_module.compose_up(RELEASE, installed)
+
+    command, options = calls[0]
+    assert command == (
+        "docker",
+        "compose",
+        "--project-name",
+        "ac-media-safety",
+        "--file",
+        str(installed / "compose.yaml"),
+        "up",
+        "--detach",
+        "--no-build",
+        "scanner",
+    )
+    assert options["timeout"] == 120
+    assert options["env"] == {
+        "PATH": "/usr/sbin:/usr/bin:/sbin:/bin",
+        "AC_MEDIA_SAFETY_RELEASE": RELEASE,
+    }
+
+
+def test_only_named_legacy_release_can_be_a_transition_source(
+    safety_module: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    installed = _installed(tmp_path)
+    compose = installed / "compose.yaml"
+    compose.write_text(
+        compose.read_text(encoding="utf-8").replace(
+            'test: ["CMD-SHELL", "echo PING | nc 127.0.0.1 3310 | grep -qx PONG"]',
+            "test: [CMD, clamdcheck.sh]",
+        ),
+        encoding="utf-8",
+    )
+    container = _container(safety_module, installed)
+    legacy = next(iter(safety_module.LEGACY_HEALTH_RELEASES))
+    container["Config"]["Labels"]["ac.release"] = legacy
+    container["Config"]["Healthcheck"]["Test"] = safety_module.LEGACY_HEALTH_TEST
+    monkeypatch.setattr(safety_module, "run", _hash_command(safety_module, installed))
+
+    safety_module.validate_container(
+        container,
+        legacy,
+        installed,
+        allow_legacy_health=True,
+    )
+    with pytest.raises(ValueError, match="health"):
+        safety_module.validate_container(container, legacy, installed)
+    container["Config"]["Labels"]["ac.release"] = RELEASE
+    with pytest.raises(ValueError, match="health"):
+        safety_module.validate_container(
+            container,
+            RELEASE,
+            installed,
+            allow_legacy_health=True,
+        )
+
+
 @pytest.mark.parametrize(
     ("path", "value", "message"),
     (
@@ -257,6 +385,7 @@ def test_validate_container_accepts_pinned_shape(
         (("Config", "Entrypoint"), ["/bin/sh"], "command"),
         (("Config", "Cmd"), ["-c", "sleep infinity"], "command"),
         (("Config", "User"), "0:0", "user"),
+        (("Config", "Healthcheck"), {"Test": ["CMD", "clamdcheck.sh"]}, "healthcheck"),
         (("HostConfig", "Privileged"), True, "capabilities"),
         (("HostConfig", "CapAdd"), ["NET_ADMIN"], "capabilities"),
         (("HostConfig", "Devices"), [{"PathOnHost": "/dev/kmsg"}], "capabilities"),
@@ -354,6 +483,59 @@ def test_validate_container_rejects_unbounded_json_file_logging(
         safety_module.validate_container(container, RELEASE, installed)
 
 
+@pytest.mark.parametrize(
+    "tmpfs",
+    [
+        None,
+        {},
+        {"/tmp": "rw"},  # noqa: S108 - fixed container mount fixture
+        {"/tmp": "rw", "/extra": "rw"},  # noqa: S108
+        {"/tmp": None},  # noqa: S108
+    ],
+)
+def test_validate_container_rejects_missing_or_drifted_host_tmpfs(
+    safety_module: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    tmpfs: dict | None,
+) -> None:
+    installed = _installed(tmp_path)
+    monkeypatch.setattr(safety_module, "run", _hash_command(safety_module, installed))
+    container = _container(safety_module, installed)
+    container["HostConfig"]["Tmpfs"] = tmpfs
+
+    with pytest.raises(ValueError, match="tmpfs"):
+        safety_module.validate_container(container, RELEASE, installed)
+
+
+def test_validate_container_rejects_duplicate_tmpfs_options(
+    safety_module: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    installed = _installed(tmp_path)
+    monkeypatch.setattr(safety_module, "run", _hash_command(safety_module, installed))
+    container = _container(safety_module, installed)
+    container["HostConfig"]["Tmpfs"]["/tmp"] += ",rw"  # noqa: S108
+
+    with pytest.raises(ValueError, match="tmpfs"):
+        safety_module.validate_container(container, RELEASE, installed)
+
+
+@pytest.mark.parametrize("compress", [None, "true"])
+def test_validate_container_accepts_bounded_local_log_default_compression(
+    safety_module: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    compress: str | None,
+) -> None:
+    installed = _installed(tmp_path)
+    monkeypatch.setattr(safety_module, "run", _hash_command(safety_module, installed))
+    container = _container(safety_module, installed)
+    config = container["HostConfig"]["LogConfig"]["Config"]
+    if compress is None:
+        config.pop("compress")
+    safety_module.validate_container(container, RELEASE, installed)
+
+
 class _FakeSocket:
     def __init__(self, responses: list[bytes]) -> None:
         self.responses = responses
@@ -417,7 +599,10 @@ def _patch_proof_dependencies(module: ModuleType, monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(
         module,
         "inspect",
-        lambda: {"Id": "container-id", "State": {"Running": True}},
+        lambda: {
+            "Id": "container-id",
+            "State": {"Running": True, "Health": {"Status": "healthy"}},
+        },
     )
     monkeypatch.setattr(module, "validate_container", lambda *_: None)
     version = b"ClamAV 1.5.4/123/fixture\0"
@@ -461,6 +646,47 @@ def test_prove_accepts_exact_clean_and_eicar_protocol(
     assert receipt["definitions"]["daily"]["version"] == 123
 
 
+def test_prove_rejects_unhealthy_container_before_minting_evidence(
+    safety_module: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    installed = _installed(tmp_path)
+    _patch_proof_dependencies(safety_module, monkeypatch)
+    monkeypatch.setattr(
+        safety_module,
+        "inspect",
+        lambda: {
+            "Id": "container-id",
+            "State": {"Running": True, "Health": {"Status": "unhealthy"}},
+        },
+    )
+
+    with pytest.raises(ValueError, match="health"):
+        safety_module.prove(RELEASE, installed)
+
+
+def test_prove_rechecks_exact_container_health_after_functional_probe(
+    safety_module: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    installed = _installed(tmp_path)
+    _patch_proof_dependencies(safety_module, monkeypatch)
+    values = iter(
+        (
+            {
+                "Id": "container-id",
+                "State": {"Running": True, "Health": {"Status": "healthy"}},
+            },
+            {
+                "Id": "replacement-id",
+                "State": {"Running": True, "Health": {"Status": "healthy"}},
+            },
+        )
+    )
+    monkeypatch.setattr(safety_module, "inspect", lambda: next(values))
+
+    with pytest.raises(ValueError, match="identity or health changed"):
+        safety_module.prove(RELEASE, installed)
+
+
 @pytest.mark.parametrize(
     ("name", "needle", "replacement"),
     (
@@ -487,3 +713,255 @@ def test_prove_rejects_drifted_scanner_policy(
 
     with pytest.raises(ValueError, match="policy|limits|updater"):
         safety_module.prove(RELEASE, installed)
+
+
+def _patch_transition_dependencies(
+    module: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[Path, Path, list[tuple[str, Path]]]:
+    source = _installed(tmp_path, "source")
+    target = _installed(tmp_path, "target")
+    composed: list[tuple[str, Path]] = []
+    monkeypatch.setattr(
+        module,
+        "validate_installed_release",
+        lambda release, checksum: (
+            source,
+            {
+                "manage.py": Path(module.__file__).read_bytes(),
+                "release": release.encode(),
+                "checksum": checksum.encode(),
+            },
+        ),
+    )
+    monkeypatch.setattr(
+        module,
+        "inspect",
+        lambda: {"State": {"Running": True, "Health": {"Status": "healthy"}}},
+    )
+    monkeypatch.setattr(module, "validate_container", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(module, "validate_policy", lambda *_args: None)
+    monkeypatch.setattr(module, "live_probe", lambda: (b"version", {"daily": 1}))
+    monkeypatch.setattr(
+        module,
+        "compose_up",
+        lambda release, installed: composed.append((release, installed)),
+    )
+    monkeypatch.setattr(module, "wait_healthy", lambda *_args: None)
+    monkeypatch.setattr(
+        module,
+        "prove",
+        lambda release, installed: {"release": release, "installed": str(installed)},
+    )
+    return source, target, composed
+
+
+def test_exact_release_transition_proves_target_without_touching_other_services(
+    safety_module: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, composed = _patch_transition_dependencies(safety_module, tmp_path, monkeypatch)
+    target_release = "b" * 40
+
+    result = safety_module.transition_release(
+        mode="upgrade",
+        source_release=RELEASE,
+        source_checksum="c" * 64,
+        target_release=target_release,
+        target_installed=target,
+    )
+
+    assert source != target
+    assert composed == [(target_release, target)]
+    assert result["transitioned"] is True
+    assert result["from_release"] == RELEASE
+    assert result["release"] == target_release
+    assert result["scanner_readiness"] == "verified"
+
+
+def test_failed_target_proof_restores_exact_source_release(
+    safety_module: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, composed = _patch_transition_dependencies(safety_module, tmp_path, monkeypatch)
+    target_release = "b" * 40
+    monkeypatch.setattr(
+        safety_module,
+        "prove",
+        lambda *_args: (_ for _ in ()).throw(ValueError("target proof failed")),
+    )
+    restored: list[tuple[str, Path]] = []
+    monkeypatch.setattr(
+        safety_module,
+        "restore_release",
+        lambda release, installed: restored.append((release, installed)),
+    )
+
+    with pytest.raises(safety_module.ScannerTransitionFailed) as caught:
+        safety_module.transition_release(
+            mode="upgrade",
+            source_release=RELEASE,
+            source_checksum="c" * 64,
+            target_release=target_release,
+            target_installed=target,
+        )
+
+    assert caught.value.restored is True
+    assert composed == [(target_release, target)]
+    assert restored == [(RELEASE, source)]
+
+
+@pytest.mark.parametrize(
+    "running,health", [(False, "unhealthy"), (True, "unhealthy"), (True, "healthy")]
+)
+def test_rollback_accepts_degraded_identified_source_and_proves_target(
+    safety_module: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    running: bool,
+    health: str,
+) -> None:
+    validator = safety_module.validate_container
+    source, target, composed = _patch_transition_dependencies(safety_module, tmp_path, monkeypatch)
+    container = _container(safety_module, source)
+    container["State"] = {"Running": running, "Health": {"Status": health}}
+    monkeypatch.setattr(safety_module, "inspect", lambda: container)
+    # Exercise the real static validator: even an apparently healthy source
+    # may fail exec/PING/scans, and none can be required to request rollback.
+    monkeypatch.setattr(safety_module, "validate_container", validator)
+
+    def unavailable(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("Rollback tried to use the failing source runtime")
+
+    monkeypatch.setattr(safety_module, "run", unavailable)
+    monkeypatch.setattr(safety_module, "live_probe", unavailable)
+    proofs: list[str] = []
+    monkeypatch.setattr(
+        safety_module,
+        "prove",
+        lambda release, _installed: proofs.append(release) or {"passed": True},
+    )
+
+    result = safety_module.transition_release(
+        mode="rollback",
+        source_release=RELEASE,
+        source_checksum="c" * 64,
+        target_release="b" * 40,
+        target_installed=target,
+    )
+
+    assert composed == [("b" * 40, target)]
+    assert proofs == ["b" * 40]
+    assert result["scanner_readiness"] == "verified"
+
+
+@pytest.mark.parametrize("mode", ["upgrade", "rollback"])
+def test_transition_refuses_wrong_source_identity_before_replacement(
+    safety_module: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+) -> None:
+    validator = safety_module.validate_container
+    source, target, composed = _patch_transition_dependencies(safety_module, tmp_path, monkeypatch)
+    container = _container(safety_module, source)
+    container["Config"]["Labels"]["ac.release"] = "d" * 40
+    container["State"]["Running"] = mode == "upgrade"
+    monkeypatch.setattr(safety_module, "inspect", lambda: container)
+    monkeypatch.setattr(safety_module, "validate_container", validator)
+
+    with pytest.raises(ValueError, match="Different release"):
+        safety_module.transition_release(
+            mode=mode,
+            source_release=RELEASE,
+            source_checksum="c" * 64,
+            target_release="b" * 40,
+            target_installed=target,
+        )
+
+    assert composed == []
+
+
+def test_failed_target_and_failed_restore_report_unrecovered_state(
+    safety_module: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _, target, _ = _patch_transition_dependencies(safety_module, tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        safety_module,
+        "wait_healthy",
+        lambda *_args: (_ for _ in ()).throw(ValueError("target unhealthy")),
+    )
+    monkeypatch.setattr(
+        safety_module,
+        "restore_release",
+        lambda *_args: (_ for _ in ()).throw(ValueError("source unavailable")),
+    )
+
+    with pytest.raises(safety_module.ScannerTransitionFailed) as caught:
+        safety_module.transition_release(
+            mode="rollback",
+            source_release=RELEASE,
+            source_checksum="c" * 64,
+            target_release="b" * 40,
+            target_installed=target,
+        )
+
+    assert caught.value.restored is False
+
+
+def test_transition_rejects_missing_or_same_source_before_reconciliation(
+    safety_module: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _, target, composed = _patch_transition_dependencies(safety_module, tmp_path, monkeypatch)
+    with pytest.raises(ValueError, match="two releases"):
+        safety_module.transition_release(
+            mode="upgrade",
+            source_release=RELEASE,
+            source_checksum="c" * 64,
+            target_release=RELEASE,
+            target_installed=target,
+        )
+    assert composed == []
+
+    legacy = next(iter(safety_module.LEGACY_HEALTH_RELEASES))
+    with pytest.raises(ValueError, match="only for rollback"):
+        safety_module.transition_release(
+            mode="upgrade",
+            source_release=RELEASE,
+            source_checksum="c" * 64,
+            target_release=legacy,
+            target_installed=target,
+        )
+    assert composed == []
+
+    monkeypatch.setattr(safety_module, "inspect", lambda: None)
+    with pytest.raises(ValueError, match="source is missing"):
+        safety_module.transition_release(
+            mode="upgrade",
+            source_release=RELEASE,
+            source_checksum="c" * 64,
+            target_release="b" * 40,
+            target_installed=target,
+        )
+    assert composed == []
+
+
+def test_rollback_requires_controller_from_exact_running_source_release(
+    safety_module: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target, composed = _patch_transition_dependencies(safety_module, tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        safety_module,
+        "validate_installed_release",
+        lambda *_args: (source, {"manage.py": b"different-controller"}),
+    )
+
+    with pytest.raises(ValueError, match="Rollback controller"):
+        safety_module.transition_release(
+            mode="rollback",
+            source_release=RELEASE,
+            source_checksum="c" * 64,
+            target_release="b" * 40,
+            target_installed=target,
+        )
+
+    assert composed == []
