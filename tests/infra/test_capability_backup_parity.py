@@ -351,17 +351,29 @@ def test_exact_capability_parity_and_legacy_schema_proofs_pass(tmp_path: Path) -
 
 def test_new_writer_v1_metadata_is_accepted_by_exact_old_controller(tmp_path: Path) -> None:
     historical = "35c658bd028b4fc3a7c048ab72dae700cd7682d6"
+    required = os.getenv("AC_REQUIRE_HISTORICAL_BACKUP_CONTROLLER_TEST") == "1"
+    root = Path(__file__).resolve().parents[2]
     git = shutil.which("git")
     if git is None:
+        if required:
+            pytest.fail("Git is required for the exact historical-controller proof")
         pytest.skip("Git is unavailable for the exact historical-controller proof")
     completed = subprocess.run(  # noqa: S603 - exact read-only historical Git blob
-        [git, "show", f"{historical}:infra/application/scripts/restore-drill.py"],
-        cwd=Path(__file__).parents[2],
+        [
+            git,
+            "-c",
+            f"safe.directory={root.as_posix()}",
+            "show",
+            f"{historical}:infra/application/scripts/restore-drill.py",
+        ],
+        cwd=root,
         capture_output=True,
         check=False,
         timeout=15,
     )
     if completed.returncode != 0:
+        if required:
+            pytest.fail("exact historical controller Git object is required but unreadable")
         pytest.skip("exact historical controller Git object is absent in this checkout")
     source = completed.stdout.decode("utf-8")
     assert "CAPABILITY_PARITY_CONTRACT" not in source
@@ -729,3 +741,19 @@ def test_coach_environment_values_cannot_override_the_verified_backup_profile(
     for key in keys:
         assert key not in environment
         assert command[command.index(key) - 1] == "-u"
+
+
+@pytest.mark.parametrize("failure", ["missing-git", "unreadable-object"])
+def test_required_historical_controller_proof_fails_instead_of_skipping(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    monkeypatch.setenv("AC_REQUIRE_HISTORICAL_BACKUP_CONTROLLER_TEST", "1")
+    monkeypatch.setattr(shutil, "which", lambda _: None if failure == "missing-git" else "git")
+    if failure == "unreadable-object":
+        monkeypatch.setattr(
+            subprocess,
+            "run",
+            lambda command, **_: subprocess.CompletedProcess(command, 1, b"", b""),
+        )
+    with pytest.raises(pytest.fail.Exception, match="required"):
+        test_new_writer_v1_metadata_is_accepted_by_exact_old_controller(tmp_path)

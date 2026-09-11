@@ -43,6 +43,19 @@ jobs:
           --health-interval 3s
           --health-timeout 3s
           --health-retries 20
+      postgres-recovery-tests:
+        image: postgres@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af
+        env:
+          POSTGRES_DB: ac_local_sandbox
+          POSTGRES_USER: ac_owner
+          POSTGRES_PASSWORD: local-owner-only
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U ac_owner -d ac_local_sandbox"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
     env:
       AC_ENVIRONMENT: test
       AC_RELEASE_ID: ci-${{ github.sha }}
@@ -52,9 +65,9 @@ jobs:
       # owner so they can create and drop their isolated search paths. The CI
       # service itself is ephemeral; production never exposes this credential.
       AC_TEST_DATABASE_URL: postgresql+psycopg://ac_owner:local-owner-only@localhost:5432/ac_platform
-      # Studio authoring/revision suites use the same disposable owner target
-      # through their dedicated production-parity harness.
-      AC_MEDIA_DELIVERY_RENEWAL_POSTGRES_TEST_URL: postgresql+psycopg://ac_owner:local-owner-only@localhost:5432/ac_platform
+      # Media/Studio and worker-isolation schemas use their dedicated owner
+      # target; canonical runtime/migrator privilege proofs stay on port 5432.
+      AC_MEDIA_DELIVERY_RENEWAL_POSTGRES_TEST_URL: postgresql+psycopg://ac_owner:local-owner-only@127.0.0.1:55432/ac_local_sandbox
       AC_OPERATIONS_POSTGRES_TEST_URL: postgresql+psycopg://ac_owner:local-owner-only@localhost:5432/ac_platform
       AC_EXTERNAL_SIDE_EFFECTS_HOLD: "true"
       AC_EMAIL_PROVIDER: fake
@@ -62,6 +75,9 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           persist-credentials: false
+          fetch-depth: 0
+      - name: Require the exact historical backup controller
+        run: git cat-file -e '35c658bd028b4fc3a7c048ab72dae700cd7682d6:infra/application/scripts/restore-drill.py'
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: 24.19.0
@@ -74,6 +90,19 @@ jobs:
         run: python -m pip install --disable-pip-version-check uv==0.12.7
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile && uv sync --frozen
+      - name: Require codec tools for media regressions
+        run: |
+          set -euo pipefail
+          command -v ffmpeg
+          command -v ffprobe
+          ffmpeg -version
+          ffprobe -version
+      - name: Create the dedicated migration regression database
+        env:
+          PGPASSWORD: local-owner-only
+        run: >-
+          createdb --host 127.0.0.1 --port 55432 --username ac_owner
+          ac_migration_rehearsal_ci
       - name: Provision least-privilege database roles
         env:
           PGPASSWORD: local-owner-only
@@ -181,6 +210,21 @@ jobs:
           uv run pytest
           tests/integration/test_studio_draft_authoring_postgresql.py
           tests/integration/test_studio_revision_postgresql.py
+      - name: Prove worker isolation and operations bootstrap
+        env:
+          AC_REQUIRE_MEDIA_DELIVERY_RENEWAL_POSTGRES_TEST: "1"
+          AC_OPERATIONS_BOOTSTRAP_POSTGRES_TEST_URL: postgresql+psycopg://ac_owner:local-owner-only@127.0.0.1:55432/ac_local_sandbox
+          AC_REQUIRE_OPERATIONS_BOOTSTRAP_POSTGRES_TEST: "1"
+        run: >-
+          uv run pytest
+          tests/integration/test_job_kind_isolation_postgresql.py
+          tests/integration/test_studio_video_worker_fence_postgresql.py
+          tests/integration/test_operations_bootstrap_postgresql.py
+      - name: Prove the populated prior-head migration regression
+        env:
+          AC_MIGRATION_REHEARSAL_POSTGRES_TEST_URL: postgresql+psycopg://ac_owner:local-owner-only@127.0.0.1:55432/ac_migration_rehearsal_ci
+          AC_REQUIRE_MIGRATION_REHEARSAL_POSTGRES_TEST: "1"
+        run: uv run pytest tests/integration/test_migration_rehearsal_postgresql.py
       - name: Validate application
         env:
           AC_REQUIRE_RESTORE_INPUT_DOCKER_TEST: "1"

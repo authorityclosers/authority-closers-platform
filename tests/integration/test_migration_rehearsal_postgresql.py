@@ -188,9 +188,19 @@ def _seed_populated_0027(engine: Engine) -> None:
                 Tenant(id=tenant_b, slug=f"rehearsal-b-{tenant_b.hex}", name="Rehearsal B"),
                 Person(id=person_a, email=f"rehearsal-a-{person_a.hex}@example.test"),
                 Person(id=person_b, email=f"rehearsal-b-{person_b.hex}@example.test"),
+            ]
+        )
+        database.flush()
+        database.add_all(
+            [
                 Membership(tenant_id=tenant_a, person_id=person_a),
                 Membership(tenant_id=tenant_b, person_id=person_a),
                 Membership(tenant_id=tenant_b, person_id=person_b),
+            ]
+        )
+        database.flush()
+        database.add_all(
+            [
                 AcademyPublicProfile(
                     tenant_id=tenant_a,
                     person_id=person_a,

@@ -225,7 +225,7 @@ catch {{
     assert _last_json(result.stdout) == {"threw": True, "marker": False}
 
 
-@pytest.mark.skipif(PWSH is None, reason="PowerShell 7 is required")
+@pytest.mark.skipif(os.name != "nt" or PWSH is None, reason="Windows and PowerShell 7 are required")
 def test_node_resolution_prefers_existing_path_node24_without_mutating_path(
     tmp_path: Path,
 ) -> None:
@@ -267,7 +267,7 @@ $resolved = Get-LocalNodeExecutable
     assert observed["machine_path_unchanged"] is True
 
 
-@pytest.mark.skipif(PWSH is None, reason="PowerShell 7 is required")
+@pytest.mark.skipif(os.name != "nt" or PWSH is None, reason="Windows and PowerShell 7 are required")
 def test_node_resolution_uses_existing_codex_fallback_without_installing(
     tmp_path: Path,
 ) -> None:
