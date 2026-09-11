@@ -78,3 +78,9 @@ and unrelated logging options remain rejected. [Docker's local logging
 documentation](https://docs.docker.com/engine/logging/drivers/local/) confirms
 compression is enabled by default. The prior 56-test result predates this
 adjustment; final tests and review are recorded in the subsequent release entry.
+
+Final scanner candidate `3a16f0a`: **64 tests passed in 0.84 seconds** after
+the Docker metadata correction; Ruff lint and formatting checks passed.
+Independent rereview cleared the rollback and runtime-shape changes with no
+remaining actionable findings. Packaging, CI and live transition are still
+required; the unit result does not claim deployed scanner readiness.

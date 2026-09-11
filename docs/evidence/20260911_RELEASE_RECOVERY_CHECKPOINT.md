@@ -50,6 +50,11 @@ names present. No values were printed or copied. The newest retained paired
 logical-backup metadata filename observed is dated 2026-09-10 07:15:40 UTC;
 fresh backup operation evidence still needs reconciliation.
 
+Final scanner-only code commit `3a16f0a` passed 64 focused tests in 0.84 seconds
+after correcting actual Docker tmpfs/default-log representation. Ruff passed;
+independent final rereview found no remaining actionable scanner defect.
+The rehearsal paths remain unstaged and are not included in that commit.
+
 ## Controlled requirements and next gates
 
 Read in required order by manifest IDs: Master Index, BRD, AC-IMP-00/01/03/04/05, followed by PRD, IA, UX Research/States/UI, SRS, Data/Tenancy, API/MCP, Security, DevOps, QA, Admin, Telemetry and ADR/Risk. AC-UXA-01 was fetched for recovery acceptance. Controlled Drive documents remain authoritative; this file is implementation evidence only.
