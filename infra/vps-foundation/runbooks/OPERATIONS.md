@@ -122,6 +122,10 @@ systemctl list-timers --all | grep -E 'ac-(r2|restic|foundation)'
 
 The logical PostgreSQL writer is a separate disabled-by-default gate. It uses only `/srv/authority-closers/application/current-staging` and, when present and healthy, `/srv/authority-closers/application/current-production`; it never accepts a free-standing database URL. The runtime Infisical wrapper supplies `AC_DB_BACKUP_PASSWORD` to the exact compose `postgres` service, and the backup Infisical identity supplies only the Restic/R2 environment. A failed upload does not remove the verified local dump.
 
+An activated writer captures and verifies each local pair before checking the off-host quota under the repository lock. A quota rejection prevents the upload and leaves the service failed, while the other resolved healthy environment can still receive its local capture. `--capture-only` performs no R2 query, repository lock or upload. Ordinary `--dry-run` still checks R2; `--dry-run --capture-only` checks release/health without touching the local ring or remote repository. Local capture success is not evidence of a fresh off-host backup or a passed restore/RPO gate.
+
+Before each capture, the environment lock protects cleanup and validation of the existing root-owned ring. After capture, retention protects the exact new pair even when the wall clock moved backward. A failed retention may leave one additional bounded pair; if cleanup cannot safely complete, or valid pairs still exceed the configured count, the next run preserves them and refuses another capture. Repair the reported filesystem/retention condition through reviewed recovery code; do not rename timestamps, delete arbitrary pairs, edit paired metadata, lift the R2 quota, or report the failed upload as a successful backup.
+
 Before enabling it on the VPS, use the exact reviewed release archive and run:
 
 ```bash
