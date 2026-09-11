@@ -1,7 +1,7 @@
 {
   "schema_version": "ac-public-film-demonstration-deployment.v1",
   "enabled": {
-    "staging": false,
+    "staging": true,
     "production": false
   },
   "manifest_sha256": "dc8f635df33432aee83c461535823881286ded1577a8f8a72dc5b10f0ad86b42",
