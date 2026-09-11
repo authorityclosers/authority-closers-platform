@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./blob-sha256": "./src/blob-sha256.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit --jsx react-jsx --module preserve --moduleResolution bundler --target es2022 --skipLibCheck src/index.ts"

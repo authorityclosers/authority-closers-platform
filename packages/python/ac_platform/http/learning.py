@@ -36,6 +36,7 @@ from ac_platform.learning.catalog_activity import resolve_catalog_activity
 from ac_platform.learning.services import (
     ActivityDefinition,
     ActivityState,
+    CourseProgressProjection,
     DraftSnapshot,
     EvidenceCorrectionSnapshot,
     EvidenceSnapshot,
@@ -151,6 +152,9 @@ class LearningProjectionResponse(BaseModel):
     predicate: str
     missing_module_ids: list[UUID]
     activity_reasons: list[ActivityReasonResponse]
+    # This is a nullable, server-owned pointer into ``activity_reasons``.  It
+    # is guidance only: activity access/actions remain resolved independently.
+    next_activity_id: UUID | None = None
 
 
 class ActivityRequest(BaseModel):
@@ -445,6 +449,24 @@ def _reason_response(
         reason="server_resolved_activity_state",
         missing_activity_ids=[],
         missing_module_ids=[],
+    )
+
+
+def _learning_projection_response(
+    projection: CourseProgressProjection,
+) -> LearningProjectionResponse:
+    """Expose canonical progress plus its deterministic next-action pointer.
+
+    The pointer is intentionally derived from the same versioned course
+    projection and activity reasons.  It does not read analytics, explicit
+    planning rows, or client state, and it never grants access or completion.
+    """
+
+    return LearningProjectionResponse.model_validate(
+        projection.explanation.as_dict()
+        | {
+            "next_activity_id": projection.next_activity_id,
+        }
     )
 
 
@@ -843,10 +865,10 @@ def install_learning_http(
                         activity_id=catalog_activities[0].id,
                     )
                     progress = authoritative_progress(bundle.store, access)
-                    explanation = ProgressProjector(access.program.projection_version).explain(
-                        access.program, progress
-                    )
-                    projection = LearningProjectionResponse.model_validate(explanation.as_dict())
+                    course_projection = ProgressProjector(
+                        access.program.projection_version
+                    ).project(access.program, progress)
+                    projection = _learning_projection_response(course_projection)
                 items.append(
                     LearningCourseSummaryResponse(
                         program_id=version.program_id,
@@ -915,7 +937,10 @@ def install_learning_http(
                 activity_id=catalog_activities[0].id,
             )
             progress = authoritative_progress(bundle.store, first_access)
-            explanation = ProgressProjector().explain(first_access.program, progress)
+            course_projection = ProgressProjector(first_access.program.projection_version).project(
+                first_access.program, progress
+            )
+            explanation = course_projection.explanation
             by_module: dict[UUID, list[ActivityRequest]] = {}
             for module in first_access.program.modules:
                 for definition in module.activities:
@@ -977,7 +1002,7 @@ def install_learning_http(
                     )
                     for module in first_access.program.modules
                 ],
-                projection=explanation.as_dict(),
+                projection=_learning_projection_response(course_projection),
             )
 
         result = await _run_in_auth_transaction(auth, read)

@@ -179,6 +179,7 @@ export function PlatformConsole() {
         signal: AbortSignal.any([controller.signal, AbortSignal.timeout(5000)]),
       });
       if (!response.ok) throw new Error();
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- Confirmed sign-out must discard the privileged document and route cache.
       if (!controller.signal.aborted) window.location.assign("/login");
     } catch {
       if (!controller.signal.aborted)

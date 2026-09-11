@@ -195,6 +195,10 @@ class StudioModuleWriteRequest(BaseModel):
     title: str = Field(min_length=1, max_length=200)
 
 
+class StudioCourseCreateRequest(StudioModuleWriteRequest):
+    """Only the draft name is client-owned; scope, IDs and provenance are not."""
+
+
 class StudioActivityWriteRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     title: str = Field(min_length=1, max_length=240)
@@ -1264,6 +1268,55 @@ def install_admin_learning_http(
         )
         _no_store(response)
         return result
+
+    @studio_router.post(
+        "/admin/studio/programs",
+        response_model=StudioDraftWriteResponse,
+    )
+    async def create_studio_course(
+        body: StudioCourseCreateRequest,
+        request: Request,
+        response: Response,
+        idempotency_key: Annotated[
+            str | None, Header(alias="Idempotency-Key", max_length=128)
+        ] = None,
+        auth: AuthenticatedTransaction = authoring_dependency,
+    ) -> StudioDraftWriteResponse:
+        require_safe_origin(request, settings)
+        if request.query_params:
+            raise StudioDraftInvalid("Course creation does not accept query parameters.")
+        actor, tenant_id = await _require_named_admin(auth, permission="catalog_write")
+        await _require_named_admin(auth, permission="catalog_read")
+        access = await _studio_access(auth)
+        try:
+            result = await AsyncCatalogApplication(auth.database).create_program_draft(
+                actor=actor,
+                tenant_id=tenant_id,
+                title=body.title,
+                idempotency_key=_idempotency_key(idempotency_key),
+                request_id=_request_id(request),
+            )
+        except CatalogConflictError as error:
+            raise StudioDraftConflict(
+                "The course request conflicts with a saved request."
+            ) from error
+        except CatalogAccessDeniedError as error:
+            raise AdminAuthorizationDenied("Course creation is not authorized.") from error
+        except CatalogValidationError as error:
+            raise StudioDraftInvalid("The course request failed catalog validation.") from error
+        detail = await auth.database.run_sync(
+            lambda database: _studio_program_detail_response(
+                database,
+                access,
+                result.program_id,
+                allow_technical_validation_publication=settings.environment == "staging",
+                required_version_id=result.resource_id,
+            )
+        )
+        _no_store(response)
+        return StudioDraftWriteResponse(
+            program=detail, resource_id=result.resource_id, replayed=result.replayed
+        )
 
     async def author_draft(
         version_id: UUID,

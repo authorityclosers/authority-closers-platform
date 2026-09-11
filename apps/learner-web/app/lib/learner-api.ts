@@ -283,6 +283,8 @@ export interface LearningProjectionResponse {
   predicate: string;
   missing_module_ids: string[];
   activity_reasons: ActivityReasonResponse[];
+  /** Server-owned canonical pointer; absent on older API deployments. */
+  next_activity_id?: string | null;
 }
 
 export interface LearningResponse {

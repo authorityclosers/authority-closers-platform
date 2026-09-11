@@ -166,7 +166,7 @@ environment, before Next starts; its workers inherit it. Do not set this inside
 `next.config.ts`, where tracing may already be imported, or as a machine-wide
 environment variable. Next config refuses an enabled learner bridge without
 this exact startup guard or when the installed Next version differs from the
-reviewed **16.2.11** pin. Ordinary non-bridge development and production do not
+reviewed **16.3.3** pin. Ordinary non-bridge development and production do not
 require this guard and keep their normal logging behavior.
 
 This is an **internal, undocumented Next control**, not a stable public API.

@@ -353,7 +353,14 @@ def test_delivery_rejects_misleading_version_marker_paths(
         )
 
 
-@pytest.mark.parametrize("rendition_root", ["renditions", "original/renditions"])
+@pytest.mark.parametrize(
+    "rendition_root",
+    [
+        "renditions",
+        "original/renditions",
+        "original/attempts/64a14d8c-32ec-4a2b-989f-f3ed9ea9eb03/renditions",
+    ],
+)
 def test_hls_delivery_rewrites_each_private_child_with_an_exact_child_token(
     delivery_harness: tuple[PrivateMediaDeliveryHandler, InMemoryPrivateObjectStorage],
     rendition_root: str,
@@ -416,6 +423,45 @@ def test_hls_delivery_rewrites_each_private_child_with_an_exact_child_token(
     assert b"".join(segment.body or ()) == b"segment"
     assert child_range.status_code == 416
     assert child_range.headers["Accept-Ranges"] == "none"
+
+
+@pytest.mark.parametrize(
+    "suffix",
+    [
+        "original/attempts/not-a-uuid/renditions",
+        "original/attempts/00000000-0000-0000-0000-000000000000/renditions",
+        "original/attempts/64A14D8C-32EC-4A2B-989F-F3ED9EA9EB03/renditions",
+        "original/attempts/64a14d8c32ec4a2b989ff3ed9ea9eb03/renditions",
+        "original/extra/attempts/64a14d8c-32ec-4a2b-989f-f3ed9ea9eb03/renditions",
+        "original/attempts/64a14d8c-32ec-4a2b-989f-f3ed9ea9eb03/extra/renditions",
+    ],
+)
+def test_hls_attempt_namespace_requires_exact_canonical_attempt(delivery_harness, suffix):
+    handler, storage = delivery_harness
+    key = f"{MEDIA_ROOT}/{suffix}/master.m3u8"
+    storage.put(
+        object_key=key,
+        body=b"#EXTM3U\n#EXT-X-ENDLIST\n",
+        content_type="application/vnd.apple.mpegurl",
+    )
+    with pytest.raises(MediaStorageUnavailable, match="rendition namespace"):
+        handler.serve(token=_token(handler, key), token_type=PLAYBACK, object_key=key, now=NOW)
+
+
+def test_hls_attempt_cannot_reference_a_different_attempt(delivery_harness):
+    handler, storage = delivery_harness
+    first = "64a14d8c-32ec-4a2b-989f-f3ed9ea9eb03"
+    second = "3907a702-ae44-40e3-8c43-2849a587bb0a"
+    key = f"{MEDIA_ROOT}/original/attempts/{first}/renditions/master.m3u8"
+    sibling = f"{MEDIA_ROOT}/original/attempts/{second}/renditions/segment.ts"
+    storage.put(object_key=sibling, body=b"private-sibling", content_type="video/mp2t")
+    storage.put(
+        object_key=key,
+        body=f"#EXTM3U\n#EXTINF:1,\n../../{second}/renditions/segment.ts\n#EXT-X-ENDLIST\n".encode(),
+        content_type="application/vnd.apple.mpegurl",
+    )
+    with pytest.raises(MediaStorageUnavailable, match="not deliverable"):
+        handler.serve(token=_token(handler, key), token_type=PLAYBACK, object_key=key, now=NOW)
 
 
 def test_hls_delivery_fails_closed_for_external_or_missing_children(

@@ -33,6 +33,11 @@ import {
 
 import { createLearnerApi } from "../lib/learner-api";
 import { NotificationPopover } from "./notifications-runtime";
+import {
+  AppUpdatesProvider,
+  AppUpdateUnreadIndicator,
+  useAppUpdates,
+} from "./app-updates-provider";
 import { initialsForDisplayName } from "../lib/profile-identity";
 import { ROUTES } from "../lib/routes";
 import { SignOutControl } from "./sign-out-control";
@@ -338,7 +343,17 @@ function IdentityAvatar({
   );
 }
 
-export function LearnerShell({
+export function LearnerShell(props: LearnerShellProps) {
+  return (
+    <AppUpdatesProvider
+      key={props.tenantConfig?.currentTenantId ?? "current-academy"}
+    >
+      <LearnerShellContent {...props} />
+    </AppUpdatesProvider>
+  );
+}
+
+function LearnerShellContent({
   children,
   current = "dashboard",
   learningHref = ROUTES.learning,
@@ -350,6 +365,11 @@ export function LearnerShell({
   navSections,
   learningChildren,
 }: LearnerShellProps) {
+  const appUpdates = useAppUpdates();
+  const unreadUpdates =
+    appUpdates?.state.status === "ready"
+      ? appUpdates.state.feed.unread_count
+      : 0;
   const practiceAvailable = usePracticeNavigationAvailability(current);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
@@ -901,9 +921,14 @@ export function LearnerShell({
                 aria-expanded={notificationPopoverOpen}
                 aria-controls="learner-notifications-popover"
                 aria-haspopup="dialog"
-                aria-label="Notifications"
+                aria-label={
+                  unreadUpdates
+                    ? `Notifications, ${unreadUpdates} unread app updates`
+                    : "Notifications"
+                }
               >
                 <Bell size={18} aria-hidden="true" />
+                <AppUpdateUnreadIndicator />
               </button>
 
               {notificationPopoverOpen ? (

@@ -22,6 +22,10 @@ _EVIDENCE_PATH = re.compile(r"^/v1/activities/[^/]+/evidence$")
 _WEBHOOK_PATH = re.compile(r"^/internal/v1/providers/[^/]+/webhooks$")
 _MEDIA_CAPTION_PATH = re.compile(r"^/v1/media/[^/]+/captions$")
 _TELEMETRY_PATH = re.compile(r"^/v1/(?:telemetry/events|telemetry/batch|analytics/events/batch)$")
+_UUID = r"[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}"
+_STUDIO_VIDEO_BYTES_PATH = re.compile(
+    rf"/v1/admin/studio/programs/{_UUID}/video-uploads/{_UUID}/bytes"
+)
 
 
 def request_body_limit(scope: Scope) -> int:
@@ -102,12 +106,39 @@ class RequestBodyLimitMiddleware:
         app: Callable[[Scope, Receive, Send], Awaitable[None]],
         *,
         local_avatar_upload_enabled: bool = False,
+        studio_video_upload_max_bytes: int | None = None,
     ) -> None:
         self.app = app
         self.local_avatar_upload_enabled = local_avatar_upload_enabled is True
+        if studio_video_upload_max_bytes is not None and (
+            type(studio_video_upload_max_bytes) is not int
+            or not 1 <= studio_video_upload_max_bytes <= 8 * 1024**3
+        ):
+            raise ValueError("The explicitly enabled Studio video byte limit is invalid.")
+        self.studio_video_upload_max_bytes = studio_video_upload_max_bytes
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope.get("type") != "http" or scope.get("method", "").upper() in SAFE_METHODS:
+            await self.app(scope, receive, send)
+            return
+
+        if (
+            self.studio_video_upload_max_bytes is not None
+            and scope.get("method") == "PUT"
+            and _STUDIO_VIDEO_BYTES_PATH.fullmatch(scope.get("path", ""))
+        ):
+            lengths = tuple(_header_values(scope, b"content-length"))
+            if (
+                len(lengths) != 1
+                or re.fullmatch(rb"[1-9][0-9]{0,10}", lengths[0]) is None
+                or int(lengths[0]) > self.studio_video_upload_max_bytes
+                or tuple(_header_values(scope, b"transfer-encoding"))
+            ):
+                await _send_too_large(scope, send)
+                return
+            # The explicitly composed byte route authenticates before receiving
+            # data, bounds every frame/total/deadline, and writes off-loop. Never
+            # gather a lecture into this middleware's generic JSON body buffer.
             await self.app(scope, receive, send)
             return
 

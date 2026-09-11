@@ -67,6 +67,7 @@ import {
   type MutationFailureKind,
 } from "../lib/local-drafts";
 import { ROUTES } from "../lib/routes";
+import { firstActionableActivity } from "../lib/next-learning-action";
 import { userFacingRequestError } from "../lib/user-facing-error";
 import {
   hasMembershipRole,
@@ -911,18 +912,6 @@ export function enrollmentFailureMessage(error: unknown): {
   };
 }
 
-function firstActionableActivity(
-  learning: LearningResponse,
-): LearningActivityResponse | undefined {
-  const activities = learning.modules.flatMap((module) => module.activities);
-  return (
-    activities.find(
-      (activity) => activity.state.toLowerCase() === "in_progress",
-    ) ??
-    activities.find((activity) => activity.state.toLowerCase() === "available")
-  );
-}
-
 export function learningPathContinueTarget(learning: LearningResponse): {
   href: string;
   label: string;
@@ -1452,11 +1441,13 @@ export function LearningActivityNavigation({
 }) {
   const lockedReason = activityLockReason(activity);
   const offlineRead = disabled || Boolean(getOfflineReadMetadata(activity));
+  const state = activity.state.toLowerCase();
   const unavailableReason = offlineRead
     ? "Reconnect to open this activity."
     : lockedReason;
-  const locked = activity.state.toLowerCase() === "locked";
-  const completed = activity.state.toLowerCase() === "completed";
+  const locked = state === "locked";
+  const completed = state === "completed";
+  const showActivityState = offlineRead || state !== "available";
   const content = (
     <>
       <span className={journey.activityIcon} aria-hidden="true">
@@ -1482,11 +1473,13 @@ export function LearningActivityNavigation({
         ) : null}
       </span>
       <span className={journey.activityStatus}>
-        <span>
-          {offlineRead
-            ? "Reconnect to open"
-            : activityStateLabel(activity.state)}
-        </span>
+        {showActivityState ? (
+          <span>
+            {offlineRead
+              ? "Reconnect to open"
+              : activityStateLabel(activity.state)}
+          </span>
+        ) : null}
         {unavailableReason ? (
           <LockKeyhole size={15} aria-hidden="true" />
         ) : (
@@ -3234,8 +3227,10 @@ export function LearningModules({
                     />
                     <div>
                       <p className={journey.chapterLabel}>
-                        Module {module.position} ·{" "}
-                        {offlineRead ? "Saved view" : moduleState}
+                        Module {module.position}
+                        {offlineRead || moduleState !== "Available"
+                          ? ` · ${offlineRead ? "Saved view" : moduleState}`
+                          : null}
                       </p>
                       <h3>{module.title}</h3>
                       <p>

@@ -180,6 +180,19 @@ STUDIO_VIDEO_PARITY_TABLES = COURSE_CREATION_PARITY_TABLES + ("studio_video_uplo
 COMMUNITY_PARITY_MIGRATION_HEAD = "20260910_0027"
 COMMUNITY_PARITY_CONTRACT = "ac-postgres-parity-v7"
 COMMUNITY_PARITY_TABLES = STUDIO_VIDEO_PARITY_TABLES + ("academy_public_profiles",)
+GLOBAL_COMMUNITY_PARITY_MIGRATION_HEAD = "20260910_0028"
+GLOBAL_COMMUNITY_PARITY_CONTRACT = "ac-postgres-parity-v8"
+GLOBAL_COMMUNITY_PARITY_TABLES = COMMUNITY_PARITY_TABLES + (
+    "community_public_profiles",
+    "academy_leaderboard_preferences",
+)
+APP_UPDATES_PARITY_MIGRATION_HEAD = "20260910_0029"
+APP_UPDATES_PARITY_CONTRACT = "ac-postgres-parity-v9"
+APP_UPDATES_PARITY_TABLES = GLOBAL_COMMUNITY_PARITY_TABLES + ("app_update_read_receipts",)
+# The first migration rehearsal is deliberately an exact reviewed transition.
+# Do not infer a source/target pair from lexical revision ordering.
+MIGRATION_REHEARSAL_SOURCE_HEAD = COMMUNITY_PARITY_MIGRATION_HEAD
+MIGRATION_REHEARSAL_TARGET_HEAD = APP_UPDATES_PARITY_MIGRATION_HEAD
 VERSIONED_PARITY_CONTRACTS = {
     CAPABILITY_PARITY_MIGRATION_HEAD: (CAPABILITY_PARITY_CONTRACT, CAPABILITY_PARITY_TABLES),
     PRACTICE_PARITY_MIGRATION_HEAD: (PRACTICE_PARITY_CONTRACT, PRACTICE_PARITY_TABLES),
@@ -201,6 +214,14 @@ VERSIONED_PARITY_CONTRACTS = {
     COMMUNITY_PARITY_MIGRATION_HEAD: (
         COMMUNITY_PARITY_CONTRACT,
         COMMUNITY_PARITY_TABLES,
+    ),
+    GLOBAL_COMMUNITY_PARITY_MIGRATION_HEAD: (
+        GLOBAL_COMMUNITY_PARITY_CONTRACT,
+        GLOBAL_COMMUNITY_PARITY_TABLES,
+    ),
+    APP_UPDATES_PARITY_MIGRATION_HEAD: (
+        APP_UPDATES_PARITY_CONTRACT,
+        APP_UPDATES_PARITY_TABLES,
     ),
 }
 
@@ -267,6 +288,8 @@ class DrillConfig:
     reconcile_tenant_id: UUID | None
     reconcile_reason: str | None
     acknowledge_reconciliation: bool
+    source_application_image: str | None = None
+    source_migration_head: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -896,7 +919,9 @@ def _stable_restore_inputs(
             backup=verified_backup,
             environment=config.environment,
             workspace_root=workspace_root,
-            expected_migration_head=config.expected_migration_head,
+            expected_migration_head=(
+                config.source_migration_head or config.expected_migration_head
+            ),
         )
         if (
             captured_at != config.backup_captured_at
@@ -1131,6 +1156,21 @@ def _preflight(target: DisposableTarget, config: DrillConfig) -> None:
         ("image", "inspect", "--format", "{{.Id}}", config.postgres_image),
         "verify local PostgreSQL image",
     )
+    if config.source_application_image is not None:
+        source_image_id = _run_docker(
+            (
+                "image",
+                "inspect",
+                "--format",
+                "{{.Id}}",
+                config.source_application_image,
+            ),
+            "verify local source application image",
+        )
+        if source_image_id != config.source_application_image:
+            raise DrillError(
+                "local source application image identity does not match the exact image ID"
+            )
     for kind, name in (
         ("container", target.container),
         ("container", target.init_container),
@@ -1140,16 +1180,35 @@ def _preflight(target: DisposableTarget, config: DrillConfig) -> None:
     ):
         if _docker_inspect_optional(kind, name) is not None:
             raise DrillError(f"generated {kind} name already exists; refusing to reuse it")
+    if config.source_application_image is not None:
+        if config.source_migration_head != MIGRATION_REHEARSAL_SOURCE_HEAD:
+            raise DrillError("migration rehearsal source head is not the reviewed 0027 head")
+        source_release_id, source_image_migration_head = _application_image_contract(
+            config.source_application_image,
+            target,
+        )
+        if (
+            source_release_id != config.backup_release_id
+            or source_image_migration_head != config.source_migration_head
+        ):
+            raise DrillError(
+                "source application image identity does not match the prior-head backup"
+            )
     image_release_id, image_migration_head = _application_image_contract(
         config.application_image,
         target,
     )
-    if (
-        image_release_id != config.backup_release_id
-        or image_release_id != config.workspace_release_id
-    ):
+    if config.source_application_image is None:
+        if (
+            image_release_id != config.backup_release_id
+            or image_release_id != config.workspace_release_id
+        ):
+            raise DrillError(
+                "application image release marker does not match the backup and workspace release"
+            )
+    elif image_release_id != config.workspace_release_id:
         raise DrillError(
-            "application image release marker does not match the backup and workspace release"
+            "application image release marker does not match the selected workspace release"
         )
     if image_migration_head != config.expected_migration_head:
         raise DrillError("application image migration head does not match the workspace head")
@@ -1549,7 +1608,12 @@ def _verify_target_identity(target: DisposableTarget) -> dict[str, str]:
     }
 
 
-def _schema_and_migration(target: DisposableTarget, expected_head: str) -> dict[str, Any]:
+def _schema_and_migration(
+    target: DisposableTarget,
+    expected_head: str,
+    *,
+    require_exact_tables: bool = False,
+) -> dict[str, Any]:
     tables = parity_tables_for_head(expected_head)
     actual_tables = set(
         filter(
@@ -1565,6 +1629,9 @@ def _schema_and_migration(target: DisposableTarget, expected_head: str) -> dict[
     missing = sorted(set(tables) - actual_tables)
     if missing:
         raise DrillError(f"restored schema is missing {len(missing)} canonical tables")
+    extra = sorted(actual_tables - set(tables))
+    if require_exact_tables and extra:
+        raise DrillError(f"restored schema contains {len(extra)} unexpected public tables")
     versions = _query(
         target,
         "SELECT version_num FROM alembic_version ORDER BY version_num",
@@ -1576,7 +1643,7 @@ def _schema_and_migration(target: DisposableTarget, expected_head: str) -> dict[
         "expected_migration_head": expected_head,
         "actual_migration_versions": versions,
         "canonical_tables_checked": len(tables),
-        "extra_public_tables": len(actual_tables - set(tables)),
+        "extra_public_tables": len(extra),
     }
 
 
@@ -1599,20 +1666,24 @@ def _row_counts(target: DisposableTarget, expected_head: str) -> dict[str, int]:
     return result
 
 
-def _verify_versioned_backup_parity(config: DrillConfig, actual: Mapping[str, int]) -> None:
-    contract = parity_contract_for_head(config.expected_migration_head)
+def _verify_backup_row_count_parity(
+    metadata_path: Path,
+    expected_head: str,
+    actual: Mapping[str, int],
+) -> None:
+    contract = parity_contract_for_head(expected_head)
     if contract is None:
         return
-    tables = parity_tables_for_head(config.expected_migration_head)
+    tables = parity_tables_for_head(expected_head)
     # These inputs have already been copied privately and hash/contract-checked.
     try:
-        metadata = json.loads(config.backup_metadata.read_text(encoding="utf-8"))
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
         raise DrillError("versioned backup metadata is unreadable for parity") from error
     if (
         not isinstance(metadata, dict)
         or metadata.get("parity_contract") != contract
-        or metadata.get("migration_head") != config.expected_migration_head
+        or metadata.get("migration_head") != expected_head
         or set(actual) != set(tables)
         or dict(actual) != metadata.get("row_counts")
         or any(
@@ -1621,6 +1692,14 @@ def _verify_versioned_backup_parity(config: DrillConfig, actual: Mapping[str, in
         )
     ):
         raise DrillError("restored versioned row-count parity failed")
+
+
+def _verify_versioned_backup_parity(config: DrillConfig, actual: Mapping[str, int]) -> None:
+    _verify_backup_row_count_parity(
+        config.backup_metadata,
+        config.expected_migration_head,
+        actual,
+    )
 
 
 def _invariants(target: DisposableTarget) -> dict[str, int]:
@@ -1687,6 +1766,158 @@ def _helper_database_url(target: DisposableTarget) -> str:
     return (
         f"postgresql+psycopg://{quote(target.role, safe='')}:"
         f"{quote(target.password, safe='')}@{target.container}:5432/{target.database}"
+    )
+
+
+def _migration_rehearsal_source_derivations(target: DisposableTarget) -> dict[str, int]:
+    """Collect only the aggregates consumed by migrations 0028 and 0029."""
+
+    values = _query(
+        target,
+        "SELECT count(*)::bigint, count(DISTINCT person_id)::bigint FROM academy_public_profiles",
+        "collect migration rehearsal source aggregates",
+    ).split("|")
+    if len(values) != 2:
+        raise DrillError("migration rehearsal source aggregate query returned an unexpected shape")
+    try:
+        profile_count, person_count = (int(value) for value in values)
+    except ValueError as error:
+        raise DrillError(
+            "migration rehearsal source aggregate query returned an invalid count"
+        ) from error
+    if profile_count < 0 or person_count < 0 or person_count > profile_count:
+        raise DrillError("migration rehearsal source aggregate query returned an invalid result")
+    return {
+        "academy_public_profiles": profile_count,
+        "academy_public_profile_people": person_count,
+    }
+
+
+def _assert_migration_rehearsal_transition(
+    source_counts_after_hold: Mapping[str, int],
+    target_counts: Mapping[str, int],
+    source_derivations: Mapping[str, int],
+) -> dict[str, int]:
+    """Require exact preservation plus the rows defined by 0028/0029."""
+
+    source_tables = set(parity_tables_for_head(MIGRATION_REHEARSAL_SOURCE_HEAD))
+    target_tables = set(parity_tables_for_head(MIGRATION_REHEARSAL_TARGET_HEAD))
+    expected_new_tables = target_tables - source_tables
+    if set(source_counts_after_hold) != source_tables:
+        raise DrillError("migration rehearsal source row-count baseline is incomplete")
+    if set(target_counts) != target_tables:
+        raise DrillError("migration rehearsal target row-count result is incomplete")
+    if any(
+        isinstance(value, bool) or not isinstance(value, int) or value < 0
+        for value in (*source_counts_after_hold.values(), *target_counts.values())
+    ):
+        raise DrillError("migration rehearsal row counts are invalid")
+    if any(target_counts[table] != source_counts_after_hold[table] for table in source_tables):
+        raise DrillError("migration rehearsal changed a preserved source table count")
+    if set(source_derivations) != {
+        "academy_public_profiles",
+        "academy_public_profile_people",
+    }:
+        raise DrillError("migration rehearsal source derivation contract is incomplete")
+    if any(
+        isinstance(value, bool) or not isinstance(value, int) or value < 0
+        for value in source_derivations.values()
+    ):
+        raise DrillError("migration rehearsal source derivations are invalid")
+    if (
+        source_derivations["academy_public_profiles"]
+        != source_counts_after_hold["academy_public_profiles"]
+    ):
+        raise DrillError("migration rehearsal source derivation does not match its row count")
+    expected_new_counts = {
+        # 0028 inserts one global identity per distinct legacy person and one
+        # preference per legacy profile; 0029 creates an empty append-only
+        # receipt table.
+        "community_public_profiles": source_derivations["academy_public_profile_people"],
+        "academy_leaderboard_preferences": source_counts_after_hold["academy_public_profiles"],
+        "app_update_read_receipts": 0,
+    }
+    if expected_new_tables != set(expected_new_counts):
+        raise DrillError(
+            "migration rehearsal new-table contract is not the reviewed 0028/0029 pair"
+        )
+    if any(
+        target_counts[table] != expected_count
+        for table, expected_count in expected_new_counts.items()
+    ):
+        raise DrillError("migration rehearsal new-table row counts are incorrect")
+    return expected_new_counts
+
+
+def _migration_command(target: DisposableTarget, image: str) -> tuple[str, ...]:
+    """Run only the reviewed candidate Alembic entrypoint on the internal target."""
+
+    return (
+        "run",
+        "--rm",
+        "--pull",
+        "never",
+        "--name",
+        target.probe_container,
+        "--label",
+        target.label,
+        "--network",
+        target.network,
+        "--read-only",
+        "--user",
+        "10001:10001",
+        "--security-opt",
+        "no-new-privileges:true",
+        "--cap-drop",
+        "ALL",
+        "--pids-limit",
+        "128",
+        "--cpus",
+        "1.00",
+        "--memory",
+        "512m",
+        "--memory-swap",
+        "512m",
+        "--shm-size",
+        "64m",
+        "--stop-timeout",
+        "15",
+        "--tmpfs",
+        "/tmp:rw,noexec,nosuid,nodev,size=33554432,uid=10001,gid=10001,mode=0700",
+        "--env",
+        "AC_DATABASE_URL",
+        "--env",
+        "AC_DATABASE_MIGRATOR_URL",
+        "--env",
+        "AC_ENVIRONMENT",
+        "--env",
+        "AC_RELEASE_ID",
+        "--env",
+        "AC_EXTERNAL_SIDE_EFFECTS_HOLD",
+        "--env",
+        "PYTHONDONTWRITEBYTECODE",
+        "--entrypoint",
+        "alembic",
+        image,
+        "upgrade",
+        MIGRATION_REHEARSAL_TARGET_HEAD,
+    )
+
+
+def _run_candidate_migration(target: DisposableTarget, config: DrillConfig) -> None:
+    target_url = _helper_database_url(target)
+    _run_docker(
+        _migration_command(target, config.application_image),
+        "apply candidate migration 0028/0029 in isolated target",
+        timeout_seconds=RESTORE_TIMEOUT_SECONDS,
+        env_updates={
+            "AC_DATABASE_URL": target_url,
+            "AC_DATABASE_MIGRATOR_URL": target_url,
+            "AC_ENVIRONMENT": config.environment,
+            "AC_RELEASE_ID": config.workspace_release_id,
+            "AC_EXTERNAL_SIDE_EFFECTS_HOLD": "true",
+            "PYTHONDONTWRITEBYTECODE": "1",
+        },
     )
 
 
@@ -1786,6 +2017,47 @@ def _validate_mark_probe(payload: Mapping[str, Any]) -> tuple[dict[str, Any], di
     }:
         raise DrillError("worker no-provider-call proof failed")
     return marker, proof
+
+
+def _validate_held_probe(
+    payload: Mapping[str, Any],
+    *,
+    expected_generation: int,
+) -> dict[str, Any]:
+    _require_exact_keys(
+        payload,
+        {"action", "recovery_state", "worker_hold_proof"},
+        "held-state probe",
+    )
+    if payload["action"] != "prove-held":
+        raise DrillError("held-state probe returned the wrong action")
+    recovery = payload["recovery_state"]
+    proof = payload["worker_hold_proof"]
+    if not isinstance(recovery, Mapping) or not isinstance(proof, Mapping):
+        raise DrillError("held-state probe returned an unexpected nested shape")
+    _require_exact_keys(recovery, {"generation", "status"}, "held recovery state")
+    _require_exact_keys(
+        proof,
+        {"worker_ready", "run_once_rejected", "provider_calls"},
+        "held worker proof",
+    )
+    generation = _nonnegative_int(
+        recovery["generation"],
+        "held recovery generation",
+        positive=True,
+    )
+    if generation != expected_generation or recovery["status"] != "held":
+        raise DrillError("held-state probe returned an unexpected recovery generation")
+    if proof != {
+        "worker_ready": False,
+        "run_once_rejected": True,
+        "provider_calls": 0,
+    }:
+        raise DrillError("post-migration worker no-provider-call proof failed")
+    return {
+        "recovery_state": {"generation": generation, "status": "held"},
+        "worker_hold_proof": dict(proof),
+    }
 
 
 def _assert_hold_transition(
@@ -1934,6 +2206,41 @@ def _validate_reconciliation_args(args: argparse.Namespace) -> None:
             raise DrillError("reconciliation reason must be printable and 1-500 characters")
 
 
+def _validate_migration_rehearsal_args(
+    args: argparse.Namespace,
+    *,
+    target_head: str,
+) -> tuple[str | None, str | None]:
+    source_image = args.source_application_image
+    source_head = args.source_migration_head
+    if (source_image is None) != (source_head is None):
+        raise DrillError(
+            "migration rehearsal requires both --source-application-image and "
+            "--source-migration-head"
+        )
+    if source_image is None:
+        return None, None
+    if source_head != MIGRATION_REHEARSAL_SOURCE_HEAD:
+        raise DrillError("migration rehearsal supports only source migration head 20260910_0027")
+    if target_head != MIGRATION_REHEARSAL_TARGET_HEAD:
+        raise DrillError("migration rehearsal supports only candidate migration head 20260910_0029")
+    if args.reconcile_job_id or args.reconcile_outbox_event_id:
+        raise DrillError("migration rehearsal must leave the recovery state held")
+    if (
+        any(
+            value is not None
+            for value in (
+                args.reconcile_actor_person_id,
+                args.reconcile_tenant_id,
+                args.reconcile_reason,
+            )
+        )
+        or args.acknowledge_reconciliation
+    ):
+        raise DrillError("migration rehearsal does not support reconciliation arguments")
+    return _validate_application_image(source_image), source_head
+
+
 def _config_from_args(args: argparse.Namespace) -> DrillConfig:
     workspace_root = _workspace_root()
     if args.execute and not args.acknowledge_isolated_target:
@@ -1943,6 +2250,10 @@ def _config_from_args(args: argparse.Namespace) -> DrillConfig:
     _validate_reconciliation_args(args)
     workspace_mode, workspace_release_id, expected_head = _workspace_release_contract(
         workspace_root
+    )
+    source_application_image, source_migration_head = _validate_migration_rehearsal_args(
+        args,
+        target_head=expected_head,
     )
     backup = _validate_backup(args.backup, workspace_root=workspace_root)
     (
@@ -1956,11 +2267,11 @@ def _config_from_args(args: argparse.Namespace) -> DrillConfig:
         backup=backup,
         environment=args.environment,
         workspace_root=workspace_root,
-        expected_migration_head=expected_head,
+        expected_migration_head=source_migration_head or expected_head,
     )
     postgres_image = _validate_postgres_image(args.postgres_image)
     application_image = _validate_application_image(args.application_image)
-    if backup_release_id != workspace_release_id:
+    if source_application_image is None and backup_release_id != workspace_release_id:
         raise DrillError("backup release does not match the selected workspace release")
     # Deliberately last: validating configuration never creates this path.
     evidence_dir = _validate_evidence_dir(
@@ -1989,6 +2300,8 @@ def _config_from_args(args: argparse.Namespace) -> DrillConfig:
         reconcile_tenant_id=args.reconcile_tenant_id,
         reconcile_reason=(args.reconcile_reason.strip() if args.reconcile_reason else None),
         acknowledge_reconciliation=args.acknowledge_reconciliation,
+        source_application_image=source_application_image,
+        source_migration_head=source_migration_head,
     )
 
 
@@ -2002,7 +2315,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="absolute JSON metadata paired with the logical dump",
     )
     parser.add_argument("--evidence-dir", required=True, help="absolute new directory path")
-    parser.add_argument("--application-image", required=True, help="exact local sha256 image ID")
+    parser.add_argument(
+        "--application-image",
+        required=True,
+        help="exact local sha256 candidate image ID",
+    )
+    parser.add_argument(
+        "--source-application-image",
+        help="exact local sha256 image ID for the prior-head backup",
+    )
+    parser.add_argument(
+        "--source-migration-head",
+        choices=(MIGRATION_REHEARSAL_SOURCE_HEAD,),
+        help="exact prior migration head for the isolated 0027-to-0029 rehearsal",
+    )
     parser.add_argument("--postgres-image", default=DEFAULT_POSTGRES_IMAGE)
     parser.add_argument("--execute", action="store_true", help="run the disposable drill")
     parser.add_argument(
@@ -2025,8 +2351,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 def _dry_run_plan(config: DrillConfig) -> dict[str, Any]:
     has_selection = bool(config.reconcile_job_ids or config.reconcile_outbox_event_ids)
-    return {
-        "mode": "dry-run",
+    plan = {
+        "mode": "migration-rehearsal-dry-run"
+        if config.source_application_image is not None
+        else "dry-run",
         "environment": config.environment,
         "backup_sha256": config.backup_sha256,
         "backup_metadata_sha256": config.backup_metadata_sha256,
@@ -2046,6 +2374,15 @@ def _dry_run_plan(config: DrillConfig) -> dict[str, Any]:
         "external_connections": [],
         "reconciliation": "selected IDs only" if has_selection else "disabled",
     }
+    if config.source_application_image is not None:
+        plan["source_application_image"] = config.source_application_image
+        plan["source_migration_head"] = config.source_migration_head
+        plan["migration"] = {
+            "entrypoint": "alembic",
+            "command": ["upgrade", MIGRATION_REHEARSAL_TARGET_HEAD],
+            "target_migration_head": MIGRATION_REHEARSAL_TARGET_HEAD,
+        }
+    return plan
 
 
 def _create_evidence_dir(path: Path) -> None:
@@ -2151,6 +2488,115 @@ def _restore_signal_handlers(previous: Mapping[int, Any]) -> None:
         signal.signal(signum, handler)
 
 
+def _execute_migration_rehearsal(
+    target: DisposableTarget,
+    config: DrillConfig,
+    evidence: dict[str, Any],
+) -> None:
+    source_image = config.source_application_image
+    source_head = config.source_migration_head
+    if source_image is None or source_head != MIGRATION_REHEARSAL_SOURCE_HEAD:
+        raise DrillError("migration rehearsal source contract is incomplete")
+    if config.expected_migration_head != MIGRATION_REHEARSAL_TARGET_HEAD:
+        raise DrillError("migration rehearsal target contract is not the reviewed 0029 head")
+
+    _restore_dump(target)
+    source_schema = _schema_and_migration(
+        target,
+        source_head,
+        require_exact_tables=True,
+    )
+    source_counts_before_hold = _row_counts(target, source_head)
+    _verify_backup_row_count_parity(
+        config.backup_metadata,
+        source_head,
+        source_counts_before_hold,
+    )
+    source_derivations_before_hold = _migration_rehearsal_source_derivations(target)
+    evidence["source_schema"] = source_schema
+    evidence["source_row_counts_before_hold"] = source_counts_before_hold
+    evidence["source_derivations_before_hold"] = source_derivations_before_hold
+    evidence["invariants_before_hold"] = _invariants(target)
+    before_hold = _side_effect_counts(target)
+    evidence["counts_before_hold"] = before_hold.as_dict()
+
+    marker_payload = _run_probe(
+        target,
+        source_image,
+        (
+            "mark-and-prove",
+            "--reason",
+            "migration rehearsal requires explicit selected reconciliation",
+        ),
+        "run sanctioned source restore marker and worker hold proof",
+    )
+    marker, worker_proof = _validate_mark_probe(marker_payload)
+    evidence["restore_marker"] = marker
+    evidence["worker_hold_proof"] = worker_proof
+    after_hold = _side_effect_counts(target)
+    evidence["counts_after_hold"] = after_hold.as_dict()
+    _assert_hold_transition(before_hold, after_hold, marker)
+
+    # The source baseline used for preservation must be taken after the
+    # sanctioned hold because holding jobs/outbox work is an intentional state
+    # transition.
+    source_counts_after_hold = _row_counts(target, source_head)
+    source_derivations_after_hold = _migration_rehearsal_source_derivations(target)
+    if source_derivations_after_hold != source_derivations_before_hold:
+        raise DrillError("source migration derivations changed during the restore hold")
+    evidence["source_row_counts_after_hold"] = source_counts_after_hold
+    evidence["source_derivations_after_hold"] = source_derivations_after_hold
+
+    _run_candidate_migration(target, config)
+    target_schema = _schema_and_migration(
+        target,
+        config.expected_migration_head,
+        require_exact_tables=True,
+    )
+    target_counts = _row_counts(target, config.expected_migration_head)
+    new_table_counts = _assert_migration_rehearsal_transition(
+        source_counts_after_hold,
+        target_counts,
+        source_derivations_after_hold,
+    )
+    after_migration = _side_effect_counts(target)
+    if after_migration != after_hold:
+        raise DrillError("candidate migrations changed the sanctioned restore hold state")
+
+    post_migration_probe = _run_probe(
+        target,
+        config.application_image,
+        ("prove-held",),
+        "prove candidate worker hold after migration",
+    )
+    post_migration_worker_proof = _validate_held_probe(
+        post_migration_probe,
+        expected_generation=marker["generation"],
+    )
+
+    evidence["migration"] = {
+        "entrypoint": "alembic",
+        "command": ["upgrade", MIGRATION_REHEARSAL_TARGET_HEAD],
+        "source_head": source_head,
+        "target_head": config.expected_migration_head,
+    }
+    evidence["schema"] = target_schema
+    evidence["row_counts"] = target_counts
+    evidence["parity_contract"] = parity_contract_for_head(config.expected_migration_head)
+    evidence["new_table_counts"] = new_table_counts
+    evidence["invariants_after_migration"] = _invariants(target)
+    evidence["counts_after_migration"] = after_migration.as_dict()
+    evidence["post_migration_worker_hold_proof"] = post_migration_worker_proof
+    evidence["reconciliation"] = {
+        "requested": False,
+        "released_job_ids": [],
+        "released_outbox_event_ids": [],
+        "recovery_state_remains_held": True,
+    }
+    evidence["counts_after_reconciliation"] = after_migration.as_dict()
+    evidence["operation_gate"] = {"status": "passed"}
+
+
 def _execute(config: DrillConfig) -> tuple[dict[str, Any], Path]:
     run_id = _short_token()
     target = _target_for(run_id)
@@ -2212,68 +2658,73 @@ def _execute(config: DrillConfig) -> tuple[dict[str, Any], Path]:
             rto_started = time.perf_counter()
             _create_target(target, config)
             evidence["postgres_identity"] = _verify_target_identity(target)
-            _restore_dump(target)
-            evidence["schema"] = _schema_and_migration(
-                target,
-                config.expected_migration_head,
-            )
-            evidence["row_counts"] = _row_counts(target, config.expected_migration_head)
-            contract = parity_contract_for_head(config.expected_migration_head)
-            if contract is not None:
-                _verify_versioned_backup_parity(config, evidence["row_counts"])
-                evidence["parity_contract"] = contract
-            evidence["invariants_before_hold"] = _invariants(target)
-            before_hold = _side_effect_counts(target)
-            evidence["counts_before_hold"] = before_hold.as_dict()
-            probe_payload = _run_probe(
-                target,
-                config.application_image,
-                (
-                    "mark-and-prove",
-                    "--reason",
-                    "restore drill requires explicit selected reconciliation",
-                ),
-                "run sanctioned restore marker and worker hold proof",
-            )
-            marker, worker_proof = _validate_mark_probe(probe_payload)
-            evidence["restore_marker"] = marker
-            evidence["worker_hold_proof"] = worker_proof
-            after_hold = _side_effect_counts(target)
-            evidence["counts_after_hold"] = after_hold.as_dict()
-            _assert_hold_transition(before_hold, after_hold, marker)
-            rto_observed_seconds = time.perf_counter() - rto_started
-            rto_completed = True
-
-            if config.reconcile_job_ids or config.reconcile_outbox_event_ids:
-                reconcile_payload = _run_probe(
+            if config.source_application_image is not None:
+                evidence["source_application_image"] = config.source_application_image
+                evidence["source_migration_head"] = config.source_migration_head
+                _execute_migration_rehearsal(target, config, evidence)
+            else:
+                _restore_dump(target)
+                evidence["schema"] = _schema_and_migration(
+                    target,
+                    config.expected_migration_head,
+                )
+                evidence["row_counts"] = _row_counts(target, config.expected_migration_head)
+                contract = parity_contract_for_head(config.expected_migration_head)
+                if contract is not None:
+                    _verify_versioned_backup_parity(config, evidence["row_counts"])
+                    evidence["parity_contract"] = contract
+                evidence["invariants_before_hold"] = _invariants(target)
+                before_hold = _side_effect_counts(target)
+                evidence["counts_before_hold"] = before_hold.as_dict()
+                probe_payload = _run_probe(
                     target,
                     config.application_image,
-                    _reconciliation_action_args(config),
-                    "reconcile exact selected held records",
-                    operations_tenant_id=config.reconcile_tenant_id,
+                    (
+                        "mark-and-prove",
+                        "--reason",
+                        "restore drill requires explicit selected reconciliation",
+                    ),
+                    "run sanctioned restore marker and worker hold proof",
                 )
-                reconciliation = _validate_reconcile_probe(
-                    reconcile_payload,
-                    config,
-                    marker["generation"],
-                )
-                after_reconciliation = _side_effect_counts(target)
-                _assert_reconciliation_transition(
-                    after_hold,
-                    after_reconciliation,
-                    config,
-                )
-                evidence["reconciliation"] = reconciliation
-                evidence["counts_after_reconciliation"] = after_reconciliation.as_dict()
-            else:
-                evidence["reconciliation"] = {
-                    "requested": False,
-                    "released_job_ids": [],
-                    "released_outbox_event_ids": [],
-                    "recovery_state_remains_held": True,
-                }
-                evidence["counts_after_reconciliation"] = after_hold.as_dict()
-            evidence["operation_gate"] = {"status": "passed"}
+                marker, worker_proof = _validate_mark_probe(probe_payload)
+                evidence["restore_marker"] = marker
+                evidence["worker_hold_proof"] = worker_proof
+                after_hold = _side_effect_counts(target)
+                evidence["counts_after_hold"] = after_hold.as_dict()
+                _assert_hold_transition(before_hold, after_hold, marker)
+
+                if config.reconcile_job_ids or config.reconcile_outbox_event_ids:
+                    reconcile_payload = _run_probe(
+                        target,
+                        config.application_image,
+                        _reconciliation_action_args(config),
+                        "reconcile exact selected held records",
+                        operations_tenant_id=config.reconcile_tenant_id,
+                    )
+                    reconciliation = _validate_reconcile_probe(
+                        reconcile_payload,
+                        config,
+                        marker["generation"],
+                    )
+                    after_reconciliation = _side_effect_counts(target)
+                    _assert_reconciliation_transition(
+                        after_hold,
+                        after_reconciliation,
+                        config,
+                    )
+                    evidence["reconciliation"] = reconciliation
+                    evidence["counts_after_reconciliation"] = after_reconciliation.as_dict()
+                else:
+                    evidence["reconciliation"] = {
+                        "requested": False,
+                        "released_job_ids": [],
+                        "released_outbox_event_ids": [],
+                        "recovery_state_remains_held": True,
+                    }
+                    evidence["counts_after_reconciliation"] = after_hold.as_dict()
+                evidence["operation_gate"] = {"status": "passed"}
+            rto_observed_seconds = time.perf_counter() - rto_started
+            rto_completed = True
         except DrillError as error:
             operation_errors.append(str(error))
         except KeyboardInterrupt:

@@ -1,1 +1,1 @@
-"""Academy-scoped public learner identity and opt-in leaderboard."""
+"""Global Cohorva public identity and academy-scoped opt-in leaderboard."""

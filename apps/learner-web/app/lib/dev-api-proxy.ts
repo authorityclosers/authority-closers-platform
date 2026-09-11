@@ -2,6 +2,8 @@ import { randomBytes } from "node:crypto";
 import { proxyLocalSandboxMedia } from "./local-media-upstream";
 import { proxyLocalSandboxAvatarUpload } from "./local-avatar-upstream";
 import { fetchDevelopmentLocalApiUpstream } from "./dev-local-api-upstream";
+import { fetchLocalLearnerWire } from "./local-api-upstream";
+import { LOCAL_SANDBOX_ORIGIN } from "./local-sandbox";
 import { fetchDevelopmentMediaUpstream } from "./dev-media-upstream";
 import {
   DEVELOPMENT_MEDIA_MAX_BYTES,
@@ -57,7 +59,11 @@ const STAGING_AUTH_REQUEST_HEADERS = new Set([
 type DevApiEnvironment = Readonly<Record<string, string | undefined>>;
 
 export type DevApiTarget =
-  | { mode: "local"; origin: string }
+  | {
+      mode: "local";
+      origin: string;
+      browserOrigin?: typeof LOCAL_SANDBOX_ORIGIN;
+    }
   | { mode: "staging-public-catalog"; origin: typeof STAGING_API_ORIGIN }
   | {
       mode: "staging-authenticated";
@@ -386,7 +392,13 @@ export function resolveDevApiTarget(
     isLoopbackHost(url.hostname) &&
     (url.protocol === "http:" || url.protocol === "https:")
   ) {
-    return { mode: "local", origin: url.origin };
+    return environment.AC_DEV_LOCAL_SANDBOX_ENABLED === "true"
+      ? {
+          mode: "local",
+          origin: url.origin,
+          browserOrigin: LOCAL_SANDBOX_ORIGIN,
+        }
+      : { mode: "local", origin: url.origin };
   }
 
   throw new Error(
@@ -566,6 +578,17 @@ export function isStagingAuthenticatedLearnerRequest(
       !(pathname === "/v1/me" && normalizedMethod === "POST")
     );
   }
+  if (pathname === "/v1/me/app-updates") {
+    return normalizedMethod === "GET" && hasNoQuery(url);
+  }
+  if (
+    /^\/v1\/me\/app-updates\/[a-z0-9]+(?:-[a-z0-9]+)*\/read$/.test(pathname)
+  ) {
+    const releaseId = pathname.split("/")[4];
+    return (
+      normalizedMethod === "POST" && releaseId.length <= 128 && hasNoQuery(url)
+    );
+  }
   if (pathname === "/v1/onboarding") {
     return (
       (normalizedMethod === "GET" || normalizedMethod === "PUT") &&
@@ -642,10 +665,10 @@ export function isStagingAuthenticatedLearnerRequest(
 
 function proxyRequestHeaders(
   request: Request,
-  mode: DevApiTarget["mode"],
+  target: DevApiTarget,
   stagingSession: string | null = null,
 ): Headers {
-  if (mode === "local") {
+  if (target.mode === "local") {
     const headers = new Headers(request.headers);
     for (const header of [
       "connection",
@@ -664,7 +687,7 @@ function proxyRequestHeaders(
   }
 
   const allowedHeaders =
-    mode === "staging-authenticated"
+    target.mode === "staging-authenticated"
       ? STAGING_AUTH_REQUEST_HEADERS
       : STAGING_PREVIEW_REQUEST_HEADERS;
   const headers = new Headers();
@@ -672,13 +695,26 @@ function proxyRequestHeaders(
     const value = request.headers.get(name);
     if (value !== null) headers.set(name, value);
   }
-  if (mode === "staging-authenticated") {
+  if (target.mode === "staging-authenticated") {
     headers.set("origin", STAGING_PUBLIC_APP_ORIGIN);
     if (stagingSession !== null) {
       headers.set("cookie", `${STAGING_SESSION_COOKIE_NAME}=${stagingSession}`);
     }
   }
   return headers;
+}
+
+function proxyUpstreamOrigin(target: DevApiTarget): string {
+  if (target.mode !== "local" || target.browserOrigin === undefined) {
+    return target.origin;
+  }
+  // Address the configured loopback API through the package-owned learner
+  // hostname. Node fetch will then generate the canonical Host itself; it does
+  // not honor a caller-supplied Host header. Scheme and port remain those of
+  // the already-validated loopback API origin.
+  const upstream = new URL(target.origin);
+  upstream.hostname = new URL(target.browserOrigin).hostname;
+  return upstream.origin;
 }
 
 function stripDevelopmentBridgeCookies(headers: Headers): void {
@@ -1029,9 +1065,15 @@ async function proxyUpstream(
   }
 
   const incomingUrl = new URL(request.url);
+  const localNativeTransport =
+    target.mode === "local" &&
+    target.browserOrigin === LOCAL_SANDBOX_ORIGIN &&
+    fetcher === fetchLocalLearnerWire;
   const upstreamUrl = new URL(
     `${incomingUrl.pathname}${incomingUrl.search}`,
-    target.origin,
+    localNativeTransport
+      ? DEFAULT_LOCAL_API_ORIGIN
+      : proxyUpstreamOrigin(target),
   );
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), PROXY_TIMEOUT_MS);
@@ -1064,7 +1106,7 @@ async function proxyUpstream(
     }
     const response = await fetcher(upstreamUrl, {
       method: request.method,
-      headers: proxyRequestHeaders(request, target.mode, stagingSession),
+      headers: proxyRequestHeaders(request, target, stagingSession),
       body: boundedBody.body,
       redirect: "manual",
       signal: controller.signal,
@@ -1631,6 +1673,17 @@ export async function proxyDevelopmentLearnerApi(
     return jsonError(404, "Only same-origin /v1 requests are proxied.");
   }
 
+  if (
+    target.mode === "local" &&
+    target.browserOrigin !== undefined &&
+    !isAllowedBridgeOrigin(request, target.browserOrigin)
+  ) {
+    return jsonError(
+      403,
+      "The managed local API proxy accepts requests only from its exact learner origin.",
+    );
+  }
+
   if (target.mode === "staging-authenticated") {
     return proxyAuthenticatedStaging(
       request,
@@ -1671,9 +1724,11 @@ export async function proxyDevelopmentLearnerApi(
 
   const upstreamFetcher =
     fetcher ??
-    (target.mode === "local"
-      ? fetchDevelopmentLocalApiUpstream
-      : globalThis.fetch.bind(globalThis));
-
+    (target.mode !== "local"
+      ? globalThis.fetch.bind(globalThis)
+      : target.origin === DEFAULT_LOCAL_API_ORIGIN &&
+          target.browserOrigin === LOCAL_SANDBOX_ORIGIN
+        ? fetchLocalLearnerWire
+        : fetchDevelopmentLocalApiUpstream);
   return (await proxyUpstream(request, target, upstreamFetcher, null)).response;
 }

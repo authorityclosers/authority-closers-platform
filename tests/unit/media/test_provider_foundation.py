@@ -64,6 +64,7 @@ from ac_platform.media.storage import (
     compose_private_object_storage,
 )
 from ac_platform.media.telemetry import JsonlMediaTelemetryExporter, MediaTelemetryRecorder
+from ac_platform.media.video_probe import VideoMetadata
 
 
 def _environment(**overrides: object) -> dict[str, object]:
@@ -1199,6 +1200,7 @@ def test_ffmpeg_worker_boundary_stores_injected_local_outputs() -> None:
     result = FFmpegMediaProcessor(
         profiles=DEFAULT_TRANSCODE_PROFILES[:1],
         command_runner=runner,
+        video_probe=lambda path: VideoMetadata(640, 360, 6.0),
         quota=ProcessingQuota(max_source_bytes=100, max_output_bytes=10_000),
     ).process(
         storage=storage,
@@ -1243,6 +1245,11 @@ def test_ffmpeg_worker_cleans_outputs_when_a_later_rendition_fails() -> None:
             profiles=DEFAULT_TRANSCODE_PROFILES[:2],
             include_progressive=False,
             command_runner=runner,
+            video_probe=lambda path: VideoMetadata(
+                640 if path.parent.name == "360p" else 1280,
+                360 if path.parent.name == "360p" else 720,
+                6.0,
+            ),
             quota=ProcessingQuota(max_source_bytes=100, max_output_bytes=10_000),
         ).process(
             storage=storage,

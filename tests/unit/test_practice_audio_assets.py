@@ -16,6 +16,7 @@ MANIFEST = json.loads((ASSETS / "manifest.json").read_text(encoding="utf-8"))
 EXPECTED_HASHES = {
     "select.wav": "12bbfde9fec219439ae042c11aa66b50dc10121452a62e4e8ad33c0293de4697",
     "confirm.wav": "fb30cc1cda28b8e4450ec05cf6737b34a6fb938e3fdcaa45dbaee5a262981d1e",
+    "retry.wav": "9b8f860d011b448698647ce5d058072712e339033bfdf10fe64d250c21ee4708",
     "reward.wav": "d15ff5364db61db28d9ce4373931cfa60cec414d8f56cdb42aa1aead719c8eb1",
 }
 EXPECTED_SOURCES = {
@@ -41,6 +42,11 @@ EXPECTED_ENTRIES = {
         "Audio/confirmation_001.ogg",
         "063564703b6094d70718a3e787a55cc9141611e4ecd6b6637f8828f79b4a8c3a",
     ),
+    "retry.wav": (
+        "interface-sounds",
+        "Audio/question_001.ogg",
+        "abb8f9e4eb2071491b0b15f84ee302386b1847609310c1b000ae174639a6cc5a",
+    ),
     "reward.wav": (
         "music-jingles",
         "Audio/Pizzicato jingles/jingles_PIZZI00.ogg",
@@ -49,11 +55,11 @@ EXPECTED_ENTRIES = {
 }
 
 
-def test_audio_pack_is_small_local_and_exactly_three_optional_cues():
+def test_audio_pack_is_small_local_and_exactly_four_optional_cues():
     assert {path.name for path in ASSETS.glob("*.wav")} == set(EXPECTED_HASHES)
     assert {asset["file"] for asset in MANIFEST["assets"]} == set(EXPECTED_HASHES)
     total = sum((ASSETS / filename).stat().st_size for filename in EXPECTED_HASHES)
-    assert total == MANIFEST["total_audio_bytes"] == 70306
+    assert total == MANIFEST["total_audio_bytes"] == 113628
     assert sum(path.stat().st_size for path in ASSETS.iterdir() if path.is_file()) < 400_000
     assert MANIFEST["auditioned"] is False
     assert MANIFEST["license"] == "CC0-1.0"

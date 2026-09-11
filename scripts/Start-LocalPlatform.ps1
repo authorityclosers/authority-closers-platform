@@ -1,15 +1,18 @@
 [CmdletBinding()]
-param([switch]$Stop, [ValidateSet('all', 'both', 'learner', 'admin', 'coach')][string]$SurfaceSelection = 'all')
+param([switch]$Stop, [ValidateSet('all', 'both', 'learner', 'admin', 'coach')][string]$SurfaceSelection = 'all', [switch]$StudioVideo)
+
+$ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'Local-RuntimeBootstrap.ps1')
+if (Invoke-LocalRuntimeRelaunch -ScriptPath $PSCommandPath -Parameters $PSBoundParameters) { return }
 
 # One-tree local development. No staging/production network or credentials.
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'Get-LocalTcpListeners.ps1')
 $Repository = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $Runtime = Join-Path $Repository '.tmp/local-platform'
 $ProcessFile = Join-Path $Runtime 'ui-processes.json'
-$Node = (Get-Command node.exe -ErrorAction Stop).Source
-if ((& $Node --version) -notmatch '^v24\.') { throw 'Node 24 must be first on PATH.' }
-if ($PSVersionTable.PSVersion -lt [version]'7.4') { throw 'PowerShell 7.4 or later is required.' }
+$Node = Get-LocalNodeExecutable
 
 foreach ($ManagedPath in @($Runtime, $ProcessFile, (Join-Path $Runtime 'ui-startup.lock'),
         (Join-Path $Runtime 'learner.stdout.log'), (Join-Path $Runtime 'learner.stderr.log'),
@@ -26,8 +29,58 @@ foreach ($ManagedPath in @($Runtime, $ProcessFile, (Join-Path $Runtime 'ui-start
 }
 New-Item -ItemType Directory -Path $Runtime -Force | Out-Null
 $Lock = [IO.File]::Open((Join-Path $Runtime 'ui-startup.lock'), 'OpenOrCreate', 'ReadWrite', 'None')
+
+function Assert-LocalAnonymousApiRoute {
+    param([Parameter(Mandatory = $true)][hashtable]$Surface)
+
+    $Handler = [Net.Http.HttpClientHandler]::new()
+    $Handler.UseCookies = $false
+    $Handler.UseProxy = $false
+    $Handler.AllowAutoRedirect = $false
+    $Client = [Net.Http.HttpClient]::new($Handler)
+    $Client.Timeout = [TimeSpan]::FromSeconds(5)
+    $Request = $null
+    $Response = $null
+    try {
+        $Request = [Net.Http.HttpRequestMessage]::new(
+            [Net.Http.HttpMethod]::Get,
+            "http://127.0.0.1:$($Surface.port)/v1/me"
+        )
+        $Request.Headers.Host = "$($Surface.name).localhost:$($Surface.port)"
+        $Request.Headers.Accept.ParseAdd('application/json')
+        $Response = $Client.SendAsync(
+            $Request,
+            [Net.Http.HttpCompletionOption]::ResponseHeadersRead
+        ).GetAwaiter().GetResult()
+        $Status = [int]$Response.StatusCode
+        $CacheControl = $Response.Headers.CacheControl
+        if (
+            $Status -ne 401 -or
+            $null -eq $CacheControl -or
+            -not $CacheControl.Private -or
+            -not $CacheControl.NoStore -or
+            $Response.Headers.Contains('Set-Cookie')
+        ) {
+            $CacheValue = if ($null -eq $CacheControl) { '<missing>' } else { $CacheControl.ToString() }
+            throw "Anonymous /v1/me returned status $Status with cache-control '$CacheValue'."
+        }
+    }
+    catch {
+        throw "Anonymous $($Surface.name) /v1/me route is not healthy: $($_.Exception.Message)"
+    }
+    finally {
+        if ($null -ne $Response) { $Response.Dispose() }
+        if ($null -ne $Request) { $Request.Dispose() }
+        $Client.Dispose()
+        $Handler.Dispose()
+    }
+}
+
 try {
     $Live = @()
+    $OwnedSelectedNames = @()
+    $SeenNames = @{}
+    $SeenProcessIds = @{}
     $PreservedRecords = @()
     $SelectedSurfaces = @(@{ name = 'learner'; port = 3100 }, @{ name = 'admin'; port = 3101 }, @{ name = 'coach'; port = 3102 }) |
         Where-Object { $SurfaceSelection -eq 'all' -or ($SurfaceSelection -eq 'both' -and $_.name -in @('learner', 'admin')) -or $_.name -eq $SurfaceSelection }
@@ -35,12 +88,24 @@ try {
         $Record = Get-Content -LiteralPath $ProcessFile -Raw | ConvertFrom-Json
         if ($Record.repository -ne $Repository) { throw 'UI process record belongs to another tree.' }
         foreach ($Tracked in $Record.processes) {
+            # A count alone cannot establish ownership of all three surfaces.
+            # Reject ambiguous records before looking up or controlling any PID.
+            $ExpectedPort = @{ learner = 3100; admin = 3101; coach = 3102 }[[string]$Tracked.name]
+            if (-not $ExpectedPort -or $Tracked.port -ne $ExpectedPort -or [int]$Tracked.id -le 0 -or
+                $SeenNames.ContainsKey([string]$Tracked.name) -or $SeenProcessIds.ContainsKey([int]$Tracked.id)) {
+                throw 'Local UI process records are ambiguous or invalid. Existing processes are preserved.'
+            }
+            $SeenNames[[string]$Tracked.name] = $true
+            $SeenProcessIds[[int]$Tracked.id] = $true
             $Process = Get-Process -Id $Tracked.id -ErrorAction SilentlyContinue
             if ($Process -and $Process.StartTime.ToFileTimeUtc() -eq $Tracked.started_at) {
                 if ($Process.Path -ne $Tracked.executable -or $Process.Path -ne $Node) {
                     throw 'Tracked UI executable changed; refusing process control.'
                 }
-                if ($Tracked.name -in @($SelectedSurfaces.name)) { $Live += $Process }
+                if ($Tracked.name -in @($SelectedSurfaces.name)) {
+                    $Live += $Process
+                    $OwnedSelectedNames += $Tracked.name
+                }
                 else { $PreservedRecords += $Tracked }
             }
         }
@@ -50,12 +115,30 @@ try {
         Write-Host 'Stopped only the selected managed local UI processes. API, database, other surfaces, edits and logs are preserved.'
         return
     }
-    if ($Live.Count) { throw 'Local UI is already running. Use -Stop before restarting it.' }
-    if (Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |
+    if ($Live.Count -eq @($SelectedSurfaces).Count) {
+        if (@($SelectedSurfaces | Where-Object { $_.name -notin $OwnedSelectedNames }).Count) {
+            throw 'Not every selected app has a verified process owner. Existing processes are preserved.'
+        }
+        # Starting twice is safe. Reuse only owned processes, and verify that
+        # they are actually healthy before reporting the apps as available.
+        & (Join-Path $PSScriptRoot 'Start-LocalApi.ps1') -StudioVideo:$StudioVideo
+        $Health = Invoke-RestMethod 'http://127.0.0.1:8000/health/ready' -TimeoutSec 3 -NoProxy
+        if ($Health.status -ne 'ready') { throw 'The running local API is not ready. Existing processes are preserved.' }
+        foreach ($Surface in $SelectedSurfaces) {
+            $Response = Invoke-WebRequest "http://127.0.0.1:$($Surface.port)/login" `
+                -Headers @{ Host = "$($Surface.name).localhost:$($Surface.port)" } -TimeoutSec 5 -NoProxy
+            if ($Response.StatusCode -ne 200) { throw 'A running local app is not ready. Existing processes are preserved.' }
+            Assert-LocalAnonymousApiRoute -Surface $Surface
+            Write-Host "Local $($Surface.name) already ready: http://$($Surface.name).localhost:$($Surface.port)/login"
+        }
+        return
+    }
+    if ($Live.Count) { throw 'Some selected apps are already running. Start only the missing app with -SurfaceSelection, or use -Stop for an explicit restart.' }
+    if (Get-LocalTcpListeners |
         Where-Object { $_.LocalPort -in @($SelectedSurfaces.port) }) {
         throw 'A selected local app port is occupied. Stop the tracked old bridge explicitly; unknown processes are not stopped.'
     }
-    & (Join-Path $PSScriptRoot 'Start-LocalApi.ps1')
+    & (Join-Path $PSScriptRoot 'Start-LocalApi.ps1') -StudioVideo:$StudioVideo
     $Health = Invoke-RestMethod 'http://127.0.0.1:8000/health/ready' -TimeoutSec 3 -NoProxy
     if ($Health.status -ne 'ready') { throw 'Local API readiness failed.' }
 
@@ -72,6 +155,7 @@ try {
     $ChildEnvironment['AC_API_URL'] = 'http://127.0.0.1:8000'
     $ChildEnvironment['AC_ADMIN_API_URL'] = 'http://127.0.0.1:8000'
     $ChildEnvironment['AC_DEV_LOCAL_SANDBOX_ENABLED'] = 'true'
+    $ChildEnvironment['AC_DEV_STUDIO_VIDEO_UPLOAD_ENABLED'] = if ($StudioVideo) { 'true' } else { 'false' }
     $ChildEnvironment['AC_DEV_LOCAL_SANDBOX_ADMIN_ORIGIN'] = 'http://admin.localhost:3101'
     $ChildEnvironment['NEXT_PUBLIC_AC_LOCAL_SANDBOX_ENABLED'] = 'true'
     $ChildEnvironment['NODE_ENV'] = 'development'
@@ -81,6 +165,7 @@ try {
     $ChildEnvironment['NEXT_TELEMETRY_DISABLED'] = '1'
     $Started = @()
     $Records = @()
+    $ChildEnvironment['PATH'] = (Split-Path -Parent $Node) + [IO.Path]::PathSeparator + $env:PATH
     try {
         foreach ($Surface in $SelectedSurfaces) {
             $ChildEnvironment['AC_DEV_OPERATIONS_SURFACE'] = $Surface.name
@@ -103,19 +188,33 @@ try {
         @{ repository = $Repository; processes = @($PreservedRecords) + @($Records) } |
             ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $ProcessFile
         foreach ($Surface in $Records) {
-            $Deadline = [DateTime]::UtcNow.AddSeconds(60)
+            # Cold webpack compilation on development laptops can exceed a
+            # minute. Keep retries bounded without killing a healthy compiler.
+            $Deadline = [DateTime]::UtcNow.AddSeconds(180)
             $Ready = $false
+            $LastReadinessError = ''
             while ([DateTime]::UtcNow -lt $Deadline) {
                 $Process = Get-Process -Id $Surface.id -ErrorAction SilentlyContinue
                 if (-not $Process) { throw 'A local UI process exited during startup.' }
                 try {
                     $Response = Invoke-WebRequest "http://127.0.0.1:$($Surface.port)/login" `
                         -Headers @{ Host = "$($Surface.name).localhost:$($Surface.port)" } -TimeoutSec 5 -NoProxy
-                    if ($Response.StatusCode -eq 200) { $Ready = $true; break }
+                    if ($Response.StatusCode -eq 200) {
+                        try {
+                            Assert-LocalAnonymousApiRoute -Surface $Surface
+                            $Ready = $true
+                            break
+                        }
+                        catch { $LastReadinessError = $_.Exception.Message }
+                    }
                 }
-                catch { Start-Sleep -Milliseconds 500 }
+                catch { $LastReadinessError = $_.Exception.Message }
+                Start-Sleep -Milliseconds 500
             }
-            if (-not $Ready) { throw 'Local UI did not become ready within 60 seconds.' }
+            if (-not $Ready) {
+                $Detail = if ($LastReadinessError) { " Last readiness error: $LastReadinessError" } else { '' }
+                throw "Local UI did not become ready within 180 seconds.$Detail"
+            }
         }
     }
     catch {

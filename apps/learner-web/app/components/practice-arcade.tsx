@@ -6,8 +6,8 @@ import {
   actionClassName,
   ChoiceOption,
   FocusSession,
-  RouteHeader,
   SessionStep,
+  type PracticeCompanionKind,
 } from "@ac/ui";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
@@ -15,10 +15,10 @@ import {
   ArrowLeft,
   ArrowRight,
   Check,
-  ChevronRight,
   Clock3,
   Headphones,
   Lightbulb,
+  Link2,
   LoaderCircle,
   RotateCcw,
   Trophy,
@@ -34,6 +34,8 @@ import {
   type PracticeSummary,
 } from "../lib/practice-api";
 import styles from "./practice-arcade.module.css";
+import { PracticeArt } from "./practice-art";
+import { PracticeCompanionStage } from "./practice-companion-stage";
 import { PracticeEngineRequestError } from "../lib/practice-engine-api";
 
 const labels = {
@@ -152,36 +154,31 @@ export function PracticeArcade({
     catalog.find((item) => item.id === "next-move") ?? catalog[0];
   return (
     <div className={styles.arcade}>
-      <RouteHeader
-        title="Practice Arcade"
-        titleId="practice-title"
-        description="Build confidence, one conversation at a time."
-        aside={
-          durable ? (
-            <Link
-              className={actionClassName("secondary")}
-              href="/profile#community-identity-title"
-            >
-              <Trophy size={17} aria-hidden="true" /> Username & leaderboard
-            </Link>
-          ) : (
-            <span className={styles.previewBadge}>Preview</span>
-          )
-        }
-      />
+      <header className={styles.hubHeader}>
+        <h1 id="practice-title">Practice Arcade</h1>
+        {durable ? (
+          <Link
+            className={styles.leaderboardShortcut}
+            href="/leaderboard"
+            aria-label="Academy leaderboard"
+            title="Academy leaderboard"
+          >
+            <Trophy size={21} aria-hidden="true" />
+            <span>Leaderboard</span>
+          </Link>
+        ) : (
+          <span className={styles.previewBadge}>Preview</span>
+        )}
+      </header>
       {recognition}
-      {featured ? (
+      {featured && !durable ? (
         <section
           className={styles.featured}
           aria-labelledby="practice-featured-title"
         >
-          <Image
-            src={`/arcade-v02/${featured.art}.svg`}
-            width={88}
-            height={88}
-            alt=""
-            className={styles.featuredArt}
-          />
+          <span className={styles.featuredArt}>
+            <PracticeArt kind={featured.kind} />
+          </span>
           <div>
             <p className={styles.skill}>Your next small win</p>
             <h2 id="practice-featured-title">{featured.title}</h2>
@@ -194,7 +191,7 @@ export function PracticeArcade({
             Start practice <ArrowRight size={18} />
           </Link>
         </section>
-      ) : (
+      ) : !featured ? (
         <section
           className={styles.emptyLibrary}
           aria-labelledby="practice-empty-title"
@@ -208,15 +205,13 @@ export function PracticeArcade({
             Continue learning <ArrowRight size={18} />
           </Link>
         </section>
-      )}
+      ) : null}
       {catalog.length > 0 ? (
         <section aria-labelledby="practice-library-title">
           <div className={styles.sectionHeading}>
             <div>
-              <h2 id="practice-library-title">
-                What would you like to work on?
-              </h2>
-              <p>Choose a skill. Try a new way to practise.</p>
+              <h2 id="practice-library-title">Pick your next challenge</h2>
+              <p>Different skills. A fresh way to practise.</p>
             </div>
             <span>
               {catalog.length} {catalog.length === 1 ? "set" : "sets"} to
@@ -225,40 +220,7 @@ export function PracticeArcade({
           </div>
           <div className={styles.library}>
             {catalog.map((item) => (
-              <Link
-                key={item.id}
-                href={practiceHref(item.id)}
-                className={styles.setCard}
-                data-color={cardTone(item.color)}
-              >
-                <div className={styles.artTile}>
-                  <Image
-                    src={`/arcade-v02/${item.art}.svg`}
-                    width={96}
-                    height={96}
-                    alt=""
-                    loading="lazy"
-                  />
-                </div>
-                <div className={styles.setCopy}>
-                  <div className={styles.cardLabels}>
-                    <span className={styles.skill}>{item.skill}</span>
-                    <span className={styles.format}>{formats[item.kind]}</span>
-                  </div>
-                  <h3>{item.title}</h3>
-                  <p>{item.description}</p>
-                  <div className={styles.setMeta}>
-                    <span>
-                      <Clock3 size={14} />
-                      About {item.estimated_minutes} min
-                    </span>
-                    <span>{item.item_count} prompts</span>
-                  </div>
-                </div>
-                <span className={styles.cardArrow} aria-hidden="true">
-                  <ChevronRight size={20} />
-                </span>
-              </Link>
+              <PracticeCard key={item.id} item={item} />
             ))}
           </div>
         </section>
@@ -269,6 +231,101 @@ export function PracticeArcade({
           : "You’re exploring draft practice content awaiting coach review. This session stays in this tab and doesn’t change course progress, streaks, or rankings."}
       </p>
     </div>
+  );
+}
+
+function PracticeCard({ item }: { item: PracticeSummary }) {
+  const [open, setOpen] = useState(false);
+  const dialog = useRef<HTMLDialogElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const surface = dialog.current;
+    const opener = trigger.current;
+    const previousOverflow = document.body.style.overflow;
+    surface?.showModal();
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      surface?.close();
+      opener?.focus({ preventScroll: true });
+    };
+  }, [open]);
+  return (
+    <article className={styles.setCard} data-color={cardTone(item.color)}>
+      <Link
+        href={practiceHref(item.id)}
+        className={styles.setLink}
+        aria-label={`${formats[item.kind]}: ${item.title}`}
+      >
+        <div className={styles.artTile}>
+          <PracticeArt kind={item.kind} />
+        </div>
+        <div className={styles.setCopy}>
+          <h3>{item.title}</h3>
+          <div className={styles.setMeta}>
+            <span>
+              <Clock3 size={13} aria-hidden="true" />
+              {item.estimated_minutes} min
+            </span>
+            <span>{item.item_count} prompts</span>
+          </div>
+        </div>
+        <span className={styles.cardArrow}>
+          <span>Play</span>
+          <ArrowRight size={18} aria-hidden="true" />
+        </span>
+      </Link>
+      <button
+        ref={trigger}
+        className={styles.cardInfo}
+        type="button"
+        aria-label={`About ${item.title}`}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-controls={open ? `game-dialog-${item.id}` : undefined}
+        onClick={() => setOpen(true)}
+      >
+        <span aria-hidden="true">i</span>
+      </button>
+      {open ? (
+        <dialog
+          ref={dialog}
+          id={`game-dialog-${item.id}`}
+          className={styles.gameInfo}
+          aria-labelledby={`game-info-${item.id}`}
+          aria-describedby={`game-description-${item.id}`}
+          onCancel={(event) => {
+            event.preventDefault();
+            setOpen(false);
+          }}
+          onClose={() => setOpen(false)}
+        >
+          <button
+            className={styles.infoClose}
+            type="button"
+            aria-label="Close practice details"
+            onClick={() => setOpen(false)}
+          >
+            <X size={20} />
+          </button>
+          <div className={styles.infoArt}>
+            <PracticeArt kind={item.kind} />
+          </div>
+          <p className={styles.skill}>
+            {item.skill} · {formats[item.kind]}
+          </p>
+          <h2 id={`game-info-${item.id}`}>{item.title}</h2>
+          <p id={`game-description-${item.id}`}>{item.description}</p>
+          <p className={styles.setMeta}>
+            {item.item_count} prompts · About {item.estimated_minutes} minutes
+          </p>
+          <Link className={actionClassName()} href={practiceHref(item.id)}>
+            Start practice <ArrowRight size={18} />
+          </Link>
+        </dialog>
+      ) : null}
+    </article>
   );
 }
 
@@ -440,6 +497,7 @@ export function PracticeQuestion({
   initialState,
   disabled = false,
   onInteraction,
+  companion = "echo",
 }: {
   item: PracticePrompt;
   setId: string;
@@ -457,6 +515,7 @@ export function PracticeQuestion({
   };
   disabled?: boolean;
   onInteraction?: (kind: "select" | "submit") => void;
+  companion?: PracticeCompanionKind;
 }) {
   const [selections, setSelections] = useState<number[]>(
     item.kind === "branch" ? [] : (initialState?.selections ?? []),
@@ -591,6 +650,7 @@ export function PracticeQuestion({
   const sequence = item.kind === "build" || item.kind === "order";
   return (
     <SessionStep
+      className={styles.playStep}
       labelledBy={`prompt-${item.id}`}
       footer={
         <div className={styles.footerActions}>
@@ -655,49 +715,119 @@ export function PracticeQuestion({
         </div>
       }
     >
-      <div className={styles.question} ref={questionRef}>
+      <div
+        className={styles.question}
+        ref={questionRef}
+        data-feedback-tone={
+          feedback
+            ? feedback.reference_match === false
+              ? "retry"
+              : feedback.reference_match === true
+                ? "success"
+                : "reflection"
+            : undefined
+        }
+      >
         {feedback ? (
           <div className={styles.feedbackStage}>
-            <p className={styles.eyebrow}>{labels[item.kind]}</p>
-            <h1 id={`prompt-${item.id}`} className={styles.feedbackPrompt}>
-              {item.prompt}
-            </h1>
-            {feedback ? (
-              <div
-                ref={feedbackRef}
-                tabIndex={-1}
-                className={styles.feedback}
-                data-match={feedback.reference_match !== false}
-                role="status"
-              >
-                <div className={styles.feedbackIcon}>
-                  {feedback.reference_match === false ? (
-                    <Lightbulb size={23} />
-                  ) : (
-                    <Check size={23} />
-                  )}
+            <div className={styles.reactionScene} aria-hidden="true">
+              <div className={styles.reactionHalo} />
+              {feedback.reference_match === true ? (
+                <div className={styles.confetti}>
+                  {Array.from({ length: 12 }, (_, index) => (
+                    <i
+                      key={index}
+                      style={{ "--particle": index } as React.CSSProperties}
+                    />
+                  ))}
                 </div>
-                <div>
-                  <h2>
-                    {feedback.reference_match === false
-                      ? "Here’s a useful way to think about it"
-                      : feedback.reference_match === null
-                        ? "A thoughtful next step"
-                        : "That’s a useful move"}
-                  </h2>
-                  <p>{feedback.explanation}</p>
-                </div>
+              ) : null}
+              <PracticeCompanionStage
+                variant={companion}
+                mood={
+                  feedback.reference_match === false
+                    ? "encourage"
+                    : feedback.reference_match === true
+                      ? "celebrate"
+                      : "ready"
+                }
+                size={190}
+              />
+              <span className={styles.reactionBadge}>
+                {feedback.reference_match === false ? (
+                  <RotateCcw size={23} />
+                ) : feedback.reference_match === true ? (
+                  <Check size={25} strokeWidth={3} />
+                ) : (
+                  <Lightbulb size={23} />
+                )}
+              </span>
+            </div>
+            <div
+              ref={feedbackRef}
+              tabIndex={-1}
+              className={styles.feedback}
+              data-match={feedback.reference_match !== false}
+              role="status"
+            >
+              <div>
+                <p className={styles.feedbackLabel}>
+                  {feedback.reference_match === false
+                    ? "Not quite"
+                    : feedback.reference_match === true
+                      ? "Good connection"
+                      : "Keep exploring"}
+                </p>
+                <h1 id={`prompt-${item.id}`}>
+                  {feedback.reference_match === false
+                    ? "Try another approach"
+                    : feedback.reference_match === null
+                      ? "A thoughtful next step"
+                      : "Nicely done!"}
+                </h1>
+                <p>
+                  {feedback.reference_match === false
+                    ? "Your response differs from the reference. Give it another try."
+                    : feedback.explanation}
+                </p>
               </div>
+            </div>
+            {feedback.reference_match === false ? (
+              <details className={styles.promptDetails}>
+                <summary>Reference explanation</summary>
+                <p>{feedback.explanation}</p>
+              </details>
             ) : null}
+            <details className={styles.promptDetails}>
+              <summary>Review the prompt</summary>
+              <p>{item.prompt}</p>
+            </details>
           </div>
         ) : (
           <>
             <div className={styles.promptHeading}>
-              <p className={styles.eyebrow}>{labels[item.kind]}</p>
-              <h1 ref={headingRef} tabIndex={-1} id={`prompt-${item.id}`}>
-                {item.kind === "gap" ? "Choose the missing word" : item.prompt}
-              </h1>
+              <span className={styles.promptArt} aria-hidden="true">
+                <PracticeArt kind={item.kind} />
+              </span>
+              <div>
+                <p className={styles.eyebrow}>
+                  {item.kind === "match" ? "Link each pair" : labels[item.kind]}
+                </p>
+                <h1 ref={headingRef} tabIndex={-1} id={`prompt-${item.id}`}>
+                  {item.kind === "gap"
+                    ? "Choose the missing word"
+                    : item.kind === "match"
+                      ? "Connect the pairs"
+                      : item.prompt}
+                </h1>
+              </div>
             </div>
+            {item.kind === "match" ? (
+              <details className={styles.promptDetails}>
+                <summary>How to play</summary>
+                <p>{item.prompt}</p>
+              </details>
+            ) : null}
             {item.kind === "audio" ? (
               <div className={styles.audioCard}>
                 <span>
@@ -762,14 +892,25 @@ export function PracticeQuestion({
                       className={styles.matchTile}
                       data-selected={leftSelected === left.id}
                       data-paired={selections[left.id] >= 0}
+                      data-pair={
+                        selections[left.id] >= 0 ? left.id % 3 : undefined
+                      }
                       disabled={frozen}
-                      onClick={() => setLeftSelected(left.id)}
+                      onClick={() => {
+                        onInteraction?.("select");
+                        setLeftSelected(left.id);
+                      }}
                       aria-pressed={leftSelected === left.id}
+                      aria-label={`${left.text}${selections[left.id] >= 0 ? `. Paired with ${options.find((option) => option.id === selections[left.id])?.text}. Select to change.` : ""}`}
                     >
-                      <span>{left.id + 1}</span>
+                      <span aria-hidden="true">{left.id + 1}</span>
                       {left.text}
                       {selections[left.id] >= 0 ? (
-                        <small>Paired · tap to change</small>
+                        <Link2
+                          className={styles.pairLink}
+                          size={16}
+                          aria-hidden="true"
+                        />
                       ) : null}
                     </button>
                   ))}
@@ -785,6 +926,7 @@ export function PracticeQuestion({
                         key={option.id}
                         className={styles.matchTile}
                         data-paired={paired >= 0}
+                        data-pair={paired >= 0 ? paired % 3 : undefined}
                         disabled={frozen || leftSelected === null}
                         onClick={() => {
                           if (leftSelected === null) return;
@@ -807,14 +949,21 @@ export function PracticeQuestion({
                           </span>
                         ) : null}
                         {option.text}
+                        {paired >= 0 ? (
+                          <Link2
+                            className={styles.pairLink}
+                            size={16}
+                            aria-hidden="true"
+                          />
+                        ) : null}
                       </button>
                     );
                   })}
                 </div>
                 <p className={styles.matchHint} role="status">
                   {leftSelected === null
-                    ? "Choose a statement on the left, then its question on the right."
-                    : `Now choose a question for statement ${leftSelected + 1}.`}
+                    ? `${selections.filter((value) => value >= 0).length}/${item.left.length} linked. Pick a statement, then a question.`
+                    : `Choose a question for ${leftSelected + 1}.`}
                 </p>
               </div>
             ) : sequence ? (

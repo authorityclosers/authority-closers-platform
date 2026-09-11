@@ -1,5 +1,5 @@
 /** Optional presentation-only audio. No answers, identity or reward state are stored here. */
-export type PracticeSound = "select" | "confirm" | "reward";
+export type PracticeSound = "select" | "confirm" | "retry" | "reward";
 export const PRACTICE_SOUND_KEY = "ac-practice-sounds";
 export const PRACTICE_SOUND_EVENT = "ac-practice-sounds-change";
 export const PRACTICE_VOLUME_KEY = "ac-practice-volume";
@@ -7,6 +7,7 @@ export const DEFAULT_PRACTICE_VOLUME = 0.65;
 export const PRACTICE_SOUND_ASSETS: Record<PracticeSound, string> = {
   select: "/audio/practice/select.wav",
   confirm: "/audio/practice/confirm.wav",
+  retry: "/audio/practice/retry.wav",
   reward: "/audio/practice/reward.wav",
 };
 let sessionChoice: boolean | undefined;
@@ -268,7 +269,7 @@ export function createPracticeSoundPlayer({
       if (!buffer) return false; // Never queue a late click or old reward sound.
       // Let acknowledged feedback finish. A low-priority click must not chop
       // off a musical reward; no sound queues are created by rapid tapping.
-      const priority = { select: 0, confirm: 1, reward: 2 };
+      const priority = { select: 0, retry: 1, confirm: 1, reward: 2 };
       if (
         [...sources.values()].some(
           (active) => priority[active.kind] > priority[kind],

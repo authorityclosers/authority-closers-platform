@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
-  "prepared_on": "2026-09-08",
+  "prepared_on": "2026-09-10",
   "license": "CC0-1.0",
   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
   "credit": "Kenney (Kenney.nl)",
   "auditioned": false,
   "selection_basis": "Source category, measured duration, decoded PCM integrity and restrained peak level; not a subjective listening review.",
-  "total_audio_bytes": 70306,
+  "total_audio_bytes": 113628,
   "runtime_delivery": "Bundled same-origin files only; no external playback request.",
   "encoding": {
     "container": "RIFF/WAVE",
@@ -67,6 +67,20 @@
       "duration_ms": 289.841,
       "measured_peak_dbfs": -11.0,
       "filter": "volume=-10dB,afade=t=in:st=0:d=0.001,afade=t=out:st=0.279841:d=0.010"
+    },
+    {
+      "cue": "retry",
+      "file": "retry.wav",
+      "url": "/audio/practice/retry.wav",
+      "source": "interface-sounds",
+      "source_entry": "Audio/question_001.ogg",
+      "source_sha256": "abb8f9e4eb2071491b0b15f84ee302386b1847609310c1b000ae174639a6cc5a",
+      "sha256": "9b8f860d011b448698647ce5d058072712e339033bfdf10fe64d250c21ee4708",
+      "bytes": 43322,
+      "frames": 21639,
+      "duration_ms": 490.68,
+      "measured_peak_dbfs": -12.9,
+      "filter": "volume=-12dB,afade=t=in:st=0:d=0.001,afade=t=out:st=0.470680:d=0.020"
     },
     {
       "cue": "reward",

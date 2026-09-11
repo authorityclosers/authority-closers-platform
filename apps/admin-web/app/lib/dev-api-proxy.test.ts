@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   InMemoryDevelopmentAdminSessionStore,
   isStagingAdminRequest,
+  isCoachApiRequest,
   proxyDevelopmentAdminApi,
   resolveDevAdminApiTarget,
   type DevAdminFetch,
@@ -14,6 +15,28 @@ const ADMIN_PERSON = "11111111-1111-4111-8111-111111111111";
 const ADMIN_TENANT = "22222222-2222-4222-8222-222222222222";
 const ADMIN_SESSION = "33333333-3333-4333-8333-333333333333";
 const TARGET_ID = "44444444-4444-4444-8444-444444444444";
+
+describe("course-scoped video upload admission proxy", () => {
+  const prefix = `/v1/admin/studio/programs/${TARGET_ID}/video-uploads`;
+  it("admits only exact create and status methods on Admin and Coach", () => {
+    for (const admit of [isStagingAdminRequest, isCoachApiRequest]) {
+      for (const [path, method, expected] of [
+        [prefix, "POST", true],
+        [`${prefix}/${ADMIN_SESSION}`, "GET", true],
+        [prefix, "GET", false],
+        [`${prefix}/${ADMIN_SESSION}`, "POST", false],
+        [`${prefix}/${ADMIN_SESSION}/complete`, "POST", false],
+        [`${prefix}?tenant_id=${ADMIN_TENANT}`, "POST", false],
+        [`${prefix}/invalid`, "GET", false],
+        [prefix.replace(TARGET_ID, "invalid"), "POST", false],
+      ] as const) {
+        expect(
+          admit(new URL(path, "http://coach.localhost:3102"), method),
+        ).toBe(expected);
+      }
+    }
+  });
+});
 
 const bridgeEnvironment = {
   AC_DEV_ADMIN_AUTH_BRIDGE_ENABLED: "true",
@@ -193,6 +216,77 @@ describe("development admin API target", () => {
 });
 
 describe("admin bridge route allowlist", () => {
+  const videoRoutes: [string, string, boolean][] = [
+    ["POST", "/v1/admin/studio/programs", true],
+    ["POST", "/v1/admin/studio/programs?tenant_id=other", false],
+    ["PATCH", "/v1/admin/studio/programs", false],
+    ["DELETE", "/v1/admin/studio/programs", false],
+    ["POST", `/v1/admin/studio/programs/${TARGET_ID}`, false],
+    ["GET", `/v1/admin/studio/programs/${TARGET_ID}/videos`, true],
+    ["GET", `/v1/admin/studio/programs/${TARGET_ID}/videos?limit=24`, true],
+    [
+      "GET",
+      `/v1/admin/studio/programs/${TARGET_ID}/videos?limit=50&after=${ADMIN_SESSION}`,
+      true,
+    ],
+    ["POST", `/v1/admin/studio/programs/${TARGET_ID}/videos`, false],
+    ["GET", "/v1/admin/studio/programs/not-a-uuid/videos", false],
+    ...[
+      "limit=0",
+      "limit=51",
+      "limit=24&limit=24",
+      "limit=1.5",
+      "limit=NaN",
+      "after=bad",
+      `after=${ADMIN_SESSION}&after=${ADMIN_SESSION}`,
+      "tenant_id=other",
+      "include=all",
+      "limit=24&force=true",
+    ].map((query): [string, string, boolean] => [
+      "GET",
+      `/v1/admin/studio/programs/${TARGET_ID}/videos?${query}`,
+      false,
+    ]),
+    [
+      "GET",
+      `/v1/admin/studio/programs/${TARGET_ID}/activities/${ADMIN_SESSION}/video`,
+      true,
+    ],
+    [
+      "POST",
+      `/v1/admin/studio/programs/${TARGET_ID}/activities/${ADMIN_SESSION}/video`,
+      true,
+    ],
+    [
+      "PATCH",
+      `/v1/admin/studio/programs/${TARGET_ID}/activities/${ADMIN_SESSION}/video`,
+      false,
+    ],
+    [
+      "DELETE",
+      `/v1/admin/studio/programs/${TARGET_ID}/activities/${ADMIN_SESSION}/video`,
+      false,
+    ],
+    [
+      "GET",
+      `/v1/admin/studio/programs/${TARGET_ID}/activities/bad/video`,
+      false,
+    ],
+    [
+      "POST",
+      `/v1/admin/studio/programs/${TARGET_ID}/activities/${ADMIN_SESSION}/video?force=true`,
+      false,
+    ],
+    ["POST", "/v1/media/activity-bindings", false],
+  ];
+  it.each(videoRoutes)(
+    "scopes Studio video routes for Admin and Coach: %s %s",
+    (method, path, expected) => {
+      const url = new URL(`http://coach.localhost:3102${path}`);
+      expect(isStagingAdminRequest(url, method)).toBe(expected);
+      expect(isCoachApiRequest(url, method)).toBe(expected);
+    },
+  );
   it.each([
     ["GET", "/v1/dev-bridge/health"],
     ["POST", "/v1/auth/password/login"],
@@ -202,6 +296,7 @@ describe("admin bridge route allowlist", () => {
     ["GET", "/v1/me/studio-access"],
     ["GET", "/v1/admin/studio/readiness"],
     ["GET", "/v1/admin/studio/programs"],
+    ["POST", "/v1/admin/studio/programs"],
     ["GET", `/v1/admin/studio/programs/${TARGET_ID}`],
     ["POST", `/v1/admin/studio/program-versions/${TARGET_ID}/revision`],
     ["POST", "/v1/admin/corrections"],
@@ -220,7 +315,7 @@ describe("admin bridge route allowlist", () => {
     ["POST", "/v1/context"],
     ["POST", "/v1/me/studio-access"],
     ["POST", "/v1/admin/studio/readiness"],
-    ["POST", "/v1/admin/studio/programs"],
+    ["PATCH", "/v1/admin/studio/programs"],
     ["POST", `/v1/admin/studio/programs/${TARGET_ID}`],
     ["GET", `/v1/admin/studio/program-versions/${TARGET_ID}/revision`],
     ["PATCH", `/v1/admin/studio/program-versions/${TARGET_ID}/revision`],

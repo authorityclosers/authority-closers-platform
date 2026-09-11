@@ -13,12 +13,12 @@ export type CourseNextAction = {
 };
 
 /**
- * Pick the learner-facing action from the server's course state only.
+ * Pick the learner-facing action from the course state returned by the service.
  *
  * The collection contract intentionally does not expose an activity route or
  * a client-selected next item. Every action therefore stays on the existing
- * slug-shaped program route, where the server re-checks current access and
- * destination state before showing the course path.
+ * slug-shaped program route, where current access and destination state are
+ * checked again before the course path is shown.
  */
 export function getCourseNextAction(
   state: LearningCourseSummaryResponse["state"],
@@ -27,7 +27,7 @@ export function getCourseNextAction(
     return {
       id: "continue",
       label: "Continue course",
-      detail: "Resume the published course path from your current progress.",
+      detail: "Resume your published path.",
     };
   }
 
@@ -35,15 +35,14 @@ export function getCourseNextAction(
     return {
       id: "review",
       label: "Review course",
-      detail: "Revisit the published course path and completed activities.",
+      detail: "Revisit completed activities.",
     };
   }
 
   return {
     id: "open",
     label: "Open course",
-    detail:
-      "Open the published course path to re-check current access and progress.",
+    detail: "See your current progress.",
   };
 }
 
@@ -73,7 +72,7 @@ export function getCourseProjection(course: LearningCourseSummaryResponse): {
   ) {
     return {
       value: null,
-      detail: "Progress is unavailable for this published course version.",
+      detail: "Progress isn't available for this course version.",
     };
   }
 
@@ -173,11 +172,6 @@ export function LearningCourseCard({
         </Link>
       }
     >
-      <ProgressMeter
-        value={progress.value}
-        label="Course progress"
-        detail={progress.detail}
-      />
       <div
         className="learning-course-card__next-action"
         data-next-action={nextAction.id}
@@ -188,6 +182,11 @@ export function LearningCourseCard({
         </span>
         <strong>{nextAction.detail}</strong>
       </div>
+      <ProgressMeter
+        value={progress.value}
+        label="Course progress"
+        detail={progress.detail}
+      />
     </ProgramCard>
   );
 }

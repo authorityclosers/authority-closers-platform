@@ -1,4 +1,4 @@
-"""Exact migration-bound parity through Studio uploads and community identity."""
+"""Exact migration-bound parity through learner app-update read receipts."""
 
 from __future__ import annotations
 
@@ -32,6 +32,8 @@ MEDIA_LIBRARY = "20260909_0024"
 COURSE_CREATION = "20260909_0025"
 STUDIO_VIDEO_UPLOADS = "20260910_0026"
 COMMUNITY_IDENTITY = "20260910_0027"
+GLOBAL_COMMUNITY_IDENTITY = "20260910_0028"
+APP_UPDATES = "20260910_0029"
 HEADS = (
     LEGACY,
     CAPABILITIES,
@@ -43,6 +45,8 @@ HEADS = (
     COURSE_CREATION,
     STUDIO_VIDEO_UPLOADS,
     COMMUNITY_IDENTITY,
+    GLOBAL_COMMUNITY_IDENTITY,
+    APP_UPDATES,
 )
 VERSIONED_HEADS = HEADS[1:]
 TABLELESS_VERSIONED_HEADS = (REVISION, MEDIA_LIBRARY, COURSE_CREATION)
@@ -62,6 +66,11 @@ NEW_TABLES = {
     AUTHORING: ("catalog_authoring_commands",),
     STUDIO_VIDEO_UPLOADS: ("studio_video_uploads",),
     COMMUNITY_IDENTITY: ("academy_public_profiles",),
+    GLOBAL_COMMUNITY_IDENTITY: (
+        "community_public_profiles",
+        "academy_leaderboard_preferences",
+    ),
+    APP_UPDATES: ("app_update_read_receipts",),
 }
 ROOT = Path(__file__).parents[2]
 
@@ -123,7 +132,7 @@ def test_three_separately_packaged_helpers_have_identical_versioned_contracts() 
             assert module.parity_tables_for_head(head) == backup.PARITY_TABLES
 
 
-@pytest.mark.parametrize("head", ["", "20000101_0001", "20260910_0028", "20260907_0019;bad"])
+@pytest.mark.parametrize("head", ["", "20000101_0001", "20260910_0030", "20260907_0019;bad"])
 def test_unknown_or_unsafe_heads_never_fall_back_to_legacy(head: str) -> None:
     for module in (backup, proof, drill):
         with pytest.raises(RuntimeError, match="no reviewed"):
@@ -445,7 +454,7 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
             and node.func.attr == "create_table"
         }
         assert created == set()
-    expected_counts = (39, 41, 50, 52, 53, 53, 53, 53, 54, 55)
+    expected_counts = (39, 41, 50, 52, 53, 53, 53, 53, 54, 55, 57, 58)
     expected_contracts = (
         None,
         "ac-postgres-parity-v2",
@@ -457,6 +466,8 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
         "ac-postgres-parity-v5",
         "ac-postgres-parity-v6",
         "ac-postgres-parity-v7",
+        "ac-postgres-parity-v8",
+        "ac-postgres-parity-v9",
     )
     for module in (backup, proof, drill):
         assert module.VERSIONED_PARITY_CONTRACTS == backup.VERSIONED_PARITY_CONTRACTS

@@ -185,7 +185,7 @@ $LearnerEnvironment["AC_DEV_AUTH_BRIDGE_ENABLED"] = "true"
 $LearnerEnvironment["AC_DEV_AUTH_BRIDGE_ORIGIN"] = $LearnerOrigin
 $LearnerEnvironment["AC_DEV_AUTH_BRIDGE_UPSTREAM_ORIGIN"] = $LearnerStagingOrigin
 $LearnerEnvironment["AC_DEV_API_ORIGIN"] = ""
-# Next 16.2.11 reads this internal threshold before loading next.config.ts.
+# Next 16.3.3 reads this internal threshold before loading next.config.ts.
 # Its largest recordable span is MAX_SAFE_INTEGER microseconds; this threshold
 # is expressed in milliseconds, so no valid span can reach it. Set only in the
 # child environment, before Next and all of its workers import tracing code.

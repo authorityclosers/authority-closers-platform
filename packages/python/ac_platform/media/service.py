@@ -109,12 +109,13 @@ from ac_platform.media.processing import (
     ProcessingQuota,
     inspect_hls_playlist_inventory,
 )
-from ac_platform.media.scanner import ContentScanner, FailClosedScanner
+from ac_platform.media.scanner import ContentScanner, FailClosedScanner, ScanResult
 from ac_platform.media.signing import MediaSigner
 from ac_platform.media.storage import (
     PrivateObjectStorage,
     StorageUploadIntent,
     StoredObjectMetadata,
+    StudioVideoStorageUploadIntent,
 )
 
 if TYPE_CHECKING:
@@ -128,6 +129,9 @@ if TYPE_CHECKING:
         VerifiedFixtureClip,
         VerifiedStagingFixturePack,
     )
+    from ac_platform.media.studio_selection import StudioBindingAuthorization
+    from ac_platform.media.studio_upload import StudioUploadAuthorization
+    from ac_platform.media.studio_video_completion import StudioVideoCompletionAuthorization
 
 _CONTENT_TYPES: dict[MediaPurpose, frozenset[str]] = {
     MediaPurpose.AVATAR: frozenset({"image/jpeg", "image/png", "image/webp"}),
@@ -561,6 +565,7 @@ class MediaService:
         *,
         idempotency_key: str,
         public_film_authorization: PublicFilmImportAuthorization | None = None,
+        studio_authorization: StudioBindingAuthorization | None = None,
     ) -> ActivityMediaBindingResponse:
         """Append a human-approved, tenant-scoped activity/media binding.
 
@@ -573,6 +578,15 @@ class MediaService:
             raise MediaBadRequest(
                 "A bounded Idempotency-Key is required for activity media bindings."
             )
+        if studio_authorization is not None:
+            from ac_platform.media.studio_selection import StudioBindingAuthorization
+
+            if (
+                public_film_authorization is not None
+                or type(studio_authorization) is not StudioBindingAuthorization
+            ):
+                raise MediaForbidden("One exact Studio approval authorization is required.")
+            studio_authorization.require(database, actor, service=self, request=request)
         if public_film_authorization is not None:
             from ac_platform.media.public_film_import import PublicFilmImportAuthorization
 
@@ -585,7 +599,7 @@ class MediaService:
                 request=request,
                 service=self,
             )
-        elif not self._manager(actor):
+        elif studio_authorization is None and not self._manager(actor):
             raise MediaForbidden("The actor is not authorized to approve activity media.")
         from ac_platform.media.public_film_manifest import is_public_film_media_identity
 
@@ -641,7 +655,7 @@ class MediaService:
             raise MediaConflict("Only published catalog activities can receive approved media.")
 
         asset = self._asset(database, actor, request.asset_id, lock=True)
-        if public_film_authorization is None:
+        if public_film_authorization is None and studio_authorization is None:
             self._require_write(actor, purpose=MediaPurpose.VIDEO, asset=asset)
         if asset.purpose != MediaPurpose.VIDEO.value or asset.state == MediaLifecycle.RETIRED.value:
             raise MediaConflict("Only active video media can be approved for an activity.")
@@ -767,6 +781,8 @@ class MediaService:
                 request=request,
                 service=self,
             )
+        if studio_authorization is not None:
+            studio_authorization.require(database, actor, service=self, request=request)
         binding = ActivityMediaBinding(
             tenant_id=tenant_id,
             activity_id=activity.id,
@@ -1303,7 +1319,17 @@ class MediaService:
         request: UploadIntentRequest,
         *,
         idempotency_key: str,
+        studio_authorization: StudioUploadAuthorization | None = None,
     ) -> UploadIntentResponse:
+        studio_program_id: UUID | None = None
+        if studio_authorization is not None:
+            from ac_platform.media.studio_upload import StudioUploadAuthorization
+
+            if type(studio_authorization) is not StudioUploadAuthorization:
+                raise MediaForbidden("The exact Studio upload authorization is required.")
+            studio_program_id = studio_authorization.require(
+                database, actor, service=self, request=request, idempotency_key=idempotency_key
+            )
         if not idempotency_key or len(idempotency_key) > 128:
             raise MediaBadRequest(
                 "A bounded Idempotency-Key is required for media upload commands."
@@ -1327,7 +1353,8 @@ class MediaService:
                 .order_by(MediaAsset.updated_at.desc())
                 .with_for_update()
             )
-        self._require_write(actor, purpose=request.purpose, asset=asset)
+        if studio_authorization is None:
+            self._require_write(actor, purpose=request.purpose, asset=asset)
         fingerprint = self._fingerprint(request.model_dump(mode="json"))
         existing = database.scalar(
             select(MediaUploadIntent)
@@ -1344,7 +1371,11 @@ class MediaService:
                     "The idempotency key was already used for a different media request."
                 )
             version = self._version(database, actor, existing.version_id)
-            return self._upload_response(existing, version)
+            return self._upload_response(
+                existing,
+                version,
+                studio_program_id=studio_program_id,
+            )
 
         if asset is not None and asset.purpose != request.purpose.value:
             raise MediaConflict("A media asset cannot change purpose across versions.")
@@ -1393,9 +1424,14 @@ class MediaService:
         )
         max_bytes = self._reserve_quota(database, actor, request.content_length)
         expires_at = self._now() + self.upload_ttl
+        upload_id = uuid4()
         try:
-            upload_intent = self.storage.create_upload_intent(
+            upload_intent = self._issue_storage_upload_intent(
                 object_key=version.object_key,
+                tenant_id=asset.tenant_id,
+                owner_person_id=actor.person_id,
+                program_id=studio_program_id,
+                upload_id=upload_id,
                 content_type=version.content_type,
                 content_length=version.declared_bytes,
                 checksum_sha256=version.checksum_sha256,
@@ -1410,6 +1446,7 @@ class MediaService:
         # There is no ORM relationship to impose mapper flush ordering.
         database.flush()
         intent = MediaUploadIntent(
+            id=upload_id,
             tenant_id=asset.tenant_id,
             actor_person_id=actor.person_id,
             asset_id=asset.id,
@@ -1429,19 +1466,72 @@ class MediaService:
         asset.state = MediaLifecycle.UPLOADING.value
         database.add(intent)
         database.flush()
-        return self._upload_response(intent, version, storage_intent=upload_intent)
+        return self._upload_response(
+            intent,
+            version,
+            storage_intent=upload_intent,
+            studio_program_id=studio_program_id,
+        )
+
+    def _issue_storage_upload_intent(
+        self,
+        *,
+        object_key: str,
+        tenant_id: UUID,
+        owner_person_id: UUID,
+        program_id: UUID | None,
+        upload_id: UUID,
+        content_type: str,
+        content_length: int,
+        checksum_sha256: str | None,
+        expires_at: datetime,
+    ) -> StorageUploadIntent | StudioVideoStorageUploadIntent:
+        if program_id is not None:
+            from ac_platform.media.video_file_storage import VideoFileStorage
+
+            if type(self.storage) is not VideoFileStorage:
+                raise MediaStorageUnavailable(
+                    "The same-host Studio video upload adapter is not composed."
+                )
+            if checksum_sha256 is None:
+                raise MediaStorageUnavailable(
+                    "The Studio video upload requires its admitted checksum."
+                )
+            return self.storage.create_studio_video_upload_intent(
+                object_key=object_key,
+                tenant_id=tenant_id,
+                owner_person_id=owner_person_id,
+                program_id=program_id,
+                upload_id=upload_id,
+                content_type=content_type,
+                content_length=content_length,
+                checksum_sha256=checksum_sha256,
+                expires_at=expires_at,
+            )
+        return self.storage.create_upload_intent(
+            object_key=object_key,
+            content_type=content_type,
+            content_length=content_length,
+            checksum_sha256=checksum_sha256,
+            expires_at=expires_at,
+        )
 
     def _upload_response(
         self,
         intent: MediaUploadIntent,
         version: MediaVersion,
         *,
-        storage_intent: StorageUploadIntent | None = None,
+        storage_intent: StorageUploadIntent | StudioVideoStorageUploadIntent | None = None,
+        studio_program_id: UUID | None = None,
     ) -> UploadIntentResponse:
         if storage_intent is None:
             try:
-                storage_intent = self.storage.create_upload_intent(
+                storage_intent = self._issue_storage_upload_intent(
                     object_key=intent.object_key,
+                    tenant_id=intent.tenant_id,
+                    owner_person_id=intent.actor_person_id,
+                    program_id=studio_program_id,
+                    upload_id=intent.id,
                     content_type=intent.content_type,
                     content_length=intent.declared_bytes,
                     checksum_sha256=intent.checksum_sha256,
@@ -1451,7 +1541,36 @@ class MediaService:
                 raise MediaStorageUnavailable(
                     "The private media storage adapter could not issue an upload intent."
                 ) from error
-        upload_url = self._secure_media_url(storage_intent.upload_url, description="upload")
+        if (
+            studio_program_id is not None
+            and type(storage_intent) is not StudioVideoStorageUploadIntent
+        ):
+            raise MediaStorageUnavailable("The same-host Studio video upload receipt is required.")
+        if type(storage_intent) is StudioVideoStorageUploadIntent:
+            expected_url = (
+                f"/v1/admin/studio/programs/{studio_program_id}/video-uploads/{intent.id}/bytes"
+            )
+            if (
+                studio_program_id is None
+                or storage_intent.upload_url != expected_url
+                or storage_intent.tenant_id != intent.tenant_id
+                or storage_intent.owner_person_id != intent.actor_person_id
+                or storage_intent.program_id != studio_program_id
+                or storage_intent.upload_id != intent.id
+                or storage_intent.object_key != intent.object_key
+                or _as_utc(storage_intent.expires_at) != _as_utc(intent.expires_at)
+                or set(storage_intent.headers)
+                != {"content-type", "content-length", "x-content-sha256"}
+                or storage_intent.headers.get("content-type") != intent.content_type
+                or storage_intent.headers.get("content-length") != str(intent.declared_bytes)
+                or storage_intent.headers.get("x-content-sha256") != intent.checksum_sha256
+            ):
+                raise MediaStorageUnavailable(
+                    "The Studio video upload route does not match its admission."
+                )
+            upload_url = storage_intent.upload_url
+        else:
+            upload_url = self._secure_media_url(storage_intent.upload_url, description="upload")
         return UploadIntentResponse(
             upload_id=intent.id,
             media_id=intent.asset_id,
@@ -1461,7 +1580,7 @@ class MediaService:
             object_key=intent.object_key,
             upload_url=upload_url,
             upload_headers=storage_intent.headers,
-            expires_at=intent.expires_at,
+            expires_at=_as_utc(intent.expires_at),
             max_bytes=intent.max_bytes,
         )
 
@@ -1474,7 +1593,25 @@ class MediaService:
         *,
         idempotency_key: str,
         expected_purpose: MediaPurpose | None = None,
+        studio_authorization: StudioVideoCompletionAuthorization | None = None,
     ) -> MediaAssetResponse:
+        verified_head: StoredObjectMetadata | None = None
+        completed_scan: ScanResult | None = None
+        if studio_authorization is not None:
+            from ac_platform.media.studio_video_completion import (
+                StudioVideoCompletionAuthorization,
+            )
+
+            if type(studio_authorization) is not StudioVideoCompletionAuthorization:
+                raise MediaForbidden("The exact Studio completion authorization is required.")
+            verified_head, completed_scan = studio_authorization.require(
+                database,
+                actor,
+                service=self,
+                upload_id=upload_id,
+                request=request,
+                idempotency_key=idempotency_key,
+            )
         if not idempotency_key or len(idempotency_key) > 128:
             raise MediaBadRequest(
                 "A bounded Idempotency-Key is required for media upload commands."
@@ -1490,10 +1627,13 @@ class MediaService:
         if intent is None:
             raise MediaNotFound("The media upload intent was not found.")
         asset = self._asset(database, actor, intent.asset_id, lock=True)
+        if asset.state == MediaLifecycle.RETIRED.value:
+            raise MediaConflict("A retired media asset cannot accept an upload completion.")
         version = self._version(database, actor, intent.version_id, lock=True)
         if expected_purpose is not None and version.purpose != expected_purpose.value:
             raise MediaBadRequest("The upload intent does not match this media route.")
-        self._require_write(actor, purpose=MediaPurpose(version.purpose), asset=asset)
+        if studio_authorization is None:
+            self._require_write(actor, purpose=MediaPurpose(version.purpose), asset=asset)
         fingerprint = self._fingerprint(
             request.model_dump(mode="json") | {"idempotency_key": idempotency_key}
         )
@@ -1512,31 +1652,43 @@ class MediaService:
             or request.duration_seconds > self.processing_quota.max_duration_seconds
         ):
             raise MediaQuotaExceeded("The media duration exceeds the processing quota.")
-        try:
-            head = self.storage.head(intent.object_key)
-        except Exception as error:
-            raise MediaStorageUnavailable(
-                "The private media storage adapter could not inspect the upload."
-            ) from error
+        head: StoredObjectMetadata | None = verified_head
+        if head is not None:
+            if head.object_key != intent.object_key:
+                raise MediaForbidden("The verified Studio video object is out of scope.")
+        else:
+            try:
+                head = self.storage.head(intent.object_key)
+            except Exception as error:
+                raise MediaStorageUnavailable(
+                    "The private media storage adapter could not inspect the upload."
+                ) from error
         if head is None:
             raise MediaConflict("The uploaded media object was not found.")
         self._verify_uploaded_object(intent, version, head, request)
-        try:
-            scan = self.scanner.scan(
-                storage=self.storage,
-                object_key=intent.object_key,
-                declared_content_type=intent.content_type,
-                content_length=head.content_length,
-                checksum_sha256=request.checksum_sha256
-                or intent.checksum_sha256
-                or head.checksum_sha256,
-            )
-        except MediaScannerUnavailable:
-            raise
-        except Exception as error:
-            raise MediaScannerUnavailable(
-                "The media safety scanner could not inspect the upload."
-            ) from error
+        if studio_authorization is not None:
+            if completed_scan is None:
+                raise MediaScannerUnavailable(
+                    "The Studio video does not have current scanner verification."
+                )
+            scan = completed_scan
+        else:
+            try:
+                scan = self.scanner.scan(
+                    storage=self.storage,
+                    object_key=intent.object_key,
+                    declared_content_type=intent.content_type,
+                    content_length=head.content_length,
+                    checksum_sha256=request.checksum_sha256
+                    or intent.checksum_sha256
+                    or head.checksum_sha256,
+                )
+            except MediaScannerUnavailable:
+                raise
+            except Exception as error:
+                raise MediaScannerUnavailable(
+                    "The media safety scanner could not inspect the upload."
+                ) from error
         expected_checksum = (
             request.checksum_sha256 or intent.checksum_sha256 or head.checksum_sha256
         )

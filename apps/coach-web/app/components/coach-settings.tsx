@@ -30,6 +30,7 @@ export function CoachSettings() {
         credentials: "same-origin",
       });
       if (!response.ok) throw new Error();
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- Confirmed sign-out must discard the privileged document and route cache.
       window.location.assign("/login");
     } catch {
       setError("We couldn’t confirm sign-out. Please try again.");

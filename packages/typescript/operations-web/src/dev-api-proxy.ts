@@ -2,6 +2,16 @@ import { randomBytes } from "node:crypto";
 
 import { verifyAdminIdentity } from "./admin-identity";
 import { fetchLocalAdminWire } from "./local-admin-transport";
+import {
+  fetchLocalStudioPreviewWire,
+  studioPreviewRequestKind,
+} from "./local-studio-preview-transport";
+import {
+  fetchLocalStudioVideoWire,
+  isStudioVideoByteRequest,
+  studioVideoByteLength,
+  StudioVideoTransportError,
+} from "./local-studio-video-transport";
 
 const DEFAULT_LOCAL_API_ORIGIN = "http://127.0.0.1:8000";
 const LOCAL_SANDBOX_ADMIN_ORIGIN = "http://admin.localhost:3101";
@@ -301,6 +311,22 @@ function isUuid(value: string): boolean {
 
 /** Exact first-slice admin API surface; every other route stays unavailable. */
 export function isStagingAdminRequest(url: URL, method: string): boolean {
+  const videoLibrary = /^\/v1\/admin\/studio\/programs\/([^/]+)\/videos$/.exec(
+    url.pathname,
+  );
+  if (videoLibrary) {
+    const entries = [...url.searchParams.entries()];
+    return (
+      method.toUpperCase() === "GET" &&
+      isUuid(videoLibrary[1]) &&
+      new Set(entries.map(([name]) => name)).size === entries.length &&
+      entries.every(([name, value]) =>
+        name === "limit"
+          ? /^(?:[1-9]|[1-4][0-9]|50)$/.test(value)
+          : name === "after" && isUuid(value),
+      )
+    );
+  }
   if (url.pathname === "/v1/platform/tenants") {
     const entries = [...url.searchParams.entries()];
     return (
@@ -314,6 +340,29 @@ export function isStagingAdminRequest(url: URL, method: string): boolean {
   if (!hasNoQuery(url)) return false;
   const normalizedMethod = method.toUpperCase();
   const { pathname } = url;
+  const videoUpload =
+    /^\/v1\/admin\/studio\/programs\/([^/]+)\/video-uploads(?:\/([^/]+))?$/.exec(
+      pathname,
+    );
+  if (videoUpload) {
+    return (
+      isUuid(videoUpload[1]) &&
+      (videoUpload[2]
+        ? isUuid(videoUpload[2]) && normalizedMethod === "GET"
+        : normalizedMethod === "POST")
+    );
+  }
+  const activityVideo =
+    /^\/v1\/admin\/studio\/programs\/([^/]+)\/activities\/([^/]+)\/video$/.exec(
+      pathname,
+    );
+  if (activityVideo) {
+    return (
+      ["GET", "POST"].includes(normalizedMethod) &&
+      isUuid(activityVideo[1]) &&
+      isUuid(activityVideo[2])
+    );
+  }
 
   if (pathname === "/v1/dev-bridge/health") {
     return normalizedMethod === "GET";
@@ -333,10 +382,10 @@ export function isStagingAdminRequest(url: URL, method: string): boolean {
   ) {
     return normalizedMethod === "GET";
   }
-  if (
-    pathname === "/v1/admin/studio/readiness" ||
-    pathname === "/v1/admin/studio/programs"
-  ) {
+  if (pathname === "/v1/admin/studio/programs") {
+    return normalizedMethod === "GET" || normalizedMethod === "POST";
+  }
+  if (pathname === "/v1/admin/studio/readiness") {
     return normalizedMethod === "GET";
   }
   const studioProgramMatch = /^\/v1\/admin\/studio\/programs\/([^/]+)$/.exec(
@@ -1023,9 +1072,55 @@ async function proxyStagingAdmin(
 async function proxyLocalAdmin(
   request: Request,
   target: Extract<DevAdminApiTarget, { mode: "local" | "local-sandbox" }>,
-  fetcher: DevAdminFetch,
+  fetcher: DevAdminFetch | undefined,
+  videoUploadEnabled: boolean,
 ): Promise<Response> {
   const incoming = new URL(request.url);
+  const videoBytes = isStudioVideoByteRequest(incoming, request.method);
+  const previewKind = studioPreviewRequestKind(incoming, request.method);
+  const localPreview = target.mode === "local-sandbox" && previewKind !== null;
+  const capability =
+    /^\/v1\/admin\/studio\/programs\/([^/]+)\/video-upload-capability$/.exec(
+      incoming.pathname,
+    );
+  const completion =
+    /^\/v1\/admin\/studio\/programs\/([^/]+)\/video-uploads\/([^/]+)\/complete$/.exec(
+      incoming.pathname,
+    );
+  const exactCapability =
+    !!capability &&
+    isUuid(capability[1]) &&
+    request.method === "GET" &&
+    hasNoQuery(incoming) &&
+    !incoming.hash;
+  const exactCompletion =
+    !!completion &&
+    isUuid(completion[1]) &&
+    isUuid(completion[2]) &&
+    request.method === "POST" &&
+    hasNoQuery(incoming) &&
+    !incoming.hash;
+  const localVideoCommand =
+    target.mode === "local-sandbox" &&
+    (exactCapability ||
+      (exactCompletion && videoUploadEnabled) ||
+      localPreview);
+  if ((capability || completion) && !localVideoCommand) {
+    return problem(
+      403,
+      "studio_video_upload_unavailable",
+      "Video uploads are not enabled in this local workspace.",
+    );
+  }
+  const localVideoBytes =
+    videoBytes && target.mode === "local-sandbox" && videoUploadEnabled;
+  if (videoBytes && !localVideoBytes) {
+    return problem(
+      403,
+      "studio_video_upload_unavailable",
+      "Video uploads are not enabled in this local workspace.",
+    );
+  }
   if (target.mode === "local-sandbox") {
     if (!hasAllowedOrigin(request, target.browserOrigin)) {
       return problem(
@@ -1039,10 +1134,15 @@ async function proxyLocalAdmin(
       request.method === "POST" &&
       hasNoQuery(incoming);
     if (
-      (!isStagingAdminRequest(incoming, request.method) && !selectContext) ||
+      (!isStagingAdminRequest(incoming, request.method) &&
+        !selectContext &&
+        !localVideoBytes &&
+        !localVideoCommand) ||
       incoming.pathname === "/v1/dev-bridge/health" ||
       (target.browserOrigin === LOCAL_SANDBOX_COACH_ORIGIN &&
-        !isCoachApiRequest(incoming, request.method))
+        !isCoachApiRequest(incoming, request.method) &&
+        !localVideoBytes &&
+        !localVideoCommand)
     ) {
       return problem(
         403,
@@ -1085,8 +1185,106 @@ async function proxyLocalAdmin(
     headers.set("host", new URL(target.browserOrigin).host);
     headers.set("origin", target.browserOrigin);
   }
+  if (localPreview && previewKind === "bytes") {
+    if (!videoUploadEnabled)
+      return problem(
+        503,
+        "preview_not_configured",
+        "Video preview is not enabled in this workspace.",
+      );
+    if (
+      hasForbiddenBrowserCredential(request) ||
+      request.body ||
+      ![null, "0"].includes(request.headers.get("content-length")) ||
+      request.headers.has("transfer-encoding") ||
+      ![null, "identity"].includes(request.headers.get("content-encoding"))
+    ) {
+      return problem(
+        400,
+        "preview_request_invalid",
+        "Use the normal workspace session with no request body.",
+      );
+    }
+    const range = request.headers.get("range");
+    if (range !== null) {
+      if (!/^bytes=\d+-\d*$/.test(range) || range.length > 64)
+        return problem(
+          416,
+          "preview_range_invalid",
+          "Use one video byte range.",
+        );
+      headers.set("range", range);
+    }
+    try {
+      return await (fetcher ?? fetchLocalStudioPreviewWire)(upstream, {
+        method: request.method,
+        headers,
+        signal: request.signal,
+        redirect: "error",
+      });
+    } catch {
+      return problem(
+        502,
+        "preview_unavailable",
+        "Video preview could not be reached. Try again.",
+      );
+    }
+  }
+  if (localVideoBytes) {
+    try {
+      // Keep the one-MiB buffered JSON path unchanged. Only this opt-in exact
+      // PUT receives raw streamed bytes and the backend's length/checksum fence.
+      if (hasForbiddenBrowserCredential(request)) {
+        return problem(
+          403,
+          "studio_video_credential_denied",
+          "Use your normal local workspace session for video uploads.",
+        );
+      }
+      studioVideoByteLength(request.headers);
+      for (const name of ["content-length", "x-content-sha256"]) {
+        headers.set(name, request.headers.get(name)!);
+      }
+      return await (fetcher ?? fetchLocalStudioVideoWire)(upstream, {
+        method: "PUT",
+        headers,
+        body: request.body,
+        signal: request.signal,
+        redirect: "manual",
+      });
+    } catch (error) {
+      if (error instanceof StudioVideoTransportError) {
+        return problem(error.status, error.code, error.message);
+      }
+      return problem(
+        502,
+        "studio_video_unavailable",
+        "The local video upload service could not be reached.",
+      );
+    }
+  }
+  if (exactCompletion && localVideoCommand) {
+    if (
+      hasForbiddenBrowserCredential(request) ||
+      request.headers.has("transfer-encoding") ||
+      ![null, "0"].includes(request.headers.get("content-length")) ||
+      ![null, "identity"].includes(request.headers.get("content-encoding")) ||
+      !/^[A-Za-z0-9_-]{1,128}$/.test(
+        request.headers.get("idempotency-key") ?? "",
+      )
+    ) {
+      return problem(
+        400,
+        "studio_video_completion_invalid",
+        "Complete this upload with its existing request identity and no body.",
+      );
+    }
+  }
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), PROXY_TIMEOUT_MS);
+  const timeout = setTimeout(
+    () => controller.abort(),
+    exactCompletion && localVideoCommand ? 180_000 : PROXY_TIMEOUT_MS,
+  );
   const abort = () => controller.abort(request.signal.reason);
   request.signal.addEventListener("abort", abort, { once: true });
   if (request.signal.aborted) controller.abort(request.signal.reason);
@@ -1102,13 +1300,48 @@ async function proxyLocalAdmin(
         "The admin request body is too large.",
       );
     }
-    return await fetcher(upstream, {
+    if (
+      exactCompletion &&
+      localVideoCommand &&
+      boundedBody.body &&
+      boundedBody.body.byteLength !== 0
+    ) {
+      return problem(
+        400,
+        "studio_video_completion_invalid",
+        "Video completion takes no body.",
+      );
+    }
+    const transport =
+      fetcher ??
+      (target.mode === "local-sandbox"
+        ? fetchLocalAdminWire
+        : globalThis.fetch.bind(globalThis));
+    const response = await transport(upstream, {
       method: request.method,
       headers,
       body: boundedBody.body,
       redirect: "manual",
       signal: controller.signal,
     });
+    if (
+      exactCapability &&
+      localVideoCommand &&
+      !videoUploadEnabled &&
+      response.ok
+    ) {
+      await response.body?.cancel();
+      return Response.json(
+        {
+          available: false,
+          max_source_bytes: null,
+          accepted_content_types: ["video/mp4", "video/webm"],
+          reason: "not_configured",
+        },
+        { headers: { "cache-control": "no-store" } },
+      );
+    }
+    return response;
   } catch {
     if (controller.signal.aborted) {
       return problem(
@@ -1130,8 +1363,8 @@ async function proxyLocalAdmin(
 
 /** Coach transport never exposes operational commands even to an admin account. */
 export function isCoachApiRequest(url: URL, method: string): boolean {
-  if (!hasNoQuery(url)) return false;
-  if (url.pathname === "/v1/context" && method === "POST") return true;
+  if (url.pathname === "/v1/context" && method === "POST")
+    return hasNoQuery(url);
   return (
     isStagingAdminRequest(url, method) &&
     ([
@@ -1190,9 +1423,7 @@ export async function proxyDevelopmentAdminApi(
     : proxyLocalAdmin(
         request,
         target,
-        fetcher ??
-          (target.mode === "local-sandbox"
-            ? fetchLocalAdminWire
-            : globalThis.fetch.bind(globalThis)),
+        fetcher,
+        environment.AC_DEV_STUDIO_VIDEO_UPLOAD_ENABLED === "true",
       );
 }

@@ -7,11 +7,12 @@ import hashlib
 import ipaddress
 import mimetypes
 import re
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any, NoReturn, Protocol, runtime_checkable
 from urllib.parse import parse_qsl, quote, urlsplit
+from uuid import UUID
 
 from ac_platform.media.contracts import EphemeralMediaUrl
 from ac_platform.media.errors import MediaStorageUnavailable
@@ -54,6 +55,7 @@ _PRESIGNED_AWS_REQUIRED_QUERY_NAMES = frozenset(
 _PRESIGNED_AWS_OPTIONAL_QUERY_NAMES = frozenset({"x-amz-security-token", "x-amz-content-sha256"})
 _LOCAL_UPLOAD_CONTRACT = object()
 _LOCAL_AVATAR_UPLOAD_CONTRACT = object()
+_STUDIO_VIDEO_UPLOAD_CONTRACT = object()
 _S3_UPLOAD_CONTRACT = object()
 
 
@@ -256,6 +258,92 @@ class StorageUploadIntent:
         object.__setattr__(self, "headers", normalized_headers)
 
 
+@dataclass(frozen=True, slots=True)
+class StudioVideoStorageUploadIntent:
+    """Exact same-host cookie route for one canonical Studio admission."""
+
+    upload_url: str
+    object_key: str
+    tenant_id: UUID
+    owner_person_id: UUID
+    program_id: UUID
+    upload_id: UUID
+    expires_at: datetime
+    headers: dict[str, str]
+    _contract: object | None = field(default=None, repr=False, compare=False)
+
+    def __post_init__(self) -> None:
+        if self._contract is not _STUDIO_VIDEO_UPLOAD_CONTRACT:
+            raise MediaStorageUnavailable(
+                "The Studio video upload intent is not a constructible contract."
+            )
+        if any(
+            not isinstance(value, UUID)
+            for value in (
+                self.tenant_id,
+                self.owner_person_id,
+                self.program_id,
+                self.upload_id,
+            )
+        ):
+            raise MediaStorageUnavailable("The Studio video upload scope is invalid.")
+        expected_url = (
+            f"/v1/admin/studio/programs/{self.program_id}/video-uploads/{self.upload_id}/bytes"
+        )
+        if self.upload_url != expected_url or any(
+            character.isspace() or ord(character) < 0x20 or ord(character) == 0x7F
+            for character in self.upload_url
+        ):
+            raise MediaStorageUnavailable("The Studio video upload route is invalid.")
+        parsed = urlsplit(self.upload_url)
+        if parsed.scheme or parsed.netloc or parsed.query or parsed.fragment:
+            raise MediaStorageUnavailable("The Studio video upload route must be same-host.")
+        key = self.object_key.strip() if isinstance(self.object_key, str) else ""
+        if (
+            key != self.object_key
+            or len(key) > 512
+            or not _OBJECT_KEY_PATTERN.fullmatch(key)
+            or not key.startswith(f"tenants/{self.tenant_id}/media/video/")
+            or not key.endswith("/original")
+            or any(part in {".", ".."} for part in key.split("/"))
+        ):
+            raise MediaStorageUnavailable("The Studio video object scope is invalid.")
+        if (
+            not isinstance(self.expires_at, datetime)
+            or self.expires_at.tzinfo is None
+            or self.expires_at.utcoffset() is None
+        ):
+            raise MediaStorageUnavailable("The Studio video upload expiry is invalid.")
+        remaining = (self.expires_at.astimezone(UTC) - datetime.now(UTC)).total_seconds()
+        if remaining <= 0 or remaining > _MAX_UPLOAD_LIFETIME_SECONDS + 5:
+            raise MediaStorageUnavailable("The Studio video upload expiry is invalid.")
+        if not isinstance(self.headers, dict):
+            raise MediaStorageUnavailable("The Studio video upload headers are invalid.")
+        normalized: dict[str, str] = {}
+        for name, value in self.headers.items():
+            if (
+                not isinstance(name, str)
+                or _HEADER_NAME_PATTERN.fullmatch(name) is None
+                or not isinstance(value, str)
+                or len(value) > _HEADER_VALUE_MAX_LENGTH
+                or any(ord(character) < 0x20 or ord(character) == 0x7F for character in value)
+            ):
+                raise MediaStorageUnavailable("The Studio video upload headers are invalid.")
+            lowered = name.lower()
+            if lowered in normalized:
+                raise MediaStorageUnavailable("The Studio video upload headers are duplicated.")
+            normalized[lowered] = value
+        if (
+            set(normalized) != {"content-type", "content-length", "x-content-sha256"}
+            or normalized["content-type"] not in {"video/mp4", "video/webm"}
+            or re.fullmatch(r"[1-9][0-9]{0,10}", normalized["content-length"]) is None
+            or re.fullmatch(r"[0-9a-f]{64}", normalized["x-content-sha256"]) is None
+        ):
+            raise MediaStorageUnavailable("The Studio video upload headers are invalid.")
+        object.__setattr__(self, "object_key", key)
+        object.__setattr__(self, "headers", normalized)
+
+
 def _secure_url(value: str) -> str:
     try:
         return EphemeralMediaUrl(value).value
@@ -308,6 +396,22 @@ class PrivateObjectStorage(Protocol):
     def delete(self, object_key: str) -> None: ...
 
     def list_prefix(self, prefix: str) -> tuple[str, ...]: ...
+
+
+@runtime_checkable
+class StreamingPrivateObjectWriter(Protocol):
+    """Optional bounded-write capability; it grants no upload or publish authority."""
+
+    def put_stream(
+        self,
+        *,
+        object_key: str,
+        chunks: Iterable[bytes],
+        content_type: str,
+        content_length: int,
+        checksum_sha256: str,
+        storage_version_id: str | None = None,
+    ) -> StoredObjectMetadata: ...
 
 
 class UnconfiguredPrivateObjectStorage:
@@ -1130,6 +1234,7 @@ __all__ = [
     "PrivateObjectStorage",
     "S3CompatiblePrivateObjectStorage",
     "compose_private_object_storage",
+    "StudioVideoStorageUploadIntent",
     "StorageUploadIntent",
     "StoredObjectMetadata",
     "UnconfiguredPrivateObjectStorage",

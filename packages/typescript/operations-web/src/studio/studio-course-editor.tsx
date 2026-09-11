@@ -17,7 +17,6 @@ import {
   Check,
   ChevronRight,
   Eye,
-  FileText,
   Layers,
   LockKeyhole,
   Pencil,
@@ -39,7 +38,17 @@ import {
   type StudioProgramDetail,
 } from "../admin-api";
 import styles from "./studio-course-editor.module.css";
+import {
+  StudioLessonTypePicker,
+  studioLessonKinds as kinds,
+} from "./studio-lesson-type-picker";
 import { StudioRevisionAction } from "./studio-revision-action";
+import { StudioVideoUpload } from "./studio-video-upload";
+import { StudioLessonVideoPreview } from "./studio-lesson-video-preview";
+import {
+  StudioVideoPanel,
+  readStudioVideoRecoveryActivity,
+} from "./studio-video-panel";
 import {
   clearStudioDraft,
   readStudioDraft,
@@ -62,19 +71,6 @@ type SaveState =
   | "denied"
   | "error";
 
-const kinds: Record<
-  StudioActivityKind,
-  {
-    label: string;
-    symbol: "watch" | "reflect" | "implement" | "review" | "improve";
-  }
-> = {
-  VIDEO: { label: "Video lesson", symbol: "watch" },
-  REFLECTION: { label: "Reflection", symbol: "reflect" },
-  IMPLEMENTATION_CHALLENGE: { label: "Implementation", symbol: "implement" },
-  REVIEW: { label: "Review", symbol: "review" },
-  IMPROVE: { label: "Improve", symbol: "improve" },
-};
 const emptyFields: Fields = {
   title: "",
   prompt: "",
@@ -152,10 +148,12 @@ export function StudioCourseEditor({
   canWrite,
   renderPublication,
   recoveryContext = "",
+  videoRecoveryContext = recoveryContext,
 }: {
   initialProgram: StudioProgramDetail;
   canWrite: boolean;
   recoveryContext?: string;
+  videoRecoveryContext?: string;
   renderPublication: (
     version: Version | undefined,
     refresh: () => void,
@@ -173,10 +171,32 @@ export function StudioCourseEditor({
     readStudioRevision(recoveryContext, initialProgram.id),
   );
   const [program, setProgram] = useState(initialProgram);
+  const [videoRecoveryActivity] = useState(() =>
+    readStudioVideoRecoveryActivity(videoRecoveryContext, initialProgram.id),
+  );
+  const videoRecoveryVersion = initialProgram.versions.find((item) =>
+    item.modules.some((module) =>
+      module.activities.some(
+        (activity) => activity.id === videoRecoveryActivity,
+      ),
+    ),
+  );
+  const videoRecoveryModule = videoRecoveryVersion?.modules.find((module) =>
+    module.activities.some((activity) => activity.id === videoRecoveryActivity),
+  );
+  const videoSelection: Selection | null =
+    videoRecoveryActivity && videoRecoveryModule
+      ? {
+          type: "activity",
+          moduleId: videoRecoveryModule.id,
+          activityId: videoRecoveryActivity,
+        }
+      : null;
   const recoveredVersionId =
     publicationRecovery?.programVersionId ??
     revisionRecovery?.programVersionId ??
-    recovery?.versionId;
+    recovery?.versionId ??
+    videoRecoveryVersion?.id;
   const initialVersion = recoveredVersionId
     ? initialProgram.versions.find((item) => item.id === recoveredVersionId)
     : (initialProgram.versions.find((item) => item.status === "draft") ??
@@ -192,6 +212,7 @@ export function StudioCourseEditor({
   const [selection, setSelection] = useState<Selection>(
     () =>
       recovery?.selection ??
+      videoSelection ??
       (initialVersion
         ? initialSelection(initialVersion)
         : { type: "new-module", moduleId: "" }),
@@ -200,8 +221,10 @@ export function StudioCourseEditor({
     () =>
       recovery?.fields ??
       (initialVersion
-        ? (fieldsFor(initialVersion, initialSelection(initialVersion)) ??
-          emptyFields)
+        ? (fieldsFor(
+            initialVersion,
+            videoSelection ?? initialSelection(initialVersion),
+          ) ?? emptyFields)
         : emptyFields),
   );
   const [baseline, setBaseline] = useState(recovery?.baseline ?? fields);
@@ -233,6 +256,9 @@ export function StudioCourseEditor({
   const [revisionPending, setRevisionPending] = useState(
     Boolean(revisionRecovery),
   );
+  const [videoPending, setVideoPending] = useState(false);
+  const [uploadPending, setUploadPending] = useState(false);
+  const [videoLibraryRevision, setVideoLibraryRevision] = useState(0);
   const [leave, setLeave] = useState<(() => void) | null>(null);
   const [outlineOpen, setOutlineOpen] = useState(false);
   const pending = useRef<Command | null>(recovery?.pending ?? null);
@@ -254,7 +280,9 @@ export function StudioCourseEditor({
     saveState === "unknown" ||
     saveState === "comparing" ||
     publicationPending ||
-    revisionPending;
+    revisionPending ||
+    videoPending ||
+    uploadPending;
   const writable =
     canWrite &&
     program.access === "selected_tenant" &&
@@ -262,13 +290,37 @@ export function StudioCourseEditor({
     Boolean(version.etag) &&
     saveState !== "denied" &&
     !publicationPending &&
-    !revisionPending;
+    !revisionPending &&
+    !videoPending;
   const canReplay =
     canWrite &&
     program.access === "selected_tenant" &&
     hasPending &&
     !publicationPending &&
-    !revisionPending;
+    !revisionPending &&
+    !videoPending;
+  const selectedModule = version?.modules.find(
+    (item) => item.id === selection.moduleId,
+  );
+  const saveHint =
+    message ||
+    (isNew(selection) && !fields.title.trim()
+      ? `Add a title to create this ${isActivity(selection) ? "lesson" : "module"}.`
+      : dirty
+        ? "Unsaved changes"
+        : version?.status === "draft"
+          ? "All changes saved in this draft"
+          : "Published content · read only");
+
+  function editFields(next: Fields) {
+    setFields(next);
+    // New typing after a confirmed save must not keep announcing "Saved".
+    // In-flight, uncertain and conflict messages remain until their own recovery.
+    if (saveState === "idle" || saveState === "saved") {
+      setSaveState("idle");
+      setMessage("");
+    }
+  }
 
   useLayoutEffect(() => {
     if (bypassLeave.current) return;
@@ -526,7 +578,14 @@ export function StudioCourseEditor({
     }
   }
   const refresh = useEffectEvent(async () => {
-    if (dirty || pending.current || inFlight.current || revisionPending) return;
+    if (
+      dirty ||
+      pending.current ||
+      inFlight.current ||
+      revisionPending ||
+      videoPending
+    )
+      return;
     const currentRevision = ++revision.current;
     const currentFields = latestFields.current;
     try {
@@ -624,7 +683,7 @@ export function StudioCourseEditor({
                 key={id}
                 type="button"
                 aria-pressed={tab === id}
-                disabled={publicationPending || revisionPending}
+                disabled={publicationPending || revisionPending || videoPending}
                 onClick={() => setTab(id)}
               >
                 <Icon size={16} aria-hidden="true" />
@@ -634,6 +693,14 @@ export function StudioCourseEditor({
           </div>
         </div>
       </header>
+      <StudioVideoUpload
+        programId={program.id}
+        recoveryContext={videoRecoveryContext}
+        canWrite={canWrite && program.access === "selected_tenant"}
+        disabled={publicationPending || revisionPending || videoPending}
+        onPendingChange={setUploadPending}
+        onReady={() => setVideoLibraryRevision((value) => value + 1)}
+      />
       <StudioRevisionAction
         key={`${recoveryContext}:${program.id}:${versionId}`}
         program={program}
@@ -780,7 +847,13 @@ export function StudioCourseEditor({
                           )
                         }
                       >
-                        <FileText size={16} aria-hidden="true" />
+                        <LearningSymbol
+                          kind={
+                            kinds[activity.kind as StudioActivityKind]
+                              ?.symbol ?? "reflect"
+                          }
+                          size={24}
+                        />
                         <span>
                           {activity.title}
                           <small>
@@ -805,7 +878,7 @@ export function StudioCourseEditor({
                     }
                   >
                     <Plus size={15} aria-hidden="true" />
-                    Add activity
+                    Add lesson
                     <span className={styles.srOnly}> to {module.title}</span>
                   </button>
                 ) : null}
@@ -932,14 +1005,16 @@ export function StudioCourseEditor({
                       ? "Your instructions will appear here."
                       : "Select an activity in the outline to preview its content.")}
                 </p>
-                {isActivity(selection) && fields.kind === "VIDEO" ? (
-                  <div className={styles.notice}>
-                    <BookOpen size={20} />
-                    <p>
-                      This previews lesson text. Video delivery is connected
-                      separately after content publication.
-                    </p>
-                  </div>
+                {selection.type === "activity" &&
+                selection.activityId &&
+                fields.kind === "VIDEO" ? (
+                  <StudioLessonVideoPreview
+                    programId={program.id}
+                    activityId={selection.activityId}
+                    versionStatus={version.status}
+                    canWrite={canWrite && program.access === "selected_tenant"}
+                    recoveryContext={videoRecoveryContext}
+                  />
                 ) : null}
                 <ActionButton
                   variant="secondary"
@@ -950,237 +1025,276 @@ export function StudioCourseEditor({
                 </ActionButton>
               </div>
             ) : (
-              <form className={styles.editor} onSubmit={save}>
-                <div className={styles.editorHeading}>
-                  <div>
-                    <span className={styles.eyebrow}>
-                      {isNew(selection) ? "Create content" : "Selected content"}
-                    </span>
-                    <h3 ref={editorHeading} tabIndex={-1}>
-                      {isNew(selection)
-                        ? `New ${isActivity(selection) ? "activity" : "module"}`
-                        : isActivity(selection)
-                          ? "Edit activity"
-                          : "Edit module"}
-                    </h3>
-                  </div>
-                  {isActivity(selection) ? (
-                    <LearningSymbol
-                      kind={kinds[fields.kind].symbol}
-                      size={48}
-                    />
-                  ) : (
-                    <Layers size={28} aria-hidden="true" />
-                  )}
-                </div>
-                {!writable ? (
-                  <p className={styles.notice}>
-                    <LockKeyhole size={18} />
-                    This content is read only.{" "}
-                    {dirty
-                      ? "Your unsaved edits are preserved for copying."
-                      : "Editing requires access to a draft in your academy."}
-                  </p>
+              <>
+                {selection.type === "activity" &&
+                selection.activityId &&
+                fields.kind === "VIDEO" ? (
+                  <StudioVideoPanel
+                    programId={program.id}
+                    activityId={selection.activityId}
+                    versionStatus={version.status}
+                    canWrite={canWrite && program.access === "selected_tenant"}
+                    recoveryContext={videoRecoveryContext}
+                    libraryRevision={videoLibraryRevision}
+                    onPendingChange={setVideoPending}
+                  />
                 ) : null}
-                {comparison ? (
-                  <div className={styles.comparison}>
-                    <span className={styles.eyebrow}>Latest saved content</span>
-                    <h4>{comparison.title || "New content"}</h4>
-                    <p>{comparison.prompt || "No instructions"}</p>
-                    <div className={styles.comparisonActions}>
+                <form className={styles.editor} onSubmit={save}>
+                  <div className={styles.editorHeading}>
+                    <div>
+                      <span className={styles.eyebrow}>
+                        {selectedModule && isActivity(selection)
+                          ? selectedModule.title
+                          : "Course content"}
+                      </span>
+                      <h3 ref={editorHeading} tabIndex={-1}>
+                        {isNew(selection)
+                          ? `New ${isActivity(selection) ? "lesson" : "module"}`
+                          : isActivity(selection)
+                            ? "Lesson details"
+                            : "Edit module"}
+                      </h3>
+                    </div>
+                    {isActivity(selection) ? (
+                      <LearningSymbol
+                        kind={kinds[fields.kind].symbol}
+                        size={48}
+                      />
+                    ) : (
+                      <Layers size={28} aria-hidden="true" />
+                    )}
+                  </div>
+                  {!writable ? (
+                    <p className={styles.notice}>
+                      <LockKeyhole size={18} />
+                      This content is read only.{" "}
+                      {dirty
+                        ? "Your unsaved edits are preserved for copying."
+                        : "Editing requires access to a draft in your academy."}
+                    </p>
+                  ) : null}
+                  {comparison ? (
+                    <div className={styles.comparison}>
+                      <span className={styles.eyebrow}>
+                        Latest saved content
+                      </span>
+                      <h4>{comparison.title || "New content"}</h4>
+                      <p>{comparison.prompt || "No instructions"}</p>
+                      <div className={styles.comparisonActions}>
+                        <ActionButton
+                          variant="secondary"
+                          disabled={!writable}
+                          onClick={() => {
+                            setBaseline(comparison);
+                            setComparison(null);
+                            setSaveState("idle");
+                            setMessage(
+                              "Latest version reviewed. Save your edits when ready.",
+                            );
+                          }}
+                        >
+                          Keep my edits
+                        </ActionButton>
+                        <ActionButton
+                          variant="quiet"
+                          onClick={() => {
+                            setFields(comparison);
+                            setBaseline(comparison);
+                            setComparison(null);
+                            setSaveState("idle");
+                            setMessage("Latest saved content loaded.");
+                          }}
+                        >
+                          Use latest saved content
+                        </ActionButton>
+                      </div>
+                    </div>
+                  ) : null}
+                  {selection.type === "new-activity" ? (
+                    <StudioLessonTypePicker
+                      value={fields.kind}
+                      disabled={!writable || unsettled}
+                      onChange={(kind) => editFields({ ...fields, kind })}
+                    />
+                  ) : null}
+                  <label className={styles.field}>
+                    <span>
+                      {isActivity(selection) ? "Lesson title" : "Module title"}
+                      <small>Required</small>
+                    </span>
+                    <input
+                      value={fields.title}
+                      maxLength={isActivity(selection) ? 240 : 200}
+                      required
+                      readOnly={!writable}
+                      onChange={(e) =>
+                        editFields({ ...fields, title: e.target.value })
+                      }
+                      placeholder={
+                        isActivity(selection)
+                          ? "What will the learner work on?"
+                          : "Give this module a clear purpose"
+                      }
+                    />
+                    <small>
+                      A short, clear title learners will see in their course.
+                    </small>
+                  </label>
+                  {isActivity(selection) ? (
+                    <>
+                      <div className={styles.metadataRow}>
+                        {selection.type !== "new-activity" ? (
+                          <div className={styles.metadata}>
+                            <span>Lesson format</span>
+                            <strong>{kinds[fields.kind].label}</strong>
+                          </div>
+                        ) : null}
+                        {selection.type === "new-activity" ? (
+                          <label className={styles.checkbox}>
+                            <input
+                              type="checkbox"
+                              checked={fields.isRequired}
+                              disabled={!writable || unsettled}
+                              onChange={(e) =>
+                                editFields({
+                                  ...fields,
+                                  isRequired: e.target.checked,
+                                })
+                              }
+                            />
+                            <span>
+                              Required to complete this course
+                              <small>
+                                Included in course completion requirements.
+                              </small>
+                            </span>
+                          </label>
+                        ) : (
+                          <div className={styles.metadata}>
+                            <span>Completion requirement</span>
+                            <strong>
+                              {fields.isRequired ? "Required" : "Optional"}
+                            </strong>
+                          </div>
+                        )}
+                      </div>
+                      <label className={styles.field}>
+                        <span>
+                          Learner instructions <small>Optional</small>
+                        </span>
+                        <textarea
+                          value={fields.prompt}
+                          rows={9}
+                          maxLength={2000}
+                          readOnly={!writable}
+                          onChange={(e) =>
+                            editFields({ ...fields, prompt: e.target.value })
+                          }
+                          placeholder="Explain the task, what to consider, and what to do next."
+                        />
+                        <small className={styles.characterCount}>
+                          {fields.prompt.length.toLocaleString()} / 2,000
+                          characters · plain text
+                        </small>
+                      </label>
+                    </>
+                  ) : (
+                    <>
+                      <p className={styles.help}>
+                        {isNew(selection)
+                          ? "A module groups related lessons into one clear topic. Save its title, then add your first lesson."
+                          : "Group related video lessons and practice activities here. You can update the module title without changing its lessons."}
+                      </p>
+                      {selection.type === "module" &&
+                      selectedModule &&
+                      writable &&
+                      !dirty &&
+                      !unsettled ? (
+                        <div className={styles.nextStep}>
+                          <LearningSymbol kind="watch" size={44} />
+                          <div>
+                            <h4>
+                              {selectedModule.activities.length
+                                ? "Keep building this module"
+                                : "Your module is ready for its first lesson"}
+                            </h4>
+                            <p>
+                              Choose a video, reflection or hands-on practice.
+                            </p>
+                            <ActionButton
+                              type="button"
+                              variant="secondary"
+                              onClick={() =>
+                                navigate(() =>
+                                  select({
+                                    type: "new-activity",
+                                    moduleId: selectedModule.id,
+                                  }),
+                                )
+                              }
+                            >
+                              <Plus size={16} aria-hidden="true" />
+                              {selectedModule.activities.length
+                                ? "Add another lesson"
+                                : "Add your first lesson"}
+                            </ActionButton>
+                          </div>
+                        </div>
+                      ) : null}
+                    </>
+                  )}
+                  <footer className={styles.saveBar}>
+                    <div
+                      role="status"
+                      aria-live="polite"
+                      className={styles.saveStatus}
+                      data-state={saveState}
+                    >
+                      {saveState === "saved" && !dirty ? (
+                        <Check size={18} />
+                      ) : dirty ? (
+                        <Pencil size={16} />
+                      ) : (
+                        <ShieldCheck size={17} />
+                      )}
+                      <span>{saveHint}</span>
+                    </div>
+                    {saveState === "conflict" && !comparison ? (
                       <ActionButton
                         variant="secondary"
-                        disabled={!writable}
                         onClick={() => {
-                          setBaseline(comparison);
-                          setComparison(null);
-                          setSaveState("idle");
-                          setMessage(
-                            "Latest version reviewed. Save your edits when ready.",
-                          );
+                          void compareLatest();
                         }}
                       >
-                        Keep my edits
+                        Compare latest draft
                       </ActionButton>
-                      <ActionButton
-                        variant="quiet"
-                        onClick={() => {
-                          setFields(comparison);
-                          setBaseline(comparison);
-                          setComparison(null);
-                          setSaveState("idle");
-                          setMessage("Latest saved content loaded.");
-                        }}
-                      >
-                        Use latest saved content
-                      </ActionButton>
-                    </div>
-                  </div>
-                ) : null}
-                <label className={styles.field}>
-                  <span>
-                    {isActivity(selection) ? "Activity title" : "Module title"}
-                  </span>
-                  <input
-                    value={fields.title}
-                    maxLength={isActivity(selection) ? 240 : 200}
-                    required
-                    readOnly={!writable}
-                    onChange={(e) =>
-                      setFields({ ...fields, title: e.target.value })
-                    }
-                    placeholder={
-                      isActivity(selection)
-                        ? "What will the learner work on?"
-                        : "Give this module a clear purpose"
-                    }
-                  />
-                  <small>
-                    A short, clear title learners will see in their course.
-                  </small>
-                </label>
-                {isActivity(selection) ? (
-                  <>
-                    <div className={styles.metadataRow}>
-                      {selection.type === "new-activity" ? (
-                        <label className={styles.field}>
-                          <span>Activity type</span>
-                          <select
-                            value={fields.kind}
-                            disabled={!writable}
-                            onChange={(e) =>
-                              setFields({
-                                ...fields,
-                                kind: e.target.value as StudioActivityKind,
-                              })
-                            }
-                          >
-                            {Object.entries(kinds).map(([kind, item]) => (
-                              <option key={kind} value={kind}>
-                                {item.label}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                      ) : (
-                        <div className={styles.metadata}>
-                          <span>Activity type</span>
-                          <strong>{kinds[fields.kind].label}</strong>
-                        </div>
-                      )}
-                      {selection.type === "new-activity" ? (
-                        <label className={styles.checkbox}>
-                          <input
-                            type="checkbox"
-                            checked={fields.isRequired}
-                            disabled={!writable}
-                            onChange={(e) =>
-                              setFields({
-                                ...fields,
-                                isRequired: e.target.checked,
-                              })
-                            }
-                          />
-                          <span>
-                            Required activity
-                            <small>
-                              Included in course completion requirements.
-                            </small>
-                          </span>
-                        </label>
-                      ) : (
-                        <div className={styles.metadata}>
-                          <span>Completion requirement</span>
-                          <strong>
-                            {fields.isRequired ? "Required" : "Optional"}
-                          </strong>
-                        </div>
-                      )}
-                    </div>
-                    <label className={styles.field}>
-                      <span>
-                        Learner instructions <small>Optional</small>
-                      </span>
-                      <textarea
-                        value={fields.prompt}
-                        rows={9}
-                        maxLength={2000}
-                        readOnly={!writable}
-                        onChange={(e) =>
-                          setFields({ ...fields, prompt: e.target.value })
-                        }
-                        placeholder="Explain the task, what to consider, and what to do next."
-                      />
-                      <small className={styles.characterCount}>
-                        {fields.prompt.length.toLocaleString()} / 2,000
-                        characters · plain text
-                      </small>
-                    </label>
-                  </>
-                ) : (
-                  <p className={styles.help}>
-                    Activities in this module keep their order and identity when
-                    you change the title. Add a new activity from the outline.
-                  </p>
-                )}
-                <footer className={styles.saveBar}>
-                  <div
-                    role="status"
-                    aria-live="polite"
-                    className={styles.saveStatus}
-                    data-state={saveState}
-                  >
-                    {saveState === "saved" && !dirty ? (
-                      <Check size={18} />
-                    ) : dirty ? (
-                      <Pencil size={16} />
                     ) : (
-                      <ShieldCheck size={17} />
+                      <ActionButton
+                        type="submit"
+                        disabled={
+                          (!writable && !canReplay) ||
+                          (!dirty && saveState !== "unknown") ||
+                          (unsettled && saveState !== "unknown") ||
+                          saveState === "conflict" ||
+                          (saveState !== "unknown" && !fields.title.trim())
+                        }
+                        formNoValidate={saveState === "unknown"}
+                      >
+                        <Save size={16} aria-hidden="true" />
+                        {saveState === "saving"
+                          ? "Saving…"
+                          : saveState === "unknown"
+                            ? "Check save"
+                            : isNew(selection)
+                              ? isActivity(selection)
+                                ? "Create lesson"
+                                : "Add module"
+                              : "Save changes"}
+                      </ActionButton>
                     )}
-                    <span>
-                      {message ||
-                        (dirty
-                          ? "Unsaved changes"
-                          : isNew(selection)
-                            ? "Start with a clear title."
-                            : version.status === "draft"
-                              ? "All changes saved in this draft"
-                              : "Published content · read only")}
-                    </span>
-                  </div>
-                  {saveState === "conflict" && !comparison ? (
-                    <ActionButton
-                      variant="secondary"
-                      onClick={() => {
-                        void compareLatest();
-                      }}
-                    >
-                      Compare latest draft
-                    </ActionButton>
-                  ) : (
-                    <ActionButton
-                      type="submit"
-                      disabled={
-                        (!writable && !canReplay) ||
-                        (!dirty && saveState !== "unknown") ||
-                        (unsettled && saveState !== "unknown") ||
-                        saveState === "conflict" ||
-                        (saveState !== "unknown" && !fields.title.trim())
-                      }
-                      formNoValidate={saveState === "unknown"}
-                    >
-                      <Save size={16} aria-hidden="true" />
-                      {saveState === "saving"
-                        ? "Saving…"
-                        : saveState === "unknown"
-                          ? "Check save"
-                          : isNew(selection)
-                            ? `Add ${isActivity(selection) ? "activity" : "module"}`
-                            : "Save changes"}
-                    </ActionButton>
-                  )}
-                </footer>
-              </form>
+                  </footer>
+                </form>
+              </>
             )}
           </section>
         </div>

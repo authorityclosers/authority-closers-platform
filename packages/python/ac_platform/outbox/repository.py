@@ -44,6 +44,7 @@ from ac_platform.outbox.policy import (
 from ac_platform.telemetry.redaction import sanitize_error
 
 MAX_JOB_LEASE = timedelta(minutes=15)
+MAX_JOB_CLAIM_KINDS = 64
 EXPIRED_DISPATCH_AMBIGUITY_REASON = (
     "provider delivery outcome unresolved after worker lease expired; "
     "operations reconciliation required"
@@ -63,6 +64,36 @@ def _required_text(value: str, field_name: str, maximum: int) -> str:
     if len(normalized) > maximum:
         raise ValueError(f"{field_name} must be at most {maximum} characters")
     return normalized
+
+
+def _normalize_job_kinds(kinds: Iterable[str] | None) -> tuple[str, ...] | None:
+    """Normalize an optional exact worker allowlist.
+
+    ``None`` is retained for low-level/recovery callers that intentionally
+    operate across the whole jobs table. Worker call sites must pass their
+    explicit allowlist; an empty iterable is never treated as an unfiltered
+    query.
+    """
+
+    if kinds is None:
+        return None
+    if isinstance(kinds, str):
+        raise ValueError("kinds must be a non-empty iterable of job kinds")
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for kind in kinds:
+        if not isinstance(kind, str):
+            raise ValueError("job kinds must be strings")
+        value = _required_text(kind, "job kind", 128)
+        if value in seen:
+            continue
+        seen.add(value)
+        normalized.append(value)
+        if len(normalized) > MAX_JOB_CLAIM_KINDS:
+            raise ValueError(f"kinds must contain at most {MAX_JOB_CLAIM_KINDS} distinct job kinds")
+    if not normalized:
+        raise ValueError("kinds must contain at least one job kind")
+    return tuple(normalized)
 
 
 def _bounded_error(error: str | BaseException, *, maximum: int = 2000) -> str:
@@ -259,6 +290,7 @@ def build_job_claim_statement(
     now: datetime,
     recovery_generation: int,
     limit: int = 1,
+    kinds: Iterable[str] | None = None,
 ) -> Select[tuple[Job]]:
     """Build the row-locking claim query.
 
@@ -269,6 +301,7 @@ def build_job_claim_statement(
 
     if limit < 1 or limit > 500:
         raise ValueError("limit must be between 1 and 500")
+    normalized_kinds = _normalize_job_kinds(kinds)
     del now
     queued = Job.status.in_((JobStatus.QUEUED.value, JobStatus.RETRY_WAIT.value))
     eligible_queued = and_(queued, Job.available_at <= func.now())
@@ -293,14 +326,17 @@ def build_job_claim_statement(
             OperationsRecoveryState.generation == recovery_generation,
         )
     )
+    predicates = [
+        or_(eligible_queued, and_(expired_lease, reclaim_is_safe)),
+        generation_is_current,
+        recovery_is_ready,
+        Job.attempt_count < Job.max_attempts,
+    ]
+    if normalized_kinds is not None:
+        predicates.append(Job.kind.in_(normalized_kinds))
     return (
         select(Job)
-        .where(
-            or_(eligible_queued, and_(expired_lease, reclaim_is_safe)),
-            generation_is_current,
-            recovery_is_ready,
-            Job.attempt_count < Job.max_attempts,
-        )
+        .where(*predicates)
         .order_by(Job.available_at.asc(), Job.created_at.asc(), Job.id.asc())
         .limit(limit)
         .with_for_update(skip_locked=True)
@@ -314,10 +350,12 @@ def build_job_take_statement(
     lease_for: timedelta,
     recovery_generation: int,
     dialect: str = "postgresql",
+    kinds: Iterable[str] | None = None,
 ) -> Any:
     """Build the database-clock transition that claims exactly one job."""
 
     seconds = _lease_seconds(lease_for)
+    normalized_kinds = _normalize_job_kinds(kinds)
     queued = and_(
         Job.status.in_((JobStatus.QUEUED.value, JobStatus.RETRY_WAIT.value)),
         Job.available_at <= func.now(),
@@ -331,26 +369,29 @@ def build_job_take_statement(
         Job.dispatch_started_at.is_(None),
         Job.provider_receipt.is_not(None),
     )
-    return (
-        update(Job)
-        .where(
-            Job.id == job_id,
-            or_(queued, and_(expired, reclaim_is_safe)),
-            Job.attempt_count < Job.max_attempts,
-            or_(
-                Job.external_side_effect.is_(False),
-                and_(
-                    Job.recovery_generation == recovery_generation,
-                    exists(
-                        select(OperationsRecoveryState.id).where(
-                            OperationsRecoveryState.id == 1,
-                            OperationsRecoveryState.status == RecoveryStatus.READY.value,
-                            OperationsRecoveryState.generation == recovery_generation,
-                        )
-                    ),
+    predicates = [
+        Job.id == job_id,
+        or_(queued, and_(expired, reclaim_is_safe)),
+        Job.attempt_count < Job.max_attempts,
+        or_(
+            Job.external_side_effect.is_(False),
+            and_(
+                Job.recovery_generation == recovery_generation,
+                exists(
+                    select(OperationsRecoveryState.id).where(
+                        OperationsRecoveryState.id == 1,
+                        OperationsRecoveryState.status == RecoveryStatus.READY.value,
+                        OperationsRecoveryState.generation == recovery_generation,
+                    )
                 ),
             ),
-        )
+        ),
+    ]
+    if normalized_kinds is not None:
+        predicates.append(Job.kind.in_(normalized_kinds))
+    return (
+        update(Job)
+        .where(*predicates)
         .values(
             status=JobStatus.LEASED.value,
             attempt_count=Job.attempt_count + 1,
@@ -1316,12 +1357,18 @@ class JobRepository:
         now: datetime | None = None,
         lease_for: timedelta = timedelta(minutes=5),
         limit: int = 1,
+        kinds: Iterable[str] | None = None,
     ) -> list[Job]:
-        """Claim eligible jobs and increment their durable attempt counters."""
+        """Claim eligible jobs and increment their durable attempt counters.
+
+        ``kinds=None`` preserves the explicit whole-table behavior used by
+        recovery tooling. Every worker must provide its exact allowlist.
+        """
 
         _lease_seconds(lease_for)
         if limit != 1:
             raise ValueError("durable workers must claim exactly one job per transaction")
+        normalized_kinds = _normalize_job_kinds(kinds)
         current_time = _as_utc(now or utc_now())
         recovery_state = await RecoveryStateRepository(self._session).require_ready(
             lock=True,
@@ -1338,6 +1385,7 @@ class JobRepository:
                         now=current_time,
                         recovery_generation=recovery_state.generation,
                         limit=limit,
+                        kinds=normalized_kinds,
                     )
                 )
             ).all()
@@ -1353,6 +1401,7 @@ class JobRepository:
                     lease_for=lease_for,
                     recovery_generation=recovery_state.generation,
                     dialect=dialect,
+                    kinds=normalized_kinds,
                 )
             )
             rowcount = getattr(result, "rowcount", None)
@@ -1409,6 +1458,54 @@ class JobRepository:
         row.leased_until = current_time + lease_for
         row.updated_at = current_time
         await self._session.flush()
+        return row
+
+    async def lock_internal_lease(
+        self,
+        job: Job | UUID,
+        lease_token: UUID,
+        *,
+        kind: str,
+        recovery_generation: int,
+    ) -> Job:
+        """Lock one live internal lease behind the shared recovery fence.
+
+        Internal jobs deliberately persist recovery generation zero. A worker
+        therefore carries the global generation observed when it claimed the
+        job and must present it again before every database phase. Lock order
+        remains recovery state first, then the job row, matching restore.
+        """
+
+        normalized_kind = _required_text(kind, "kind", 128)
+        if not isinstance(lease_token, UUID):
+            raise ValueError("lease_token must be a UUID")
+        if type(recovery_generation) is not int or recovery_generation < 1:
+            raise ValueError("recovery_generation must be a positive integer")
+        await RecoveryStateRepository(self._session).require_ready(
+            expected_generation=recovery_generation,
+            lock=True,
+            shared_lock=True,
+        )
+        job_id = job.id if isinstance(job, Job) else job
+        row = cast(
+            Job | None,
+            await self._session.scalar(
+                select(Job)
+                .where(
+                    Job.id == job_id,
+                    Job.kind == normalized_kind,
+                    Job.external_side_effect.is_(False),
+                    Job.recovery_generation == 0,
+                    Job.status == JobStatus.LEASED.value,
+                    Job.lease_token == lease_token,
+                    Job.leased_until > func.now(),
+                )
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            ),
+        )
+        if row is None:
+            raise LeaseLostError("internal job phase was fenced by lease or job identity")
         return row
 
     async def lock_for_dispatch(

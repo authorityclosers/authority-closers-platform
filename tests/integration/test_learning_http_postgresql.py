@@ -549,6 +549,9 @@ def test_learning_http_uses_one_authenticated_postgres_transaction(
                 assert collection_item["state"] == "in_progress"
                 assert collection_item["projection"]["denominator"] == 2
                 assert collection_item["projection"]["completed_count"] == 0
+                assert collection_item["projection"]["next_activity_id"] == str(
+                    seed.first_activity_id
+                )
 
                 wrong_tenant_collection = await client.get(
                     "/v1/learning", headers={"X-Test-Tenant": "wrong"}
@@ -569,6 +572,9 @@ def test_learning_http_uses_one_authenticated_postgres_transaction(
                 assert learning_body["projection"]["denominator"] == 2
                 assert learning_body["projection"]["completed_count"] == 0
                 assert learning_body["projection"]["percentage"] == 0.0
+                assert learning_body["projection"]["next_activity_id"] == str(
+                    seed.first_activity_id
+                )
                 assert learning_body["modules"][0]["position"] == 1
                 assert learning_body["modules"][0]["activities"][0]["position"] == 1
                 scoped_learning = await client.get(
@@ -696,6 +702,20 @@ def test_learning_http_uses_one_authenticated_postgres_transaction(
                 assert submitted.json()["draft_revision"] == 1
                 assert submitted.json()["draft_payload"] == {"answer": "first durable answer"}
 
+                # The first activity awaits review and the second is still
+                # prerequisite-locked: neither is a learner continuation.
+                pending_learning = await client.get(f"/v1/learning/{seed.program_id}")
+                pending_collection = await client.get("/v1/learning")
+                assert pending_learning.status_code == pending_collection.status_code == 200
+                assert pending_learning.json()["projection"]["next_activity_id"] is None
+                assert (
+                    pending_collection.json()["items"][0]["projection"]["next_activity_id"] is None
+                )
+                assert (
+                    pending_learning.json()["projection"]["projection_version"]
+                    == learning_body["projection"]["projection_version"]
+                )
+
                 review = await client.post(
                     f"/v1/evidence/{evidence.json()['submission_id']}/review",
                     json={
@@ -714,6 +734,9 @@ def test_learning_http_uses_one_authenticated_postgres_transaction(
 
                 unlocked_learning = await client.get(f"/v1/learning/{seed.program_id}")
                 assert unlocked_learning.status_code == 200
+                assert unlocked_learning.json()["projection"]["next_activity_id"] == str(
+                    seed.locked_activity_id
+                )
                 unlocked = unlocked_learning.json()["modules"][1]["activities"][0]
                 assert unlocked["state"] == "available"
                 assert unlocked["prompt"] == (

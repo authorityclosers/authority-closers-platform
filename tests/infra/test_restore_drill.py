@@ -53,6 +53,7 @@ def _write_backup_pair(
     *,
     environment: str = "staging",
     release_id: str = CURRENT_RELEASE_ID,
+    migration_head: str = CURRENT_MIGRATION_HEAD,
 ) -> tuple[Path, Path, Any]:
     backup = directory / f"capture-{environment}.dump"
     backup.write_bytes(b"PGDMP-test-fixture")
@@ -76,11 +77,10 @@ def _write_backup_pair(
                 "capture_clock": "CLOCK_REALTIME",
                 "dump_bytes": backup.stat().st_size,
                 "dump_sha256": hashlib.sha256(backup.read_bytes()).hexdigest(),
-                "parity_contract": restore_drill.parity_contract_for_head(CURRENT_MIGRATION_HEAD),
-                "migration_head": CURRENT_MIGRATION_HEAD,
+                "parity_contract": restore_drill.parity_contract_for_head(migration_head),
+                "migration_head": migration_head,
                 "row_counts": {
-                    table: 0
-                    for table in restore_drill.parity_tables_for_head(CURRENT_MIGRATION_HEAD)
+                    table: 0 for table in restore_drill.parity_tables_for_head(migration_head)
                 },
             }
         ),
@@ -113,6 +113,40 @@ def _config(tmp_path: Path, *, execute: bool = False) -> Any:
         reconcile_tenant_id=None,
         reconcile_reason=None,
         acknowledge_reconciliation=False,
+    )
+
+
+def _rehearsal_config(tmp_path: Path, *, execute: bool = False) -> Any:
+    source_release_id = "b" * 40
+    backup, metadata, captured_at = _write_backup_pair(
+        tmp_path,
+        release_id=source_release_id,
+        migration_head=restore_drill.MIGRATION_REHEARSAL_SOURCE_HEAD,
+    )
+    return restore_drill.DrillConfig(
+        environment="staging",
+        backup=backup,
+        backup_metadata=metadata,
+        backup_sha256=hashlib.sha256(backup.read_bytes()).hexdigest(),
+        backup_metadata_sha256=hashlib.sha256(metadata.read_bytes()).hexdigest(),
+        backup_captured_at=captured_at,
+        backup_release_id=source_release_id,
+        evidence_dir=tmp_path / "evidence",
+        workspace_mode="source",
+        workspace_release_id=CURRENT_RELEASE_ID,
+        expected_migration_head=restore_drill.MIGRATION_REHEARSAL_TARGET_HEAD,
+        postgres_image=restore_drill.DEFAULT_POSTGRES_IMAGE,
+        application_image=APPLICATION_IMAGE,
+        execute=execute,
+        acknowledge_isolated_target=execute,
+        reconcile_job_ids=(),
+        reconcile_outbox_event_ids=(),
+        reconcile_actor_person_id=None,
+        reconcile_tenant_id=None,
+        reconcile_reason=None,
+        acknowledge_reconciliation=False,
+        source_application_image="sha256:" + "b" * 64,
+        source_migration_head=restore_drill.MIGRATION_REHEARSAL_SOURCE_HEAD,
     )
 
 
@@ -329,6 +363,190 @@ def test_source_preflight_rejects_image_release_or_head_mismatch(
 
     with pytest.raises(restore_drill.DrillError, match=error):
         restore_drill._preflight(restore_drill._target_for("0123456789ab"), config)
+
+
+def test_migration_rehearsal_preflight_binds_source_and_candidate_independently(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = _rehearsal_config(tmp_path, execute=True)
+    source_image = config.source_application_image
+    assert source_image is not None
+
+    monkeypatch.setattr(
+        restore_drill,
+        "_run_docker",
+        lambda args, *_positional, **_kwargs: (
+            args[-1] if args[:3] == ("image", "inspect", "--format") else "fixture"
+        ),
+    )
+    monkeypatch.setattr(restore_drill, "_docker_inspect_optional", lambda *_args: None)
+
+    def image_contract(image: str, _target: Any) -> tuple[str, str]:
+        if image == source_image:
+            return "b" * 40, restore_drill.MIGRATION_REHEARSAL_SOURCE_HEAD
+        return CURRENT_RELEASE_ID, restore_drill.MIGRATION_REHEARSAL_TARGET_HEAD
+
+    monkeypatch.setattr(restore_drill, "_application_image_contract", image_contract)
+
+    restore_drill._preflight(restore_drill._target_for("0123456789ab"), config)
+
+
+def test_migration_rehearsal_preflight_rejects_source_image_digest_mismatch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = _rehearsal_config(tmp_path, execute=True)
+    source_image = config.source_application_image
+    assert source_image is not None
+
+    def inspect_image(args: tuple[str, ...], *_positional: object, **_kwargs: object) -> str:
+        if args[:3] != ("image", "inspect", "--format"):
+            return "fixture"
+        if args[-1] == source_image:
+            return "sha256:" + "c" * 64
+        return args[-1]
+
+    monkeypatch.setattr(
+        restore_drill,
+        "_run_docker",
+        inspect_image,
+    )
+
+    with pytest.raises(restore_drill.DrillError, match="source application image identity"):
+        restore_drill._preflight(restore_drill._target_for("0123456789ab"), config)
+
+
+def test_migration_rehearsal_config_keeps_prior_backup_and_candidate_workspace_bindings(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        restore_drill,
+        "_workspace_release_contract",
+        lambda _root: ("source", CURRENT_RELEASE_ID, restore_drill.MIGRATION_REHEARSAL_TARGET_HEAD),
+    )
+    backup, metadata, _captured_at = _write_backup_pair(
+        tmp_path,
+        release_id="b" * 40,
+        migration_head=restore_drill.MIGRATION_REHEARSAL_SOURCE_HEAD,
+    )
+    args = restore_drill.build_parser().parse_args(
+        [
+            "--environment",
+            "staging",
+            "--backup",
+            str(backup),
+            "--backup-metadata",
+            str(metadata),
+            "--evidence-dir",
+            str(tmp_path / "evidence"),
+            "--application-image",
+            APPLICATION_IMAGE,
+            "--source-application-image",
+            "sha256:" + "b" * 64,
+            "--source-migration-head",
+            restore_drill.MIGRATION_REHEARSAL_SOURCE_HEAD,
+        ]
+    )
+
+    config = restore_drill._config_from_args(args)
+
+    assert config.backup_release_id == "b" * 40
+    assert config.workspace_release_id == CURRENT_RELEASE_ID
+    assert config.expected_migration_head == restore_drill.MIGRATION_REHEARSAL_TARGET_HEAD
+    assert config.source_application_image == "sha256:" + "b" * 64
+    assert config.source_migration_head == restore_drill.MIGRATION_REHEARSAL_SOURCE_HEAD
+
+
+def test_migration_rehearsal_transition_requires_exact_preservation_and_derivations() -> None:
+    source_counts = {
+        table: 0
+        for table in restore_drill.parity_tables_for_head(
+            restore_drill.MIGRATION_REHEARSAL_SOURCE_HEAD
+        )
+    }
+    source_counts["academy_public_profiles"] = 3
+    derivations = {
+        "academy_public_profiles": 3,
+        "academy_public_profile_people": 2,
+    }
+    target_counts = dict(source_counts)
+    target_counts.update(
+        {
+            "community_public_profiles": 2,
+            "academy_leaderboard_preferences": 3,
+            "app_update_read_receipts": 0,
+        }
+    )
+
+    assert restore_drill._assert_migration_rehearsal_transition(
+        source_counts,
+        target_counts,
+        derivations,
+    ) == {
+        "community_public_profiles": 2,
+        "academy_leaderboard_preferences": 3,
+        "app_update_read_receipts": 0,
+    }
+
+    target_counts["academy_leaderboard_preferences"] = 2
+    with pytest.raises(restore_drill.DrillError, match="new-table row counts"):
+        restore_drill._assert_migration_rehearsal_transition(
+            source_counts,
+            target_counts,
+            derivations,
+        )
+
+
+def test_migration_rehearsal_command_runs_only_candidate_alembic_head() -> None:
+    target = restore_drill._target_for("0123456789ab")
+    command = restore_drill._migration_command(target, APPLICATION_IMAGE)
+
+    assert command[-3:] == (
+        APPLICATION_IMAGE,
+        "upgrade",
+        restore_drill.MIGRATION_REHEARSAL_TARGET_HEAD,
+    )
+    assert command[command.index("--network") + 1] == target.network
+    assert command[command.index("--entrypoint") + 1] == "alembic"
+    assert "--publish" not in command
+    assert "--privileged" not in command
+    assert target.password not in command
+
+
+def test_migration_rehearsal_dry_run_is_non_mutating_and_explicit(tmp_path: Path) -> None:
+    config = _rehearsal_config(tmp_path)
+
+    plan = restore_drill._dry_run_plan(config)
+
+    assert plan["mode"] == "migration-rehearsal-dry-run"
+    assert plan["source_application_image"] == config.source_application_image
+    assert plan["source_migration_head"] == restore_drill.MIGRATION_REHEARSAL_SOURCE_HEAD
+    assert plan["migration"]["command"] == [
+        "upgrade",
+        restore_drill.MIGRATION_REHEARSAL_TARGET_HEAD,
+    ]
+    assert plan["external_connections"] == []
+    assert not config.evidence_dir.exists()
+
+
+def test_post_migration_held_probe_requires_same_generation_and_zero_provider_calls() -> None:
+    payload = {
+        "action": "prove-held",
+        "recovery_state": {"generation": 4, "status": "held"},
+        "worker_hold_proof": {
+            "worker_ready": False,
+            "run_once_rejected": True,
+            "provider_calls": 0,
+        },
+    }
+
+    result = restore_drill._validate_held_probe(payload, expected_generation=4)
+
+    assert result["recovery_state"] == {"generation": 4, "status": "held"}
+    with pytest.raises(restore_drill.DrillError, match="unexpected recovery generation"):
+        restore_drill._validate_held_probe(payload, expected_generation=5)
 
 
 def test_checked_in_migrations_preserve_forward_only_recovery_policy() -> None:
@@ -645,6 +863,22 @@ def test_executed_restore_uses_private_immutable_input_copies(
         config.backup_metadata.write_text("{}", encoding="utf-8")
         assert stable_config.backup.read_bytes() == original_dump
         assert stable_config.backup_metadata.read_bytes() == original_metadata
+
+    assert stable_root.is_dir()
+    assert tuple(stable_root.iterdir()) == ()
+
+
+def test_migration_rehearsal_stable_copy_revalidates_the_prior_head(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _allow_test_owned_stable_inputs(monkeypatch)
+    config = _rehearsal_config(tmp_path, execute=True)
+    stable_root = tmp_path / "stable-inputs"
+
+    with restore_drill._stable_restore_inputs(config, root=stable_root) as stable_config:
+        metadata = json.loads(stable_config.backup_metadata.read_text(encoding="utf-8"))
+        assert metadata["migration_head"] == restore_drill.MIGRATION_REHEARSAL_SOURCE_HEAD
 
     assert stable_root.is_dir()
     assert tuple(stable_root.iterdir()) == ()

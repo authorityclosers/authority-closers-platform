@@ -30,6 +30,8 @@ import {
   type OfflineReadMetadata,
 } from "../lib/offline-read-cache";
 import { ROUTES } from "../lib/routes";
+import { firstActionableActivity } from "../lib/next-learning-action";
+export { firstActionableActivity } from "../lib/next-learning-action";
 import { userFacingRequestError } from "../lib/user-facing-error";
 import {
   hasMembershipRole,
@@ -46,23 +48,6 @@ export function selectPublishedFreeCourse(
   programs: ProgramSummaryResponse[],
 ): ProgramSummaryResponse | undefined {
   return programs.find((p) => p.slug === FREE_COURSE_SLUG);
-}
-
-export function firstActionableActivity(
-  learning: LearningResponse,
-): LearningActivityResponse | undefined {
-  for (const mod of learning.modules) {
-    for (const activity of mod.activities) {
-      const state = activity.state.toLowerCase();
-      if (
-        (state === "in_progress" || state === "available") &&
-        activity.allowed_actions.length > 0
-      ) {
-        return activity;
-      }
-    }
-  }
-  return undefined;
 }
 
 export function activityStateLabel(activity: LearningActivityResponse): string {

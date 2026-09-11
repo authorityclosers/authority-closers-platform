@@ -5,6 +5,7 @@ import type { ClientRequest, IncomingMessage } from "node:http";
 import { request as httpsRequest } from "node:https";
 import type { LookupFunction } from "node:net";
 import { Readable } from "node:stream";
+import { assertDevelopmentMediaNativePrivacy } from "./dev-media-native-privacy";
 
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]", "::1"]);
 const unavailable = () =>
@@ -103,6 +104,7 @@ export async function fetchDevelopmentLocalApiUpstream(
   let signal: AbortSignal;
   let body: Uint8Array | undefined;
   try {
+    assertDevelopmentMediaNativePrivacy();
     if (typeof window !== "undefined") throw unavailable();
     const original = input instanceof Request ? input : null;
     url = new URL(original ? original.url : String(input));
@@ -134,6 +136,9 @@ export async function fetchDevelopmentLocalApiUpstream(
     // lookup maps that hostname to 127.0.0.1/::1, set it explicitly so the
     // local API still evaluates its canonical allowlisted authority.
     headers.set("host", url.host);
+    // Node's native client does not transparently decode compressed responses.
+    // Force an identity response so the proxy never forwards mislabeled bytes.
+    headers.set("accept-encoding", "identity");
     body = bodyBytes(
       init.body ?? (original?.body ? await original.arrayBuffer() : undefined),
     );
@@ -205,6 +210,13 @@ export async function fetchDevelopmentLocalApiUpstream(
             const status = response.statusCode ?? 0;
             if (status < 200 || status > 599) throw unavailable();
             const headers = responseHeaders(response);
+            const contentEncoding = headers.get("content-encoding");
+            if (
+              contentEncoding !== null &&
+              contentEncoding.toLowerCase() !== "identity"
+            ) {
+              throw unavailable();
+            }
             if (
               method.toUpperCase() === "HEAD" ||
               [204, 205, 304].includes(status)

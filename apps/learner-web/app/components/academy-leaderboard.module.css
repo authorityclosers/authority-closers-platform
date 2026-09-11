@@ -1,0 +1,266 @@
+.surface {
+  display: grid;
+  gap: 24px;
+  max-width: 840px;
+  margin: 0 auto;
+  padding: clamp(24px, 5vw, 48px);
+  border: 1px solid var(--theme-border);
+  border-radius: 28px;
+  background: var(--theme-surface);
+  color: var(--theme-text);
+  box-shadow: var(--theme-shadow);
+}
+
+.header {
+  display: grid;
+  gap: 12px;
+}
+
+.titleRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  color: var(--theme-action);
+  background: var(--theme-info-surface);
+}
+
+.eyebrow {
+  margin: 0 0 4px;
+  color: var(--theme-text-muted);
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: clamp(1.55rem, 4vw, 2.3rem);
+  line-height: 1.15;
+  letter-spacing: -0.04em;
+}
+
+.lede,
+.footer p,
+.empty p,
+.state p,
+.moreError {
+  margin: 0;
+  color: var(--theme-text-muted);
+  font-size: 0.9rem;
+  line-height: 1.65;
+}
+
+.policy {
+  width: fit-content;
+  margin: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--theme-border);
+  border-radius: 999px;
+  color: var(--theme-info-text);
+  background: var(--theme-info-surface);
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.state,
+.empty {
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+  padding: clamp(20px, 4vw, 32px);
+  border: 1px solid var(--theme-border);
+  border-radius: 20px;
+  background: var(--theme-surface-subtle);
+}
+
+.state {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+}
+
+.state > svg {
+  color: var(--theme-info-text);
+}
+
+.state h2,
+.empty h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  line-height: 1.4;
+}
+
+.primaryAction,
+.secondaryAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  margin-top: 6px;
+  padding: 9px 15px;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 750;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.primaryAction {
+  border: 1px solid var(--theme-action);
+  color: var(--theme-action-text);
+  background: var(--theme-action);
+}
+
+.secondaryAction {
+  border: 1px solid var(--theme-border-strong);
+  color: var(--theme-text);
+  background: var(--theme-surface);
+}
+
+.secondaryAction:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+
+.primaryAction:focus-visible,
+.secondaryAction:focus-visible,
+.footer a:focus-visible {
+  outline: 3px solid var(--theme-focus);
+  outline-offset: 3px;
+}
+
+.tableWrap {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--theme-border);
+  border-radius: 18px;
+}
+
+.table {
+  width: 100%;
+  min-width: 0;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 0.9rem;
+}
+
+.rankColumn {
+  width: 4.5rem;
+}
+
+.xpColumn {
+  width: 8rem;
+}
+
+.table th,
+.table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--theme-border);
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
+.table thead th {
+  color: var(--theme-text-muted);
+  font-size: 0.74rem;
+  font-weight: 750;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.table th:last-child,
+.table td:last-child {
+  text-align: right;
+}
+
+.table tbody tr:last-child th,
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.current {
+  background: var(--theme-info-surface);
+}
+
+.you {
+  display: inline-flex;
+  margin-left: 8px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  color: var(--theme-info-text);
+  background: var(--theme-surface);
+  font-size: 0.68rem;
+  font-weight: 750;
+  vertical-align: middle;
+}
+
+.more {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+}
+
+.moreError {
+  color: var(--theme-danger-text);
+  font-size: 0.8rem;
+}
+
+.footer {
+  padding-top: 4px;
+  border-top: 1px solid var(--theme-border);
+}
+
+.footer a {
+  color: var(--theme-action);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.spin {
+  animation: spin 900ms linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 540px) {
+  .surface {
+    gap: 20px;
+    padding: 20px;
+    border-radius: 20px;
+  }
+
+  .table th,
+  .table td {
+    padding: 12px 10px;
+  }
+
+  .rankColumn {
+    width: 3.5rem;
+  }
+
+  .xpColumn {
+    width: 6.5rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation: none;
+  }
+}

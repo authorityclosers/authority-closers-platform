@@ -4,7 +4,9 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import * as api from "@ac/operations-web/api";
 import { StudioCourseEditor } from "./studio-course-editor";
-import { PublishDraft } from "./studio-runtime";
+import { PublishDraft, StudioProgram } from "./studio-runtime";
+import * as videoApi from "../../../../../packages/typescript/operations-web/src/studio/studio-video-api";
+import { activateStudioVideoRecoveryScope } from "../../../../../packages/typescript/operations-web/src/studio/studio-video-panel";
 import * as adminSession from "@ac/operations-web/session";
 import {
   activateStudioRecoveryScope,
@@ -128,6 +130,7 @@ const renderPublication = vi.fn<
 
 beforeEach(() => {
   activateStudioRecoveryScope("");
+  activateStudioVideoRecoveryScope("");
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -175,6 +178,7 @@ beforeEach(() => {
 
 afterEach(async () => {
   activateStudioRecoveryScope("");
+  activateStudioVideoRecoveryScope("");
   if (!unmounted) await act(async () => root.unmount());
   container.remove();
   vi.restoreAllMocks();
@@ -213,7 +217,7 @@ function button(text: string | RegExp) {
   return found!;
 }
 
-function input(label = "Activity title") {
+function input(label = "Lesson title") {
   const found =
     container.querySelector(`[aria-label="${label}"]`) ??
     [...container.querySelectorAll("label")]
@@ -223,7 +227,7 @@ function input(label = "Activity title") {
   return found as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
 }
 
-async function type(value: string, label = "Activity title") {
+async function type(value: string, label = "Lesson title") {
   const node = input(label);
   const prototype =
     node instanceof HTMLTextAreaElement
@@ -672,13 +676,111 @@ it("appends a module once and selects the returned canonical resource", async ()
   expect(container.textContent).toContain("Edit module");
   expect(input("Module title").value).toBe("New module");
   expect(button("Save changes").disabled).toBe(true);
+  expect(container.textContent).toContain(
+    "Your module is ready for its first lesson",
+  );
+  await click(button("Add your first lesson"));
+  expect(container.textContent).toContain("New lesson");
+  expect(input().value).toBe("");
+  expect(container.querySelectorAll('input[type="radio"]')).toHaveLength(5);
+  expect(api.appendStudioModule).toHaveBeenCalledOnce();
+  expect(api.appendStudioActivity).not.toHaveBeenCalled();
+});
+
+it("replaces a prior Saved message when the learner-facing text is edited again", async () => {
+  vi.mocked(api.updateStudioActivity).mockResolvedValue(
+    savedActivity("Saved title"),
+  );
+  await mount();
+  await type("Saved title");
+  await click(button("Save changes"));
+  expect(
+    container.querySelector('footer [role="status"]')?.textContent,
+  ).toContain("Saved to draft");
+  await type("Newer title");
+  expect(container.querySelector('footer [role="status"]')?.textContent).toBe(
+    "Unsaved changes",
+  );
+  expect(button("Save changes").disabled).toBe(false);
+  expect(api.updateStudioActivity).toHaveBeenCalledOnce();
+});
+
+it("explains lesson formats without mutating a draft or clearing typed content", async () => {
+  await mount();
+  await click(button(/^Add lesson/));
+  const formats = container.querySelector(
+    "details:has(fieldset)",
+  ) as HTMLDetailsElement;
+  expect(formats.open).toBe(false);
+  await click(formats.querySelector("summary")!);
+  expect(formats.open).toBe(true);
+  expect(container.querySelector("fieldset legend")?.textContent).toBe(
+    "What would you like to add?",
+  );
+  await type("A clear lesson title");
+  for (const kind of [
+    "VIDEO",
+    "REFLECTION",
+    "IMPLEMENTATION_CHALLENGE",
+    "REVIEW",
+    "IMPROVE",
+  ]) {
+    const option = container.querySelector(
+      `input[type="radio"][value="${kind}"]`,
+    ) as HTMLInputElement;
+    await click(option);
+    expect(option.checked).toBe(true);
+    expect(option.getAttribute("aria-label")).toBeTruthy();
+    const hint = document.getElementById(
+      option.getAttribute("aria-describedby")!,
+    );
+    expect(hint?.textContent).toBeTruthy();
+    expect(input().value).toBe("A clear lesson title");
+    expect(formats.querySelector("summary strong")?.textContent).toBe(
+      option.getAttribute("aria-label"),
+    );
+  }
+  expectNoMutation();
+  await click(formats.querySelector("summary")!);
+  expect(formats.open).toBe(false);
+});
+
+it("locks immutable lesson choices while creation is saving or its outcome is unknown", async () => {
+  const request = deferred<api.StudioDraftMutationResponse>();
+  vi.mocked(api.appendStudioActivity).mockReturnValue(request.promise);
+  await mount();
+  await click(button(/^Add lesson/));
+  await type("A video lesson");
+  await click(
+    container.querySelector(
+      'input[type="radio"][value="VIDEO"]',
+    ) as HTMLInputElement,
+  );
+  await click(button("Create lesson"));
+  expect(container.querySelector("fieldset")?.disabled).toBe(true);
+  expect(
+    (container.querySelector('input[type="checkbox"]') as HTMLInputElement)
+      .disabled,
+  ).toBe(true);
+  await act(async () => request.reject(problem(503, "unavailable")));
+  expect(container.querySelector("fieldset")?.disabled).toBe(true);
+  expect(
+    (container.querySelector('input[type="checkbox"]') as HTMLInputElement)
+      .disabled,
+  ).toBe(true);
+  expect(button("Check save")).toBeDefined();
+  expect(api.appendStudioActivity).toHaveBeenCalledOnce();
 });
 
 it("appends the explicitly selected activity kind and required choice", async () => {
   await mount();
-  await click(button(/^Add activity/));
+  await click(button(/^Add lesson/));
   await type("Watch the conversation");
-  await type("VIDEO", "Activity type");
+  await click(
+    container.querySelector(
+      'input[type="radio"][value="VIDEO"]',
+    ) as HTMLInputElement,
+  );
   const required = container.querySelector(
     'input[type="checkbox"]',
   ) as HTMLInputElement;
@@ -698,7 +800,7 @@ it("appends the explicitly selected activity kind and required choice", async ()
     resource_id: addedId,
     replayed: false,
   });
-  await click(button("Add activity"));
+  await click(button("Create lesson"));
   expect(api.appendStudioActivity).toHaveBeenCalledExactlyOnceWith({
     programVersionId: versionId,
     moduleId,
@@ -1022,4 +1124,145 @@ it("recovers the exact publication command on a fresh published version without 
   expect(readStudioPublication(recoveryScope, programId)).toBeNull();
   await act(async () => request.resolve(result));
   expect(props.onPublished).toHaveBeenCalledOnce();
+});
+
+function videoProgram() {
+  const next = publishedProgram();
+  next.versions[0].modules[0].activities.push({
+    ...next.versions[0].modules[0].activities[0],
+    id: addedId,
+    position: 2,
+    kind: "VIDEO",
+    title: "Reviewed video source",
+  });
+  return next;
+}
+
+function prepareVideoRequests() {
+  vi.spyOn(videoApi, "loadStudioActivityVideo").mockResolvedValue({
+    activity_id: addedId,
+    version_status: "published",
+    binding: null,
+  });
+  vi.spyOn(videoApi, "loadStudioVideos").mockResolvedValue({
+    items: [
+      {
+        asset_id: activityId,
+        version_id: versionId,
+        version_number: 1,
+        label: "Private source.mp4",
+        state: "ready",
+        actual_bytes: 1000,
+        duration_seconds: 10,
+        width: 1920,
+        height: 1080,
+      },
+    ],
+    next_cursor: null,
+  });
+  return vi
+    .spyOn(videoApi, "saveStudioActivityVideo")
+    .mockRejectedValue(new TypeError("Unconfirmed response"));
+}
+
+async function beginVideoApproval() {
+  await click(button(/Reviewed video source/));
+  await click(
+    container.querySelector('input[type="radio"]') as HTMLInputElement,
+  );
+  const approval = container.querySelector(
+    'input[placeholder^="For example:"]',
+  ) as HTMLInputElement;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!.call(approval, "Reviewed by instructor");
+    approval.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await click(button("Approve lesson video"));
+}
+
+it("mounts video approval outside the content form and protects all editor navigation until confirmed", async () => {
+  const saveVideo = prepareVideoRequests();
+  await mount(videoProgram(), true, "video", "stable-video-session");
+  await beginVideoApproval();
+  expect(saveVideo).toHaveBeenCalledOnce();
+  expect(button("Retry same approval").closest("form")).toBeNull();
+  expect(button("Preview").disabled).toBe(true);
+  expect(button("Publication").disabled).toBe(true);
+  expect(button(/01Listen first/).disabled).toBe(true);
+  expect(
+    (
+      container.querySelector(
+        '[aria-label="Course version"]',
+      ) as HTMLSelectElement
+    ).disabled,
+  ).toBe(true);
+  expect(button("Save changes").disabled).toBe(true);
+  await click(
+    container.querySelector('a[href="/studio/programs"]') as HTMLAnchorElement,
+  );
+  expect(container.querySelector("dialog")?.hasAttribute("open")).toBe(true);
+  expect(container.textContent).toContain("Resolve your save first");
+  expectNoMutation();
+});
+
+it("restores the exact pending video and selected lesson across same-session capability changes in the real Studio mount", async () => {
+  const saveVideo = prepareVideoRequests();
+  const detail = videoProgram();
+  vi.mocked(api.loadStudioProgram).mockResolvedValue(detail);
+  const session: adminSession.AdminSessionState = {
+    status: "ready",
+    error: null,
+    session: {
+      personId: activityId,
+      sessionId: moduleId,
+      tenantId,
+      membershipRole: "learner",
+      email: "coach@example.test",
+      displayName: "Synthetic coach",
+      emailVerifiedAt: "2026-09-08T00:00:00Z",
+      permissions: [],
+      studioCapabilities: ["catalog_read", "catalog_write"].map(
+        (permission) => ({
+          permission: permission as "catalog_read" | "catalog_write",
+          scope_kind: "program" as const,
+          tenant_id: tenantId,
+          program_id: programId,
+        }),
+      ),
+    },
+  };
+  const currentSession = vi
+    .spyOn(adminSession, "useAdminSession")
+    .mockReturnValue(session);
+  const renderStudio = async () => {
+    await act(async () => root.render(<StudioProgram programId={programId} />));
+  };
+  await renderStudio();
+  await beginVideoApproval();
+  const first = saveVideo.mock.calls[0][0];
+  currentSession.mockReturnValue({
+    ...session,
+    session: {
+      ...session.session,
+      studioCapabilities: session.session.studioCapabilities.filter(
+        (item) => item.permission === "catalog_read",
+      ),
+    },
+  });
+  await renderStudio();
+  expect(container.textContent).not.toContain("Private source.mp4");
+  expect(container.textContent).toContain(
+    "earlier video request is unresolved",
+  );
+  currentSession.mockReturnValue(session);
+  await renderStudio();
+  expect(input().value).toBe("Reviewed video source");
+  expect(button("Retry same approval").disabled).toBe(false);
+  await click(button("Retry same approval"));
+  const second = saveVideo.mock.calls[1][0];
+  expect(second.idempotencyKey).toBe(first.idempotencyKey);
+  expect(second.selection).toEqual(first.selection);
 });

@@ -409,6 +409,23 @@ async def test_worker_claims_and_commits_one_job_at_a_time() -> None:
     assert [call.args[0] for call in worker._execute_one.await_args_list] == [first, second]
 
 
+async def test_worker_claim_passes_its_exact_dispatch_allowlist() -> None:
+    session = AsyncMock(spec=AsyncSession)
+    session.begin = Mock(return_value=_AsyncContext(None))
+    worker = DurableWorker(_factory(session), settings=_settings())
+    job = _job()
+
+    with patch(
+        "ac_platform.worker.JobRepository.claim",
+        new=AsyncMock(return_value=[job]),
+    ) as claim:
+        assert await worker._claim_one() is job
+
+    assert claim.await_args is not None
+    assert claim.await_args.kwargs["kinds"] == worker.allowed_job_kinds
+    assert isinstance(claim.await_args.kwargs["kinds"], frozenset)
+
+
 async def test_lease_loss_on_failure_does_not_abort_remaining_work() -> None:
     sink = InMemoryTelemetrySink()
     worker = DurableWorker(

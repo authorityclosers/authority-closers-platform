@@ -15,8 +15,9 @@ import os
 import posixpath
 import re
 import shutil
+import stat
 import subprocess
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Iterator
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
@@ -27,8 +28,15 @@ from urllib.parse import unquote, urlsplit
 from uuid import UUID, uuid4
 
 from ac_platform.media.errors import MediaProcessingError, MediaQuotaExceeded
+from ac_platform.media.file_storage import _identity
 from ac_platform.media.models import CaptionKind, DeliveryProtocol, MediaPurpose
-from ac_platform.media.storage import PrivateObjectStorage, StoredObjectMetadata
+from ac_platform.media.storage import (
+    PrivateObjectStorage,
+    StoredObjectMetadata,
+    StreamingPrivateObjectWriter,
+)
+from ac_platform.media.video_file_storage import VideoFileStorage
+from ac_platform.media.video_probe import FFprobeVideoProbe, VideoMetadata
 
 _HLS_CONTENT_TYPE = "application/vnd.apple.mpegurl"
 _HLS_ALTERNATE_CONTENT_TYPE = "application/x-mpegurl"
@@ -850,6 +858,70 @@ def _cleanup_objects(storage: PrivateObjectStorage, object_keys: Iterable[str]) 
         ) from first_error
 
 
+def _ffmpeg_source_metadata(
+    storage: PrivateObjectStorage, source_key: str, content_type: str, quota: ProcessingQuota
+) -> StoredObjectMetadata:
+    try:
+        metadata = storage.head(source_key)
+    except Exception as error:
+        raise MediaProcessingError("The media source is unavailable to FFmpeg.") from error
+    if (
+        not isinstance(metadata, StoredObjectMetadata)
+        or metadata.object_key != source_key
+        or not isinstance(metadata.content_type, str)
+        or metadata.content_type.lower().split(";", 1)[0].strip() != content_type
+        or type(metadata.content_length) is not int
+        or not isinstance(metadata.checksum_sha256, str)
+        or not re.fullmatch(r"[0-9a-fA-F]{64}", metadata.checksum_sha256)
+        or not isinstance(metadata.storage_version_id, str)
+        or not 0 < len(metadata.storage_version_id) <= 255
+    ):
+        raise MediaProcessingError("The FFmpeg source metadata could not be verified.")
+    quota.check_source(metadata.content_length)
+    return metadata
+
+
+def _stage_ffmpeg_source(
+    storage: PrivateObjectStorage, metadata: StoredObjectMetadata, destination: Path
+) -> None:
+    """Stage an immutable source without retaining a lecture-sized byte buffer.
+
+    The storage port must honor the bounded-chunk contract. Verify size, hash and
+    storage revision before exposing the staged file to any decoder. The caller
+    owns the private temporary directory and removes partial files on failure.
+    """
+    chunk_limit = 1024 * 1024
+    digest = hashlib.sha256()
+    total = 0
+    try:
+        with destination.open("xb") as target:
+            for chunk in storage.iter_range(
+                metadata.object_key,
+                start=0,
+                end=metadata.content_length - 1,
+                chunk_size=chunk_limit,
+            ):
+                if (
+                    not isinstance(chunk, bytes)
+                    or not 0 < len(chunk) <= chunk_limit
+                    or total + len(chunk) > metadata.content_length
+                ):
+                    raise MediaProcessingError("The FFmpeg source stream exceeded its bounds.")
+                target.write(chunk)
+                digest.update(chunk)
+                total += len(chunk)
+        if (
+            total != metadata.content_length
+            or digest.hexdigest() != metadata.checksum_sha256.lower()
+            or storage.head(metadata.object_key) != metadata
+        ):
+            raise MediaProcessingError("The media source changed while the worker read it.")
+    except MediaProcessingError:
+        raise
+    except Exception as error:
+        raise MediaProcessingError("The FFmpeg worker could not stage the source.") from error
+
+
 def _ensure_new_output(storage: PrivateObjectStorage, object_key: str) -> None:
     try:
         existing = storage.head(object_key)
@@ -906,13 +978,24 @@ def _copy_captions(
         )
         try:
             _ensure_new_output(storage, destination)
-            if created_keys is not None:
+            exclusive = type(storage) is VideoFileStorage
+            if created_keys is not None and not exclusive:
                 created_keys.append(destination)
-            copied = storage.copy(
-                source_key=caption.source_key,
-                destination_key=destination,
-                content_type=caption.content_type,
-            )
+            if type(storage) is VideoFileStorage:
+                copied = storage.copy(
+                    source_key=caption.source_key,
+                    destination_key=destination,
+                    content_type=caption.content_type,
+                    create_only=True,
+                )
+                if created_keys is not None:
+                    created_keys.append(destination)
+            else:
+                copied = storage.copy(
+                    source_key=caption.source_key,
+                    destination_key=destination,
+                    content_type=caption.content_type,
+                )
             if (
                 not isinstance(copied, StoredObjectMetadata)
                 or copied.object_key != destination
@@ -1464,14 +1547,17 @@ class FFmpegMediaProcessor:
         profiles: tuple[TranscodeProfile, ...] = DEFAULT_TRANSCODE_PROFILES,
         ffmpeg_binary: str = "ffmpeg",
         command_runner: CommandRunner | None = None,
+        video_probe: Callable[[Path], VideoMetadata] | None = None,
         include_progressive: bool = True,
         quota: ProcessingQuota | None = None,
     ) -> None:
         if not ffmpeg_binary or Path(ffmpeg_binary).name != ffmpeg_binary:
             raise ValueError("ffmpeg binary must be a leaf executable name")
         self.profiles = tuple(profiles)
-        if not self.profiles:
-            raise ValueError("at least one transcode profile is required")
+        if not 1 <= len(self.profiles) <= 16 or len({p.name for p in self.profiles}) != len(
+            self.profiles
+        ):
+            raise ValueError("one to sixteen uniquely named transcode profiles are required")
         self.ffmpeg_binary = ffmpeg_binary
         self.include_progressive = include_progressive
         self.quota = quota or ProcessingQuota()
@@ -1480,6 +1566,22 @@ class FFmpegMediaProcessor:
                 command, cwd, max_stderr_bytes=self.quota.max_stderr_bytes
             )
         )
+        self.video_probe = video_probe or FFprobeVideoProbe()
+        self.segment_probe = video_probe or FFprobeVideoProbe(format_name="mpegts")
+
+    def _source_profiles(self, source: VideoMetadata) -> tuple[TranscodeProfile, ...]:
+        """Fit the display aspect ratio without upscaling or duplicate quality levels."""
+
+        selected: list[TranscodeProfile] = []
+        seen: set[tuple[int, int]] = set()
+        for profile in self.profiles:
+            factor = min(1.0, profile.width / source.width, profile.height / source.height)
+            width = max(2, int(source.width * factor) // 2 * 2)
+            height = max(2, int(source.height * factor) // 2 * 2)
+            if (width, height) not in seen:
+                selected.append(TranscodeProfile(profile.name, width, height, profile.bitrate_kbps))
+                seen.add((width, height))
+        return tuple(selected)
 
     def _worker_duration_limit(self, caption_count: int = 0) -> int:
         """Derive a duration bound that cannot exceed the file-count quota."""
@@ -1504,30 +1606,54 @@ class FFmpegMediaProcessor:
         playlist_path: Path,
         segment_pattern: Path,
         profile: TranscodeProfile,
-        max_duration_seconds: int | None = None,
+        max_duration_seconds: float | None = None,
     ) -> tuple[str, ...]:
+        duration = (
+            max_duration_seconds
+            if max_duration_seconds is not None
+            else self._worker_duration_limit()
+        )
+        # Only measured source duration may extend the last frame over an audio tail.
+        # An omitted duration is a safety ceiling, never a requested output length.
+        padding = (
+            f",tpad=stop_mode=clone:stop_duration={duration}"
+            if max_duration_seconds is not None
+            else ""
+        )
         return (
             self.ffmpeg_binary,
             "-nostdin",
             "-hide_banner",
             "-loglevel",
             "error",
+            "-protocol_whitelist",
+            "file",
+            "-format_whitelist",
+            "mov,matroska,webm",
+            "-threads",
+            "2",
             "-i",
             str(input_path),
             "-t",
-            str(
-                max_duration_seconds
-                if max_duration_seconds is not None
-                else self._worker_duration_limit()
-            ),
+            str(duration),
             "-map",
-            "0:v:0",
+            "0:V:0",
             "-map",
-            "0:a?",
+            "0:a:0?",
             "-vf",
-            f"scale={profile.width}:{profile.height}:force_original_aspect_ratio=decrease",
+            f"scale={profile.width}:{profile.height},setsar=1{padding}",
+            "-filter_threads",
+            "1",
             "-c:v",
             "libx264",
+            "-threads",
+            "2",
+            "-pix_fmt",
+            "yuv420p",
+            "-force_key_frames",
+            "expr:gte(t,n_forced*6)",
+            "-map_metadata",
+            "-1",
             "-b:v",
             f"{profile.bitrate_kbps}k",
             "-c:a",
@@ -1548,28 +1674,56 @@ class FFmpegMediaProcessor:
         *,
         input_path: Path,
         output_path: Path,
-        max_duration_seconds: int | None = None,
+        max_duration_seconds: float | None = None,
+        dimensions: tuple[int, int] | None = None,
     ) -> tuple[str, ...]:
+        duration = (
+            max_duration_seconds
+            if max_duration_seconds is not None
+            else self._worker_duration_limit()
+        )
+        scale = (
+            f"scale={dimensions[0]}:{dimensions[1]},setsar=1"
+            if dimensions is not None
+            else "scale=trunc(iw*sar/2)*2:trunc(ih/2)*2,setsar=1"
+        )
+        padding = (
+            f",tpad=stop_mode=clone:stop_duration={duration}"
+            if max_duration_seconds is not None
+            else ""
+        )
         return (
             self.ffmpeg_binary,
             "-nostdin",
             "-hide_banner",
             "-loglevel",
             "error",
+            "-protocol_whitelist",
+            "file",
+            "-format_whitelist",
+            "mov,matroska,webm",
+            "-threads",
+            "2",
             "-i",
             str(input_path),
             "-t",
-            str(
-                max_duration_seconds
-                if max_duration_seconds is not None
-                else self._worker_duration_limit()
-            ),
+            str(duration),
             "-map",
-            "0:v:0",
+            "0:V:0",
             "-map",
-            "0:a?",
+            "0:a:0?",
+            "-vf",
+            f"{scale}{padding}",
+            "-filter_threads",
+            "1",
             "-c:v",
             "libx264",
+            "-threads",
+            "2",
+            "-pix_fmt",
+            "yuv420p",
+            "-map_metadata",
+            "-1",
             "-c:a",
             "aac",
             "-movflags",
@@ -1587,8 +1741,23 @@ class FFmpegMediaProcessor:
         content_type: str,
         crop: dict[str, object] | None,
         captions: Iterable[CaptionPassthrough] = (),
+        attempt_id: UUID | None = None,
     ) -> ProcessingResult:
         del version_id, crop
+        # A future leased worker supplies a fresh server-owned UUID per claim.
+        # It is not accepted from an upload request and is not itself a lease
+        # or publication proof. Keep legacy callers' output layout unchanged.
+        output_root = source_key
+        if attempt_id is not None:
+            if type(attempt_id) is not UUID or attempt_id.int == 0:
+                raise MediaProcessingError("The video processing attempt must be a nonzero UUID.")
+            if purpose is not MediaPurpose.VIDEO:
+                raise MediaProcessingError("Attempt-isolated processing is only for video.")
+            if type(storage) is not VideoFileStorage:
+                raise MediaProcessingError(
+                    "Attempt-isolated video requires the exclusive private video adapter."
+                )
+            output_root = _safe_child_key(source_key, f"attempts/{attempt_id}")
         if purpose is not MediaPurpose.VIDEO:
             return TestCopyProcessor().process(
                 storage=storage,
@@ -1614,12 +1783,7 @@ class FFmpegMediaProcessor:
             + int(self.include_progressive)
             + len(caption_inputs)
         )
-        source = _read_bounded_source(
-            storage,
-            source_key=source_key,
-            quota=self.quota,
-            unavailable_message="The media source is unavailable to FFmpeg.",
-        )
+        source_object = _ffmpeg_source_metadata(storage, source_key, content_type, self.quota)
         created_keys: list[str] = []
         try:
             with TemporaryDirectory(prefix="ac-media-ffmpeg-") as temporary_directory:
@@ -1627,7 +1791,7 @@ class FFmpegMediaProcessor:
                 reservation = _reserve_workspace_budget(
                     workspace,
                     self.quota,
-                    source_bytes=len(source),
+                    source_bytes=source_object.content_length,
                     output_file_count=output_file_count,
                 )
                 try:
@@ -1641,19 +1805,20 @@ class FFmpegMediaProcessor:
                             accounted_workspace_bytes = actual_workspace_bytes
 
                     input_path = workspace / "source.bin"
-                    try:
-                        input_path.write_bytes(source)
-                    except OSError as error:
-                        raise MediaProcessingError(
-                            "The FFmpeg worker could not stage the source."
-                        ) from error
+                    _stage_ffmpeg_source(storage, source_object, input_path)
                     reconcile_workspace_budget()
+                    source_metadata = self.video_probe(input_path)
+                    if source_metadata.duration_seconds > worker_duration_limit:
+                        raise MediaQuotaExceeded(
+                            "The video is longer than this worker can process without trimming."
+                        )
+                    profiles = self._source_profiles(source_metadata)
                     output_bytes = 0
                     measured_duration = 0.0
                     rendition_rows: list[ProcessedRendition] = []
                     manifest_object_keys: list[str] = []
                     variant_lines = ["#EXTM3U", "#EXT-X-VERSION:3"]
-                    for profile in self.profiles:
+                    for profile in profiles:
                         profile_directory = workspace / "hls" / profile.name
                         profile_directory.mkdir(parents=True, exist_ok=True)
                         playlist_path = profile_directory / "index.m3u8"
@@ -1665,7 +1830,7 @@ class FFmpegMediaProcessor:
                                 playlist_path=playlist_path,
                                 segment_pattern=segment_pattern,
                                 profile=profile,
-                                max_duration_seconds=worker_duration_limit,
+                                max_duration_seconds=source_metadata.duration_seconds,
                             ),
                             workspace,
                         )
@@ -1674,12 +1839,16 @@ class FFmpegMediaProcessor:
                             raise MediaProcessingError(
                                 "The FFmpeg worker did not produce an HLS playlist."
                             )
-                        measured_duration = max(
-                            measured_duration,
-                            _measure_hls_playlist_duration(
-                                playlist_path, maximum=worker_duration_limit
-                            ),
+                        duration = _measure_hls_playlist_duration(
+                            playlist_path, maximum=worker_duration_limit
                         )
+                        if abs(duration - source_metadata.duration_seconds) > 0.5:
+                            raise MediaProcessingError("The encoded video duration does not match.")
+                        measured_duration = max(measured_duration, duration)
+                        # Inspect encoded bytes, not the configured label or filename.
+                        encoded = self.segment_probe(profile_directory / "segment-00000.ts")
+                        if (encoded.width, encoded.height) != (profile.width, profile.height):
+                            raise MediaProcessingError("The encoded video dimensions do not match.")
                         variant_lines.extend(
                             (
                                 f"#EXT-X-STREAM-INF:BANDWIDTH={profile.bitrate_kbps * 1000},"
@@ -1690,26 +1859,37 @@ class FFmpegMediaProcessor:
                         output_bytes += self._store_tree(
                             storage,
                             directory=profile_directory,
-                            object_prefix=f"{source_key}/renditions/hls/{profile.name}",
+                            object_prefix=f"{output_root}/renditions/hls/{profile.name}",
                             remaining_bytes=self.quota.max_output_bytes - output_bytes,
                             created_keys=created_keys,
                         )
                         manifest_object_keys.extend(
                             _safe_child_key(
-                                f"{source_key}/renditions/hls/{profile.name}",
+                                f"{output_root}/renditions/hls/{profile.name}",
                                 path.relative_to(profile_directory).as_posix(),
                             )
                             for path in sorted(profile_directory.rglob("*"))
                             if path.is_file()
                         )
-                    master_key = _safe_child_key(source_key, "renditions/master.m3u8")
+                    master_key = _safe_child_key(output_root, "renditions/master.m3u8")
                     master = ("\n".join(variant_lines) + "\n").encode("utf-8")
                     output_bytes += len(master)
                     if output_bytes > self.quota.max_output_bytes:
                         raise MediaQuotaExceeded("The media output exceeds the processing quota.")
                     _ensure_new_output(storage, master_key)
-                    created_keys.append(master_key)
-                    storage.put(object_key=master_key, body=master, content_type=_HLS_CONTENT_TYPE)
+                    if type(storage) is VideoFileStorage:
+                        storage.put(
+                            object_key=master_key,
+                            body=master,
+                            content_type=_HLS_CONTENT_TYPE,
+                            create_only=True,
+                        )
+                        created_keys.append(master_key)
+                    else:
+                        created_keys.append(master_key)
+                        storage.put(
+                            object_key=master_key, body=master, content_type=_HLS_CONTENT_TYPE
+                        )
                     manifest_object_keys.append(master_key)
                     rendition_rows.append(
                         ProcessedRendition(
@@ -1717,20 +1897,25 @@ class FFmpegMediaProcessor:
                             protocol=DeliveryProtocol.HLS.value,
                             content_type=_HLS_CONTENT_TYPE,
                             object_key=master_key,
-                            width=max(profile.width for profile in self.profiles),
-                            height=max(profile.height for profile in self.profiles),
-                            bitrate_kbps=max(profile.bitrate_kbps for profile in self.profiles),
+                            width=max(profile.width for profile in profiles),
+                            height=max(profile.height for profile in profiles),
+                            bitrate_kbps=max(profile.bitrate_kbps for profile in profiles),
                             name="master",
                         )
                     )
                     if self.include_progressive:
+                        progressive_dimensions = (
+                            source_metadata.width // 2 * 2,
+                            source_metadata.height // 2 * 2,
+                        )
                         progressive_path = workspace / "progressive.mp4"
                         reconcile_workspace_budget()
                         self.command_runner(
                             self.build_progressive_command(
                                 input_path=input_path,
                                 output_path=progressive_path,
-                                max_duration_seconds=worker_duration_limit,
+                                max_duration_seconds=source_metadata.duration_seconds,
+                                dimensions=progressive_dimensions,
                             ),
                             workspace,
                         )
@@ -1739,7 +1924,17 @@ class FFmpegMediaProcessor:
                             raise MediaProcessingError(
                                 "The FFmpeg worker did not produce a progressive fallback."
                             )
-                        progressive_key = _safe_child_key(source_key, "renditions/progressive.mp4")
+                        progressive_metadata = self.video_probe(progressive_path)
+                        if (
+                            progressive_metadata.width,
+                            progressive_metadata.height,
+                        ) != progressive_dimensions or abs(
+                            progressive_metadata.duration_seconds - measured_duration
+                        ) > 0.5:
+                            raise MediaProcessingError(
+                                "The progressive video metadata does not match."
+                            )
+                        progressive_key = _safe_child_key(output_root, "renditions/progressive.mp4")
                         output_bytes += self._store_file(
                             storage,
                             path=progressive_path,
@@ -1754,12 +1949,14 @@ class FFmpegMediaProcessor:
                                 protocol=DeliveryProtocol.PROGRESSIVE.value,
                                 content_type=_PROGRESSIVE_CONTENT_TYPE,
                                 object_key=progressive_key,
+                                width=progressive_metadata.width,
+                                height=progressive_metadata.height,
                                 name="progressive",
                             )
                         )
                     processed_captions = _copy_captions(
                         storage,
-                        source_key=source_key,
+                        source_key=output_root,
                         captions=caption_inputs,
                         max_bytes=self.quota.max_caption_bytes,
                         created_keys=created_keys,
@@ -1771,12 +1968,14 @@ class FFmpegMediaProcessor:
                 renditions=tuple(rendition_rows),
                 hls_manifest=HlsManifestMetadata(
                     master_object_key=master_key,
-                    renditions=self.profiles,
+                    renditions=profiles,
                     caption_tracks=processed_captions,
                     object_keys=tuple(manifest_object_keys),
                 ),
                 captions=processed_captions,
                 duration_seconds=measured_duration,
+                width=source_metadata.width,
+                height=source_metadata.height,
                 output_bytes=output_bytes,
                 object_keys=tuple(created_keys),
             )
@@ -1804,6 +2003,7 @@ class FFmpegMediaProcessor:
         total_bytes = sum(path.stat().st_size for path in files)
         if total_bytes > remaining_bytes or total_bytes > self.quota.max_temp_bytes:
             raise MediaQuotaExceeded("The media output exceeds the processing quota.")
+        stored_bytes = 0
         for path in files:
             relative = path.relative_to(directory).as_posix()
             content_type = (
@@ -1813,15 +2013,15 @@ class FFmpegMediaProcessor:
                 if path.suffix.lower() == ".ts"
                 else "application/octet-stream"
             )
-            self._store_file(
+            stored_bytes += self._store_file(
                 storage,
                 path=path,
                 object_key=_safe_child_key(object_prefix, relative),
                 content_type=content_type,
-                max_bytes=remaining_bytes,
+                max_bytes=remaining_bytes - stored_bytes,
                 created_keys=created_keys,
             )
-        return total_bytes
+        return stored_bytes
 
     def _store_file(
         self,
@@ -1835,15 +2035,115 @@ class FFmpegMediaProcessor:
     ) -> int:
         if len(created_keys) >= self.quota.max_output_files:
             raise MediaQuotaExceeded("The FFmpeg worker produced too many output files.")
-        size = path.stat().st_size
+        _ensure_new_output(storage, object_key)
+        return _store_ffmpeg_output(
+            storage,
+            path=path,
+            object_key=object_key,
+            content_type=content_type,
+            max_bytes=max_bytes,
+            created_keys=created_keys,
+        )
+
+
+def _store_ffmpeg_output(
+    storage: PrivateObjectStorage,
+    *,
+    path: Path,
+    object_key: str,
+    content_type: str,
+    max_bytes: int,
+    created_keys: list[str],
+) -> int:
+    """Hash and store generated video files in bounded chunks, using one open fd.
+
+    Whole-file buffering is permitted only for legacy adapters' small outputs.
+    The production writer must provide atomic verified streaming for larger files.
+    This byte transfer is not a READY/publication transition.
+    """
+    buffer_bytes = 1024 * 1024
+    try:
+        before = path.lstat()
+        if not stat.S_ISREG(before.st_mode) or getattr(before, "st_file_attributes", 0) & 0x400:
+            raise MediaProcessingError("The FFmpeg worker produced an unsafe output.")
+        size = before.st_size
         if size <= 0:
             raise MediaProcessingError("The FFmpeg worker produced an empty output.")
         if size > max_bytes:
             raise MediaQuotaExceeded("The media output exceeds the processing quota.")
-        _ensure_new_output(storage, object_key)
-        created_keys.append(object_key)
-        storage.put(object_key=object_key, body=path.read_bytes(), content_type=content_type)
-        return size
+        streaming = isinstance(storage, StreamingPrivateObjectWriter)
+        if not streaming and size > buffer_bytes:
+            raise MediaProcessingError("Large video outputs require a streaming storage adapter.")
+        with path.open("rb", buffering=0) as stream:
+            identity = _identity(before)
+
+            def check_identity() -> None:
+                if (
+                    _identity(os.fstat(stream.fileno())) != identity
+                    or _identity(path.lstat()) != identity
+                    or path.is_symlink()
+                ):
+                    raise MediaProcessingError("The FFmpeg worker output changed during storage.")
+
+            def chunks() -> Iterator[bytes]:
+                read_bytes = 0
+                check_identity()
+                while chunk := stream.read(buffer_bytes):
+                    check_identity()
+                    read_bytes += len(chunk)
+                    if read_bytes > size:
+                        raise MediaProcessingError("The FFmpeg worker output length changed.")
+                    yield chunk
+                check_identity()
+                if read_bytes != size:
+                    raise MediaProcessingError("The FFmpeg worker output length changed.")
+
+            digest = hashlib.sha256()
+            for chunk in chunks():
+                digest.update(chunk)
+            checksum = digest.hexdigest()
+            stream.seek(0)
+            # A key becomes ours only after an atomic create-only write succeeds.
+            # Head-then-put is not ownership: another attempt may win that race.
+            # An uncertain post-publish OS failure conservatively leaves a
+            # charged orphan, never permission to delete somebody else's bytes.
+            if type(storage) is VideoFileStorage:
+                stored = storage.put_stream(
+                    object_key=object_key,
+                    chunks=chunks(),
+                    content_type=content_type,
+                    content_length=size,
+                    checksum_sha256=checksum,
+                    create_only=True,
+                )
+                created_keys.append(object_key)
+            elif isinstance(storage, StreamingPrivateObjectWriter):
+                created_keys.append(object_key)
+                stored = storage.put_stream(
+                    object_key=object_key,
+                    chunks=chunks(),
+                    content_type=content_type,
+                    content_length=size,
+                    checksum_sha256=checksum,
+                )
+            else:
+                created_keys.append(object_key)
+                body = b"".join(chunks())
+                if hashlib.sha256(body).hexdigest() != checksum:
+                    raise MediaProcessingError("The FFmpeg worker output checksum changed.")
+                stored = storage.put(object_key=object_key, body=body, content_type=content_type)
+            check_identity()
+            if (
+                stored.object_key != object_key
+                or stored.content_length != size
+                or stored.content_type != content_type
+                or stored.checksum_sha256 != checksum
+                or not stored.storage_version_id
+            ):
+                raise MediaProcessingError("The stored video output metadata does not match.")
+            return size
+    except OSError as error:
+        raise MediaProcessingError("The FFmpeg worker output could not be stored.") from error
 
 
 LocalFFmpegProcessor = FFmpegMediaProcessor

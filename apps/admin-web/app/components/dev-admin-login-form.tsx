@@ -52,6 +52,7 @@ export function DevAdminLoginForm({
           String(values.get("password") ?? ""),
           String(values.get("tenant_id") ?? ""),
         );
+        // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- New authentication cookies require a fresh document and route cache.
         window.location.assign("/");
         return;
       }
@@ -77,6 +78,7 @@ export function DevAdminLoginForm({
         }
         throw new Error(safeError(payload));
       }
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- New authentication cookies require a fresh document and route cache.
       window.location.assign("/");
     } catch (requestError) {
       setError(

@@ -97,7 +97,7 @@ it("requires a choice, sends stable option ID, shows backend explanation, and ad
   expect(next).toHaveBeenCalledWith(false);
 });
 
-it("links saved practice to the real academy username and leaderboard section", async () => {
+it("links to a separate academy leaderboard without coupling it to username claiming", async () => {
   vi.mocked(api.catalog).mockResolvedValue({
     items: [],
     mode: "editorial_preview",
@@ -106,9 +106,55 @@ it("links saved practice to the real academy username and leaderboard section", 
   });
   await act(async () => root.render(<PracticeArcade api={api} durable />));
   const link = container.querySelector<HTMLAnchorElement>(
-    'a[href="/profile#community-identity-title"]',
+    'a[href="/leaderboard"]',
   );
-  expect(link?.textContent).toContain("Username & leaderboard");
+  expect(link?.getAttribute("aria-label")).toBe("Academy leaderboard");
+  expect(
+    container.querySelector('a[href*="community-identity-title"]'),
+  ).toBeNull();
+});
+
+it.each([
+  [true, "success", "celebrate", "Nicely done!"],
+  [false, "retry", "encourage", "Try another approach"],
+  [null, "reflection", "ready", "A thoughtful next step"],
+] as const)(
+  "uses distinct truthful feedback for a %s reference match",
+  async (match, tone, mood, title) => {
+    check.mockResolvedValueOnce({ ...useful, reference_match: match });
+    await mount();
+    expect(container.querySelector("[data-feedback-tone]")).toBeNull();
+    await click(container.querySelector<HTMLInputElement>('input[value="0"]')!);
+    await click(button("Check my response"));
+    const stage = container.querySelector(`[data-feedback-tone="${tone}"]`);
+    expect(stage).not.toBeNull();
+    expect(stage?.querySelector(`svg[data-mood="${mood}"]`)).not.toBeNull();
+    expect(stage?.querySelector("h1")?.textContent).toBe(title);
+    expect(stage?.textContent).toContain(useful.explanation);
+    if (match === false) {
+      expect(
+        stage?.querySelector('[role="status"]')?.textContent,
+      ).not.toContain(useful.explanation);
+      const reference = stage?.querySelector("details");
+      expect(reference?.querySelector("summary")?.textContent).toBe(
+        "Reference explanation",
+      );
+      expect(reference?.open).toBe(false);
+      expect(reference?.textContent).toContain(useful.explanation);
+    }
+    expect(stage?.querySelectorAll("i").length).toBe(match === true ? 12 : 0);
+    expect(stage?.textContent).not.toMatch(/credits|XP|streak|score/);
+    expect(next).not.toHaveBeenCalled();
+  },
+);
+
+it("does not show a success reaction when checking fails", async () => {
+  check.mockRejectedValueOnce(new TypeError("offline"));
+  await mount();
+  await click(container.querySelector<HTMLInputElement>('input[value="0"]')!);
+  await click(button("Check my response"));
+  expect(container.querySelector("[data-feedback-tone]")).toBeNull();
+  expect(container.querySelector('[role="alert"]')).not.toBeNull();
 });
 
 it("keeps the response on network failure and retries without erasing choices", async () => {
@@ -124,7 +170,7 @@ it("keeps the response on network failure and retries without erasing choices", 
   ).toBe(true);
   await click(button("Check my response"));
   expect(check).toHaveBeenCalledTimes(2);
-  expect(container.textContent).toContain("That’s a useful move");
+  expect(container.textContent).toContain("Nicely done!");
 });
 
 it("supports revision after nonmatching feedback without claiming a score", async () => {
@@ -132,9 +178,7 @@ it("supports revision after nonmatching feedback without claiming a score", asyn
   await mount();
   await click(container.querySelector<HTMLInputElement>('input[value="1"]')!);
   await click(button("Check my response"));
-  expect(container.textContent).toContain(
-    "Here’s a useful way to think about it",
-  );
+  expect(container.textContent).toContain("Try another approach");
   await click(button("Try a different answer"));
   await click(container.querySelector<HTMLInputElement>('input[value="0"]')!);
   await click(button("Check my response"));
@@ -291,6 +335,45 @@ const catalogSet: PracticeSummary = {
   item_count: 5,
 };
 
+it("keeps game descriptions behind an accessible info action and returns focus on Escape", async () => {
+  vi.spyOn(HTMLDialogElement.prototype, "showModal").mockImplementation(
+    function (this: HTMLDialogElement) {
+      this.open = true;
+    },
+  );
+  vi.spyOn(HTMLDialogElement.prototype, "close").mockImplementation(function (
+    this: HTMLDialogElement,
+  ) {
+    this.open = false;
+  });
+  await mountCatalog([catalogSet]);
+  const card = container.querySelector("article")!;
+  expect(card.textContent).not.toContain(catalogSet.description);
+  const trigger = card.querySelector<HTMLButtonElement>(
+    'button[aria-haspopup="dialog"]',
+  )!;
+  expect(trigger.closest("a")).toBeNull();
+  await click(trigger);
+  const dialog = container.querySelector<HTMLDialogElement>("dialog[open]")!;
+  expect(trigger.getAttribute("aria-controls")).toBe(dialog.id);
+  expect(trigger.getAttribute("aria-expanded")).toBe("true");
+  expect(
+    document.getElementById(dialog.getAttribute("aria-describedby")!)
+      ?.textContent,
+  ).toBe(catalogSet.description);
+  expect(dialog.querySelector("a")?.getAttribute("href")).toBe(
+    `/practice?set=${catalogSet.id}`,
+  );
+  await act(async () =>
+    dialog.dispatchEvent(new Event("cancel", { cancelable: true })),
+  );
+  expect(container.querySelector("dialog")).toBeNull();
+  expect(document.activeElement).toBe(trigger);
+  expect(trigger.getAttribute("aria-expanded")).toBe("false");
+  expect(document.body.style.overflow).not.toBe("hidden");
+  expect(api.check).not.toHaveBeenCalled();
+});
+
 it("features only an available set and uses its real title and prompt count", async () => {
   await mountCatalog([catalogSet]);
   const featured = container.querySelector(
@@ -319,11 +402,15 @@ it("keeps format labels beside decorative color and safely falls back for unknow
     catalogSet,
     { ...catalogSet, id: "other", kind: "gap", color: "unrecognized" },
   ]);
-  const cards = container.querySelectorAll("a[data-color]");
+  const cards = container.querySelectorAll("article[data-color]");
   expect(cards[0].getAttribute("data-color")).toBe("mint");
-  expect(cards[0].textContent).toContain("Conversation");
+  expect(cards[0].querySelector("a")?.getAttribute("aria-label")).toContain(
+    "Conversation",
+  );
   expect(cards[1].getAttribute("data-color")).toBe("cobalt");
-  expect(cards[1].textContent).toContain("Fill the gap");
+  expect(cards[1].querySelector("a")?.getAttribute("aria-label")).toContain(
+    "Fill the gap",
+  );
 });
 
 it("response readiness rejects incomplete or duplicate arrangements", () => {

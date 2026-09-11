@@ -26,19 +26,25 @@ async function closeServer(server: Server): Promise<void> {
   });
 }
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+});
 
 describe("development local API upstream transport", () => {
   it("bypasses unavailable .localhost DNS while preserving the canonical Host", async () => {
     let observedHost: string | undefined;
     let observedAddress: string | undefined;
     let observedForwarded: string | undefined;
+    let observedEncoding: string | undefined;
     let observedBody = "";
     const { server, origin } = await listeningServer((request, response) => {
       observedHost = request.headers.host;
       observedAddress = request.socket.remoteAddress;
       const forwarded = request.headers["x-forwarded-host"];
       observedForwarded = typeof forwarded === "string" ? forwarded : undefined;
+      const encoding = request.headers["accept-encoding"];
+      observedEncoding = typeof encoding === "string" ? encoding : undefined;
       request.setEncoding("utf8");
       request.on("data", (chunk: string) => {
         observedBody += chunk;
@@ -70,6 +76,7 @@ describe("development local API upstream transport", () => {
       expect(observedHost).toBe(new URL(origin).host);
       expect(observedAddress).toBe("127.0.0.1");
       expect(observedForwarded).toBeUndefined();
+      expect(observedEncoding).toBe("identity");
       expect(observedBody).toBe(JSON.stringify({ local: true }));
     } finally {
       await closeServer(server);
@@ -83,6 +90,27 @@ describe("development local API upstream transport", () => {
         signal: new AbortController().signal,
       }),
     ).rejects.toThrow("Local API upstream is unavailable or cancelled.");
+  });
+
+  it("fails closed before native IO when network diagnostics are enabled", async () => {
+    vi.stubEnv("NODE_DEBUG", "http");
+    let received = false;
+    const { server, origin } = await listeningServer((_request, response) => {
+      received = true;
+      response.writeHead(200);
+      response.end("unexpected");
+    });
+    try {
+      await expect(
+        fetchDevelopmentLocalApiUpstream(`${origin}/v1/me`, {
+          redirect: "manual",
+          signal: new AbortController().signal,
+        }),
+      ).rejects.toThrow("Local API upstream is unavailable or cancelled.");
+      expect(received).toBe(false);
+    } finally {
+      await closeServer(server);
+    }
   });
 
   it("sanitizes native transport failures and follows no redirects", async () => {
@@ -99,6 +127,26 @@ describe("development local API upstream transport", () => {
       expect(response.headers.get("location")).toBe(
         "https://evil.example.test",
       );
+    } finally {
+      await closeServer(server);
+    }
+  });
+
+  it("fails closed when an upstream ignores identity encoding", async () => {
+    const { server, origin } = await listeningServer((_request, response) => {
+      response.writeHead(200, {
+        "content-encoding": "gzip",
+        "content-type": "application/json",
+      });
+      response.end();
+    });
+    try {
+      await expect(
+        fetchDevelopmentLocalApiUpstream(`${origin}/v1/me`, {
+          redirect: "manual",
+          signal: new AbortController().signal,
+        }),
+      ).rejects.toThrow("Local API upstream is unavailable or cancelled.");
     } finally {
       await closeServer(server);
     }

@@ -1558,6 +1558,10 @@ describe("connected learner ready states", () => {
         state,
         missing_activity_ids: state === "locked" ? ["earlier-required"] : [],
       },
+      allowed_actions:
+        state === "available" || state === "in_progress"
+          ? (["save_draft"] as ActivityResponse["allowed_actions"])
+          : [],
     });
     return {
       program_id: "program-1",
@@ -1694,6 +1698,7 @@ describe("connected learner ready states", () => {
     expect(chapters[1][2]).toContain("Discovery decisions");
     expect(chapters[1][2]).toContain("1 of 3 activities complete");
     expect(chapters[1][2]).not.toContain("2 of 3 activities complete");
+    expect(chapters[1][2]).not.toContain("· Available");
   });
 
   it("keeps the primary continue action on the canonical actionable activity", () => {
@@ -1703,10 +1708,64 @@ describe("connected learner ready states", () => {
       label: "Continue learning",
     });
     learning.modules[1].activities[1].state = "in_progress";
+    learning.modules[1].activities[1].allowed_actions = ["save_draft"];
     expect(learningPathContinueTarget(learning)).toEqual({
       href: ROUTES.activity("review-step"),
       label: "Continue learning",
     });
+  });
+
+  it("shares server guidance across the course path and enrollment card", () => {
+    const learning = learningModulesFixture();
+    const later = {
+      ...learning.modules[1].activities[2],
+      id: "required-later",
+      title: "Server-selected next step",
+    };
+    learning.modules[1].activities.push(later);
+    learning.projection.next_activity_id = later.id;
+    expect(learningPathContinueTarget(learning).href).toBe(
+      ROUTES.activity(later.id),
+    );
+    const html = renderToStaticMarkup(
+      createElement(LearnerHomeEnrollmentCard, { learning }),
+    );
+    expect(html).toContain(`href="${ROUTES.activity(later.id)}"`);
+    expect(html).toContain(later.title);
+    expect(html).not.toContain(`href="${ROUTES.activity("available-step")}"`);
+  });
+
+  it("keeps an explicit server no-action result out of every continue CTA", () => {
+    const learning = learningModulesFixture();
+    learning.projection.next_activity_id = null;
+    expect(learningPathContinueTarget(learning).href).toBe(
+      ROUTES.module(learning.program_slug, "current-chapter"),
+    );
+    const html = renderToStaticMarkup(
+      createElement(LearnerHomeEnrollmentCard, { learning }),
+    );
+    expect(html).not.toContain(`href="${ROUTES.activity("available-step")}"`);
+    expect(html).not.toContain("Your next available step is");
+  });
+
+  it("does not revive a pointed activity without an allowed action", () => {
+    const learning = learningModulesFixture();
+    learning.projection.next_activity_id = "available-step";
+    learning.modules[1].activities[2].allowed_actions = [];
+    expect(learningPathContinueTarget(learning).href).toBe(
+      ROUTES.module(learning.program_slug, "current-chapter"),
+    );
+  });
+
+  it("keeps server guidance disabled for an offline enrollment card", () => {
+    const learning = markOfflineRead(learningModulesFixture(), 7_000);
+    learning.projection.next_activity_id = "available-step";
+    const html = renderToStaticMarkup(
+      createElement(LearnerHomeEnrollmentCard, { learning }),
+    );
+    expect(html).toContain('aria-disabled="true"');
+    expect(html).not.toContain(`href="${ROUTES.activity("available-step")}"`);
+    expect(html).toMatch(/reconnect/i);
   });
 
   it("uses a reviewable chapter rather than a locked first chapter when no activity is actionable", () => {
@@ -1748,6 +1807,16 @@ describe("connected learner ready states", () => {
     expect(html).toMatch(/awaiting review/i);
     expect(html).not.toContain('aria-disabled="true"');
     expect(html).not.toMatch(/\bcompleted\b/i);
+  });
+
+  it("keeps ready activity rows action-first without repeating a ready label", () => {
+    const activity = learningModulesFixture().modules[1].activities[2];
+    const html = renderToStaticMarkup(
+      createElement(LearningActivityNavigation, { activity }),
+    );
+
+    expect(html).toContain(`href="${ROUTES.activity(activity.id)}"`);
+    expect(html).not.toMatch(/>Available<|>available<|· Available/);
   });
 
   it("removes both activity and chapter links for a cached learning response", () => {
