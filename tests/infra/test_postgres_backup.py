@@ -8,6 +8,7 @@ import subprocess
 import sys
 import time
 from configparser import ConfigParser
+from contextlib import nullcontext
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -433,6 +434,266 @@ def test_publish_retention_happens_after_upload_and_failed_upload_keeps_verified
     )
     assert dump.exists() and metadata.exists()
     assert not old_capture.exists()
+
+
+@pytest.fixture
+def local_backup_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
+    """Exercise run/publish/retention with isolated local pairs and no live services."""
+    events: list[str] = []
+    targets = [SimpleNamespace(environment="staging"), SimpleNamespace(environment="production")]
+    policy = backup.read_policy(FOUNDATION / "config/r2/free-tier-policy.conf")
+    policy["R2_POSTGRES_LOGICAL_RETENTION_POINTS_PER_ENVIRONMENT"] = 2
+    monkeypatch.setenv("AC_POSTGRES_BACKUP_HOST_ROOT", str(tmp_path))
+    monkeypatch.setattr(backup.os, "geteuid", lambda: 0, raising=False)
+    monkeypatch.setattr(backup, "read_policy", lambda _path: policy)
+    monkeypatch.setattr(backup, "resolve_targets", lambda **_kwargs: targets)
+    monkeypatch.setattr(backup, "assert_healthy", lambda target: events.append(target.environment))
+    monkeypatch.setattr(backup, "is_root_owned", lambda _path: True)
+    monkeypatch.setattr(backup, "fsync_directory", lambda _path: None)
+    monkeypatch.setattr(
+        backup, "prepare_directory", lambda path: path.mkdir(parents=True, exist_ok=True)
+    )
+    monkeypatch.setattr(backup, "environment_lock", lambda *_args: nullcontext())
+    monkeypatch.setattr(backup, "repository_lock", lambda *_args: nullcontext(17))
+    sequence = [0]
+
+    def capture(target, logical_dir, max_bytes):
+        assert max_bytes == 8 * 1024 * 1024
+        sequence[0] += 1
+        capture_dir = logical_dir / (f"20260911T000000.{sequence[0]:06d}Z-101-{target.environment}")
+        capture_dir.mkdir()
+        dump, metadata = capture_dir / "backup.dump", capture_dir / "metadata.json"
+        dump.write_bytes(b"verified synthetic dump")
+        metadata.write_text("{}", encoding="utf-8")
+        events.append(f"capture:{target.environment}")
+        return dump, metadata, {}
+
+    def upload(_dump, _metadata, environment, _projected, *, repository_lock_fd):
+        assert repository_lock_fd == 17
+        events.append(f"upload:{environment}")
+
+    monkeypatch.setattr(backup, "capture_dump", capture)
+    monkeypatch.setattr(backup, "upload_dump", upload)
+    monkeypatch.setattr(backup, "run_r2_guard", lambda _projected: events.append("guard"))
+    return SimpleNamespace(
+        root=tmp_path,
+        events=events,
+        targets=targets,
+        policy=policy,
+        capture=capture,
+        sequence=sequence,
+        args=SimpleNamespace(environment=None, capture_only=False, dry_run=False),
+    )
+
+
+def test_capture_only_keeps_pairs_without_any_offsite_operation(local_backup_run) -> None:
+    run = local_backup_run
+    run.args.capture_only = True
+    backup.run(run.args)
+    assert "guard" not in run.events
+    assert not any(event.startswith("upload:") for event in run.events)
+    assert len(list(run.root.rglob("backup.dump"))) == 2
+    assert len(list(run.root.rglob("metadata.json"))) == 2
+
+
+@pytest.mark.parametrize("capture_only", [False, True])
+def test_dry_run_never_captures_or_prunes(local_backup_run, capture_only: bool) -> None:
+    run = local_backup_run
+    run.args.dry_run = True
+    run.args.capture_only = capture_only
+    backup.run(run.args)
+    assert run.events == ["staging", "production"] + ([] if capture_only else ["guard"])
+    assert not list(run.root.iterdir())
+
+
+def test_quota_failure_retains_both_local_pairs_and_remains_failed(
+    local_backup_run, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run = local_backup_run
+
+    def reject(_projected):
+        run.events.append("guard:rejected")
+        raise backup.BackupError("R2 usage is not safe.")
+
+    monkeypatch.setattr(backup, "run_r2_guard", reject)
+    for _attempt in range(4):
+        with pytest.raises(backup.BackupError, match="staging, production") as failure:
+            backup.run(run.args)
+        assert "verified local pair was retained" in str(failure.value)
+    assert run.events[2:6] == [
+        "capture:staging",
+        "guard:rejected",
+        "capture:production",
+        "guard:rejected",
+    ]
+    assert not any(event.startswith("upload:") for event in run.events)
+    # Four repeated failures still retain exactly two complete pairs per environment.
+    assert len(list(run.root.rglob("backup.dump"))) == 4
+    assert len(list(run.root.rglob("metadata.json"))) == 4
+    assert run.sequence[0] == 8
+
+
+def test_successful_offsite_write_follows_capture_and_guard(local_backup_run) -> None:
+    run = local_backup_run
+    backup.run(run.args)
+    assert run.events == [
+        "staging",
+        "production",
+        "capture:staging",
+        "guard",
+        "upload:staging",
+        "capture:production",
+        "guard",
+        "upload:production",
+    ]
+
+
+def test_unsafe_ring_blocks_capture_before_any_offsite_call(
+    local_backup_run, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run = local_backup_run
+    run.targets.pop()
+    run.args.capture_only = True
+    backup.run(run.args)
+    metadata = next(run.root.rglob("metadata.json"))
+    metadata.unlink()
+    run.events.clear()
+    with pytest.raises(backup.BackupError, match="incomplete pair"):
+        backup.run(run.args)
+    assert run.events == ["staging"]
+    assert run.sequence[0] == 1
+    assert metadata.parent.exists()
+
+
+def test_failed_retention_prevents_repeated_capture_growth(
+    local_backup_run, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run = local_backup_run
+    run.targets.pop()
+    run.args.capture_only = True
+    backup.run(run.args)
+    backup.run(run.args)
+
+    def failed_remove(*_args, **_kwargs):
+        raise OSError("synthetic-sensitive-filesystem-detail")
+
+    def reject(_projected):
+        raise backup.BackupError("R2 usage is not safe.")
+
+    monkeypatch.setattr(backup, "remove_capture_directory", failed_remove)
+    monkeypatch.setattr(backup, "run_r2_guard", reject)
+    run.args.capture_only = False
+    with pytest.raises(backup.BackupError, match="local retention could not complete"):
+        backup.run(run.args)
+    assert run.sequence[0] == 3
+    for _attempt in range(3):
+        with pytest.raises(backup.BackupError) as failure:
+            backup.run(run.args)
+        assert "synthetic-sensitive" not in str(failure.value)
+        assert run.sequence[0] == 3
+        assert len(list(run.root.rglob("backup.dump"))) == 3
+
+
+def test_capture_timeout_is_sanitized_and_other_environment_still_captures(
+    local_backup_run, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run = local_backup_run
+    run.args.capture_only = True
+
+    def capture(target, logical_dir, max_bytes):
+        if target.environment == "staging":
+            raise subprocess.TimeoutExpired(
+                ["synthetic-sensitive-command"], 1, output="synthetic-sensitive-output"
+            )
+        return run.capture(target, logical_dir, max_bytes)
+
+    monkeypatch.setattr(backup, "capture_dump", capture)
+    with pytest.raises(backup.BackupError, match="failed for staging") as failure:
+        backup.run(run.args)
+    assert "synthetic-sensitive" not in str(failure.value)
+    assert "local pair was retained" not in str(failure.value)
+    assert "capture:production" in run.events
+    assert len(list(run.root.rglob("backup.dump"))) == 1
+
+
+def test_retry_preserves_fresh_pair_after_clock_rollback_and_retention_failure(
+    local_backup_run, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run = local_backup_run
+    run.targets.pop()
+    run.policy["R2_POSTGRES_LOGICAL_RETENTION_POINTS_PER_ENVIRONMENT"] = 1
+    run.args.capture_only = True
+    backup.run(run.args)
+    old_pair = next(run.root.rglob("backup.dump")).parent
+    fresh_pair = old_pair.parent / "20260910T000000.000000Z-102-staging"
+    dump, metadata = fresh_pair / "backup.dump", fresh_pair / "metadata.json"
+
+    def backward_clock_capture(*_args):
+        fresh_pair.mkdir()
+        dump.write_bytes(b"fresh verified capture with earlier wall-clock timestamp")
+        metadata.write_text("{}", encoding="utf-8")
+        return dump, metadata, {}
+
+    monkeypatch.setattr(backup, "capture_dump", backward_clock_capture)
+    original_rename = Path.rename
+
+    def fail_before_prune_rename(path, target):
+        if path == old_pair:
+            raise OSError("synthetic-sensitive-retention-failure")
+        return original_rename(path, target)
+
+    def reject(*_args):
+        raise backup.BackupError("R2 usage is not safe.")
+
+    monkeypatch.setattr(backup, "run_r2_guard", reject)
+    run.args.capture_only = False
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "rename", fail_before_prune_rename)
+        with pytest.raises(backup.BackupError, match="local retention could not complete"):
+            backup.run(run.args)
+
+    # Retention can now run again, but timestamp sorting would delete the fresh
+    # pair before a replacement exists. Refuse that guess even if capture fails.
+    def failed_capture(*_args):
+        pytest.fail("No new capture is allowed while the previous ring is over its bound.")
+
+    monkeypatch.setattr(backup, "capture_dump", failed_capture)
+    with pytest.raises(backup.BackupError, match="existing pairs were preserved"):
+        backup.run(run.args)
+    assert old_pair.exists() and dump.exists() and metadata.exists()
+
+
+@pytest.mark.parametrize("capture_only", [False, True])
+def test_current_capture_survives_retention_when_wall_clock_moves_backward(
+    local_backup_run, monkeypatch: pytest.MonkeyPatch, capture_only: bool
+) -> None:
+    run = local_backup_run
+    run.targets.pop()
+    run.args.capture_only = True
+    backup.run(run.args)
+    backup.run(run.args)
+    original = next(run.root.rglob("backup.dump")).parent
+    earlier = original.parent / "20260910T000000.000000Z-102-staging"
+    earlier.mkdir()
+    dump, metadata = earlier / "backup.dump", earlier / "metadata.json"
+    dump.write_bytes(b"verified newest pair after clock rollback")
+    metadata.write_text("{}", encoding="utf-8")
+
+    def reject(*_args):
+        raise backup.BackupError("R2 usage is not safe.")
+
+    def publish():
+        backup.publish_snapshot(
+            dump, metadata, "staging", 1, capture_only=capture_only, uploader=reject, keep_points=1
+        )
+
+    if capture_only:
+        publish()
+    else:
+        with pytest.raises(backup.BackupError, match="local pair was retained"):
+            publish()
+    assert dump.exists() and metadata.exists()
+    assert list(earlier.parent.iterdir()) == [earlier]
 
 
 def test_timer_and_unit_are_persistent_bounded_and_hardened() -> None:

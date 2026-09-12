@@ -1037,7 +1037,13 @@ def capture_dump(
         raise
 
 
-def prune_local_ring(logical_dir: Path, keep_points: int) -> None:
+def prune_local_ring(
+    logical_dir: Path,
+    keep_points: int,
+    retained_capture: Path | None = None,
+    *,
+    validate_only: bool = False,
+) -> None:
     environment = logical_dir.parent.name
     if environment not in ENVIRONMENTS or keep_points <= 0:
         raise BackupError("The local logical-backup ring identity is invalid.")
@@ -1056,7 +1062,25 @@ def prune_local_ring(logical_dir: Path, keep_points: int) -> None:
         ):
             raise BackupError("The local logical-backup ring contains an incomplete pair.")
         captures.append(candidate)
-    recent_captures = set(captures[-keep_points:])
+    if validate_only:
+        # A previous failed retention may have left the actually newest pair
+        # with an older CLOCK_REALTIME filename. Never guess which valid pair
+        # to delete before its replacement has been captured successfully.
+        if len(captures) > keep_points:
+            raise BackupError(
+                "The local logical-backup ring exceeds its retention bound; "
+                "existing pairs were preserved and no new capture was started."
+            )
+        return
+    if retained_capture is None:
+        recent_captures = set(captures[-keep_points:])
+    else:
+        if retained_capture not in captures:
+            raise BackupError("The retained logical capture is not a verified ring member.")
+        other_captures = [capture for capture in captures if capture != retained_capture]
+        recent_captures = {retained_capture}
+        if keep_points > 1:
+            recent_captures.update(other_captures[-(keep_points - 1) :])
     for capture_dir in captures:
         if capture_dir in recent_captures:
             continue
@@ -1328,7 +1352,7 @@ def publish_snapshot(
     *,
     capture_only: bool,
     uploader: Callable[[Path, Path, str, int], None] = upload_dump,
-    pruner: Callable[[Path, int], None] = prune_local_ring,
+    pruner: Callable[[Path, int, Path | None], None] = prune_local_ring,
     keep_points: int,
 ) -> None:
     if (
@@ -1341,15 +1365,26 @@ def publish_snapshot(
     if not capture_only:
         try:
             uploader(dump_path, metadata_path, environment, projected_bytes)
-        except Exception:
-            # Bound repeated off-host failures while always retaining the
-            # just-verified dump, which is the newest ring member.
-            with contextlib.suppress(Exception):
-                pruner(logical_dir, keep_points)
-            raise
+        except Exception as upload_error:
+            # Protect this exact pair even if CLOCK_REALTIME moved backward.
+            try:
+                pruner(logical_dir, keep_points, dump_path.parent)
+            except Exception:
+                raise BackupError(
+                    "The off-host logical snapshot failed and local retention could not "
+                    "complete; the verified local dump was retained."
+                ) from upload_error
+            detail = (
+                str(upload_error)
+                if isinstance(upload_error, BackupError)
+                else "Bounded off-host operation failed."
+            )
+            raise BackupError(
+                f"Off-host upload failed; the verified local pair was retained. {detail}"
+            ) from upload_error
     # Retention is deliberately after upload. A failed off-host write leaves
     # the verified local dump and its metadata in the bounded ring.
-    pruner(logical_dir, keep_points)
+    pruner(logical_dir, keep_points, dump_path.parent)
 
 
 def run(args: argparse.Namespace) -> None:
@@ -1367,45 +1402,72 @@ def run(args: argparse.Namespace) -> None:
     targets = resolve_targets(host_root=host_root, requested_environment=args.environment)
     for target in targets:
         assert_healthy(target)
-    run_r2_guard(projected_bytes)
     if args.dry_run:
+        if not args.capture_only:
+            run_r2_guard(projected_bytes)
         return
+    failures: list[tuple[str, str]] = []
     for target in targets:
         logical_dir = host_path(host_root, BACKUP_ROOT) / target.environment / "logical"
-        with environment_lock(target.environment, host_root):
-            dump_path, metadata_path, _metadata = capture_dump(target, logical_dir, max_dump_bytes)
+        try:
+            with environment_lock(target.environment, host_root):
+                # A failed upload must not prevent the next local recovery point.
+                # A failed retention pass must prevent another capture from
+                # accumulating beyond the ring plus one in-flight pair.
+                prepare_directory(logical_dir)
+                prune_local_ring(logical_dir, keep_points, validate_only=True)
+                dump_path, metadata_path, _metadata = capture_dump(
+                    target, logical_dir, max_dump_bytes
+                )
 
-            def locked_upload(
-                dump: Path,
-                metadata: Path,
-                environment: str,
-                projected: int,
-            ) -> None:
-                with repository_lock(host_root) as repository_lock_fd:
-                    run_r2_guard(projected)
-                    upload_dump(
-                        dump,
-                        metadata,
-                        environment,
-                        projected,
-                        repository_lock_fd=repository_lock_fd,
-                    )
+                def locked_upload(
+                    dump: Path,
+                    metadata: Path,
+                    environment: str,
+                    projected: int,
+                ) -> None:
+                    with repository_lock(host_root) as repository_lock_fd:
+                        run_r2_guard(projected)
+                        upload_dump(
+                            dump,
+                            metadata,
+                            environment,
+                            projected,
+                            repository_lock_fd=repository_lock_fd,
+                        )
 
-            publish_snapshot(
-                dump_path,
-                metadata_path,
-                target.environment,
-                projected_bytes,
-                capture_only=args.capture_only,
-                uploader=locked_upload,
-                keep_points=keep_points,
+                publish_snapshot(
+                    dump_path,
+                    metadata_path,
+                    target.environment,
+                    projected_bytes,
+                    capture_only=args.capture_only,
+                    uploader=locked_upload,
+                    keep_points=keep_points,
+                )
+        except (BackupError, OSError, subprocess.SubprocessError) as error:
+            # BackupError messages are curated; never print raw filesystem or
+            # subprocess diagnostics. Continue the other exact environment's
+            # local capture, but do not turn partial/off-host failure into success.
+            detail = (
+                str(error)
+                if isinstance(error, BackupError)
+                else "Bounded local operation failed before completion."
             )
+            failures.append((target.environment, detail))
+    if failures:
+        environments = ", ".join(environment for environment, _detail in failures)
+        raise BackupError(
+            f"Logical backup failed for {environments}. First failure: {failures[0][1]}"
+        )
 
 
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
     result.add_argument(
-        "--dry-run", action="store_true", help="validate release, health, and R2 projection only"
+        "--dry-run",
+        action="store_true",
+        help="validate release and health; also validate R2 unless --capture-only",
     )
     result.add_argument(
         "--capture-only",
