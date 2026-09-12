@@ -1423,6 +1423,230 @@ class JobRepository:
             claimed.append(row)
         return claimed
 
+    async def claim_bootstrap_external(
+        self,
+        job: Job | UUID,
+        *,
+        kind: str,
+        recovery_generation: int,
+        lease_for: timedelta = timedelta(minutes=2),
+        now: datetime | None = None,
+    ) -> Job:
+        """Claim one approved bootstrap effect while recovery remains held.
+
+        This is intentionally narrower than :meth:`claim`: it requires the
+        exact job kind and generation, never scans the queue, and only admits a
+        held or pre-dispatch retryable row.  A job whose provider dispatch has
+        started without a receipt is never reclaimed here; it remains an
+        explicit ambiguity for the normal recovery path.
+        """
+
+        _lease_seconds(lease_for)
+        normalized_kind = _required_text(kind, "kind", 128)
+        if type(recovery_generation) is not int or recovery_generation < 1:
+            raise ValueError("recovery_generation must be a positive integer")
+        state = await RecoveryStateRepository(self._session).require_held(lock=True)
+        if state.generation != recovery_generation:
+            raise ReconciliationRequiredError(
+                "bootstrap job belongs to a stale recovery generation"
+            )
+        job_id = job.id if isinstance(job, Job) else job
+        current_time = _as_utc(now or utc_now())
+        row = cast(
+            Job | None,
+            await self._session.scalar(
+                select(Job)
+                .where(
+                    Job.id == job_id,
+                    Job.kind == normalized_kind,
+                    Job.external_side_effect.is_(True),
+                    Job.recovery_generation == recovery_generation,
+                    Job.attempt_count < Job.max_attempts,
+                    Job.provider_receipt.is_(None),
+                    Job.dispatch_started_at.is_(None),
+                    Job.delivery_ambiguous_at.is_(None),
+                    or_(
+                        Job.status == JobStatus.HELD.value,
+                        and_(
+                            Job.status == JobStatus.RETRY_WAIT.value,
+                            Job.available_at <= func.now(),
+                        ),
+                        and_(
+                            Job.status == JobStatus.LEASED.value,
+                            Job.leased_until.is_not(None),
+                            Job.leased_until <= func.now(),
+                        ),
+                    ),
+                )
+                .with_for_update()
+            ),
+        )
+        if row is None:
+            raise LeaseLostError("bootstrap job is unavailable or already in progress")
+        token = uuid4()
+        row.status = JobStatus.LEASED.value
+        row.attempt_count += 1
+        row.lease_token = token
+        row.leased_until = current_time + lease_for
+        row.held_at = None
+        row.hold_reason = None
+        row.dead_lettered_at = None
+        row.last_error = None
+        row.updated_at = current_time
+        await self._session.flush()
+        return row
+
+    async def lock_bootstrap_dispatch(
+        self,
+        job: Job | UUID,
+        lease_token: UUID,
+        *,
+        kind: str,
+        recovery_generation: int,
+        provider_idempotency_key: str,
+    ) -> Job:
+        """Fence one approved held-state effect before its provider call."""
+
+        normalized_kind = _required_text(kind, "kind", 128)
+        _required_text(provider_idempotency_key, "provider_idempotency_key", 255)
+        if not isinstance(lease_token, UUID):
+            raise ValueError("lease_token must be a UUID")
+        if type(recovery_generation) is not int or recovery_generation < 1:
+            raise ValueError("recovery_generation must be a positive integer")
+        state = await RecoveryStateRepository(self._session).require_held(lock=True)
+        if state.generation != recovery_generation:
+            raise ReconciliationRequiredError(
+                "bootstrap dispatch belongs to a stale recovery generation"
+            )
+        job_id = job.id if isinstance(job, Job) else job
+        row = cast(
+            Job | None,
+            await self._session.scalar(
+                select(Job)
+                .where(
+                    Job.id == job_id,
+                    Job.kind == normalized_kind,
+                    Job.status == JobStatus.LEASED.value,
+                    Job.lease_token == lease_token,
+                    Job.leased_until > func.now(),
+                    Job.external_side_effect.is_(True),
+                    Job.recovery_generation == recovery_generation,
+                    Job.provider_receipt.is_(None),
+                    Job.dispatch_started_at.is_(None),
+                    Job.delivery_ambiguous_at.is_(None),
+                )
+                .with_for_update()
+            ),
+        )
+        if row is None:
+            raise LeaseLostError("bootstrap dispatch was fenced by lease or recovery state")
+        return row
+
+    async def record_bootstrap_dispatch_started(
+        self,
+        job: Job | UUID,
+        lease_token: UUID,
+        *,
+        kind: str,
+        recovery_generation: int,
+        provider_idempotency_key: str,
+    ) -> Job:
+        """Persist bootstrap dispatch evidence after canonical message resolution."""
+
+        normalized_kind = _required_text(kind, "kind", 128)
+        normalized_key = _required_text(
+            provider_idempotency_key,
+            "provider_idempotency_key",
+            255,
+        )
+        state = await RecoveryStateRepository(self._session).require_held(lock=True)
+        if state.generation != recovery_generation:
+            raise ReconciliationRequiredError(
+                "bootstrap dispatch belongs to a stale recovery generation"
+            )
+        job_id = job.id if isinstance(job, Job) else job
+        row = cast(
+            Job | None,
+            await self._session.scalar(
+                select(Job)
+                .where(
+                    Job.id == job_id,
+                    Job.kind == normalized_kind,
+                    Job.status == JobStatus.LEASED.value,
+                    Job.lease_token == lease_token,
+                    Job.leased_until > func.now(),
+                    Job.external_side_effect.is_(True),
+                    Job.recovery_generation == recovery_generation,
+                    Job.provider_receipt.is_(None),
+                    Job.dispatch_started_at.is_(None),
+                    Job.delivery_ambiguous_at.is_(None),
+                )
+                .with_for_update()
+            ),
+        )
+        if row is None:
+            raise LeaseLostError("bootstrap dispatch was fenced before provider effect")
+        current_time = utc_now()
+        row.provider_idempotency_key = normalized_key
+        row.dispatch_started_at = current_time
+        row.reconciled_at = None
+        row.reconciled_by = None
+        row.reconciliation_reason = None
+        row.updated_at = current_time
+        await self._session.flush()
+        return row
+
+    async def lock_bootstrap_effect(
+        self,
+        job: Job | UUID,
+        lease_token: UUID,
+        *,
+        kind: str,
+        recovery_generation: int,
+        provider_idempotency_key: str,
+    ) -> Job:
+        """Re-fence one already-recorded held-state effect for its provider call."""
+
+        normalized_kind = _required_text(kind, "kind", 128)
+        normalized_key = _required_text(
+            provider_idempotency_key,
+            "provider_idempotency_key",
+            255,
+        )
+        if not isinstance(lease_token, UUID):
+            raise ValueError("lease_token must be a UUID")
+        if type(recovery_generation) is not int or recovery_generation < 1:
+            raise ValueError("recovery_generation must be a positive integer")
+        state = await RecoveryStateRepository(self._session).require_held(lock=True)
+        if state.generation != recovery_generation:
+            raise ReconciliationRequiredError(
+                "bootstrap dispatch belongs to a stale recovery generation"
+            )
+        job_id = job.id if isinstance(job, Job) else job
+        row = cast(
+            Job | None,
+            await self._session.scalar(
+                select(Job)
+                .where(
+                    Job.id == job_id,
+                    Job.kind == normalized_kind,
+                    Job.status == JobStatus.LEASED.value,
+                    Job.lease_token == lease_token,
+                    Job.leased_until > func.now(),
+                    Job.external_side_effect.is_(True),
+                    Job.recovery_generation == recovery_generation,
+                    Job.provider_idempotency_key == normalized_key,
+                    Job.dispatch_started_at.is_not(None),
+                    Job.provider_receipt.is_(None),
+                    Job.delivery_ambiguous_at.is_(None),
+                )
+                .with_for_update()
+            ),
+        )
+        if row is None:
+            raise LeaseLostError("bootstrap effect was fenced before provider call")
+        return row
+
     async def renew(
         self,
         job: Job | UUID,
