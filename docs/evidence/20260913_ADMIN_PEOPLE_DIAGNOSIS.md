@@ -39,3 +39,33 @@ The first real browser attempts exposed two probe/label issues before any diagno
 The next attempt reached the new lookup and was denied by the development transport's existing exact route allowlist. The follow-up admits only POST lookup without query parameters and GET diagnosis for a UUID with one declared purpose; wrong methods, extra/duplicate query keys, and the Coach surface remain denied. Thirteen transport regression cases cover this boundary. Runtime browser validation keeps the already-started API on the original backend commit while validating that the later frontend-only commits leave all committed backend files unchanged; this avoids loading the separate unfinished email-context work into the API process.
 
 This is a separate follow-on to the recovery release candidate `f0a80f2ca120fb73ce17bb9cdc5b95faf490116d`. It is not included in that frozen deployment candidate. The release owner must integrate the reviewed commit and verify the exact deployed revision before claiming it live. No production database, provider, or deployment changes were made by this UI slice.
+
+## Canonical local browser acceptance
+
+Final receipt: external recovery packet
+`canonical-admin-people-20260912T232612Z/proof.json`, passed with frontend
+`5c0bb4c73802effcce132e8d9a6a4cfdf8b32e8f` and running API
+`c741d0fc413477bece2fabd5e11c3f1fae613368`. The probe verifies every committed
+API-to-frontend delta is Admin UI, shared transport/session UI, or evidence.
+The running backend was deliberately kept fixed while separate email changes
+were uncommitted; this is an explicit composite local proof.
+
+Normal Admin sign-in, explicit exact lookup, purpose/selection/confirmation,
+and canonical diagnosis returned the previously saved synthetic draft at
+revision 3 and unchanged completion 0 of 5. Read-only PostgreSQL snapshots of
+all six learning/enrollment tables remained equal. Both purpose-only access
+audits were committed before observation. Normal logout returned 204; the next
+read returned 401 and removed learner records, verified header, tenant context
+and privileged navigation. Diagnosis focus and keyboard disclosure passed.
+No page errors, blocked requests or horizontal overflow at 320/390/1440.
+Screenshots were inspected. The query field is intentionally masked.
+
+Earlier successful data-read receipts exposed the stale verified shell during
+visual inspection; commit 5c0bb4c fixes it and the final receipt supersedes them.
+The development transport correctly adds `private` to `no-store`; the probe
+checks the directive as a token rather than requiring one exact header string.
+
+Ordered release source: c741d0f, 93d4281, 4521823, 5c0bb4c. Independent Luna
+backend and frontend review, targeted transport/session/Coach regressions,
+static checks and the final local browser proof accompany this source. Exact
+integrated CI and deployment verification remain release-owner responsibilities.
