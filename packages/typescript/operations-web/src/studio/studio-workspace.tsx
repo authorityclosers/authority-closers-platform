@@ -10,11 +10,13 @@ import {
   ClipboardCheck,
   FilePenLine,
   Search,
+  Video,
 } from "lucide-react";
 import { LearningSymbol } from "@ac/ui";
 import { loadStudioPrograms, loadStudioReadiness } from "../admin-api";
 import { canUseStudioPermission, useAdminSession } from "../admin-session";
 import { LoadBoundary, useStudioData } from "./studio-runtime";
+import { StudioCourseCreate } from "./studio-course-create";
 import styles from "./studio-workspace.module.css";
 
 const courseHref = (id: string) => `/studio/programs/${id}`;
@@ -62,6 +64,7 @@ export function StudioDashboard() {
               </h1>
               <p>Good teaching starts with one clear next step.</p>
             </div>
+            <StudioCourseCreate onRefresh={retry} />
           </header>
           <section
             className={styles.overview}
@@ -116,15 +119,15 @@ export function StudioDashboard() {
                   ? canShapeNext
                     ? "PICK UP YOUR COURSE"
                     : "EXPLORE YOUR COURSE"
-                  : "YOUR COURSES"}
+                  : "MAKE ROOM FOR A GREAT IDEA"}
               </span>
-              <h2>{next?.title ?? "No courses assigned yet."}</h2>
+              <h2>{next?.title ?? "Your next course starts here."}</h2>
               <p>
                 {next
                   ? canShapeNext
                     ? "Shape the lessons, check the learner preview, and get your next version ready."
                     : "Review this course and the versions available to your account."
-                  : "Your assigned courses will appear here when they are ready."}
+                  : "Start with a course name. Build it one module at a time, with videos, questions and practice."}
               </p>
               <Link
                 className="button button-primary"
@@ -154,12 +157,13 @@ export function StudioDashboard() {
                 </li>
                 <li>
                   <span>
-                    <FilePenLine size={19} aria-hidden="true" />
+                    <Video size={19} aria-hidden="true" />
                   </span>
                   <div>
                     <strong>Bring the lessons to life</strong>
                     <p>
-                      Add content and choose the right format for each lesson.
+                      Add content, choose lesson formats and connect ready
+                      videos.
                     </p>
                   </div>
                 </li>

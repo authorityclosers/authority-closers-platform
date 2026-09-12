@@ -1,6 +1,8 @@
 import { AuthFlowPage } from "../components/auth-flow-page";
 import { OnboardingForm } from "../components/onboarding-form";
 import { SurfaceStatePanel } from "../components/surface-state";
+import { courseIntentHref, parseCourseIntent } from "../lib/course-intent";
+import { ROUTES } from "../lib/routes";
 import {
   onboardingHref,
   onboardingReturnHref,
@@ -13,7 +15,11 @@ import {
 } from "../lib/surface-state";
 
 type OnboardingPageProps = {
-  searchParams: Promise<{ state?: QueryValue; return?: QueryValue }>;
+  searchParams: Promise<{
+    state?: QueryValue;
+    return?: QueryValue;
+    course?: QueryValue;
+  }>;
 };
 
 export default async function OnboardingPage({
@@ -22,7 +28,8 @@ export default async function OnboardingPage({
   const query = await searchParams;
   const state = parseSurfaceState(query.state);
   const returnIntent = parseOnboardingReturnIntent(query.return);
-  const returnHref = onboardingReturnHref(returnIntent);
+  const courseIntent = parseCourseIntent(query.course);
+  const returnHref = onboardingReturnHref(returnIntent, courseIntent);
 
   return (
     <AuthFlowPage
@@ -45,12 +52,13 @@ export default async function OnboardingPage({
     >
       <SurfaceStatePanel
         state={state}
-        retryHref={onboardingHref(returnIntent)}
+        retryHref={onboardingHref(returnIntent, courseIntent)}
+        signInHref={courseIntentHref(ROUTES.login, courseIntent)}
         backHref={returnHref}
         pageHeadingPresent
       />
       {isContentVisible(state) ? (
-        <OnboardingForm returnHref={returnHref} />
+        <OnboardingForm returnHref={returnHref} courseIntent={courseIntent} />
       ) : null}
     </AuthFlowPage>
   );

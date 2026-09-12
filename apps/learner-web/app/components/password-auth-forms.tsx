@@ -9,14 +9,22 @@ import {
   MailCheck,
 } from "lucide-react";
 import Link from "next/link";
-import { type FormEvent, useEffect, useRef, useState } from "react";
-
 import {
-  GOOGLE_REGISTRATION_RETURN_PATH,
-  googleAuthStartUrl,
-} from "../lib/auth-links";
+  type FormEvent,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
+
+import { googleAuthReturnPath, googleAuthStartUrl } from "../lib/auth-links";
+import { courseIntentHref, type CourseIntent } from "../lib/course-intent";
 import { createLearnerApi } from "../lib/learner-api";
 import { ROUTES } from "../lib/routes";
+import {
+  LEARNER_CONSENT_COPY,
+  LEARNER_POLICY_VERSION,
+} from "../lib/learner-policy";
 import { userFacingRequestError } from "../lib/user-facing-error";
 
 function requestErrorMessage(error: unknown): string {
@@ -37,7 +45,21 @@ function fragmentToken(): string | null {
   return token;
 }
 
-export function RegistrationForm() {
+const subscribeRegistrationHydration = () => () => {};
+const registrationClientHydrated = () => true;
+const registrationServerHydrated = () => false;
+
+export function RegistrationForm({
+  courseIntent = null,
+}: {
+  courseIntent?: CourseIntent;
+}) {
+  const hydrated = useSyncExternalStore(
+    subscribeRegistrationHydration,
+    registrationClientHydrated,
+    registrationServerHydrated,
+  );
+  const loginHref = courseIntentHref(ROUTES.login, courseIntent);
   const [pending, setPending] = useState(false);
   const [complete, setComplete] = useState(false);
   const [consentGranted, setConsentGranted] = useState(false);
@@ -51,6 +73,7 @@ export function RegistrationForm() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!hydrated || pending || !consentGranted) return;
     setPending(true);
     setError(null);
     const values = new FormData(event.currentTarget);
@@ -79,10 +102,7 @@ export function RegistrationForm() {
           If that address can be registered, a verification link is on its way.
           The link expires after 24 hours.
         </p>
-        <Link
-          className="button button--outline button--full"
-          href={ROUTES.login}
-        >
+        <Link className="button button--outline button--full" href={loginHref}>
           Return to sign in
         </Link>
         <Link className="text-link" href={ROUTES.verifyEmail}>
@@ -105,7 +125,7 @@ export function RegistrationForm() {
         Start the free course and keep progress, reflections, and recovery tied
         to one verified identity.
       </p>
-      <form className="stack-form" onSubmit={submit}>
+      <form className="stack-form" method="post" onSubmit={submit}>
         <fieldset className="auth-fieldset">
           <legend>Identity</legend>
           <div className="field-group">
@@ -117,7 +137,7 @@ export function RegistrationForm() {
               placeholder="First name"
               required
               maxLength={120}
-              disabled={pending}
+              disabled={pending || !hydrated}
             />
           </div>
           <div className="field-group">
@@ -131,7 +151,7 @@ export function RegistrationForm() {
               placeholder="you@example.com"
               required
               maxLength={320}
-              disabled={pending}
+              disabled={pending || !hydrated}
             />
           </div>
           <div className="field-group">
@@ -147,7 +167,7 @@ export function RegistrationForm() {
               minLength={7}
               maxLength={32}
               aria-describedby="register-whatsapp-help"
-              disabled={pending}
+              disabled={pending || !hydrated}
             />
             <p id="register-whatsapp-help" className="field-help">
               Stored with your learner profile. This number is not used for
@@ -170,7 +190,7 @@ export function RegistrationForm() {
                 minLength={12}
                 maxLength={256}
                 aria-describedby="register-password-help"
-                disabled={pending}
+                disabled={pending || !hydrated}
               />
               <button
                 className="auth-password-toggle"
@@ -178,7 +198,7 @@ export function RegistrationForm() {
                 aria-label={passwordVisible ? "Hide password" : "Show password"}
                 aria-pressed={passwordVisible}
                 onClick={() => setPasswordVisible((visible) => !visible)}
-                disabled={pending}
+                disabled={pending || !hydrated}
               >
                 {passwordVisible ? (
                   <EyeOff size={18} aria-hidden="true" />
@@ -198,16 +218,16 @@ export function RegistrationForm() {
             name="consent"
             type="checkbox"
             required
-            disabled={pending}
+            disabled={pending || !hydrated}
             checked={consentGranted}
             onChange={(event) => setConsentGranted(event.currentTarget.checked)}
           />
           <span>
-            I confirm I am 18 or older, agree to the staging{" "}
-            <Link href={ROUTES.terms}>Terms</Link>, acknowledge the{" "}
-            <Link href={ROUTES.privacy}>Privacy notice</Link>, and authorize the
-            account-verification, security, and course-access emails needed to
-            operate this test.
+            {LEARNER_CONSENT_COPY.beforeTerms}
+            <Link href={ROUTES.terms}>Terms</Link>
+            {LEARNER_CONSENT_COPY.beforePrivacy}
+            <Link href={ROUTES.privacy}>Privacy notice</Link>
+            {LEARNER_CONSENT_COPY.afterPrivacy}
           </span>
         </label>
         {error ? (
@@ -221,7 +241,10 @@ export function RegistrationForm() {
             <p>{error}</p>
           </div>
         ) : null}
-        <button className="button button--ink button--full" disabled={pending}>
+        <button
+          className="button button--ink button--full"
+          disabled={pending || !hydrated}
+        >
           {pending ? "Creating account…" : "Create free account"}
           <ArrowRight size={17} aria-hidden="true" />
         </button>
@@ -231,7 +254,7 @@ export function RegistrationForm() {
       </div>
       <form
         className="stack-form"
-        action={googleAuthStartUrl("register")}
+        action={googleAuthStartUrl("register", courseIntent)}
         method="get"
       >
         <input type="hidden" name="action" value="register" />
@@ -239,18 +262,24 @@ export function RegistrationForm() {
         <input
           type="hidden"
           name="return_path"
-          value={GOOGLE_REGISTRATION_RETURN_PATH}
+          value={googleAuthReturnPath("register", courseIntent)}
         />
         <input
           type="hidden"
           name="consent"
           value="true"
-          disabled={!consentGranted}
+          disabled={!hydrated || !consentGranted}
+        />
+        <input
+          type="hidden"
+          name="consent_version"
+          value={LEARNER_POLICY_VERSION}
+          disabled={!hydrated || !consentGranted}
         />
         <button
           className="button button--outline button--full"
           type="submit"
-          disabled={!consentGranted || pending}
+          disabled={!hydrated || !consentGranted || pending}
         >
           Continue with Google
           <ArrowRight size={17} aria-hidden="true" />
@@ -258,7 +287,7 @@ export function RegistrationForm() {
       </form>
       <div className="auth-card__footer">
         <span>Already verified?</span>
-        <Link href={ROUTES.login}>Sign in</Link>
+        <Link href={loginHref}>Sign in</Link>
       </div>
     </div>
   );

@@ -887,6 +887,65 @@ describe("Direction A & B UI System & Shell", () => {
       );
     });
 
+    it("honors the server-owned next activity when it is still action-enabled", () => {
+      const available = learning.modules[0].activities[2];
+      const later = {
+        ...available,
+        id: "later",
+        position: 4,
+        explanation: { ...available.explanation, activity_id: "later" },
+      };
+      const guided = {
+        ...learning,
+        modules: [
+          {
+            ...learning.modules[0],
+            activities: [...learning.modules[0].activities, later],
+          },
+        ],
+        projection: { ...learning.projection, next_activity_id: "later" },
+      } satisfies LearningResponse;
+
+      expect(firstActionableActivity(guided)?.id).toBe("later");
+    });
+
+    it("falls back safely when the server pointer is stale or not actionable", () => {
+      const guided = {
+        ...learning,
+        projection: { ...learning.projection, next_activity_id: "awaiting" },
+      } satisfies LearningResponse;
+
+      expect(firstActionableActivity(guided)?.id).toBe("available");
+    });
+
+    it("honors an explicit server no-action result", () => {
+      const optional = {
+        ...learning.modules[0].activities[2],
+        id: "optional",
+        required: false,
+        state: "in_progress",
+      };
+      const noAction = {
+        ...learning,
+        modules: [
+          {
+            ...learning.modules[0],
+            activities: [
+              ...learning.modules[0].activities.map((activity) => ({
+                ...activity,
+                state: "completed",
+                allowed_actions: [],
+              })),
+              optional,
+            ],
+          },
+        ],
+        projection: { ...learning.projection, next_activity_id: null },
+      } satisfies LearningResponse;
+
+      expect(firstActionableActivity(noAction)).toBeUndefined();
+    });
+
     it("normalizes authored module separators only for presentation", () => {
       expect(presentationModuleTitle("Opening — Module 1")).toBe(
         "Opening · Module 1",

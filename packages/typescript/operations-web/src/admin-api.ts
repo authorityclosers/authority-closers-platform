@@ -671,6 +671,10 @@ function validateStudioCommand(input: StudioDraftCommandInput) {
   z.string()
     .regex(/^"program-version-[0-9a-f]{64}"$/)
     .parse(input.ifMatch);
+  validateStudioKey(input.idempotencyKey);
+}
+
+function validateStudioKey(key: string) {
   z.string()
     .min(1)
     .max(128)
@@ -682,7 +686,52 @@ function validateStudioCommand(input: StudioDraftCommandInput) {
           return code >= 32 && code !== 127;
         }),
     )
-    .parse(input.idempotencyKey);
+    .parse(key);
+}
+
+export function createStudioCourse(input: {
+  title: string;
+  tenantId: string;
+  idempotencyKey: string;
+  signal?: AbortSignal;
+  origin?: string;
+  fetcher?: Fetcher;
+}): Promise<StudioDraftMutationResponse> {
+  const tenantId = uuidPath(input.tenantId, "tenantId").toLowerCase();
+  const title = z.string().trim().min(1).max(200).parse(input.title);
+  validateStudioKey(input.idempotencyKey);
+  return requestJson(
+    "/v1/admin/studio/programs",
+    {
+      method: "POST",
+      headers: mutationHeaders({
+        origin: input.origin ?? currentOrigin(),
+        idempotencyKey: input.idempotencyKey,
+        hasBody: true,
+      }),
+      body: body({ title }),
+      signal: input.signal,
+    },
+    studioDraftMutationResponseSchema.refine(
+      ({ program, resource_id: resultId, replayed }) => {
+        const versions = program.versions.filter(
+          (version) => version.id === resultId,
+        );
+        return (
+          program.tenant_id === tenantId &&
+          program.scope === "tenant" &&
+          program.access === "selected_tenant" &&
+          versions.length === 1 &&
+          versions[0].version_number === 1 &&
+          versions[0].supersedes_version_id === null &&
+          (replayed ||
+            (program.title === title && versions[0].status === "draft"))
+        );
+      },
+      "The new course response does not match this academy and request.",
+    ),
+    input.fetcher,
+  );
 }
 
 export function createStudioRevision(input: CreateStudioRevisionInput) {

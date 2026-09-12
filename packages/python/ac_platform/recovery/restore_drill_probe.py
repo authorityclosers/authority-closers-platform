@@ -18,6 +18,7 @@ import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 from types import SimpleNamespace
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import and_, func, select
@@ -146,12 +147,6 @@ async def mark_and_prove(target: ProbeTarget, *, reason: str) -> dict[str, objec
         raise ProbeError("restore marker reason is invalid")
     engine = create_async_engine(target.url, pool_pre_ping=True)
     sessions = async_sessionmaker(engine, expire_on_commit=False)
-    provider_calls = 0
-
-    async def provider_must_not_be_called(_prepared: PreparedDispatch) -> DeliveryReceipt:
-        nonlocal provider_calls
-        provider_calls += 1
-        raise ProbeError("provider dispatch was attempted while restore hold was active")
 
     try:
         async with sessions() as session, session.begin():
@@ -166,28 +161,63 @@ async def mark_and_prove(target: ProbeTarget, *, reason: str) -> dict[str, objec
                 "held_jobs": held_jobs,
             }
 
-        worker = DurableWorker(
-            sessions,
-            dispatcher=AllowlistedDispatcher({ENROLLMENT_WELCOME_JOB: provider_must_not_be_called}),
-            settings=SimpleNamespace(external_side_effects_hold=False),
-            poll_interval=0,
-        )
-        ready = await worker.prepare()
-        run_once_rejected = False
-        try:
-            await worker.run_once()
-        except WorkerNotReadyError:
-            run_once_rejected = True
-        if ready or not run_once_rejected or provider_calls != 0:
-            raise ProbeError("worker recovery hold proof failed")
+        worker_proof = await _prove_worker_hold(sessions)
         return {
             "action": "mark-and-prove",
             "restore_marker": marker,
-            "worker_hold_proof": {
-                "worker_ready": ready,
-                "run_once_rejected": run_once_rejected,
-                "provider_calls": provider_calls,
-            },
+            "worker_hold_proof": worker_proof,
+        }
+    finally:
+        await engine.dispose()
+
+
+async def _prove_worker_hold(sessions: Any) -> dict[str, object]:
+    """Prove the hold without releasing it or invoking an external provider."""
+
+    provider_calls = 0
+
+    async def provider_must_not_be_called(_prepared: PreparedDispatch) -> DeliveryReceipt:
+        nonlocal provider_calls
+        provider_calls += 1
+        raise ProbeError("provider dispatch was attempted while restore hold was active")
+
+    worker = DurableWorker(
+        sessions,
+        dispatcher=AllowlistedDispatcher({ENROLLMENT_WELCOME_JOB: provider_must_not_be_called}),
+        settings=SimpleNamespace(external_side_effects_hold=False),
+        poll_interval=0,
+    )
+    ready = await worker.prepare()
+    run_once_rejected = False
+    try:
+        await worker.run_once()
+    except WorkerNotReadyError:
+        run_once_rejected = True
+    if ready or not run_once_rejected or provider_calls != 0:
+        raise ProbeError("worker recovery hold proof failed")
+    return {
+        "worker_ready": ready,
+        "run_once_rejected": run_once_rejected,
+        "provider_calls": provider_calls,
+    }
+
+
+async def prove_held(target: ProbeTarget) -> dict[str, object]:
+    """Prove a pre-existing hold after a schema-only migration."""
+
+    engine = create_async_engine(target.url, pool_pre_ping=True)
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with sessions() as session, session.begin():
+            state = await RecoveryStateRepository(session).require_held()
+            recovery_state = {
+                "generation": state.generation,
+                "status": state.status,
+            }
+        return {
+            "action": "prove-held",
+            "recovery_state": recovery_state,
+            "worker_hold_proof": await _prove_worker_hold(sessions),
         }
     finally:
         await engine.dispose()
@@ -296,6 +326,8 @@ def build_parser() -> argparse.ArgumentParser:
     marker = actions.add_parser("mark-and-prove")
     marker.add_argument("--reason", required=True)
 
+    actions.add_parser("prove-held")
+
     reconcile = actions.add_parser("reconcile-selected")
     reconcile.add_argument("--job-id", action="append", type=UUID)
     reconcile.add_argument("--outbox-event-id", action="append", type=UUID)
@@ -318,6 +350,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
             if args.action == "mark-and-prove":
                 result = run_async(mark_and_prove(target, reason=args.reason))
+            elif args.action == "prove-held":
+                result = run_async(prove_held(target))
             else:
                 selection = _selection_from_args(args)
                 result = run_async(reconcile_selected(target, selection))

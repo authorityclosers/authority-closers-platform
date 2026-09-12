@@ -10,6 +10,7 @@ import Link from "next/link";
 import { AuthFlowPage } from "../../components/auth-flow-page";
 import { SurfaceStatePanel } from "../../components/surface-state";
 import { ROUTES } from "../../lib/routes";
+import { courseIntentHref, parseCourseIntent } from "../../lib/course-intent";
 import {
   isContentVisible,
   parseSurfaceState,
@@ -17,7 +18,11 @@ import {
 } from "../../lib/surface-state";
 
 type CallbackPageProps = {
-  searchParams: Promise<{ result?: QueryValue; state?: QueryValue }>;
+  searchParams: Promise<{
+    result?: QueryValue;
+    state?: QueryValue;
+    course?: QueryValue;
+  }>;
 };
 
 type CallbackResult =
@@ -88,7 +93,8 @@ const callbackResults: Record<
 
 function parseCallbackResult(value: QueryValue): CallbackResult | null {
   const candidate = Array.isArray(value) ? value[0] : value;
-  return candidate && candidate in callbackResults
+  return candidate &&
+    Object.prototype.hasOwnProperty.call(callbackResults, candidate)
     ? (candidate as CallbackResult)
     : null;
 }
@@ -99,7 +105,18 @@ export default async function CallbackPage({
   const query = await searchParams;
   const state = parseSurfaceState(query.state);
   const result = parseCallbackResult(query.result);
+  const courseIntent = parseCourseIntent(query.course);
+  const loginHref = courseIntentHref(ROUTES.login, courseIntent);
   const recovery = result ? callbackResults[result] : null;
+  const recoveryHref =
+    recovery?.actionHref === ROUTES.login ||
+    recovery?.actionHref === ROUTES.register
+      ? courseIntentHref(recovery.actionHref, courseIntent)
+      : recovery?.actionHref;
+  const retryParameters = new URLSearchParams();
+  if (result) retryParameters.set("result", result);
+  if (courseIntent) retryParameters.set("course", courseIntent);
+  const retryHref = `${ROUTES.callback}${retryParameters.size ? `?${retryParameters}` : ""}`;
   const RecoveryIcon = recovery?.icon ?? ShieldCheck;
 
   return (
@@ -107,7 +124,7 @@ export default async function CallbackPage({
       eyebrow="Google sign-in"
       heading="We need one more step."
       copy="Complete the bounded account step below, then start a fresh sign-in attempt."
-      backHref={ROUTES.login}
+      backHref={loginHref}
       backLabel="Back to sign in"
       steps={[
         { label: "Identity", state: "outline", detail: "Account task" },
@@ -136,8 +153,9 @@ export default async function CallbackPage({
         {state !== "DEFAULT" ? (
           <SurfaceStatePanel
             state={state}
-            retryHref={ROUTES.callback}
-            backHref={ROUTES.login}
+            retryHref={retryHref}
+            signInHref={loginHref}
+            backHref={loginHref}
             pageHeadingPresent
           />
         ) : null}
@@ -146,7 +164,7 @@ export default async function CallbackPage({
             <p className="callback-card__intro">{recovery.detail}</p>
             <Link
               className="button button--ink button--full"
-              href={recovery.actionHref}
+              href={recoveryHref!}
             >
               {recovery.actionLabel}
               <ArrowRight size={17} aria-hidden="true" />
@@ -165,10 +183,7 @@ export default async function CallbackPage({
               This page only accepts a server-issued sign-in result. Return to
               sign in to start a fresh, protected Google transaction.
             </p>
-            <Link
-              className="button button--ink button--full"
-              href={ROUTES.login}
-            >
+            <Link className="button button--ink button--full" href={loginHref}>
               Return to sign in
               <ArrowRight size={17} aria-hidden="true" />
             </Link>

@@ -70,7 +70,7 @@ async function ready(f: ReturnType<typeof fixture>) {
   f.player.setEnabled(true);
   f.player.prepare();
   await vi.waitFor(() =>
-    expect(f.context.decodeAudioData).toHaveBeenCalledTimes(3),
+    expect(f.context.decodeAudioData).toHaveBeenCalledTimes(4),
   );
 }
 it("creates no audio context or requests before an enabled explicit gesture", async () => {
@@ -81,7 +81,13 @@ it("creates no audio context or requests before an enabled explicit gesture", as
   expect(f.fetcher).not.toHaveBeenCalled();
   await ready(f);
   expect(f.sources).toHaveLength(0);
-  expect(f.fetcher).toHaveBeenCalledTimes(3);
+  expect(f.fetcher).toHaveBeenCalledTimes(4);
+  expect(f.fetcher.mock.calls.map(([url]) => url)).toEqual([
+    "/audio/practice/select.wav",
+    "/audio/practice/confirm.wav",
+    "/audio/practice/retry.wav",
+    "/audio/practice/reward.wav",
+  ]);
   expect(f.fetcher.mock.calls[0]).toEqual([
     "/audio/practice/select.wav",
     expect.objectContaining({
@@ -92,6 +98,16 @@ it("creates no audio context or requests before an enabled explicit gesture", as
   ]);
   f.player.play("reward", "old");
   expect(f.sources).toHaveLength(0);
+  f.player.dispose();
+});
+it("plays the distinct retry cue once per canonical response event", async () => {
+  const f = fixture();
+  await ready(f);
+  expect(f.player.play("retry", "response:one:reference:false")).toBe(true);
+  expect(
+    f.player.play("retry", "response:one:reference:false"),
+  ).toBeUndefined();
+  expect(f.sources).toHaveLength(1);
   f.player.dispose();
 });
 it("does not queue an unloaded cue; deduplicates confirmed receipts and throttles selection", async () => {
@@ -154,7 +170,7 @@ it("abort on dispose suppresses a late decoder completion", async () => {
   f.player.setEnabled(true);
   f.player.prepare();
   await vi.waitFor(() =>
-    expect(f.context.decodeAudioData).toHaveBeenCalledTimes(3),
+    expect(f.context.decodeAudioData).toHaveBeenCalledTimes(4),
   );
   f.player.dispose();
   for (const resolve of resolvers) resolve({ duration: 0.2 });
@@ -198,7 +214,7 @@ it("bounds sample bytes and decoded duration", async () => {
   f.context.decodeAudioData.mockResolvedValue({ duration: 3 });
   f.player.prepare();
   await vi.waitFor(() =>
-    expect(f.context.decodeAudioData).toHaveBeenCalledTimes(3),
+    expect(f.context.decodeAudioData).toHaveBeenCalledTimes(4),
   );
   expect(f.player.play("reward")).toBe(false);
   f.player.dispose();
@@ -234,7 +250,7 @@ it("a labelled preview waits for its gesture-started load but does not record a 
   f.player.setEnabled(true);
   expect(await f.player.preview("reward")).toBe(true);
   expect(f.sources).toHaveLength(1);
-  expect(f.fetcher).toHaveBeenCalledTimes(3);
+  expect(f.fetcher).toHaveBeenCalledTimes(4);
   // A real receipt is independent of preview playback and is still eligible once.
   expect(f.player.play("reward", "real-receipt")).toBe(true);
   expect(f.player.play("reward", "real-receipt")).toBeUndefined();
@@ -249,7 +265,7 @@ it("closing or muting during a preview load prevents delayed playback", async ()
   );
   f.player.setEnabled(true);
   const preview = f.player.preview("reward");
-  await vi.waitFor(() => expect(decoded).toHaveLength(3));
+  await vi.waitFor(() => expect(decoded).toHaveLength(4));
   f.player.stop();
   decoded.forEach((resolve) => resolve({ duration: 0.4 }));
   expect(await preview).toBe(false);
@@ -265,7 +281,7 @@ it("concurrent previews reuse one decode and only the latest preview can play", 
   expect(await first).toBe(false);
   expect(await latest).toBe(true);
   expect(f.sources).toHaveLength(1);
-  expect(f.fetcher).toHaveBeenCalledTimes(3);
+  expect(f.fetcher).toHaveBeenCalledTimes(4);
   f.player.dispose();
 });
 
@@ -280,7 +296,7 @@ it("bounds a stalled audio resume and never plays its timed-out preview later", 
   f.player.setEnabled(true);
   const preview = f.player.preview("reward");
   await vi.advanceTimersByTimeAsync(0);
-  expect(f.context.decodeAudioData).toHaveBeenCalledTimes(3);
+  expect(f.context.decodeAudioData).toHaveBeenCalledTimes(4);
   await vi.advanceTimersByTimeAsync(4000);
   expect(await preview).toBe(false);
   expect(f.sources).toHaveLength(0);
@@ -291,7 +307,7 @@ it("bounds a stalled audio resume and never plays its timed-out preview later", 
   expect(f.sources).toHaveLength(0);
   // Only a new explicit preview can play once audio is available.
   expect(await f.player.preview("reward")).toBe(true);
-  expect(f.fetcher).toHaveBeenCalledTimes(3);
+  expect(f.fetcher).toHaveBeenCalledTimes(4);
   f.player.dispose();
 });
 
@@ -305,7 +321,7 @@ it("bounds stalled decoding, permits a fresh retry and ignores late stale buffer
   f.player.setEnabled(true);
   const preview = f.player.preview("reward");
   await vi.advanceTimersByTimeAsync(0);
-  expect(finishOld).toHaveLength(3);
+  expect(finishOld).toHaveLength(4);
   await vi.advanceTimersByTimeAsync(4000);
   expect(await preview).toBe(false);
   expect(f.sources).toHaveLength(0);
@@ -314,7 +330,7 @@ it("bounds stalled decoding, permits a fresh retry and ignores late stale buffer
 
   f.context.decodeAudioData.mockResolvedValue({ duration: 0.2 });
   expect(await f.player.preview("reward")).toBe(true);
-  expect(f.fetcher).toHaveBeenCalledTimes(6);
+  expect(f.fetcher).toHaveBeenCalledTimes(8);
   finishOld.forEach((finish) => finish({ duration: 0.9 }));
   await vi.advanceTimersByTimeAsync(0);
   expect(f.sources).toHaveLength(1);

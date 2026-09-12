@@ -81,7 +81,7 @@ describe("learner course surface primitives", () => {
       createElement(NextActionCard, {
         eyebrow: "Next action",
         title: "Reflect on the signal",
-        detail: "Open the server-authorized activity.",
+        detail: "Open the published activity.",
         action: createElement(
           "a",
           { href: "/activity/reflection-1" },
@@ -196,7 +196,7 @@ describe("learner course surface primitives", () => {
     expect(completed).toContain('data-next-action="review"');
     expect(unavailable).toContain("Open course");
     expect(unavailable).toContain("Progress unavailable");
-    expect(unavailable).toContain("re-check current access");
+    expect(unavailable).toContain("See your current progress.");
     expect(unavailable).toContain('data-next-action="open"');
     expect(unavailable).not.toContain('href="/activity/');
     expect(unavailable).not.toContain("LockKeyhole");
@@ -219,6 +219,8 @@ describe("learner course surface primitives", () => {
     expect(tabs).toContain('aria-selected="true"');
     expect(tabs).toContain('tabindex="0"');
     expect(tabs).toContain('tabindex="-1"');
+    expect(tabs).not.toContain(">Saved<");
+    expect(tabs).not.toContain("unavailable");
     expect(getLearningFilterKeyboardTarget("all", "ArrowRight", true)).toBe(
       "in_progress",
     );
@@ -357,7 +359,7 @@ describe("learner course surface primitives", () => {
       errorClass: "terminal",
       title: "You do not have access to this learner library",
       detail:
-        "This account is not authorized to view this learner library. If you think this is incorrect, contact support.",
+        "This account cannot view this learner library right now. If you think this is incorrect, contact support.",
       requiresSignIn: false,
       requiresSupport: true,
       supportHref:
@@ -587,10 +589,22 @@ describe("learner course route wiring", () => {
     expect(css).toContain("min-height: 44px");
     expect(css).toContain(".site-frame--learner .discover-view");
     expect(css).toContain(".site-frame--learner .discover-catalog-summary");
-    // Scope this contract to the phone filter row. Another two-column rule
-    // elsewhere must not make a broken collection-tab layout pass.
+    expect(css).toContain(".site-frame--learner .learning-collection-header");
+    expect(css).toContain("var(--course-info-surface)");
+    expect(css).toContain(".site-frame--learner .breadcrumbs--clarity");
+    // Scope this contract to the phone filter row. Another grid rule elsewhere
+    // must not make a broken collection-tab layout pass.
     expect(css).toMatch(
-      /@media \(max-width: 560px\)\s*\{(?:(?!@media)[\s\S])*?\.site-frame--learner \.learning-collection-tabs\s*\{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/,
+      /@media \(max-width: 560px\)\s*\{(?:(?!@media)[\s\S])*?\.site-frame--learner \.learning-collection-tabs\s*\{[^}]*grid-template-columns:\s*repeat\(auto-fit, minmax\(58px, 1fr\)\);/,
+    );
+    expect(css).toMatch(
+      /\.learning-course-card \.ac-program-card__action\s*\{[^}]*order:\s*5;/,
+    );
+    expect(css).toMatch(
+      /\.learning-course-card \.ac-program-card__content\s*\{[^}]*order:\s*6;/,
+    );
+    expect(css).toMatch(
+      /\.learning-course-card \.ac-program-card__media\s*\{[^}]*height:\s*112px;/,
     );
     expect(css).toContain('html[data-theme="dark"] .site-frame--learner');
   });

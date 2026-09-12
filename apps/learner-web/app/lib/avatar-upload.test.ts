@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { createHash } from "node:crypto";
 
 import {
   AVATAR_HASH_CHUNK_BYTES,
@@ -86,8 +87,9 @@ describe("avatar upload boundary", () => {
     expect(slices).toEqual([AVATAR_HASH_CHUNK_BYTES, 17]);
     expect(createProfileAvatarUpload).toHaveBeenCalledWith(
       expect.objectContaining({
-        checksum_sha256:
-          "198fe22858bf90dd34cba065bf3e3d4680918f930e94ce51807b9b3055f2eb1e",
+        checksum_sha256: createHash("sha256")
+          .update(Uint8Array.from(bytes))
+          .digest("hex"),
       }),
       expect.anything(),
     );

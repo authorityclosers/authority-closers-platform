@@ -45,6 +45,7 @@ from ac_platform.telemetry import TelemetryEvent, TelemetryRecorder
 
 if TYPE_CHECKING:
     from ac_platform.media.local_avatar_runtime import LocalAvatarRuntime
+    from ac_platform.media.studio_video_runtime import StudioVideoRuntime
 
 
 class NullTelemetrySink:
@@ -71,6 +72,7 @@ class MediaRuntime:
     authenticated_delivery_handler_factory: (
         Callable[[Session, ActorContext], PrivateMediaDeliveryHandler] | None
     ) = None
+    studio_video_runtime: StudioVideoRuntime | None = None
 
     @property
     def learning_playback_composed(self) -> bool:

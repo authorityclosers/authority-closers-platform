@@ -994,6 +994,24 @@ def test_environment_profiles_isolate_state_hosts_and_edge_aliases() -> None:
     assert "Released environment profile must use canonical LF line endings" in INSTALLER
 
 
+def test_release_consent_profiles_match_the_reviewed_learner_policy() -> None:
+    version = "ac-learner-terms-privacy-2026-09-13-v1"
+    policy = (ROOT / "apps/learner-web/app/lib/learner-policy.ts").read_text(encoding="utf-8")
+    assert f'export const LEARNER_POLICY_VERSION = "{version}";' in policy
+    for environment in ("staging", "production"):
+        profile = (APPLICATION / "environments" / f"{environment}.env").read_text(encoding="utf-8")
+        assert profile.splitlines().count(f"AC_LEARNER_CONSENT_VERSION={version}") == 1
+    contract = _installer_function(
+        "initialize_release_profile_contract", "\n\nload_release_profile() {"
+    )
+    assert "    AC_LEARNER_CONSENT_VERSION\n" in contract
+    assert 'if [[ "$target_environment" == staging ]]' not in contract
+    compose_for = _installer_function(
+        "compose_for", '\n\ncompose_for "$release_dir" config --quiet'
+    )
+    assert "-u AC_LEARNER_CONSENT_VERSION" in compose_for
+
+
 def test_installer_reports_the_reviewed_profile_policy_without_secrets() -> None:
     policy_start = INSTALLER.index('external_side_effects_hold="')
     policy_end = INSTALLER.index("with_release_secrets() {", policy_start)
@@ -1047,6 +1065,27 @@ def test_installer_profile_parser_reports_effective_profile_policy(
 
     assert result.returncode == 0, result.stderr
     assert result.stdout == expected_status
+
+
+@pytest.mark.parametrize("target_environment", ("staging", "production"))
+@pytest.mark.parametrize("consent_version", (None, "staging-test-document-v1", "unreviewed-v2"))
+def test_installer_rejects_absent_or_unreviewed_release_consent(
+    tmp_path: Path, target_environment: str, consent_version: str | None
+) -> None:
+    profile = (APPLICATION / "environments" / f"{target_environment}.env").read_bytes()
+    reviewed = b"AC_LEARNER_CONSENT_VERSION=ac-learner-terms-privacy-2026-09-13-v1\n"
+    replacement = (
+        b""
+        if consent_version is None
+        else f"AC_LEARNER_CONSENT_VERSION={consent_version}\n".encode()
+    )
+    result = _run_profile_parser(
+        tmp_path, profile.replace(reviewed, replacement), target_environment=target_environment
+    )
+
+    assert result.returncode != 0
+    assert "AC_LEARNER_CONSENT_VERSION" in result.stderr
+    assert ("missing" if consent_version is None else "unexpected value") in result.stderr
 
 
 @pytest.mark.parametrize(

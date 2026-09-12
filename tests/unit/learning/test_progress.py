@@ -98,6 +98,87 @@ def test_projection_is_deterministic_and_explainable_for_unsorted_versioned_work
     assert [item.activity_id for item in projection.activity_states] == [first.id, second.id]
 
 
+def test_next_activity_skips_locked_and_review_pending_required_work() -> None:
+    fixture = make_fixture()
+    locked = replace(
+        fixture.activity,
+        id=uuid4(),
+        order=1,
+        prerequisites=(uuid4(),),
+    )
+    awaiting_review = replace(
+        fixture.activity,
+        id=uuid4(),
+        order=2,
+    )
+    available = replace(
+        fixture.activity,
+        id=uuid4(),
+        order=3,
+    )
+    module = replace(fixture.program.modules[0], activities=(locked, awaiting_review, available))
+    program = replace(fixture.program, modules=(module,))
+
+    projection = ProgressProjector().project(
+        program,
+        {awaiting_review.id: _progress(fixture, awaiting_review, ActivityState.AWAITING_REVIEW)},
+    )
+
+    assert projection.next_activity_id == available.id
+    assert [item.state for item in projection.activity_states] == [
+        ActivityState.LOCKED,
+        ActivityState.AWAITING_REVIEW,
+        ActivityState.AVAILABLE,
+    ]
+
+
+@pytest.mark.parametrize("state", [ActivityState.COMPLETED, ActivityState.AWAITING_REVIEW])
+def test_next_activity_is_null_when_required_work_has_no_learner_action(
+    state: ActivityState,
+) -> None:
+    fixture = make_fixture()
+    projection = ProgressProjector().project(
+        fixture.program, {fixture.activity.id: _progress(fixture, fixture.activity, state)}
+    )
+    assert projection.next_activity_id is None
+
+
+@pytest.mark.parametrize("optional_scope", ["activity", "module"])
+def test_next_activity_excludes_optional_work(optional_scope: str) -> None:
+    fixture = make_fixture()
+    activity = replace(fixture.activity, required=optional_scope != "activity")
+    module = replace(
+        fixture.program.modules[0],
+        activities=(activity,),
+        required=optional_scope != "module",
+    )
+    projection = ProgressProjector().project(replace(fixture.program, modules=(module,)), {})
+    assert projection.activity_states[0].state is ActivityState.AVAILABLE
+    assert projection.next_activity_id is None
+
+
+def test_next_activity_is_null_when_a_module_prerequisite_is_incomplete() -> None:
+    fixture = make_fixture()
+    prerequisite_id = uuid4()
+    prerequisite_activity = replace(fixture.activity, id=uuid4(), module_id=prerequisite_id)
+    prerequisite = replace(
+        fixture.program.modules[0], id=prerequisite_id, activities=(prerequisite_activity,), order=0
+    )
+    module = replace(
+        fixture.program.modules[0], prerequisite_module_ids=(prerequisite_id,), order=1
+    )
+    projection = ProgressProjector().project(
+        replace(fixture.program, modules=(prerequisite, module)),
+        {
+            prerequisite_activity.id: _progress(
+                fixture, prerequisite_activity, ActivityState.AWAITING_REVIEW
+            )
+        },
+    )
+    assert projection.activity_states[1].state is ActivityState.LOCKED
+    assert projection.next_activity_id is None
+
+
 def test_authoritative_projection_does_not_count_arbitrary_or_cross_scope_evidence() -> None:
     fixture = make_fixture()
     program = fixture.program

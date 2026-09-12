@@ -10,12 +10,14 @@ run_root_restore_proof_tests() {
     "$script_dir/test_capability_backup_parity.py"
   )
   local python="$repo_root/.venv/bin/python"
+  local require_history="${AC_REQUIRE_HISTORICAL_BACKUP_CONTROLLER_TEST:-0}"
   if [[ ! -x "$python" ]]; then
     printf 'The locked project Python environment is required for root restore-proof tests.\n' >&2
     return 1
   fi
   if ((EUID == 0)); then
-    PYTHONDONTWRITEBYTECODE=1 "$python" -m pytest -p no:cacheprovider "${test_files[@]}"
+    PYTHONDONTWRITEBYTECODE=1 AC_REQUIRE_HISTORICAL_BACKUP_CONTROLLER_TEST="$require_history" \
+      "$python" -m pytest -p no:cacheprovider "${test_files[@]}"
     return
   fi
   command -v sudo >/dev/null 2>&1 || {
@@ -23,6 +25,7 @@ run_root_restore_proof_tests() {
     return 1
   }
   sudo env PYTHONDONTWRITEBYTECODE=1 \
+    AC_REQUIRE_HISTORICAL_BACKUP_CONTROLLER_TEST="$require_history" \
     "$python" -m pytest -p no:cacheprovider "${test_files[@]}"
 }
 

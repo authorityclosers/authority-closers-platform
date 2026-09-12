@@ -67,6 +67,8 @@ import {
   type MutationFailureKind,
 } from "../lib/local-drafts";
 import { ROUTES } from "../lib/routes";
+import { courseIntentHref, parseCourseIntent } from "../lib/course-intent";
+import { firstActionableActivity } from "../lib/next-learning-action";
 import { userFacingRequestError } from "../lib/user-facing-error";
 import {
   hasMembershipRole,
@@ -359,6 +361,7 @@ export function PublicProgramDetail({
     () => false,
   );
   const program = state.status === "ready" ? state.value : null;
+  const courseIntent = parseCourseIntent(program?.slug);
   const offlineRead = program ? getEarliestOfflineReadMetadata(program) : null;
   const freeEnrollmentAvailable =
     program !== null && isFreeEnrollmentProgram(program);
@@ -439,13 +442,13 @@ export function PublicProgramDetail({
                 <div className="hero-actions program-hero__actions">
                   <Link
                     className="button button--ink program-hero__cta-primary"
-                    href={ROUTES.login}
+                    href={courseIntentHref(ROUTES.login, courseIntent)}
                   >
                     Sign in to start free
                   </Link>
                   <Link
                     className="button button--outline program-hero__cta-secondary"
-                    href={ROUTES.register}
+                    href={courseIntentHref(ROUTES.register, courseIntent)}
                   >
                     Create learner account →
                   </Link>
@@ -516,7 +519,7 @@ export function PublicProgramDetail({
                   <div className="program-hero__card-cta">
                     <Link
                       className="button button--ink button--full-width"
-                      href={ROUTES.login}
+                      href={courseIntentHref(ROUTES.login, courseIntent)}
                     >
                       {freeEnrollmentAvailable
                         ? "Sign in to start free"
@@ -636,12 +639,18 @@ export function PublicProgramDetail({
                 </p>
               </div>
               <div className="program-bottom-cta__actions">
-                <Link className="button button--ink" href={ROUTES.login}>
+                <Link
+                  className="button button--ink"
+                  href={courseIntentHref(ROUTES.login, courseIntent)}
+                >
                   {freeEnrollmentAvailable
                     ? "Sign in to start free"
                     : "Sign in"}
                 </Link>
-                <Link className="button button--outline" href={ROUTES.register}>
+                <Link
+                  className="button button--outline"
+                  href={courseIntentHref(ROUTES.register, courseIntent)}
+                >
                   Create learner account →
                 </Link>
               </div>
@@ -909,18 +918,6 @@ export function enrollmentFailureMessage(error: unknown): {
   return {
     message: `${errorText(error)} You can retry without losing progress.`,
   };
-}
-
-function firstActionableActivity(
-  learning: LearningResponse,
-): LearningActivityResponse | undefined {
-  const activities = learning.modules.flatMap((module) => module.activities);
-  return (
-    activities.find(
-      (activity) => activity.state.toLowerCase() === "in_progress",
-    ) ??
-    activities.find((activity) => activity.state.toLowerCase() === "available")
-  );
 }
 
 export function learningPathContinueTarget(learning: LearningResponse): {
@@ -1452,11 +1449,13 @@ export function LearningActivityNavigation({
 }) {
   const lockedReason = activityLockReason(activity);
   const offlineRead = disabled || Boolean(getOfflineReadMetadata(activity));
+  const state = activity.state.toLowerCase();
   const unavailableReason = offlineRead
     ? "Reconnect to open this activity."
     : lockedReason;
-  const locked = activity.state.toLowerCase() === "locked";
-  const completed = activity.state.toLowerCase() === "completed";
+  const locked = state === "locked";
+  const completed = state === "completed";
+  const showActivityState = offlineRead || state !== "available";
   const content = (
     <>
       <span className={journey.activityIcon} aria-hidden="true">
@@ -1482,11 +1481,13 @@ export function LearningActivityNavigation({
         ) : null}
       </span>
       <span className={journey.activityStatus}>
-        <span>
-          {offlineRead
-            ? "Reconnect to open"
-            : activityStateLabel(activity.state)}
-        </span>
+        {showActivityState ? (
+          <span>
+            {offlineRead
+              ? "Reconnect to open"
+              : activityStateLabel(activity.state)}
+          </span>
+        ) : null}
         {unavailableReason ? (
           <LockKeyhole size={15} aria-hidden="true" />
         ) : (
@@ -3234,8 +3235,10 @@ export function LearningModules({
                     />
                     <div>
                       <p className={journey.chapterLabel}>
-                        Module {module.position} ·{" "}
-                        {offlineRead ? "Saved view" : moduleState}
+                        Module {module.position}
+                        {offlineRead || moduleState !== "Available"
+                          ? ` · ${offlineRead ? "Saved view" : moduleState}`
+                          : null}
                       </p>
                       <h3>{module.title}</h3>
                       <p>

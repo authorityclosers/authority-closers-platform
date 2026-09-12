@@ -19,6 +19,7 @@ from datetime import UTC, datetime, timedelta
 from types import MappingProxyType
 from typing import Literal, Protocol, cast
 from urllib.parse import quote
+from uuid import UUID
 
 from ac_platform.media.contracts import (
     EphemeralMediaUrl,
@@ -607,11 +608,10 @@ class PrivateMediaDeliveryHandler:
             raise MediaStorageUnavailable("The HLS playlist is not valid UTF-8.") from error
         # The service's canonical source object is
         # ``.../{version}/original`` and processing stores outputs below
-        # ``original/renditions``.  Keep the compact test/local layout
-        # ``.../{version}/renditions`` valid as well, but accept only these
-        # two structured descendants of the verified version prefix.  A
-        # substring marker or an arbitrary intermediate path must not widen
-        # the HLS graph's namespace.
+        # ``original/renditions`` or one immutable processing-attempt directory.
+        # Keep the compact test/local layout valid as well. The inventory and
+        # every rewritten child remain inside ONE exact rendition namespace;
+        # a processing retry must never connect to another attempt's output.
         rendition_prefixes = (
             f"{version_prefix}/renditions",
             f"{version_prefix}/original/renditions",
@@ -620,6 +620,21 @@ class PrivateMediaDeliveryHandler:
             (prefix for prefix in rendition_prefixes if object_key.startswith(prefix + "/")),
             None,
         )
+        if rendition_prefix is None:
+            attempt_root = f"{version_prefix}/original/attempts/"
+            if object_key.startswith(attempt_root):
+                suffix = object_key[len(attempt_root) :].split("/")
+                try:
+                    attempt_id = UUID(suffix[0])
+                except ValueError:
+                    attempt_id = UUID(int=0)
+                if (
+                    attempt_id.int
+                    and str(attempt_id) == suffix[0]
+                    and len(suffix) >= 3
+                    and suffix[1] == "renditions"
+                ):
+                    rendition_prefix = f"{attempt_root}{attempt_id}/renditions"
         if rendition_prefix is None:
             raise MediaStorageUnavailable("The HLS playlist is outside the rendition namespace.")
         namespace_prefix = rendition_prefix

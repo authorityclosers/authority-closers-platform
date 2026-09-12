@@ -10,7 +10,7 @@ import {
   useState,
   type KeyboardEvent,
 } from "react";
-import { RouteHeader, StatusBanner } from "@ac/ui";
+import { RouteHeader } from "@ac/ui";
 
 import {
   ApiError,
@@ -69,19 +69,23 @@ export function filterLearningCourses(
   return courses.filter((course) => course.state === filter);
 }
 
-/** Return the next enabled tab for the controlled course filter list. */
+function getVisibleLearningFilters(
+  savedFilterAvailable: boolean,
+): Array<{ id: LearningFilter; label: string }> {
+  return FILTERS.filter((item) => item.id !== "saved" || savedFilterAvailable);
+}
+
+/** Return the next visible tab for the controlled course filter list. */
 export function getLearningFilterKeyboardTarget(
   current: LearningFilter,
   key: string,
   savedFilterAvailable: boolean,
 ): LearningFilter | null {
-  const enabled = FILTERS.filter(
-    (item) => item.id !== "saved" || savedFilterAvailable,
-  );
-  const currentIndex = enabled.findIndex((item) => item.id === current);
+  const visibleFilters = getVisibleLearningFilters(savedFilterAvailable);
+  const currentIndex = visibleFilters.findIndex((item) => item.id === current);
   if (currentIndex === -1) return null;
-  if (key === "Home") return enabled[0]?.id ?? null;
-  if (key === "End") return enabled.at(-1)?.id ?? null;
+  if (key === "Home") return visibleFilters[0]?.id ?? null;
+  if (key === "End") return visibleFilters.at(-1)?.id ?? null;
 
   const direction =
     key === "ArrowRight" || key === "ArrowDown"
@@ -91,8 +95,9 @@ export function getLearningFilterKeyboardTarget(
         : 0;
   if (direction === 0) return null;
   return (
-    enabled[(currentIndex + direction + enabled.length) % enabled.length]?.id ??
-    null
+    visibleFilters[
+      (currentIndex + direction + visibleFilters.length) % visibleFilters.length
+    ]?.id ?? null
   );
 }
 
@@ -142,7 +147,7 @@ export function getLearningLoadErrorPresentation(
     detail: is401
       ? "Your session has expired. Sign in again to view your courses."
       : is403
-        ? "This account is not authorized to view this learner library. If you think this is incorrect, contact support."
+        ? "This account cannot view this learner library right now. If you think this is incorrect, contact support."
         : canRetry
           ? "The learning service or network is temporarily unavailable. Retry the read; no learner work was changed."
           : userFacingRequestError(
@@ -166,7 +171,7 @@ export function isActivityActionable(
   );
 }
 
-/** Load the canonical learner-owned/enrolled course projection. */
+/** Load the learner-owned course collection. */
 export async function loadLearningData(
   api: LearnerApi,
   signal?: AbortSignal,
@@ -247,7 +252,7 @@ function EmptyLearningState({
       </h2>
       <p>
         {filtered
-          ? "Only server-authorized course states appear in each view. Return to all courses to see the full library."
+          ? "No courses match this filter. Return to all courses to see your library."
           : "Browse the published catalog to find a course available for this learner workspace."}
       </p>
       <div className="learning-collection-empty__actions">
@@ -278,14 +283,18 @@ export function LearningFilterTabs({
   onFilterChange: (filter: LearningFilter) => void;
 }) {
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const visibleFilters = useMemo(
+    () => getVisibleLearningFilters(savedFilterAvailable),
+    [savedFilterAvailable],
+  );
   const focusFilter = useCallback(
     (nextFilter: LearningFilter) => {
-      const index = FILTERS.findIndex((item) => item.id === nextFilter);
+      const index = visibleFilters.findIndex((item) => item.id === nextFilter);
       if (index === -1) return;
       tabRefs.current[index]?.focus();
       onFilterChange(nextFilter);
     },
-    [onFilterChange],
+    [onFilterChange, visibleFilters],
   );
 
   return (
@@ -295,8 +304,7 @@ export function LearningFilterTabs({
       aria-label="Filter courses"
       aria-orientation="horizontal"
     >
-      {FILTERS.map((item, index) => {
-        const disabled = item.id === "saved" && !savedFilterAvailable;
+      {visibleFilters.map((item, index) => {
         const selected = filter === item.id;
         const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
           const target = getLearningFilterKeyboardTarget(
@@ -320,14 +328,11 @@ export function LearningFilterTabs({
             role="tab"
             aria-selected={selected}
             aria-controls="learning-course-list"
-            aria-disabled={disabled}
             tabIndex={selected ? 0 : -1}
-            disabled={disabled}
             onKeyDown={handleKeyDown}
             onClick={() => onFilterChange(item.id)}
           >
             {item.label}
-            {disabled ? " · unavailable" : null}
           </button>
         );
       })}
@@ -485,7 +490,7 @@ export function LearningViewRuntime({
         description={
           offlineRead
             ? "Read-only snapshot of your learner library. Reconnect to verify access and enable live actions."
-            : "Your server-authorized courses, organized around the published paths you can access."
+            : "Published courses and paths for you."
         }
         aside={
           <div
@@ -508,14 +513,6 @@ export function LearningViewRuntime({
         >
           {offlineReadNotice(offlineRead)}
         </div>
-      ) : null}
-
-      {!savedFilterAvailable ? (
-        <StatusBanner state="info" title="Saved courses are not available yet.">
-          This library does not have a canonical course bookmark projection.
-          Activity drafts are kept separate and are not treated as saved
-          courses.
-        </StatusBanner>
       ) : null}
 
       <div className="learning-collection-toolbar">

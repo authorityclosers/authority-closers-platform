@@ -1,3 +1,4 @@
+import { LEARNER_POLICY_VERSION } from "./learner-policy";
 import {
   getDefaultOfflineReadCache,
   getOfflineReadPolicy,
@@ -283,6 +284,8 @@ export interface LearningProjectionResponse {
   predicate: string;
   missing_module_ids: string[];
   activity_reasons: ActivityReasonResponse[];
+  /** Server-owned canonical pointer; absent on older API deployments. */
+  next_activity_id?: string | null;
 }
 
 export interface LearningResponse {
@@ -838,6 +841,7 @@ export function createLearnerApi(
         whatsapp_number: input.whatsappNumber,
         password: input.password,
         consent: input.consent,
+        consent_version: LEARNER_POLICY_VERSION,
       }),
     loginPassword: async (email: string, password: string) =>
       rememberAuthenticatedOwner(

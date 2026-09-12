@@ -7,8 +7,12 @@ from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
 from uuid import UUID
+
+if TYPE_CHECKING:
+    from ac_platform.media.studio_upload import StudioUploadAuthorization
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -77,13 +81,18 @@ class LocalAvatarMediaService(MediaService):
         request: UploadIntentRequest,
         *,
         idempotency_key: str,
+        studio_authorization: StudioUploadAuthorization | None = None,
     ) -> UploadIntentResponse:
         if request.purpose is not MediaPurpose.AVATAR:
             raise MediaForbidden("This local upload adapter accepts only profile photos.")
         if request.crop is not None and request.crop.rotation_degrees != 0:
             raise MediaBadRequest("This local photo editor does not support crop rotation.")
         return super().create_upload_intent(
-            database, actor, request, idempotency_key=idempotency_key
+            database,
+            actor,
+            request,
+            idempotency_key=idempotency_key,
+            studio_authorization=studio_authorization,
         )
 
 

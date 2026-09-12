@@ -369,6 +369,7 @@ class DurableWorker:
             jobs = await JobRepository(session).claim(
                 lease_for=self._claim_lease_for,
                 limit=1,
+                kinds=self.allowed_job_kinds,
             )
             return jobs[0] if jobs else None
 

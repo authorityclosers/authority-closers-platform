@@ -242,6 +242,7 @@ class PasswordRegistrationRequest(BaseModel):
     whatsapp_number: str = Field(min_length=7, max_length=32)
     password: str = Field(min_length=12, max_length=256)
     consent: Literal[True]
+    consent_version: str | None = Field(default=None, min_length=1, max_length=64)
 
 
 class PasswordLoginRequest(BaseModel):
@@ -340,6 +341,20 @@ class LearnerConsentRequired(DomainError):
     code = "learner_consent_required"
     title = "Learner consent is required"
     status = 400
+
+
+def _require_current_learner_consent(
+    settings: Settings,
+    *,
+    submitted_version: str | None,
+    configured_version: str,
+) -> None:
+    if (submitted_version is not None and submitted_version != configured_version) or (
+        submitted_version is None and settings.environment == "production"
+    ):
+        raise LearnerConsentRequired(
+            "Reload registration and review the current Terms and Privacy Policy before agreeing."
+        )
 
 
 class AdminRegistrationUnavailable(DomainError):
@@ -1083,6 +1098,13 @@ def _surface_callback_uri(settings: Settings, surface: str) -> str:
     return f"{_surface_origin(settings, surface)}/v1/auth/google/callback"
 
 
+# Navigation context only; these destinations do not grant enrollment or access.
+_LEARNER_COURSE_INTENT = "authority-closers-free-course"
+_LEARNER_COURSE_RETURN_PATHS = frozenset(
+    f"{path}?course={_LEARNER_COURSE_INTENT}" for path in ("/home", "/onboarding")
+)
+
+
 def _learner_oauth_recovery_response(
     settings: Settings,
     *,
@@ -1094,10 +1116,12 @@ def _learner_oauth_recovery_response(
         "registration_required",
     ],
     transaction_cookie_names: tuple[str, ...],
+    transaction_return_path: str | None = None,
 ) -> Response:
-    location = (
-        f"{_surface_origin(settings, 'learner')}/auth/callback?{urlencode({'result': result})}"
-    )
+    parameters: dict[str, str] = {"result": result}
+    if transaction_return_path in _LEARNER_COURSE_RETURN_PATHS:
+        parameters["course"] = _LEARNER_COURSE_INTENT
+    location = f"{_surface_origin(settings, 'learner')}/auth/callback?{urlencode(parameters)}"
     response = RedirectResponse(location, status_code=status.HTTP_303_SEE_OTHER)
     _delete_oauth_transaction_cookies(response, settings, transaction_cookie_names)
     response.headers["cache-control"] = "no-store"
@@ -1257,6 +1281,11 @@ def install_identity_http(
             raise PasswordRegistrationUnavailable(
                 "Reviewed learner consent and the public learner context must be configured."
             )
+        _require_current_learner_consent(
+            settings,
+            submitted_version=body.consent_version,
+            configured_version=consent_version,
+        )
         try:
             async with sessions() as database, database.begin():
                 registration = await PasswordIdentityService(
@@ -1529,6 +1558,9 @@ def install_identity_http(
         surface: Literal["learner", "admin", "coach"] = "learner",
         return_path: str = "/home",
         consent: bool = False,
+        client_consent_version: Annotated[
+            str | None, Query(alias="consent_version", min_length=1, max_length=64)
+        ] = None,
     ) -> Response:
         _require_surface_host(request, settings, surface)
         safe_return_path = normalize_return_path(return_path)
@@ -1550,6 +1582,11 @@ def install_identity_http(
                 raise PasswordRegistrationUnavailable(
                     "Reviewed learner consent and the public learner context must be configured."
                 )
+            _require_current_learner_consent(
+                settings,
+                submitted_version=client_consent_version,
+                configured_version=consent_version,
+            )
         else:
             consent_version = None
         audience = identity_provider.audience
@@ -1636,6 +1673,7 @@ def install_identity_http(
                     settings,
                     result="provider_rejected",
                     transaction_cookie_names=transaction_cookie_names,
+                    transaction_return_path=transaction.return_path,
                 )
             return _oauth_terminal_problem_response(
                 request,
@@ -1705,6 +1743,7 @@ def install_identity_http(
                     settings,
                     result="provider_rejected",
                     transaction_cookie_names=transaction_cookie_names,
+                    transaction_return_path=transaction.return_path,
                 )
             return _oauth_terminal_problem_response(
                 request,
@@ -1718,6 +1757,7 @@ def install_identity_http(
                     settings,
                     result="provider_unavailable",
                     transaction_cookie_names=transaction_cookie_names,
+                    transaction_return_path=transaction.return_path,
                 )
             return _oauth_terminal_problem_response(
                 request,
@@ -1777,12 +1817,14 @@ def install_identity_http(
                     settings,
                     result="consent_required",
                     transaction_cookie_names=transaction_cookie_names,
+                    transaction_return_path=transaction.return_path,
                 )
             if isinstance(error.__cause__, LearnerConsentUpdateRequiredError):
                 return _learner_oauth_recovery_response(
                     settings,
                     result="consent_update_required",
                     transaction_cookie_names=transaction_cookie_names,
+                    transaction_return_path=transaction.return_path,
                 )
             return _oauth_terminal_problem_response(
                 request,
@@ -1799,6 +1841,7 @@ def install_identity_http(
                     settings,
                     result="consent_update_required",
                     transaction_cookie_names=transaction_cookie_names,
+                    transaction_return_path=transaction.return_path,
                 )
             return await _oauth_identity_problem_response(
                 request,
@@ -1815,6 +1858,7 @@ def install_identity_http(
                     settings,
                     result="registration_required",
                     transaction_cookie_names=transaction_cookie_names,
+                    transaction_return_path=transaction.return_path,
                 )
             return await _oauth_identity_problem_response(
                 request,

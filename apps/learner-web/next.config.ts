@@ -18,7 +18,7 @@ if (privateMediaDevelopment) assertDevelopmentMediaNativePrivacy();
 
 if (
   privateMediaDevelopment &&
-  (nextPackage.version !== "16.2.11" ||
+  (nextPackage.version !== "16.3.3" ||
     process.env.NEXT_TRACE_SPAN_THRESHOLD_MS !== "9007199254740991")
 ) {
   // logging:false does not cover .next/dev/trace. This pinned, internal Next

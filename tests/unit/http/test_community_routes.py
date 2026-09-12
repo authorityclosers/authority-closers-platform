@@ -115,9 +115,14 @@ def settings() -> Settings:
 def client(
     monkeypatch: pytest.MonkeyPatch,
     *,
-    role: str = "learner",
+    role: str | None = "learner",
+    selected_academy: bool = True,
 ) -> tuple[TestClient, ActorContext]:
-    actor = ActorContext(person_id=uuid4(), session_id=uuid4(), tenant_id=uuid4())
+    actor = ActorContext(
+        person_id=uuid4(),
+        session_id=uuid4(),
+        tenant_id=uuid4() if selected_academy else None,
+    )
     auth = SimpleNamespace(
         resolved=SimpleNamespace(actor=actor, membership_role=role),
         database=object(),
@@ -145,6 +150,33 @@ def test_profile_is_self_scoped_and_does_not_expose_email(
     assert response.json()["username"] == "learner_7"
     assert "email" not in response.text
     assert FakeCommunityApplication.calls == [("profile", actor)]
+
+
+def test_global_profile_and_username_work_without_selected_academy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    test_client, actor = client(monkeypatch, role=None, selected_academy=False)
+
+    assert test_client.get("/v1/community/profile").status_code == 200
+    claimed = test_client.put(
+        "/v1/community/username",
+        headers={"Origin": "https://app.authorityclosers.test"},
+        json={"username": "learner_7"},
+    )
+    assert claimed.status_code == 200
+    assert FakeCommunityApplication.calls == [
+        ("profile", actor),
+        ("claim", actor, "learner_7"),
+        ("profile", actor),
+    ]
+    assert (
+        test_client.put(
+            "/v1/community/leaderboard-opt-in",
+            headers={"Origin": "https://app.authorityclosers.test"},
+            json={"opted_in": True, "expected_revision": 0},
+        ).status_code
+        == 403
+    )
 
 
 @pytest.mark.parametrize("origin", [None, "https://evil.example"])
@@ -195,12 +227,12 @@ def test_opt_in_is_explicit_and_revision_guarded(monkeypatch: pytest.MonkeyPatch
     response = test_client.put(
         "/v1/community/leaderboard-opt-in",
         headers={"Origin": "https://app.authorityclosers.test"},
-        json={"opted_in": True, "expected_revision": 4},
+        json={"opted_in": True, "expected_revision": 0},
     )
 
     assert response.status_code == 200
     assert response.json()["leaderboard_opted_in"] is True
-    assert FakeCommunityApplication.calls == [("opt-in", actor, True, 4)]
+    assert FakeCommunityApplication.calls == [("opt-in", actor, True, 0)]
 
 
 def test_leaderboard_is_learner_tenant_scoped_and_public_fields_only(

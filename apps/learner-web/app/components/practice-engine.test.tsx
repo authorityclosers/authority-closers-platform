@@ -129,7 +129,7 @@ const progress = (): PracticeProgress => ({
   credits_balance: 0,
   xp_total: 0,
   actual_practice_days_this_week: 0,
-  policy_version: "earned-pilot-v1",
+  policy_version: "arcade-earned-pilot-2026-09-08-v1",
   recent_attempts: [],
   recent_awards: [],
   purchases_enabled: false,
@@ -148,6 +148,16 @@ beforeEach(() => {
   document.body.append(container);
   root = createRoot(container);
   unmounted = false;
+  vi.spyOn(HTMLDialogElement.prototype, "showModal").mockImplementation(
+    function (this: HTMLDialogElement) {
+      this.open = true;
+    },
+  );
+  vi.spyOn(HTMLDialogElement.prototype, "close").mockImplementation(function (
+    this: HTMLDialogElement,
+  ) {
+    this.open = false;
+  });
   api = {
     progress: vi.fn(async () => progress()),
     profile: vi.fn(async () => progress().profile),
@@ -198,7 +208,11 @@ async function mount(attemptId?: string) {
 function button(text: string) {
   const result = [
     ...container.querySelectorAll<HTMLButtonElement>("button"),
-  ].find((node) => node.textContent?.trim() === text);
+  ].find(
+    (node) =>
+      node.textContent?.trim() === text ||
+      node.getAttribute("aria-label") === text,
+  );
   expect(result, text).toBeTruthy();
   return result!;
 }
@@ -271,12 +285,7 @@ it("uses user-gesture sound preparation, confirmed reward cues and immediate mut
   expect(player.play).not.toHaveBeenCalled();
   await click(
     container.querySelector<HTMLButtonElement>(
-      '[aria-label="Practice sound settings"]',
-    )!,
-  );
-  await click(
-    container.querySelector<HTMLButtonElement>(
-      '[role="switch"][aria-label="Practice sound effects"]',
+      '[aria-label="Unmute practice sounds"]',
     )!,
   );
   expect(player.setEnabled).toHaveBeenLastCalledWith(true);
@@ -288,7 +297,7 @@ it("uses user-gesture sound preparation, confirmed reward cues and immediate mut
   );
   await click(
     container.querySelector<HTMLButtonElement>(
-      '[role="switch"][aria-label="Practice sound effects"]',
+      '[aria-label="Mute practice sounds"]',
     )!,
   );
   expect(player.setEnabled).toHaveBeenLastCalledWith(false);
@@ -297,8 +306,77 @@ it("uses user-gesture sound preparation, confirmed reward cues and immediate mut
   expect(player.dispose).toHaveBeenCalledOnce();
 });
 
+it.each([
+  { referenceMatch: true, expectedCue: "confirm" },
+  { referenceMatch: false, expectedCue: "retry" },
+  { referenceMatch: null, expectedCue: null },
+] as const)(
+  "routes editorial reference match $referenceMatch to $expectedCue feedback audio",
+  async ({ referenceMatch, expectedCue }) => {
+    const play = vi.fn();
+    vi.spyOn(soundModule, "createPracticeSoundPlayer").mockReturnValue({
+      prepare: vi.fn(),
+      play,
+      setEnabled: vi.fn(),
+      setVolume: vi.fn(),
+      preview: vi.fn(),
+      stop: vi.fn(),
+      dispose: vi.fn(),
+    });
+    vi.mocked(api.respond).mockResolvedValue({
+      ...answeredAttempt(),
+      item_states: [
+        {
+          ...answeredAttempt().item_states[0],
+          feedback: { ...feedback, reference_match: referenceMatch },
+        },
+      ],
+    });
+
+    await mount();
+    await click(button("Start a new practice"));
+    await click(container.querySelector<HTMLInputElement>('input[value="0"]')!);
+    await click(button("Check my response"));
+
+    const feedbackCalls = play.mock.calls.filter(([kind]) => kind !== "select");
+    if (expectedCue) {
+      expect(feedbackCalls).toEqual([
+        [expectedCue, `response:${responseId}:reference:${referenceMatch}`],
+      ]);
+    } else {
+      expect(feedbackCalls).toEqual([]);
+    }
+  },
+);
+
+it("plays no feedback cue when the response request has no canonical result", async () => {
+  const play = vi.fn();
+  vi.spyOn(soundModule, "createPracticeSoundPlayer").mockReturnValue({
+    prepare: vi.fn(),
+    play,
+    setEnabled: vi.fn(),
+    setVolume: vi.fn(),
+    preview: vi.fn(),
+    stop: vi.fn(),
+    dispose: vi.fn(),
+  });
+  vi.mocked(api.respond).mockRejectedValue(new TypeError("Network failed"));
+
+  await mount();
+  await click(button("Start a new practice"));
+  await click(container.querySelector<HTMLInputElement>('input[value="0"]')!);
+  await click(button("Check my response"));
+
+  expect(play.mock.calls.filter(([kind]) => kind !== "select")).toEqual([]);
+});
+
 it("lets a learner choose a decorative companion without any account or reward mutation", async () => {
   await mount();
+  expect(container.textContent).not.toContain("A useful question.");
+  await click(button("Practice details"));
+  expect(container.querySelector("dialog[open]")?.textContent).toContain(
+    "A useful question.",
+  );
   await click(button("Scout"));
   expect(window.localStorage.getItem("ac-practice-companion")).toBe("scout");
   expect(
@@ -498,6 +576,7 @@ it("unlocks wallet timezone correction after definite input rejection", async ()
     new PracticeEngineRequestError(400),
   );
   await act(async () => root.render(<PracticeRecognition api={api} />));
+  await click(button("View your week"));
   await click(button("Change timezone"));
   await click(button("Save timezone"));
   expect(
@@ -560,9 +639,86 @@ it("shows the original reward date and receipt without treating an empty week as
       .querySelector('[role="progressbar"]')
       ?.getAttribute("aria-valuenow"),
   ).toBe("0");
+  expect(container.querySelector("details")).toBeNull();
+  await click(
+    container.querySelector<HTMLButtonElement>(
+      'button[aria-label="0 earned credits. View details"]',
+    )!,
+  );
+  await click(button("Reward activity"));
   expect(container.textContent).toContain("Your recent rewards");
   expect(container.textContent).toContain("Sep 8");
   expect(container.textContent).toContain("+10 credits · +30 XP");
   expect(container.textContent).not.toMatch(/streak|mastery|rank/i);
   expect(api.acknowledge).not.toHaveBeenCalled();
+});
+
+it("opens accessible reward sheets on tap, restores focus on Escape and restores page scrolling", async () => {
+  document.body.style.overflow = "auto";
+  await act(async () => root.render(<PracticeRecognition api={api} />));
+  const trigger = container.querySelector<HTMLButtonElement>(
+    'button[aria-label="0 earned credits. View details"]',
+  )!;
+  await click(trigger);
+  expect(trigger.getAttribute("aria-expanded")).toBe("true");
+  const dialog = container.querySelector<HTMLDialogElement>("dialog")!;
+  expect(dialog.open).toBe(true);
+  expect(
+    document.getElementById(dialog.getAttribute("aria-labelledby")!)
+      ?.textContent,
+  ).toBe("Earned credits");
+  await click(button("Reward activity"));
+  expect(dialog.textContent).toContain("Your first reward belongs here");
+  expect(document.body.style.overflow).toBe("hidden");
+  await act(async () =>
+    dialog.dispatchEvent(new Event("cancel", { cancelable: true })),
+  );
+  expect(container.querySelector("dialog")).toBeNull();
+  expect(document.activeElement).toBe(trigger);
+  expect(document.body.style.overflow).toBe("auto");
+  expect(api.issue).not.toHaveBeenCalled();
+  document.body.style.overflow = "";
+});
+
+it("keeps XP, academy leaderboard access and weekly activity distinct without fake scores or purchases", async () => {
+  await act(async () => root.render(<PracticeRecognition api={api} />));
+  const weekTrigger = button("View your week");
+  const weekProgress = container.querySelector('[role="progressbar"]')!;
+  expect(weekProgress.closest("button")).toBeNull();
+  expect(
+    document.getElementById(weekTrigger.getAttribute("aria-describedby")!)
+      ?.textContent,
+  ).toContain("0 of 3 practice days");
+  expect(weekTrigger.getAttribute("aria-expanded")).toBe("false");
+  await click(
+    container.querySelector<HTMLButtonElement>(
+      'button[aria-label="0 practice xp. View details"]',
+    )!,
+  );
+  expect(container.querySelector("dialog")?.textContent).toContain(
+    "separate from course progress",
+  );
+  expect(
+    container.querySelector('dialog a[href="/leaderboard"]'),
+  ).not.toBeNull();
+  await click(
+    container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Close reward details"]',
+    )!,
+  );
+  await click(button("View your week"));
+  expect(weekTrigger.getAttribute("aria-expanded")).toBe("true");
+  expect(weekTrigger.getAttribute("aria-controls")).toBe(
+    container.querySelector("dialog")?.id,
+  );
+  expect(container.querySelector("dialog")?.textContent).toContain(
+    "not a consecutive-day streak",
+  );
+  expect(container.querySelector("dialog")?.textContent).toContain(
+    "Asia/Kolkata",
+  );
+  await act(async () => root.unmount());
+  unmounted = true;
+  expect(document.body.style.overflow).not.toBe("hidden");
+  expect(api.updateProfile).not.toHaveBeenCalled();
 });

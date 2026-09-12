@@ -477,6 +477,7 @@ export function ProfileRuntime({
         <CommunityIdentityCard
           key={`${me.person_id}:${me.selected_tenant_id ?? "none"}`}
           api={api}
+          showLeaderboard={false}
         />
       ) : null}
 

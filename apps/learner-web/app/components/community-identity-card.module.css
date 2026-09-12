@@ -22,6 +22,7 @@
 
 .heading h2 {
   font-size: 1.08rem;
+  scroll-margin-block-start: calc(96px + env(safe-area-inset-top));
 }
 
 .heading p,
@@ -86,7 +87,8 @@
 
 .input:focus-visible,
 .button:focus-visible,
-.checkbox:focus-visible {
+.checkbox:focus-visible,
+.heading h2:focus-visible {
   outline: 3px solid var(--theme-action);
   outline-offset: 3px;
 }

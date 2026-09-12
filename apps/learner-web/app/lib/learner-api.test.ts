@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { LEARNER_POLICY_VERSION } from "./learner-policy";
 
 import {
   ApiError,
@@ -920,6 +921,7 @@ describe("learner API adapter", () => {
           whatsapp_number: "+12025550123",
           password: "twelve-characters-and-more",
           consent: true,
+          consent_version: LEARNER_POLICY_VERSION,
         },
       },
       {
@@ -935,7 +937,10 @@ describe("learner API adapter", () => {
       },
     ]);
     expect(requests.every(({ path }) => !path.includes("token="))).toBe(true);
-    expect(requests[0]?.body).not.toHaveProperty("consent_version");
+    expect(requests[0]?.body).toHaveProperty(
+      "consent_version",
+      LEARNER_POLICY_VERSION,
+    );
   });
 
   it("requests a verification resend without exposing account existence", async () => {

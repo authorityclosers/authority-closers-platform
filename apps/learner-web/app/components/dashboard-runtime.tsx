@@ -30,6 +30,14 @@ import {
   type OfflineReadMetadata,
 } from "../lib/offline-read-cache";
 import { ROUTES } from "../lib/routes";
+import {
+  courseIntentHref,
+  FREE_COURSE_SLUG,
+  type CourseIntent,
+} from "../lib/course-intent";
+export { FREE_COURSE_SLUG } from "../lib/course-intent";
+import { firstActionableActivity } from "../lib/next-learning-action";
+export { firstActionableActivity } from "../lib/next-learning-action";
 import { userFacingRequestError } from "../lib/user-facing-error";
 import {
   hasMembershipRole,
@@ -40,29 +48,11 @@ import { DashboardSkeleton } from "./skeletons";
 import { CourseArtwork, InstructorPortrait } from "./course-artwork";
 
 const defaultApi = createLearnerApi();
-export const FREE_COURSE_SLUG = "authority-closers-free-course";
 
 export function selectPublishedFreeCourse(
   programs: ProgramSummaryResponse[],
 ): ProgramSummaryResponse | undefined {
   return programs.find((p) => p.slug === FREE_COURSE_SLUG);
-}
-
-export function firstActionableActivity(
-  learning: LearningResponse,
-): LearningActivityResponse | undefined {
-  for (const mod of learning.modules) {
-    for (const activity of mod.activities) {
-      const state = activity.state.toLowerCase();
-      if (
-        (state === "in_progress" || state === "available") &&
-        activity.allowed_actions.length > 0
-      ) {
-        return activity;
-      }
-    }
-  }
-  return undefined;
 }
 
 export function activityStateLabel(activity: LearningActivityResponse): string {
@@ -200,9 +190,15 @@ export async function loadDashboardData(
   return { kind: "ready", data: { ...result.data, ...plan } };
 }
 
-export type DashboardRuntimeProps = { api?: LearnerApi };
+export type DashboardRuntimeProps = {
+  api?: LearnerApi;
+  courseIntent?: CourseIntent;
+};
 
-export function DashboardRuntime({ api = defaultApi }: DashboardRuntimeProps) {
+export function DashboardRuntime({
+  api = defaultApi,
+  courseIntent = null,
+}: DashboardRuntimeProps) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
@@ -288,8 +284,11 @@ export function DashboardRuntime({ api = defaultApi }: DashboardRuntimeProps) {
   }, [load]);
 
   useEffect(() => {
-    if (onboardingRedirecting) window.location.replace(ROUTES.onboarding);
-  }, [onboardingRedirecting]);
+    if (onboardingRedirecting)
+      window.location.replace(
+        courseIntentHref(ROUTES.onboarding, courseIntent),
+      );
+  }, [onboardingRedirecting, courseIntent]);
 
   async function handleEnroll(programVersionId: string) {
     setEnrolling(true);
@@ -355,7 +354,10 @@ export function DashboardRuntime({ api = defaultApi }: DashboardRuntimeProps) {
                 )}
         </p>
         {is401 ? (
-          <Link className="button button--ink" href={ROUTES.sessionExpired}>
+          <Link
+            className="button button--ink"
+            href={courseIntentHref(ROUTES.sessionExpired, courseIntent)}
+          >
             Sign in again
           </Link>
         ) : (

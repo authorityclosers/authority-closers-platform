@@ -17,7 +17,10 @@ from ac_platform.community.application import (
     UsernameAlreadyClaimed,
     UsernameUnavailable,
 )
-from ac_platform.community.models import AcademyPublicProfile
+from ac_platform.community.models import (
+    AcademyLeaderboardPreference,
+    CohorvaPublicProfile,
+)
 from ac_platform.kernel.authz import ActorContext
 
 
@@ -90,66 +93,71 @@ def actor() -> ActorContext:
     return ActorContext(person_id=uuid4(), session_id=uuid4(), tenant_id=uuid4())
 
 
+def identity(current: ActorContext, username: str = "learner_7") -> CohorvaPublicProfile:
+    return CohorvaPublicProfile(
+        person_id=current.person_id,
+        username=username,
+        claimed_session_id=current.session_id,
+        claim_source="account_claim",
+        legacy_profile_count=0,
+    )
+
+
+def preference(
+    current: ActorContext, *, opted_in: bool = False, revision: int = 1
+) -> AcademyLeaderboardPreference:
+    assert current.tenant_id is not None
+    return AcademyLeaderboardPreference(
+        tenant_id=current.tenant_id,
+        person_id=current.person_id,
+        leaderboard_opted_in=opted_in,
+        revision=revision,
+    )
+
+
 @pytest.mark.asyncio
 async def test_mutations_require_an_explicit_caller_owned_transaction() -> None:
     current = actor()
-    existing = AcademyPublicProfile(
-        tenant_id=current.tenant_id,
-        person_id=current.person_id,
-        username="learner_7",
-        leaderboard_opted_in=False,
-        revision=1,
-    )
+    existing = preference(current)
     claim_database = FakeDatabase([None], explicit_transaction=False)
     with pytest.raises(CommunityError, match="caller-owned transaction"):
         await CommunityApplication(claim_database).claim_username(current, "learner_7")  # type: ignore[arg-type]
     assert len(claim_database.scalars) == 1
 
-    preference_database = FakeDatabase([existing], explicit_transaction=False)
+    preference_database = FakeDatabase([identity(current), existing], explicit_transaction=False)
     with pytest.raises(CommunityError, match="caller-owned transaction"):
         await CommunityApplication(preference_database).set_leaderboard_opt_in(  # type: ignore[arg-type]
             current, opted_in=True, expected_revision=1
         )
-    assert len(preference_database.scalars) == 1
+    assert len(preference_database.scalars) == 2
 
 
 @pytest.mark.asyncio
-async def test_claim_username_creates_one_private_default_and_append_only_audit() -> None:
+async def test_claim_username_creates_one_global_identity_without_academy() -> None:
     current = actor()
+    current = ActorContext(current.person_id, current.session_id, None)
     database = FakeDatabase([None])
 
     result = await CommunityApplication(database).claim_username(current, " Learner_7 ")  # type: ignore[arg-type]
 
     row = database.added[0]
-    assert isinstance(row, AcademyPublicProfile)
-    assert (row.tenant_id, row.person_id, row.username) == (
-        current.tenant_id,
+    assert isinstance(row, CohorvaPublicProfile)
+    assert (row.person_id, row.username, row.claimed_session_id) == (
         current.person_id,
         "learner_7",
+        current.session_id,
     )
-    assert row.leaderboard_opted_in is False
+    assert row.claim_source == "account_claim"
     assert result["leaderboard_opted_in"] is False
-    assert FakeAuditRepository.events == [
-        {
-            "action": "community.username_claimed",
-            "resource_type": "academy_public_profile",
-            "resource_id": current.person_id,
-            "payload": {"username": "learner_7", "revision": 1},
-        }
-    ]
+    assert result["revision"] == 0
+    assert FakeAuditRepository.events == []
 
 
 @pytest.mark.asyncio
 async def test_claim_username_is_idempotent_but_does_not_overwrite_identity() -> None:
     current = actor()
-    existing = AcademyPublicProfile(
-        tenant_id=current.tenant_id,
-        person_id=current.person_id,
-        username="learner_7",
-        leaderboard_opted_in=False,
-        revision=1,
-    )
-    same = await CommunityApplication(FakeDatabase([existing])).claim_username(  # type: ignore[arg-type]
+    existing = identity(current)
+    same = await CommunityApplication(FakeDatabase([existing, None])).claim_username(  # type: ignore[arg-type]
         current, "LEARNER_7"
     )
     assert same["username"] == "learner_7"
@@ -160,6 +168,29 @@ async def test_claim_username_is_idempotent_but_does_not_overwrite_identity() ->
             current, "another_name"
         )
     assert existing.username == "learner_7"
+
+
+@pytest.mark.asyncio
+async def test_selected_academy_claim_keeps_global_identity_and_tenant_audit() -> None:
+    current = actor()
+    database = FakeDatabase([None, None])
+
+    result = await CommunityApplication(database).claim_username(current, "learner_7")  # type: ignore[arg-type]
+
+    assert result == {
+        "username": "learner_7",
+        "leaderboard_opted_in": False,
+        "revision": 0,
+        "leaderboard_policy": result["leaderboard_policy"],
+    }
+    assert FakeAuditRepository.events == [
+        {
+            "action": "community.username_claimed",
+            "resource_type": "community_public_profile",
+            "resource_id": current.person_id,
+            "payload": {"username": "learner_7", "scope": "global"},
+        }
+    ]
 
 
 @pytest.mark.asyncio
@@ -174,14 +205,8 @@ async def test_database_uniqueness_loss_returns_generic_unavailable() -> None:
 @pytest.mark.asyncio
 async def test_opt_in_is_revision_guarded_and_withdrawal_is_audited() -> None:
     current = actor()
-    existing = AcademyPublicProfile(
-        tenant_id=current.tenant_id,
-        person_id=current.person_id,
-        username="learner_7",
-        leaderboard_opted_in=True,
-        revision=4,
-    )
-    database = FakeDatabase([existing])
+    existing = preference(current, opted_in=True, revision=4)
+    database = FakeDatabase([identity(current), existing])
 
     result = await CommunityApplication(database).set_leaderboard_opt_in(  # type: ignore[arg-type]
         current, opted_in=False, expected_revision=4
@@ -195,17 +220,33 @@ async def test_opt_in_is_revision_guarded_and_withdrawal_is_audited() -> None:
         "profile_revision": 5,
     }
 
-    stale = AcademyPublicProfile(
-        tenant_id=current.tenant_id,
-        person_id=current.person_id,
-        username="learner_7",
-        leaderboard_opted_in=False,
-        revision=5,
-    )
+    stale = preference(current, opted_in=False, revision=5)
     with pytest.raises(CommunityRevisionConflict):
-        await CommunityApplication(FakeDatabase([stale])).set_leaderboard_opt_in(  # type: ignore[arg-type]
+        await CommunityApplication(FakeDatabase([identity(current), stale])).set_leaderboard_opt_in(  # type: ignore[arg-type]
             current, opted_in=True, expected_revision=4
         )
+
+
+@pytest.mark.asyncio
+async def test_first_academy_opt_in_creates_separate_revisioned_preference() -> None:
+    current = actor()
+    database = FakeDatabase([identity(current), None])
+
+    result = await CommunityApplication(database).set_leaderboard_opt_in(  # type: ignore[arg-type]
+        current, opted_in=True, expected_revision=0
+    )
+
+    row = database.added[0]
+    assert isinstance(row, AcademyLeaderboardPreference)
+    assert (row.tenant_id, row.person_id, row.leaderboard_opted_in, row.revision) == (
+        current.tenant_id,
+        current.person_id,
+        True,
+        1,
+    )
+    assert result["username"] == "learner_7"
+    assert result["leaderboard_opted_in"] is True
+    assert result["revision"] == 1
 
 
 @pytest.mark.asyncio
@@ -241,5 +282,6 @@ async def test_leaderboard_query_uses_competition_rank_and_public_fields_only() 
     assert "analytics" not in repr(database.executed[0]).lower()
     compiled = str(database.executed[0])
     assert "rank() OVER" in compiled
-    assert "academy_public_profiles.leaderboard_opted_in" in compiled
+    assert "academy_leaderboard_preferences.leaderboard_opted_in" in compiled
+    assert "community_public_profiles.username" in compiled
     assert "practice_reward_claims.xp >" in compiled

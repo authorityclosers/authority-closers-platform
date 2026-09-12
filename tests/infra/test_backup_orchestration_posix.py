@@ -183,6 +183,74 @@ class BackupOrchestrationPosixTests(unittest.TestCase):
                             "AC_BACKUP_FAILURE=repository_lock_descriptor_invalid",
                         )
 
+    def test_foundation_restore_admission_holds_lock_and_gates_all_restic_calls(self) -> None:
+        source = (SCRIPTS / "ac-restic-restore-check-inner").read_text(encoding="utf-8")
+        block = source[
+            source.index("restic_lock_wait_seconds=") : source.index("\nsnapshot_count=")
+        ]
+        guard = "/usr/local/libexec/authority-closers/r2-usage-guard"
+        self.assertEqual(block.count(guard), 1)
+        # Only the fixed guard executable is substituted. The committed lock,
+        # admission branch and first Restic invocation execute unchanged.
+        block = block.replace(guard, "synthetic_r2_guard", 1)
+        harness = r"""
+set -euo pipefail
+synthetic_lock="$1"
+synthetic_calls="$2"
+synthetic_guard_status="$3"
+AC_FOUNDATION_RPO_TARGET_SECONDS=86400
+AC_FOUNDATION_RESTORE_TARGET_SECONDS=14400
+synthetic_r2_guard() {
+  if flock --exclusive --nonblock "$synthetic_lock" true; then
+    printf 'guard-without-lock\n' >> "$synthetic_calls"
+    return 99
+  fi
+  printf 'guard-under-lock\n' >> "$synthetic_calls"
+  printf 'synthetic-private-guard-output\n'
+  printf 'synthetic-private-guard-error\n' >&2
+  return "$synthetic_guard_status"
+}
+restic() {
+  printf 'restic %s\n' "$*" >> "$synthetic_calls"
+  printf '[]\n'
+}
+exec 9>>"$synthetic_lock"
+"""
+        for guard_status in (0, 17):
+            with (
+                self.subTest(guard_status=guard_status),
+                tempfile.TemporaryDirectory(prefix="ac-alpha-restore-admission-") as directory,
+            ):
+                root = Path(directory)
+                calls = root / "synthetic.calls"
+                result = subprocess.run(  # noqa: S603 - copied block with synthetic functions only
+                    [
+                        "/usr/bin/bash",
+                        "-c",
+                        harness + block,
+                        "proof",
+                        str(root / "synthetic.lock"),
+                        str(calls),
+                        str(guard_status),
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=3,
+                    check=False,
+                )
+                self.assertEqual(result.returncode, 0 if guard_status == 0 else 1)
+                self.assertEqual(result.stdout, "")
+                self.assertEqual(
+                    result.stderr,
+                    "" if guard_status == 0 else "AC_BACKUP_FAILURE=r2_quota_paused\n",
+                )
+                expected_calls = ["guard-under-lock"]
+                if guard_status == 0:
+                    expected_calls.append(
+                        "restic snapshots --tag authority-closers-foundation --latest 1 --json"
+                    )
+                self.assertEqual(calls.read_text(encoding="utf-8").splitlines(), expected_calls)
+
     def test_offhost_diagnostic_does_not_echo_synthetic_sensitive_text(self) -> None:
         command = [
             sys.executable,

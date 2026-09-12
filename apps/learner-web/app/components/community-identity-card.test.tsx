@@ -97,6 +97,87 @@ function deferred<T>() {
 }
 
 describe("academy public identity", () => {
+  it("keeps the actual profile mode separate from rankings while preserving identity and privacy controls", async () => {
+    const api = {
+      communityProfile: vi.fn(async () => ({ ...unclaimed, username: "alex" })),
+      communityLeaderboard: vi.fn(async () => leaderboard),
+      setLeaderboardOptIn: vi.fn(async () => ({
+        ...unclaimed,
+        username: "alex",
+        leaderboard_opted_in: true,
+        revision: 1,
+      })),
+    } as unknown as LearnerApi;
+    await act(async () =>
+      root.render(<CommunityIdentityCard api={api} showLeaderboard={false} />),
+    );
+    expect(api.communityProfile).toHaveBeenCalledOnce();
+    expect(api.communityLeaderboard).not.toHaveBeenCalled();
+    expect(container.querySelector("table")).toBeNull();
+    expect(container.querySelector('a[href="/leaderboard"]')).not.toBeNull();
+    await act(async () =>
+      container
+        .querySelector<HTMLInputElement>('input[type="checkbox"]')!
+        .click(),
+    );
+    await act(async () =>
+      [...container.querySelectorAll<HTMLButtonElement>("button")]
+        .find((button) => button.textContent === "Save participation")!
+        .click(),
+    );
+    expect(api.setLeaderboardOptIn).toHaveBeenCalledOnce();
+    expect(api.communityLeaderboard).not.toHaveBeenCalled();
+  });
+  it("lands the Arcade shortcut on the username heading after the profile mounts", async () => {
+    vi.spyOn(window.location, "hash", "get").mockReturnValue(
+      "#community-identity-title",
+    );
+    const scroll = vi.spyOn(HTMLElement.prototype, "scrollIntoView");
+    await act(async () => root.render(<p>Loading profile…</p>));
+    const api = {
+      communityProfile: vi.fn(async () => unclaimed),
+      communityLeaderboard: vi.fn(async () => leaderboard),
+    } as unknown as LearnerApi;
+    await render(api);
+    const heading = container.querySelector("#community-identity-title");
+    expect(document.activeElement).toBe(heading);
+    expect(scroll).toHaveBeenCalledWith({
+      block: "start",
+      behavior: "instant",
+    });
+    scroll.mockClear();
+    const input = container.querySelector<HTMLInputElement>("input")!;
+    input.focus();
+    await render(api);
+    expect(document.activeElement).toBe(input);
+    expect(scroll).not.toHaveBeenCalled();
+  });
+
+  it("does not steal focus on an ordinary profile visit and responds to later fragment navigation", async () => {
+    const hash = vi.spyOn(window.location, "hash", "get").mockReturnValue("");
+    const scroll = vi.spyOn(HTMLElement.prototype, "scrollIntoView");
+    const api = {
+      communityProfile: vi.fn(async () => unclaimed),
+      communityLeaderboard: vi.fn(async () => leaderboard),
+    } as unknown as LearnerApi;
+    await render(api);
+    expect(scroll).not.toHaveBeenCalled();
+    hash.mockReturnValue("#community-identity-title");
+    await act(async () =>
+      window.dispatchEvent(new HashChangeEvent("hashchange")),
+    );
+    expect(document.activeElement).toBe(
+      container.querySelector("#community-identity-title"),
+    );
+    expect(scroll).toHaveBeenCalledTimes(1);
+    scroll.mockClear();
+    await act(async () => root.render(<p>Another page</p>));
+    await act(async () =>
+      window.dispatchEvent(new HashChangeEvent("hashchange")),
+    );
+    expect(scroll).not.toHaveBeenCalled();
+  });
+
   it("unlocks saved participation while its optional leaderboard refresh is pending", async () => {
     const pending = deferred<CommunityLeaderboardResponse>();
     const claimed = { ...unclaimed, username: "alex", revision: 1 };

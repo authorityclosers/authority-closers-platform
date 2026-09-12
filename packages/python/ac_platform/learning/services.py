@@ -4194,7 +4194,12 @@ class ProgressProjector:
             (
                 item.activity_id
                 for item in displayed_activity_states
-                if item.required and item.state is not ActivityState.COMPLETED
+                # A lock or a pending human review is useful explanation, but
+                # neither is an action the learner can take now.  Keep the
+                # recommendation on the canonical progress projection and
+                # fail closed when no required activity is currently eligible.
+                if item.required
+                and item.state in {ActivityState.AVAILABLE, ActivityState.IN_PROGRESS}
             ),
             None,
         )

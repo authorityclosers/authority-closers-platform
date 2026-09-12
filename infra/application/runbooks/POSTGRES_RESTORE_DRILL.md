@@ -58,6 +58,46 @@ python3 infra/application/scripts/restore-drill.py \
   --application-image sha256:<64-lowercase-hex-characters>
 ```
 
+## Prior-head migration rehearsal (0027 to 0029)
+
+The explicit migration-rehearsal mode is a separate opt-in contract for a
+candidate whose workspace head is exactly `20260910_0029`. It accepts a paired
+backup whose metadata head is exactly `20260910_0027`, plus the immutable image
+that attests that prior release/head. The candidate image is independently
+attested to the selected workspace release and `20260910_0029`; the old backup
+release is never relabeled as the candidate release.
+
+The rehearsal is dry-run first and remains non-mutating until both execute
+acknowledgements are supplied:
+
+```bash
+python3 infra/application/scripts/restore-drill.py \
+  --environment staging \
+  --backup /absolute/path/to/staging-postgres-0027.dump \
+  --backup-metadata /absolute/path/to/staging-postgres-0027.json \
+  --evidence-dir /absolute/path/to/new/migration-rehearsal-evidence \
+  --application-image sha256:<candidate-image-id> \
+  --source-application-image sha256:<prior-0027-image-id> \
+  --source-migration-head 20260910_0027
+```
+
+After reviewing that plan, add `--execute --acknowledge-isolated-target` to
+the same command. The target remains a new internal-only disposable
+PostgreSQL container with no published ports or external connections. The
+source image first runs the sanctioned restore marker and worker hold proof;
+the source row-count baseline is captured after that hold because the hold can
+legitimately change job/outbox/audit counts. The candidate image then runs
+only `alembic upgrade 20260910_0029` inside the same isolated target.
+
+The gate requires exact 0027 source-table preservation, the rows derived by
+the reviewed 0028 migration (`community_public_profiles` per distinct
+`person_id` and `academy_leaderboard_preferences` per legacy profile), an
+empty 0029 `app_update_read_receipts` table, unchanged held state, and a
+post-migration `prove-held` worker proof with zero provider calls. Reconciliation
+arguments are rejected in this mode. Cleanup is still mandatory and the
+generated evidence must show completion; no live application or provider is
+started.
+
 ## Execute the drill
 
 Executed runs copy the already validated dump and metadata into a generated,

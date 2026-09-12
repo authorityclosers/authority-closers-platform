@@ -17,7 +17,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import SessionTransactionOrigin
 
 from ac_platform.audit.service import AuditRepository
-from ac_platform.community.models import AcademyPublicProfile
+from ac_platform.community.models import (
+    AcademyLeaderboardPreference,
+    CohorvaPublicProfile,
+)
 from ac_platform.identity.models import Person
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.kernel.errors import DomainError
@@ -165,11 +168,16 @@ class CommunityApplication:
         return actor.tenant_id
 
     @staticmethod
-    def _profile_payload(row: AcademyPublicProfile | None) -> dict[str, Any]:
+    def _profile_payload(
+        identity: CohorvaPublicProfile | None,
+        preference: AcademyLeaderboardPreference | None,
+    ) -> dict[str, Any]:
         return {
-            "username": None if row is None else row.username,
-            "leaderboard_opted_in": False if row is None else row.leaderboard_opted_in,
-            "revision": 0 if row is None else row.revision,
+            "username": None if identity is None else identity.username,
+            "leaderboard_opted_in": (
+                False if preference is None else preference.leaderboard_opted_in
+            ),
+            "revision": 0 if preference is None else preference.revision,
             "leaderboard_policy": {
                 "version": LEADERBOARD_POLICY_VERSION,
                 "period": "all_time",
@@ -179,64 +187,73 @@ class CommunityApplication:
             },
         }
 
+    async def _preference(self, actor: ActorContext) -> AcademyLeaderboardPreference | None:
+        if actor.tenant_id is None:
+            return None
+        return cast(
+            AcademyLeaderboardPreference | None,
+            await self.database.scalar(
+                select(AcademyLeaderboardPreference).where(
+                    AcademyLeaderboardPreference.tenant_id == actor.tenant_id,
+                    AcademyLeaderboardPreference.person_id == actor.person_id,
+                )
+            ),
+        )
+
     async def profile(self, actor: ActorContext) -> dict[str, Any]:
-        tenant_id = self._tenant(actor)
-        row = await self.database.scalar(
-            select(AcademyPublicProfile).where(
-                AcademyPublicProfile.tenant_id == tenant_id,
-                AcademyPublicProfile.person_id == actor.person_id,
+        identity = await self.database.scalar(
+            select(CohorvaPublicProfile).where(
+                CohorvaPublicProfile.person_id == actor.person_id,
             )
         )
-        return self._profile_payload(row)
+        return self._profile_payload(identity, await self._preference(actor))
 
     async def claim_username(self, actor: ActorContext, value: str) -> dict[str, Any]:
         self._require_transaction()
-        tenant_id = self._tenant(actor)
         username = normalize_username(value)
-        row = await self.database.scalar(
-            select(AcademyPublicProfile)
+        identity = await self.database.scalar(
+            select(CohorvaPublicProfile)
             .where(
-                AcademyPublicProfile.tenant_id == tenant_id,
-                AcademyPublicProfile.person_id == actor.person_id,
+                CohorvaPublicProfile.person_id == actor.person_id,
             )
             .with_for_update()
         )
-        if row is not None:
-            if row.username == username:
-                return self._profile_payload(row)
+        if identity is not None:
+            if identity.username == username:
+                return self._profile_payload(identity, await self._preference(actor))
             raise UsernameAlreadyClaimed(
-                "This academy identity already has a username. Usernames are fixed in this release."
+                "This Cohorva account already has a username. Usernames are fixed in this release."
             )
 
         try:
             async with self.database.begin_nested():
-                row = AcademyPublicProfile(
-                    tenant_id=tenant_id,
+                identity = CohorvaPublicProfile(
                     person_id=actor.person_id,
                     username=username,
-                    leaderboard_opted_in=False,
-                    revision=1,
+                    claimed_session_id=actor.session_id,
+                    claim_source="account_claim",
+                    legacy_profile_count=0,
                 )
-                self.database.add(row)
+                self.database.add(identity)
                 await self.database.flush()
         except IntegrityError as error:
             existing = await self.database.scalar(
-                select(AcademyPublicProfile).where(
-                    AcademyPublicProfile.tenant_id == tenant_id,
-                    AcademyPublicProfile.person_id == actor.person_id,
+                select(CohorvaPublicProfile).where(
+                    CohorvaPublicProfile.person_id == actor.person_id,
                 )
             )
             if existing is not None and existing.username == username:
-                return self._profile_payload(existing)
+                return self._profile_payload(existing, await self._preference(actor))
             raise UsernameUnavailable("That username is unavailable. Choose another.") from error
-        await AuditRepository(self.database).append_for_actor(
-            actor,
-            action="community.username_claimed",
-            resource_type="academy_public_profile",
-            resource_id=actor.person_id,
-            payload={"username": username, "revision": 1},
-        )
-        return self._profile_payload(row)
+        if actor.tenant_id is not None:
+            await AuditRepository(self.database).append_for_actor(
+                actor,
+                action="community.username_claimed",
+                resource_type="community_public_profile",
+                resource_id=actor.person_id,
+                payload={"username": username, "scope": "global"},
+            )
+        return self._profile_payload(identity, await self._preference(actor))
 
     async def set_leaderboard_opt_in(
         self,
@@ -247,54 +264,90 @@ class CommunityApplication:
     ) -> dict[str, Any]:
         self._require_transaction()
         tenant_id = self._tenant(actor)
-        row = await self.database.scalar(
-            select(AcademyPublicProfile).where(
-                AcademyPublicProfile.tenant_id == tenant_id,
-                AcademyPublicProfile.person_id == actor.person_id,
+        identity = await self.database.scalar(
+            select(CohorvaPublicProfile).where(
+                CohorvaPublicProfile.person_id == actor.person_id,
             )
         )
-        if row is None:
+        if identity is None:
             raise UsernameRequired("Claim a username before joining the leaderboard.")
-        if row.revision != expected_revision:
-            if row.leaderboard_opted_in is opted_in:
-                return self._profile_payload(row)
-            raise CommunityRevisionConflict("Community preferences changed. Refresh and try again.")
-        if row.leaderboard_opted_in is opted_in:
-            return self._profile_payload(row)
-
-        result = cast(
-            CursorResult[Any],
-            await self.database.execute(
-                update(AcademyPublicProfile)
-                .where(
-                    AcademyPublicProfile.tenant_id == tenant_id,
-                    AcademyPublicProfile.person_id == actor.person_id,
-                    AcademyPublicProfile.revision == expected_revision,
-                )
-                .values(
-                    leaderboard_opted_in=opted_in,
-                    revision=expected_revision + 1,
-                    updated_at=func.now(),
-                )
-            ),
+        preference = await self.database.scalar(
+            select(AcademyLeaderboardPreference).where(
+                AcademyLeaderboardPreference.tenant_id == tenant_id,
+                AcademyLeaderboardPreference.person_id == actor.person_id,
+            )
         )
-        if result.rowcount != 1:
+        if preference is None:
+            if not opted_in and expected_revision == 0:
+                return self._profile_payload(identity, None)
+            if expected_revision != 0:
+                raise CommunityRevisionConflict(
+                    "Community preferences changed. Refresh and try again."
+                )
+            try:
+                async with self.database.begin_nested():
+                    preference = AcademyLeaderboardPreference(
+                        tenant_id=tenant_id,
+                        person_id=actor.person_id,
+                        leaderboard_opted_in=True,
+                        revision=1,
+                    )
+                    self.database.add(preference)
+                    await self.database.flush()
+            except IntegrityError as error:
+                existing = await self.database.scalar(
+                    select(AcademyLeaderboardPreference).where(
+                        AcademyLeaderboardPreference.tenant_id == tenant_id,
+                        AcademyLeaderboardPreference.person_id == actor.person_id,
+                    )
+                )
+                if existing is not None and existing.leaderboard_opted_in is opted_in:
+                    return self._profile_payload(identity, existing)
+                raise CommunityRevisionConflict(
+                    "Community preferences changed. Refresh and try again."
+                ) from error
+        elif preference.revision != expected_revision:
+            if preference.leaderboard_opted_in is opted_in:
+                return self._profile_payload(identity, preference)
             raise CommunityRevisionConflict("Community preferences changed. Refresh and try again.")
-        row.leaderboard_opted_in = opted_in
-        row.revision = expected_revision + 1
+        elif preference.leaderboard_opted_in is opted_in:
+            return self._profile_payload(identity, preference)
+        else:
+            result = cast(
+                CursorResult[Any],
+                await self.database.execute(
+                    update(AcademyLeaderboardPreference)
+                    .where(
+                        AcademyLeaderboardPreference.tenant_id == tenant_id,
+                        AcademyLeaderboardPreference.person_id == actor.person_id,
+                        AcademyLeaderboardPreference.revision == expected_revision,
+                    )
+                    .values(
+                        leaderboard_opted_in=opted_in,
+                        revision=expected_revision + 1,
+                        updated_at=func.now(),
+                    )
+                ),
+            )
+            if result.rowcount != 1:
+                raise CommunityRevisionConflict(
+                    "Community preferences changed. Refresh and try again."
+                )
+            preference.leaderboard_opted_in = opted_in
+            preference.revision = expected_revision + 1
         await AuditRepository(self.database).append_for_actor(
             actor,
             action=(
                 "community.leaderboard_joined" if opted_in else "community.leaderboard_withdrawn"
             ),
-            resource_type="academy_public_profile",
+            resource_type="academy_leaderboard_preference",
             resource_id=actor.person_id,
             payload={
                 "policy_version": LEADERBOARD_POLICY_VERSION,
-                "profile_revision": row.revision,
+                "profile_revision": preference.revision,
             },
         )
-        return self._profile_payload(row)
+        return self._profile_payload(identity, preference)
 
     async def leaderboard(
         self,
@@ -307,28 +360,32 @@ class CommunityApplication:
         # Rank only the immutable, server-confirmed reward journal, never telemetry.
         totals = (
             select(
-                AcademyPublicProfile.person_id.label("person_id"),
-                AcademyPublicProfile.username.label("username"),
+                CohorvaPublicProfile.person_id.label("person_id"),
+                CohorvaPublicProfile.username.label("username"),
                 func.sum(PracticeRewardClaim.xp).label("xp_total"),
+            )
+            .join(
+                AcademyLeaderboardPreference,
+                AcademyLeaderboardPreference.person_id == CohorvaPublicProfile.person_id,
             )
             .join(
                 PracticeRewardClaim,
                 and_(
-                    PracticeRewardClaim.tenant_id == AcademyPublicProfile.tenant_id,
-                    PracticeRewardClaim.person_id == AcademyPublicProfile.person_id,
+                    PracticeRewardClaim.tenant_id == AcademyLeaderboardPreference.tenant_id,
+                    PracticeRewardClaim.person_id == AcademyLeaderboardPreference.person_id,
                 ),
             )
             .join(
                 Membership,
                 and_(
-                    Membership.tenant_id == AcademyPublicProfile.tenant_id,
-                    Membership.person_id == AcademyPublicProfile.person_id,
+                    Membership.tenant_id == AcademyLeaderboardPreference.tenant_id,
+                    Membership.person_id == AcademyLeaderboardPreference.person_id,
                 ),
             )
-            .join(Person, Person.id == AcademyPublicProfile.person_id)
+            .join(Person, Person.id == CohorvaPublicProfile.person_id)
             .where(
-                AcademyPublicProfile.tenant_id == tenant_id,
-                AcademyPublicProfile.leaderboard_opted_in.is_(True),
+                AcademyLeaderboardPreference.tenant_id == tenant_id,
+                AcademyLeaderboardPreference.leaderboard_opted_in.is_(True),
                 PracticeRewardClaim.xp > 0,
                 Membership.role == "learner",
                 Membership.status == "active",
@@ -336,8 +393,8 @@ class CommunityApplication:
                 Person.email_verified_at.is_not(None),
             )
             .group_by(
-                AcademyPublicProfile.person_id,
-                AcademyPublicProfile.username,
+                CohorvaPublicProfile.person_id,
+                CohorvaPublicProfile.username,
             )
             .subquery()
         )

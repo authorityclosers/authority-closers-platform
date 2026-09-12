@@ -296,14 +296,15 @@ if [[ "$R2_FORBID_INFREQUENT_ACCESS" == 1 ]] && [[ "$infrequent_bytes" != 0 ]]; 
   failures=$((failures + 1))
 fi
 
-if decimal_gt "$class_a" "$R2_MAX_CLASS_A_MONTH"; then
-  printf 'FAIL  Class A operations %s exceed policy ceiling %s.\n' \
+# Operation admission closes at the cutoff, including exact equality.
+if ! decimal_gt "$R2_MAX_CLASS_A_MONTH" "$class_a"; then
+  printf 'FAIL  Class A operations %s reach or exceed policy admission cutoff %s.\n' \
     "$class_a" "$R2_MAX_CLASS_A_MONTH" >&2
   failures=$((failures + 1))
 fi
 
-if decimal_gt "$class_b" "$R2_MAX_CLASS_B_MONTH"; then
-  printf 'FAIL  Class B operations %s exceed policy ceiling %s.\n' \
+if ! decimal_gt "$R2_MAX_CLASS_B_MONTH" "$class_b"; then
+  printf 'FAIL  Class B operations %s reach or exceed policy admission cutoff %s.\n' \
     "$class_b" "$R2_MAX_CLASS_B_MONTH" >&2
   failures=$((failures + 1))
 fi

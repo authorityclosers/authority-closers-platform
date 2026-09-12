@@ -556,6 +556,14 @@ def test_learning_projection_schema_is_exact_and_forbids_unknown_fields() -> Non
         "activity_reasons": [],
     }
 
-    assert LearningProjectionResponse.model_validate(payload).scope_type == "program"
+    parsed = LearningProjectionResponse.model_validate(payload)
+    assert parsed.scope_type == "program"
+    assert parsed.model_dump(mode="json")["next_activity_id"] is None
+    pointer = uuid4()
+    guided = LearningProjectionResponse.model_validate(payload | {"next_activity_id": pointer})
+    assert guided.model_dump(mode="json")["next_activity_id"] == str(pointer)
+    assert guided.projection_version == payload["projection_version"]
+    with pytest.raises(ValidationError):
+        LearningProjectionResponse.model_validate(payload | {"next_activity_id": "not-a-uuid"})
     with pytest.raises(ValidationError):
         LearningProjectionResponse.model_validate(payload | {"unexpected": True})

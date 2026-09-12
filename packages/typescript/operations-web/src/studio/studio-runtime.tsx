@@ -12,6 +12,15 @@ import {
 import Link from "next/link";
 import { StudioCourseEditor } from "./studio-course-editor";
 import {
+  StudioCourseCreate,
+  activateStudioCourseCreationScope,
+} from "./studio-course-create";
+import { activateStudioVideoRecoveryScope } from "./studio-video-panel";
+import {
+  activateStudioUploadScope,
+  restrictStudioUploadScope,
+} from "./studio-video-upload-session";
+import {
   activateStudioRecoveryScope,
   clearStudioPublication,
   readStudioPublication,
@@ -63,6 +72,14 @@ function studioContextKey(state: AdminSessionState): string {
   ]);
 }
 
+function studioVideoContextKey(state: AdminSessionState): string {
+  if (state.status !== "ready") return "";
+  // Changing assignments must trigger fresh reads, not erase a command whose
+  // commit is still unknown. Identity/session/tenant changes do clear it.
+  const { tenantId, personId, sessionId } = state.session;
+  return JSON.stringify([tenantId, personId, sessionId]);
+}
+
 export function useStudioData<T>(
   loader: () => Promise<T>,
   dependency: string,
@@ -80,9 +97,23 @@ export function useStudioData<T>(
   }>({ dependency: requestKey, state: loadingState });
 
   useEffect(() => {
-    if (session.status === "ready")
+    if (session.status === "ready") {
       activateStudioRecoveryScope(studioContextKey(session));
-    else if (session.status === "denied") activateStudioRecoveryScope("");
+      activateStudioVideoRecoveryScope(studioVideoContextKey(session));
+      activateStudioUploadScope(studioVideoContextKey(session));
+      restrictStudioUploadScope(
+        studioVideoContextKey(session),
+        (id) =>
+          canUseStudioPermission(session, "catalog_write", id) &&
+          canUseStudioPermission(session, "catalog_read", id),
+      );
+      activateStudioCourseCreationScope(studioVideoContextKey(session));
+    } else if (session.status === "denied") {
+      activateStudioRecoveryScope("");
+      // A failed session read is not proof of logout. Keep unresolved video
+      // intent private until the same identity is verified again. A new verified
+      // session/tenant clears it; normal sign-out performs a full navigation.
+    }
     if (!canRead) return;
     let active = true;
     void Promise.resolve()
@@ -417,18 +448,21 @@ export function StudioProgramList() {
                 preview the content, or check what’s needed to publish.
               </p>
             </div>
-            <span className="status-badge status-badge-muted">
-              {state.data.programs.length} visible
-            </span>
+            <StudioCourseCreate onRefresh={retry} />
           </div>
           {state.data.programs.length === 0 ? (
             <div className="studio-empty">
               <Database aria-hidden="true" />
               <div>
-                <h3>No courses assigned yet</h3>
+                <h3>
+                  {canUseStudioPermission(session, "catalog_write")
+                    ? "Your first course starts here"
+                    : "No courses assigned yet"}
+                </h3>
                 <p>
-                  Your courses will appear here once your administrator assigns
-                  them to you.
+                  {canUseStudioPermission(session, "catalog_write")
+                    ? "Create a draft, then add your modules and lessons. Nothing is published until it’s ready."
+                    : "Your courses will appear here once your administrator assigns them to you."}
                 </p>
               </div>
             </div>
@@ -708,6 +742,7 @@ export function StudioProgram({ programId }: { programId: string }) {
           key={context + ":" + programId}
           initialProgram={state.data}
           recoveryContext={context}
+          videoRecoveryContext={studioVideoContextKey(session)}
           canWrite={canUseStudioPermission(session, "catalog_write", programId)}
           renderPublication={(version, refresh, setPending) =>
             version?.status === "draft" ||

@@ -256,3 +256,80 @@ async def test_mark_and_prove_uses_sanctioned_boundary_and_zero_call_worker(
         "run_once_rejected": True,
         "provider_calls": 0,
     }
+
+
+def test_probe_parser_supports_read_only_prove_held_action() -> None:
+    args = restore_drill_probe.build_parser().parse_args(["prove-held"])
+
+    assert args.action == "prove-held"
+
+
+@pytest.mark.asyncio
+async def test_prove_held_reads_existing_hold_and_keeps_provider_calls_zero(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = {"disposed": 0, "worker": 0}
+
+    class FakeTransaction:
+        async def __aenter__(self) -> None:
+            return None
+
+        async def __aexit__(self, *_args: Any) -> None:
+            return None
+
+    class FakeSession:
+        async def __aenter__(self) -> FakeSession:
+            return self
+
+        async def __aexit__(self, *_args: Any) -> None:
+            return None
+
+        def begin(self) -> FakeTransaction:
+            return FakeTransaction()
+
+    class FakeEngine:
+        async def dispose(self) -> None:
+            calls["disposed"] += 1
+
+    class FakeRecoveryStateRepository:
+        def __init__(self, _session: Any) -> None:
+            pass
+
+        async def require_held(self) -> Any:
+            return SimpleNamespace(generation=7, status="held")
+
+    class FakeWorker:
+        def __init__(self, *_args: Any, **_kwargs: Any) -> None:
+            calls["worker"] += 1
+
+        async def prepare(self) -> bool:
+            return False
+
+        async def run_once(self) -> None:
+            raise restore_drill_probe.WorkerNotReadyError("held")
+
+    monkeypatch.setattr(restore_drill_probe, "create_async_engine", lambda *_a, **_k: FakeEngine())
+    monkeypatch.setattr(restore_drill_probe, "async_sessionmaker", lambda *_a, **_k: FakeSession)
+    monkeypatch.setattr(
+        restore_drill_probe,
+        "RecoveryStateRepository",
+        FakeRecoveryStateRepository,
+    )
+    monkeypatch.setattr(restore_drill_probe, "DurableWorker", FakeWorker)
+    target = restore_drill_probe.validate_probe_target(
+        _url(),
+        restore_drill_probe.ACKNOWLEDGEMENT_VALUE,
+    )
+
+    result = await restore_drill_probe.prove_held(target)
+
+    assert calls == {"disposed": 1, "worker": 1}
+    assert result == {
+        "action": "prove-held",
+        "recovery_state": {"generation": 7, "status": "held"},
+        "worker_hold_proof": {
+            "worker_ready": False,
+            "run_once_rejected": True,
+            "provider_calls": 0,
+        },
+    }

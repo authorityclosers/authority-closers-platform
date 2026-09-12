@@ -74,8 +74,10 @@ function message(error: unknown, fallback: string): string {
 
 export function CommunityIdentityCard({
   api = defaultApi,
+  showLeaderboard = true,
 }: {
   api?: LearnerApi;
+  showLeaderboard?: boolean;
 }) {
   const [contextApi, setContextApi] = useState(() => api);
   const [profile, setProfile] = useState<CommunityProfileResponse | null>(null);
@@ -91,6 +93,7 @@ export function CommunityIdentityCard({
   const [requiresRefresh, setRequiresRefresh] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const errorRef = useRef<HTMLParagraphElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
   const mountedRef = useRef(false);
   const generationRef = useRef(0);
   const loadAbortRef = useRef<AbortController | null>(null);
@@ -140,6 +143,7 @@ export function CommunityIdentityCard({
           setLoading(false);
         },
       );
+    if (!showLeaderboard) return;
     void Promise.resolve()
       .then(() =>
         boundedRequest(signal, (requestSignal) =>
@@ -234,11 +238,28 @@ export function CommunityIdentityCard({
     };
     // The API is a stable dependency supplied by the route or a test fixture.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [api]);
+  }, [api, showLeaderboard]);
 
   useEffect(() => {
     if (error) errorRef.current?.focus();
   }, [error]);
+
+  useEffect(() => {
+    const followShortcut = () => {
+      if (window.location.hash !== "#community-identity-title") return;
+      // The profile loads asynchronously, after the router's initial fragment
+      // scroll. Restore the explicit shortcut only on mount or hash navigation,
+      // never on API refresh or while the learner is typing.
+      headingRef.current?.scrollIntoView({
+        block: "start",
+        behavior: "instant",
+      });
+      headingRef.current?.focus({ preventScroll: true });
+    };
+    followShortcut();
+    window.addEventListener("hashchange", followShortcut);
+    return () => window.removeEventListener("hashchange", followShortcut);
+  }, []);
 
   async function claim() {
     if (!username.trim()) return;
@@ -325,6 +346,7 @@ export function CommunityIdentityCard({
     // The canonical save is finished. Optional ranking refresh must not lock
     // the learner out of withdrawing again while the network is slow.
     finishOperation(controller, generation);
+    if (!showLeaderboard) return;
     leaderboardAbortRef.current = controller;
     try {
       const refreshed = await boundedRequest(controller.signal, (signal) =>
@@ -366,10 +388,12 @@ export function CommunityIdentityCard({
   return (
     <section className={styles.card} aria-labelledby="community-identity-title">
       <header className={styles.heading}>
-        <h2 id="community-identity-title">Academy username</h2>
+        <h2 id="community-identity-title" ref={headingRef} tabIndex={-1}>
+          Cohorva username
+        </h2>
         <p>
-          Choose a public academy name. It is not your sign-in ID and never
-          exposes your email.
+          One public username across Cohorva and every academy you join. It is
+          not your sign-in ID and never exposes your email.
         </p>
       </header>
 
@@ -402,7 +426,7 @@ export function CommunityIdentityCard({
         </button>
       ) : null}
 
-      {leaderboardError ? (
+      {showLeaderboard && leaderboardError ? (
         <div>
           <p className={styles.error} role="status">
             {leaderboardError}
@@ -471,7 +495,7 @@ export function CommunityIdentityCard({
         <>
           <div className={styles.claimed}>
             <strong>@{profile.username}</strong>
-            <span>Claimed for this academy · fixed in this release</span>
+            <span>Your Cohorva identity · fixed in this release</span>
           </div>
           <div className={styles.preference}>
             <label className={styles.choice}>
@@ -517,7 +541,12 @@ export function CommunityIdentityCard({
         </>
       ) : null}
 
-      {leaderboard ? (
+      {!showLeaderboard ? (
+        <Link className={styles.button} href="/leaderboard">
+          View academy leaderboard
+        </Link>
+      ) : null}
+      {showLeaderboard && leaderboard ? (
         <div className={styles.leaderboard}>
           <h3>{leaderboard.policy.label}</h3>
           {leaderboard.items.length === 0 ? (

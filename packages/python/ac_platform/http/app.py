@@ -15,6 +15,7 @@ from ac_platform import __version__
 from ac_platform.application.settings import Settings, get_settings
 from ac_platform.db.session import engine, session_factory
 from ac_platform.http.admin_learning import install_admin_learning_http
+from ac_platform.http.app_updates import install_app_updates_http
 from ac_platform.http.auth import install_identity_http
 from ac_platform.http.certificates import install_certificate_http
 from ac_platform.http.community import install_community_http
@@ -36,9 +37,12 @@ from ac_platform.http.problem import problem_response, register_problem_handlers
 from ac_platform.http.rate_limits import RateLimitMiddleware
 from ac_platform.http.request_context import request_context_middleware
 from ac_platform.http.request_limits import RequestBodyLimitMiddleware
+from ac_platform.http.studio_media import install_studio_media_http
+from ac_platform.http.studio_video_bytes import StudioVideoByteTransport
 from ac_platform.http.surfaces import CoachSurfaceMiddleware
 from ac_platform.http.telemetry import install_telemetry_http
 from ac_platform.media.runtime import MediaRuntime, create_default_media_runtime
+from ac_platform.media.studio_video_completion import StudioVideoCompletion
 
 logger = structlog.get_logger()
 settings = get_settings()
@@ -126,6 +130,7 @@ def create_app(
     )
     install_practice_http(application, settings=settings, require_actor=require_actor)
     install_community_http(application, settings=settings, require_actor=require_actor)
+    install_app_updates_http(application, settings=settings, require_actor=require_actor)
     install_platform_http(application, settings=settings, require_actor=require_actor)
     # Static planning paths are registered before the dynamic
     # /v1/learning/{program_id} route so they cannot be parsed as UUIDs.
@@ -176,6 +181,44 @@ def create_app(
         require_actor=require_actor,
         runtime=resolved_media_runtime,
     )
+    studio_video_runtime = resolved_media_runtime.studio_video_runtime
+    studio_video_transport: StudioVideoByteTransport | None = None
+    studio_video_max_source_bytes: int | None = None
+    studio_service = resolved_media_runtime.service
+    studio_completion: StudioVideoCompletion | None = None
+    if studio_video_runtime is not None:
+        studio_video_runtime.validate()
+        if (
+            studio_video_runtime.settings is not settings
+            or studio_video_runtime.sessions is not session_factory
+            or studio_video_runtime.service.storage is not studio_video_runtime.storage
+        ):
+            raise RuntimeError(
+                "Studio video runtime must share the application's settings and session factory"
+            )
+        studio_service = studio_video_runtime.service
+        studio_completion = studio_video_runtime.completion
+        studio_video_max_source_bytes = studio_video_runtime.max_source_bytes
+        studio_video_transport = StudioVideoByteTransport(
+            storage=studio_video_runtime.storage,
+            require_actor=require_actor,
+            settings=settings,
+        )
+    # Deliberately expose one bounded worker without scheduling it in the HTTP
+    # process. A reviewed local runner can invoke run_once explicitly.
+    application.state.studio_video_worker = (
+        None if studio_video_runtime is None else studio_video_runtime.worker
+    )
+    install_studio_media_http(
+        application,
+        settings=settings,
+        require_actor=require_actor,
+        service=studio_service,
+        byte_transport=studio_video_transport,
+        video_completion=studio_completion,
+        video_upload_max_source_bytes=studio_video_max_source_bytes,
+        studio_video_runtime=studio_video_runtime,
+    )
     delivery_factory = resolved_media_runtime.authenticated_delivery_handler_factory
     if delivery_factory is not None:
         if resolved_media_runtime.media_cors_policy is None:
@@ -196,6 +239,7 @@ def create_app(
         RequestBodyLimitMiddleware,
         local_avatar_upload_enabled=settings.environment == "local"
         and settings.media_local_avatar_enabled,
+        studio_video_upload_max_bytes=studio_video_max_source_bytes,
     )
     application.add_middleware(
         RateLimitMiddleware,

@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import importlib.util
 import json
 from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
+from types import ModuleType
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -32,7 +35,12 @@ from ac_platform.community.application import (
     UsernameUnavailable,
     decode_cursor,
 )
-from ac_platform.community.models import AcademyPublicProfile, CommunityProfileMutationError
+from ac_platform.community.models import (
+    AcademyLeaderboardPreference,
+    AcademyPublicProfile,
+    CohorvaPublicProfile,
+    CommunityProfileMutationError,
+)
 from ac_platform.db.models import model_metadata
 from ac_platform.identity.models import Person, PersonStatus
 from ac_platform.identity.models import Session as IdentitySession
@@ -55,6 +63,18 @@ from tests.integration.test_studio_draft_authoring_postgresql import seed
 NOW = datetime(2026, 9, 10, 12, tzinfo=UTC)
 BASE_DAY = date(2026, 9, 8)
 WEEK_START = date(2026, 9, 7)
+
+
+def _load_global_identity_migration() -> ModuleType:
+    migration_path = (
+        Path(__file__).resolve().parents[2]
+        / "db/migrations/versions/20260910_0028_global_community_identity.py"
+    )
+    spec = importlib.util.spec_from_file_location("global_identity_migration_test", migration_path)
+    assert spec is not None and spec.loader is not None
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    return migration
 
 
 async def _event_count(database: AsyncSession, tenant_id: UUID, action: str) -> int:
@@ -119,11 +139,25 @@ async def _add_profile(
     opted_in: bool = True,
 ) -> None:
     assert actor.tenant_id is not None
+    identity = await database.scalar(
+        select(CohorvaPublicProfile).where(CohorvaPublicProfile.person_id == actor.person_id)
+    )
+    if identity is None:
+        database.add(
+            CohorvaPublicProfile(
+                person_id=actor.person_id,
+                username=username,
+                claimed_session_id=actor.session_id,
+                claim_source="account_claim",
+                legacy_profile_count=0,
+                created_at=NOW,
+            )
+        )
+        await database.flush()
     database.add(
-        AcademyPublicProfile(
+        AcademyLeaderboardPreference(
             tenant_id=actor.tenant_id,
             person_id=actor.person_id,
-            username=username,
             leaderboard_opted_in=opted_in,
             revision=1,
             created_at=NOW,
@@ -232,6 +266,21 @@ def test_concurrent_normalized_username_claims_have_one_owner(postgres_harness) 
         sessions = async_sessionmaker(engine, expire_on_commit=False)
         try:
             state = await seed(sessions)
+            no_tenant_actors: list[ActorContext] = []
+            async with sessions() as database, database.begin():
+                for seeded_actor in state.actors:
+                    session_id = uuid4()
+                    database.add(
+                        IdentitySession(
+                            id=session_id,
+                            person_id=seeded_actor.person_id,
+                            selected_tenant_id=None,
+                            token_hash=hashlib.sha256(session_id.bytes).digest(),
+                            created_at=NOW,
+                            expires_at=NOW + timedelta(hours=1),
+                        )
+                    )
+                    no_tenant_actors.append(ActorContext(seeded_actor.person_id, session_id, None))
 
             async def claim(actor: ActorContext) -> dict[str, Any]:
                 async with sessions() as database, database.begin():
@@ -240,7 +289,9 @@ def test_concurrent_normalized_username_claims_have_one_owner(postgres_harness) 
                     )
 
             results = await asyncio.wait_for(
-                asyncio.gather(*(claim(actor) for actor in state.actors), return_exceptions=True),
+                asyncio.gather(
+                    *(claim(actor) for actor in no_tenant_actors), return_exceptions=True
+                ),
                 timeout=10,
             )
             successes = [result for result in results if not isinstance(result, BaseException)]
@@ -251,23 +302,17 @@ def test_concurrent_normalized_username_claims_have_one_owner(postgres_harness) 
             assert successes[0]["username"] == "shared_name"
 
             async with sessions() as database:
-                profiles = list(
-                    await database.scalars(
-                        select(AcademyPublicProfile).where(
-                            AcademyPublicProfile.tenant_id == state.tenant_id
-                        )
-                    )
-                )
+                profiles = list(await database.scalars(select(CohorvaPublicProfile)))
                 owner = next(
                     actor
-                    for actor, result in zip(state.actors, results, strict=True)
+                    for actor, result in zip(no_tenant_actors, results, strict=True)
                     if not isinstance(result, BaseException)
                 )
                 assert [(row.person_id, row.username) for row in profiles] == [
                     (owner.person_id, "shared_name")
                 ]
                 assert (
-                    await _event_count(database, state.tenant_id, "community.username_claimed") == 1
+                    await _event_count(database, state.tenant_id, "community.username_claimed") == 0
                 )
                 assert (
                     await database.run_sync(
@@ -299,9 +344,8 @@ def test_same_person_username_retry_is_idempotent_and_audited_once(postgres_harn
 
             async with sessions() as database:
                 row = await database.scalar(
-                    select(AcademyPublicProfile).where(
-                        AcademyPublicProfile.tenant_id == state.tenant_id,
-                        AcademyPublicProfile.person_id == actor.person_id,
+                    select(CohorvaPublicProfile).where(
+                        CohorvaPublicProfile.person_id == actor.person_id,
                     )
                 )
                 assert row is not None and row.username == "retry_user"
@@ -314,7 +358,7 @@ def test_same_person_username_retry_is_idempotent_and_audited_once(postgres_harn
     _run_async(run())
 
 
-def test_username_reuse_is_academy_scoped_and_profiles_do_not_leak_between_people(
+def test_username_is_global_across_academies_and_profiles_do_not_leak_between_people(
     postgres_harness,
 ) -> None:  # noqa: F811
     async def run() -> None:
@@ -362,16 +406,31 @@ def test_username_reuse_is_academy_scoped_and_profiles_do_not_leak_between_peopl
                     second_actor, " academy_name "
                 )
                 assert second_profile["username"] == "academy_name"
+                with pytest.raises(UsernameAlreadyClaimed):
+                    await CommunityApplication(database).claim_username(
+                        second_actor, "different_name"
+                    )
+
+                other = state.actors[1]
+                with pytest.raises(UsernameUnavailable):
+                    await CommunityApplication(database).claim_username(
+                        ActorContext(
+                            person_id=other.person_id,
+                            session_id=other.session_id,
+                            tenant_id=None,
+                        ),
+                        "academy_name",
+                    )
 
             async with sessions() as database:
                 rows = list(
                     await database.scalars(
-                        select(AcademyPublicProfile)
-                        .where(AcademyPublicProfile.person_id == actor.person_id)
-                        .order_by(AcademyPublicProfile.tenant_id)
+                        select(CohorvaPublicProfile).where(
+                            CohorvaPublicProfile.person_id == actor.person_id
+                        )
                     )
                 )
-                assert len(rows) == 2
+                assert len(rows) == 1
                 assert {row.username for row in rows} == {"academy_name"}
                 other_person_profile = await CommunityApplication(database).profile(
                     ActorContext(
@@ -386,7 +445,7 @@ def test_username_reuse_is_academy_scoped_and_profiles_do_not_leak_between_peopl
                 )
                 assert (
                     await _event_count(database, second_tenant_id, "community.username_claimed")
-                    == 1
+                    == 0
                 )
         finally:
             await engine.dispose()
@@ -407,36 +466,36 @@ def test_leaderboard_opt_in_out_uses_revisions_and_appends_one_audit_per_change(
                 await CommunityApplication(database).claim_username(actor, "Revision_User")
             async with sessions() as database, database.begin():
                 joined = await CommunityApplication(database).set_leaderboard_opt_in(
-                    actor, opted_in=True, expected_revision=1
+                    actor, opted_in=True, expected_revision=0
                 )
                 assert joined["leaderboard_opted_in"] is True
-                assert joined["revision"] == 2
+                assert joined["revision"] == 1
             async with sessions() as database, database.begin():
                 retry = await CommunityApplication(database).set_leaderboard_opt_in(
-                    actor, opted_in=True, expected_revision=1
+                    actor, opted_in=True, expected_revision=0
                 )
-                assert retry["revision"] == 2
+                assert retry["revision"] == 1
                 withdrawn = await CommunityApplication(database).set_leaderboard_opt_in(
-                    actor, opted_in=False, expected_revision=2
+                    actor, opted_in=False, expected_revision=1
                 )
                 assert withdrawn["leaderboard_opted_in"] is False
-                assert withdrawn["revision"] == 3
+                assert withdrawn["revision"] == 2
 
             with pytest.raises(CommunityRevisionConflict):
                 async with sessions() as database, database.begin():
                     await CommunityApplication(database).set_leaderboard_opt_in(
-                        actor, opted_in=True, expected_revision=2
+                        actor, opted_in=True, expected_revision=1
                     )
 
             async with sessions() as database:
                 row = await database.scalar(
-                    select(AcademyPublicProfile).where(
-                        AcademyPublicProfile.tenant_id == state.tenant_id,
-                        AcademyPublicProfile.person_id == actor.person_id,
+                    select(AcademyLeaderboardPreference).where(
+                        AcademyLeaderboardPreference.tenant_id == state.tenant_id,
+                        AcademyLeaderboardPreference.person_id == actor.person_id,
                     )
                 )
                 assert row is not None
-                assert (row.leaderboard_opted_in, row.revision) == (False, 3)
+                assert (row.leaderboard_opted_in, row.revision) == (False, 2)
                 assert (
                     await _event_count(database, state.tenant_id, "community.leaderboard_joined")
                     == 1
@@ -647,8 +706,17 @@ def test_leaderboard_filters_to_active_learners_and_ranks_earned_xp_with_tied_pa
     _run_async(run())
 
 
-def test_academy_public_profiles_migration_matches_orm_metadata(postgres_harness) -> None:  # noqa: F811
-    table_name = "academy_public_profiles"
+@pytest.mark.parametrize(
+    "table_name",
+    [
+        "academy_public_profiles",
+        "community_public_profiles",
+        "academy_leaderboard_preferences",
+    ],
+)
+def test_community_profile_migrations_match_orm_metadata(  # noqa: F811
+    postgres_harness, table_name: str
+) -> None:
     metadata = model_metadata()
     model_table = metadata.tables[table_name]
     inspector = inspect(postgres_harness.engine)
@@ -716,6 +784,146 @@ def test_academy_public_profiles_migration_matches_orm_metadata(postgres_harness
         assert compare_metadata(context, metadata) == []
 
 
+def test_global_username_migration_preflight_reports_both_collision_classes(
+    postgres_harness, monkeypatch: pytest.MonkeyPatch
+) -> None:  # noqa: F811
+    migration = _load_global_identity_migration()
+
+    async def run() -> None:
+        engine = create_async_engine(postgres_harness.schema_url, hide_parameters=True)
+        sessions = async_sessionmaker(engine, expire_on_commit=False)
+        try:
+            state = await seed(sessions)
+            first, second = state.actors
+            assert first.tenant_id is not None
+            extra_one, extra_two = uuid4(), uuid4()
+            async with sessions() as database:
+                transaction = await database.begin()
+                identity_count = int(
+                    await database.scalar(select(func.count()).select_from(CohorvaPublicProfile))
+                    or 0
+                )
+                database.add_all(
+                    [
+                        Tenant(id=extra_one, slug=f"collision-{extra_one.hex}", name="Extra one"),
+                        Tenant(id=extra_two, slug=f"collision-{extra_two.hex}", name="Extra two"),
+                        Membership(tenant_id=extra_one, person_id=first.person_id, role="learner"),
+                        Membership(tenant_id=extra_two, person_id=second.person_id, role="learner"),
+                    ]
+                )
+                await database.flush()
+                database.add_all(
+                    [
+                        AcademyPublicProfile(
+                            tenant_id=first.tenant_id,
+                            person_id=first.person_id,
+                            username="first_name",
+                        ),
+                        AcademyPublicProfile(
+                            tenant_id=extra_one,
+                            person_id=first.person_id,
+                            username="second_name",
+                        ),
+                        AcademyPublicProfile(
+                            tenant_id=extra_two,
+                            person_id=second.person_id,
+                            username="first_name",
+                        ),
+                    ]
+                )
+                await database.flush()
+
+                def preflight(sync: Any) -> None:
+                    connection = sync.connection()
+                    monkeypatch.setattr(migration.op, "get_bind", lambda: connection)
+                    with pytest.raises(
+                        RuntimeError,
+                        match="1 account-name conflicts and 1 cross-account username conflicts",
+                    ):
+                        migration._require_unambiguous_legacy_identity()
+
+                await database.run_sync(preflight)
+                assert (
+                    int(
+                        await database.scalar(
+                            select(func.count()).select_from(CohorvaPublicProfile)
+                        )
+                        or 0
+                    )
+                    == identity_count
+                )
+                await transaction.rollback()
+        finally:
+            await engine.dispose()
+
+    _run_async(run())
+
+
+def test_global_username_migration_backfills_unambiguous_legacy_history(
+    postgres_harness, monkeypatch: pytest.MonkeyPatch
+) -> None:  # noqa: F811
+    migration = _load_global_identity_migration()
+
+    async def run() -> None:
+        engine = create_async_engine(postgres_harness.schema_url, hide_parameters=True)
+        sessions = async_sessionmaker(engine, expire_on_commit=False)
+        try:
+            state = await seed(sessions)
+            actor = state.actors[0]
+            assert actor.tenant_id is not None
+            async with sessions() as database:
+                transaction = await database.begin()
+                database.add(
+                    AcademyPublicProfile(
+                        tenant_id=actor.tenant_id,
+                        person_id=actor.person_id,
+                        username="legacy_name",
+                        leaderboard_opted_in=True,
+                        revision=4,
+                        created_at=NOW,
+                        updated_at=NOW,
+                    )
+                )
+                await database.flush()
+
+                def backfill(sync: Any) -> None:
+                    connection = sync.connection()
+                    monkeypatch.setattr(migration.op, "get_bind", lambda: connection)
+                    migration._require_unambiguous_legacy_identity()
+                    migration._backfill_legacy_identity()
+
+                await database.run_sync(backfill)
+                identity = await database.get(CohorvaPublicProfile, actor.person_id)
+                preference = await database.get(
+                    AcademyLeaderboardPreference,
+                    (actor.tenant_id, actor.person_id),
+                )
+                legacy = await database.get(
+                    AcademyPublicProfile,
+                    (actor.tenant_id, actor.person_id),
+                )
+                assert identity is not None
+                assert (
+                    identity.username,
+                    identity.claim_source,
+                    identity.claimed_session_id,
+                    identity.legacy_profile_count,
+                ) == ("legacy_name", "legacy_0027", None, 1)
+                assert preference is not None
+                assert (preference.leaderboard_opted_in, preference.revision) == (True, 4)
+                assert legacy is not None
+                assert (legacy.username, legacy.leaderboard_opted_in, legacy.revision) == (
+                    "legacy_name",
+                    True,
+                    4,
+                )
+                await transaction.rollback()
+        finally:
+            await engine.dispose()
+
+    _run_async(run())
+
+
 def test_community_public_identity_is_immutable_in_orm_and_postgresql(
     postgres_harness,
 ) -> None:  # noqa: F811
@@ -727,12 +935,14 @@ def test_community_public_identity_is_immutable_in_orm_and_postgresql(
             actor = state.actors[0]
             async with sessions() as database, database.begin():
                 await CommunityApplication(database).claim_username(actor, "Immutable_User")
+                await CommunityApplication(database).set_leaderboard_opt_in(
+                    actor, opted_in=True, expected_revision=0
+                )
 
             async with sessions() as database:
                 row = await database.scalar(
-                    select(AcademyPublicProfile).where(
-                        AcademyPublicProfile.tenant_id == state.tenant_id,
-                        AcademyPublicProfile.person_id == actor.person_id,
+                    select(CohorvaPublicProfile).where(
+                        CohorvaPublicProfile.person_id == actor.person_id,
                     )
                 )
                 assert row is not None
@@ -743,15 +953,17 @@ def test_community_public_identity_is_immutable_in_orm_and_postgresql(
                 await database.rollback()
 
             for statement in (
-                update(AcademyPublicProfile)
+                update(CohorvaPublicProfile)
                 .where(
-                    AcademyPublicProfile.tenant_id == state.tenant_id,
-                    AcademyPublicProfile.person_id == actor.person_id,
+                    CohorvaPublicProfile.person_id == actor.person_id,
                 )
                 .values(username="changed_user"),
-                AcademyPublicProfile.__table__.delete().where(
-                    AcademyPublicProfile.tenant_id == state.tenant_id,
-                    AcademyPublicProfile.person_id == actor.person_id,
+                CohorvaPublicProfile.__table__.delete().where(
+                    CohorvaPublicProfile.person_id == actor.person_id,
+                ),
+                AcademyLeaderboardPreference.__table__.delete().where(
+                    AcademyLeaderboardPreference.tenant_id == state.tenant_id,
+                    AcademyLeaderboardPreference.person_id == actor.person_id,
                 ),
             ):
                 async with sessions() as database:
@@ -762,9 +974,8 @@ def test_community_public_identity_is_immutable_in_orm_and_postgresql(
 
             async with sessions() as database:
                 row = await database.scalar(
-                    select(AcademyPublicProfile).where(
-                        AcademyPublicProfile.tenant_id == state.tenant_id,
-                        AcademyPublicProfile.person_id == actor.person_id,
+                    select(CohorvaPublicProfile).where(
+                        CohorvaPublicProfile.person_id == actor.person_id,
                     )
                 )
                 assert row is not None and row.username == "immutable_user"

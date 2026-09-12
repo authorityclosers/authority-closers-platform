@@ -397,17 +397,25 @@ describe("installable browser shell", () => {
   });
 });
 
-describe("staging consent support pages", () => {
-  it("publishes honest privacy and terms boundaries without production claims", () => {
+describe("published learner consent policies", () => {
+  it("publishes a dated version, actual service scope and privacy contact", () => {
     const privacy = renderToStaticMarkup(createElement(PrivacyPage));
     const terms = renderToStaticMarkup(createElement(TermsPage));
 
     expect(h1Count(privacy)).toBe(1);
     expect(h1Count(terms)).toBe(1);
-    expect(privacy).toContain("Staging test document");
+    expect(privacy).toContain("ac-learner-terms-privacy-2026-09-13-v1");
+    expect(terms).toContain("ac-learner-terms-privacy-2026-09-13-v1");
+    expect(privacy).toContain("13 September 2026");
     expect(privacy).toContain("does not receive your Google password");
-    expect(terms).toContain("Not final production legal terms");
-    expect(terms).toContain("No purchase");
+    expect(terms).toContain("has no course fee");
+    expect(terms).toContain(
+      "Account creation and course enrollment are separate steps",
+    );
+    expect(privacy).toContain("Leaderboard participation is off by default");
+    expect(privacy).toContain("withdrawal of consent");
+    expect(privacy).not.toContain("Staging test document");
+    expect(terms).not.toContain("Not final production legal terms");
     expect(privacy).toContain("admin@authorityclosers.com");
     expect(terms).toContain("admin@authorityclosers.com");
   });
@@ -691,7 +699,7 @@ describe("honest preview controls", () => {
   });
 
   it("applies the Clarity Grid auth and onboarding compositions without changing capability", async () => {
-    const registration = renderToStaticMarkup(createElement(RegisterPage));
+    const registration = renderToStaticMarkup(await RegisterPage());
     const verification = renderToStaticMarkup(createElement(VerifyEmailPage));
     const onboarding = renderToStaticMarkup(
       await OnboardingPage({ searchParams: Promise.resolve({}) }),
@@ -1558,6 +1566,10 @@ describe("connected learner ready states", () => {
         state,
         missing_activity_ids: state === "locked" ? ["earlier-required"] : [],
       },
+      allowed_actions:
+        state === "available" || state === "in_progress"
+          ? (["save_draft"] as ActivityResponse["allowed_actions"])
+          : [],
     });
     return {
       program_id: "program-1",
@@ -1694,6 +1706,7 @@ describe("connected learner ready states", () => {
     expect(chapters[1][2]).toContain("Discovery decisions");
     expect(chapters[1][2]).toContain("1 of 3 activities complete");
     expect(chapters[1][2]).not.toContain("2 of 3 activities complete");
+    expect(chapters[1][2]).not.toContain("· Available");
   });
 
   it("keeps the primary continue action on the canonical actionable activity", () => {
@@ -1703,10 +1716,64 @@ describe("connected learner ready states", () => {
       label: "Continue learning",
     });
     learning.modules[1].activities[1].state = "in_progress";
+    learning.modules[1].activities[1].allowed_actions = ["save_draft"];
     expect(learningPathContinueTarget(learning)).toEqual({
       href: ROUTES.activity("review-step"),
       label: "Continue learning",
     });
+  });
+
+  it("shares server guidance across the course path and enrollment card", () => {
+    const learning = learningModulesFixture();
+    const later = {
+      ...learning.modules[1].activities[2],
+      id: "required-later",
+      title: "Server-selected next step",
+    };
+    learning.modules[1].activities.push(later);
+    learning.projection.next_activity_id = later.id;
+    expect(learningPathContinueTarget(learning).href).toBe(
+      ROUTES.activity(later.id),
+    );
+    const html = renderToStaticMarkup(
+      createElement(LearnerHomeEnrollmentCard, { learning }),
+    );
+    expect(html).toContain(`href="${ROUTES.activity(later.id)}"`);
+    expect(html).toContain(later.title);
+    expect(html).not.toContain(`href="${ROUTES.activity("available-step")}"`);
+  });
+
+  it("keeps an explicit server no-action result out of every continue CTA", () => {
+    const learning = learningModulesFixture();
+    learning.projection.next_activity_id = null;
+    expect(learningPathContinueTarget(learning).href).toBe(
+      ROUTES.module(learning.program_slug, "current-chapter"),
+    );
+    const html = renderToStaticMarkup(
+      createElement(LearnerHomeEnrollmentCard, { learning }),
+    );
+    expect(html).not.toContain(`href="${ROUTES.activity("available-step")}"`);
+    expect(html).not.toContain("Your next available step is");
+  });
+
+  it("does not revive a pointed activity without an allowed action", () => {
+    const learning = learningModulesFixture();
+    learning.projection.next_activity_id = "available-step";
+    learning.modules[1].activities[2].allowed_actions = [];
+    expect(learningPathContinueTarget(learning).href).toBe(
+      ROUTES.module(learning.program_slug, "current-chapter"),
+    );
+  });
+
+  it("keeps server guidance disabled for an offline enrollment card", () => {
+    const learning = markOfflineRead(learningModulesFixture(), 7_000);
+    learning.projection.next_activity_id = "available-step";
+    const html = renderToStaticMarkup(
+      createElement(LearnerHomeEnrollmentCard, { learning }),
+    );
+    expect(html).toContain('aria-disabled="true"');
+    expect(html).not.toContain(`href="${ROUTES.activity("available-step")}"`);
+    expect(html).toMatch(/reconnect/i);
   });
 
   it("uses a reviewable chapter rather than a locked first chapter when no activity is actionable", () => {
@@ -1748,6 +1815,16 @@ describe("connected learner ready states", () => {
     expect(html).toMatch(/awaiting review/i);
     expect(html).not.toContain('aria-disabled="true"');
     expect(html).not.toMatch(/\bcompleted\b/i);
+  });
+
+  it("keeps ready activity rows action-first without repeating a ready label", () => {
+    const activity = learningModulesFixture().modules[1].activities[2];
+    const html = renderToStaticMarkup(
+      createElement(LearningActivityNavigation, { activity }),
+    );
+
+    expect(html).toContain(`href="${ROUTES.activity(activity.id)}"`);
+    expect(html).not.toMatch(/>Available<|>available<|· Available/);
   });
 
   it("removes both activity and chapter links for a cached learning response", () => {

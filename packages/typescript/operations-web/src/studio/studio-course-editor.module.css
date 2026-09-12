@@ -295,7 +295,7 @@
 }
 .module li > button {
   display: grid;
-  grid-template-columns: 16px minmax(0, 1fr) 14px;
+  grid-template-columns: 24px minmax(0, 1fr) 14px;
   align-items: center;
   gap: 8px;
   width: 100%;
@@ -370,6 +370,16 @@
   align-items: center;
   justify-content: space-between;
   margin-bottom: 32px;
+  gap: 16px;
+}
+.editorHeading > div {
+  min-width: 0;
+}
+.editorHeading > div > .eyebrow {
+  overflow-wrap: anywhere;
+}
+.editorHeading > svg {
+  flex-shrink: 0;
 }
 .editorHeading h3 {
   margin: 8px 0 0;
@@ -461,7 +471,34 @@
   color: var(--muted);
   line-height: 1.7;
   font-size: 0.875rem;
-  margin: 24px 0 80px;
+  margin: 24px 0;
+}
+.nextStep {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin: 24px 0;
+  padding: 20px;
+  border: 1px solid var(--accent-line);
+  border-radius: 12px;
+  background: var(--accent-soft);
+}
+.nextStep > svg {
+  flex-shrink: 0;
+}
+.nextStep > div {
+  min-width: 0;
+}
+.nextStep h4 {
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  margin: 0;
+}
+.nextStep p {
+  color: var(--muted);
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  margin: 6px 0 16px;
 }
 .saveBar {
   display: flex;
@@ -734,6 +771,10 @@
   }
 }
 @media (max-width: 500px) {
+  .nextStep {
+    flex-wrap: wrap;
+    padding: 16px;
+  }
   .titleRow {
     display: grid;
     gap: 16px;

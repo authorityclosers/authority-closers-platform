@@ -147,22 +147,42 @@ def test_catalog_tables_and_migration_revision_are_present(database: Session) ->
         ledger_migration.downgrade()
 
 
-def test_revision_receipt_migration_is_forward_only_and_follows_existing_history() -> None:
-    path = (
-        Path(__file__).parents[2]
-        / "db"
-        / "migrations"
-        / "versions"
-        / "20260909_0023_studio_revision_commands.py"
+def test_studio_migrations_follow_history_and_preserve_forward_only_boundaries() -> None:
+    migrations = (
+        (
+            "20260909_0023_studio_revision_commands.py",
+            "studio_revision_migration",
+            "20260909_0023",
+            "20260908_0022",
+            True,
+        ),
+        (
+            "20260909_0024_studio_media_library_index.py",
+            "studio_media_library_migration",
+            "20260909_0024",
+            "20260909_0023",
+            False,
+        ),
+        (
+            "20260909_0025_studio_course_creation.py",
+            "studio_course_creation_migration",
+            "20260909_0025",
+            "20260909_0024",
+            True,
+        ),
     )
-    spec = spec_from_file_location("studio_revision_migration", path)
-    assert spec is not None and spec.loader is not None
-    migration = module_from_spec(spec)
-    spec.loader.exec_module(migration)
-    assert migration.revision == "20260909_0023"
-    assert migration.down_revision == "20260908_0022"
-    with pytest.raises(RuntimeError, match="forward-only"):
-        migration.downgrade()
+    versions = Path(__file__).parents[2] / "db" / "migrations" / "versions"
+    for filename, module_name, revision, down_revision, forward_only in migrations:
+        spec = spec_from_file_location(module_name, versions / filename)
+        assert spec is not None and spec.loader is not None
+        migration = module_from_spec(spec)
+        spec.loader.exec_module(migration)
+        assert migration.revision == revision
+        assert migration.down_revision == down_revision
+        assert callable(migration.downgrade)
+        if forward_only:
+            with pytest.raises(RuntimeError, match="forward-only"):
+                migration.downgrade()
 
 
 def test_publish_command_allows_one_completion_then_is_immutable(database: Session) -> None:

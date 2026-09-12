@@ -156,6 +156,73 @@ def test_every_restic_entrypoint_uses_the_same_private_repository_lock() -> None
         assert "0:$acops_gid:640:1" in source
 
 
+def test_foundation_restore_reads_require_r2_admission_under_the_repository_lock() -> None:
+    source = (FOUNDATION / "scripts" / "ac-restic-restore-check-inner").read_text(encoding="utf-8")
+    guard = "/usr/local/libexec/authority-closers/r2-usage-guard"
+    assert source.count(guard) == 1
+    assert source.index('exec 9>>"$restic_lock_file"') < source.index("# Repository lock acquired.")
+    assert source.index("# Repository lock acquired.") < source.index(guard)
+    assert source.index(guard) < source.index("$(restic snapshots ")
+    assert (
+        f"if ! {guard} >/dev/null 2>&1; then\n"
+        "  printf 'AC_BACKUP_FAILURE=r2_quota_paused\\n' >&2\n"
+        "  exit 1\nfi"
+    ) in source
+    assert "restic snapshots --tag authority-closers-foundation --latest 1 --json" in source
+    assert 'restic restore "$snapshot_id" --target "$restore_dir"' in source
+    assert "restic check --read-data-subset=1/20" in source
+    policy = backup.read_policy(FOUNDATION / "config" / "r2" / "free-tier-policy.conf")
+    assert policy["R2_MAX_CLASS_B_MONTH"] == 7_000_000
+
+
+@pytest.mark.parametrize("guard_status", [0, 17])
+def test_foundation_restore_admission_executes_before_any_restic_call(guard_status: int) -> None:
+    bash = (
+        Path(os.environ.get("PROGRAMFILES", "C:/Program Files")) / "Git/bin/bash.exe"
+        if os.name == "nt"
+        else Path("/usr/bin/bash")
+    )
+    if not bash.is_file():
+        pytest.skip("Bash is unavailable for the synthetic admission proof")
+    source = (FOUNDATION / "scripts" / "ac-restic-restore-check-inner").read_text(encoding="utf-8")
+    block = source.split("# Repository lock acquired.\n", 1)[1].split("\nsnapshot_count=", 1)[0]
+    block = block.replace("/usr/local/libexec/authority-closers/r2-usage-guard", "synthetic_guard")
+    # Only admission and the first read run here. POSIX tests separately exercise
+    # the actual fd9 lock. Descriptor 3 records synthetic calls past redirection.
+    harness = r"""
+set -euo pipefail
+exec 3>&1
+synthetic_guard_status="$1"
+AC_FOUNDATION_RPO_TARGET_SECONDS=86400
+AC_FOUNDATION_RESTORE_TARGET_SECONDS=14400
+synthetic_guard() {
+  printf 'GUARD_CALL\n' >&3
+  printf 'synthetic-private-guard-output\n'
+  printf 'synthetic-private-guard-error\n' >&2
+  return "$synthetic_guard_status"
+}
+restic() {
+  printf 'RESTIC_CALL:%s\n' "$*" >&3
+  printf '[]\n'
+}
+"""
+    result = subprocess.run(  # noqa: S603 - source block calls synthetic functions only
+        [str(bash), "-c", harness + block, "proof", str(guard_status)],
+        capture_output=True,
+        text=True,
+        timeout=5,
+        check=False,
+    )
+    assert result.returncode == (0 if guard_status == 0 else 1)
+    expected_calls = ["GUARD_CALL"]
+    if guard_status == 0:
+        expected_calls.append(
+            "RESTIC_CALL:snapshots --tag authority-closers-foundation --latest 1 --json"
+        )
+    assert result.stdout.splitlines() == expected_calls
+    assert result.stderr == ("" if guard_status == 0 else "AC_BACKUP_FAILURE=r2_quota_paused\n")
+
+
 @pytest.mark.skipif(os.name != "posix", reason="Bash syntax proof runs on POSIX CI")
 @pytest.mark.parametrize(
     "name",

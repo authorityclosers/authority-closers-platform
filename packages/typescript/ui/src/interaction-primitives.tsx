@@ -72,13 +72,18 @@ export function SessionStep({
   children,
   footer,
   labelledBy,
+  className = "",
 }: {
   children: ReactNode;
   footer: ReactNode;
   labelledBy: string;
+  className?: string;
 }) {
   return (
-    <section className={styles.step} aria-labelledby={labelledBy}>
+    <section
+      className={`${styles.step} ${className}`.trim()}
+      aria-labelledby={labelledBy}
+    >
       <div className={styles.stepBody} data-session-scroll="body">
         {children}
       </div>

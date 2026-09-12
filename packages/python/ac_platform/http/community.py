@@ -1,4 +1,4 @@
-"""Authenticated academy public identity and opt-in leaderboard HTTP boundary."""
+"""Authenticated global public identity and academy leaderboard HTTP boundary."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ class LeaderboardOptInRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     opted_in: StrictBool
-    expected_revision: StrictInt = Field(ge=1)
+    expected_revision: StrictInt = Field(ge=0)
 
 
 class CommunityPolicyResponse(BaseModel):
@@ -80,13 +80,23 @@ def install_community_http(
     router = APIRouter(prefix="/v1/community", tags=["learner-community"])
     actor_dependency = Depends(require_actor, scope="function")
 
-    def admitted(
+    def account_admitted(
+        auth: AuthenticatedTransaction,
+        request: Request,
+        response: Response,
+    ) -> None:
+        del auth
+        if request.query_params:
+            raise HTTPException(422, "Community identity does not accept account selectors.")
+        response.headers["cache-control"] = "private, no-store"
+
+    def academy_admitted(
         auth: AuthenticatedTransaction,
         request: Request,
         response: Response,
     ) -> None:
         if auth.resolved.actor.tenant_id is None or auth.resolved.membership_role != "learner":
-            raise HTTPException(403, "Select your learner academy to open community identity.")
+            raise HTTPException(403, "Select your learner academy to manage its leaderboard.")
         if request.query_params:
             raise HTTPException(422, "Community profile does not accept account selectors.")
         response.headers["cache-control"] = "private, no-store"
@@ -97,7 +107,7 @@ def install_community_http(
         response: Response,
         auth: AuthenticatedTransaction = actor_dependency,
     ) -> dict[str, Any]:
-        admitted(auth, request, response)
+        account_admitted(auth, request, response)
         return await CommunityApplication(auth.database).profile(auth.resolved.actor)
 
     @router.put("/username", response_model=CommunityProfileResponse)
@@ -107,7 +117,7 @@ def install_community_http(
         response: Response,
         auth: AuthenticatedTransaction = actor_dependency,
     ) -> dict[str, Any]:
-        admitted(auth, request, response)
+        account_admitted(auth, request, response)
         require_safe_origin(request, settings)
         return await CommunityApplication(auth.database).claim_username(
             auth.resolved.actor,
@@ -121,7 +131,7 @@ def install_community_http(
         response: Response,
         auth: AuthenticatedTransaction = actor_dependency,
     ) -> dict[str, Any]:
-        admitted(auth, request, response)
+        academy_admitted(auth, request, response)
         require_safe_origin(request, settings)
         return await CommunityApplication(auth.database).set_leaderboard_opt_in(
             auth.resolved.actor,

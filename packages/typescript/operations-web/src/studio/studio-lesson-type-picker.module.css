@@ -1,0 +1,169 @@
+.disclosure {
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  margin-bottom: 24px;
+  background: var(--panel);
+  min-width: 0;
+}
+.disclosure > summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 76px;
+  padding: 14px 16px;
+  list-style: none;
+  cursor: pointer;
+  border-radius: 12px;
+}
+.disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+.disclosure > summary > svg {
+  flex-shrink: 0;
+}
+.disclosure > summary small {
+  display: block;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.disclosure > summary strong {
+  display: block;
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+.change {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--signal);
+  font-size: 0.75rem;
+}
+.disclosure[open] > summary .change svg {
+  transform: rotate(180deg);
+}
+.disclosure[open] > summary {
+  border-bottom: 1px solid var(--line);
+  border-radius: 12px 12px 0 0;
+}
+.picker {
+  min-width: 0;
+  margin: 20px 16px;
+  padding: 0;
+  border: 0;
+}
+.picker legend {
+  font-weight: 650;
+  font-size: 0.9375rem;
+  padding: 0;
+}
+.hint {
+  margin: 7px 0 16px;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  line-height: 1.6;
+}
+.options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.option {
+  position: relative;
+  min-width: 0;
+  cursor: pointer;
+}
+.option input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.card {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) 18px;
+  gap: 12px;
+  align-items: start;
+  height: 100%;
+  min-height: 100px;
+  padding: 16px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  color: var(--text);
+  background: var(--panel);
+  transition:
+    border-color 120ms ease,
+    background 120ms ease,
+    transform 120ms ease;
+}
+.words {
+  min-width: 0;
+}
+.words strong {
+  display: block;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+.words small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+.selected {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--signal);
+  color: var(--signal-ink);
+  opacity: 0;
+}
+.option input:checked + .card {
+  border-color: var(--signal);
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--signal);
+}
+.option input:checked + .card .selected {
+  opacity: 1;
+}
+.option input:focus-visible + .card {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+.option:hover input:not(:disabled) + .card {
+  border-color: var(--signal);
+}
+.option:active input:not(:disabled) + .card {
+  transform: translateY(1px);
+}
+.picker:disabled .option {
+  cursor: not-allowed;
+}
+.picker:disabled .card {
+  background: var(--panel-soft);
+}
+@media (max-width: 600px) {
+  .options {
+    grid-template-columns: 1fr;
+  }
+  .card {
+    min-height: 80px;
+    padding: 12px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    transition: none;
+    transform: none !important;
+  }
+}
+:global(html[data-reduced-motion="true"]) .card,
+:global(html[data-motion="reduced"]) .card {
+  transition: none;
+  transform: none !important;
+}

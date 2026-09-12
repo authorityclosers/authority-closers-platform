@@ -1,0 +1,297 @@
+.panel {
+  --theme-action: var(--signal);
+  --theme-action-hover: color-mix(in srgb, var(--signal) 88%, var(--text));
+  --theme-action-text: var(--signal-ink);
+  --theme-surface: var(--panel);
+  --theme-surface-subtle: var(--panel-soft);
+  --theme-text: var(--text);
+  --theme-text-muted: var(--muted);
+  --theme-border: var(--line);
+  --theme-border-strong: var(--line-strong);
+  --theme-disabled-surface: var(--panel-soft);
+  --theme-disabled-text: var(--muted);
+  --theme-focus: var(--signal);
+  min-width: 0;
+  margin-top: 24px;
+  padding: clamp(16px, 3vw, 28px);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+  color: var(--text);
+}
+.panel h3,
+.panel h4,
+.panel p {
+  margin: 0;
+}
+.panel h3 {
+  margin-top: 5px;
+  font-size: 1.125rem;
+  letter-spacing: -0.02em;
+}
+.panel h4 {
+  font-size: 0.9375rem;
+  overflow-wrap: anywhere;
+}
+.panel p {
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  background: var(--panel-soft);
+  color: var(--signal);
+}
+.eyebrow {
+  display: block;
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  font-weight: 700;
+  color: var(--muted);
+}
+.muted {
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.current {
+  padding: 16px;
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  margin-bottom: 24px;
+}
+.current p {
+  font-weight: 600;
+  margin-top: 6px;
+}
+.badge,
+.currentHint {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--signal);
+  font-size: 0.75rem;
+  margin-top: 8px;
+}
+.picker {
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+.picker legend {
+  padding: 0;
+  margin-bottom: 8px;
+  font-size: 0.875rem;
+  font-weight: 650;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+.choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 78px;
+  padding: 15px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--panel);
+  cursor: pointer;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease;
+}
+.choice:hover {
+  background: var(--panel-soft);
+}
+.choice[data-selected="true"] {
+  border-color: var(--signal);
+  background: color-mix(in srgb, var(--signal) 7%, var(--panel));
+}
+.choice:has(input:focus-visible) {
+  outline: 3px solid var(--signal);
+  outline-offset: 3px;
+}
+.choice input {
+  margin: 3px 0 0;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  accent-color: var(--signal);
+}
+.choiceBody {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+.choiceBody strong {
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}
+.choiceBody > span {
+  font-size: 0.75rem;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+.choiceBody .currentHint {
+  margin-top: 0;
+  color: var(--signal);
+}
+.picker:disabled .choice {
+  cursor: default;
+}
+.picker:disabled .choiceBody {
+  opacity: 0.7;
+}
+.empty {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+  padding: 24px 16px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 10px;
+  margin-top: 16px;
+  color: var(--muted);
+}
+.empty h4 {
+  color: var(--text);
+}
+.empty p {
+  font-size: 0.8125rem;
+}
+.pagination {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0;
+}
+.pagination > span {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.panel button {
+  min-height: 44px;
+}
+.approval,
+.recovery {
+  display: grid;
+  gap: 12px;
+  margin: 20px 0;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-soft);
+}
+.approval > label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+.approval input {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+}
+.approval input:focus-visible {
+  outline: 3px solid var(--signal);
+  outline-offset: 3px;
+}
+.approval > button {
+  justify-self: start;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.loading,
+.notice {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 16px 0 !important;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.notice {
+  color: var(--signal);
+}
+.loading svg,
+.notice svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+.error {
+  color: var(--danger);
+  margin: 16px 0 !important;
+  font-size: 0.8125rem;
+}
+.spinner {
+  animation: video-spin 900ms linear infinite;
+}
+@keyframes video-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (max-width: 500px) {
+  .approval,
+  .recovery {
+    padding: 16px;
+  }
+  .actions,
+  .actions > button,
+  .approval > button {
+    width: 100%;
+  }
+  .pagination {
+    gap: 4px;
+  }
+  .pagination > span {
+    flex-basis: 100%;
+    order: -1;
+    text-align: center;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .choice {
+    transition: none;
+  }
+  .spinner {
+    animation: none;
+  }
+}
+:global(html[data-reduced-motion="true"]) .spinner,
+:global(html[data-motion="reduced"]) .spinner {
+  animation: none;
+}
+:global(html[data-reduced-motion="true"]) .choice,
+:global(html[data-motion="reduced"]) .choice {
+  transition: none;
+}

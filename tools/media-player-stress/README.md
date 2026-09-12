@@ -129,6 +129,24 @@ matrix and the test assertions are in
 [`test-manifest.json`](test-manifest.json). They describe local simulation
 metadata only; they do not issue live network requests.
 
+The complete 10m 34.6s official 2160p film has a separate release-pack command.
+It leaves the short smoke pack unchanged, copies the verified H.264 2160p video
+without re-encoding, normalizes the primary stereo track to AAC, and prepares a
+source-keyframe-aligned 720p rendition. The command is local-only, limited to two
+transcode threads and a bounded total timeout. The resulting progressive MP4,
+adaptive HLS and checksummed `release-manifest.json` stay under the ignored
+artifact cache:
+
+```powershell
+python -u tools/media-player-stress/prepare_full_film_release.py `
+  --output tools/media-player-stress/.artifacts/full-film/bbb-4k-30-normal `
+  --timeout-seconds 3600
+```
+
+This pack preserves the complete visual-frame inventory. It does not create a
+course binding or waive the Studio upload-size, malware-scanning, publication,
+tenant-access or playback-grant requirements.
+
 The application seam is fail-closed: `AC_MEDIA_STRESS_FIXTURES_ENABLED` is
 accepted only in test/development/staging, production rejects it, and fixture
 composition requires an already-verified provider activation and playback grant

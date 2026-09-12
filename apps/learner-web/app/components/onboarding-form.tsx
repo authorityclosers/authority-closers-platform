@@ -13,6 +13,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type Ref } from "react";
 
 import { useAuthFlowProgress } from "./auth-flow-page";
+import { courseIntentHref, type CourseIntent } from "../lib/course-intent";
 import {
   ApiError,
   createLearnerApi,
@@ -364,6 +365,7 @@ export type OnboardingFormProps = {
   api?: LearnerApi;
   initialProfile?: OnboardingResponse;
   returnHref?: string;
+  courseIntent?: CourseIntent;
 };
 
 export type OnboardingCompletionStateProps = {
@@ -499,7 +501,8 @@ export function OnboardingForm(props: OnboardingFormProps = {}) {
   const {
     api = defaultApi,
     initialProfile,
-    returnHref = ROUTES.learnerHome,
+    courseIntent = null,
+    returnHref = courseIntentHref(ROUTES.learnerHome, courseIntent),
   } = props;
   const initialDraft = initialProfile ? draftFrom(initialProfile) : emptyDraft;
   const [profile, setProfile] = useState<OnboardingResponse | null>(
@@ -1293,7 +1296,10 @@ export function OnboardingForm(props: OnboardingFormProps = {}) {
           Retry profile
         </button>
         {sessionExpired ? (
-          <Link className="text-link" href={ROUTES.sessionExpired}>
+          <Link
+            className="text-link"
+            href={courseIntentHref(ROUTES.sessionExpired, courseIntent)}
+          >
             Sign in again
           </Link>
         ) : null}
@@ -1947,7 +1953,10 @@ export function OnboardingForm(props: OnboardingFormProps = {}) {
           <strong>Profile save could not be completed</strong>
           <p>{error}</p>
           {sessionExpired ? (
-            <Link className="text-link" href={ROUTES.sessionExpired}>
+            <Link
+              className="text-link"
+              href={courseIntentHref(ROUTES.sessionExpired, courseIntent)}
+            >
               Sign in again
             </Link>
           ) : null}

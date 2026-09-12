@@ -1,9 +1,8 @@
 export type NotificationKind = "learning" | "account" | "system";
 
 /**
- * Shared first-slice copy for the shell popover and full notification route.
- * Keeping the boundary in one contract prevents the two entry points from
- * drifting into different claims while notification history is unavailable.
+ * Learning/account notification contracts remain separate from the activated
+ * package-owned app-update feed. Do not fabricate course or account alerts.
  */
 export const NOTIFICATION_SOURCE_UNAVAILABLE_COPY = {
   heading: "Notifications aren’t available yet",
@@ -54,8 +53,8 @@ export interface NotificationReadPort {
 }
 
 /**
- * The first slice has no notification service contract. This adapter makes
- * that boundary explicit without inventing a client-side source of truth.
+ * There is no learning/account notification service contract yet. App release
+ * notes use app-updates-api and canonical read receipts instead of this adapter.
  */
 export const unavailableNotificationReadPort: NotificationReadPort = {
   async list(): Promise<NotificationResource> {
