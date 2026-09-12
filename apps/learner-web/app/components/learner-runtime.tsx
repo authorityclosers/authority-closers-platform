@@ -1702,7 +1702,8 @@ export type ActivityRecoveryHydrationGuard = {
 
 /**
  * Recovery hydration is advisory. A learner edit wins over a delayed local
- * read, even if the read began first and the recovery copy matches the server.
+ * read, including a retry started after the edit, even when the recovery copy
+ * matches the server.
  */
 export function createActivityRecoveryHydrationGuard(): ActivityRecoveryHydrationGuard {
   let learnerEditGeneration = 0;
@@ -1712,7 +1713,7 @@ export function createActivityRecoveryHydrationGuard(): ActivityRecoveryHydratio
       learnerEditGeneration += 1;
     },
     canApply: (hydrationGeneration) =>
-      hydrationGeneration === learnerEditGeneration,
+      hydrationGeneration === 0 && learnerEditGeneration === 0,
   };
 }
 
@@ -1830,6 +1831,9 @@ export function ConnectedActivityWorkspace({
     "draft" | "evidence" | null
   >(null);
   const [localDraftChecked, setLocalDraftChecked] = useState(false);
+  const [localDraftReadUnavailable, setLocalDraftReadUnavailable] =
+    useState(false);
+  const [localDraftReadAttempt, setLocalDraftReadAttempt] = useState(0);
   const [localDraftRestored, setLocalDraftRestored] = useState(false);
   const [staleLocalDraft, setStaleLocalDraft] =
     useState<ActivityDraftEnvelope | null>(null);
@@ -2010,54 +2014,66 @@ export function ConnectedActivityWorkspace({
         active = false;
       };
     }
-    void readActivityLocalDraftWithLock(
-      localDraftStorage,
-      localDraftScope,
-    ).then((localDraft) => {
+    // Effect replay must cancel before taking the exclusive recovery lock.
+    // Otherwise the second read can report busy while the discarded first read
+    // owns the lock, leaving the active mount without its recovery response.
+    queueMicrotask(() => {
       if (!active) return;
-      if (localDraft.status === "ready") {
-        if (
-          localDraftMatchesServer(
-            localDraft.envelope,
-            activity.draft_revision,
-            activityServerFingerprint(initialResponse),
-          )
-        ) {
-          if (
-            activityRecoveryHydrationGuardRef.current.canApply(
-              hydrationGeneration,
-            ) &&
-            localDraft.envelope.draft.response !== initialResponse
-          ) {
-            setResponse(localDraft.envelope.draft.response);
-            setLocalDraftRestored(true);
-            setLocalPersistence("saved");
-          }
-        } else {
-          setStaleLocalDraft(localDraft.envelope);
+      void readActivityLocalDraftWithLock(
+        localDraftStorage,
+        localDraftScope,
+      ).then((localDraft) => {
+        if (!active) return;
+        if (localDraft.status === "unavailable") {
+          setLocalDraftChecked(false);
+          setLocalDraftReadUnavailable(true);
+          setLocalPersistence("failed");
+          setRecoveryMessage(
+            "This browser could not verify your local activity recovery copy. Retry recovery before leaving; the saved server response is unchanged.",
+          );
+          return;
         }
-      } else if (localDraft.status === "unavailable") {
-        setLocalPersistence("failed");
-        setRecoveryMessage(
-          "This browser could not verify local activity recovery storage. The server activity remains authoritative; keep any response you need before leaving.",
-        );
-      } else if (
-        localDraft.status === "expired" ||
-        localDraft.status === "invalid"
-      ) {
-        setLocalCleanupPending(
-          null,
-          localDraft.cleanupTarget,
-          "expired-record",
-        );
-        setLocalPersistence("failed");
-        setRecoveryMessage(
-          localDraft.status === "expired"
-            ? "An expired activity recovery copy could not be removed under the shared lock. Retry local cleanup before leaving."
-            : "An invalid activity recovery copy could not be removed under the shared lock. Retry local cleanup before leaving.",
-        );
-      }
-      setLocalDraftChecked(true);
+        setLocalDraftReadUnavailable(false);
+        setRecoveryMessage(null);
+        if (localDraft.status === "ready") {
+          if (
+            localDraftMatchesServer(
+              localDraft.envelope,
+              activity.draft_revision,
+              activityServerFingerprint(initialResponse),
+            )
+          ) {
+            if (
+              activityRecoveryHydrationGuardRef.current.canApply(
+                hydrationGeneration,
+              ) &&
+              localDraft.envelope.draft.response !== initialResponse
+            ) {
+              setResponse(localDraft.envelope.draft.response);
+              setLocalDraftRestored(true);
+              setLocalPersistence("saved");
+            }
+          } else {
+            setStaleLocalDraft(localDraft.envelope);
+          }
+        } else if (
+          localDraft.status === "expired" ||
+          localDraft.status === "invalid"
+        ) {
+          setLocalCleanupPending(
+            null,
+            localDraft.cleanupTarget,
+            "expired-record",
+          );
+          setLocalPersistence("failed");
+          setRecoveryMessage(
+            localDraft.status === "expired"
+              ? "An expired activity recovery copy could not be removed under the shared lock. Retry local cleanup before leaving."
+              : "An invalid activity recovery copy could not be removed under the shared lock. Retry local cleanup before leaving.",
+          );
+        }
+        setLocalDraftChecked(true);
+      });
     });
     return () => {
       active = false;
@@ -2069,6 +2085,7 @@ export function ConnectedActivityWorkspace({
     initialResponse,
     localDraftScope,
     localDraftStorage,
+    localDraftReadAttempt,
     setLocalCleanupPending,
     setRecoveryMessage,
   ]);
@@ -3029,12 +3046,39 @@ export function ConnectedActivityWorkspace({
             <details className="lesson-context">
               <summary>Device storage notice</summary>
               <p>{recoveryMessage}</p>
+              {localDraftReadUnavailable ? (
+                <button
+                  className="text-button"
+                  type="button"
+                  onClick={() =>
+                    setLocalDraftReadAttempt((attempt) => attempt + 1)
+                  }
+                >
+                  Retry local recovery
+                </button>
+              ) : null}
             </details>
           ) : (
             <p className="activity-recovery-status" role="status">
               {recoveryMessage}
             </p>
           )
+        ) : null}
+        {localDraftReadUnavailable &&
+        !(
+          isVideo &&
+          !dirty &&
+          !staleLocalDraft &&
+          !localCleanupPendingDraft &&
+          !localCleanupPendingRaw
+        ) ? (
+          <button
+            className="text-button"
+            type="button"
+            onClick={() => setLocalDraftReadAttempt((attempt) => attempt + 1)}
+          >
+            Retry local recovery
+          </button>
         ) : null}
         {message ? (
           <div
