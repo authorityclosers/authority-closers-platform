@@ -26,6 +26,7 @@ The source limits are exact and intentionally expressed in their native units:
 | ClamAV scan limit | 4,000,000,000 bytes |
 | Scanner total deadline | 1,800 seconds |
 | Private store aggregate envelope | 8 GiB |
+| FFmpeg temporary workspace quota | 8 GiB |
 | Video processing concurrency | 2 active completions |
 | API memory limit | 768 MiB |
 | Worker memory limit | 512 MiB |
@@ -39,6 +40,9 @@ worker:
 - `/srv/authority-closers/volumes/media-safety-socket` to
   `/run/ac-media-safety`, read-only for API and worker, with ClamAV at
   `/run/ac-media-safety/clamd.sock`.
+- The worker's `TMPDIR` is `/var/lib/ac-media/tmp`, a precreated private
+  directory on the media volume. This avoids the foundation `/tmp` tmpfs
+  limit while retaining the processor's bounded source/output reservation.
 
 The default application profile remains disabled. An operator activates this
 capability only after the exact reviewed application and scanner archives have
@@ -47,6 +51,8 @@ been installed and proved:
 ```sh
 sudo install -d -o 10001 -g 10001 -m 0700 \
   /srv/authority-closers/volumes/media-video
+sudo install -d -o 10001 -g 10001 -m 0700 \
+  /srv/authority-closers/volumes/media-video/tmp
 sudo install -d -o 100 -g 100 -m 0755 \
   /srv/authority-closers/volumes/media-safety-socket
 

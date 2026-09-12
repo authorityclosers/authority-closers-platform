@@ -18,6 +18,7 @@ services:
       AC_MEDIA_FILESYSTEM_ROOT: /var/lib/ac-media/video-objects
       AC_MEDIA_SCANNER_UNIX_SOCKET: /run/ac-media-safety/clamd.sock
       AC_MEDIA_MAX_UPLOAD_BYTES: "2000000000"
+      TMPDIR: /var/lib/ac-media/tmp
     volumes:
       - /srv/authority-closers/volumes/media-video:/var/lib/ac-media:rw
       - /srv/authority-closers/volumes/media-safety-socket:/run/ac-media-safety:ro
