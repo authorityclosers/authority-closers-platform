@@ -1,0 +1,48 @@
+{
+  "schema": "ac.sales-xray.source-compatibility/1",
+  "inspected_on": "2026-09-13",
+  "activation": "source_inspected_adapter_not_implemented",
+  "sources": [
+    {
+      "package": "AC_SignalLab_Studio_v0.2_Windows/AC_SignalLab_Studio_v0.2",
+      "path": "signallab/config.py",
+      "sha256": "d5838bbbee2b2fd8b0a12648832443af4c028dab83a01d2069baa8cb91228914"
+    },
+    {
+      "package": "AC_SignalLab_Studio_v0.2_Windows/AC_SignalLab_Studio_v0.2",
+      "path": "acav/audio.py",
+      "sha256": "dababc19a9fec29851fbfe60510cfcf7f3d7b101e5339f3ba47107be5b4332c2"
+    },
+    {
+      "package": "AC_SignalLab_Studio_v0.2_Windows/AC_SignalLab_Studio_v0.2",
+      "path": "acav/engine.py",
+      "sha256": "1ab95e4a4cb22552efa7ce8ef5de4fc01956b825958f12e59a90f5750aba0215"
+    },
+    {
+      "package": "AC_Sales_Video_Core_and_Engine/AC_SignalLab_Real_Video/software/engine",
+      "path": "acav/audio.py",
+      "sha256": "35f25ffebfa32f6f05643a17287e76ac63b70b0e8b236f09345ed30417f47c04"
+    },
+    {
+      "package": "AC_Sales_Video_Core_and_Engine/AC_SignalLab_Real_Video/software/engine",
+      "path": "acav/engine.py",
+      "sha256": "c043708bb904bef7b6fdba5cd10aa87a7c29442ea1bfb0d579724fa0a1cdb5f0"
+    }
+  ],
+  "profiles": {
+    "audioatlas_native_0.1": {"window_ms": 40, "hop_ms": 10, "sample_grid": "floor(rate*10/1000)*frame_index", "spectral_rate": "decoded_profile_rate", "pitch_rate": "decoded_profile_rate", "join": "full_support", "clock": "decoded_audio_track"},
+    "signallab_core": {"window_ms": 80, "hop_ms": 10, "sample_grid": "round(frame_index*source_rate*hop_ms/1000)", "spectral_rate": "native_source_rate", "pitch_rate_hz": 16000, "clock": "piecewise_decoded_frame_pts_mapping"},
+    "signallab_balanced": {"window_ms": 80, "hop_ms": 40, "save_spectra": false, "retain_waveforms": false},
+    "signallab_research": {"window_ms": 80, "hop_ms": 10, "save_spectra": true, "retain_waveforms": true},
+    "signallab_forensic": {"window_ms": 80, "hop_ms": 10, "save_spectra": true, "retain_waveforms": true}
+  },
+  "mapping_rules": [
+    "SignalLab AudioMap validates decoded-frame sample total against serialized native PCM samples; missing/invalid source times remain null.",
+    "PTS discontinuities create separate timeline segments; windows crossing boundaries carry an explicit flag and pitch abstains.",
+    "SignalLab pitch starts map independently rounded absolute native sample positions to the 16kHz derivative. Noninteger hops must not accumulate rounding drift.",
+    "AudioAtlas original integer-floor hop behavior is preserved. The product only selects 16kHz or48kHz profiles where10ms is integral.",
+    "SignalLab review reports center-selected word joins. Sales Xray uses conservative full-window containment, and does not call them equivalent.",
+    "No SignalLab output or model review is proof of calibrated acoustic accuracy. Engine-specific spectral scaling, FFT lengths and windows remain distinct.",
+    "A source track origin alone cannot certify codec delay, resampling latency, discontinuities or container/video synchronization. No constant offset is fabricated."
+  ]
+}

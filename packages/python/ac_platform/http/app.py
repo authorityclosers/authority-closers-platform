@@ -19,6 +19,9 @@ from ac_platform.http.app_updates import install_app_updates_http
 from ac_platform.http.auth import install_identity_http
 from ac_platform.http.certificates import install_certificate_http
 from ac_platform.http.community import install_community_http
+from ac_platform.http.conversation import install_conversation_http
+from ac_platform.http.conversation_admin import install_conversation_admin_http
+from ac_platform.http.conversation_intake import ConversationIntakeRuntime
 from ac_platform.http.course import install_course_http
 from ac_platform.http.identity_provider import OAuthIdentityProvider, create_google_provider
 from ac_platform.http.learning import (
@@ -78,6 +81,7 @@ def create_app(
     *,
     identity_provider: OAuthIdentityProvider | None = None,
     media_runtime: MediaRuntime | None = None,
+    conversation_intake_runtime: ConversationIntakeRuntime | None = None,
 ) -> FastAPI:
     # Provider activation is closed in this slice.  There is no immutable
     # externally attested activation boundary, inbox-first/quick-ACK webhook
@@ -129,6 +133,22 @@ def create_app(
         require_actor=require_actor,
     )
     install_practice_http(application, settings=settings, require_actor=require_actor)
+    if conversation_intake_runtime is not None and settings.environment not in {"local", "test"}:
+        raise RuntimeError(
+            "Hosted conversation intake requires its reviewed deployment composition."
+        )
+    install_conversation_http(
+        application,
+        settings=settings,
+        require_actor=require_actor,
+        intake_runtime=conversation_intake_runtime,
+    )
+    install_conversation_admin_http(
+        application,
+        settings=settings,
+        require_actor=require_actor,
+        import_storage=conversation_intake_runtime.storage if conversation_intake_runtime else None,
+    )
     install_community_http(application, settings=settings, require_actor=require_actor)
     install_app_updates_http(application, settings=settings, require_actor=require_actor)
     install_platform_http(application, settings=settings, require_actor=require_actor)
@@ -240,6 +260,9 @@ def create_app(
         local_avatar_upload_enabled=settings.environment == "local"
         and settings.media_local_avatar_enabled,
         studio_video_upload_max_bytes=studio_video_max_source_bytes,
+        conversation_upload_max_bytes=conversation_intake_runtime.storage.max_bytes
+        if conversation_intake_runtime
+        else None,
     )
     application.add_middleware(
         RateLimitMiddleware,
@@ -260,6 +283,7 @@ def create_app(
                 "if-match",
                 "x-request-id",
                 "x-playback-token",
+                "x-analysis-quote",
             ],
             expose_headers=["etag", "x-request-id", "x-ac-release-id"],
             max_age=600,

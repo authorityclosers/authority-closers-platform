@@ -16,6 +16,7 @@ from ac_platform.authorization import models as authorization_models
 from ac_platform.catalog import models as catalog_models
 from ac_platform.certificates import models as certificate_models
 from ac_platform.community import models as community_models
+from ac_platform.conversation_intelligence import models as conversation_models
 from ac_platform.db.base import Base
 from ac_platform.enrollment import models as enrollment_models
 from ac_platform.identity import models as identity_models
@@ -34,6 +35,7 @@ MODEL_MODULES = (
     tenancy_models,
     app_update_models,
     community_models,
+    conversation_models,
     authorization_models,
     knowledge_models,
     catalog_models,

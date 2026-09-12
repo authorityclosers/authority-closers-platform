@@ -229,6 +229,21 @@ def test_deployment_composition_does_not_enable_cross_surface_browser_cors(
     )
 
 
+def test_local_cors_allows_exact_quote_header_for_intake(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(app_module, "settings", Settings(environment="local"))
+    with TestClient(create_app(identity_provider=DisabledIdentityProvider())) as client:
+        response = client.options(
+            "/v1/conversation/recordings/00000000-0000-4000-8000-000000000001/source",
+            headers={
+                "Origin": app_module.settings.allowed_origins[0],
+                "Access-Control-Request-Method": "PUT",
+                "Access-Control-Request-Headers": "Content-Type,X-Analysis-Quote",
+            },
+        )
+    assert response.status_code == 200
+    assert "x-analysis-quote" in response.headers["access-control-allow-headers"].lower()
+
+
 def test_deployment_coach_host_is_trusted_but_restricted_before_identity_resolution(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
