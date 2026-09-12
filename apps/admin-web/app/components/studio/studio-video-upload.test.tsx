@@ -3,7 +3,10 @@ import { act, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { File as NodeFile } from "node:buffer";
-import { StudioVideoUpload } from "../../../../../packages/typescript/operations-web/src/studio/studio-video-upload";
+import {
+  StudioVideoUpload,
+  videoFileSize,
+} from "../../../../../packages/typescript/operations-web/src/studio/studio-video-upload";
 import {
   activateStudioUploadScope,
   restrictStudioUploadScope,
@@ -128,12 +131,15 @@ function button(text: string) {
 }
 it("mounts a labelled, format/limit-aware upload control only after verified capability", async () => {
   await mount();
-  expect(container.textContent).toContain("MP4 or WebM, up to 10.0 MB");
+  expect(container.textContent).toContain("MP4 or WebM, up to 10.5 MB");
   expect(button("Choose video")).toBeDefined();
   expect(
     container.querySelector('input[type="file"]')?.getAttribute("aria-label"),
   ).toBe("Choose a course video");
   expect(container.textContent).not.toContain("private/");
+});
+it("labels the decimal source ceiling without converting it to a binary limit", () => {
+  expect(videoFileSize(2_000_000_000)).toBe("2.0 GB");
 });
 it("offers no misleading file control when runtime is not configured or the editor is read only", async () => {
   fetcher.mockImplementation(async () =>

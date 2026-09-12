@@ -62,7 +62,7 @@ The Sun in Ultra-High Definition** as a nominal 30-minute `3840x2160` download:
   from NASA's general media status.
 
 This candidate was deliberately not downloaded. Its listed 8.4 GB size is far
-above the current 100 MiB Studio source-upload cap and is at or above the fixture
+above the current 2,000,000,000-byte Studio source-upload cap and is at or above the fixture
 manifest's 8 GiB extracted-file ceiling. It would also consume roughly one third
 of the 24.4 GiB free on the local volume before processing outputs. A future
 acquisition requires an explicit, reviewed larger-file policy and either
@@ -75,4 +75,4 @@ NASA file.
 
 This evidence proves source provenance and local byte integrity only. It does
 not authorize upload, course binding, publication, access, playback, deployment,
-or any change to the current Studio 100 MiB admission limit.
+or any change to the current Studio 2,000,000,000-byte admission limit.

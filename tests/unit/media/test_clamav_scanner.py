@@ -162,7 +162,7 @@ def test_accepts_normalized_mime_case_checksum_and_existing_revision_lengths(
     assert scan(scanner(), storage, metadata).clean
 
 
-@pytest.mark.parametrize("length", [0, -1, True, 1.2, 101 * 1024 * 1024])
+@pytest.mark.parametrize("length", [0, -1, True, 1.2, module.STUDIO_VIDEO_MAX_SOURCE_BYTES + 1])
 def test_invalid_and_oversize_lengths_never_start_storage_or_transport(
     connection: FakeSocket, length: int
 ) -> None:

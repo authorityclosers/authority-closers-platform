@@ -12,6 +12,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import make_url
 
 from ac_platform.application.release_identity import require_baked_release_id
+from ac_platform.media.studio_video_limits import STUDIO_VIDEO_MAX_SOURCE_BYTES
 
 _DEPLOYMENT_ORIGINS = {
     "staging": {
@@ -109,7 +110,7 @@ class Settings(BaseSettings):
     media_gap_reference: str | None = None
     media_upload_ttl_seconds: int = 900
     media_playback_ttl_seconds: int = 900
-    media_max_upload_bytes: int = 512 * 1024 * 1024
+    media_max_upload_bytes: int = STUDIO_VIDEO_MAX_SOURCE_BYTES
     media_quota_window_seconds: int = 3600
     media_quota_bytes_per_actor: int = 2 * 1024 * 1024 * 1024
     media_quota_uploads_per_actor: int = 100

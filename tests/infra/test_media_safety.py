@@ -690,7 +690,7 @@ def test_prove_rechecks_exact_container_health_after_functional_probe(
 @pytest.mark.parametrize(
     ("name", "needle", "replacement"),
     (
-        ("clamd.conf", "StreamMaxLength 100M", "StreamMaxLength 1M"),
+        ("clamd.conf", "StreamMaxLength 2000000000", "StreamMaxLength 1M"),
         ("clamd.conf", "BytecodeSecurity TrustSigned", "BytecodeSecurity Permissive"),
         ("freshclam.conf", "Checks 12", "Checks 0"),
         ("freshclam.conf", "DatabaseDirectory /var/lib/clamav", "DatabaseDirectory /tmp"),

@@ -6,7 +6,7 @@ The controller consumes an exact checksum-verified Git archive, retains immutabl
 
 Before packaging: 30 independent offline scanner tests passed; 10 launcher tests passed separately, including actual PowerShell opt-in evaluation. Independent review cleared the bounded scanner/controller/launcher changes after correcting writable signature storage and updater-policy validation. Real scanner activation, live signature verification and browser upload-to-playback are subsequent acceptance gates; these test results do not claim them completed.
 
-Source references: [official Docker operation guidance](https://docs.clamav.net/manual/Installing/Docker.html), [ClamAV 1.5.4 security release](https://blog.clamav.net/2026/08/clamav-154-and-146-security-patch.html). The local upload pilot remains capped at 100 MiB source bytes and 8 GiB private storage; a short 4K fixture does not prove long-lecture acceptance.
+Source references: [official Docker operation guidance](https://docs.clamav.net/manual/Installing/Docker.html), [ClamAV 1.5.4 security release](https://blog.clamav.net/2026/08/clamav-154-and-146-security-patch.html). The source-owned Studio upload pilot now admits at most 2,000,000,000 decimal source bytes and retains an 8 GiB private storage ceiling; a short 4K fixture does not prove long-lecture acceptance.
 
 ## IPv4 health reconciliation (source-only correction)
 

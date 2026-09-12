@@ -59,9 +59,9 @@ const titles: Record<UploadStage, string> = {
   rejected: "Choose another video",
 };
 export function videoFileSize(bytes: number) {
-  return bytes >= 1024 ** 3
-    ? `${(bytes / 1024 ** 3).toFixed(1)} GB`
-    : `${Math.max(0.1, bytes / 1024 ** 2).toFixed(1)} MB`;
+  return bytes >= 1_000_000_000
+    ? `${(bytes / 1_000_000_000).toFixed(1)} GB`
+    : `${Math.max(0.1, bytes / 1_000_000).toFixed(1)} MB`;
 }
 const noopSubscribe = () => () => {};
 const emptySnapshot = () => emptyUpload;

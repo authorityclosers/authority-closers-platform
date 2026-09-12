@@ -330,9 +330,9 @@ def validate_policy(installed: Path) -> None:
         all(
             policy.get(key) == setting
             for key, setting in {
-                "StreamMaxLength": "100M",
-                "MaxFileSize": "100M",
-                "MaxScanSize": "200M",
+                "StreamMaxLength": "2000000000",
+                "MaxFileSize": "2000000000",
+                "MaxScanSize": "4000000000",
                 "AlertExceedsMax": "yes",
                 "BytecodeSecurity": "TrustSigned",
             }.items()
