@@ -402,6 +402,8 @@ def test_total_deadline_cannot_be_extended_by_dribbling_responses(
         {"max_response_bytes": 0},
         {"total_timeout_seconds": float("inf")},
         {"io_timeout_seconds": float("nan")},
+        {"verdict_timeout_seconds": float("inf")},
+        {"verdict_timeout_seconds": 0},
         {"connect_timeout_seconds": 0},
     ],
 )
@@ -493,7 +495,8 @@ def test_failed_connection_closes_socket(monkeypatch: pytest.MonkeyPatch) -> Non
     connection.close.assert_called_once()
 
 
-def test_real_loopback_socket_streams_and_reads_fragmented_reply() -> None:
+@pytest.mark.parametrize("verdict_delay", [0.0, 0.15])
+def test_real_loopback_socket_streams_and_reads_fragmented_reply(verdict_delay: float) -> None:
     """A bounded protocol peer, not a daemon/antivirus acceptance test."""
     storage, metadata = storage_fixture(MP4 + b"x" * 200_000)
     received: list[str] = []
@@ -523,6 +526,8 @@ def test_real_loopback_socket_streams_and_reads_fragmented_reply() -> None:
                         assert size <= 64 * 1024
                         digest.update(exact(size))
                     received.append(digest.hexdigest())
+                    # Scanning can outlast the short stream I/O timeout.
+                    time.sleep(verdict_delay)
                     peer.sendall(b"stream:")
                     peer.sendall(b" OK\0")
             except Exception as error:
@@ -531,7 +536,16 @@ def test_real_loopback_socket_streams_and_reads_fragmented_reply() -> None:
         worker = Thread(target=serve)
         worker.start()
         try:
-            result = scan(scanner(port=listener.getsockname()[1]), storage, metadata)
+            result = scan(
+                scanner(
+                    port=listener.getsockname()[1],
+                    io_timeout_seconds=0.05,
+                    verdict_timeout_seconds=1,
+                    total_timeout_seconds=2,
+                ),
+                storage,
+                metadata,
+            )
         finally:
             worker.join(timeout=4)
         assert not worker.is_alive()
