@@ -76,3 +76,25 @@ The exact-checkpoint canonical browser rerun remains pending after this tested
 local checkpoint. Browser acceptance must show automatic activity return,
 visible C restoration, server B/revision 2 unchanged until explicit save, then
 C/revision 3 with unchanged completion and zero browser errors/blocked requests.
+
+## Exact-checkpoint browser acceptance
+
+The canonical browser rerun passed on commit
+`2127ee49e2c4d113ff328bbe0b78bde7452ff612`; API readiness returned that same
+release identifier. Receipt: `canonical-draft-recovery-20260912T212752Z/proof.json`.
+The retained failed receipt above remains part of the history.
+
+At 390px, a fresh synthetic learner registered, verified locally, skipped
+onboarding explicitly and enrolled through canonical APIs. Draft A persisted as
+revision 1. An interrupted B save retained the response; retry reused its command
+identity and persisted revision 2. After a real self-session revocation, saving C
+returned 401. Normal password sign-in returned 200 and automatically reopened the
+same activity for the same person. The editor visibly restored C from local
+recovery, while the server still held B/revision 2. Only explicit Save persisted
+C/revision 3. Completion remained unchanged throughout.
+
+All five views had viewport/document width 390px. There were zero page errors or
+blocked requests. Screenshots 03, 04 and 05 were visually inspected: the expired
+session retains C, the returned activity says local draft restored, and the final
+save reports success. This establishes local password-session recovery acceptance;
+it does not claim email delivery, live Google authentication or deployment.
