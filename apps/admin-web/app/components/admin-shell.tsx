@@ -12,6 +12,7 @@ import {
   CircleAlert,
   CircleHelp,
   LayoutDashboard,
+  MessagesSquare,
   Settings,
   UsersRound,
   type LucideIcon,
@@ -27,7 +28,12 @@ import {
   useAdminSession,
 } from "../lib/admin-session";
 
-export type AdminArea = "overview" | "people" | "catalog" | "operations";
+export type AdminArea =
+  | "overview"
+  | "people"
+  | "catalog"
+  | "operations"
+  | "sales-xray";
 export type AdminSupportArea = "correction" | "grant";
 export type AdminSurface = "organization" | "people" | "studio" | "operations";
 
@@ -68,6 +74,13 @@ const navigation: NavigationItem[] = [
     icon: Activity,
     permissions: ["job_retry", "recovery_reconcile"],
   },
+  {
+    area: "sales-xray",
+    href: "/sales-xray",
+    label: "Sales Xray",
+    icon: MessagesSquare,
+    permissions: ["admin_surface"],
+  },
 ];
 
 const supportNavigation: Array<{
@@ -101,11 +114,19 @@ function AdminNavigation({
   const permissions = new Set(
     state.status === "ready" ? state.session.permissions : [],
   );
+  const providerControlsVisible =
+    state.status === "ready" &&
+    state.session.email.trim().toLowerCase() === "admin@authorityclosers.com" &&
+    Boolean(state.session.emailVerifiedAt) &&
+    ["owner", "admin"].includes(state.session.membershipRole) &&
+    permissions.has("admin_surface");
   const visibleNavigation = navigation.filter(
     ({ area, permissions: required }) =>
-      area === "catalog"
-        ? canEnterStudio(state)
-        : required.some((permission) => permissions.has(permission)),
+      area === "sales-xray"
+        ? providerControlsVisible
+        : area === "catalog"
+          ? canEnterStudio(state)
+          : required.some((permission) => permissions.has(permission)),
   );
   const visibleSupport = supportNavigation.filter(({ permission }) =>
     permissions.has(permission),

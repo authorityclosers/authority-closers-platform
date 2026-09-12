@@ -14,6 +14,7 @@ import {
   HelpCircle,
   Gamepad2,
   LayoutDashboard,
+  MessagesSquare,
   Search,
   Settings,
   User,
@@ -96,6 +97,7 @@ export type LearnerCurrent =
   | "discover"
   | "progress"
   | "practice"
+  | "sales-xray"
   | "calendar"
   | "notifications"
   | "profile"
@@ -189,6 +191,9 @@ export function PublicShell({
             {FIRST_ACADEMY_BRAND.name} · Powered by {PLATFORM_BRAND.name}
           </p>
           <nav className="site-footer__links" aria-label="Legal and access">
+            <Link href={ROUTES.salesXray} prefetch={false}>
+              Sales Xray
+            </Link>
             <Link href={ROUTES.privacy}>Privacy</Link>
             <Link href={ROUTES.terms}>Terms</Link>
             <Link href={ROUTES.login}>
@@ -669,6 +674,16 @@ function LearnerShellContent({
           current: isDiscover,
           icon: <Compass size={20} strokeWidth={1.85} aria-hidden="true" />,
           title: "Discover",
+        },
+        {
+          id: "sales-xray",
+          label: "Sales Xray",
+          href: ROUTES.salesXray,
+          current: current === "sales-xray",
+          icon: (
+            <MessagesSquare size={20} strokeWidth={1.85} aria-hidden="true" />
+          ),
+          title: "Sales Xray",
         },
         ...(practiceAvailable
           ? [

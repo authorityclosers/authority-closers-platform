@@ -1186,7 +1186,7 @@ export function ProviderControlsPanel() {
 export function ProviderControls() {
   return (
     <AdminShell
-      active="operations"
+      active="sales-xray"
       surface="operations"
       eyebrow="Conversation intelligence / provider registry"
       title="Provider controls"
