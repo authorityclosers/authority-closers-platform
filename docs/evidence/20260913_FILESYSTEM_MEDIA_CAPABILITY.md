@@ -31,6 +31,10 @@ The source limits are exact and intentionally expressed in their native units:
 | API memory limit | 768 MiB |
 | Worker memory limit | 512 MiB |
 
+The reviewed Python runtime image installs the Debian `ffmpeg` package, which
+provides both `ffmpeg` and `ffprobe` for the processing worker. The worker
+therefore does not depend on a host binary or an unreviewed sidecar image.
+
 The dedicated Compose companion profile mounts the same host paths into API and
 worker:
 

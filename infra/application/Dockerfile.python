@@ -32,6 +32,15 @@ ENV PATH="/app/.venv/bin:${PATH}" \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
+USER root
+
+# The reviewed Studio worker invokes the host-independent FFmpeg/ffprobe
+# boundary. Keep the runtime image self-contained so production processing does
+# not depend on an unbounded host executable or a second mutable container.
+RUN apt-get update && \
+    apt-get install --yes --no-install-recommends ffmpeg && \
+    rm -rf /var/lib/apt/lists/*
+
 RUN groupadd --gid 10001 ac && \
     useradd --uid 10001 --gid ac --no-create-home --shell /usr/sbin/nologin ac
 
