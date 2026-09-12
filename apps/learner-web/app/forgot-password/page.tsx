@@ -2,8 +2,18 @@ import { AuthFlowPage } from "../components/auth-flow-page";
 import { RecoveryRequestForm } from "../components/password-auth-forms";
 import { StagingAuthHandoff } from "../components/staging-auth-handoff";
 import { isStagingAuthenticatedBridge } from "../lib/dev-api-proxy";
+import { parseCourseIntent } from "../lib/course-intent";
+import { parseActivityIntent } from "../lib/activity-intent";
+import type { QueryValue } from "../lib/surface-state";
 
-export default function ForgotPasswordPage() {
+export default async function ForgotPasswordPage({
+  searchParams = Promise.resolve({}),
+}: {
+  searchParams?: Promise<{ course?: QueryValue; activity?: QueryValue }>;
+} = {}) {
+  const query = await searchParams;
+  const courseIntent = parseCourseIntent(query.course);
+  const activityIntent = parseActivityIntent(query.activity);
   const stagingBridge = isStagingAuthenticatedBridge(
     process.env,
     process.env.NODE_ENV,
@@ -22,9 +32,14 @@ export default function ForgotPasswordPage() {
         <StagingAuthHandoff
           path="/forgot-password"
           action="Password recovery"
+          courseIntent={courseIntent}
+          activityIntent={activityIntent}
         />
       ) : (
-        <RecoveryRequestForm />
+        <RecoveryRequestForm
+          courseIntent={courseIntent}
+          activityIntent={activityIntent}
+        />
       )}
     </AuthFlowPage>
   );

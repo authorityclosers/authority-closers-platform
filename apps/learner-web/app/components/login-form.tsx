@@ -84,6 +84,16 @@ export function LoginForm({
     activityIntent,
     courseIntent,
   );
+  const verificationHref = activityIntentHref(
+    ROUTES.verifyEmail,
+    activityIntent,
+    courseIntent,
+  );
+  const forgotPasswordHref = activityIntentHref(
+    ROUTES.forgotPassword,
+    activityIntent,
+    courseIntent,
+  );
 
   useEffect(() => {
     if (error) errorRef.current?.focus();
@@ -198,11 +208,11 @@ export function LoginForm({
             <p>{error}</p>
             {verificationRequired ? (
               stagingBridge ? (
-                <a className="text-link" href={stagingHref(ROUTES.verifyEmail)}>
+                <a className="text-link" href={stagingHref(verificationHref)}>
                   Request on deployed staging
                 </a>
               ) : (
-                <Link className="text-link" href={ROUTES.verifyEmail}>
+                <Link className="text-link" href={verificationHref}>
                   Request a fresh verification link
                 </Link>
               )
@@ -217,11 +227,11 @@ export function LoginForm({
           <ArrowRight size={17} aria-hidden="true" />
         </button>
         {stagingBridge ? (
-          <a className="text-link" href={stagingHref(ROUTES.forgotPassword)}>
+          <a className="text-link" href={stagingHref(forgotPasswordHref)}>
             Forgot your password? Continue on staging
           </a>
         ) : (
-          <Link className="text-link" href={ROUTES.forgotPassword}>
+          <Link className="text-link" href={forgotPasswordHref}>
             Forgot your password?
           </Link>
         )}

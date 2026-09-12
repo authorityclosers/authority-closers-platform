@@ -94,6 +94,12 @@ export function RegistrationForm({
         whatsappNumber: String(values.get("whatsappNumber") ?? ""),
         password: String(values.get("password") ?? ""),
         consent: true,
+        ...(courseIntent
+          ? {
+              courseIntent,
+              ...(activityIntent ? { activityIntent } : {}),
+            }
+          : {}),
       });
       setComplete(true);
     } catch (requestError) {
@@ -115,7 +121,14 @@ export function RegistrationForm({
         <Link className="button button--outline button--full" href={loginHref}>
           Return to sign in
         </Link>
-        <Link className="text-link" href={ROUTES.verifyEmail}>
+        <Link
+          className="text-link"
+          href={activityIntentHref(
+            ROUTES.verifyEmail,
+            activityIntent,
+            courseIntent,
+          )}
+        >
           Need a fresh verification link?
         </Link>
       </div>
@@ -303,7 +316,13 @@ export function RegistrationForm({
   );
 }
 
-export function RecoveryRequestForm() {
+export function RecoveryRequestForm({
+  courseIntent = null,
+  activityIntent = null,
+}: {
+  courseIntent?: CourseIntent;
+  activityIntent?: ActivityIntent;
+} = {}) {
   const hydrated = useSyncExternalStore(
     subscribeRegistrationHydration,
     registrationClientHydrated,
@@ -313,6 +332,11 @@ export function RecoveryRequestForm() {
   const [complete, setComplete] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const errorRef = useRef<HTMLDivElement>(null);
+  const loginHref = activityIntentHref(
+    ROUTES.login,
+    activityIntent,
+    courseIntent,
+  );
 
   useEffect(() => {
     if (error) errorRef.current?.focus();
@@ -325,9 +349,15 @@ export function RecoveryRequestForm() {
     setError(null);
     const values = new FormData(event.currentTarget);
     try {
-      await createLearnerApi().requestPasswordRecovery(
-        String(values.get("email") ?? ""),
-      );
+      const email = String(values.get("email") ?? "");
+      if (courseIntent) {
+        await createLearnerApi().requestPasswordRecovery(email, {
+          courseIntent,
+          activityIntent,
+        });
+      } else {
+        await createLearnerApi().requestPasswordRecovery(email);
+      }
       setComplete(true);
     } catch (requestError) {
       setError(requestErrorMessage(requestError));
@@ -353,7 +383,7 @@ export function RecoveryRequestForm() {
           </p>
           <Link
             className="button button--outline button--full"
-            href={ROUTES.login}
+            href={loginHref}
           >
             Return to sign in
           </Link>
@@ -399,7 +429,13 @@ export function RecoveryRequestForm() {
   );
 }
 
-export function VerifyEmailFlow() {
+export function VerifyEmailFlow({
+  courseIntent = null,
+  activityIntent = null,
+}: {
+  courseIntent?: CourseIntent;
+  activityIntent?: ActivityIntent;
+} = {}) {
   const started = useRef(false);
   const [state, setState] = useState<"working" | "success" | "error">(
     "working",
@@ -408,6 +444,16 @@ export function VerifyEmailFlow() {
   const [resendPending, setResendPending] = useState(false);
   const [resendComplete, setResendComplete] = useState(false);
   const [resendError, setResendError] = useState<string | null>(null);
+  const onboardingHref = activityIntentHref(
+    ROUTES.onboarding,
+    activityIntent,
+    courseIntent,
+  );
+  const loginHref = activityIntentHref(
+    ROUTES.login,
+    activityIntent,
+    courseIntent,
+  );
 
   async function resend(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -415,9 +461,15 @@ export function VerifyEmailFlow() {
     setResendError(null);
     const values = new FormData(event.currentTarget);
     try {
-      await createLearnerApi().resendPasswordVerification(
-        String(values.get("email") ?? ""),
-      );
+      const email = String(values.get("email") ?? "");
+      if (courseIntent) {
+        await createLearnerApi().resendPasswordVerification(email, {
+          courseIntent,
+          activityIntent,
+        });
+      } else {
+        await createLearnerApi().resendPasswordVerification(email);
+      }
       setResendComplete(true);
     } catch (requestError) {
       setResendError(requestErrorMessage(requestError));
@@ -472,10 +524,7 @@ export function VerifyEmailFlow() {
       </h2>
       <p>{message}</p>
       {state === "success" ? (
-        <Link
-          className="button button--ink button--full"
-          href={ROUTES.onboarding}
-        >
+        <Link className="button button--ink button--full" href={onboardingHref}>
           Continue to onboarding
         </Link>
       ) : null}
@@ -515,7 +564,7 @@ export function VerifyEmailFlow() {
           )}
           <Link
             className="button button--outline button--full"
-            href={ROUTES.login}
+            href={loginHref}
           >
             Return to sign in
           </Link>
@@ -525,7 +574,13 @@ export function VerifyEmailFlow() {
   );
 }
 
-export function PasswordResetForm() {
+export function PasswordResetForm({
+  courseIntent = null,
+  activityIntent = null,
+}: {
+  courseIntent?: CourseIntent;
+  activityIntent?: ActivityIntent;
+} = {}) {
   const tokenRead = useRef(false);
   const [token, setToken] = useState<string | null | undefined>(undefined);
   const [pending, setPending] = useState(false);
@@ -533,6 +588,16 @@ export function PasswordResetForm() {
   const [error, setError] = useState<string | null>(null);
   const [passwordVisible, setPasswordVisible] = useState(false);
   const errorRef = useRef<HTMLDivElement>(null);
+  const forgotPasswordHref = activityIntentHref(
+    ROUTES.forgotPassword,
+    activityIntent,
+    courseIntent,
+  );
+  const loginHref = activityIntentHref(
+    ROUTES.login,
+    activityIntent,
+    courseIntent,
+  );
 
   useEffect(() => {
     if (tokenRead.current) return;
@@ -581,7 +646,7 @@ export function PasswordResetForm() {
         <p>This reset link is missing its one-time token.</p>
         <Link
           className="button button--outline button--full"
-          href={ROUTES.forgotPassword}
+          href={forgotPasswordHref}
         >
           Request another link
         </Link>
@@ -597,7 +662,7 @@ export function PasswordResetForm() {
           All earlier sessions were revoked. Sign in again with your new
           password.
         </p>
-        <Link className="button button--ink button--full" href={ROUTES.login}>
+        <Link className="button button--ink button--full" href={loginHref}>
           Sign in
         </Link>
       </div>

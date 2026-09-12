@@ -210,6 +210,7 @@ class OutboxJobRoute:
     uuid_payload_keys: frozenset[str] = frozenset()
     allowed_payload_values: Mapping[str, frozenset[str]] = field(default_factory=dict)
     max_attempts: int = 5
+    optional_payload_keys: frozenset[str] = frozenset()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "job_kind", _required_text(self.job_kind, "job_kind", 128))
@@ -220,13 +221,21 @@ class OutboxJobRoute:
             for key in self.required_payload_keys
         ):
             raise ValueError("outbox route payload keys must be bounded non-blank strings")
-        if not self.uuid_payload_keys.issubset(self.required_payload_keys):
-            raise ValueError("UUID payload keys must be part of the required schema")
+        schema_keys = self.required_payload_keys | self.optional_payload_keys
+        if self.required_payload_keys & self.optional_payload_keys:
+            raise ValueError("required and optional payload keys must be disjoint")
+        if any(
+            not isinstance(key, str) or not key.strip() or len(key) > 64
+            for key in self.optional_payload_keys
+        ):
+            raise ValueError("outbox route payload keys must be bounded non-blank strings")
+        if not self.uuid_payload_keys.issubset(schema_keys):
+            raise ValueError("UUID payload keys must be part of the route schema")
         normalized_allowlists = {
             key: frozenset(values) for key, values in self.allowed_payload_values.items()
         }
-        if not set(normalized_allowlists).issubset(self.required_payload_keys):
-            raise ValueError("allowlisted value keys must be part of the required schema")
+        if not set(normalized_allowlists).issubset(schema_keys):
+            raise ValueError("allowlisted value keys must be part of the route schema")
         if any(not values for values in normalized_allowlists.values()):
             raise ValueError("allowlisted payload values must not be empty")
         if any(
@@ -248,10 +257,14 @@ class OutboxJobRoute:
 
         if not isinstance(payload, Mapping):
             raise ValueError("outbox payload must be an object")
-        if set(payload) != set(self.required_payload_keys):
+        payload_keys = set(payload)
+        schema_keys = self.required_payload_keys | self.optional_payload_keys
+        if not self.required_payload_keys.issubset(payload_keys) or not payload_keys.issubset(
+            schema_keys
+        ):
             raise ValueError("outbox payload does not match the allowlisted versioned schema")
         normalized: dict[str, Any] = {}
-        for key in sorted(self.required_payload_keys):
+        for key in sorted(payload_keys):
             value = payload[key]
             if key in self.uuid_payload_keys:
                 try:

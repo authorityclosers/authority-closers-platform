@@ -6,6 +6,8 @@ import {
   type OfflineReadCache,
   type OfflineReadCacheLease,
 } from "./offline-read-cache";
+import { parseActivityIntent, type ActivityIntent } from "./activity-intent";
+import { parseCourseIntent, type CourseIntent } from "./course-intent";
 
 export type JsonRecord = Record<string, unknown>;
 
@@ -15,6 +17,22 @@ export interface PasswordRegistrationInput {
   whatsappNumber: string;
   password: string;
   consent: true;
+  courseIntent?: CourseIntent;
+  activityIntent?: ActivityIntent;
+}
+
+export interface PasswordEmailContext {
+  courseIntent?: CourseIntent;
+  activityIntent?: ActivityIntent;
+}
+
+function passwordEmailContextBody(
+  context?: PasswordEmailContext,
+): Record<string, string> {
+  const course = parseCourseIntent(context?.courseIntent);
+  const activity = parseActivityIntent(context?.activityIntent);
+  if (!course) return {};
+  return activity ? { course, activity } : { course };
 }
 
 export interface PasswordRegistrationResponse {
@@ -842,6 +860,7 @@ export function createLearnerApi(
         password: input.password,
         consent: input.consent,
         consent_version: LEARNER_POLICY_VERSION,
+        ...passwordEmailContextBody(input),
       }),
     loginPassword: async (email: string, password: string) =>
       rememberAuthenticatedOwner(
@@ -850,14 +869,18 @@ export function createLearnerApi(
           password,
         }),
       ),
-    requestPasswordRecovery: (email: string) =>
+    requestPasswordRecovery: (email: string, context?: PasswordEmailContext) =>
       jsonMutation<PasswordRecoveryResponse>("/v1/auth/password/recovery", {
         email,
+        ...passwordEmailContextBody(context),
       }),
-    resendPasswordVerification: (email: string) =>
+    resendPasswordVerification: (
+      email: string,
+      context?: PasswordEmailContext,
+    ) =>
       jsonMutation<PasswordRecoveryResponse>(
         "/v1/auth/password/resend-verification",
-        { email },
+        { email, ...passwordEmailContextBody(context) },
       ),
     verifyPasswordEmail: async (token: string) =>
       rememberAuthenticatedOwner(

@@ -138,6 +138,23 @@ def _route() -> OutboxJobRoute:
     )
 
 
+def test_existing_positional_route_keeps_uuid_validation_and_exact_schema() -> None:
+    route = OutboxJobRoute("email.example.v1", frozenset({"id"}), frozenset({"id"}), {}, 3)
+    identifier = str(uuid4())
+    assert route.normalize_payload({"id": identifier.upper()}) == {"id": identifier}
+    assert route.max_attempts == 3
+    with pytest.raises(ValueError):
+        route.normalize_payload({"id": "invalid"})
+    with pytest.raises(ValueError):
+        route.normalize_payload({"id": identifier, "extra": "not allowed"})
+
+
+@pytest.mark.parametrize("optional", [frozenset({"id"}), frozenset({""}), frozenset({"x" * 65})])
+def test_optional_route_schema_refuses_overlap_or_unbounded_keys(optional: frozenset[str]) -> None:
+    with pytest.raises(ValueError):
+        OutboxJobRoute("email.example.v2", frozenset({"id"}), optional_payload_keys=optional)
+
+
 async def test_outbox_dedupe_returns_canonical_intent_and_rejects_conflict() -> None:
     session = _session()
     event = EventEnvelope(

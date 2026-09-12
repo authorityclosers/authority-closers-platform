@@ -17,10 +17,7 @@ export function StagingAuthHandoff({
   courseIntent?: CourseIntent;
   activityIntent?: ActivityIntent;
 }) {
-  const target =
-    path === "/register"
-      ? activityIntentHref(path, activityIntent, courseIntent)
-      : path;
+  const target = activityIntentHref(path, activityIntent, courseIntent);
   const href = new URL(target, STAGING_APP_ORIGIN).toString();
   return (
     <div className="auth-card">

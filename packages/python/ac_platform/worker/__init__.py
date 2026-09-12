@@ -10,6 +10,7 @@ from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from types import MappingProxyType
 from typing import Any, Protocol
+from urllib.parse import urlencode
 from uuid import UUID
 
 import structlog
@@ -22,9 +23,13 @@ from ac_platform.application.settings import get_settings
 from ac_platform.identity.models import EmailChallenge, EmailChallengeKind, Person, PersonStatus
 from ac_platform.identity.password_auth import (
     PASSWORD_EMAIL_RESET_EVENT,
+    PASSWORD_EMAIL_RESET_EVENT_V2,
     PASSWORD_EMAIL_RESET_JOB,
+    PASSWORD_EMAIL_RESET_JOB_V2,
     PASSWORD_EMAIL_VERIFICATION_EVENT,
+    PASSWORD_EMAIL_VERIFICATION_EVENT_V2,
     PASSWORD_EMAIL_VERIFICATION_JOB,
+    PASSWORD_EMAIL_VERIFICATION_JOB_V2,
     decrypt_challenge_token,
 )
 from ac_platform.outbox.models import Job, JobStatus, RecoveryStatus
@@ -88,6 +93,36 @@ OUTBOX_JOB_ROUTES: Mapping[str, OutboxJobRoute] = MappingProxyType(
             uuid_payload_keys=frozenset({"challenge_id"}),
             allowed_payload_values={"kind": frozenset({EmailChallengeKind.PASSWORD_RESET.value})},
         ),
+        PASSWORD_EMAIL_VERIFICATION_EVENT_V2: OutboxJobRoute(
+            job_kind=PASSWORD_EMAIL_VERIFICATION_JOB_V2,
+            required_payload_keys=frozenset({"challenge_id", "kind", "course"}),
+            optional_payload_keys=frozenset({"activity"}),
+            uuid_payload_keys=frozenset({"challenge_id", "activity"}),
+            allowed_payload_values={
+                "kind": frozenset({EmailChallengeKind.VERIFICATION.value}),
+                "course": frozenset({"authority-closers-free-course"}),
+            },
+        ),
+        PASSWORD_EMAIL_RESET_EVENT_V2: OutboxJobRoute(
+            job_kind=PASSWORD_EMAIL_RESET_JOB_V2,
+            required_payload_keys=frozenset({"challenge_id", "kind", "course"}),
+            optional_payload_keys=frozenset({"activity"}),
+            uuid_payload_keys=frozenset({"challenge_id", "activity"}),
+            allowed_payload_values={
+                "kind": frozenset({EmailChallengeKind.PASSWORD_RESET.value}),
+                "course": frozenset({"authority-closers-free-course"}),
+            },
+        ),
+    }
+)
+
+# The v2 jobs change only the durable navigation hint payload.  Keep the
+# existing low-cardinality telemetry taxonomy on the logical communication
+# route so delivery telemetry remains accepted without adding a shared schema.
+_PASSWORD_EMAIL_TELEMETRY_JOB_KINDS = MappingProxyType(
+    {
+        PASSWORD_EMAIL_VERIFICATION_JOB_V2: PASSWORD_EMAIL_VERIFICATION_JOB,
+        PASSWORD_EMAIL_RESET_JOB_V2: PASSWORD_EMAIL_RESET_JOB,
     }
 )
 
@@ -101,7 +136,12 @@ async def resolve_password_message(
 ) -> EmailMessage:
     """Resolve the canonical password challenge email for one durable job."""
 
-    if job.kind not in {PASSWORD_EMAIL_VERIFICATION_JOB, PASSWORD_EMAIL_RESET_JOB}:
+    if job.kind not in {
+        PASSWORD_EMAIL_VERIFICATION_JOB,
+        PASSWORD_EMAIL_RESET_JOB,
+        PASSWORD_EMAIL_VERIFICATION_JOB_V2,
+        PASSWORD_EMAIL_RESET_JOB_V2,
+    }:
         raise UnknownJobKindError(f"email route is not allowlisted: {job.kind}")
     route = next(
         (candidate for candidate in OUTBOX_JOB_ROUTES.values() if candidate.job_kind == job.kind),
@@ -145,7 +185,13 @@ async def resolve_password_message(
     # Keep one-time credentials out of HTTP request targets and edge access
     # logs. The browser reads the fragment and submits the token in a JSON
     # body to the same-origin API.
-    action_link = f"{str(settings.public_app_url).rstrip('/')}{path}#token={token}"
+    context_query = ""
+    if job.kind in {PASSWORD_EMAIL_VERIFICATION_JOB_V2, PASSWORD_EMAIL_RESET_JOB_V2}:
+        context = {"course": payload["course"]}
+        if "activity" in payload:
+            context["activity"] = payload["activity"]
+        context_query = "?" + urlencode(context)
+    action_link = f"{str(settings.public_app_url).rstrip('/')}{path}{context_query}#token={token}"
     template = (
         "identity-email-verification"
         if kind is EmailChallengeKind.VERIFICATION
@@ -298,6 +344,8 @@ def build_default_dispatcher(
             ENROLLMENT_WELCOME_JOB: handler,
             PASSWORD_EMAIL_VERIFICATION_JOB: handler,
             PASSWORD_EMAIL_RESET_JOB: handler,
+            PASSWORD_EMAIL_VERIFICATION_JOB_V2: handler,
+            PASSWORD_EMAIL_RESET_JOB_V2: handler,
         }
     )
 
@@ -456,6 +504,8 @@ class DurableWorker:
                 ENROLLMENT_WELCOME_JOB,
                 PASSWORD_EMAIL_VERIFICATION_JOB,
                 PASSWORD_EMAIL_RESET_JOB,
+                PASSWORD_EMAIL_VERIFICATION_JOB_V2,
+                PASSWORD_EMAIL_RESET_JOB_V2,
             }:
                 raise UnknownJobKindError(f"job kind is not allowlisted: {job.kind}")
             state = await RecoveryStateRepository(session).require_ready(
@@ -536,7 +586,12 @@ class DurableWorker:
         *,
         provider_key: str,
     ) -> EmailMessage:
-        if job.kind in {PASSWORD_EMAIL_VERIFICATION_JOB, PASSWORD_EMAIL_RESET_JOB}:
+        if job.kind in {
+            PASSWORD_EMAIL_VERIFICATION_JOB,
+            PASSWORD_EMAIL_RESET_JOB,
+            PASSWORD_EMAIL_VERIFICATION_JOB_V2,
+            PASSWORD_EMAIL_RESET_JOB_V2,
+        }:
             return await self._resolve_password_message(
                 session,
                 job,
@@ -855,7 +910,7 @@ class DurableWorker:
         error: BaseException | None = None,
     ) -> None:
         attributes: dict[str, Any] = {
-            "job_kind": job.kind,
+            "job_kind": _PASSWORD_EMAIL_TELEMETRY_JOB_KINDS.get(job.kind, job.kind),
             "attempt": job.attempt_count,
             "outcome": outcome,
         }
@@ -900,8 +955,12 @@ __all__ = [
     "ENROLLMENT_WELCOME_ROUTE",
     "PASSWORD_EMAIL_RESET_EVENT",
     "PASSWORD_EMAIL_RESET_JOB",
+    "PASSWORD_EMAIL_RESET_EVENT_V2",
+    "PASSWORD_EMAIL_RESET_JOB_V2",
     "PASSWORD_EMAIL_VERIFICATION_EVENT",
     "PASSWORD_EMAIL_VERIFICATION_JOB",
+    "PASSWORD_EMAIL_VERIFICATION_EVENT_V2",
+    "PASSWORD_EMAIL_VERIFICATION_JOB_V2",
     "OUTBOX_JOB_ROUTES",
     "PreparedDispatch",
     "resolve_password_message",

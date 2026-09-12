@@ -16,7 +16,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request, Response, status
 from fastapi.responses import JSONResponse, RedirectResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -52,7 +52,9 @@ from ac_platform.identity.onboarding import (
 )
 from ac_platform.identity.password_auth import (
     PASSWORD_EMAIL_RESET_EVENT,
+    PASSWORD_EMAIL_RESET_EVENT_V2,
     PASSWORD_EMAIL_VERIFICATION_EVENT,
+    PASSWORD_EMAIL_VERIFICATION_EVENT_V2,
     EmailVerificationRequired,
     InvalidEmailChallenge,
     InvalidPasswordCredentials,
@@ -243,6 +245,14 @@ class PasswordRegistrationRequest(BaseModel):
     password: str = Field(min_length=12, max_length=256)
     consent: Literal[True]
     consent_version: str | None = Field(default=None, min_length=1, max_length=64)
+    course: Literal["authority-closers-free-course"] | None = None
+    activity: UUID | None = None
+
+    @model_validator(mode="after")
+    def validate_navigation_context(self) -> PasswordRegistrationRequest:
+        if self.course is None and self.activity is not None:
+            raise ValueError("activity requires an allowlisted course")
+        return self
 
 
 class PasswordLoginRequest(BaseModel):
@@ -256,6 +266,14 @@ class PasswordRecoveryRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     email: str = Field(min_length=3, max_length=320)
+    course: Literal["authority-closers-free-course"] | None = None
+    activity: UUID | None = None
+
+    @model_validator(mode="after")
+    def validate_navigation_context(self) -> PasswordRecoveryRequest:
+        if self.course is None and self.activity is not None:
+            raise ValueError("activity requires an allowlisted course")
+        return self
 
 
 class PasswordResetRequest(BaseModel):
@@ -329,6 +347,42 @@ class PasswordRequestInvalid(DomainError):
     code = "password_request_invalid"
     title = "The password request is invalid"
     status = 422
+
+
+def _password_email_event(
+    *,
+    challenge_id: UUID,
+    person_id: UUID,
+    kind: str,
+    course: str | None = None,
+    activity: UUID | None = None,
+) -> EventEnvelope:
+    event_names = {
+        "email_verification": (
+            PASSWORD_EMAIL_VERIFICATION_EVENT,
+            PASSWORD_EMAIL_VERIFICATION_EVENT_V2,
+        ),
+        "password_reset": (PASSWORD_EMAIL_RESET_EVENT, PASSWORD_EMAIL_RESET_EVENT_V2),
+    }.get(kind)
+    if event_names is None:
+        raise PasswordRequestInvalid("unsupported email challenge kind")
+    if course is None and activity is not None:
+        raise PasswordRequestInvalid("activity requires an allowlisted course")
+    if course is not None and course != "authority-closers-free-course":
+        raise PasswordRequestInvalid("course is not allowlisted")
+    payload: dict[str, str] = {"challenge_id": str(challenge_id), "kind": kind}
+    if course is not None:
+        payload["course"] = course
+        if activity is not None:
+            payload["activity"] = str(activity).lower()
+    return EventEnvelope(
+        name=event_names[1] if course is not None else event_names[0],
+        category=EventCategory.OPERATIONAL,
+        aggregate_type="person",
+        aggregate_id=person_id,
+        tenant_id=None,
+        payload=payload,
+    )
 
 
 class PasswordRegistrationUnavailable(DomainError):
@@ -1238,21 +1292,16 @@ def install_identity_http(
         challenge_id: UUID,
         person_id: UUID,
         kind: str,
+        course: str | None = None,
+        activity: UUID | None = None,
     ) -> None:
-        event_name = {
-            "email_verification": PASSWORD_EMAIL_VERIFICATION_EVENT,
-            "password_reset": PASSWORD_EMAIL_RESET_EVENT,
-        }.get(kind)
-        if event_name is None:
-            raise PasswordRequestInvalid("unsupported email challenge kind")
         await OutboxRepository(database).enqueue(
-            EventEnvelope(
-                name=event_name,
-                category=EventCategory.OPERATIONAL,
-                aggregate_type="person",
-                aggregate_id=person_id,
-                tenant_id=None,
-                payload={"challenge_id": str(challenge_id), "kind": kind},
+            _password_email_event(
+                challenge_id=challenge_id,
+                person_id=person_id,
+                kind=kind,
+                course=course,
+                activity=activity,
             ),
             dedupe_key=f"identity-email:{kind}:{challenge_id}",
         )
@@ -1312,6 +1361,8 @@ def install_identity_http(
                         challenge_id=registration.challenge.challenge_id,
                         person_id=registration.challenge.person_id,
                         kind=registration.challenge.kind.value,
+                        course=body.course,
+                        activity=body.activity,
                     )
         except (PasswordAuthError, ValueError) as error:
             raise PasswordRequestInvalid(str(error)) from error
@@ -1380,6 +1431,8 @@ def install_identity_http(
                         challenge_id=challenge.challenge_id,
                         person_id=challenge.person_id,
                         kind=challenge.kind.value,
+                        course=body.course,
+                        activity=body.activity,
                     )
         except (PasswordAuthError, ValueError):
             pass
@@ -1407,6 +1460,8 @@ def install_identity_http(
                         challenge_id=challenge.challenge_id,
                         person_id=challenge.person_id,
                         kind=challenge.kind.value,
+                        course=body.course,
+                        activity=body.activity,
                     )
         except (PasswordAuthError, ValueError):
             pass
