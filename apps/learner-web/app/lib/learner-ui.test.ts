@@ -691,7 +691,7 @@ describe("honest preview controls", () => {
   });
 
   it("applies the Clarity Grid auth and onboarding compositions without changing capability", async () => {
-    const registration = renderToStaticMarkup(createElement(RegisterPage));
+    const registration = renderToStaticMarkup(await RegisterPage());
     const verification = renderToStaticMarkup(createElement(VerifyEmailPage));
     const onboarding = renderToStaticMarkup(
       await OnboardingPage({ searchParams: Promise.resolve({}) }),

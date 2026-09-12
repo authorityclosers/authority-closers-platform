@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any, cast
-from urllib.parse import urlencode, urlsplit
+from urllib.parse import parse_qs, urlencode, urlsplit
 from uuid import UUID
 
 import pytest
@@ -789,14 +789,104 @@ def test_unknown_learner_google_identity_is_sent_to_explicit_registration(
     assert _IdentityApplication.registered_provider_calls == []
 
 
+@pytest.mark.parametrize(
+    ("return_path", "preserves_course"),
+    [
+        ("/home?course=authority-closers-free-course", True),
+        ("/onboarding?course=authority-closers-free-course", True),
+        ("/settings?course=authority-closers-free-course", False),
+        ("/home?course=other-course", False),
+        ("/home?course=authority-closers-free-course&course=other", False),
+        ("/home?course=authority-closers-free-course&extra=true", False),
+        ("/home?course=authority%2Dclosers-free-course", False),
+    ],
+)
+def test_google_recovery_preserves_only_signed_allowlisted_course_context(
+    return_path: str,
+    preserves_course: bool,
+) -> None:
+    client = _client(provider=_SuccessfulProvider())
+    started = client.get(
+        "/v1/auth/google/start",
+        params={"action": "authenticate", "surface": "learner", "return_path": return_path},
+        follow_redirects=False,
+    )
+    assert started.status_code == 303
+    transaction = AuthTransactionCodec(TEST_TRANSACTION_KEY).decode(
+        started.cookies["ac_oauth_transaction"]
+    )
+    response = client.get(
+        "/v1/auth/google/callback",
+        params={
+            "state": transaction.state,
+            "error": "access_denied",
+            "course": "other-course",
+            "return_path": "/settings",
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    location = urlsplit(response.headers["location"])
+    assert location.scheme == "https"
+    assert location.netloc == "app.authorityclosers.test"
+    assert location.path == "/auth/callback"
+    expected = {"result": ["provider_rejected"]}
+    if preserves_course:
+        expected["course"] = ["authority-closers-free-course"]
+    assert parse_qs(location.query) == expected
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["pragma"] == "no-cache"
+    assert 'ac_oauth_transaction=""' in response.headers["set-cookie"]
+    assert "ac_session" not in response.cookies
+
+
+def test_course_return_keeps_unknown_google_identity_behind_explicit_registration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        auth_module, "AsyncIdentityApplication", _UnknownProviderIdentityApplication
+    )
+    client = _client(provider=_SuccessfulProvider())
+    started = client.get(
+        "/v1/auth/google/start",
+        params={
+            "action": "authenticate",
+            "surface": "learner",
+            "return_path": "/home?course=authority-closers-free-course",
+        },
+        follow_redirects=False,
+    )
+    transaction = AuthTransactionCodec(TEST_TRANSACTION_KEY).decode(
+        started.cookies["ac_oauth_transaction"]
+    )
+    response = client.get(
+        "/v1/auth/google/callback",
+        params={"state": transaction.state, "code": "google-authorization-code"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert parse_qs(urlsplit(response.headers["location"]).query) == {
+        "result": ["registration_required"],
+        "course": ["authority-closers-free-course"],
+    }
+    assert "ac_session" not in response.cookies
+    assert _IdentityApplication.registered_provider_calls == []
+
+
+@pytest.mark.parametrize("return_path", [None, "/home?course=authority-closers-free-course"])
 def test_google_authenticate_callback_uses_signed_action_not_callback_query(
     monkeypatch: pytest.MonkeyPatch,
+    return_path: str | None,
 ) -> None:
     monkeypatch.setattr(auth_module, "AsyncIdentityApplication", _CallbackIdentityApplication)
     client = _client(provider=_SuccessfulProvider())
     started = client.get(
         "/v1/auth/google/start",
-        params={"action": "authenticate", "surface": "learner"},
+        params={
+            "action": "authenticate",
+            "surface": "learner",
+            **({"return_path": return_path} if return_path else {}),
+        },
         follow_redirects=False,
     )
     transaction = AuthTransactionCodec(TEST_TRANSACTION_KEY).decode(
@@ -810,13 +900,18 @@ def test_google_authenticate_callback_uses_signed_action_not_callback_query(
             "code": "google-authorization-code",
             "action": "register",
             "consent": "true",
+            "course": "other-course",
+            "return_path": "/settings",
         },
         follow_redirects=False,
     )
 
     assert transaction.authorization_type is ProviderAuthorizationType.AUTHENTICATE
     assert response.status_code == 303
-    assert response.headers["location"] == "https://app.authorityclosers.test/home"
+    assert transaction.return_path == (return_path or "/home")
+    assert response.headers["location"] == "https://app.authorityclosers.test" + (
+        return_path or "/home"
+    )
     assert response.cookies["ac_session"] == VALID_SESSION_TOKEN
     assert _IdentityApplication.registered_provider_calls == []
 
@@ -1555,7 +1650,10 @@ def test_oauth_transaction_secret_rotation_requires_pending_callbacks_to_restart
     assert provider.redirect_uris == []
 
 
-def test_learner_google_registration_binds_consent_and_selects_public_tenant() -> None:
+@pytest.mark.parametrize("return_path", [None, "/onboarding?course=authority-closers-free-course"])
+def test_learner_google_registration_binds_consent_and_selects_public_tenant(
+    return_path: str | None,
+) -> None:
     provider = _SuccessfulProvider()
     client = _client(provider=provider)
     started = client.get(
@@ -1564,6 +1662,7 @@ def test_learner_google_registration_binds_consent_and_selects_public_tenant() -
             "action": "register",
             "surface": "learner",
             "consent": "true",
+            **({"return_path": return_path} if return_path else {}),
         },
         follow_redirects=False,
     )
@@ -1581,7 +1680,12 @@ def test_learner_google_registration_binds_consent_and_selects_public_tenant() -
     )
 
     assert callback.status_code == 303
-    assert callback.headers["location"] == "https://app.authorityclosers.test/home"
+    assert transaction.return_path == (return_path or "/home")
+    assert transaction.authorization_type is ProviderAuthorizationType.REGISTER
+    assert callback.headers["location"] == "https://app.authorityclosers.test" + (
+        return_path or "/home"
+    )
+    assert len(_IdentityApplication.registered_provider_calls) == 1
     assert _IdentityApplication.registered_provider_calls[0]["consent_version"] == (
         "staging-test-document-v1"
     )

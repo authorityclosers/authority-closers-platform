@@ -14,6 +14,7 @@ import {
   type ProgramSummaryResponse,
 } from "../lib/learner-api";
 import { DashboardRuntime, loadDashboardData } from "./dashboard-runtime";
+import { FREE_COURSE_SLUG, type CourseIntent } from "../lib/course-intent";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -185,9 +186,46 @@ describe("mounted dashboard progressive plan", () => {
     vi.restoreAllMocks();
   });
 
-  async function mount(api: LearnerApi) {
-    await act(async () => root.render(<DashboardRuntime api={api} />));
+  async function mount(api: LearnerApi, courseIntent: CourseIntent = null) {
+    await act(async () =>
+      root.render(<DashboardRuntime api={api} courseIntent={courseIntent} />),
+    );
   }
+
+  it("preserves course intent while required onboarding prevents catalog and enrollment reads", async () => {
+    const navigate = vi
+      .spyOn(window.location, "replace")
+      .mockImplementation(() => {});
+    const enrollFree = vi.fn();
+    const api = apiFor({
+      onboarding: vi.fn(async () => ({
+        ...onboarding,
+        status: "not_started" as const,
+      })),
+      enrollFree,
+    });
+    await mount(api, FREE_COURSE_SLUG);
+    expect(navigate).toHaveBeenCalledWith(
+      "/onboarding?course=" + FREE_COURSE_SLUG,
+    );
+    expect(api.listPrograms).not.toHaveBeenCalled();
+    expect(api.learning).not.toHaveBeenCalled();
+    expect(api.calendar).not.toHaveBeenCalled();
+    expect(enrollFree).not.toHaveBeenCalled();
+  });
+
+  it("requires an explicit enrollment action even with a valid course intent", async () => {
+    const enrollFree = vi.fn();
+    const api = apiFor({
+      learning: vi.fn(async () => {
+        throw new ApiError(404, "No enrollment");
+      }),
+      enrollFree,
+    });
+    await mount(api, FREE_COURSE_SLUG);
+    expect(container.textContent).toContain("Start the Free Course");
+    expect(enrollFree).not.toHaveBeenCalled();
+  });
 
   it("renders the primary action while calendar is pending after onboarding", async () => {
     const setup = deferred<OnboardingResponse>();
@@ -255,21 +293,31 @@ describe("mounted dashboard progressive plan", () => {
     expect(container.querySelector('[role="alert"]')).toBeNull();
   });
 
-  it("requires session recovery when the current plan returns 401", async () => {
-    const plan = deferred<CalendarResponse>();
-    await mount(apiFor({ calendar: vi.fn(() => plan.promise) }));
-    expect(container.querySelector("#dashboard-title")).not.toBeNull();
+  it.each([null, FREE_COURSE_SLUG] as const)(
+    "requires session recovery without losing course %s when the current plan returns 401",
+    async (courseIntent) => {
+      const plan = deferred<CalendarResponse>();
+      await mount(
+        apiFor({ calendar: vi.fn(() => plan.promise) }),
+        courseIntent,
+      );
+      expect(container.querySelector("#dashboard-title")).not.toBeNull();
 
-    await act(async () => plan.reject(new ApiError(401, "Session expired")));
+      await act(async () => plan.reject(new ApiError(401, "Session expired")));
 
-    expect(container.querySelector("#dashboard-title")).toBeNull();
-    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
-      "Sign in to continue",
-    );
-    expect(
-      container.querySelector('a[href="/session-expired"]'),
-    ).not.toBeNull();
-  });
+      expect(container.querySelector("#dashboard-title")).toBeNull();
+      expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+        "Sign in to continue",
+      );
+      expect(
+        container.querySelector(
+          'a[href="/session-expired' +
+            (courseIntent ? "?course=" + courseIntent : "") +
+            '"]',
+        ),
+      ).not.toBeNull();
+    },
+  );
 
   it.each(["success", "401"])(
     "ignores a superseded tenant plan %s even if the API ignores abort",

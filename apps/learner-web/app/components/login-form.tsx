@@ -11,6 +11,7 @@ import {
 } from "react";
 
 import { googleAuthStartUrl } from "../lib/auth-links";
+import { courseIntentHref, type CourseIntent } from "../lib/course-intent";
 import {
   ApiError,
   createLearnerApi,
@@ -29,6 +30,7 @@ function errorMessage(error: unknown): string {
 type LoginFormProps = {
   sessionExpired?: boolean;
   stagingBridge?: boolean;
+  courseIntent?: CourseIntent;
 };
 
 const STAGING_APP_ORIGIN = "https://staging.authorityclosers.com";
@@ -40,15 +42,22 @@ function stagingHref(path: string): string {
   return new URL(path, STAGING_APP_ORIGIN).toString();
 }
 
-export function routeAfterOnboarding(status?: OnboardingStatus): string {
-  return status === "completed" || status === "skipped"
-    ? ROUTES.learnerHome
-    : ROUTES.onboarding;
+export function routeAfterOnboarding(
+  status?: OnboardingStatus,
+  courseIntent: CourseIntent = null,
+): string {
+  return courseIntentHref(
+    status === "completed" || status === "skipped"
+      ? ROUTES.learnerHome
+      : ROUTES.onboarding,
+    courseIntent,
+  );
 }
 
 export function LoginForm({
   sessionExpired = false,
   stagingBridge = false,
+  courseIntent = null,
 }: LoginFormProps) {
   const hydrated = useSyncExternalStore(
     subscribeHydration,
@@ -61,8 +70,9 @@ export function LoginForm({
   const [passwordVisible, setPasswordVisible] = useState(false);
   const errorRef = useRef<HTMLDivElement>(null);
   const authenticateUrl = stagingBridge
-    ? stagingHref(googleAuthStartUrl("authenticate"))
-    : googleAuthStartUrl("authenticate");
+    ? stagingHref(googleAuthStartUrl("authenticate", courseIntent))
+    : googleAuthStartUrl("authenticate", courseIntent);
+  const registrationHref = courseIntentHref(ROUTES.register, courseIntent);
 
   useEffect(() => {
     if (error) errorRef.current?.focus();
@@ -83,9 +93,11 @@ export function LoginForm({
       );
       try {
         const onboarding = await api.onboarding();
-        window.location.assign(routeAfterOnboarding(onboarding.status));
+        window.location.assign(
+          routeAfterOnboarding(onboarding.status, courseIntent),
+        );
       } catch {
-        window.location.assign(routeAfterOnboarding());
+        window.location.assign(routeAfterOnboarding(undefined, courseIntent));
       }
     } catch (requestError) {
       setError(errorMessage(requestError));
@@ -212,9 +224,9 @@ export function LoginForm({
       <div className="auth-card__footer">
         <span>First time here—including with Google?</span>
         {stagingBridge ? (
-          <a href={stagingHref(ROUTES.register)}>Create on deployed staging</a>
+          <a href={stagingHref(registrationHref)}>Create on deployed staging</a>
         ) : (
-          <Link href={ROUTES.register}>Create your free learner account</Link>
+          <Link href={registrationHref}>Create your free learner account</Link>
         )}
       </div>
     </div>

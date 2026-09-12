@@ -1083,6 +1083,13 @@ def _surface_callback_uri(settings: Settings, surface: str) -> str:
     return f"{_surface_origin(settings, surface)}/v1/auth/google/callback"
 
 
+# Navigation context only; these destinations do not grant enrollment or access.
+_LEARNER_COURSE_INTENT = "authority-closers-free-course"
+_LEARNER_COURSE_RETURN_PATHS = frozenset(
+    f"{path}?course={_LEARNER_COURSE_INTENT}" for path in ("/home", "/onboarding")
+)
+
+
 def _learner_oauth_recovery_response(
     settings: Settings,
     *,
@@ -1094,10 +1101,12 @@ def _learner_oauth_recovery_response(
         "registration_required",
     ],
     transaction_cookie_names: tuple[str, ...],
+    transaction_return_path: str | None = None,
 ) -> Response:
-    location = (
-        f"{_surface_origin(settings, 'learner')}/auth/callback?{urlencode({'result': result})}"
-    )
+    parameters: dict[str, str] = {"result": result}
+    if transaction_return_path in _LEARNER_COURSE_RETURN_PATHS:
+        parameters["course"] = _LEARNER_COURSE_INTENT
+    location = f"{_surface_origin(settings, 'learner')}/auth/callback?{urlencode(parameters)}"
     response = RedirectResponse(location, status_code=status.HTTP_303_SEE_OTHER)
     _delete_oauth_transaction_cookies(response, settings, transaction_cookie_names)
     response.headers["cache-control"] = "no-store"
@@ -1636,6 +1645,7 @@ def install_identity_http(
                     settings,
                     result="provider_rejected",
                     transaction_cookie_names=transaction_cookie_names,
+                    transaction_return_path=transaction.return_path,
                 )
             return _oauth_terminal_problem_response(
                 request,
@@ -1705,6 +1715,7 @@ def install_identity_http(
                     settings,
                     result="provider_rejected",
                     transaction_cookie_names=transaction_cookie_names,
+                    transaction_return_path=transaction.return_path,
                 )
             return _oauth_terminal_problem_response(
                 request,
@@ -1718,6 +1729,7 @@ def install_identity_http(
                     settings,
                     result="provider_unavailable",
                     transaction_cookie_names=transaction_cookie_names,
+                    transaction_return_path=transaction.return_path,
                 )
             return _oauth_terminal_problem_response(
                 request,
@@ -1777,12 +1789,14 @@ def install_identity_http(
                     settings,
                     result="consent_required",
                     transaction_cookie_names=transaction_cookie_names,
+                    transaction_return_path=transaction.return_path,
                 )
             if isinstance(error.__cause__, LearnerConsentUpdateRequiredError):
                 return _learner_oauth_recovery_response(
                     settings,
                     result="consent_update_required",
                     transaction_cookie_names=transaction_cookie_names,
+                    transaction_return_path=transaction.return_path,
                 )
             return _oauth_terminal_problem_response(
                 request,
@@ -1799,6 +1813,7 @@ def install_identity_http(
                     settings,
                     result="consent_update_required",
                     transaction_cookie_names=transaction_cookie_names,
+                    transaction_return_path=transaction.return_path,
                 )
             return await _oauth_identity_problem_response(
                 request,
@@ -1815,6 +1830,7 @@ def install_identity_http(
                     settings,
                     result="registration_required",
                     transaction_cookie_names=transaction_cookie_names,
+                    transaction_return_path=transaction.return_path,
                 )
             return await _oauth_identity_problem_response(
                 request,

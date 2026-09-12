@@ -67,6 +67,7 @@ import {
   type MutationFailureKind,
 } from "../lib/local-drafts";
 import { ROUTES } from "../lib/routes";
+import { courseIntentHref, parseCourseIntent } from "../lib/course-intent";
 import { firstActionableActivity } from "../lib/next-learning-action";
 import { userFacingRequestError } from "../lib/user-facing-error";
 import {
@@ -360,6 +361,7 @@ export function PublicProgramDetail({
     () => false,
   );
   const program = state.status === "ready" ? state.value : null;
+  const courseIntent = parseCourseIntent(program?.slug);
   const offlineRead = program ? getEarliestOfflineReadMetadata(program) : null;
   const freeEnrollmentAvailable =
     program !== null && isFreeEnrollmentProgram(program);
@@ -440,13 +442,13 @@ export function PublicProgramDetail({
                 <div className="hero-actions program-hero__actions">
                   <Link
                     className="button button--ink program-hero__cta-primary"
-                    href={ROUTES.login}
+                    href={courseIntentHref(ROUTES.login, courseIntent)}
                   >
                     Sign in to start free
                   </Link>
                   <Link
                     className="button button--outline program-hero__cta-secondary"
-                    href={ROUTES.register}
+                    href={courseIntentHref(ROUTES.register, courseIntent)}
                   >
                     Create learner account →
                   </Link>
@@ -517,7 +519,7 @@ export function PublicProgramDetail({
                   <div className="program-hero__card-cta">
                     <Link
                       className="button button--ink button--full-width"
-                      href={ROUTES.login}
+                      href={courseIntentHref(ROUTES.login, courseIntent)}
                     >
                       {freeEnrollmentAvailable
                         ? "Sign in to start free"
@@ -637,12 +639,18 @@ export function PublicProgramDetail({
                 </p>
               </div>
               <div className="program-bottom-cta__actions">
-                <Link className="button button--ink" href={ROUTES.login}>
+                <Link
+                  className="button button--ink"
+                  href={courseIntentHref(ROUTES.login, courseIntent)}
+                >
                   {freeEnrollmentAvailable
                     ? "Sign in to start free"
                     : "Sign in"}
                 </Link>
-                <Link className="button button--outline" href={ROUTES.register}>
+                <Link
+                  className="button button--outline"
+                  href={courseIntentHref(ROUTES.register, courseIntent)}
+                >
                   Create learner account →
                 </Link>
               </div>
