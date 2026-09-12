@@ -271,10 +271,8 @@ initialize_release_profile_contract() {
     AC_EXTERNAL_SIDE_EFFECTS_HOLD
     AC_EMAIL_PROVIDER
     AC_PRACTICE_PILOT_ENABLED
+    AC_LEARNER_CONSENT_VERSION
   )
-  if [[ "$target_environment" == staging ]]; then
-    profile_required_keys+=(AC_LEARNER_CONSENT_VERSION)
-  fi
   profile_allowed_keys=()
   for profile_key in "${profile_required_keys[@]}"; do
     profile_allowed_keys["$profile_key"]=1
@@ -338,6 +336,7 @@ validate_release_profile() {
     "AC_COMPOSE_PROJECT=ac-application-$target_environment"
     "AC_ENVIRONMENT=$target_environment"
     "AC_STATE_ROOT=/srv/authority-closers/state/application/$target_environment"
+    "AC_LEARNER_CONSENT_VERSION=ac-learner-terms-privacy-2026-09-13-v1"
   )
   case "$target_environment" in
     staging)
@@ -355,7 +354,6 @@ validate_release_profile() {
         "AC_EDGE_COACH_ALIAS=ac-staging-coach"
         "AC_EXTERNAL_SIDE_EFFECTS_HOLD=false"
         "AC_EMAIL_PROVIDER=resend"
-        "AC_LEARNER_CONSENT_VERSION=staging-test-document-v1"
         "AC_PRACTICE_PILOT_ENABLED=true"
       )
       ;;
