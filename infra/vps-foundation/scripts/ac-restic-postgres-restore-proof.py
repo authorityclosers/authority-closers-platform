@@ -182,6 +182,24 @@ GLOBAL_COMMUNITY_PARITY_TABLES = COMMUNITY_PARITY_TABLES + (
 APP_UPDATES_PARITY_MIGRATION_HEAD = "20260910_0029"
 APP_UPDATES_PARITY_CONTRACT = "ac-postgres-parity-v9"
 APP_UPDATES_PARITY_TABLES = GLOBAL_COMMUNITY_PARITY_TABLES + ("app_update_read_receipts",)
+SALES_XRAY_PARITY_MIGRATION_HEAD = "20260913_0030"
+SALES_XRAY_PARITY_CONTRACT = "ac-postgres-parity-v10"
+SALES_XRAY_PARITY_NEW_TABLES = (
+    "conversation_budget_accounts",
+    "conversation_review_cursors",
+    "conversation_minute_accounts",
+    "conversation_permissions",
+    "conversation_recordings",
+    "conversation_checkpoints",
+    "conversation_commands",
+    "conversation_quotes",
+    "conversation_runs",
+    "conversation_reviews",
+    "conversation_quote_acceptances",
+    "conversation_provider_configurations",
+    "conversation_report_drafts",
+)
+SALES_XRAY_PARITY_TABLES = APP_UPDATES_PARITY_TABLES + SALES_XRAY_PARITY_NEW_TABLES
 VERSIONED_PARITY_CONTRACTS = {
     CAPABILITY_PARITY_MIGRATION_HEAD: (CAPABILITY_PARITY_CONTRACT, CAPABILITY_PARITY_TABLES),
     PRACTICE_PARITY_MIGRATION_HEAD: (PRACTICE_PARITY_CONTRACT, PRACTICE_PARITY_TABLES),
@@ -211,6 +229,10 @@ VERSIONED_PARITY_CONTRACTS = {
     APP_UPDATES_PARITY_MIGRATION_HEAD: (
         APP_UPDATES_PARITY_CONTRACT,
         APP_UPDATES_PARITY_TABLES,
+    ),
+    SALES_XRAY_PARITY_MIGRATION_HEAD: (
+        SALES_XRAY_PARITY_CONTRACT,
+        SALES_XRAY_PARITY_TABLES,
     ),
 }
 

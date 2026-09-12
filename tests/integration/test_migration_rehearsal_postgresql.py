@@ -1,7 +1,8 @@
-"""Opt-in real PostgreSQL regression for the reviewed 0027 -> 0029 upgrade."""
+"""Opt-in populated PostgreSQL regressions for 0027 -> 0029 and 0029 -> 0030."""
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
@@ -17,6 +18,7 @@ from sqlalchemy.exc import ArgumentError
 from sqlalchemy.orm import Session
 from sqlalchemy.schema import CreateSchema, DropSchema
 
+from ac_platform.app_updates.models import AppUpdateReadReceipt
 from ac_platform.community.models import AcademyPublicProfile
 from ac_platform.identity.models import Person
 from ac_platform.tenancy.models import Membership, Tenant
@@ -28,6 +30,22 @@ NEW_TABLES = {
     "community_public_profiles",
     "academy_leaderboard_preferences",
     "app_update_read_receipts",
+}
+SALES_XRAY_HEAD = "20260913_0030"
+SALES_XRAY_TABLES = {
+    "conversation_budget_accounts",
+    "conversation_review_cursors",
+    "conversation_minute_accounts",
+    "conversation_permissions",
+    "conversation_recordings",
+    "conversation_checkpoints",
+    "conversation_commands",
+    "conversation_quotes",
+    "conversation_runs",
+    "conversation_reviews",
+    "conversation_quote_acceptances",
+    "conversation_provider_configurations",
+    "conversation_report_drafts",
 }
 DEDICATED_DATABASE_PREFIX = "ac_migration_rehearsal_"
 DEDICATED_HOST = "127.0.0.1"
@@ -239,6 +257,25 @@ def _public_row_counts(engine: Engine) -> dict[str, int]:
         }
 
 
+def _public_rows(engine: Engine) -> dict[str, tuple[str, ...]]:
+    """Compare full synthetic contents, including immutable receipts, across DDL."""
+
+    tables = set(inspect(engine).get_table_names()) - {"alembic_version"}
+    metadata = MetaData()
+    with engine.connect() as connection:
+        return {
+            name: tuple(
+                sorted(
+                    json.dumps(dict(row), default=str, sort_keys=True, separators=(",", ":"))
+                    for row in connection.execute(
+                        select(Table(name, metadata, autoload_with=connection))
+                    ).mappings()
+                )
+            )
+            for name in tables
+        }
+
+
 def test_populated_0027_dump_path_upgrades_only_to_candidate_0029(
     migration_harness: _MigrationHarness,
 ) -> None:
@@ -260,3 +297,41 @@ def test_populated_0027_dump_path_upgrades_only_to_candidate_0029(
     assert target_counts["app_update_read_receipts"] == 0
     with migration_harness.engine.connect() as connection:
         assert connection.scalar(text("SELECT version_num FROM alembic_version")) == TARGET_HEAD
+
+
+def test_populated_0029_preserves_all_existing_rows_when_upgrading_to_0030(
+    migration_harness: _MigrationHarness,
+) -> None:
+    _seed_populated_0027(migration_harness.engine)
+    migration = _run_migration(migration_harness.environment, TARGET_HEAD)
+    assert migration.returncode == 0, "prior-head migration failed in the isolated schema"
+    with Session(migration_harness.engine) as database:
+        memberships = database.scalars(select(Membership)).all()
+        assert len(memberships) == 3
+        database.add_all(
+            AppUpdateReadReceipt(
+                tenant_id=membership.tenant_id,
+                person_id=membership.person_id,
+                release_id="migration-rehearsal-preserved-0029",
+            )
+            for membership in memberships
+        )
+        database.commit()
+    source_rows = _public_rows(migration_harness.engine)
+    assert len(source_rows["community_public_profiles"]) == 2
+    assert len(source_rows["academy_leaderboard_preferences"]) == 3
+    assert len(source_rows["app_update_read_receipts"]) == 3
+    assert not set(source_rows) & SALES_XRAY_TABLES
+    with migration_harness.engine.connect() as connection:
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == TARGET_HEAD
+
+    migration = _run_migration(migration_harness.environment, SALES_XRAY_HEAD)
+
+    assert migration.returncode == 0, "Sales Xray migration failed in the isolated schema"
+    target_rows = _public_rows(migration_harness.engine)
+    assert set(target_rows) == set(source_rows) | SALES_XRAY_TABLES
+    for table, rows in source_rows.items():
+        assert target_rows[table] == rows, f"migration changed existing rows in {table}"
+    assert all(target_rows[table] == () for table in SALES_XRAY_TABLES)
+    with migration_harness.engine.connect() as connection:
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == SALES_XRAY_HEAD

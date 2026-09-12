@@ -5,6 +5,7 @@ from __future__ import annotations
 import itertools
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -34,6 +35,7 @@ STUDIO_VIDEO_UPLOADS = "20260910_0026"
 COMMUNITY_IDENTITY = "20260910_0027"
 GLOBAL_COMMUNITY_IDENTITY = "20260910_0028"
 APP_UPDATES = "20260910_0029"
+SALES_XRAY = "20260913_0030"
 HEADS = (
     LEGACY,
     CAPABILITIES,
@@ -47,6 +49,7 @@ HEADS = (
     COMMUNITY_IDENTITY,
     GLOBAL_COMMUNITY_IDENTITY,
     APP_UPDATES,
+    SALES_XRAY,
 )
 VERSIONED_HEADS = HEADS[1:]
 TABLELESS_VERSIONED_HEADS = (REVISION, MEDIA_LIBRARY, COURSE_CREATION)
@@ -71,6 +74,21 @@ NEW_TABLES = {
         "academy_leaderboard_preferences",
     ),
     APP_UPDATES: ("app_update_read_receipts",),
+    SALES_XRAY: (
+        "conversation_budget_accounts",
+        "conversation_review_cursors",
+        "conversation_minute_accounts",
+        "conversation_permissions",
+        "conversation_recordings",
+        "conversation_checkpoints",
+        "conversation_commands",
+        "conversation_quotes",
+        "conversation_runs",
+        "conversation_reviews",
+        "conversation_quote_acceptances",
+        "conversation_provider_configurations",
+        "conversation_report_drafts",
+    ),
 }
 ROOT = Path(__file__).parents[2]
 
@@ -132,7 +150,7 @@ def test_three_separately_packaged_helpers_have_identical_versioned_contracts() 
             assert module.parity_tables_for_head(head) == backup.PARITY_TABLES
 
 
-@pytest.mark.parametrize("head", ["", "20000101_0001", "20260910_0030", "20260907_0019;bad"])
+@pytest.mark.parametrize("head", ["", "20000101_0001", "20260913_0031", "20260907_0019;bad"])
 def test_unknown_or_unsafe_heads_never_fall_back_to_legacy(head: str) -> None:
     for module in (backup, proof, drill):
         with pytest.raises(RuntimeError, match="no reviewed"):
@@ -441,7 +459,8 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
     for head, added in NEW_TABLES.items():
         paths = list((ROOT / "db/migrations/versions").glob(f"{head}_*.py"))
         assert len(paths) == 1
-        tree = ast.parse(paths[0].read_text(encoding="utf-8"))
+        source = paths[0].read_text(encoding="utf-8")
+        tree = ast.parse(source)
         created = {
             ast.literal_eval(node.args[0])
             for node in ast.walk(tree)
@@ -451,6 +470,9 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
             and node.func.value.id == "op"
             and node.func.attr == "create_table"
         }
+        # 0030 deliberately keeps most of its frozen SQL in execute() blocks;
+        # include those CREATE TABLE statements alongside op.create_table.
+        created.update(re.findall(r"\bCREATE\s+TABLE\s+([a-z_][a-z0-9_]*)", source, re.IGNORECASE))
         assert created == set(added)
     for head in TABLELESS_VERSIONED_HEADS:
         paths = list((ROOT / "db/migrations/versions").glob(f"{head}_*.py"))
@@ -466,7 +488,7 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
             and node.func.attr == "create_table"
         }
         assert created == set()
-    expected_counts = (39, 41, 50, 52, 53, 53, 53, 53, 54, 55, 57, 58)
+    expected_counts = (39, 41, 50, 52, 53, 53, 53, 53, 54, 55, 57, 58, 71)
     expected_contracts = (
         None,
         "ac-postgres-parity-v2",
@@ -480,6 +502,7 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
         "ac-postgres-parity-v7",
         "ac-postgres-parity-v8",
         "ac-postgres-parity-v9",
+        "ac-postgres-parity-v10",
     )
     for module in (backup, proof, drill):
         assert module.VERSIONED_PARITY_CONTRACTS == backup.VERSIONED_PARITY_CONTRACTS

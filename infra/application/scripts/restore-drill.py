@@ -189,10 +189,36 @@ GLOBAL_COMMUNITY_PARITY_TABLES = COMMUNITY_PARITY_TABLES + (
 APP_UPDATES_PARITY_MIGRATION_HEAD = "20260910_0029"
 APP_UPDATES_PARITY_CONTRACT = "ac-postgres-parity-v9"
 APP_UPDATES_PARITY_TABLES = GLOBAL_COMMUNITY_PARITY_TABLES + ("app_update_read_receipts",)
+SALES_XRAY_PARITY_MIGRATION_HEAD = "20260913_0030"
+SALES_XRAY_PARITY_CONTRACT = "ac-postgres-parity-v10"
+SALES_XRAY_PARITY_NEW_TABLES = (
+    "conversation_budget_accounts",
+    "conversation_review_cursors",
+    "conversation_minute_accounts",
+    "conversation_permissions",
+    "conversation_recordings",
+    "conversation_checkpoints",
+    "conversation_commands",
+    "conversation_quotes",
+    "conversation_runs",
+    "conversation_reviews",
+    "conversation_quote_acceptances",
+    "conversation_provider_configurations",
+    "conversation_report_drafts",
+)
+SALES_XRAY_PARITY_TABLES = APP_UPDATES_PARITY_TABLES + SALES_XRAY_PARITY_NEW_TABLES
 # The first migration rehearsal is deliberately an exact reviewed transition.
 # Do not infer a source/target pair from lexical revision ordering.
 MIGRATION_REHEARSAL_SOURCE_HEAD = COMMUNITY_PARITY_MIGRATION_HEAD
 MIGRATION_REHEARSAL_TARGET_HEAD = APP_UPDATES_PARITY_MIGRATION_HEAD
+SALES_XRAY_REHEARSAL_SOURCE_HEAD = APP_UPDATES_PARITY_MIGRATION_HEAD
+SALES_XRAY_REHEARSAL_TARGET_HEAD = SALES_XRAY_PARITY_MIGRATION_HEAD
+MIGRATION_REHEARSAL_PAIRS = frozenset(
+    {
+        (MIGRATION_REHEARSAL_SOURCE_HEAD, MIGRATION_REHEARSAL_TARGET_HEAD),
+        (SALES_XRAY_REHEARSAL_SOURCE_HEAD, SALES_XRAY_REHEARSAL_TARGET_HEAD),
+    }
+)
 VERSIONED_PARITY_CONTRACTS = {
     CAPABILITY_PARITY_MIGRATION_HEAD: (CAPABILITY_PARITY_CONTRACT, CAPABILITY_PARITY_TABLES),
     PRACTICE_PARITY_MIGRATION_HEAD: (PRACTICE_PARITY_CONTRACT, PRACTICE_PARITY_TABLES),
@@ -223,6 +249,10 @@ VERSIONED_PARITY_CONTRACTS = {
         APP_UPDATES_PARITY_CONTRACT,
         APP_UPDATES_PARITY_TABLES,
     ),
+    SALES_XRAY_PARITY_MIGRATION_HEAD: (
+        SALES_XRAY_PARITY_CONTRACT,
+        SALES_XRAY_PARITY_TABLES,
+    ),
 }
 
 
@@ -239,6 +269,11 @@ def parity_contract_for_head(migration_head: str) -> str | None:
     if migration_head in LEGACY_PARITY_MIGRATION_HEADS:
         return None
     return VERSIONED_PARITY_CONTRACTS[migration_head][0]
+
+
+def _validate_migration_rehearsal_pair(source_head: str, target_head: str) -> None:
+    if (source_head, target_head) not in MIGRATION_REHEARSAL_PAIRS:
+        raise DrillError("migration rehearsal transition is not an explicitly reviewed pair")
 
 
 SIDE_EFFECT_COUNTS_QUERY = """
@@ -1181,8 +1216,12 @@ def _preflight(target: DisposableTarget, config: DrillConfig) -> None:
         if _docker_inspect_optional(kind, name) is not None:
             raise DrillError(f"generated {kind} name already exists; refusing to reuse it")
     if config.source_application_image is not None:
-        if config.source_migration_head != MIGRATION_REHEARSAL_SOURCE_HEAD:
-            raise DrillError("migration rehearsal source head is not the reviewed 0027 head")
+        if config.source_migration_head is None:
+            raise DrillError("migration rehearsal source head is missing")
+        _validate_migration_rehearsal_pair(
+            config.source_migration_head,
+            config.expected_migration_head,
+        )
         source_release_id, source_image_migration_head = _application_image_contract(
             config.source_application_image,
             target,
@@ -1797,11 +1836,15 @@ def _assert_migration_rehearsal_transition(
     source_counts_after_hold: Mapping[str, int],
     target_counts: Mapping[str, int],
     source_derivations: Mapping[str, int],
+    *,
+    source_head: str = MIGRATION_REHEARSAL_SOURCE_HEAD,
+    target_head: str = MIGRATION_REHEARSAL_TARGET_HEAD,
 ) -> dict[str, int]:
-    """Require exact preservation plus the rows defined by 0028/0029."""
+    """Require exact preservation plus the rows defined by one reviewed pair."""
 
-    source_tables = set(parity_tables_for_head(MIGRATION_REHEARSAL_SOURCE_HEAD))
-    target_tables = set(parity_tables_for_head(MIGRATION_REHEARSAL_TARGET_HEAD))
+    _validate_migration_rehearsal_pair(source_head, target_head)
+    source_tables = set(parity_tables_for_head(source_head))
+    target_tables = set(parity_tables_for_head(target_head))
     expected_new_tables = target_tables - source_tables
     if set(source_counts_after_hold) != source_tables:
         raise DrillError("migration rehearsal source row-count baseline is incomplete")
@@ -1814,33 +1857,45 @@ def _assert_migration_rehearsal_transition(
         raise DrillError("migration rehearsal row counts are invalid")
     if any(target_counts[table] != source_counts_after_hold[table] for table in source_tables):
         raise DrillError("migration rehearsal changed a preserved source table count")
-    if set(source_derivations) != {
-        "academy_public_profiles",
-        "academy_public_profile_people",
-    }:
-        raise DrillError("migration rehearsal source derivation contract is incomplete")
-    if any(
-        isinstance(value, bool) or not isinstance(value, int) or value < 0
-        for value in source_derivations.values()
+    if (source_head, target_head) == (
+        MIGRATION_REHEARSAL_SOURCE_HEAD,
+        MIGRATION_REHEARSAL_TARGET_HEAD,
     ):
-        raise DrillError("migration rehearsal source derivations are invalid")
-    if (
-        source_derivations["academy_public_profiles"]
-        != source_counts_after_hold["academy_public_profiles"]
-    ):
-        raise DrillError("migration rehearsal source derivation does not match its row count")
-    expected_new_counts = {
-        # 0028 inserts one global identity per distinct legacy person and one
-        # preference per legacy profile; 0029 creates an empty append-only
-        # receipt table.
-        "community_public_profiles": source_derivations["academy_public_profile_people"],
-        "academy_leaderboard_preferences": source_counts_after_hold["academy_public_profiles"],
-        "app_update_read_receipts": 0,
-    }
-    if expected_new_tables != set(expected_new_counts):
-        raise DrillError(
-            "migration rehearsal new-table contract is not the reviewed 0028/0029 pair"
-        )
+        if set(source_derivations) != {
+            "academy_public_profiles",
+            "academy_public_profile_people",
+        }:
+            raise DrillError("migration rehearsal source derivation contract is incomplete")
+        if any(
+            isinstance(value, bool) or not isinstance(value, int) or value < 0
+            for value in source_derivations.values()
+        ):
+            raise DrillError("migration rehearsal source derivations are invalid")
+        if (
+            source_derivations["academy_public_profiles"]
+            != source_counts_after_hold["academy_public_profiles"]
+        ):
+            raise DrillError("migration rehearsal source derivation does not match its row count")
+        expected_new_counts = {
+            # 0028 inserts one global identity per distinct legacy person and one
+            # preference per legacy profile; 0029 creates an empty append-only
+            # receipt table.
+            "community_public_profiles": source_derivations["academy_public_profile_people"],
+            "academy_leaderboard_preferences": source_counts_after_hold["academy_public_profiles"],
+            "app_update_read_receipts": 0,
+        }
+        if expected_new_tables != set(expected_new_counts):
+            raise DrillError(
+                "migration rehearsal new-table contract is not the reviewed 0028/0029 pair"
+            )
+    else:
+        if source_derivations:
+            raise DrillError("Sales Xray rehearsal does not accept source derivations")
+        expected_new_counts = {table: 0 for table in SALES_XRAY_PARITY_NEW_TABLES}
+        if expected_new_tables != set(expected_new_counts):
+            raise DrillError(
+                "migration rehearsal new-table contract is not the reviewed 0029/0030 pair"
+            )
     if any(
         target_counts[table] != expected_count
         for table, expected_count in expected_new_counts.items()
@@ -1849,7 +1904,12 @@ def _assert_migration_rehearsal_transition(
     return expected_new_counts
 
 
-def _migration_command(target: DisposableTarget, image: str) -> tuple[str, ...]:
+def _migration_command(
+    target: DisposableTarget,
+    image: str,
+    *,
+    target_head: str = MIGRATION_REHEARSAL_TARGET_HEAD,
+) -> tuple[str, ...]:
     """Run only the reviewed candidate Alembic entrypoint on the internal target."""
 
     return (
@@ -1900,15 +1960,19 @@ def _migration_command(target: DisposableTarget, image: str) -> tuple[str, ...]:
         "alembic",
         image,
         "upgrade",
-        MIGRATION_REHEARSAL_TARGET_HEAD,
+        target_head,
     )
 
 
 def _run_candidate_migration(target: DisposableTarget, config: DrillConfig) -> None:
     target_url = _helper_database_url(target)
     _run_docker(
-        _migration_command(target, config.application_image),
-        "apply candidate migration 0028/0029 in isolated target",
+        _migration_command(
+            target,
+            config.application_image,
+            target_head=config.expected_migration_head,
+        ),
+        f"apply candidate migration to {config.expected_migration_head} in isolated target",
         timeout_seconds=RESTORE_TIMEOUT_SECONDS,
         env_updates={
             "AC_DATABASE_URL": target_url,
@@ -2220,10 +2284,9 @@ def _validate_migration_rehearsal_args(
         )
     if source_image is None:
         return None, None
-    if source_head != MIGRATION_REHEARSAL_SOURCE_HEAD:
-        raise DrillError("migration rehearsal supports only source migration head 20260910_0027")
-    if target_head != MIGRATION_REHEARSAL_TARGET_HEAD:
-        raise DrillError("migration rehearsal supports only candidate migration head 20260910_0029")
+    if source_head is None:
+        raise DrillError("migration rehearsal source head is missing")
+    _validate_migration_rehearsal_pair(source_head, target_head)
     if args.reconcile_job_id or args.reconcile_outbox_event_id:
         raise DrillError("migration rehearsal must leave the recovery state held")
     if (
@@ -2326,8 +2389,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--source-migration-head",
-        choices=(MIGRATION_REHEARSAL_SOURCE_HEAD,),
-        help="exact prior migration head for the isolated 0027-to-0029 rehearsal",
+        choices=(MIGRATION_REHEARSAL_SOURCE_HEAD, SALES_XRAY_REHEARSAL_SOURCE_HEAD),
+        help="exact prior migration head for an explicitly reviewed isolated rehearsal",
     )
     parser.add_argument("--postgres-image", default=DEFAULT_POSTGRES_IMAGE)
     parser.add_argument("--execute", action="store_true", help="run the disposable drill")
@@ -2379,8 +2442,8 @@ def _dry_run_plan(config: DrillConfig) -> dict[str, Any]:
         plan["source_migration_head"] = config.source_migration_head
         plan["migration"] = {
             "entrypoint": "alembic",
-            "command": ["upgrade", MIGRATION_REHEARSAL_TARGET_HEAD],
-            "target_migration_head": MIGRATION_REHEARSAL_TARGET_HEAD,
+            "command": ["upgrade", config.expected_migration_head],
+            "target_migration_head": config.expected_migration_head,
         }
     return plan
 
@@ -2495,10 +2558,9 @@ def _execute_migration_rehearsal(
 ) -> None:
     source_image = config.source_application_image
     source_head = config.source_migration_head
-    if source_image is None or source_head != MIGRATION_REHEARSAL_SOURCE_HEAD:
+    if source_image is None or source_head is None:
         raise DrillError("migration rehearsal source contract is incomplete")
-    if config.expected_migration_head != MIGRATION_REHEARSAL_TARGET_HEAD:
-        raise DrillError("migration rehearsal target contract is not the reviewed 0029 head")
+    _validate_migration_rehearsal_pair(source_head, config.expected_migration_head)
 
     _restore_dump(target)
     source_schema = _schema_and_migration(
@@ -2512,7 +2574,12 @@ def _execute_migration_rehearsal(
         source_head,
         source_counts_before_hold,
     )
-    source_derivations_before_hold = _migration_rehearsal_source_derivations(target)
+    source_derivations_before_hold = (
+        _migration_rehearsal_source_derivations(target)
+        if (source_head, config.expected_migration_head)
+        == (MIGRATION_REHEARSAL_SOURCE_HEAD, MIGRATION_REHEARSAL_TARGET_HEAD)
+        else {}
+    )
     evidence["source_schema"] = source_schema
     evidence["source_row_counts_before_hold"] = source_counts_before_hold
     evidence["source_derivations_before_hold"] = source_derivations_before_hold
@@ -2541,7 +2608,9 @@ def _execute_migration_rehearsal(
     # sanctioned hold because holding jobs/outbox work is an intentional state
     # transition.
     source_counts_after_hold = _row_counts(target, source_head)
-    source_derivations_after_hold = _migration_rehearsal_source_derivations(target)
+    source_derivations_after_hold = (
+        _migration_rehearsal_source_derivations(target) if source_derivations_before_hold else {}
+    )
     if source_derivations_after_hold != source_derivations_before_hold:
         raise DrillError("source migration derivations changed during the restore hold")
     evidence["source_row_counts_after_hold"] = source_counts_after_hold
@@ -2558,6 +2627,8 @@ def _execute_migration_rehearsal(
         source_counts_after_hold,
         target_counts,
         source_derivations_after_hold,
+        source_head=source_head,
+        target_head=config.expected_migration_head,
     )
     after_migration = _side_effect_counts(target)
     if after_migration != after_hold:
@@ -2576,7 +2647,7 @@ def _execute_migration_rehearsal(
 
     evidence["migration"] = {
         "entrypoint": "alembic",
-        "command": ["upgrade", MIGRATION_REHEARSAL_TARGET_HEAD],
+        "command": ["upgrade", config.expected_migration_head],
         "source_head": source_head,
         "target_head": config.expected_migration_head,
     }
