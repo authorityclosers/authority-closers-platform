@@ -123,7 +123,7 @@ def test_compose_binds_resend_configuration_only_to_worker(profile: str) -> None
     assert isinstance(default_services, dict)
     default_worker = default_services["worker"]
     assert isinstance(default_worker, dict)
-    expected_default_provider = "resend" if profile == "staging" else "fake"
+    expected_default_provider = "resend"
     assert (  # type: ignore[index]
         default_worker["environment"]["AC_EMAIL_PROVIDER"] == expected_default_provider
     )
