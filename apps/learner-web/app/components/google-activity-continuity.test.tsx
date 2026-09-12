@@ -137,6 +137,26 @@ describe("Google activity continuation through actual auth surfaces", () => {
     ).toBe("/login" + query);
   });
 
+  it("offers existing password users a context-preserving recovery path", async () => {
+    await mount(
+      CallbackPage({
+        searchParams: Promise.resolve({
+          result: "registration_required",
+          activity,
+          course,
+        }),
+      }),
+    );
+
+    const passwordLink = [...container.querySelectorAll("a")].find(
+      (link) => link.textContent?.trim() === "Sign in with password",
+    );
+    expect(passwordLink?.getAttribute("href")).toBe("/login" + query);
+    expect(container.textContent).toContain(
+      "connect Google later from account settings",
+    );
+  });
+
   it("preserves only validated context in callback view retry", async () => {
     await mount(
       CallbackPage({

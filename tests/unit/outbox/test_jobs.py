@@ -537,6 +537,42 @@ async def test_claim_is_one_at_a_time_and_requires_ready_generation() -> None:
         await repository.claim(limit=1)
 
 
+async def test_bootstrap_claim_is_exact_and_requires_held_generation() -> None:
+    session = _session()
+    job = _job(status=JobStatus.HELD.value)
+    job.kind = "email.identity_verification.v1"
+    job.dedupe_key = f"outbox:{uuid4()}"
+    job.payload = {"challenge_id": str(uuid4()), "kind": "email_verification"}
+    job.tenant_id = None
+    session.scalar.side_effect = [_state(RecoveryStatus.HELD.value), job]
+
+    claimed = await JobRepository(session).claim_bootstrap_external(
+        job.id,
+        kind=job.kind,
+        recovery_generation=job.recovery_generation,
+    )
+
+    assert claimed is job
+    assert claimed.status == JobStatus.LEASED.value
+    assert claimed.lease_token is not None
+    assert claimed.attempt_count == 1
+    session.flush.assert_awaited_once()
+
+
+async def test_bootstrap_claim_rejects_ready_generation_before_job_lookup() -> None:
+    session = _session()
+    session.scalar.return_value = _state(RecoveryStatus.READY.value)
+
+    with pytest.raises(ReconciliationRequiredError, match="held first"):
+        await JobRepository(session).claim_bootstrap_external(
+            uuid4(),
+            kind="email.identity_verification.v1",
+            recovery_generation=3,
+        )
+
+    assert session.scalar.await_count == 1
+
+
 async def test_restore_row_holds_cannot_run_before_the_global_marker_is_held() -> None:
     session = _session()
     session.scalar.return_value = _state(RecoveryStatus.READY.value)

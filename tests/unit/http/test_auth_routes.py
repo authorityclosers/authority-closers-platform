@@ -9,7 +9,7 @@ from uuid import UUID
 import pytest
 from fastapi import FastAPI, Request, Response
 from fastapi.testclient import TestClient
-from pydantic import SecretStr
+from pydantic import AnyHttpUrl, SecretStr
 from sqlalchemy.exc import SQLAlchemyError
 
 import ac_platform.http.auth as auth_module
@@ -51,6 +51,9 @@ class _AsyncContext:
 
     def begin(self) -> _AsyncContext:
         return _AsyncContext()
+
+    async def scalar(self, _statement: object) -> object | None:
+        return None
 
 
 def _sessions() -> _AsyncContext:
@@ -983,6 +986,69 @@ def test_google_authenticate_callback_uses_signed_action_not_callback_query(
         return_path or "/home"
     )
     assert response.cookies["ac_session"] == VALID_SESSION_TOKEN
+    assert _IdentityApplication.registered_provider_calls == []
+
+
+@pytest.mark.parametrize("surface", ["learner", "admin", "coach"])
+@pytest.mark.parametrize("has_existing_membership", [True, False])
+def test_google_login_selects_only_existing_public_learner_context(
+    monkeypatch: pytest.MonkeyPatch,
+    surface: str,
+    has_existing_membership: bool,
+) -> None:
+    selections: list[tuple[str, UUID]] = []
+    queries: list[object] = []
+
+    class ExistingMembershipDatabase(_AsyncContext):
+        async def scalar(self, statement: object) -> object | None:
+            queries.append(statement)
+            return object() if has_existing_membership else None
+
+    class SelectingIdentity(_CallbackIdentityApplication):
+        async def select_tenant(self, token: str, tenant_id: UUID) -> object:
+            selections.append((token, tenant_id))
+            return object()
+
+    database = ExistingMembershipDatabase()
+    monkeypatch.setitem(globals(), "_sessions", lambda: database)
+    monkeypatch.setattr(auth_module, "AsyncIdentityApplication", SelectingIdentity)
+    client = _client(
+        provider=_SuccessfulProvider(),
+        settings=_settings().model_copy(
+            update={"coach_app_url": AnyHttpUrl("https://coach.authorityclosers.test")}
+        ),
+    )
+    origin = "https://coach.authorityclosers.test" if surface == "coach" else "http://testserver"
+    started = client.get(
+        origin + "/v1/auth/google/start",
+        params={"action": "authenticate", "surface": surface},
+        follow_redirects=False,
+    )
+    transaction = AuthTransactionCodec(TEST_TRANSACTION_KEY).decode(
+        started.cookies["ac_oauth_transaction"]
+    )
+    response = client.get(
+        origin + "/v1/auth/google/callback",
+        params={"state": transaction.state, "code": "google-authorization-code"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert response.cookies["ac_session"] == VALID_SESSION_TOKEN
+    expected_tenant = _settings().public_learner_tenant_id
+    assert selections == (
+        [(VALID_SESSION_TOKEN, expected_tenant)]
+        if surface == "learner" and has_existing_membership
+        else []
+    )
+    assert len(queries) == (1 if surface == "learner" else 0)
+    if queries:
+        parameters = cast(Any, queries[0]).compile().params
+        assert set(parameters.values()) == {
+            expected_tenant,
+            UUID("11111111-1111-4111-8111-111111111111"),
+            "learner",
+            "active",
+        }
     assert _IdentityApplication.registered_provider_calls == []
 
 
