@@ -39,6 +39,13 @@ export const ADMIN_SESSION_REFRESH_TIMEOUT_MS = 10_000;
 
 const AdminSessionContext = createContext<AdminSessionState>(initialState);
 
+export type AdminSessionInvalidator = (session: AdminSession) => void;
+
+const noOpSessionInvalidator: AdminSessionInvalidator = () => undefined;
+const AdminSessionInvalidationContext = createContext<AdminSessionInvalidator>(
+  noOpSessionInvalidator,
+);
+
 export function canUseAdminPermission(
   state: AdminSessionState,
   permission: AdminPermission,
@@ -130,6 +137,10 @@ export function AdminSessionProvider({
     state: AdminSessionState;
     confirmed: ReadySessionState | null;
   }>({ key: refreshKey, state: initialState, confirmed: null });
+  const viewRef = useRef(view);
+  useLayoutEffect(() => {
+    viewRef.current = view;
+  }, [view]);
   const generation = useRef(0);
   const pending = useRef(false);
   const activeRefresh = useRef<{
@@ -172,6 +183,36 @@ export function AdminSessionProvider({
     }
     pending.current = false;
   }, []);
+  const invalidateSession = useCallback<AdminSessionInvalidator>(
+    (expectedSession) => {
+      const expectedIdentity = sessionIdentity(expectedSession);
+      if (
+        !viewRef.current.confirmed ||
+        sessionIdentity(viewRef.current.confirmed.session) !== expectedIdentity
+      ) {
+        return;
+      }
+      invalidate();
+      setView((current) => {
+        if (
+          !current.confirmed ||
+          sessionIdentity(current.confirmed.session) !== expectedIdentity
+        ) {
+          return current;
+        }
+        return {
+          key: refreshKey,
+          state: {
+            status: "denied",
+            session: null,
+            error: "Your product session is no longer valid.",
+          },
+          confirmed: null,
+        };
+      });
+    },
+    [invalidate, refreshKey],
+  );
   const settle = useCallback((request: number) => {
     const active = activeRefresh.current;
     if (request !== generation.current || active?.request !== request)
@@ -328,71 +369,81 @@ export function AdminSessionProvider({
 
   if (refreshKey === undefined && !revalidateOnFocus) {
     return (
-      <AdminSessionContext.Provider value={state}>
-        {children}
-      </AdminSessionContext.Provider>
+      <AdminSessionInvalidationContext.Provider value={invalidateSession}>
+        <AdminSessionContext.Provider value={state}>
+          {children}
+        </AdminSessionContext.Provider>
+      </AdminSessionInvalidationContext.Provider>
     );
   }
   if (state.status === "denied") {
     return (
-      <AdminSessionContext.Provider value={state}>
-        {children}
-      </AdminSessionContext.Provider>
+      <AdminSessionInvalidationContext.Provider value={invalidateSession}>
+        <AdminSessionContext.Provider value={state}>
+          {children}
+        </AdminSessionContext.Provider>
+      </AdminSessionInvalidationContext.Provider>
     );
   }
   return (
-    <>
-      {hidden && (
-        <section
-          className="studio-boundary panel"
-          role={state.status === "error" ? "alert" : "status"}
-        >
-          <div>
-            <h2>
-              {state.status === "error"
-                ? "We couldn’t check your account"
-                : "Checking your account…"}
-            </h2>
-            <p>
-              {state.status === "error"
-                ? "Your open work is kept privately in this tab. Reconnect to continue."
-                : "Your workspace will return after your session is verified."}
-            </p>
-            {state.status === "error" && (
-              <button
-                type="button"
-                className="button button-secondary"
-                onClick={() => refresh()}
-              >
-                Reconnect
-              </button>
-            )}
-          </div>
-        </section>
-      )}
-      <div
-        ref={attachPrivateRoot}
-        hidden={hidden}
-        inert={hidden}
-        aria-hidden={hidden || undefined}
-        data-private-session-tree=""
-      >
-        {view.confirmed && (
-          <PrivateSessionTree
-            key={sessionIdentity(view.confirmed.session)}
-            state={view.confirmed}
-            frozen={hidden}
+    <AdminSessionInvalidationContext.Provider value={invalidateSession}>
+      <>
+        {hidden && (
+          <section
+            className="studio-boundary panel"
+            role={state.status === "error" ? "alert" : "status"}
           >
-            {children}
-          </PrivateSessionTree>
+            <div>
+              <h2>
+                {state.status === "error"
+                  ? "We couldn’t check your account"
+                  : "Checking your account…"}
+              </h2>
+              <p>
+                {state.status === "error"
+                  ? "Your open work is kept privately in this tab. Reconnect to continue."
+                  : "Your workspace will return after your session is verified."}
+              </p>
+              {state.status === "error" && (
+                <button
+                  type="button"
+                  className="button button-secondary"
+                  onClick={() => refresh()}
+                >
+                  Reconnect
+                </button>
+              )}
+            </div>
+          </section>
         )}
-      </div>
-    </>
+        <div
+          ref={attachPrivateRoot}
+          hidden={hidden}
+          inert={hidden}
+          aria-hidden={hidden || undefined}
+          data-private-session-tree=""
+        >
+          {view.confirmed && (
+            <PrivateSessionTree
+              key={sessionIdentity(view.confirmed.session)}
+              state={view.confirmed}
+              frozen={hidden}
+            >
+              {children}
+            </PrivateSessionTree>
+          )}
+        </div>
+      </>
+    </AdminSessionInvalidationContext.Provider>
   );
 }
 
 export function useAdminSession(): AdminSessionState {
   return useContext(AdminSessionContext);
+}
+
+export function useInvalidateAdminSession(): AdminSessionInvalidator {
+  return useContext(AdminSessionInvalidationContext);
 }
 
 export function AdminSessionStatus() {

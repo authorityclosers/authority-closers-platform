@@ -12,7 +12,11 @@ import {
   type AdminLearnerLookup,
   type AdminSession,
 } from "../lib/admin-api";
-import { canUseAdminPermission, useAdminSession } from "../lib/admin-session";
+import {
+  canUseAdminPermission,
+  useAdminSession,
+  useInvalidateAdminSession,
+} from "../lib/admin-session";
 
 export const PEOPLE_READ_TIMEOUT_MS = 15_000;
 const defaultApi = {
@@ -35,6 +39,16 @@ export function PeopleRuntime({ api = defaultApi }: { api?: PeopleApi }) {
   const state = useAdminSession();
   if (state.status === "loading")
     return <p role="status">Checking workspace access…</p>;
+  if (state.status === "denied")
+    return (
+      <section className="panel people-message" role="alert">
+        <h2>Workspace access needs to be checked</h2>
+        <p>Your session or permission changed. Sign in again to continue.</p>
+        <Link className="button" href="/login">
+          Sign in again
+        </Link>
+      </section>
+    );
   if (
     state.status !== "ready" ||
     !canUseAdminPermission(state, "learner_diagnose")
@@ -62,6 +76,7 @@ function PeopleWorkspace({
   session: AdminSession;
   api: PeopleApi;
 }) {
+  const invalidateSession = useInvalidateAdminSession();
   const [purpose, setPurpose] = useState<AdminDiagnosisPurpose | "">("");
   const [lookup, setLookup] = useState<AdminLearnerLookup | null>(null);
   const [selected, setSelected] = useState<AdminLearnerCandidate | null>(null);
@@ -135,6 +150,7 @@ function PeopleWorkspace({
         setSelected(null);
         setDiagnosis(null);
         setAccessLost(true);
+        invalidateSession(session);
       } else {
         setError(
           problem instanceof AdminApiProblem && problem.status === 404

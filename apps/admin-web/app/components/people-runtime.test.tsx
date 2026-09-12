@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import * as sessionApi from "@ac/operations-web/api";
 import { AdminSessionProvider } from "../lib/admin-session";
+import { AdminShell } from "./admin-shell";
 import {
   AdminApiProblem,
   type AdminLearnerLookup,
@@ -18,6 +19,8 @@ import {
   personId,
   tenantId,
 } from "../../test-fixtures/people";
+
+vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: vi.fn() }) }));
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -41,6 +44,21 @@ async function render(refreshKey = "people") {
       <AdminSessionProvider refreshKey={refreshKey}>
         <PeopleRuntime api={api} />
       </AdminSessionProvider>,
+    ),
+  );
+}
+async function renderShell() {
+  await act(async () =>
+    root.render(
+      <AdminShell
+        active="people"
+        eyebrow="People"
+        title="Learner records"
+        description="Review a learner record"
+        surface="people"
+      >
+        <PeopleRuntime api={api} />
+      </AdminShell>,
     ),
   );
 }
@@ -238,6 +256,31 @@ it.each([401, 403])(
     expect(host.textContent).toContain("Sign in again");
     expect(host.textContent).not.toContain("Synthetic Learner");
     expect(host.textContent).not.toContain("Private server context");
+    expect(host.querySelector("input")).toBeNull();
+  },
+);
+
+it.each([401, 403])(
+  "invalidates the shared admin shell after People access failure %s",
+  async (status) => {
+    api.diagnose.mockRejectedValueOnce(
+      new AdminApiProblem({
+        status,
+        code: "denied",
+        title: "Denied",
+        detail: "Private server context must not appear",
+        requestId: null,
+      }),
+    );
+    await renderShell();
+    await openDiagnosis();
+    expect(
+      host.querySelector('[aria-label="Product admin session denied"]'),
+    ).not.toBeNull();
+    expect(host.textContent).toContain("No verified tenant context");
+    expect(host.textContent).toContain("Sign in");
+    expect(host.textContent).not.toContain("Session verified");
+    expect(host.textContent).not.toContain("Synthetic Learner");
     expect(host.querySelector("input")).toBeNull();
   },
 );
