@@ -216,6 +216,57 @@ describe("development admin API target", () => {
 });
 
 describe("admin bridge route allowlist", () => {
+  it.each([
+    ["POST", "/v1/admin/learners/lookup", true],
+    ["GET", "/v1/admin/learners/lookup", false],
+    ["POST", "/v1/admin/learners/lookup?query=private", false],
+    ["POST", "/v1/admin/learners/lookup?tenant_id=other", false],
+    [
+      "GET",
+      `/v1/admin/learners/${TARGET_ID}/diagnosis?purpose=learner_support`,
+      true,
+    ],
+    [
+      "GET",
+      `/v1/admin/learners/${TARGET_ID}/diagnosis?purpose=safeguarding_review`,
+      true,
+    ],
+    [
+      "GET",
+      `/v1/admin/learners/${TARGET_ID}/diagnosis?purpose=accessibility_review`,
+      true,
+    ],
+    [
+      "POST",
+      `/v1/admin/learners/${TARGET_ID}/diagnosis?purpose=learner_support`,
+      false,
+    ],
+    ["GET", `/v1/admin/learners/${TARGET_ID}/diagnosis`, false],
+    ["GET", `/v1/admin/learners/${TARGET_ID}/diagnosis?purpose=unknown`, false],
+    [
+      "GET",
+      `/v1/admin/learners/${TARGET_ID}/diagnosis?purpose=learner_support&purpose=learner_support`,
+      false,
+    ],
+    [
+      "GET",
+      `/v1/admin/learners/${TARGET_ID}/diagnosis?purpose=learner_support&tenant_id=other`,
+      false,
+    ],
+    [
+      "GET",
+      "/v1/admin/learners/invalid/diagnosis?purpose=learner_support",
+      false,
+    ],
+  ] as const)(
+    "admits only exact People reads to Admin: %s %s",
+    (method, path, expected) => {
+      const url = new URL(path, "http://admin.localhost:3101");
+      expect(isStagingAdminRequest(url, method)).toBe(expected);
+      expect(isCoachApiRequest(url, method)).toBe(false);
+    },
+  );
+
   const videoRoutes: [string, string, boolean][] = [
     ["POST", "/v1/admin/studio/programs", true],
     ["POST", "/v1/admin/studio/programs?tenant_id=other", false],

@@ -311,6 +311,23 @@ function isUuid(value: string): boolean {
 
 /** Exact first-slice admin API surface; every other route stays unavailable. */
 export function isStagingAdminRequest(url: URL, method: string): boolean {
+  const diagnosis = /^\/v1\/admin\/learners\/([^/]+)\/diagnosis$/.exec(
+    url.pathname,
+  );
+  if (diagnosis) {
+    const entries = [...url.searchParams.entries()];
+    return (
+      method.toUpperCase() === "GET" &&
+      isUuid(diagnosis[1]) &&
+      entries.length === 1 &&
+      entries[0][0] === "purpose" &&
+      [
+        "learner_support",
+        "safeguarding_review",
+        "accessibility_review",
+      ].includes(entries[0][1])
+    );
+  }
   const videoLibrary = /^\/v1\/admin\/studio\/programs\/([^/]+)\/videos$/.exec(
     url.pathname,
   );
@@ -371,6 +388,9 @@ export function isStagingAdminRequest(url: URL, method: string): boolean {
     return normalizedMethod === "POST";
   }
   if (pathname === "/v1/auth/logout") {
+    return normalizedMethod === "POST";
+  }
+  if (pathname === "/v1/admin/learners/lookup") {
     return normalizedMethod === "POST";
   }
   if (
