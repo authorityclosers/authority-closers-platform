@@ -3,6 +3,13 @@
 This supersedes earlier activation summaries in the individual slice evidence
 files. Those files describe their earlier test scope, not the current release.
 
+The additive provider follow-on is described in
+`SALES_XRAY_INFERENCE_WORKER.md`: durable internal C2 admission/execution, a
+separate bounded subprocess broker, and pure C4/C5 task adapters. It does not
+activate hosted intake or a complete automatic upload-to-report pipeline.
+Migration 0031 extends immutable history and provider-response erasure; the
+frozen local integration and its browser receipts remain a separate slice.
+
 ## User-visible result
 
 The supplied 20m53s recording has a private, source-checked AI sales draft outside

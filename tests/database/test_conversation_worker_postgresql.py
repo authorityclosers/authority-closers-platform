@@ -66,8 +66,11 @@ from tests.database.test_conversation_postgresql import (
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def postgres_harness() -> Any:
+    # Each test gives its worker a different private storage root. Its queue
+    # must be isolated too: an intentionally failed retry from an earlier test
+    # can become eligible while a slower later test is running.
     yield from _postgres_harness.__wrapped__()
 
 
@@ -148,7 +151,10 @@ async def _add_quote(
     now: datetime | None = None,
 ) -> UUID:
     quote_id = uuid4()
-    current = now or datetime.now(UTC)
+    # Commands in this harness use build_application(..., state)'s frozen clock.
+    # A quote issued on the wall clock after a slow native run would otherwise
+    # appear to be issued in the future to that same synthetic owner.
+    current = now or state.now
     quoted = Quote(
         quote_id=str(quote_id),
         source=SourceBinding(

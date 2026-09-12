@@ -181,11 +181,12 @@ class ConversationReports:
             has_report = False
             run_view = None
             if latest is not None:
+                current = await self.application._run_view(actor, latest.id)
                 run_view = {
                     "id": str(latest.id),
-                    "state": latest.state,
+                    "state": current["state"],
                     "recipe_revision": latest.recipe_revision,
-                    "provider_calls": 0,
+                    "provider_calls": current["provider_calls"],
                 }
                 has_report = (
                     await self.database.scalar(

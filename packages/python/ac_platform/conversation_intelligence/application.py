@@ -28,6 +28,7 @@ from ac_platform.conversation_intelligence.models import (
     ConversationBudgetAccount,
     ConversationCheckpoint,
     ConversationCommand,
+    ConversationInferenceTask,
     ConversationMinuteAccount,
     ConversationPermission,
     ConversationQuote,
@@ -46,6 +47,7 @@ from ac_platform.conversation_intelligence.storage import (
 from ac_platform.identity.models import Person
 from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.kernel.authz import ActorContext
+from ac_platform.outbox.models import Job
 from ac_platform.outbox.repository import JobRepository
 from ac_platform.tenancy.models import Membership, Tenant
 
@@ -533,12 +535,17 @@ class ConversationApplication:
         )
         if run is None:
             raise ConversationNotFound("Run not found.")
+        job = await self.database.get(Job, run.job_id)
+        state = run.state
+        if job is not None and job.status == "dead_letter" and state in {"queued", "running"}:
+            state = "failed"
         return {
             "id": str(run.id),
             "recording_id": str(run.recording_id),
-            "state": run.state,
+            "state": state,
             "recipe_revision": run.recipe_revision,
-            "provider_calls": 0,
+            # Confirmed responses only; an ambiguous dispatch has no receipt.
+            "provider_calls": int(job is not None and job.provider_receipt is not None),
         }
 
     async def get_run(self, actor: ActorContext, run_id: UUID) -> dict[str, Any]:
@@ -789,6 +796,17 @@ class ConversationApplication:
         ):
             raise ConversationConflict("Erasure was fenced.")
         now = utc(self.clock())
+        for task in (
+            await self.database.scalars(
+                select(ConversationInferenceTask).where(
+                    ConversationInferenceTask.recording_id == recording.id,
+                    ConversationInferenceTask.erased_at.is_(None),
+                )
+            )
+        ).all():
+            task.intent, task.erased_at = None, now
+            if task.state in {"queued", "running"}:
+                task.state = "cancelled"
         for draft in (
             await self.database.scalars(
                 select(ConversationReportDraft).where(

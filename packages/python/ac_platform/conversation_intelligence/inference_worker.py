@@ -1,0 +1,418 @@
+"""Durable C2 worker with a separate broker, recovery fencing and no automatic retry.
+
+No provider credentials are read here. The injected broker owns its process and
+must terminate and join it before returning from a cancelled/expired execution.
+No HTTP 200 is treated as a settled invoice or as human quality approval.
+"""
+
+from __future__ import annotations
+
+import asyncio
+from dataclasses import dataclass, replace
+from datetime import UTC, datetime, timedelta
+from typing import Any, Protocol
+from uuid import UUID, uuid4
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+from ac_platform.conversation_intelligence.application import (
+    ConversationApplication,
+    ConversationConflict,
+    ConversationDenied,
+)
+from ac_platform.conversation_intelligence.checkpoints import content_hash
+from ac_platform.conversation_intelligence.entitlements import (
+    BudgetAccount,
+    LedgerTransition,
+    MinuteAccount,
+    Reservation,
+    mark_dispatched,
+    mark_uncertain,
+    release,
+)
+from ac_platform.conversation_intelligence.inference import (
+    INFERENCE_JOB,
+    TRANSCRIPT_RECIPE,
+    ConversationInference,
+    TranscriptionPlan,
+)
+from ac_platform.conversation_intelligence.inference_tasks import validate_scribe_result
+from ac_platform.conversation_intelligence.models import (
+    ConversationBudgetAccount,
+    ConversationCheckpoint,
+    ConversationInferenceTask,
+    ConversationMinuteAccount,
+    ConversationQuote,
+    ConversationRecording,
+    ConversationRun,
+)
+from ac_platform.conversation_intelligence.providers import MAX_AUDIO_BYTES, ProviderResult
+from ac_platform.conversation_intelligence.storage import (
+    ObjectKey,
+    ObjectKind,
+    PrivateLocalRecordingStorage,
+    StorageError,
+)
+from ac_platform.conversation_intelligence.worker import Work, _drain, _FencedExecutor
+from ac_platform.kernel.authz import ActorContext
+from ac_platform.outbox.models import Job
+from ac_platform.outbox.repository import JobRepository, RecoveryStateRepository
+
+_LEASE = timedelta(minutes=15)
+_EFFECT_SECONDS = 240
+
+
+class InferenceBroker(Protocol):
+    async def execute(self, reservation: Reservation, payload: bytes) -> ProviderResult: ...
+
+
+@dataclass
+class Scope:
+    task: ConversationInferenceTask
+    recording: ConversationRecording
+    run: ConversationRun
+    quoted: ConversationQuote
+    plan: TranscriptionPlan
+
+
+def save_accounts(
+    minutes: ConversationMinuteAccount,
+    budget: ConversationBudgetAccount,
+    transition: LedgerTransition,
+) -> None:
+    if transition.changed:
+        minutes.snapshot, budget.snapshot = (
+            transition.minutes.as_dict(),
+            transition.budget.as_dict(),
+        )
+        minutes.revision += 1
+        budget.revision += 1
+
+
+class ConversationInferenceWorker:
+    def __init__(
+        self,
+        sessions: async_sessionmaker[AsyncSession],
+        storage: PrivateLocalRecordingStorage,
+        broker: InferenceBroker,
+    ) -> None:
+        self.sessions, self.storage, self.broker = sessions, storage, broker
+
+    async def claim(self) -> Work | None:
+        async with self.sessions() as db, db.begin():
+            recovery = await RecoveryStateRepository(db).require_ready(lock=True, shared_lock=True)
+            jobs = await JobRepository(db).claim(kinds=(INFERENCE_JOB,), limit=1, lease_for=_LEASE)
+            if not jobs:
+                return None
+            job = jobs[0]
+            if job.lease_token is None:
+                raise ConversationConflict("The provider job has no lease.")
+            return Work(job.id, job.lease_token, recovery.generation, job.kind)
+
+    async def _locked_job(self, db: AsyncSession, work: Work) -> Job:
+        await RecoveryStateRepository(db).require_ready(
+            expected_generation=work.recovery_generation,
+            lock=True,
+            shared_lock=True,
+        )
+        job = await db.scalar(
+            select(Job)
+            .where(Job.id == work.job_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if (
+            job is None
+            or job.kind != INFERENCE_JOB
+            or not job.external_side_effect
+            or job.lease_token != work.lease_token
+            or job.status != "leased"
+            or job.recovery_generation != work.recovery_generation
+        ):
+            raise ConversationConflict("The provider job was fenced.")
+        await JobRepository(db).renew(job, work.lease_token, lease_for=_LEASE)
+        return job
+
+    async def _scope(self, db: AsyncSession, job: Job) -> Scope:
+        if (
+            set(job.payload) != {"schema", "run_id"}
+            or type(job.payload["schema"]) is not int
+            or job.payload["schema"] != 1
+        ):
+            raise ConversationDenied("The provider job intent is invalid.")
+        identifier = UUID(job.payload["run_id"])
+        task = await db.scalar(
+            select(ConversationInferenceTask)
+            .where(
+                ConversationInferenceTask.run_id == identifier,
+                ConversationInferenceTask.job_id == job.id,
+                ConversationInferenceTask.tenant_id == job.tenant_id,
+            )
+            .execution_options(populate_existing=True)
+        )
+        if task is None or task.erased_at is not None or task.state not in {"queued", "running"}:
+            raise ConversationDenied("The provider task is no longer active.")
+        application = ConversationApplication(db)
+        actor = ActorContext(task.person_id, task.session_id, task.tenant_id)
+        now = await application.admit(actor)
+        await application.get(actor, task.recording_id)
+        recording = await application._recording(actor, task.recording_id)
+        # Match command lock order: owner/session -> recording -> task.
+        # Locking the task before its owner could deadlock a duplicate upload click.
+        task = await db.scalar(
+            select(ConversationInferenceTask)
+            .where(ConversationInferenceTask.run_id == identifier)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if task is None or task.erased_at is not None or task.state not in {"queued", "running"}:
+            raise ConversationDenied("The provider task is no longer active.")
+        run = await db.scalar(
+            select(ConversationRun)
+            .where(
+                ConversationRun.id == task.run_id,
+                ConversationRun.job_id == job.id,
+                ConversationRun.tenant_id == task.tenant_id,
+                ConversationRun.person_id == task.person_id,
+                ConversationRun.recording_id == recording.id,
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if (
+            recording.state != "ready"
+            or recording.generation != task.generation
+            or task.stage != "C2"
+            or run is None
+            or run.state not in {"queued", "running"}
+            or run.recipe_revision != TRANSCRIPT_RECIPE
+            or run.generation != task.generation
+        ):
+            raise ConversationConflict("The recording or provider run changed.")
+        service = ConversationInference(application)
+        plan = await service.plan_transcription(recording)
+        if (
+            task.intent is None
+            or content_hash(task.intent) != task.intent_sha256
+            or task.intent_sha256 != content_hash(plan.intent())
+            or task.cache_key != plan.checkpoint.cache_key
+            or task.input_sha256 != plan.prepared.input_sha256
+        ):
+            raise ConversationConflict("The immutable provider input changed.")
+        quoted, _, _ = await service._quote(
+            actor,
+            recording,
+            task.quote_id,
+            plan,
+            now,
+            require_acceptance=True,
+        )
+        return Scope(task, recording, run, quoted, plan)
+
+    def _audio(self, recording: ConversationRecording) -> bytes:
+        if recording.source_bytes > MAX_AUDIO_BYTES:
+            raise StorageError("provider_audio_too_large")
+        audio = b"".join(
+            self.storage.iter_bytes(
+                ObjectKey(recording.tenant_id, recording.id, recording.id, ObjectKind.SOURCE_AUDIO),
+                expected_sha256=recording.source_sha256,
+            )
+        )
+        if len(audio) != recording.source_bytes:
+            raise StorageError("provider_audio_size_mismatch")
+        return audio
+
+    def _save_raw(self, scope: Scope, result: ProviderResult) -> None:
+        self.storage.put(
+            ObjectKey(
+                scope.task.tenant_id,
+                scope.recording.id,
+                scope.task.run_id,
+                ObjectKind.PROVIDER_RESPONSE,
+            ),
+            (result.raw_json,),
+            expected_sha256=result.response_sha256,
+            expected_bytes=len(result.raw_json),
+        )
+
+    async def _dispatch(self, work: Work) -> None:
+        # Both media erasure and inference hold this fence BEFORE locking DB rows.
+        async with _FencedExecutor(self.storage.root) as fenced:
+            async with self.sessions() as db, db.begin():
+                job = await self._locked_job(db, work)
+                if job.provider_receipt is not None:
+                    # Receipt + checkpoint + completed run were committed together.
+                    await JobRepository(db).complete(job, work.lease_token)
+                    return
+                if job.dispatch_started_at is not None:
+                    raise ConversationConflict("A previous provider dispatch needs reconciliation.")
+                scope = await self._scope(db, job)
+                audio = await fenced.run(self._audio, scope.recording)
+                service = ConversationInference(ConversationApplication(db))
+                minutes, budget = await service.accounts(scope.recording, scope.quoted)
+                before = MinuteAccount.from_dict(minutes.snapshot)
+                reservation = next(
+                    (r for r in before.reservations if r.reservation_id == str(scope.task.run_id)),
+                    None,
+                )
+                if reservation is None or reservation.state != "reserved":
+                    raise ConversationConflict("The provider budget is already dispatched or held.")
+                key = job.dedupe_key
+                transition = mark_dispatched(
+                    before,
+                    BudgetAccount.from_dict(budget.snapshot),
+                    str(scope.task.run_id),
+                    key,
+                    int(datetime.now(UTC).timestamp()),
+                )
+                save_accounts(minutes, budget, transition)
+                await JobRepository(db).record_dispatch_started(
+                    job,
+                    work.lease_token,
+                    provider_idempotency_key=key,
+                    recovery_generation=work.recovery_generation,
+                )
+                scope.task.state = scope.run.state = "running"
+                reservation = transition.reservation
+
+            async with self.sessions() as db, db.begin():
+                job = await JobRepository(db).lock_for_dispatch(
+                    work.job_id,
+                    work.lease_token,
+                    recovery_generation=work.recovery_generation,
+                    provider_idempotency_key=key,
+                )
+                scope = await self._scope(db, job)
+                # Restore, revocation and deletion wait on these canonical locks
+                # across the one bounded child-process effect.
+                async with asyncio.timeout(_EFFECT_SECONDS):
+                    result = await self.broker.execute(reservation, audio)
+                await fenced.run(self._save_raw, scope, result)
+                output = validate_scribe_result(
+                    result, scope.plan.prepared, duration_ms=scope.plan.duration_ms
+                )
+                normalized = output.data()
+                checkpoint = replace(scope.plan.checkpoint, payload_sha256=content_hash(normalized))
+                row = ConversationCheckpoint(
+                    id=uuid4(),
+                    tenant_id=scope.task.tenant_id,
+                    person_id=scope.task.person_id,
+                    recording_id=scope.recording.id,
+                    cache_key=checkpoint.cache_key,
+                    manifest_sha256=checkpoint.manifest_sha256,
+                    payload_sha256=checkpoint.payload_sha256,
+                    stage="C2",
+                    feature_blob_id=None,
+                    manifest=checkpoint.as_dict(),
+                    payload=normalized,
+                    created_at=datetime.now(UTC),
+                )
+                db.add(row)
+                await db.flush()
+                scope.task.checkpoint_id = row.id
+                scope.task.state = scope.run.state = "completed"
+                scope.run.completed_at = datetime.now(UTC)
+                receipt: dict[str, Any] = {
+                    "schema": "ac.sales-xray.provider-receipt/1",
+                    "idempotency_key": key,
+                    "provider": result.provider,
+                    "model": result.model,
+                    "input_sha256": result.input_sha256,
+                    "response_sha256": result.response_sha256,
+                    "provider_request_id": output.request_id,
+                    "checkpoint_id": str(row.id),
+                    "checkpoint_manifest_sha256": checkpoint.manifest_sha256,
+                    "raw_blob_id": str(scope.task.run_id),
+                    "usage": dict(output.usage),
+                    "cost_state": "reconciliation_required",
+                    "actual_cost_paise": None,
+                    "validation": "transcript_schema_and_source_binding",
+                    "human_approved": False,
+                }
+                await JobRepository(db).record_receipt(job, work.lease_token, receipt)
+                service = ConversationInference(ConversationApplication(db))
+                minutes, budget = await service.accounts(scope.recording, scope.quoted)
+                transition = mark_uncertain(
+                    MinuteAccount.from_dict(minutes.snapshot),
+                    BudgetAccount.from_dict(budget.snapshot),
+                    str(scope.task.run_id),
+                    f"provider-cost-reconciliation:{scope.task.run_id}",
+                )
+                save_accounts(minutes, budget, transition)
+
+            # A crash here only loses acknowledgement, never the saved provider result.
+            async with self.sessions() as db, db.begin():
+                await JobRepository(db).complete(work.job_id, work.lease_token)
+
+    async def _fail(self, work: Work) -> None:
+        async with self.sessions() as db, db.begin():
+            job = await self._locked_job(db, work)
+            if job.provider_receipt is not None:
+                await JobRepository(db).complete(job, work.lease_token)
+                return
+            ambiguous = job.dispatch_started_at is not None
+            task = await db.scalar(
+                select(ConversationInferenceTask)
+                .where(
+                    ConversationInferenceTask.job_id == job.id,
+                )
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+            if task is not None:
+                run = await db.get(ConversationRun, task.run_id)
+                recording = await db.get(ConversationRecording, task.recording_id)
+                quoted = await db.get(ConversationQuote, task.quote_id)
+                if task.state != "cancelled":
+                    task.state = "uncertain" if ambiguous else "failed"
+                if run is not None and run.state not in {"cancelled", "completed"}:
+                    run.state = "failed"
+                if recording is not None and quoted is not None:
+                    minutes, budget = await ConversationInference(
+                        ConversationApplication(db)
+                    ).accounts(recording, quoted)
+                    snapshot = MinuteAccount.from_dict(minutes.snapshot)
+                    existing = next(
+                        (r for r in snapshot.reservations if r.reservation_id == str(task.run_id)),
+                        None,
+                    )
+                    if existing is not None and existing.state in {"reserved", "in_flight"}:
+                        if ambiguous and existing.state == "in_flight":
+                            transition = mark_uncertain(
+                                snapshot,
+                                BudgetAccount.from_dict(budget.snapshot),
+                                str(task.run_id),
+                                f"provider-outcome-reconciliation:{task.run_id}",
+                            )
+                            save_accounts(minutes, budget, transition)
+                        elif not ambiguous and existing.state == "reserved":
+                            transition = release(
+                                snapshot,
+                                BudgetAccount.from_dict(budget.snapshot),
+                                str(task.run_id),
+                                f"provider-not-dispatched:{task.run_id}",
+                            )
+                            save_accounts(minutes, budget, transition)
+            await JobRepository(db).fail(
+                job,
+                work.lease_token,
+                "conversation_provider_execution_unresolved",
+                permanent=True,
+                ambiguous=ambiguous,
+            )
+
+    async def run_once(self) -> bool:
+        work = await self.claim()
+        if work is None:
+            return False
+        try:
+            await self._dispatch(work)
+        except BaseException as error:
+            # A failed cleanup may itself be fenced by restore/lease loss. The
+            # dispatch marker still quarantines the job on the next claim.
+            cleanup = asyncio.create_task(self._fail(work))
+            await _drain(cleanup)
+            if isinstance(error, (asyncio.CancelledError, KeyboardInterrupt, SystemExit)):
+                raise
+        return True
