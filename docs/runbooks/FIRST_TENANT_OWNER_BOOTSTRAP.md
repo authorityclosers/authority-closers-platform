@@ -85,6 +85,50 @@ migration path, restarts the exact images, and reruns release/route/OAuth proof.
 Without `-ReapplyConfiguration`, an already-current SHA remains a read-only
 verification no-op.
 
+## Held verification-email bootstrap for the initial activation hold
+
+This is a bounded identity delivery recovery command. It is source-owned and
+does not claim that production is launched or that recovery is reconciled. It
+exists for the initial empty-environment deadlock while
+`operations_recovery_state` is still generation `1`, status `held`, with hold
+reason `initial_activation_requires_reconciliation`.
+
+Run normal password registration first. The command accepts only the exact
+active, unverified person, one unconsumed and unexpired verification challenge,
+and its canonical pending verification event. It creates no person,
+credential, challenge, membership, session, or identity assertion. It creates
+the durable `outbox:<event-uuid>` job when needed, appends one immutable
+operator audit intent, and keeps the global recovery hold in place:
+
+```sh
+python -m ac_platform.bootstrap.verification_email_cli \
+  --environment production \
+  --allow-production \
+  --person-id <exact-person-uuid> \
+  --challenge-id <exact-active-challenge-uuid> \
+  --command-id <stable-reviewed-command-uuid> \
+  --expected-email <exact-canonical-email> \
+  --operator-reference <non-secret-approved-reference> \
+  --reason "Approved initial activation verification delivery"
+```
+
+Staging and production require the reviewed Resend provider and valid sender
+configuration before any database intent is written. The provider key is
+`outbox:<event-uuid>`; the challenge ID is never used as an external
+idempotency key. A 120-second job lease and 30-second provider timeout bound
+the dispatch. A receipt is persisted before success is reported. Replaying the
+same command ID returns the stored receipt without a second provider delivery;
+an expired, consumed, superseded, restored-generation, or ambiguous challenge
+remains refused or quarantined for normal audited reconciliation. Never print
+the verification token. After mailbox verification, use the normal
+authenticated Google linking flow and then the existing owner bootstrap.
+
+The disposable PostgreSQL proof is
+`tests/integration/test_verification_email_postgresql.py`; it covers the held
+send, normal token consumption, replay, expired/consumed/restored refusal, and
+durable ambiguity quarantine. The proof uses a random schema and must be run
+only against the dedicated disposable PostgreSQL target.
+
 An installed but held empty environment is not a completed production launch.
 Email activation, production consent/content, additional membership and scoped
 capability provisioning, and enabled media/practice providers remain separate
