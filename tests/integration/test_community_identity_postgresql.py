@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import importlib
+import importlib.util
 import json
 from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
+from types import ModuleType
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -61,6 +63,18 @@ from tests.integration.test_studio_draft_authoring_postgresql import seed
 NOW = datetime(2026, 9, 10, 12, tzinfo=UTC)
 BASE_DAY = date(2026, 9, 8)
 WEEK_START = date(2026, 9, 7)
+
+
+def _load_global_identity_migration() -> ModuleType:
+    migration_path = (
+        Path(__file__).resolve().parents[2]
+        / "db/migrations/versions/20260910_0028_global_community_identity.py"
+    )
+    spec = importlib.util.spec_from_file_location("global_identity_migration_test", migration_path)
+    assert spec is not None and spec.loader is not None
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    return migration
 
 
 async def _event_count(database: AsyncSession, tenant_id: UUID, action: str) -> int:
@@ -773,9 +787,7 @@ def test_community_profile_migrations_match_orm_metadata(  # noqa: F811
 def test_global_username_migration_preflight_reports_both_collision_classes(
     postgres_harness, monkeypatch: pytest.MonkeyPatch
 ) -> None:  # noqa: F811
-    migration = importlib.import_module(
-        "db.migrations.versions.20260910_0028_global_community_identity"
-    )
+    migration = _load_global_identity_migration()
 
     async def run() -> None:
         engine = create_async_engine(postgres_harness.schema_url, hide_parameters=True)
@@ -850,9 +862,7 @@ def test_global_username_migration_preflight_reports_both_collision_classes(
 def test_global_username_migration_backfills_unambiguous_legacy_history(
     postgres_harness, monkeypatch: pytest.MonkeyPatch
 ) -> None:  # noqa: F811
-    migration = importlib.import_module(
-        "db.migrations.versions.20260910_0028_global_community_identity"
-    )
+    migration = _load_global_identity_migration()
 
     async def run() -> None:
         engine = create_async_engine(postgres_harness.schema_url, hide_parameters=True)
