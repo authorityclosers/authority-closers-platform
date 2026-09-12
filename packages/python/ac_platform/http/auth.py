@@ -1103,6 +1103,10 @@ _LEARNER_COURSE_INTENT = "authority-closers-free-course"
 _LEARNER_COURSE_RETURN_PATHS = frozenset(
     f"{path}?course={_LEARNER_COURSE_INTENT}" for path in ("/home", "/onboarding")
 )
+_LEARNER_ACTIVITY_RETURN_PATH = re.compile(
+    r"/onboarding\?(?:course=(?P<course>authority-closers-free-course)&)?"
+    r"activity=(?P<activity>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"
+)
 
 
 def _learner_oauth_recovery_response(
@@ -1121,6 +1125,11 @@ def _learner_oauth_recovery_response(
     parameters: dict[str, str] = {"result": result}
     if transaction_return_path in _LEARNER_COURSE_RETURN_PATHS:
         parameters["course"] = _LEARNER_COURSE_INTENT
+    activity_return = _LEARNER_ACTIVITY_RETURN_PATH.fullmatch(transaction_return_path or "")
+    if activity_return:
+        parameters["activity"] = activity_return["activity"]
+        if activity_return["course"]:
+            parameters["course"] = _LEARNER_COURSE_INTENT
     location = f"{_surface_origin(settings, 'learner')}/auth/callback?{urlencode(parameters)}"
     response = RedirectResponse(location, status_code=status.HTTP_303_SEE_OTHER)
     _delete_oauth_transaction_cookies(response, settings, transaction_cookie_names)

@@ -10,7 +10,11 @@ import Link from "next/link";
 import { AuthFlowPage } from "../../components/auth-flow-page";
 import { SurfaceStatePanel } from "../../components/surface-state";
 import { ROUTES } from "../../lib/routes";
-import { courseIntentHref, parseCourseIntent } from "../../lib/course-intent";
+import { parseCourseIntent } from "../../lib/course-intent";
+import {
+  activityIntentHref,
+  parseActivityIntent,
+} from "../../lib/activity-intent";
 import {
   isContentVisible,
   parseSurfaceState,
@@ -22,6 +26,7 @@ type CallbackPageProps = {
     result?: QueryValue;
     state?: QueryValue;
     course?: QueryValue;
+    activity?: QueryValue;
   }>;
 };
 
@@ -106,16 +111,22 @@ export default async function CallbackPage({
   const state = parseSurfaceState(query.state);
   const result = parseCallbackResult(query.result);
   const courseIntent = parseCourseIntent(query.course);
-  const loginHref = courseIntentHref(ROUTES.login, courseIntent);
+  const activityIntent = parseActivityIntent(query.activity);
+  const loginHref = activityIntentHref(
+    ROUTES.login,
+    activityIntent,
+    courseIntent,
+  );
   const recovery = result ? callbackResults[result] : null;
   const recoveryHref =
     recovery?.actionHref === ROUTES.login ||
     recovery?.actionHref === ROUTES.register
-      ? courseIntentHref(recovery.actionHref, courseIntent)
+      ? activityIntentHref(recovery.actionHref, activityIntent, courseIntent)
       : recovery?.actionHref;
   const retryParameters = new URLSearchParams();
   if (result) retryParameters.set("result", result);
   if (courseIntent) retryParameters.set("course", courseIntent);
+  if (activityIntent) retryParameters.set("activity", activityIntent);
   const retryHref = `${ROUTES.callback}${retryParameters.size ? `?${retryParameters}` : ""}`;
   const RecoveryIcon = recovery?.icon ?? ShieldCheck;
 

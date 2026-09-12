@@ -5,6 +5,7 @@ export type ActivityIntent = string | null;
 
 type ActivityIntentRoute =
   | typeof ROUTES.login
+  | typeof ROUTES.register
   | typeof ROUTES.sessionExpired
   | typeof ROUTES.onboarding;
 

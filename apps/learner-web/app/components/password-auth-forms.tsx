@@ -18,7 +18,11 @@ import {
 } from "react";
 
 import { googleAuthReturnPath, googleAuthStartUrl } from "../lib/auth-links";
-import { courseIntentHref, type CourseIntent } from "../lib/course-intent";
+import { type CourseIntent } from "../lib/course-intent";
+import {
+  activityIntentHref,
+  type ActivityIntent,
+} from "../lib/activity-intent";
 import { createLearnerApi } from "../lib/learner-api";
 import { ROUTES } from "../lib/routes";
 import {
@@ -51,15 +55,21 @@ const registrationServerHydrated = () => false;
 
 export function RegistrationForm({
   courseIntent = null,
+  activityIntent = null,
 }: {
   courseIntent?: CourseIntent;
+  activityIntent?: ActivityIntent;
 }) {
   const hydrated = useSyncExternalStore(
     subscribeRegistrationHydration,
     registrationClientHydrated,
     registrationServerHydrated,
   );
-  const loginHref = courseIntentHref(ROUTES.login, courseIntent);
+  const loginHref = activityIntentHref(
+    ROUTES.login,
+    activityIntent,
+    courseIntent,
+  );
   const [pending, setPending] = useState(false);
   const [complete, setComplete] = useState(false);
   const [consentGranted, setConsentGranted] = useState(false);
@@ -254,7 +264,7 @@ export function RegistrationForm({
       </div>
       <form
         className="stack-form"
-        action={googleAuthStartUrl("register", courseIntent)}
+        action={googleAuthStartUrl("register", courseIntent, activityIntent)}
         method="get"
       >
         <input type="hidden" name="action" value="register" />
@@ -262,7 +272,7 @@ export function RegistrationForm({
         <input
           type="hidden"
           name="return_path"
-          value={googleAuthReturnPath("register", courseIntent)}
+          value={googleAuthReturnPath("register", courseIntent, activityIntent)}
         />
         <input
           type="hidden"

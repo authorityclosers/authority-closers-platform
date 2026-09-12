@@ -840,6 +840,67 @@ def test_google_recovery_preserves_only_signed_allowlisted_course_context(
     assert "ac_session" not in response.cookies
 
 
+@pytest.mark.parametrize(
+    ("return_path", "expected_context"),
+    [
+        (
+            "/onboarding?activity=86f7efee-f504-4d6f-b4bc-9b3cb84ba2be",
+            {"activity": ["86f7efee-f504-4d6f-b4bc-9b3cb84ba2be"]},
+        ),
+        (
+            "/onboarding?course=authority-closers-free-course"
+            "&activity=86f7efee-f504-4d6f-b4bc-9b3cb84ba2be",
+            {
+                "course": ["authority-closers-free-course"],
+                "activity": ["86f7efee-f504-4d6f-b4bc-9b3cb84ba2be"],
+            },
+        ),
+        ("/onboarding?activity=https%3A%2F%2Foutside.example", {}),
+        ("/settings?activity=86f7efee-f504-4d6f-b4bc-9b3cb84ba2be", {}),
+        ("/onboarding?activity=86f7efee-f504-4d6f-b4bc-9b3cb84ba2be&activity=other", {}),
+        ("/onboarding?activity=86f7efee-f504-4d6f-b4bc-9b3cb84ba2be&extra=true", {}),
+        ("/onboarding?activity=86f7efee%2Df504-4d6f-b4bc-9b3cb84ba2be", {}),
+        ("/onboarding?course=other&activity=86f7efee-f504-4d6f-b4bc-9b3cb84ba2be", {}),
+    ],
+)
+def test_google_activity_recovery_uses_only_bounded_signed_navigation(
+    return_path: str,
+    expected_context: dict[str, list[str]],
+) -> None:
+    client = _client(provider=_SuccessfulProvider())
+    started = client.get(
+        "/v1/auth/google/start",
+        params={"action": "authenticate", "surface": "learner", "return_path": return_path},
+        follow_redirects=False,
+    )
+    assert started.status_code == 303
+    transaction = AuthTransactionCodec(TEST_TRANSACTION_KEY).decode(
+        started.cookies["ac_oauth_transaction"]
+    )
+    response = client.get(
+        "/v1/auth/google/callback",
+        params={
+            "state": transaction.state,
+            "error": "access_denied",
+            "activity": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "return_path": "/settings",
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    location = urlsplit(response.headers["location"])
+    assert (location.scheme, location.netloc, location.path) == (
+        "https",
+        "app.authorityclosers.test",
+        "/auth/callback",
+    )
+    assert parse_qs(location.query) == {"result": ["provider_rejected"], **expected_context}
+    assert response.headers["cache-control"] == "no-store"
+    assert 'ac_oauth_transaction=""' in response.headers["set-cookie"]
+    assert "ac_session" not in response.cookies
+    assert _IdentityApplication.registered_provider_calls == []
+
+
 def test_course_return_keeps_unknown_google_identity_behind_explicit_registration(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -873,7 +934,16 @@ def test_course_return_keeps_unknown_google_identity_behind_explicit_registratio
     assert _IdentityApplication.registered_provider_calls == []
 
 
-@pytest.mark.parametrize("return_path", [None, "/home?course=authority-closers-free-course"])
+@pytest.mark.parametrize(
+    "return_path",
+    [
+        None,
+        "/home?course=authority-closers-free-course",
+        "/onboarding?activity=86f7efee-f504-4d6f-b4bc-9b3cb84ba2be",
+        "/onboarding?course=authority-closers-free-course"
+        "&activity=86f7efee-f504-4d6f-b4bc-9b3cb84ba2be",
+    ],
+)
 def test_google_authenticate_callback_uses_signed_action_not_callback_query(
     monkeypatch: pytest.MonkeyPatch,
     return_path: str | None,
@@ -1650,7 +1720,16 @@ def test_oauth_transaction_secret_rotation_requires_pending_callbacks_to_restart
     assert provider.redirect_uris == []
 
 
-@pytest.mark.parametrize("return_path", [None, "/onboarding?course=authority-closers-free-course"])
+@pytest.mark.parametrize(
+    "return_path",
+    [
+        None,
+        "/onboarding?course=authority-closers-free-course",
+        "/onboarding?activity=86f7efee-f504-4d6f-b4bc-9b3cb84ba2be",
+        "/onboarding?course=authority-closers-free-course"
+        "&activity=86f7efee-f504-4d6f-b4bc-9b3cb84ba2be",
+    ],
+)
 def test_learner_google_registration_binds_consent_and_selects_public_tenant(
     return_path: str | None,
 ) -> None:

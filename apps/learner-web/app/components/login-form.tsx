@@ -11,7 +11,7 @@ import {
 } from "react";
 
 import { googleAuthStartUrl } from "../lib/auth-links";
-import { courseIntentHref, type CourseIntent } from "../lib/course-intent";
+import { type CourseIntent } from "../lib/course-intent";
 import {
   activityIntentHref,
   activityReturnHref,
@@ -75,9 +75,15 @@ export function LoginForm({
   const [passwordVisible, setPasswordVisible] = useState(false);
   const errorRef = useRef<HTMLDivElement>(null);
   const authenticateUrl = stagingBridge
-    ? stagingHref(googleAuthStartUrl("authenticate", courseIntent))
-    : googleAuthStartUrl("authenticate", courseIntent);
-  const registrationHref = courseIntentHref(ROUTES.register, courseIntent);
+    ? stagingHref(
+        googleAuthStartUrl("authenticate", courseIntent, activityIntent),
+      )
+    : googleAuthStartUrl("authenticate", courseIntent, activityIntent);
+  const registrationHref = activityIntentHref(
+    ROUTES.register,
+    activityIntent,
+    courseIntent,
+  );
 
   useEffect(() => {
     if (error) errorRef.current?.focus();
