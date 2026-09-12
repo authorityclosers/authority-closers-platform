@@ -1,0 +1,12 @@
+{
+  "native_source": "AC_AudioAtlas_v0.1_Source_and_Binaries.zip / AC_AudioAtlas_v0_1/src/dsp.cpp",
+  "legacy_sha256": "40b8b05256986da5eb5d49c3b3cb48c52d511117ecf2e59d56849457cb12fae3",
+  "copied_sha256": "40b8b05256986da5eb5d49c3b3cb48c52d511117ecf2e59d56849457cb12fae3",
+  "modified": false,
+  "other_inspected_sources": [
+    "AC_SignalLab_v0.3_App_Source.zip",
+    "AC_AudioAtlas_Review_Kit_v1.0.zip",
+    "AC_SignalLab_Complete_Specification_Review_Pack.zip"
+  ],
+  "SignalLab": "Inspected as a distinct engine with different window/profile semantics. Not silently substituted into AudioAtlas measurements. Video adapter planned."
+}
