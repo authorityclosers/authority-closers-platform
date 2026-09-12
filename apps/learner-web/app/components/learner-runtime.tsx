@@ -68,6 +68,11 @@ import {
 } from "../lib/local-drafts";
 import { ROUTES } from "../lib/routes";
 import { courseIntentHref, parseCourseIntent } from "../lib/course-intent";
+import {
+  activityIntentHref,
+  parseActivityIntent,
+  type ActivityIntent,
+} from "../lib/activity-intent";
 import { firstActionableActivity } from "../lib/next-learning-action";
 import { userFacingRequestError } from "../lib/user-facing-error";
 import {
@@ -116,11 +121,13 @@ function StateMessage({
   retry,
   pageTitle,
   pageHeadingPresent = false,
+  activityIntent = null,
 }: {
   state: LoadState<unknown>;
   retry?: () => void;
   pageTitle: string;
   pageHeadingPresent?: boolean;
+  activityIntent?: ActivityIntent;
 }) {
   const Heading = pageHeadingPresent ? "h3" : "h1";
   if (state.status === "loading") {
@@ -167,7 +174,7 @@ function StateMessage({
       {needsSignIn ? (
         <Link
           className="button button--small button--ink"
-          href={ROUTES.sessionExpired}
+          href={activityIntentHref(ROUTES.sessionExpired, activityIntent)}
         >
           Sign in again
         </Link>
@@ -2639,7 +2646,11 @@ export function ConnectedActivityWorkspace({
           <div className="activity-path-recovery" role="alert">
             <p>{errorText(learningPathError)}</p>
             {isSessionExpiredError(learningPathError) ? (
-              <Link href={ROUTES.sessionExpired}>Sign in again</Link>
+              <Link
+                href={activityIntentHref(ROUTES.sessionExpired, activity.id)}
+              >
+                Sign in again
+              </Link>
             ) : isForbiddenError(learningPathError) ? (
               <a href={LEARNER_SUPPORT_HREF}>Contact learner support</a>
             ) : onRetryLearningPath ? (
@@ -3073,7 +3084,10 @@ export function ConnectedActivityWorkspace({
           </div>
         ) : null}
         {reauthRequired ? (
-          <Link className="button button--ink" href={ROUTES.sessionExpired}>
+          <Link
+            className="button button--ink"
+            href={activityIntentHref(ROUTES.sessionExpired, activity.id)}
+          >
             Sign in again
           </Link>
         ) : null}
@@ -3101,7 +3115,11 @@ export function ConnectedActivityWorkspace({
             <div className="activity-module-panel__loading" role="alert">
               <p>{errorText(learningPathError)}</p>
               {isSessionExpiredError(learningPathError) ? (
-                <Link href={ROUTES.sessionExpired}>Sign in again</Link>
+                <Link
+                  href={activityIntentHref(ROUTES.sessionExpired, activity.id)}
+                >
+                  Sign in again
+                </Link>
               ) : isForbiddenError(learningPathError) ? (
                 <a href={LEARNER_SUPPORT_HREF}>Contact learner support</a>
               ) : onRetryLearningPath ? (
@@ -3765,6 +3783,7 @@ export function LiveActivity({
       <StateMessage
         state={state}
         pageTitle="Activity"
+        activityIntent={parseActivityIntent(activityId)}
         retry={(state as LoadState<unknown> & { retry?: () => void }).retry}
       />
       {state.status === "ready" && state.value.activity ? (

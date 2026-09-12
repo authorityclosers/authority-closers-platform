@@ -13,7 +13,13 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type Ref } from "react";
 
 import { useAuthFlowProgress } from "./auth-flow-page";
-import { courseIntentHref, type CourseIntent } from "../lib/course-intent";
+import type { CourseIntent } from "../lib/course-intent";
+import {
+  activityIntentHref,
+  activityReturnHref,
+  parseActivityIntent,
+  type ActivityIntent,
+} from "../lib/activity-intent";
 import {
   ApiError,
   createLearnerApi,
@@ -366,6 +372,7 @@ export type OnboardingFormProps = {
   initialProfile?: OnboardingResponse;
   returnHref?: string;
   courseIntent?: CourseIntent;
+  activityIntent?: ActivityIntent;
 };
 
 export type OnboardingCompletionStateProps = {
@@ -396,6 +403,10 @@ export function OnboardingCompletionState({
   onEdit,
 }: OnboardingCompletionStateProps) {
   const returningToSettings = returnHref === ROUTES.settings;
+  const activityPrefix = ROUTES.activity("");
+  const returningToActivity =
+    returnHref.startsWith(activityPrefix) &&
+    parseActivityIntent(returnHref.slice(activityPrefix.length)) !== null;
 
   return (
     <div
@@ -483,7 +494,11 @@ export function OnboardingCompletionState({
         </p>
       ) : null}
       <Link className="button button--ink button--full" href={returnHref}>
-        {returningToSettings ? "Return to settings" : "Open learner home"}{" "}
+        {returningToSettings
+          ? "Return to settings"
+          : returningToActivity
+            ? "Resume activity"
+            : "Open learner home"}{" "}
         <ArrowRight size={17} aria-hidden="true" />
       </Link>
       <button
@@ -502,8 +517,14 @@ export function OnboardingForm(props: OnboardingFormProps = {}) {
     api = defaultApi,
     initialProfile,
     courseIntent = null,
-    returnHref = courseIntentHref(ROUTES.learnerHome, courseIntent),
+    activityIntent = null,
+    returnHref = activityReturnHref(activityIntent, courseIntent),
   } = props;
+  const recoveryHref = activityIntentHref(
+    ROUTES.sessionExpired,
+    returnHref === ROUTES.settings ? null : activityIntent,
+    returnHref === ROUTES.settings ? null : courseIntent,
+  );
   const initialDraft = initialProfile ? draftFrom(initialProfile) : emptyDraft;
   const [profile, setProfile] = useState<OnboardingResponse | null>(
     initialProfile ?? null,
@@ -1296,10 +1317,7 @@ export function OnboardingForm(props: OnboardingFormProps = {}) {
           Retry profile
         </button>
         {sessionExpired ? (
-          <Link
-            className="text-link"
-            href={courseIntentHref(ROUTES.sessionExpired, courseIntent)}
-          >
+          <Link className="text-link" href={recoveryHref}>
             Sign in again
           </Link>
         ) : null}
@@ -1953,10 +1971,7 @@ export function OnboardingForm(props: OnboardingFormProps = {}) {
           <strong>Profile save could not be completed</strong>
           <p>{error}</p>
           {sessionExpired ? (
-            <Link
-              className="text-link"
-              href={courseIntentHref(ROUTES.sessionExpired, courseIntent)}
-            >
+            <Link className="text-link" href={recoveryHref}>
               Sign in again
             </Link>
           ) : null}

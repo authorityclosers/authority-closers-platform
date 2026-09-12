@@ -1,7 +1,11 @@
 import { AuthFlowPage } from "../components/auth-flow-page";
 import { OnboardingForm } from "../components/onboarding-form";
 import { SurfaceStatePanel } from "../components/surface-state";
-import { courseIntentHref, parseCourseIntent } from "../lib/course-intent";
+import { parseCourseIntent } from "../lib/course-intent";
+import {
+  activityIntentHref,
+  parseActivityIntent,
+} from "../lib/activity-intent";
 import { ROUTES } from "../lib/routes";
 import {
   onboardingHref,
@@ -19,6 +23,7 @@ type OnboardingPageProps = {
     state?: QueryValue;
     return?: QueryValue;
     course?: QueryValue;
+    activity?: QueryValue;
   }>;
 };
 
@@ -28,8 +33,15 @@ export default async function OnboardingPage({
   const query = await searchParams;
   const state = parseSurfaceState(query.state);
   const returnIntent = parseOnboardingReturnIntent(query.return);
-  const courseIntent = parseCourseIntent(query.course);
-  const returnHref = onboardingReturnHref(returnIntent, courseIntent);
+  const courseIntent =
+    returnIntent === "settings" ? null : parseCourseIntent(query.course);
+  const activityIntent =
+    returnIntent === "settings" ? null : parseActivityIntent(query.activity);
+  const returnHref = onboardingReturnHref(
+    returnIntent,
+    courseIntent,
+    activityIntent,
+  );
 
   return (
     <AuthFlowPage
@@ -40,7 +52,9 @@ export default async function OnboardingPage({
       backLabel={
         returnIntent === "settings"
           ? "Back to settings"
-          : "Back to learner home"
+          : activityIntent
+            ? "Back to activity"
+            : "Back to learner home"
       }
       liveProgress
       variant="onboarding"
@@ -52,13 +66,21 @@ export default async function OnboardingPage({
     >
       <SurfaceStatePanel
         state={state}
-        retryHref={onboardingHref(returnIntent, courseIntent)}
-        signInHref={courseIntentHref(ROUTES.login, courseIntent)}
+        retryHref={onboardingHref(returnIntent, courseIntent, activityIntent)}
+        signInHref={activityIntentHref(
+          ROUTES.login,
+          activityIntent,
+          courseIntent,
+        )}
         backHref={returnHref}
         pageHeadingPresent
       />
       {isContentVisible(state) ? (
-        <OnboardingForm returnHref={returnHref} courseIntent={courseIntent} />
+        <OnboardingForm
+          returnHref={returnHref}
+          courseIntent={courseIntent}
+          activityIntent={activityIntent}
+        />
       ) : null}
     </AuthFlowPage>
   );

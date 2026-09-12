@@ -11,7 +11,7 @@ import {
   type LearnerApi,
   type LearningResponse,
 } from "../lib/learner-api";
-import { ConnectedActivityWorkspace } from "./learner-runtime";
+import { ConnectedActivityWorkspace, LiveActivity } from "./learner-runtime";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -44,6 +44,7 @@ const activity: ActivityResponse = {
 };
 const api = {} as LearnerApi;
 const NOW = new Date("2026-09-09T12:00:00Z");
+const recoveryActivityId = "86f7efee-f504-4d6f-b4bc-9b3cb84ba2be";
 
 function approvedVideo(title = activity.title): ActivityResponse {
   const key = "synthetic/presentation-lesson.mp4";
@@ -158,6 +159,116 @@ afterEach(async () => {
 });
 
 describe("activity presentation", () => {
+  it("preserves the activity in both module-path session recovery links", () => {
+    const rendered = document.createElement("div");
+    rendered.innerHTML = renderToStaticMarkup(
+      <ConnectedActivityWorkspace
+        activity={{ ...activity, id: recoveryActivityId }}
+        learningPathStatus="error"
+        learningPathError={new ApiError(401, "Synthetic expired session")}
+        api={api}
+      />,
+    );
+    const links = [...rendered.querySelectorAll<HTMLAnchorElement>("a")].filter(
+      (link) => link.textContent === "Sign in again",
+    );
+    expect(links).toHaveLength(2);
+    for (const link of links) {
+      expect(link.getAttribute("href")).toBe(
+        `/session-expired?activity=${recoveryActivityId}`,
+      );
+    }
+  });
+
+  it.each([recoveryActivityId, "//external.test"])(
+    "builds a bounded initial-load session recovery link for %s",
+    async (activityId) => {
+      const unavailableApi = {
+        me: vi
+          .fn()
+          .mockRejectedValue(new ApiError(401, "Synthetic expired session")),
+        activity: vi
+          .fn()
+          .mockRejectedValue(new ApiError(401, "Synthetic expired session")),
+        enrollFree: vi.fn(),
+        saveDraft: vi.fn(),
+        submitEvidence: vi.fn(),
+      } as unknown as LearnerApi;
+      container = document.createElement("div");
+      document.body.append(container);
+      root = createRoot(container);
+      await act(async () =>
+        root?.render(
+          <LiveActivity activityId={activityId} api={unavailableApi} />,
+        ),
+      );
+      expect(container.querySelector("a")?.getAttribute("href")).toBe(
+        activityId === recoveryActivityId
+          ? `/session-expired?activity=${recoveryActivityId}`
+          : "/session-expired",
+      );
+      expect(container.querySelector("textarea")).toBeNull();
+      expect(unavailableApi.enrollFree).not.toHaveBeenCalled();
+      expect(unavailableApi.saveDraft).not.toHaveBeenCalled();
+      expect(unavailableApi.submitEvidence).not.toHaveBeenCalled();
+    },
+  );
+
+  it("retains the response and exact activity after a draft save returns 401", async () => {
+    const response = "Synthetic reflection retained through session recovery.";
+    const saveDraft = vi
+      .fn()
+      .mockRejectedValue(new ApiError(401, "Synthetic expired session"));
+    const submitEvidence = vi.fn();
+    const onMutationCommitted = vi.fn();
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+    await act(async () =>
+      root?.render(
+        <ConnectedActivityWorkspace
+          activity={{
+            ...activity,
+            id: recoveryActivityId,
+            kind: "REFLECTION",
+            allowed_actions: ["save_draft"],
+            draft_revision: 2,
+            draft_payload: { response },
+          }}
+          api={{ saveDraft, submitEvidence } as unknown as LearnerApi}
+          onMutationCommitted={onMutationCommitted}
+        />,
+      ),
+    );
+    await act(async () =>
+      container
+        ?.querySelector("form")!
+        .dispatchEvent(
+          new Event("submit", { bubbles: true, cancelable: true }),
+        ),
+    );
+    expect(saveDraft).toHaveBeenCalledTimes(1);
+    expect(saveDraft.mock.calls[0]?.slice(0, 3)).toEqual([
+      recoveryActivityId,
+      { response },
+      2,
+    ]);
+    expect(
+      container.querySelector<HTMLTextAreaElement>("textarea")?.value,
+    ).toBe(response);
+    expect(
+      container
+        .querySelector('article.activity-shell a[href^="/session-expired"]')
+        ?.getAttribute("href"),
+    ).toBe(`/session-expired?activity=${recoveryActivityId}`);
+    const evidenceButton = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Submit evidence",
+    );
+    expect(evidenceButton?.disabled).toBe(true);
+    expect(submitEvidence).not.toHaveBeenCalled();
+    expect(onMutationCommitted).not.toHaveBeenCalled();
+  });
+
   it("renders one video title and places authored lesson notes after the player", () => {
     const html = renderToStaticMarkup(
       <ConnectedActivityWorkspace activity={activity} api={api} />,

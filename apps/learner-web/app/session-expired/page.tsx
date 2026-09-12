@@ -3,12 +3,17 @@ import { LoginForm } from "../components/login-form";
 import { ROUTES } from "../lib/routes";
 import { isStagingAuthenticatedBridge } from "../lib/dev-api-proxy";
 import { parseCourseIntent } from "../lib/course-intent";
+import { parseActivityIntent } from "../lib/activity-intent";
 import type { QueryValue } from "../lib/surface-state";
 
 export default async function SessionExpiredPage({
   searchParams = Promise.resolve({}),
-}: { searchParams?: Promise<{ course?: QueryValue }> } = {}) {
-  const courseIntent = parseCourseIntent((await searchParams).course);
+}: {
+  searchParams?: Promise<{ course?: QueryValue; activity?: QueryValue }>;
+} = {}) {
+  const query = await searchParams;
+  const courseIntent = parseCourseIntent(query.course);
+  const activityIntent = parseActivityIntent(query.activity);
   const stagingBridge = isStagingAuthenticatedBridge(
     process.env,
     process.env.NODE_ENV,
@@ -29,6 +34,7 @@ export default async function SessionExpiredPage({
         sessionExpired
         stagingBridge={stagingBridge}
         courseIntent={courseIntent}
+        activityIntent={activityIntent}
       />
     </AuthFlowPage>
   );

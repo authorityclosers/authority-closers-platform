@@ -13,6 +13,11 @@ import {
 import { googleAuthStartUrl } from "../lib/auth-links";
 import { courseIntentHref, type CourseIntent } from "../lib/course-intent";
 import {
+  activityIntentHref,
+  activityReturnHref,
+  type ActivityIntent,
+} from "../lib/activity-intent";
+import {
   ApiError,
   createLearnerApi,
   type OnboardingStatus,
@@ -31,6 +36,7 @@ type LoginFormProps = {
   sessionExpired?: boolean;
   stagingBridge?: boolean;
   courseIntent?: CourseIntent;
+  activityIntent?: ActivityIntent;
 };
 
 const STAGING_APP_ORIGIN = "https://staging.authorityclosers.com";
@@ -45,19 +51,18 @@ function stagingHref(path: string): string {
 export function routeAfterOnboarding(
   status?: OnboardingStatus,
   courseIntent: CourseIntent = null,
+  activityIntent: ActivityIntent = null,
 ): string {
-  return courseIntentHref(
-    status === "completed" || status === "skipped"
-      ? ROUTES.learnerHome
-      : ROUTES.onboarding,
-    courseIntent,
-  );
+  return status === "completed" || status === "skipped"
+    ? activityReturnHref(activityIntent, courseIntent)
+    : activityIntentHref(ROUTES.onboarding, activityIntent, courseIntent);
 }
 
 export function LoginForm({
   sessionExpired = false,
   stagingBridge = false,
   courseIntent = null,
+  activityIntent = null,
 }: LoginFormProps) {
   const hydrated = useSyncExternalStore(
     subscribeHydration,
@@ -94,10 +99,12 @@ export function LoginForm({
       try {
         const onboarding = await api.onboarding();
         window.location.assign(
-          routeAfterOnboarding(onboarding.status, courseIntent),
+          routeAfterOnboarding(onboarding.status, courseIntent, activityIntent),
         );
       } catch {
-        window.location.assign(routeAfterOnboarding(undefined, courseIntent));
+        window.location.assign(
+          routeAfterOnboarding(undefined, courseIntent, activityIntent),
+        );
       }
     } catch (requestError) {
       setError(errorMessage(requestError));

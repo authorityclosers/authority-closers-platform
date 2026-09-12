@@ -1,5 +1,10 @@
 import { ROUTES } from "./routes";
-import { courseIntentHref, type CourseIntent } from "./course-intent";
+import type { CourseIntent } from "./course-intent";
+import {
+  activityIntentHref,
+  activityReturnHref,
+  type ActivityIntent,
+} from "./activity-intent";
 import type { QueryValue } from "./surface-state";
 
 export type OnboardingReturnIntent = "home" | "settings";
@@ -14,17 +19,19 @@ export function parseOnboardingReturnIntent(
 export function onboardingReturnHref(
   intent: OnboardingReturnIntent,
   courseIntent: CourseIntent = null,
+  activityIntent: ActivityIntent = null,
 ): string {
   return intent === "settings"
     ? ROUTES.settings
-    : courseIntentHref(ROUTES.learnerHome, courseIntent);
+    : activityReturnHref(activityIntent, courseIntent);
 }
 
 export function onboardingHref(
   intent: OnboardingReturnIntent,
   courseIntent: CourseIntent = null,
+  activityIntent: ActivityIntent = null,
 ): string {
   return intent === "settings"
     ? `${ROUTES.onboarding}?return=settings`
-    : courseIntentHref(ROUTES.onboarding, courseIntent);
+    : activityIntentHref(ROUTES.onboarding, activityIntent, courseIntent);
 }
