@@ -207,16 +207,23 @@ SALES_XRAY_PARITY_NEW_TABLES = (
     "conversation_report_drafts",
 )
 SALES_XRAY_PARITY_TABLES = APP_UPDATES_PARITY_TABLES + SALES_XRAY_PARITY_NEW_TABLES
+INFERENCE_PARITY_MIGRATION_HEAD = "20260913_0031"
+INFERENCE_PARITY_CONTRACT = "ac-postgres-parity-v11"
+INFERENCE_PARITY_NEW_TABLES = ("conversation_inference_tasks",)
+INFERENCE_PARITY_TABLES = SALES_XRAY_PARITY_TABLES + INFERENCE_PARITY_NEW_TABLES
 # The first migration rehearsal is deliberately an exact reviewed transition.
 # Do not infer a source/target pair from lexical revision ordering.
 MIGRATION_REHEARSAL_SOURCE_HEAD = COMMUNITY_PARITY_MIGRATION_HEAD
 MIGRATION_REHEARSAL_TARGET_HEAD = APP_UPDATES_PARITY_MIGRATION_HEAD
 SALES_XRAY_REHEARSAL_SOURCE_HEAD = APP_UPDATES_PARITY_MIGRATION_HEAD
 SALES_XRAY_REHEARSAL_TARGET_HEAD = SALES_XRAY_PARITY_MIGRATION_HEAD
+INFERENCE_REHEARSAL_SOURCE_HEAD = SALES_XRAY_PARITY_MIGRATION_HEAD
+INFERENCE_REHEARSAL_TARGET_HEAD = INFERENCE_PARITY_MIGRATION_HEAD
 MIGRATION_REHEARSAL_PAIRS = frozenset(
     {
         (MIGRATION_REHEARSAL_SOURCE_HEAD, MIGRATION_REHEARSAL_TARGET_HEAD),
         (SALES_XRAY_REHEARSAL_SOURCE_HEAD, SALES_XRAY_REHEARSAL_TARGET_HEAD),
+        (INFERENCE_REHEARSAL_SOURCE_HEAD, INFERENCE_REHEARSAL_TARGET_HEAD),
     }
 )
 VERSIONED_PARITY_CONTRACTS = {
@@ -252,6 +259,10 @@ VERSIONED_PARITY_CONTRACTS = {
     SALES_XRAY_PARITY_MIGRATION_HEAD: (
         SALES_XRAY_PARITY_CONTRACT,
         SALES_XRAY_PARITY_TABLES,
+    ),
+    INFERENCE_PARITY_MIGRATION_HEAD: (
+        INFERENCE_PARITY_CONTRACT,
+        INFERENCE_PARITY_TABLES,
     ),
 }
 
@@ -1888,7 +1899,10 @@ def _assert_migration_rehearsal_transition(
             raise DrillError(
                 "migration rehearsal new-table contract is not the reviewed 0028/0029 pair"
             )
-    else:
+    elif (source_head, target_head) == (
+        SALES_XRAY_REHEARSAL_SOURCE_HEAD,
+        SALES_XRAY_REHEARSAL_TARGET_HEAD,
+    ):
         if source_derivations:
             raise DrillError("Sales Xray rehearsal does not accept source derivations")
         expected_new_counts = {table: 0 for table in SALES_XRAY_PARITY_NEW_TABLES}
@@ -1896,6 +1910,19 @@ def _assert_migration_rehearsal_transition(
             raise DrillError(
                 "migration rehearsal new-table contract is not the reviewed 0029/0030 pair"
             )
+    elif (source_head, target_head) == (
+        INFERENCE_REHEARSAL_SOURCE_HEAD,
+        INFERENCE_REHEARSAL_TARGET_HEAD,
+    ):
+        if source_derivations:
+            raise DrillError("Inference rehearsal does not accept source derivations")
+        expected_new_counts = {table: 0 for table in INFERENCE_PARITY_NEW_TABLES}
+        if expected_new_tables != set(expected_new_counts):
+            raise DrillError(
+                "migration rehearsal new-table contract is not the reviewed 0030/0031 pair"
+            )
+    else:
+        raise DrillError("migration rehearsal transition has no reviewed row-count contract")
     if any(
         target_counts[table] != expected_count
         for table, expected_count in expected_new_counts.items()
@@ -2389,7 +2416,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--source-migration-head",
-        choices=(MIGRATION_REHEARSAL_SOURCE_HEAD, SALES_XRAY_REHEARSAL_SOURCE_HEAD),
+        choices=(
+            MIGRATION_REHEARSAL_SOURCE_HEAD,
+            SALES_XRAY_REHEARSAL_SOURCE_HEAD,
+            INFERENCE_REHEARSAL_SOURCE_HEAD,
+        ),
         help="exact prior migration head for an explicitly reviewed isolated rehearsal",
     )
     parser.add_argument("--postgres-image", default=DEFAULT_POSTGRES_IMAGE)
