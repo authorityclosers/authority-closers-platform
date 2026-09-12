@@ -520,6 +520,7 @@ export function VerifyEmailFlow() {
 }
 
 export function PasswordResetForm() {
+  const tokenRead = useRef(false);
   const [token, setToken] = useState<string | null | undefined>(undefined);
   const [pending, setPending] = useState(false);
   const [complete, setComplete] = useState(false);
@@ -528,6 +529,8 @@ export function PasswordResetForm() {
   const errorRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (tokenRead.current) return;
+    tokenRead.current = true;
     const value = fragmentToken();
     queueMicrotask(() => setToken(value));
   }, []);
