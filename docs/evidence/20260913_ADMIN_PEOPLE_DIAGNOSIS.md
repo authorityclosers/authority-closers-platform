@@ -34,4 +34,6 @@ External evidence directory: `D:\Projects\authority-closers-release-transfer\202
 
 ## Release boundary
 
+The first real browser attempts exposed two probe/label issues before any diagnosis request: the pre-existing local sign-in button has an implicit submit type, so the probe now locates it by accessible name; the nested purpose label included option text, so the People select now names the visible label explicitly with `aria-labelledby`. The latter has a mounted regression assertion. Failed receipts are retained; they are not acceptance evidence.
+
 This is a separate follow-on to the recovery release candidate `f0a80f2ca120fb73ce17bb9cdc5b95faf490116d`. It is not included in that frozen deployment candidate. The release owner must integrate the reviewed commit and verify the exact deployed revision before claiming it live. No production database, provider, or deployment changes were made by this UI slice.

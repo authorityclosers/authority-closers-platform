@@ -218,8 +218,9 @@ function PeopleWorkspace({
               />
             </label>
             <label className="field">
-              <span>Review purpose</span>
+              <span id="people-purpose-label">Review purpose</span>
               <select
+                aria-labelledby="people-purpose-label"
                 required
                 value={purpose}
                 onChange={(event) => {

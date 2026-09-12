@@ -113,6 +113,13 @@ it("waits for verified access and never searches automatically", async () => {
   expect(host.querySelector("form")).toBeNull();
   await act(async () => pending.resolve(account));
   expect(button("Find learner").disabled).toBe(true);
+  const purposeLabel = host
+    .querySelector("select")
+    ?.getAttribute("aria-labelledby");
+  expect(purposeLabel).toBeTruthy();
+  expect(document.getElementById(purposeLabel!)?.textContent).toBe(
+    "Review purpose",
+  );
   expect(api.lookup).not.toHaveBeenCalled();
   await enterQuery();
   await submit();
