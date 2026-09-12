@@ -59,9 +59,7 @@ def _run_async[T](coroutine: Coroutine[Any, Any, T]) -> T:
 
 
 def _postgres_url() -> URL:
-    raw = os.getenv("AC_VERIFICATION_EMAIL_POSTGRES_TEST_URL") or os.getenv(
-        "AC_TEST_DATABASE_URL"
-    )
+    raw = os.getenv("AC_VERIFICATION_EMAIL_POSTGRES_TEST_URL") or os.getenv("AC_TEST_DATABASE_URL")
     if not raw:
         pytest.skip(
             "AC_VERIFICATION_EMAIL_POSTGRES_TEST_URL or AC_TEST_DATABASE_URL is not configured"
@@ -273,6 +271,7 @@ def test_held_bootstrap_receipt_replay_and_normal_token_consumption(
 ) -> None:
     engine = create_async_engine(postgres_harness, pool_size=4, max_overflow=0)
     try:
+
         async def scenario() -> None:
             case = await _seed_case(engine)
             provider = FakeEmailAdapter()
@@ -317,6 +316,7 @@ def test_held_bootstrap_receipt_replay_and_normal_token_consumption(
 def test_bootstrap_refuses_expired_consumed_and_restored_inputs(postgres_harness: URL) -> None:
     engine = create_async_engine(postgres_harness, pool_size=3, max_overflow=0)
     try:
+
         async def scenario() -> None:
             expired = await _seed_case(engine)
             sessions = async_sessionmaker(engine, expire_on_commit=False)
@@ -354,6 +354,7 @@ def test_bootstrap_refuses_expired_consumed_and_restored_inputs(postgres_harness
 def test_ambiguous_provider_receipt_is_durable_and_blocks_reclaim(postgres_harness: URL) -> None:
     engine = create_async_engine(postgres_harness, pool_size=4, max_overflow=0)
     try:
+
         async def scenario() -> None:
             case = await _seed_case(engine)
             prepared = await _prepare(engine, case)

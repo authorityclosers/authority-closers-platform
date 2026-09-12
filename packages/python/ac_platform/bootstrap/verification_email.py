@@ -262,9 +262,7 @@ class VerificationEmailBootstrapApplication:
                     replayed=True,
                 )
         person = await self._session.scalar(
-            select(Person)
-            .where(Person.id == normalized.person_id)
-            .with_for_update()
+            select(Person).where(Person.id == normalized.person_id).with_for_update()
         )
         if (
             person is None
@@ -330,7 +328,8 @@ class VerificationEmailBootstrapApplication:
             or event.aggregate_id != normalized.person_id
             or event.tenant_id is not None
             or event.payload != expected_payload
-            or event.status not in {
+            or event.status
+            not in {
                 OutboxEventStatus.PENDING.value,
                 OutboxEventStatus.PUBLISHED.value,
             }

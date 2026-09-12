@@ -104,11 +104,7 @@ async def resolve_password_message(
     if job.kind not in {PASSWORD_EMAIL_VERIFICATION_JOB, PASSWORD_EMAIL_RESET_JOB}:
         raise UnknownJobKindError(f"email route is not allowlisted: {job.kind}")
     route = next(
-        (
-            candidate
-            for candidate in OUTBOX_JOB_ROUTES.values()
-            if candidate.job_kind == job.kind
-        ),
+        (candidate for candidate in OUTBOX_JOB_ROUTES.values() if candidate.job_kind == job.kind),
         None,
     )
     if route is None:
@@ -167,6 +163,7 @@ async def resolve_password_message(
         },
         communication_class="verification_security",
     )
+
 
 # Explicit v1 read shape for the server-side recipient resolver. Lightweight
 # SQL tables avoid importing enrollment command services into the worker while
