@@ -137,6 +137,8 @@ def test_historical_and_codec_proofs_cannot_silently_lose_prerequisites() -> Non
     codec = _required_step(application, "Require codec tools for media regressions")
     assert [shlex.split(line) for line in codec["run"].splitlines()] == [
         ["set", "-euo", "pipefail"],
+        ["sudo", "apt-get", "update"],
+        ["sudo", "apt-get", "install", "--yes", "--no-install-recommends", "ffmpeg"],
         ["command", "-v", "ffmpeg"],
         ["command", "-v", "ffprobe"],
         ["ffmpeg", "-version"],

@@ -99,3 +99,10 @@ disabled, then retains the existing `ffmpeg` and `ffprobe` presence/version
 checks. This corrects the CI prerequisite; it does not relax media tests or
 change application dependencies. The failed run is retained in the recovery
 packet and the exact follow-up CI must pass before release.
+
+The subsequent full run (`34713937665`) passed 4,074 Python tests and failed
+four cases, including the strict codec-step assertion, which still expected
+only presence checks. Its expected command sequence now includes the explicit
+package installation while retaining both presence and version checks. The
+remaining migration-import and scanner-address failures are tracked in their
+separate focused repair evidence. The run did not reach the standalone gate.
