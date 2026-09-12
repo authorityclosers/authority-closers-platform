@@ -149,6 +149,15 @@ def test_existing_positional_route_keeps_uuid_validation_and_exact_schema() -> N
         route.normalize_payload({"id": identifier, "extra": "not allowed"})
 
 
+@pytest.mark.parametrize("value", [None, True, 1])
+def test_v1_allowlisted_values_reject_non_string_payloads(value: object) -> None:
+    payload: dict[str, object] = _welcome_payload()
+    payload["source"] = value
+
+    with pytest.raises(ValueError, match="source must be a string"):
+        _route().normalize_payload(payload)
+
+
 @pytest.mark.parametrize("optional", [frozenset({"id"}), frozenset({""}), frozenset({"x" * 65})])
 def test_optional_route_schema_refuses_overlap_or_unbounded_keys(optional: frozenset[str]) -> None:
     with pytest.raises(ValueError):

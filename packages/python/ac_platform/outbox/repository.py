@@ -271,11 +271,15 @@ class OutboxJobRoute:
                     normalized[key] = str(UUID(str(value)))
                 except (TypeError, ValueError, AttributeError) as error:
                     raise ValueError(f"outbox payload field {key} must be a UUID") from error
+            elif key in self.allowed_payload_values:
+                if not isinstance(value, str):
+                    raise ValueError(f"outbox payload field {key} must be a string")
+                normalized_value = _required_text(value, key, 500)
+                if normalized_value not in self.allowed_payload_values[key]:
+                    raise ValueError(f"outbox payload field {key} is not allowlisted")
+                normalized[key] = normalized_value
             elif isinstance(value, str):
                 normalized_value = _required_text(value, key, 500)
-                allowed_values = self.allowed_payload_values.get(key)
-                if allowed_values is not None and normalized_value not in allowed_values:
-                    raise ValueError(f"outbox payload field {key} is not allowlisted")
                 normalized[key] = normalized_value
             elif value is None or isinstance(value, bool | int | float):
                 normalized[key] = value

@@ -64,6 +64,32 @@ def _ready_state() -> OperationsRecoveryState:
 
 
 @pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("course", None),
+        ("course", True),
+        ("kind", 1),
+        ("activity", None),
+    ],
+)
+def test_v2_typed_context_fields_reject_non_string_payloads(
+    field: str,
+    value: object,
+) -> None:
+    payload: dict[str, object] = {
+        "challenge_id": str(uuid4()),
+        "kind": EmailChallengeKind.PASSWORD_RESET.value,
+        "course": COURSE,
+    }
+    if field == "activity":
+        payload["activity"] = str(ACTIVITY_ID)
+    payload[field] = value
+
+    with pytest.raises(ValueError, match=field):
+        OUTBOX_JOB_ROUTES[PASSWORD_EMAIL_RESET_EVENT_V2].normalize_payload(payload)
+
+
+@pytest.mark.parametrize(
     "include_activity", [False, True], ids=["course-only", "course-and-activity"]
 )
 async def test_materialize_password_email_v2_preserves_allowlisted_job_payload(

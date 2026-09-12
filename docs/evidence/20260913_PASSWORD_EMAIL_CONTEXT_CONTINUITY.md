@@ -1,13 +1,12 @@
 # Password email context continuity
 
-Date: 2026-09-13 (Asia/Kolkata). Candidate source base: `ea5998c`. Status:
-bounded implementation and validation recorded; the email delta remains
-uncommitted in the d2de worktree. This document records the email slice only;
-it is not a provider, deployment or complete new-device acceptance claim.
+Date: 2026-09-13 (Asia/Kolkata). Source base: `ea5998c`; implementation checkpoint:
+`6e4f59f`. Bounded implementation and validation are recorded. This document
+records the email slice only; it is not a provider or deployment claim.
 
 ## Exact implementation and test allowlist
 
-The current pending email delta contains these **19 implementation/test paths**.
+The email delta contains these **19 implementation/test paths**.
 Other paths in the shared worktree are unrelated and are excluded from this
 cut.
 
@@ -40,7 +39,7 @@ The evidence artifact is this additional path:
 `docs/evidence/20260913_PASSWORD_EMAIL_CONTEXT_CONTINUITY.md`.
 
 The narrow Google `registration_required` password-recovery companion was
-committed separately in `ea5998c` and is intentionally outside the pending
+committed separately in `ea5998c` and is intentionally outside the
 email commit allowlist: `apps/learner-web/app/auth/callback/page.tsx`,
 `apps/learner-web/app/components/google-activity-continuity.test.tsx` and
 `docs/evidence/20260913_GOOGLE_EXISTING_PASSWORD_RECOVERY.md`. It preserves the
@@ -147,13 +146,20 @@ four changed Python source modules.
 
 ### Deployment sequence
 
-Deploy the worker with the v2 event/job allowlists before the API and learner
-start emitting v2 requests. An old worker cannot process these new versions.
-Keep worker compatibility with v1 while existing jobs drain. This cut contains
-no migration or provider activation.
+No worker lacking the v2 event/job allowlists may consume events after the API
+starts emitting v2 requests. A rolling rollout can install compatible workers
+first. The current release installer instead stops the old worker before
+starting the new API and then starts the new worker; the durable events can
+safely queue during that interval. Keep worker compatibility with v1 while
+existing jobs drain. This cut contains no migration or provider activation.
 
-The current API process remains frozen to the release owner's prior backend
-checkpoint while the email delta is reviewed. A new-device browser receipt,
-worker execution against a running release, external email delivery and
-production deployment remain pending. The separate Sales Xray login return
-destination is a dependent follow-up and is outside this email cut.
+The local API was restarted at `6e4f59f` for acceptance. Final independent review
+identified a pre-existing non-string allowlist bypass in the outbox payload
+normalizer. The follow-up requires strings before checking allowed values and
+adds seven regressions, preserving unrelated primitive fields and UUID
+coercion. Main independently reviewed the three-path fix; the bounded run
+passed 63 tests plus Ruff/format/mypy. The final expanded auth/outbox/worker
+suite passed **193 tests** (`email-continuity-schema-python-final.log`).
+Fresh-browser acceptance must pass before handoff. External email delivery and
+production deployment remain outside this local acceptance. The separate Sales
+Xray login return destination is a dependent follow-up outside this email cut.
