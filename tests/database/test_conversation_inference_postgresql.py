@@ -74,9 +74,7 @@ async def _provider_quote(
     quoted_source_sha256 = quote_source_sha256 or source_sha256
     quote = Quote(
         quote_id=str(uuid4()),
-        source=SourceBinding(
-            str(state.tenant_id), str(recording_id), quoted_source_sha256, "1"
-        ),
+        source=SourceBinding(str(state.tenant_id), str(recording_id), quoted_source_sha256, "1"),
         account_id=str(state.person_id),
         budget_scope_id=str(scope_id),
         provider_id=provider_id,
@@ -287,9 +285,9 @@ def test_provider_rejects_wrong_source_route_or_permission_before_queue(
                 )
                 assert (
                     await database.scalar(
-                        select(func.count()).select_from(Job).where(
-                            Job.kind == "conversation.infer_provider.v1"
-                        )
+                        select(func.count())
+                        .select_from(Job)
+                        .where(Job.kind == "conversation.infer_provider.v1")
                     )
                     == 0
                 )
@@ -529,6 +527,79 @@ def test_receipt_commit_survives_ack_crash_and_restart_only_ack(
                 job = await database.get(Job, job_id)
                 assert job is not None and job.status == "succeeded"
                 assert job.provider_receipt is not None
+        finally:
+            await engine.dispose()
+
+    run(exercise())
+
+
+def test_malformed_native_result_retains_raw_receipt_without_c2_publication(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    async def exercise() -> None:
+        prepared = await prepare_local(postgres_harness, tmp_path)
+        assert await prepared.worker.run_once()
+        engine = create_async_engine(postgres_harness.url)
+        sessions = async_sessionmaker(engine, expire_on_commit=False)
+        try:
+            quote_id, quote = await _provider_quote(
+                sessions,
+                prepared.state,
+                prepared.recording_id,
+                prepared.scope_id,
+                hashlib.sha256(prepared.data).hexdigest(),
+            )
+            async with sessions() as database, database.begin():
+                service = ConversationInference(ConversationApplication(database))
+                await service.accept(
+                    prepared.state.actor,
+                    prepared.recording_id,
+                    quote_id,
+                    QuoteAcceptance(
+                        quote_fingerprint=quote.fingerprint,
+                        privacy_revision=quote.privacy_revision,
+                        accepted=True,
+                    ),
+                )
+                view = await service.request_transcription(
+                    prepared.state.actor,
+                    prepared.recording_id,
+                    quote_id,
+                    key="provider-malformed-native",
+                )
+            broker = FakeBroker(prepared.data, mode="malformed")
+            worker = ConversationInferenceWorker(sessions, prepared.storage, broker)
+            assert await worker.run_once()
+            assert broker.calls == 1 and broker.response_sha256 is not None
+            async with sessions() as database:
+                run_row = await database.get(ConversationRun, UUID(view["id"]))
+                assert run_row is not None and run_row.state == "failed"
+                task = await database.get(ConversationInferenceTask, run_row.id)
+                assert task is not None and task.state == "uncertain"
+                job = await database.get(Job, run_row.job_id)
+                assert job is not None and job.status == "dead_letter"
+                assert job.provider_receipt is None
+                assert (
+                    await database.scalar(
+                        select(func.count())
+                        .select_from(ConversationCheckpoint)
+                        .where(
+                            ConversationCheckpoint.recording_id == prepared.recording_id,
+                            ConversationCheckpoint.stage == "C2",
+                        )
+                    )
+                    == 0
+                )
+            raw_key = ObjectKey(
+                prepared.state.tenant_id,
+                prepared.recording_id,
+                UUID(view["id"]),
+                ObjectKind.PROVIDER_RESPONSE,
+            )
+            raw = b"".join(
+                prepared.storage.iter_bytes(raw_key, expected_sha256=broker.response_sha256)
+            )
+            assert b"malformed native result" in raw
         finally:
             await engine.dispose()
 
@@ -791,9 +862,10 @@ def test_successful_provider_recording_erasure_removes_bytes_and_keeps_receipts(
                 )
                 assert deletion["state"] == "deleting"
             assert await prepared.worker.run_once()
-            assert prepared.storage.list_recording(
-                prepared.state.tenant_id, prepared.recording_id
-            ) == ()
+            assert (
+                prepared.storage.list_recording(prepared.state.tenant_id, prepared.recording_id)
+                == ()
+            )
             async with sessions() as database:
                 recording = await database.get(ConversationRecording, prepared.recording_id)
                 assert recording is not None and recording.state == "deleted"
