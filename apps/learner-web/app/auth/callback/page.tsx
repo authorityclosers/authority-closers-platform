@@ -89,7 +89,7 @@ const callbackResults: Record<
     eyebrow: "Create your learner identity",
     title: "This Google account is not linked yet.",
     detail:
-      "Create your free learner account, confirm the required consent, and continue with the same Google account. We will not create an account silently from sign in.",
+      "Create your free learner account, confirm the required consent, and continue with the same Google account. We will not create an account silently from sign in. If you already use a verified email and password here, sign in with those credentials; you can connect Google later from account settings.",
     actionHref: ROUTES.register,
     actionLabel: "Create free account",
     icon: UserPlus,
@@ -180,6 +180,14 @@ export default async function CallbackPage({
               {recovery.actionLabel}
               <ArrowRight size={17} aria-hidden="true" />
             </Link>
+            {result === "registration_required" ? (
+              <Link
+                className="button button--outline button--full"
+                href={loginHref}
+              >
+                Sign in with password
+              </Link>
+            ) : null}
             <div className="boundary-card" role="note">
               <strong>Your account remains protected</strong>
               <span>
