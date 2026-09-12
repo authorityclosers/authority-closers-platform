@@ -26,7 +26,9 @@ services:
     tmpfs:
       - /tmp:rw,noexec,nosuid,nodev,size=268435456,uid=100,gid=100,mode=0700
     healthcheck:
-      test: [CMD, clamdcheck.sh]
+      # The pinned image's clamdcheck.sh resolves localhost to ::1 first,
+      # while this service intentionally exposes only the IPv4 listener.
+      test: ["CMD-SHELL", "echo PING | nc 127.0.0.1 3310 | grep -qx PONG"]
       interval: 30s
       timeout: 10s
       retries: 3
