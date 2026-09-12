@@ -304,6 +304,11 @@ export function RegistrationForm({
 }
 
 export function RecoveryRequestForm() {
+  const hydrated = useSyncExternalStore(
+    subscribeRegistrationHydration,
+    registrationClientHydrated,
+    registrationServerHydrated,
+  );
   const [pending, setPending] = useState(false);
   const [complete, setComplete] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -315,6 +320,7 @@ export function RecoveryRequestForm() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!hydrated || pending) return;
     setPending(true);
     setError(null);
     const values = new FormData(event.currentTarget);
@@ -353,7 +359,7 @@ export function RecoveryRequestForm() {
           </Link>
         </div>
       ) : (
-        <form className="stack-form" onSubmit={submit}>
+        <form className="stack-form" method="post" onSubmit={submit}>
           <p className="auth-card__intro">
             Enter the email used for your learner account. The response is
             intentionally the same for every address.
@@ -367,7 +373,7 @@ export function RecoveryRequestForm() {
               inputMode="email"
               autoComplete="email"
               required
-              disabled={pending}
+              disabled={pending || !hydrated}
             />
           </div>
           {error ? (
@@ -383,7 +389,7 @@ export function RecoveryRequestForm() {
           ) : null}
           <button
             className="button button--ink button--full"
-            disabled={pending}
+            disabled={pending || !hydrated}
           >
             {pending ? "Requesting…" : "Send recovery link"}
           </button>
