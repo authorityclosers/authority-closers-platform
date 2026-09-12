@@ -106,8 +106,6 @@ EXPECTED_PROFILE_VALUES = {
         "AC_COMPOSE_PROJECT": "ac-application-production",
         "AC_ENVIRONMENT": "production",
         "AC_STATE_ROOT": "/srv/authority-closers/state/application/production",
-        "AC_EXTERNAL_SIDE_EFFECTS_HOLD": "true",
-        "AC_EMAIL_PROVIDER": "fake",
     },
 }
 POLICY_KEYS = {
@@ -572,6 +570,11 @@ def resolve_application_release(
     for key, expected in EXPECTED_PROFILE_VALUES[environment].items():
         if profile.get(key) != expected:
             raise BackupError(f"The current {environment} application profile is not exact.")
+    # Both immutable production phases need local capture, including the held
+    # baseline before activation. Never admit a mixed hold/provider pair.
+    provider_pair = (profile.get("AC_EXTERNAL_SIDE_EFFECTS_HOLD"), profile.get("AC_EMAIL_PROVIDER"))
+    if environment == "production" and provider_pair not in {("true", "fake"), ("false", "resend")}:
+        raise BackupError("The current production application profile is not exact.")
     state_root = host_path(host_root, profile["AC_STATE_ROOT"])
     if not state_root.is_dir() or state_root.is_symlink():
         raise BackupError(f"The current {environment} application state root is absent or unsafe.")

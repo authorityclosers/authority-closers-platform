@@ -164,8 +164,8 @@ a private fresh local and remote stage, validates the GitHub artifact ZIP
 against the API's SHA-256 before inspecting its own checksum manifest, creates
 the Git archive fresh from the exact commit, and removes both stages. The
 command accepts no secret values and cannot override either environment's
-reviewed side-effect/provider profile. Production remains on the fake provider
-with external effects held.
+reviewed side-effect/provider profile. Production email activation uses a second
+immutable release after held tenant bootstrap and verified provider prerequisites.
 
 After the archive and downloaded image bundle are transferred to the VPS, run
 the installer from the verified archive. The invocation is permitted only after
@@ -243,10 +243,13 @@ register the exact same-surface callbacks for each activated app:
 
 The preflight proves configuration
 presence only; credential rotation and a real Google login/callback remain
-deployment-time operational evidence. The reviewed staging profile selects
-`AC_EMAIL_PROVIDER=resend` and releases `AC_EXTERNAL_SIDE_EFFECTS_HOLD` only
-after its Infisical provider and operations references are present. Production
-remains `fake` and held until a separately reviewed production activation gate.
+deployment-time operational evidence. The reviewed staging and production
+profiles select `AC_EMAIL_PROVIDER=resend` and `AC_EXTERNAL_SIDE_EFFECTS_HOLD=false`.
+Production requires its separately reviewed activation release after the held
+bootstrap has committed the exact active operations and public learner tenants.
+The production sender domain and prod `/application` credential/sender pair must
+be verified before deployment. Release selection is the activation boundary;
+editing a live environment or setting an unrelated secret cannot replace it.
 
 The provider port reads only the prefixed `AC_RESEND_API_KEY` and reviewed
 `AC_RESEND_FROM`; both are required when the profile selects `resend`. Compose
@@ -256,6 +259,20 @@ application's fail-safe fake-provider default without access to the Resend
 credential. The worker renders only the versioned verification, recovery, and
 enrollment service templates and forwards its durable idempotency key.
 Arbitrary campaign content is outside this release.
+
+The worker requires both the released profile and durable recovery state `READY`.
+An outstanding recovery hold remains closed until canonical audited
+reconciliation; activation must not silently release queued work outside the
+approved initial delivery scope. The source-owned profiles retain the reviewed
+consent version `ac-learner-terms-privacy-2026-09-13-v1`. The installer clears
+injected `AC_LEARNER_CONSENT_VERSION`, so a secret-store-only update cannot
+replace that reviewed contract.
+
+Install a compatible reviewed foundation before this application activation:
+the backup resolver must admit the exact held/fake baseline and released/resend
+production profile pairs. Mixed pairs remain refused. This compatibility change
+does not change capture behavior, R2 cutoffs, caching or retention; the accepted
+remote backup pause remains visible and is not a successful remote RPO proof.
 
 Learner registration also requires an exact `AC_PUBLIC_LEARNER_TENANT_ID` and
 `AC_LEARNER_CONSENT_VERSION`. The tenant must already exist and be active.
