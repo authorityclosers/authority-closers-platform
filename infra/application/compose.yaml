@@ -50,6 +50,10 @@ x-application-environment: &application-environment
   AC_MEDIA_STRESS_FIXTURES_CACHE_ROOT: ""
   AC_MEDIA_STAGING_PUBLIC_FILMS_DELIVERY_ENABLED: "false"
   AC_MEDIA_PUBLIC_FILMS_DELIVERY_ENABLED: "false"
+  AC_MEDIA_FILESYSTEM_ENABLED: "false"
+  AC_MEDIA_FILESYSTEM_ROOT: ""
+  AC_MEDIA_SCANNER_UNIX_SOCKET: ""
+  AC_MEDIA_SCANNER_HOST: ""
 
 x-migration-environment: &migration-environment
   <<: *application-environment

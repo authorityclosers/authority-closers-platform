@@ -54,6 +54,9 @@
 		header X-Authority-Closers-Route "api-production"
 		header Cache-Control "no-store"
 		header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+		request_body {
+			max_size 2000000000
+		}
 		reverse_proxy ac-production-api:8000
 	}
 	handle @admin {
@@ -74,6 +77,9 @@
 		header X-Authority-Closers-Route "api-production"
 		header Cache-Control "no-store"
 		header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+		request_body {
+			max_size 2000000000
+		}
 		reverse_proxy ac-production-api:8000
 	}
 	handle @coach {

@@ -201,11 +201,22 @@ class _StudioHandlerFactory:
         )
 
 
-def compose_local_studio_video_delivery(settings: Settings, base: MediaRuntime) -> MediaRuntime:
-    """Connect an explicit local/test upload graph to normal learner delivery."""
+def _compose_studio_video_delivery(
+    settings: Settings,
+    base: MediaRuntime,
+    *,
+    filesystem_runtime: bool,
+) -> MediaRuntime:
+    """Connect one explicit filesystem upload graph to normal learner delivery."""
     studio = base.studio_video_runtime
+    allowed_environments = {"test", "staging", "production"} if filesystem_runtime else {
+        "local",
+        "test",
+    }
     if (
-        settings.environment not in {"local", "test"}
+        settings.environment not in allowed_environments
+        or (filesystem_runtime and not settings.media_filesystem_enabled)
+        or (not filesystem_runtime and settings.environment not in {"local", "test"})
         or base.environment != settings.environment
         or studio is None
         or studio.settings is not settings
@@ -214,7 +225,9 @@ def compose_local_studio_video_delivery(settings: Settings, base: MediaRuntime) 
         or isinstance(base.authenticated_delivery_handler_factory, _StudioHandlerFactory)
     ):
         raise MediaConfigurationError(
-            "Studio delivery requires one exact local/test upload runtime."
+            "Studio delivery requires one exact filesystem upload runtime."
+            if filesystem_runtime
+            else "Studio delivery requires one exact local/test upload runtime."
         )
     studio.validate()
     origin = str(settings.public_app_url).rstrip("/")
@@ -233,6 +246,15 @@ def compose_local_studio_video_delivery(settings: Settings, base: MediaRuntime) 
         or (
             settings.environment == "local"
             and parsed.hostname not in {"localhost", "127.0.0.1", "learner.localhost"}
+        )
+        or (
+            filesystem_runtime
+            and settings.environment in {"staging", "production"}
+            and origin
+            not in {
+                "https://learner-staging.authorityclosers.com",
+                "https://learner.authorityclosers.com",
+            }
         )
         or (base.media_delivery is not None and base.media_delivery.delivery_origin != origin)
         or (
@@ -327,4 +349,21 @@ def compose_local_studio_video_delivery(settings: Settings, base: MediaRuntime) 
     )
 
 
-__all__ = ["compose_local_studio_video_delivery"]
+def compose_local_studio_video_delivery(settings: Settings, base: MediaRuntime) -> MediaRuntime:
+    """Connect an explicit local/test upload graph to normal learner delivery."""
+
+    return _compose_studio_video_delivery(settings, base, filesystem_runtime=False)
+
+
+def compose_filesystem_studio_video_delivery(
+    settings: Settings, base: MediaRuntime
+) -> MediaRuntime:
+    """Connect the deployment filesystem graph to authenticated delivery."""
+
+    return _compose_studio_video_delivery(settings, base, filesystem_runtime=True)
+
+
+__all__ = [
+    "compose_filesystem_studio_video_delivery",
+    "compose_local_studio_video_delivery",
+]

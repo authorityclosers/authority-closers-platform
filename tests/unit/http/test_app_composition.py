@@ -5,6 +5,7 @@ from typing import cast
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
+from pydantic.networks import AnyHttpUrl
 
 import ac_platform.http.app as app_module
 from ac_platform.application.settings import Settings
@@ -96,6 +97,38 @@ def test_deployment_composition_omits_unconfigured_playback_routes(
     assert "/v1/activities/{activity_id}/playback/start" not in paths
     assert "/v1/activities/{activity_id}/playback/heartbeat" not in paths
     assert "/v1/activities/{activity_id}/playback/finish" not in paths
+
+
+@pytest.mark.parametrize("environment", ["staging", "production"])
+def test_deployment_composes_explicit_filesystem_video_profile(
+    environment: str,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path,
+) -> None:
+    settings = _deployment_settings(environment).model_copy(
+        update={
+            "media_filesystem_enabled": True,
+            "media_filesystem_root": str(tmp_path / "video-objects"),
+            "media_scanner_unix_socket": "/run/ac-media-safety/clamd.sock",
+            "media_max_upload_bytes": 2_000_000_000,
+            "public_app_url": (
+                AnyHttpUrl("https://learner-staging.authorityclosers.com")
+                if environment == "staging"
+                else AnyHttpUrl("https://learner.authorityclosers.com")
+            ),
+        }
+    )
+    monkeypatch.setattr(app_module, "settings", settings)
+
+    application = create_app()
+
+    assert application.state.studio_video_worker is not None
+    assert application.state.studio_video_worker.pipeline.service.storage.max_object_bytes == (
+        2_000_000_000
+    )
+    assert application.state.studio_video_worker.pipeline.service.storage.max_store_bytes == (
+        8 * 1024**3
+    )
 
 
 @pytest.mark.parametrize("environment", ["staging", "production"])

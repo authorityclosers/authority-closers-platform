@@ -132,6 +132,12 @@ def _container(module: ModuleType, installed: Path) -> dict:
                 "Destination": "/var/lib/clamav",
                 "RW": True,
             },
+            {
+                "Type": "bind",
+                "Source": str(module.SOCKET_ROOT),
+                "Destination": "/run/ac-media-safety",
+                "RW": True,
+            },
         ],
         "State": {"Running": True, "Health": {"Status": "healthy"}},
     }

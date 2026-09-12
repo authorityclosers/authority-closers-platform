@@ -35,6 +35,7 @@ if digest.hexdigest() != expected_sha256:
 
 required_files = {
     "infra/application/compose.yaml",
+    "infra/application/compose.filesystem-media.yaml",
     "infra/application/compose.staging-public-films.yaml",
     "infra/application/capabilities/staging-public-films.json",
     "infra/application/data/alpha_public_films_12s_v1.json",

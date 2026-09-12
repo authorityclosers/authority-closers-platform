@@ -939,7 +939,41 @@ def _error_code(error: BaseException) -> str:
 
 
 async def run() -> None:
-    await DurableWorker().run()
+    settings = get_settings()
+    durable = DurableWorker(settings=settings)
+    if not settings.media_filesystem_enabled:
+        await durable.run()
+        return
+
+    # The source-owned media job has its own lease/fence protocol and must
+    # never be routed through the email dispatcher. Both loops share the same
+    # process only to keep the reviewed application worker deployment small;
+    # each retains its own bounded poll and recovery gate.
+    from ac_platform.media.runtime import create_default_media_runtime
+    from ac_platform.media.studio_video_runner import StudioVideoRunner
+
+    runtime = create_default_media_runtime(settings)
+    studio = runtime.studio_video_runtime
+    if studio is None:
+        raise RuntimeError("filesystem media worker composition is incomplete")
+    stop = asyncio.Event()
+    durable_task = asyncio.create_task(durable.run(stop_event=stop), name="durable-worker")
+    media_task = asyncio.create_task(
+        StudioVideoRunner(studio.worker).run(stop),
+        name="studio-video-worker",
+    )
+    try:
+        done, _ = await asyncio.wait(
+            (durable_task, media_task), return_when=asyncio.FIRST_EXCEPTION
+        )
+        for task in done:
+            error = task.exception()
+            if error is not None:
+                raise error
+        await asyncio.gather(durable_task, media_task)
+    finally:
+        stop.set()
+        await asyncio.gather(durable_task, media_task, return_exceptions=True)
 
 
 def main() -> None:

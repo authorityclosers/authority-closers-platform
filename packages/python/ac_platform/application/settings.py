@@ -118,6 +118,15 @@ class Settings(BaseSettings):
     media_max_processing_output_bytes: int = 4 * 1024 * 1024 * 1024
     media_max_processing_caption_bytes: int = 25 * 1024 * 1024
     media_allow_range_requests: bool = True
+    # Source-owned filesystem media is an explicit deployment profile. It is
+    # separate from provider activation and remains inert unless every path
+    # and scanner endpoint is configured together.
+    media_filesystem_enabled: bool = False
+    media_filesystem_root: str | None = None
+    media_scanner_unix_socket: str | None = None
+    media_scanner_host: str | None = None
+    media_scanner_port: int = 3310
+    media_scanner_total_timeout_seconds: float = 1800.0
     # Explicitly opt-in test fixtures are separate from provider composition.
     # They are accepted only by the staging/test fixture seam and never by
     # production runtime composition.
@@ -221,6 +230,7 @@ class Settings(BaseSettings):
         self._validate_media_stress_fixtures()
         self._validate_public_films()
         self._validate_media_provider()
+        self._validate_filesystem_media()
         if self.environment not in {"staging", "production"}:
             self._validate_google_oauth_pair()
             self._validate_email_provider()
@@ -344,6 +354,64 @@ class Settings(BaseSettings):
             MediaProviderConfig.from_settings(self)
         except (TypeError, ValueError) as error:
             raise ValueError(f"invalid media provider configuration: {error}") from error
+
+    def _validate_filesystem_media(self) -> None:
+        """Validate the explicit private filesystem media deployment profile."""
+
+        for field in (
+            "media_filesystem_root",
+            "media_scanner_unix_socket",
+            "media_scanner_host",
+        ):
+            value = getattr(self, field)
+            if isinstance(value, str) and not value.strip():
+                object.__setattr__(self, field, None)
+        configured = (
+            self.media_filesystem_root,
+            self.media_scanner_unix_socket,
+            self.media_scanner_host,
+        )
+        if not self.media_filesystem_enabled:
+            if any(value is not None and str(value).strip() for value in configured):
+                raise ValueError(
+                    "filesystem media paths require AC_MEDIA_FILESYSTEM_ENABLED=true"
+                )
+            return
+        if self.environment not in {"test", "staging", "production"}:
+            raise ValueError("filesystem media requires test, staging, or production")
+        if self.media_provider_enabled or self.media_stress_fixtures_enabled:
+            raise ValueError("filesystem media cannot share provider or fixture activation")
+        if self.media_max_upload_bytes != STUDIO_VIDEO_MAX_SOURCE_BYTES:
+            raise ValueError("filesystem media requires the exact 2,000,000,000 byte source cap")
+        root = self.media_filesystem_root
+        if (
+            not root
+            or root != root.strip()
+            or not Path(root).is_absolute()
+            or Path(root).name != "video-objects"
+            or ".." in Path(root).parts
+            or "://" in root
+            or root.startswith(("//", "\\\\"))
+            or any(ord(character) < 0x20 or ord(character) == 0x7F for character in root)
+        ):
+            raise ValueError(
+                "AC_MEDIA_FILESYSTEM_ROOT must be the absolute video-objects directory"
+            )
+        if (self.media_scanner_unix_socket is None) == (self.media_scanner_host is None):
+            raise ValueError("filesystem media requires exactly one ClamAV endpoint")
+        # A deployment uses the scanner's private mounted Unix socket. TCP is
+        # retained only for test harnesses and the existing local tunnel.
+        if (
+            self.environment in {"staging", "production"}
+            and self.media_scanner_unix_socket is None
+        ):
+            raise ValueError(
+                "staging and production filesystem media require the ClamAV Unix socket"
+            )
+        if not 1 <= self.media_scanner_port <= 65535:
+            raise ValueError("AC_MEDIA_SCANNER_PORT must be a valid TCP port")
+        if not 0 < self.media_scanner_total_timeout_seconds <= 3600:
+            raise ValueError("AC_MEDIA_SCANNER_TOTAL_TIMEOUT_SECONDS must be bounded")
 
     def _validate_media_stress_fixtures(self) -> None:
         """Keep local fixture opt-in outside production and normal local mode."""

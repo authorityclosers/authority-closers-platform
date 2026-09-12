@@ -1,0 +1,23 @@
+# Explicit companion profile for the source-owned Studio video pipeline.
+# It is never included by the foundation/default application profile. The
+# operator activates it together with the exact reviewed scanner release.
+services:
+  api:
+    environment:
+      AC_MEDIA_FILESYSTEM_ENABLED: "true"
+      AC_MEDIA_FILESYSTEM_ROOT: /var/lib/ac-media/video-objects
+      AC_MEDIA_SCANNER_UNIX_SOCKET: /run/ac-media-safety/clamd.sock
+      AC_MEDIA_MAX_UPLOAD_BYTES: "2000000000"
+    volumes:
+      - /srv/authority-closers/volumes/media-video:/var/lib/ac-media:rw
+      - /srv/authority-closers/volumes/media-safety-socket:/run/ac-media-safety:ro
+
+  worker:
+    environment:
+      AC_MEDIA_FILESYSTEM_ENABLED: "true"
+      AC_MEDIA_FILESYSTEM_ROOT: /var/lib/ac-media/video-objects
+      AC_MEDIA_SCANNER_UNIX_SOCKET: /run/ac-media-safety/clamd.sock
+      AC_MEDIA_MAX_UPLOAD_BYTES: "2000000000"
+    volumes:
+      - /srv/authority-closers/volumes/media-video:/var/lib/ac-media:rw
+      - /srv/authority-closers/volumes/media-safety-socket:/run/ac-media-safety:ro

@@ -27,6 +27,7 @@ from pathlib import Path, PurePosixPath
 
 ROOT = Path("/srv/authority-closers/media-safety")
 DATABASE = Path("/srv/authority-closers/volumes/media-safety-signatures")
+SOCKET_ROOT = Path("/srv/authority-closers/volumes/media-safety-socket")
 CONTAINER = "ac-media-safety-scanner"
 DOCKER_HOST = "unix:///var/run/docker.sock"
 DIGEST = "sha256:5a7c486fc98339860373284f48a670b74b1f25f15812b327fbe5b684061cf42f"
@@ -47,7 +48,9 @@ EXPECTED_BIND_DESTINATIONS = {
     "/etc/clamav/clamd.conf",
     "/etc/clamav/freshclam.conf",
     "/var/lib/clamav",
+    "/run/ac-media-safety",
 }
+LEGACY_BIND_DESTINATIONS = EXPECTED_BIND_DESTINATIONS - {"/run/ac-media-safety"}
 EXPECTED_TMPFS_DESTINATION = "/tmp"  # noqa: S108 - fixed container tmpfs mount
 EXPECTED_TMPFS_OPTIONS = frozenset(
     {"rw", "noexec", "nosuid", "nodev", "size=268435456", "uid=100", "gid=100", "mode=0700"}
@@ -238,8 +241,12 @@ def validate_container(
             "Unexpected or duplicate scanner mount",
         )
         mounts[destination] = item
+    socket_required = "/run/ac-media-safety" in (installed / "compose.yaml").read_text(
+        encoding="utf-8"
+    )
     require(
-        set(mounts) == EXPECTED_BIND_DESTINATIONS,
+        set(mounts)
+        == (EXPECTED_BIND_DESTINATIONS if socket_required else LEGACY_BIND_DESTINATIONS),
         "Unexpected scanner mounts",
     )
     # Docker represents Compose tmpfs mounts in HostConfig.Tmpfs, separately
@@ -275,6 +282,27 @@ def validate_container(
         and database_mount.get("Source") == str(DATABASE)
         and database_mount.get("RW") is True,
         "Signature storage is not writable or drifted",
+    )
+    if socket_required:
+        socket_mount = mounts["/run/ac-media-safety"]
+        require(
+            socket_mount.get("Type") == "bind"
+            and socket_mount.get("Source") == str(SOCKET_ROOT)
+            and socket_mount.get("RW") is True,
+            "Scanner socket storage is not writable or drifted",
+        )
+
+
+def ensure_socket_root() -> None:
+    """Create the fixed scanner socket directory before a release transition."""
+
+    if not SOCKET_ROOT.exists():
+        SOCKET_ROOT.mkdir(mode=0o755)
+        os.chown(SOCKET_ROOT, 100, 100)
+    info = SOCKET_ROOT.lstat()
+    require(
+        stat.S_ISDIR(info.st_mode) and info.st_uid == 100 and not info.st_mode & 0o022,
+        "Untrusted scanner socket directory",
     )
 
 
@@ -429,10 +457,10 @@ def prove(release: str, installed: Path) -> dict:
         "environment": "local",
         "host": "127.0.0.1",
         "port": 13310,
-        "max_source_bytes": 100 * MIB,
-        "stream_max_length": 100 * MIB,
-        "max_file_size": 100 * MIB,
-        "max_scan_size": 200 * MIB,
+        "max_source_bytes": 2_000_000_000,
+        "stream_max_length": 2_000_000_000,
+        "max_file_size": 2_000_000_000,
+        "max_scan_size": 4_000_000_000,
         "alert_exceeds_max": True,
         "verified_at": now.isoformat(),
         "expires_at": (now + dt.timedelta(hours=12)).isoformat(),
@@ -628,6 +656,8 @@ def main() -> None:
     descriptor = os.open(lock_path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
     with os.fdopen(descriptor, "w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        if args.action != "prove":
+            ensure_socket_root()
         archives = ROOT / "archives"
         archives.mkdir(mode=0o755, exist_ok=True)
         trusted(archives)
@@ -683,6 +713,7 @@ def main() -> None:
                     stat.S_ISDIR(info.st_mode) and info.st_uid == 100 and not info.st_mode & 0o077,
                     "Untrusted signature directory",
                 )
+                ensure_socket_root()
                 run("docker", "pull", IMAGE, timeout=300)
             compose_up(args.release, installed)
             print(

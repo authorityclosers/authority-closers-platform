@@ -23,6 +23,7 @@ services:
       - ./clamd.conf:/etc/clamav/clamd.conf:ro
       - ./freshclam.conf:/etc/clamav/freshclam.conf:ro
       - /srv/authority-closers/volumes/media-safety-signatures:/var/lib/clamav
+      - /srv/authority-closers/volumes/media-safety-socket:/run/ac-media-safety:rw
     tmpfs:
       - /tmp:rw,noexec,nosuid,nodev,size=268435456,uid=100,gid=100,mode=0700
     healthcheck:

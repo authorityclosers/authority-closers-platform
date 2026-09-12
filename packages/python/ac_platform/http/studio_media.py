@@ -358,6 +358,9 @@ def install_studio_media_http(
         settings=settings,
         require_actor=require_actor,
         preview=(
-            StudioVideoPreview(studio_video_runtime) if studio_video_runtime is not None else None
+            StudioVideoPreview(studio_video_runtime)
+            if studio_video_runtime is not None
+            and settings.environment in {"local", "test"}
+            else None
         ),
     )

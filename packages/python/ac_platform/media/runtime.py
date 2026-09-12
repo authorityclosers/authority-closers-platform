@@ -7,6 +7,7 @@ import hmac
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import timedelta
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.orm import Session
@@ -110,6 +111,7 @@ def create_media_runtime(
     activation_verifier: MediaProviderActivationVerifier | None = None,
     media_delivery_handler: SignedMediaDeliveryPort | None = None,
     delivery_activity_resolver: DeliveryActivityResolver | None = None,
+    filesystem_runtime: bool = False,
 ) -> MediaRuntime:
     """Compose media dependencies without contacting external providers.
 
@@ -138,8 +140,12 @@ def create_media_runtime(
             delivery_activity_resolver,
         )
     )
+    if filesystem_runtime and not settings.media_filesystem_enabled:
+        raise MediaConfigurationError("filesystem media composition requires explicit activation")
+    allowed_filesystem_injection = filesystem_runtime and settings.media_filesystem_enabled
     if settings.environment not in {"local", "test"} and (
-        settings.media_provider_enabled or injected_dependencies
+        settings.media_provider_enabled
+        or (injected_dependencies and not allowed_filesystem_injection)
     ):
         raise MediaConfigurationError(
             "non-local media composition rejects provider activation and injected dependencies"
@@ -266,6 +272,34 @@ def create_media_runtime(
 
 def create_default_media_runtime(settings: Settings) -> MediaRuntime:
     """Build the application runtime with its fail-closed composition defaults."""
+
+    if settings.media_filesystem_enabled:
+        from ac_platform.db.session import session_factory
+        from ac_platform.media.clamav_scanner import ClamAVScannerConfig
+        from ac_platform.media.studio_video_delivery import (
+            compose_filesystem_studio_video_delivery,
+        )
+        from ac_platform.media.studio_video_runtime import (
+            compose_filesystem_studio_video_runtime,
+        )
+
+        scanner_config = ClamAVScannerConfig(
+            unix_socket=settings.media_scanner_unix_socket,
+            host=settings.media_scanner_host,
+            port=settings.media_scanner_port,
+            max_content_bytes=settings.media_max_upload_bytes,
+            total_timeout_seconds=settings.media_scanner_total_timeout_seconds,
+        )
+        runtime = create_media_runtime(settings, filesystem_runtime=True)
+        runtime = compose_filesystem_studio_video_runtime(
+            settings,
+            runtime,
+            sessions=session_factory,
+            root=Path(settings.media_filesystem_root or ""),
+            max_store_bytes=8 * 1024**3,
+            scanner_config=scanner_config,
+        )
+        return compose_filesystem_studio_video_delivery(settings, runtime)
 
     runtime = create_media_runtime(settings)
     if settings.media_public_films_delivery_enabled:

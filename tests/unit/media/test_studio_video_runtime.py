@@ -13,7 +13,11 @@ from ac_platform.media.errors import MediaConfigurationError
 from ac_platform.media.processing import FFmpegMediaProcessor
 from ac_platform.media.runtime import create_media_runtime
 from ac_platform.media.scanner import SignatureContentScanner
-from ac_platform.media.studio_video_runtime import compose_local_studio_video_runtime
+from ac_platform.media.studio_video_delivery import compose_filesystem_studio_video_delivery
+from ac_platform.media.studio_video_runtime import (
+    compose_filesystem_studio_video_runtime,
+    compose_local_studio_video_runtime,
+)
 from ac_platform.media.video_file_storage import VideoFileStorage
 
 
@@ -137,10 +141,57 @@ def test_composition_rejects_nonlocal_mismatch_and_duplicate(tmp_path: Path) -> 
             create_media_runtime(development),
             **{key: value for key, value in arguments.items() if key != "testing_scanner"},
         )
-
     with pytest.raises(MediaConfigurationError, match="environments must match"):
         compose_local_studio_video_runtime(
             _settings("local"),
             base,
             **{key: value for key, value in arguments.items() if key != "testing_scanner"},
         )
+
+
+def test_explicit_filesystem_profile_composes_deployment_graph(tmp_path: Path) -> None:
+    settings = _settings(
+        "test",
+    ).model_copy(
+        update={
+            "media_filesystem_enabled": True,
+            "media_filesystem_root": str(tmp_path / "video-objects"),
+            "media_scanner_unix_socket": "/run/ac-media-safety/clamd.sock",
+            "media_max_upload_bytes": 2_000_000_000,
+        }
+    )
+    base = create_media_runtime(settings, filesystem_runtime=True)
+    runtime = compose_filesystem_studio_video_runtime(
+        settings,
+        base,
+        sessions=async_sessionmaker(),
+        root=tmp_path / "video-objects",
+        max_store_bytes=8 * 1024**3,
+        scanner_config=ClamAVScannerConfig(
+            unix_socket="/run/ac-media-safety/clamd.sock",
+            max_content_bytes=2_000_000_000,
+            total_timeout_seconds=1800,
+        ),
+    )
+    delivered = compose_filesystem_studio_video_delivery(settings, runtime)
+    assert delivered.studio_video_runtime is not None
+    assert delivered.studio_video_runtime.max_source_bytes == 2_000_000_000
+    assert delivered.studio_video_runtime.storage.max_store_bytes == 8 * 1024**3
+    assert delivered.authenticated_delivery_handler_factory is not None
+
+
+def test_filesystem_profile_rejects_unmounted_tcp_scanner(tmp_path: Path) -> None:
+    settings = _settings("test").model_copy(
+        update={
+            "media_filesystem_enabled": True,
+            "media_filesystem_root": str(tmp_path / "video-objects"),
+            "media_scanner_unix_socket": None,
+            "media_scanner_host": "127.0.0.1",
+            "media_max_upload_bytes": 2_000_000_000,
+        }
+    )
+    object.__setattr__(settings, "environment", "staging")
+    with pytest.raises(ValueError, match="Unix socket"):
+        # model_copy does not rerun model validators; call the same explicit
+        # profile guard after changing only the environment discriminator.
+        settings._validate_filesystem_media()
