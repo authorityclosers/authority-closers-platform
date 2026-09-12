@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useRef,
   useState,
   type ChangeEvent,
   type FormEvent,
@@ -104,7 +105,9 @@ function CommandForm({
 }) {
   const session = useAdminSession();
   const authorized = canUseAdminPermission(session, permission);
-  const enabled = authorized && targetResolved && onExecute !== undefined;
+  const editable = authorized && targetResolved;
+  const enabled = editable && onExecute !== undefined;
+  const submissionPending = useRef(false);
   const [commandState, setCommandState] = useState<CommandState>({
     status: "idle",
   });
@@ -112,17 +115,20 @@ function CommandForm({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!enabled || !onExecute) return;
+    if (!enabled || !onExecute || submissionPending.current) return;
+    submissionPending.current = true;
     setCommandState({ status: "submitting" });
     try {
       setCommandState({ status: "success", message: await onExecute() });
     } catch (error) {
       setCommandState({ status: "error", message: safeErrorMessage(error) });
+    } finally {
+      submissionPending.current = false;
     }
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLFormElement>) {
-    if (!enabled) guardPreviewEnter(event);
+    if (!editable) guardPreviewEnter(event);
   }
 
   const readiness = !authorized
@@ -141,7 +147,7 @@ function CommandForm({
       aria-label={label}
       aria-describedby={`${id}-readiness ${statusId}`}
       data-admin-command="true"
-      data-preview-inert={!enabled ? "true" : "false"}
+      data-preview-inert={!editable ? "true" : "false"}
       noValidate
       onKeyDownCapture={handleKeyDown}
       onSubmit={handleSubmit}
@@ -151,7 +157,7 @@ function CommandForm({
         are never accepted. The server remains the authority for actor, tenant,
         permission, resource ownership, and command validity.
       </p>
-      <fieldset disabled={!enabled || commandState.status === "submitting"}>
+      <fieldset disabled={!editable || commandState.status === "submitting"}>
         <legend>{legend}</legend>
         <div className="field-grid">{children}</div>
         <div className="form-footer">
