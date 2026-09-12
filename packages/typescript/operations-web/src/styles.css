@@ -3357,6 +3357,160 @@ code {
   background: var(--panel-soft);
 }
 
+.people-workspace,
+.people-results,
+.people-diagnosis {
+  display: grid;
+  gap: 22px;
+  min-width: 0;
+}
+
+.people-intro p,
+.people-message p {
+  max-width: 70ch;
+  color: var(--muted);
+}
+
+.people-search-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 16px;
+  margin: 20px 0 12px;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.people-candidate {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+
+.people-candidate h3,
+.people-candidate p {
+  margin: 0 0 8px;
+}
+.people-candidate > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.people-candidate [aria-pressed="true"] {
+  border-color: var(--signal);
+}
+.people-review-confirm {
+  display: grid;
+  justify-items: start;
+  gap: 16px;
+}
+.people-review-confirm label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.people-review-confirm input {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  margin-top: 3px;
+}
+.people-course {
+  min-width: 0;
+  border-top: 1px solid var(--line);
+  padding-top: 22px;
+}
+.people-course h3 {
+  overflow-wrap: anywhere;
+}
+.people-facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin: 20px 0;
+}
+.people-facts dt {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.people-facts dd {
+  margin: 5px 0 0;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.people-next {
+  padding: 14px 16px;
+  background: var(--accent-soft);
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+.people-activity {
+  border-bottom: 1px solid var(--line);
+}
+.people-activity summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px 4px;
+  cursor: pointer;
+}
+.people-activity summary > span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.people-activity summary small {
+  display: block;
+  color: var(--muted);
+  margin-top: 5px;
+}
+.people-activity summary::after {
+  content: "+";
+  font-size: 1.2rem;
+}
+.people-activity[open] summary::after {
+  content: "−";
+}
+.people-activity > div {
+  padding: 0 4px 16px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+.people-activity summary:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
+}
+.people-evidence {
+  padding-left: 20px;
+  line-height: 1.8;
+}
+
+@media (max-width: 760px) {
+  .people-search-fields {
+    grid-template-columns: 1fr;
+  }
+  .people-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .people-candidate {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .people-review-confirm .button {
+    width: 100%;
+    white-space: normal;
+  }
+  .people-activity summary {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+}
+
 .studio-module-list ol {
   display: grid;
   gap: 0;

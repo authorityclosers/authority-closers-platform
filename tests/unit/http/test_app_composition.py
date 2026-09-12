@@ -66,6 +66,8 @@ def test_shipped_application_mounts_g1_command_and_query_routes() -> None:
     assert "/v1/admin/enrollment-grants" in paths
     assert "/v1/admin/jobs/{job_id}/retry" in paths
     assert "/v1/admin/recovery/reconcile" in paths
+    assert "/v1/admin/learners/lookup" in paths
+    assert "/v1/admin/learners/{person_id}/diagnosis" in paths
     assert "/v1/media/uploads" in paths
     assert "/v1/profile/avatar" in paths
     assert "/v1/media/{asset_id}/playback-token" in paths

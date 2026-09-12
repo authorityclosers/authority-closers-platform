@@ -363,7 +363,9 @@ export function AdminShell({
             <span>
               {surface === "studio"
                 ? "TENANT-SCOPED · SERVER-AUTHORIZED · NO STORE"
-                : "PREVIEW DATA · NO RECORDS ASSERTED"}
+                : active === "people"
+                  ? "ACADEMY LEARNER RECORDS · AUDITED ACCESS"
+                  : "PREVIEW DATA · NO RECORDS ASSERTED"}
             </span>
           </footer>
         </main>

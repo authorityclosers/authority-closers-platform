@@ -261,6 +261,8 @@ describe("G1 admin permissions and semantic boundaries", () => {
     expect(markup).toContain("Checking workspace access");
     expect(markup).not.toContain("No learner records available");
     expect(markup).not.toContain("Create assignment");
+    expect(markup).toContain("ACADEMY LEARNER RECORDS · AUDITED ACCESS");
+    expect(markup).not.toContain("PREVIEW DATA · NO RECORDS ASSERTED");
   });
 
   it("renders the Academy Studio shell without requesting before session verification", () => {

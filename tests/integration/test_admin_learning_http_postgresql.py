@@ -36,6 +36,7 @@ from ac_platform.catalog.models import (
 )
 from ac_platform.catalog.services import CatalogService, SqlAlchemyCatalogStore
 from ac_platform.enrollment.models import EnrollmentProvenance, Entitlement
+from ac_platform.http.admin_diagnosis import install_admin_diagnosis_http
 from ac_platform.http.admin_learning import install_admin_learning_http
 from ac_platform.http.auth import AuthenticatedTransaction
 from ac_platform.http.problem import register_problem_handlers
@@ -43,7 +44,13 @@ from ac_platform.identity.application import ResolvedActorContext
 from ac_platform.identity.models import Person
 from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.kernel.authz import ActorContext
-from ac_platform.learning.models import ActivityProgress, EvidenceSubmission, LearningEvidence
+from ac_platform.learning.models import (
+    ActivityDraft,
+    ActivityProgress,
+    EvidenceSubmission,
+    LearningEvidence,
+    LearningProgressProjection,
+)
 from ac_platform.outbox.models import OutboxEvent
 from ac_platform.tenancy.models import Membership, Tenant
 
@@ -443,6 +450,11 @@ def _application(
         require_actor=require_actor,
         reviewer_resolver=(lambda _access: reviewer_id) if reviewer_id is not None else None,
     )
+    install_admin_diagnosis_http(
+        application,
+        settings=_settings(),
+        require_actor=require_actor,
+    )
     application.state.async_engine = async_engine
     return application, actor
 
@@ -817,3 +829,137 @@ def test_admin_commands_deny_unknown_canonical_membership_without_mutation(
             )
             == 0
         )
+
+
+def test_admin_people_lookup_and_diagnosis_use_canonical_learning_scope(
+    postgres_harness: _Harness,
+) -> None:
+    seed = _seed(postgres_harness.engine)
+    application, _actor = _application(
+        postgres_harness.schema_url,
+        person_id=seed.admin_id,
+        tenant_id=seed.tenant_id,
+        session_id=seed.admin_session_id,
+        permissions=frozenset(
+            {
+                "admin_surface",
+                "catalog_publish",
+                "enrollment_grant",
+                "learner_diagnose",
+            }
+        ),
+        reviewer_id=None,
+    )
+
+    async def scenario() -> None:
+        try:
+            transport = httpx.ASGITransport(app=application)
+            async with httpx.AsyncClient(
+                transport=transport,
+                base_url="https://admin.authorityclosers.test",
+            ) as client:
+                origin = {"Origin": "https://admin.authorityclosers.test"}
+                lookup = await client.post(
+                    "/v1/admin/learners/lookup",
+                    json={
+                        "query": f"  LEARNER-{seed.learner_id.hex}@EXAMPLE.TEST  ",
+                        "purpose": "learner_support",
+                    },
+                    headers=origin,
+                )
+                assert lookup.status_code == 200
+                assert lookup.headers["cache-control"] == "no-store"
+                lookup_payload = lookup.json()
+                assert lookup_payload["tenant_id"] == str(seed.tenant_id)
+                assert lookup_payload["candidates"] == [
+                    {
+                        "person_id": str(seed.learner_id),
+                        "display_name": "Learner",
+                        "username": None,
+                        "masked_email": "l***@example.test",
+                        "membership_status": "active",
+                        "membership_role": "learner",
+                    }
+                ]
+                assert f"learner-{seed.learner_id.hex}@" not in lookup.text
+
+                publish = await client.post(
+                    f"/v1/admin/program-versions/{seed.version_id}/publish",
+                    json={"reason": "the support diagnosis catalog is reviewed"},
+                    headers=origin
+                    | {
+                        "If-Match": _publication_etag(postgres_harness.engine, seed),
+                        "Idempotency-Key": "diagnosis-publish-1",
+                    },
+                )
+                assert publish.status_code == 200
+                grant = await client.post(
+                    "/v1/admin/enrollment-grants",
+                    json={
+                        "person_id": str(seed.learner_id),
+                        "program_version_id": str(seed.version_id),
+                        "reason": "support diagnosis access is approved",
+                    },
+                    headers=origin | {"Idempotency-Key": "diagnosis-grant-1"},
+                )
+                assert grant.status_code == 201
+
+                diagnosis = await client.get(
+                    f"/v1/admin/learners/{seed.learner_id}/diagnosis",
+                    params={"purpose": "learner_support"},
+                )
+                assert diagnosis.status_code == 200
+                assert diagnosis.headers["cache-control"] == "no-store"
+                diagnosis_payload = diagnosis.json()
+                assert diagnosis_payload["tenant_id"] == str(seed.tenant_id)
+                assert diagnosis_payload["person_id"] == str(seed.learner_id)
+                assert diagnosis_payload["membership_role"] == "learner"
+                assert len(diagnosis_payload["enrollments"]) == 1
+                enrollment = diagnosis_payload["enrollments"][0]
+                assert enrollment["entitlement_status"] == "active"
+                assert enrollment["progress"]["activity_states"][0]["title"] == (
+                    "Admin review activity"
+                )
+                assert enrollment["progress"]["activity_states"][0]["kind"] == "REFLECTION"
+                assert "payload" not in diagnosis.text
+        finally:
+            await application.state.async_engine.dispose()
+
+    _run_async(scenario())
+
+    with Session(postgres_harness.engine) as database:
+        read_events = tuple(
+            database.scalars(
+                select(AuditEvent)
+                .where(
+                    AuditEvent.tenant_id == seed.tenant_id,
+                    AuditEvent.action.in_(
+                        (
+                            "audit.admin.learner.lookup.v1",
+                            "audit.admin.learner.diagnosed.v1",
+                        )
+                    ),
+                )
+                .order_by(AuditEvent.sequence_no)
+            ).all()
+        )
+        assert [event.action for event in read_events] == [
+            "audit.admin.learner.lookup.v1",
+            "audit.admin.learner.diagnosed.v1",
+        ]
+        assert read_events[0].resource_type == "tenant"
+        assert read_events[0].resource_id == str(seed.tenant_id)
+        assert read_events[1].resource_type == "person"
+        assert read_events[1].resource_id == str(seed.learner_id)
+        assert all(
+            set(event.payload) == {"purpose", "redaction_version", "result_count"}
+            for event in read_events
+        )
+        assert all(
+            f"learner-{seed.learner_id.hex}@" not in str(event.payload) for event in read_events
+        )
+        assert database.scalar(select(func.count()).select_from(ActivityProgress)) == 0
+        assert database.scalar(select(func.count()).select_from(LearningProgressProjection)) == 0
+        assert database.scalar(select(func.count()).select_from(ActivityDraft)) == 0
+        assert database.scalar(select(func.count()).select_from(LearningEvidence)) == 0
+        assert database.scalar(select(func.count()).select_from(EvidenceSubmission)) == 0

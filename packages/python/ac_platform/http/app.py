@@ -14,6 +14,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from ac_platform import __version__
 from ac_platform.application.settings import Settings, get_settings
 from ac_platform.db.session import engine, session_factory
+from ac_platform.http.admin_diagnosis import install_admin_diagnosis_http
 from ac_platform.http.admin_learning import install_admin_learning_http
 from ac_platform.http.app_updates import install_app_updates_http
 from ac_platform.http.auth import install_identity_http
@@ -190,6 +191,11 @@ def create_app(
         require_actor=require_actor,
     )
     install_admin_learning_http(
+        application,
+        settings=settings,
+        require_actor=require_actor,
+    )
+    install_admin_diagnosis_http(
         application,
         settings=settings,
         require_actor=require_actor,
