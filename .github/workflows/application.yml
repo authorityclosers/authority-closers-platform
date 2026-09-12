@@ -93,6 +93,8 @@ jobs:
       - name: Require codec tools for media regressions
         run: |
           set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ffmpeg
           command -v ffmpeg
           command -v ffprobe
           ffmpeg -version

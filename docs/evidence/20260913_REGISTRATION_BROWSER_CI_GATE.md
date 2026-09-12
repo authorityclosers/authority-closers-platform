@@ -89,3 +89,13 @@ have five-minute bounds, and no unmeasured timeout increase is proposed here.
 
 Deployment/image identity, migrations, backup/scanner readiness, real provider
 acceptance and authenticated staging acceptance remain separate release gates.
+
+## Hosted runner codec prerequisite
+
+The first PR 56 application run (`34713842329`) stopped before tests because
+the hosted Ubuntu image did not provide `ffmpeg`. The workflow now installs
+the distribution's `ffmpeg` package explicitly with recommended packages
+disabled, then retains the existing `ffmpeg` and `ffprobe` presence/version
+checks. This corrects the CI prerequisite; it does not relax media tests or
+change application dependencies. The failed run is retained in the recovery
+packet and the exact follow-up CI must pass before release.
