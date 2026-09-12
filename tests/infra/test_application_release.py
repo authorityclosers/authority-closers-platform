@@ -976,8 +976,8 @@ def test_environment_profiles_isolate_state_hosts_and_edge_aliases() -> None:
     assert ".staging.authorityclosers.com" not in staging
     assert "AC_EXTERNAL_SIDE_EFFECTS_HOLD=false" in staging
     assert "AC_EMAIL_PROVIDER=resend" in staging
-    assert "AC_EXTERNAL_SIDE_EFFECTS_HOLD=true" in production
-    assert "AC_EMAIL_PROVIDER=fake" in production
+    assert "AC_EXTERNAL_SIDE_EFFECTS_HOLD=false" in production
+    assert "AC_EMAIL_PROVIDER=resend" in production
     assert "AC_PRACTICE_PILOT_ENABLED=true" in staging
     assert "AC_PRACTICE_PILOT_ENABLED=false" in production
     assert "-u AC_PRACTICE_PILOT_ENABLED" in INSTALLER
@@ -1052,7 +1052,7 @@ def test_installer_reports_the_reviewed_profile_policy_without_secrets() -> None
 
 @pytest.mark.parametrize(
     ("target_environment", "expected_status"),
-    (("staging", "released,resend\n"), ("production", "held,fake\n")),
+    (("staging", "released,resend\n"), ("production", "released,resend\n")),
 )
 def test_installer_profile_parser_reports_effective_profile_policy(
     tmp_path: Path,
@@ -1175,6 +1175,26 @@ def test_installer_profile_parser_rejects_crlf_profiles(tmp_path: Path) -> None:
 
     assert result.returncode != 0
     assert "canonical LF line endings" in result.stderr
+
+
+@pytest.mark.parametrize(
+    ("released", "held"),
+    (
+        (b"AC_EXTERNAL_SIDE_EFFECTS_HOLD=false\n", b"AC_EXTERNAL_SIDE_EFFECTS_HOLD=true\n"),
+        (b"AC_EMAIL_PROVIDER=resend\n", b"AC_EMAIL_PROVIDER=fake\n"),
+    ),
+)
+def test_installer_rejects_stale_production_activation_policy(
+    tmp_path: Path,
+    released: bytes,
+    held: bytes,
+) -> None:
+    profile = (APPLICATION / "environments" / "production.env").read_bytes()
+    result = _run_profile_parser(
+        tmp_path, profile.replace(released, held), target_environment="production"
+    )
+    assert result.returncode != 0
+    assert "unexpected value for AC_" in result.stderr
 
 
 def test_installer_rejects_production_practice_pilot_enablement(tmp_path: Path) -> None:

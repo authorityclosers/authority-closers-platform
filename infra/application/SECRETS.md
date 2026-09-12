@@ -40,12 +40,14 @@ real Google login/callback remain deployment-time operational evidence.
 
 ## Provider activation profiles
 
-The staging profile selects `AC_EMAIL_PROVIDER=resend` and deliberately releases
-the external-effects hold only after the staging-scoped `AC_RESEND_API_KEY`, the
-reviewed `AC_RESEND_FROM`, and the operations tenant reference are present in
-Infisical. Production remains `AC_EMAIL_PROVIDER=fake` with external effects
-held; staging activation is not a production activation. Enabling Resend
-requires both provider names; the legacy unprefixed `RESEND_API_KEY` is not read.
+The reviewed staging and production profiles select `AC_EMAIL_PROVIDER=resend`
+and `AC_EXTERNAL_SIDE_EFFECTS_HOLD=false`. Production activation is a separate
+immutable release after the held bootstrap release; it requires verified active
+operations/public-learner tenant references and independently reviewed prod
+`/application` provider facts. The production `AC_RESEND_API_KEY` and reviewed
+`AC_RESEND_FROM` must be present as one pair, with the sender domain verified.
+No sender or key is embedded in source. Enabling Resend requires both provider
+names; the legacy unprefixed `RESEND_API_KEY` is not read.
 Compose injects the selector, key, and sender into the worker only. The API and
 migrator do not receive these variables or the mail credential; their provider
 configuration remains at the application default `fake`. This process-level
@@ -54,6 +56,18 @@ the short-lived Compose invocation.
 The activation record must prove the sender domain, consent version, bounded
 invitation volume, delivery/complaint monitoring, and a live verification plus
 recovery journey without printing the key or recipient address.
+
+Changing the source profile does not reconcile the durable recovery generation
+or authorize a backlog of sends. The worker also requires persisted recovery
+state `READY`; held work must use the existing audited recovery path. Verify the
+production queue and approved initial delivery scope before releasing the worker.
+
+`AC_LEARNER_CONSENT_VERSION` is release-owned configuration: the installer clears
+ambient and injected values before applying the release profiles. Production
+registration therefore requires the exact approved consent version in its
+reviewed profile contract; adding it only to Infisical is insufficient. This
+email activation retains `ac-learner-terms-privacy-2026-09-13-v1` from the separately
+reviewed consent-profile release.
 
 `AC_PUBLIC_LEARNER_TENANT_ID` is not authority by itself. It points to the
 canonical active tenant whose persisted membership rows remain the authorization

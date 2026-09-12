@@ -78,14 +78,50 @@ def test_path_resolution_uses_exact_current_release_profile_and_skips_absent_pro
     )
 
 
-def test_path_resolution_accepts_the_held_fake_production_profile(tmp_path: Path) -> None:
+@pytest.mark.parametrize(("hold", "provider"), [("true", "fake"), ("false", "resend")])
+def test_path_resolution_accepts_exact_production_activation_pairs(
+    tmp_path: Path,
+    hold: str,
+    provider: str,
+) -> None:
     release = _write_release(tmp_path, environment="production")
+    profile = release / "environments" / "production.env"
+    profile.write_text(
+        profile.read_text(encoding="utf-8")
+        .replace("AC_EXTERNAL_SIDE_EFFECTS_HOLD=false", f"AC_EXTERNAL_SIDE_EFFECTS_HOLD={hold}")
+        .replace("AC_EMAIL_PROVIDER=resend", f"AC_EMAIL_PROVIDER={provider}"),
+        encoding="utf-8",
+    )
+    _write_manifest(release)
 
     target = backup.resolve_application_release("production", host_root=tmp_path)
 
     assert target is not None
     assert target.release_dir == release
     assert target.compose_project == "ac-application-production"
+
+
+@pytest.mark.parametrize(
+    ("hold", "provider"),
+    [("true", "resend"), ("false", "fake"), ("false", "smtp"), ("maybe", "resend")],
+)
+def test_path_resolution_rejects_mixed_or_unreviewed_production_activation_pairs(
+    tmp_path: Path,
+    hold: str,
+    provider: str,
+) -> None:
+    release = _write_release(tmp_path, environment="production")
+    profile = release / "environments" / "production.env"
+    profile.write_text(
+        profile.read_text(encoding="utf-8")
+        .replace("AC_EXTERNAL_SIDE_EFFECTS_HOLD=false", f"AC_EXTERNAL_SIDE_EFFECTS_HOLD={hold}")
+        .replace("AC_EMAIL_PROVIDER=resend", f"AC_EMAIL_PROVIDER={provider}"),
+        encoding="utf-8",
+    )
+    _write_manifest(release)
+
+    with pytest.raises(backup.BackupError, match="profile is not exact"):
+        backup.resolve_application_release("production", host_root=tmp_path)
 
 
 @pytest.mark.parametrize(

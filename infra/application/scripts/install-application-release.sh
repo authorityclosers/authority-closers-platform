@@ -370,8 +370,8 @@ validate_release_profile() {
         "AC_EDGE_LEARNER_ALIAS=ac-production-learner"
         "AC_EDGE_ADMIN_ALIAS=ac-production-admin"
         "AC_EDGE_COACH_ALIAS=ac-production-coach"
-        "AC_EXTERNAL_SIDE_EFFECTS_HOLD=true"
-        "AC_EMAIL_PROVIDER=fake"
+        "AC_EXTERNAL_SIDE_EFFECTS_HOLD=false"
+        "AC_EMAIL_PROVIDER=resend"
         "AC_PRACTICE_PILOT_ENABLED=false"
       )
       ;;
