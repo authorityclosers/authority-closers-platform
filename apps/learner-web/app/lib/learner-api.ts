@@ -1,3 +1,4 @@
+import { LEARNER_POLICY_VERSION } from "./learner-policy";
 import {
   getDefaultOfflineReadCache,
   getOfflineReadPolicy,
@@ -840,6 +841,7 @@ export function createLearnerApi(
         whatsapp_number: input.whatsappNumber,
         password: input.password,
         consent: input.consent,
+        consent_version: LEARNER_POLICY_VERSION,
       }),
     loginPassword: async (email: string, password: string) =>
       rememberAuthenticatedOwner(

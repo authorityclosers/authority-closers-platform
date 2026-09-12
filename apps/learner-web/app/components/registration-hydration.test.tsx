@@ -5,6 +5,7 @@ import { renderToString } from "react-dom/server";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { FREE_COURSE_SLUG } from "../lib/course-intent";
 import * as apiModule from "../lib/learner-api";
+import { LEARNER_POLICY_VERSION } from "../lib/learner-policy";
 import { RegistrationForm } from "./password-auth-forms";
 
 (
@@ -49,6 +50,7 @@ it.each([null, FREE_COURSE_SLUG] as const)(
       google.querySelector<HTMLInputElement>('input[name="consent"]')!.disabled,
     ).toBe(true);
     expect(google.querySelector("button")!.disabled).toBe(true);
+    expect(new FormData(google).has("consent_version")).toBe(false);
 
     // Even values restored by the browser remain unsuccessful disabled controls.
     password.querySelector<HTMLInputElement>('[name="email"]')!.value =
@@ -92,6 +94,7 @@ it.each([null, FREE_COURSE_SLUG] as const)(
     expect(consent.checked).toBe(false);
     expect(googleButton.disabled).toBe(true);
     expect(new FormData(google).has("consent")).toBe(false);
+    expect(new FormData(google).has("consent_version")).toBe(false);
 
     await act(async () => consent.click());
     expect(consent.checked).toBe(true);
@@ -106,6 +109,7 @@ it.each([null, FREE_COURSE_SLUG] as const)(
       ["surface", "learner"],
       ["return_path", returnPath],
       ["consent", "true"],
+      ["consent_version", LEARNER_POLICY_VERSION],
     ]);
     const toggle = password.querySelector<HTMLButtonElement>(
       'button[type="button"]',
@@ -120,6 +124,7 @@ it.each([null, FREE_COURSE_SLUG] as const)(
     expect(consent.checked).toBe(false);
     expect(googleButton.disabled).toBe(true);
     expect(new FormData(google).has("consent")).toBe(false);
+    expect(new FormData(google).has("consent_version")).toBe(false);
   },
 );
 

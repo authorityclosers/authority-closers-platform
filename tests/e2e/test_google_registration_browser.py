@@ -71,7 +71,7 @@ def test_register_page_submits_explicit_google_consent(course: str | None) -> No
             page.goto(f"{base_url.rstrip('/')}/register{suffix}")
 
             google_form = page.locator('form[action*="action=register"]')
-            consent = page.get_by_role("checkbox", name="I confirm")
+            consent = page.get_by_role("checkbox", name="I am 18 or older")
             google_button = google_form.get_by_role("button", name="Continue with Google")
             assert consent.is_visible()
             assert google_button.is_visible()
@@ -99,6 +99,7 @@ def test_register_page_submits_explicit_google_consent(course: str | None) -> No
                 "action": ["register"],
                 "surface": ["learner"],
                 "consent": ["true"],
+                "consent_version": ["ac-learner-terms-privacy-2026-09-13-v1"],
                 "return_path": ["/onboarding" + suffix],
             }
         finally:

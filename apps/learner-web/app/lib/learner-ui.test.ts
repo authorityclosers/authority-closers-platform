@@ -397,17 +397,25 @@ describe("installable browser shell", () => {
   });
 });
 
-describe("staging consent support pages", () => {
-  it("publishes honest privacy and terms boundaries without production claims", () => {
+describe("published learner consent policies", () => {
+  it("publishes a dated version, actual service scope and privacy contact", () => {
     const privacy = renderToStaticMarkup(createElement(PrivacyPage));
     const terms = renderToStaticMarkup(createElement(TermsPage));
 
     expect(h1Count(privacy)).toBe(1);
     expect(h1Count(terms)).toBe(1);
-    expect(privacy).toContain("Staging test document");
+    expect(privacy).toContain("ac-learner-terms-privacy-2026-09-13-v1");
+    expect(terms).toContain("ac-learner-terms-privacy-2026-09-13-v1");
+    expect(privacy).toContain("13 September 2026");
     expect(privacy).toContain("does not receive your Google password");
-    expect(terms).toContain("Not final production legal terms");
-    expect(terms).toContain("No purchase");
+    expect(terms).toContain("has no course fee");
+    expect(terms).toContain(
+      "Account creation and course enrollment are separate steps",
+    );
+    expect(privacy).toContain("Leaderboard participation is off by default");
+    expect(privacy).toContain("withdrawal of consent");
+    expect(privacy).not.toContain("Staging test document");
+    expect(terms).not.toContain("Not final production legal terms");
     expect(privacy).toContain("admin@authorityclosers.com");
     expect(terms).toContain("admin@authorityclosers.com");
   });

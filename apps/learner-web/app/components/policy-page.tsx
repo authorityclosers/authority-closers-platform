@@ -2,6 +2,10 @@ import { ArrowLeft, CheckCircle2, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 
 import { ROUTES } from "../lib/routes";
+import {
+  LEARNER_POLICY_CONTACT,
+  LEARNER_POLICY_VERSION,
+} from "../lib/learner-policy";
 import { PublicShell } from "./site-shell";
 
 type PolicySection = {
@@ -27,8 +31,8 @@ export function PolicyPage({
       <main id="main-content" className="public-main policy-page" tabIndex={-1}>
         <div className="page-container">
           <Link className="text-link policy-page__back" href={ROUTES.home}>
-            <ArrowLeft size={15} aria-hidden="true" /> Back to the public
-            preview
+            <ArrowLeft size={15} aria-hidden="true" /> Back to the course
+            catalog
           </Link>
 
           <header className="policy-hero">
@@ -41,31 +45,32 @@ export function PolicyPage({
             </div>
             <aside className="policy-hero__status" aria-label="Document status">
               <ShieldCheck size={24} aria-hidden="true" />
-              <p>Staging test document</p>
-              <strong>Not final production legal terms</strong>
+              <p>Published service policy</p>
+              <strong>{LEARNER_POLICY_VERSION}</strong>
               <span>Effective {effectiveDate}</span>
             </aside>
           </header>
 
           <div className="policy-layout">
             <aside className="policy-boundary">
-              <p className="kicker">Current boundary</p>
-              <h2>Invitation-only testing.</h2>
+              <p className="kicker">Your learning account</p>
+              <h2>Free course. Clear choices.</h2>
               <p>
-                This notice covers the Authority Closers staging environment
-                while Google sign-in and the first learning slice are tested.
+                Read these policies before creating an account. Keep the version
+                and contact details here for questions about your access or
+                data.
               </p>
               <div>
                 <CheckCircle2 size={17} aria-hidden="true" />
-                No paid course or commercial checkout
+                Explicit enrollment in the Free Course
               </div>
               <div>
                 <CheckCircle2 size={17} aria-hidden="true" />
-                No call recording, voice analysis, or autonomous scoring
+                Optional profile and academy leaderboard choices
               </div>
               <div>
                 <CheckCircle2 size={17} aria-hidden="true" />
-                No production learner promise is made by this preview
+                Privacy requests through the published contact
               </div>
             </aside>
 
@@ -84,9 +89,9 @@ export function PolicyPage({
 
           <footer className="policy-contact">
             <p className="kicker">Questions or access requests</p>
-            <h2>Use the accountable company channel.</h2>
-            <a href="mailto:admin@authorityclosers.com">
-              admin@authorityclosers.com
+            <h2>Contact Authority Closers.</h2>
+            <a href={`mailto:${LEARNER_POLICY_CONTACT}`}>
+              {LEARNER_POLICY_CONTACT}
             </a>
           </footer>
         </div>

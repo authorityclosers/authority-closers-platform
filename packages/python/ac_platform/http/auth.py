@@ -242,6 +242,7 @@ class PasswordRegistrationRequest(BaseModel):
     whatsapp_number: str = Field(min_length=7, max_length=32)
     password: str = Field(min_length=12, max_length=256)
     consent: Literal[True]
+    consent_version: str | None = Field(default=None, min_length=1, max_length=64)
 
 
 class PasswordLoginRequest(BaseModel):
@@ -340,6 +341,20 @@ class LearnerConsentRequired(DomainError):
     code = "learner_consent_required"
     title = "Learner consent is required"
     status = 400
+
+
+def _require_current_learner_consent(
+    settings: Settings,
+    *,
+    submitted_version: str | None,
+    configured_version: str,
+) -> None:
+    if (submitted_version is not None and submitted_version != configured_version) or (
+        submitted_version is None and settings.environment == "production"
+    ):
+        raise LearnerConsentRequired(
+            "Reload registration and review the current Terms and Privacy Policy before agreeing."
+        )
 
 
 class AdminRegistrationUnavailable(DomainError):
@@ -1266,6 +1281,11 @@ def install_identity_http(
             raise PasswordRegistrationUnavailable(
                 "Reviewed learner consent and the public learner context must be configured."
             )
+        _require_current_learner_consent(
+            settings,
+            submitted_version=body.consent_version,
+            configured_version=consent_version,
+        )
         try:
             async with sessions() as database, database.begin():
                 registration = await PasswordIdentityService(
@@ -1538,6 +1558,9 @@ def install_identity_http(
         surface: Literal["learner", "admin", "coach"] = "learner",
         return_path: str = "/home",
         consent: bool = False,
+        client_consent_version: Annotated[
+            str | None, Query(alias="consent_version", min_length=1, max_length=64)
+        ] = None,
     ) -> Response:
         _require_surface_host(request, settings, surface)
         safe_return_path = normalize_return_path(return_path)
@@ -1559,6 +1582,11 @@ def install_identity_http(
                 raise PasswordRegistrationUnavailable(
                     "Reviewed learner consent and the public learner context must be configured."
                 )
+            _require_current_learner_consent(
+                settings,
+                submitted_version=client_consent_version,
+                configured_version=consent_version,
+            )
         else:
             consent_version = None
         audience = identity_provider.audience

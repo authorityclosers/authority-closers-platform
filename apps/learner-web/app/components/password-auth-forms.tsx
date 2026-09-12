@@ -21,6 +21,10 @@ import { googleAuthReturnPath, googleAuthStartUrl } from "../lib/auth-links";
 import { courseIntentHref, type CourseIntent } from "../lib/course-intent";
 import { createLearnerApi } from "../lib/learner-api";
 import { ROUTES } from "../lib/routes";
+import {
+  LEARNER_CONSENT_COPY,
+  LEARNER_POLICY_VERSION,
+} from "../lib/learner-policy";
 import { userFacingRequestError } from "../lib/user-facing-error";
 
 function requestErrorMessage(error: unknown): string {
@@ -219,11 +223,11 @@ export function RegistrationForm({
             onChange={(event) => setConsentGranted(event.currentTarget.checked)}
           />
           <span>
-            I confirm I am 18 or older, agree to the staging{" "}
-            <Link href={ROUTES.terms}>Terms</Link>, acknowledge the{" "}
-            <Link href={ROUTES.privacy}>Privacy notice</Link>, and authorize the
-            account-verification, security, and course-access emails needed to
-            operate this test.
+            {LEARNER_CONSENT_COPY.beforeTerms}
+            <Link href={ROUTES.terms}>Terms</Link>
+            {LEARNER_CONSENT_COPY.beforePrivacy}
+            <Link href={ROUTES.privacy}>Privacy notice</Link>
+            {LEARNER_CONSENT_COPY.afterPrivacy}
           </span>
         </label>
         {error ? (
@@ -264,6 +268,12 @@ export function RegistrationForm({
           type="hidden"
           name="consent"
           value="true"
+          disabled={!hydrated || !consentGranted}
+        />
+        <input
+          type="hidden"
+          name="consent_version"
+          value={LEARNER_POLICY_VERSION}
           disabled={!hydrated || !consentGranted}
         />
         <button
