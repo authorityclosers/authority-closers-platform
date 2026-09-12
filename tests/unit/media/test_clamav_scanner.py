@@ -390,6 +390,7 @@ def test_total_deadline_cannot_be_extended_by_dribbling_responses(
         {"host": "0.0.0.0"},  # noqa: S104 - rejected endpoint, never a bind target
         {"host": "::"},
         {"host": "::ffff:127.0.0.1"},
+        {"host": "::1%lo"},
         {"host": "127.0.0.1:3310"},
         {"host": "http://127.0.0.1"},
         {"unix_socket": "/run/clamav.sock"},
@@ -407,6 +408,22 @@ def test_total_deadline_cannot_be_extended_by_dribbling_responses(
 def test_rejects_unsafe_endpoints_and_unbounded_settings(change: dict[str, object]) -> None:
     with pytest.raises(ValueError):
         replace(ClamAVScannerConfig(host="127.0.0.1"), **change)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("host", ["::ffff:127.0.0.1", "::ffff:7f00:1", "0:0:0:0:0:ffff:7fff:ffff"])
+def test_rejects_mapped_ipv6_even_when_stdlib_classifies_it_as_loopback(
+    monkeypatch: pytest.MonkeyPatch, host: str
+) -> None:
+    # Newer Python patches inherit loopback status from the mapped IPv4 address.
+    # Exercise that behavior even on an older local interpreter.
+    def loopback(address: module.ipaddress.IPv6Address) -> bool:
+        mapped = address.ipv4_mapped
+        return mapped.is_loopback if mapped is not None else int(address) == 1
+
+    monkeypatch.setattr(module.ipaddress.IPv6Address, "is_loopback", property(loopback))
+    assert module.ipaddress.ip_address(host).is_loopback
+    with pytest.raises(ValueError, match="literal loopback address"):
+        ClamAVScannerConfig(host=host)
 
 
 @pytest.mark.parametrize(
@@ -445,9 +462,17 @@ def test_unix_transport_fails_closed_when_platform_does_not_support_it(
         module._connect(config, time.monotonic() + 10)
 
 
-@pytest.mark.parametrize("host,family", [("127.0.0.1", socket.AF_INET), ("::1", socket.AF_INET6)])
+@pytest.mark.parametrize(
+    "host,family,endpoint",
+    [
+        ("127.0.0.1", socket.AF_INET, "127.0.0.1"),
+        ("127.9.8.7", socket.AF_INET, "127.9.8.7"),
+        ("::1", socket.AF_INET6, "::1"),
+        ("0:0:0:0:0:0:0:1", socket.AF_INET6, "::1"),
+    ],
+)
 def test_uses_literal_socket_connections_without_dns(
-    monkeypatch: pytest.MonkeyPatch, host: str, family: socket.AddressFamily
+    monkeypatch: pytest.MonkeyPatch, host: str, family: socket.AddressFamily, endpoint: str
 ) -> None:
     connection = Mock(spec=socket.socket)
     factory = Mock(return_value=connection)
@@ -456,7 +481,7 @@ def test_uses_literal_socket_connections_without_dns(
     config = ClamAVScannerConfig(host=host)
     assert module._connect(config, time.monotonic() + 10) is connection
     factory.assert_called_once_with(family, socket.SOCK_STREAM)
-    connection.connect.assert_called_once_with((host, 3310))
+    connection.connect.assert_called_once_with((endpoint, 3310))
 
 
 def test_failed_connection_closes_socket(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -66,7 +66,14 @@ class ClamAVScannerConfig:
                 address = ipaddress.ip_address(self.host)
             except ValueError:
                 raise ValueError("ClamAV TCP requires a literal loopback address.") from None
-            if not isinstance(self.host, str) or not address.is_loopback or "%" in self.host:
+            # Some Python patches classify IPv4-mapped IPv6 as loopback. Keep
+            # the endpoint policy explicit: native IPv4 or IPv6 loopback only.
+            if (
+                not isinstance(self.host, str)
+                or not address.is_loopback
+                or (isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None)
+                or "%" in self.host
+            ):
                 raise ValueError("ClamAV TCP requires a literal loopback address.")
         for value, maximum in (
             (self.port, 65535),
