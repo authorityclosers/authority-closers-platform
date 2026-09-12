@@ -348,12 +348,15 @@ grant official Watch completion, or activate production media.
 The reviewed application release also contains the disabled-by-default
 `compose.filesystem-media.yaml` companion. It is the only deployment seam for
 the source-owned Studio video profile. After the private ClamAV controller has
-proved its exact release, an authorized operator may combine the base compose
-file and this companion for the same environment project. The companion
-mounts `/srv/authority-closers/volumes/media-video` into API and worker at
+proved its exact release, the canonical application installer selects this
+companion only when the immutable target environment profile contains
+`AC_MEDIA_FILESYSTEM_ENABLED=true`. The companion mounts the target's private
+root (`/srv/authority-closers/volumes/media-video/staging` or
+`/srv/authority-closers/volumes/media-video/production`) into API and worker at
 `/var/lib/ac-media`, and the scanner socket directory at
 `/run/ac-media-safety`. The application uses
-`/var/lib/ac-media/video-objects` as its marked private store.
+`/var/lib/ac-media/video-objects` as its marked private store. Rollback resolves
+the target release's own selector, so it cannot inherit the candidate setting.
 
 The profile admits exactly 2,000,000,000 source bytes, streams uploads into
 bounded private storage, scans the stored object through ClamAV INSTREAM, and

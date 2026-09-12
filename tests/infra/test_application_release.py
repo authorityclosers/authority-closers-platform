@@ -16,6 +16,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 APPLICATION = ROOT / "infra" / "application"
 COMPOSE = (APPLICATION / "compose.yaml").read_text(encoding="utf-8")
+FILESYSTEM_COMPOSE = (APPLICATION / "compose.filesystem-media.yaml").read_text(encoding="utf-8")
 APPLICATION_README = (APPLICATION / "README.md").read_text(encoding="utf-8")
 APPLICATION_SECRETS = (APPLICATION / "SECRETS.md").read_text(encoding="utf-8")
 WEB_DOCKERFILE = (APPLICATION / "Dockerfile.web").read_text(encoding="utf-8")
@@ -149,6 +150,8 @@ def _run_compose_for_probe(
     *,
     practice_enabled: bool = True,
     rollback_practice_enabled: bool | None = None,
+    filesystem_enabled: bool = False,
+    rollback_filesystem_enabled: bool | None = None,
 ) -> subprocess.CompletedProcess[str]:
     release = tmp_path / "release"
     (release / "environments").mkdir(parents=True)
@@ -157,6 +160,11 @@ def _run_compose_for_probe(
         profile = profile.replace(
             b"AC_PRACTICE_PILOT_ENABLED=true\n",
             b"AC_PRACTICE_PILOT_ENABLED=false\n",
+        )
+    if filesystem_enabled:
+        profile = profile.replace(
+            b"AC_MEDIA_FILESYSTEM_ENABLED=false\n",
+            b"AC_MEDIA_FILESYSTEM_ENABLED=true\n",
         )
     (release / "environments" / "staging.env").write_bytes(profile)
     (release / "release-images.env").write_text("", encoding="utf-8")
@@ -175,6 +183,21 @@ services:
 """,
         encoding="utf-8",
     )
+    if filesystem_enabled:
+        (release / "compose.filesystem-media.yaml").write_text(
+            """services:
+  probe:
+    environment:
+      filesystem: \"true\"
+    volumes:
+      - type: bind
+        source: ${AC_MEDIA_FILESYSTEM_HOST_ROOT:?required}
+        target: /var/lib/ac-media
+        bind:
+          create_host_path: false
+""",
+            encoding="utf-8",
+        )
     rollback_compose = ""
     if rollback_practice_enabled is not None:
         rollback = tmp_path / "rollback"
@@ -185,12 +208,24 @@ services:
                 b"AC_PRACTICE_PILOT_ENABLED=true\n",
                 b"AC_PRACTICE_PILOT_ENABLED=false\n",
             )
+        if rollback_filesystem_enabled:
+            rollback_profile = rollback_profile.replace(
+                b"AC_MEDIA_FILESYSTEM_ENABLED=false\n",
+                b"AC_MEDIA_FILESYSTEM_ENABLED=true\n",
+            )
         (rollback / "environments" / "staging.env").write_bytes(rollback_profile)
         (rollback / "release-images.env").write_text("", encoding="utf-8")
         (rollback / "compose.yaml").write_bytes((release / "compose.yaml").read_bytes())
+        if rollback_filesystem_enabled:
+            (rollback / "compose.filesystem-media.yaml").write_bytes(
+                (release / "compose.filesystem-media.yaml").read_bytes()
+            )
         rollback_compose = f"compose_for {shlex.quote(rollback.as_posix())} config\n"
     compose_for = _installer_function(
         "compose_for", '\n\ncompose_for "$release_dir" config --quiet'
+    )
+    filesystem_selector = _installer_function(
+        "filesystem_media_compose_file_for", "\n\nvalidate_filesystem_media_activation() {"
     )
     practice_scope = _installer_function(
         "with_practice_pilot_scope", "\n\nvalidate_practice_pilot_references() {"
@@ -207,6 +242,7 @@ with_release_secrets() {{
   "$@"
 }}
 {practice_scope}
+{filesystem_selector}
 export AC_EXTERNAL_SIDE_EFFECTS_HOLD=true
 export AC_EMAIL_PROVIDER=fake
 export AC_PRACTICE_PILOT_ENABLED=false
@@ -329,6 +365,22 @@ def test_runtime_containers_are_not_privileged_or_host_published() -> None:
     assert "container_name:" not in COMPOSE
     assert "build:" not in COMPOSE
     assert COMPOSE.count("pull_policy: never") == 6
+
+
+def test_filesystem_media_companion_uses_reviewed_environment_roots() -> None:
+    assert "AC_MEDIA_FILESYSTEM_HOST_ROOT:?" in FILESYSTEM_COMPOSE
+    assert "AC_MEDIA_SCANNER_HOST_ROOT:?" in FILESYSTEM_COMPOSE
+    assert "/srv/authority-closers/volumes/media-video:" not in FILESYSTEM_COMPOSE
+    assert "/srv/authority-closers/volumes/media-safety-socket:" not in FILESYSTEM_COMPOSE
+    assert "create_host_path: false" in FILESYSTEM_COMPOSE
+
+
+def test_installer_requires_canonical_prepared_filesystem_roots() -> None:
+    assert "stat -c '%u:%g:%a' -- \"$media_filesystem_host_root\"" in INSTALLER
+    assert "10001:10001:700" in INSTALLER
+    assert "stat -c '%u:%g:%a' -- \"$media_scanner_host_root\"" in INSTALLER
+    assert "100:100:755" in INSTALLER
+    assert '"$media_scanner_host_root/clamd.sock"' in INSTALLER
 
 
 def test_edge_and_application_logs_redact_oauth_and_media_credentials() -> None:
@@ -1068,6 +1120,32 @@ def test_installer_profile_parser_reports_effective_profile_policy(
 
 
 @pytest.mark.parametrize("target_environment", ("staging", "production"))
+def test_installer_profile_parser_accepts_explicit_filesystem_activation(
+    tmp_path: Path, target_environment: str
+) -> None:
+    profile = (APPLICATION / "environments" / f"{target_environment}.env").read_bytes().replace(
+        b"AC_MEDIA_FILESYSTEM_ENABLED=false\n",
+        b"AC_MEDIA_FILESYSTEM_ENABLED=true\n",
+    )
+
+    result = _run_profile_parser(tmp_path, profile, target_environment=target_environment)
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_installer_profile_parser_rejects_noncanonical_filesystem_root(tmp_path: Path) -> None:
+    profile = (APPLICATION / "environments" / "staging.env").read_bytes().replace(
+        b"AC_MEDIA_FILESYSTEM_HOST_ROOT=/srv/authority-closers/volumes/media-video/staging\n",
+        b"AC_MEDIA_FILESYSTEM_HOST_ROOT=/srv/authority-closers/volumes/media-video/production\n",
+    )
+
+    result = _run_profile_parser(tmp_path, profile)
+
+    assert result.returncode != 0
+    assert "AC_MEDIA_FILESYSTEM_HOST_ROOT" in result.stderr
+
+
+@pytest.mark.parametrize("target_environment", ("staging", "production"))
 @pytest.mark.parametrize("consent_version", (None, "staging-test-document-v1", "unreviewed-v2"))
 def test_installer_rejects_absent_or_unreviewed_release_consent(
     tmp_path: Path, target_environment: str, consent_version: str | None
@@ -1282,6 +1360,21 @@ def test_compose_for_uses_profile_policy_over_ambient_environment(tmp_path: Path
     assert f"public_tenant: {PUBLIC_TENANT}" in result.stdout
     assert f"operations_tenant: {OPERATIONS_TENANT}" in result.stdout
     assert FOREIGN_TENANT not in result.stdout
+
+
+def test_compose_for_selects_filesystem_companion_from_each_target_release_policy(
+    tmp_path: Path,
+) -> None:
+    result = _run_compose_for_probe(
+        tmp_path,
+        filesystem_enabled=True,
+        rollback_filesystem_enabled=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.count('filesystem: "true"') == 1
+    assert "AC_MEDIA_FILESYSTEM_HOST_ROOT" not in result.stderr
+    assert "media-video/staging" in result.stdout
 
 
 def test_policy_off_rollback_target_preserves_practice_history(tmp_path: Path) -> None:

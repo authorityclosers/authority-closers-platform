@@ -272,6 +272,9 @@ initialize_release_profile_contract() {
     AC_EMAIL_PROVIDER
     AC_PRACTICE_PILOT_ENABLED
     AC_LEARNER_CONSENT_VERSION
+    AC_MEDIA_FILESYSTEM_ENABLED
+    AC_MEDIA_FILESYSTEM_HOST_ROOT
+    AC_MEDIA_SCANNER_HOST_ROOT
   )
   profile_allowed_keys=()
   for profile_key in "${profile_required_keys[@]}"; do
@@ -355,6 +358,8 @@ validate_release_profile() {
         "AC_EXTERNAL_SIDE_EFFECTS_HOLD=false"
         "AC_EMAIL_PROVIDER=resend"
         "AC_PRACTICE_PILOT_ENABLED=true"
+        "AC_MEDIA_FILESYSTEM_HOST_ROOT=/srv/authority-closers/volumes/media-video/staging"
+        "AC_MEDIA_SCANNER_HOST_ROOT=/srv/authority-closers/volumes/media-safety-socket"
       )
       ;;
     production)
@@ -373,6 +378,8 @@ validate_release_profile() {
         "AC_EXTERNAL_SIDE_EFFECTS_HOLD=false"
         "AC_EMAIL_PROVIDER=resend"
         "AC_PRACTICE_PILOT_ENABLED=false"
+        "AC_MEDIA_FILESYSTEM_HOST_ROOT=/srv/authority-closers/volumes/media-video/production"
+        "AC_MEDIA_SCANNER_HOST_ROOT=/srv/authority-closers/volumes/media-safety-socket"
       )
       ;;
   esac
@@ -409,6 +416,25 @@ validate_release_profile() {
       ;;
   esac
 
+  media_filesystem_enabled="$(profile_value AC_MEDIA_FILESYSTEM_ENABLED)"
+  case "$media_filesystem_enabled" in
+    true|false) ;;
+    *)
+      printf 'Released environment profile has an invalid filesystem media activation policy.\n' >&2
+      return 1
+      ;;
+  esac
+  media_filesystem_host_root="$(profile_value AC_MEDIA_FILESYSTEM_HOST_ROOT)"
+  media_scanner_host_root="$(profile_value AC_MEDIA_SCANNER_HOST_ROOT)"
+  [[ "$media_filesystem_host_root" == /srv/authority-closers/volumes/media-video/* ]] || {
+    printf 'Released environment profile has an unsafe filesystem media root.\n' >&2
+    return 1
+  }
+  [[ "$media_scanner_host_root" == /srv/authority-closers/volumes/media-safety-socket ]] || {
+    printf 'Released environment profile has an unsafe scanner socket root.\n' >&2
+    return 1
+  }
+
   learner_host="$(profile_value AC_PUBLIC_APP_URL)"
   learner_host="${learner_host#https://}"
   admin_host="$(profile_value AC_ADMIN_APP_URL)"
@@ -419,6 +445,109 @@ validate_release_profile() {
 }
 
 validate_release_profile
+
+filesystem_media_compose_file_for() {
+  local target_release="$1"
+  local target_profile="$target_release/environments/$target_environment.env"
+  local line key value enabled='' target_media_root='' target_scanner_root=''
+  [[ -f "$target_profile" && ! -L "$target_profile" && -r "$target_profile" ]] || {
+    printf 'Target release environment profile is not a readable regular file.\n' >&2
+    return 1
+  }
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ -z "$line" || "$line" == \#* ]] && continue
+    [[ "$line" == *=* ]] || {
+      printf 'Target release environment profile has a malformed assignment.\n' >&2
+      return 1
+    }
+    key="${line%%=*}"
+    value="${line#*=}"
+    if [[ "$key" == AC_MEDIA_FILESYSTEM_ENABLED ]]; then
+      [[ -z "$enabled" ]] || {
+        printf 'Target release environment profile has a duplicate filesystem media policy.\n' >&2
+        return 1
+      }
+      enabled="$value"
+    elif [[ "$key" == AC_MEDIA_FILESYSTEM_HOST_ROOT ]]; then
+      [[ -z "$target_media_root" ]] || {
+        printf 'Target release environment profile has a duplicate filesystem media root.\n' >&2
+        return 1
+      }
+      target_media_root="$value"
+    elif [[ "$key" == AC_MEDIA_SCANNER_HOST_ROOT ]]; then
+      [[ -z "$target_scanner_root" ]] || {
+        printf 'Target release environment profile has a duplicate scanner socket root.\n' >&2
+        return 1
+      }
+      target_scanner_root="$value"
+    fi
+  done < "$target_profile"
+  [[ -n "$enabled" && "$enabled" != true && "$enabled" != false ]] && {
+    printf 'Target release environment profile has an invalid filesystem media activation policy.\n' >&2
+    return 1
+  }
+  local expected_media_root="/srv/authority-closers/volumes/media-video/$target_environment"
+  local expected_scanner_root=/srv/authority-closers/volumes/media-safety-socket
+  [[ -z "$target_media_root" || "$target_media_root" == "$expected_media_root" ]] || {
+    printf 'Target release environment profile has an unexpected filesystem media root.\n' >&2
+    return 1
+  }
+  [[ -z "$target_scanner_root" || "$target_scanner_root" == "$expected_scanner_root" ]] || {
+    printf 'Target release environment profile has an unexpected scanner socket root.\n' >&2
+    return 1
+  }
+  [[ "$enabled" == true ]] || return 0
+  [[ "$target_media_root" == "$expected_media_root" &&
+     "$target_scanner_root" == "$expected_scanner_root" ]] || {
+    printf 'Filesystem media activation requires the exact environment roots.\n' >&2
+    return 1
+  }
+  local override="$target_release/compose.filesystem-media.yaml"
+  [[ -f "$override" && ! -L "$override" && -r "$override" ]] || {
+    printf 'Filesystem media is enabled but its reviewed Compose companion is missing.\n' >&2
+    return 1
+  }
+  printf '%s' "$override"
+}
+
+validate_filesystem_media_activation() {
+  [[ "$media_filesystem_enabled" == true ]] || return 0
+  [[ -f "$release_dir/compose.filesystem-media.yaml" &&
+     ! -L "$release_dir/compose.filesystem-media.yaml" ]] || {
+    printf 'Filesystem media is enabled but its reviewed Compose companion is missing.\n' >&2
+    return 1
+  }
+  [[ -d "$media_filesystem_host_root" && ! -L "$media_filesystem_host_root" ]] || {
+    printf 'Filesystem media host root is not a prepared private directory.\n' >&2
+    return 1
+  }
+  [[ "$(stat -c '%u:%g:%a' -- "$media_filesystem_host_root")" == 10001:10001:700 ]] || {
+    printf 'Filesystem media host root ownership or mode is not canonical.\n' >&2
+    return 1
+  }
+  [[ -d "$media_filesystem_host_root/tmp" && ! -L "$media_filesystem_host_root/tmp" ]] || {
+    printf 'Filesystem media temporary directory is not a prepared private directory.\n' >&2
+    return 1
+  }
+  [[ "$(stat -c '%u:%g:%a' -- "$media_filesystem_host_root/tmp")" == 10001:10001:700 ]] || {
+    printf 'Filesystem media temporary directory ownership or mode is not canonical.\n' >&2
+    return 1
+  }
+  [[ -d "$media_scanner_host_root" && ! -L "$media_scanner_host_root" ]] || {
+    printf 'ClamAV scanner socket root is not a prepared private directory.\n' >&2
+    return 1
+  }
+  [[ "$(stat -c '%u:%g:%a' -- "$media_scanner_host_root")" == 100:100:755 ]] || {
+    printf 'ClamAV scanner socket root ownership or mode is not canonical.\n' >&2
+    return 1
+  }
+  [[ -S "$media_scanner_host_root/clamd.sock" ]] || {
+    printf 'ClamAV scanner socket is not ready at the reviewed environment boundary.\n' >&2
+    return 1
+  }
+}
+
+validate_filesystem_media_activation
 
 with_release_secrets() {
   env \
@@ -538,9 +667,14 @@ compose_for() {
   shift
   local fixture_override=''
   local public_film_override=''
+  local filesystem_override=''
   local -a fixture_compose_files=()
   # Resolve the target release's policy on every call, including rollback.
   # Old releases without a policy remain off; production never merges it.
+  filesystem_override="$(filesystem_media_compose_file_for "$target_release")" || return 1
+  if [[ -n "$filesystem_override" ]]; then
+    fixture_compose_files+=(--file "$filesystem_override")
+  fi
   if [[ "$target_environment" == staging && (
     -e "$target_release/capabilities/staging-public-films.json" ||
     -L "$target_release/capabilities/staging-public-films.json"
@@ -551,14 +685,18 @@ compose_for() {
       fixture_compose_files=(--file "$fixture_override")
     fi
   fi
+  if [[ -n "$fixture_override" && -n "$filesystem_override" ]]; then
+    printf 'Filesystem media and staging public-film delivery cannot be enabled together.\n' >&2
+    return 1
+  fi
   # Select the rollback target's own immutable policy, never the current flag.
   if [[ -e "$target_release/capabilities/public-films.json" ||
         -L "$target_release/capabilities/public-films.json" ]]; then
     public_film_override="$(python3 "$release_dir/scripts/public-films.py" \
       compose-file "$target_release" "$target_environment")" || return 1
     if [[ -n "$public_film_override" ]]; then
-      if [[ -n "$fixture_override" ]]; then
-        printf 'Legacy staging and public-film delivery cannot be enabled together.\n' >&2
+      if [[ -n "$fixture_override" || -n "$filesystem_override" ]]; then
+        printf 'Filesystem media and public-film delivery cannot be enabled together.\n' >&2
         return 1
       fi
       fixture_compose_files=(--file "$public_film_override")
@@ -604,6 +742,13 @@ compose_for() {
         -u AC_MEDIA_STAGING_PUBLIC_FILMS_DELIVERY_ENABLED \
         -u AC_MEDIA_PUBLIC_FILMS_DELIVERY_ENABLED \
         -u AC_MEDIA_PUBLIC_FILMS_ROOT \
+        -u AC_MEDIA_FILESYSTEM_ENABLED \
+        -u AC_MEDIA_FILESYSTEM_ROOT \
+        -u AC_MEDIA_SCANNER_UNIX_SOCKET \
+        -u AC_MEDIA_SCANNER_HOST \
+        -u AC_MEDIA_MAX_UPLOAD_BYTES \
+        -u AC_MEDIA_FILESYSTEM_HOST_ROOT \
+        -u AC_MEDIA_SCANNER_HOST_ROOT \
     docker compose \
       --project-name "$compose_project" \
       --env-file "$target_release/environments/$target_environment.env" \
@@ -1208,6 +1353,8 @@ attempt_file="$evidence_root/$(date -u +%Y%m%dT%H%M%SZ)-${release_id}-prepared-$
   printf 'AC_STATUS=PREPARED_BEFORE_WRITE_EXPOSURE\n'
   printf 'AC_ENVIRONMENT=%s\n' "$target_environment"
   printf 'AC_RELEASE_ID=%s\n' "$release_id"
+  printf 'AC_MEDIA_FILESYSTEM_ENABLED=%s\n' "$media_filesystem_enabled"
+  printf 'AC_MEDIA_FILESYSTEM_HOST_ROOT=%s\n' "$media_filesystem_host_root"
   printf 'AC_PREVIOUS_RELEASE=%s\n' "${previous_release##*/}"
   printf 'AC_PREVIOUS_EDGE_ROUTE=%s\n' "$previous_edge_route_target"
   printf 'AC_TARGET_EDGE_ROUTE=%s\n' "$edge_route_source"
@@ -1249,6 +1396,8 @@ evidence_file="$evidence_root/$(date -u +%Y%m%dT%H%M%SZ)-${release_id}-${evidenc
   printf 'AC_ENVIRONMENT=%s\n' "$target_environment"
   printf 'AC_STATUS=COMMITTED\n'
   printf 'AC_RELEASE_ID=%s\n' "$release_id"
+  printf 'AC_MEDIA_FILESYSTEM_ENABLED=%s\n' "$media_filesystem_enabled"
+  printf 'AC_MEDIA_FILESYSTEM_HOST_ROOT=%s\n' "$media_filesystem_host_root"
   printf 'AC_PREPARED_EVIDENCE=%s\n' "$attempt_file"
   printf 'AC_PREVIOUS_RELEASE=%s\n' "${previous_release##*/}"
   printf 'AC_PRE_MIGRATION_BACKUP=%s\n' "$backup_file"

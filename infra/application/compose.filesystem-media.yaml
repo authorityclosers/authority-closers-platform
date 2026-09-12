@@ -1,6 +1,7 @@
 # Explicit companion profile for the source-owned Studio video pipeline.
-# It is never included by the foundation/default application profile. The
-# operator activates it together with the exact reviewed scanner release.
+# It is selected only by install-application-release.sh when the target
+# release's reviewed environment profile sets AC_MEDIA_FILESYSTEM_ENABLED=true.
+# It is never included by the foundation/default application profile.
 services:
   api:
     environment:
@@ -9,8 +10,18 @@ services:
       AC_MEDIA_SCANNER_UNIX_SOCKET: /run/ac-media-safety/clamd.sock
       AC_MEDIA_MAX_UPLOAD_BYTES: "2000000000"
     volumes:
-      - /srv/authority-closers/volumes/media-video:/var/lib/ac-media:rw
-      - /srv/authority-closers/volumes/media-safety-socket:/run/ac-media-safety:ro
+      - type: bind
+        source: ${AC_MEDIA_FILESYSTEM_HOST_ROOT:?AC_MEDIA_FILESYSTEM_HOST_ROOT is required}
+        target: /var/lib/ac-media
+        read_only: false
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${AC_MEDIA_SCANNER_HOST_ROOT:?AC_MEDIA_SCANNER_HOST_ROOT is required}
+        target: /run/ac-media-safety
+        read_only: true
+        bind:
+          create_host_path: false
 
   worker:
     environment:
@@ -20,5 +31,15 @@ services:
       AC_MEDIA_MAX_UPLOAD_BYTES: "2000000000"
       TMPDIR: /var/lib/ac-media/tmp
     volumes:
-      - /srv/authority-closers/volumes/media-video:/var/lib/ac-media:rw
-      - /srv/authority-closers/volumes/media-safety-socket:/run/ac-media-safety:ro
+      - type: bind
+        source: ${AC_MEDIA_FILESYSTEM_HOST_ROOT:?AC_MEDIA_FILESYSTEM_HOST_ROOT is required}
+        target: /var/lib/ac-media
+        read_only: false
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${AC_MEDIA_SCANNER_HOST_ROOT:?AC_MEDIA_SCANNER_HOST_ROOT is required}
+        target: /run/ac-media-safety
+        read_only: true
+        bind:
+          create_host_path: false

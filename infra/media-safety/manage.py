@@ -28,6 +28,10 @@ from pathlib import Path, PurePosixPath
 ROOT = Path("/srv/authority-closers/media-safety")
 DATABASE = Path("/srv/authority-closers/volumes/media-safety-signatures")
 SOCKET_ROOT = Path("/srv/authority-closers/volumes/media-safety-socket")
+TEMP_ROOT = Path("/srv/authority-closers/volumes/media-safety-tmp")
+TEMP_CAPACITY_BYTES = 8_000_000_000
+TEMP_MAX_CONCURRENT_SCANS = 2
+TEMP_MAX_QUEUE = 2
 CONTAINER = "ac-media-safety-scanner"
 DOCKER_HOST = "unix:///var/run/docker.sock"
 DIGEST = "sha256:5a7c486fc98339860373284f48a670b74b1f25f15812b327fbe5b684061cf42f"
@@ -49,8 +53,13 @@ EXPECTED_BIND_DESTINATIONS = {
     "/etc/clamav/freshclam.conf",
     "/var/lib/clamav",
     "/run/ac-media-safety",
+    "/var/lib/ac-media-safety-tmp",
 }
-LEGACY_BIND_DESTINATIONS = EXPECTED_BIND_DESTINATIONS - {"/run/ac-media-safety"}
+LEGACY_BIND_DESTINATIONS = EXPECTED_BIND_DESTINATIONS - {
+    "/run/ac-media-safety",
+    "/var/lib/ac-media-safety-tmp",
+}
+SOCKET_ONLY_BIND_DESTINATIONS = EXPECTED_BIND_DESTINATIONS - {"/var/lib/ac-media-safety-tmp"}
 EXPECTED_TMPFS_DESTINATION = "/tmp"  # noqa: S108 - fixed container tmpfs mount
 EXPECTED_TMPFS_OPTIONS = frozenset(
     {"rw", "noexec", "nosuid", "nodev", "size=268435456", "uid=100", "gid=100", "mode=0700"}
@@ -241,12 +250,22 @@ def validate_container(
             "Unexpected or duplicate scanner mount",
         )
         mounts[destination] = item
-    socket_required = "/run/ac-media-safety" in (installed / "compose.yaml").read_text(
-        encoding="utf-8"
+    compose_text = (installed / "compose.yaml").read_text(encoding="utf-8")
+    socket_required = "/run/ac-media-safety:rw" in compose_text
+    temp_required = "/var/lib/ac-media-safety-tmp:rw" in compose_text
+    require(
+        not temp_required or socket_required,
+        "Scanner temporary storage lacks its socket boundary",
+    )
+    expected_mounts = (
+        EXPECTED_BIND_DESTINATIONS
+        if temp_required
+        else SOCKET_ONLY_BIND_DESTINATIONS
+        if socket_required
+        else LEGACY_BIND_DESTINATIONS
     )
     require(
-        set(mounts)
-        == (EXPECTED_BIND_DESTINATIONS if socket_required else LEGACY_BIND_DESTINATIONS),
+        set(mounts) == expected_mounts,
         "Unexpected scanner mounts",
     )
     # Docker represents Compose tmpfs mounts in HostConfig.Tmpfs, separately
@@ -291,6 +310,22 @@ def validate_container(
             and socket_mount.get("RW") is True,
             "Scanner socket storage is not writable or drifted",
         )
+    if temp_required:
+        clamd = (installed / "clamd.conf").read_text(encoding="utf-8")
+        require(
+            f"MaxThreads {TEMP_MAX_CONCURRENT_SCANS}" in clamd
+            and f"MaxQueue {TEMP_MAX_QUEUE}" in clamd
+            and f"MaxScanSize {TEMP_CAPACITY_BYTES // TEMP_MAX_CONCURRENT_SCANS}" in clamd
+            and "TemporaryDirectory /var/lib/ac-media-safety-tmp" in clamd,
+            "Scanner temporary storage policy is not bounded",
+        )
+        temp_mount = mounts["/var/lib/ac-media-safety-tmp"]
+        require(
+            temp_mount.get("Type") == "bind"
+            and temp_mount.get("Source") == str(TEMP_ROOT)
+            and temp_mount.get("RW") is True,
+            "Scanner temporary storage is not writable or drifted",
+        )
 
 
 def ensure_socket_root() -> None:
@@ -303,6 +338,25 @@ def ensure_socket_root() -> None:
     require(
         stat.S_ISDIR(info.st_mode) and info.st_uid == 100 and not info.st_mode & 0o022,
         "Untrusted scanner socket directory",
+    )
+
+
+def ensure_temp_root() -> None:
+    """Create the private disk workspace used by ClamAV stream scans."""
+
+    if not TEMP_ROOT.exists():
+        TEMP_ROOT.mkdir(mode=0o750)
+        os.chown(TEMP_ROOT, 100, 100)
+    info = TEMP_ROOT.lstat()
+    require(
+        stat.S_ISDIR(info.st_mode) and info.st_uid == 100 and not info.st_mode & 0o022,
+        "Untrusted scanner temporary directory",
+    )
+    filesystem = os.statvfs(TEMP_ROOT)
+    available = filesystem.f_bavail * filesystem.f_frsize
+    require(
+        available >= TEMP_CAPACITY_BYTES,
+        "Scanner temporary directory has less than the bounded capacity",
     )
 
 
@@ -658,6 +712,7 @@ def main() -> None:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         if args.action != "prove":
             ensure_socket_root()
+            ensure_temp_root()
         archives = ROOT / "archives"
         archives.mkdir(mode=0o755, exist_ok=True)
         trusted(archives)
@@ -714,6 +769,7 @@ def main() -> None:
                     "Untrusted signature directory",
                 )
                 ensure_socket_root()
+                ensure_temp_root()
                 run("docker", "pull", IMAGE, timeout=300)
             compose_up(args.release, installed)
             print(

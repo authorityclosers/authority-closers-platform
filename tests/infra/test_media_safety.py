@@ -138,6 +138,12 @@ def _container(module: ModuleType, installed: Path) -> dict:
                 "Destination": "/run/ac-media-safety",
                 "RW": True,
             },
+            {
+                "Type": "bind",
+                "Source": str(module.TEMP_ROOT),
+                "Destination": "/var/lib/ac-media-safety-tmp",
+                "RW": True,
+            },
         ],
         "State": {"Running": True, "Health": {"Status": "healthy"}},
     }
@@ -260,6 +266,24 @@ def test_compose_healthcheck_targets_exact_ipv4_scanner(safety_module: ModuleTyp
     assert safety_module.expected_health_test(SAFETY) == safety_module.HEALTH_TEST
 
 
+def test_scanner_stream_temp_is_a_private_disk_mount(safety_module: ModuleType) -> None:
+    compose = (SAFETY / "compose.yaml").read_text(encoding="utf-8")
+    clamd = (SAFETY / "clamd.conf").read_text(encoding="utf-8")
+
+    assert (
+        "/srv/authority-closers/volumes/media-safety-tmp:"
+        "/var/lib/ac-media-safety-tmp:rw"
+    ) in compose
+    assert "TemporaryDirectory /var/lib/ac-media-safety-tmp" in clamd
+    assert "/var/lib/ac-media-safety-tmp" in safety_module.EXPECTED_BIND_DESTINATIONS
+    assert f"MaxThreads {safety_module.TEMP_MAX_CONCURRENT_SCANS}" in clamd
+    assert f"MaxQueue {safety_module.TEMP_MAX_QUEUE}" in clamd
+    max_scan_size = safety_module.TEMP_CAPACITY_BYTES // safety_module.TEMP_MAX_CONCURRENT_SCANS
+    assert (
+        f"MaxScanSize {max_scan_size}" in clamd
+    )
+
+
 def test_docker_commands_are_pinned_to_local_unix_socket(
     safety_module: ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -357,11 +381,23 @@ def test_only_named_legacy_release_can_be_a_transition_source(
         compose.read_text(encoding="utf-8").replace(
             'test: ["CMD-SHELL", "echo PING | nc 127.0.0.1 3310 | grep -qx PONG"]',
             "test: [CMD, clamdcheck.sh]",
+        ).replace(
+            "      - /srv/authority-closers/volumes/media-safety-socket:/run/ac-media-safety:rw\n",
+            "",
+        ).replace(
+            "      - /srv/authority-closers/volumes/media-safety-tmp:"
+            "/var/lib/ac-media-safety-tmp:rw\n",
+            "",
         ),
         encoding="utf-8",
     )
     container = _container(safety_module, installed)
     legacy = next(iter(safety_module.LEGACY_HEALTH_RELEASES))
+    container["Mounts"] = [
+        item
+        for item in container["Mounts"]
+        if item["Destination"] not in {"/run/ac-media-safety", "/var/lib/ac-media-safety-tmp"}
+    ]
     container["Config"]["Labels"]["ac.release"] = legacy
     container["Config"]["Healthcheck"]["Test"] = safety_module.LEGACY_HEALTH_TEST
     monkeypatch.setattr(safety_module, "run", _hash_command(safety_module, installed))
@@ -382,6 +418,30 @@ def test_only_named_legacy_release_can_be_a_transition_source(
             installed,
             allow_legacy_health=True,
         )
+
+
+def test_socket_only_scanner_release_remains_rollback_compatible(
+    safety_module: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    installed = _installed(tmp_path)
+    compose = installed / "compose.yaml"
+    compose.write_text(
+        compose.read_text(encoding="utf-8").replace(
+            "      - /srv/authority-closers/volumes/media-safety-tmp:"
+            "/var/lib/ac-media-safety-tmp:rw\n",
+            "",
+        ),
+        encoding="utf-8",
+    )
+    container = _container(safety_module, installed)
+    container["Mounts"] = [
+        item
+        for item in container["Mounts"]
+        if item["Destination"] != "/var/lib/ac-media-safety-tmp"
+    ]
+    monkeypatch.setattr(safety_module, "run", _hash_command(safety_module, installed))
+
+    safety_module.validate_container(container, RELEASE, installed)
 
 
 @pytest.mark.parametrize(
