@@ -5314,6 +5314,27 @@ svg {
     font-size: 2.2rem;
   }
 
+  /* Give published module titles their own row on phones. */
+  .public-program-storefront .public-module-detail-card {
+    padding: 0;
+  }
+
+  .public-program-storefront .public-module-card__header,
+  .public-program-storefront .public-module-card__title-group {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .public-program-storefront .public-module-card__title-group {
+    width: 100%;
+  }
+
+  .public-program-storefront .public-module-card__title {
+    width: 100%;
+    min-width: 0;
+    line-height: 1.35;
+  }
+
   .activity-row > a,
   .activity-row__locked-content {
     grid-template-columns: 23px 31px minmax(0, 1fr) auto;
