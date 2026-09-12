@@ -69,11 +69,13 @@ External receipts live under
   task and broker tests. This overlaps focused receipts; do not add those counts.
 - `inference-existing-worker-isolated.xml`: eight passing native/PostgreSQL worker
   cases using distinct disposable schemas and private storage per test.
-- `inference-durable-postgresql.xml`: ten passing durable C2 PostgreSQL cases:
+- `inference-durable-postgresql-v2.xml`: eleven passing durable C2 PostgreSQL cases:
   exact consent and source/provider/model/permission rejection; one task/job and
   reservation for duplicate inputs; raw/C2 persistence; forced crash after receipt
   commit with acknowledgement-only recovery; failure/timeout holds; deletion before
-  dispatch and after a successful result; immutable reviewer history and erasure.
+  dispatch and after a successful result; immutable reviewer history and erasure;
+  malformed native response retention without publishing a C2 checkpoint. This
+  supersedes the earlier ten-case receipt; its scoped Ruff receipt also passed.
 - `broker-subprocess.xml`: 16 passing focused cases, including real Windows parent
   and descendant cleanup, repeated cancellation and input-write timeout. These are
   included in the 337 unit cases above, not additional independent coverage.
