@@ -291,3 +291,43 @@ class ConversationReportDraft(Base):
     evidence_receipt: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     erased_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ConversationInferenceTask(Base):
+    """One exact external effect, with immutable intent and erasable input content."""
+
+    __tablename__ = "conversation_inference_tasks"
+    __table_args__ = (
+        recording_fk(),
+        ForeignKeyConstraint(
+            ["run_id", "tenant_id", "person_id"],
+            ["conversation_runs.id", "conversation_runs.tenant_id", "conversation_runs.person_id"],
+        ),
+        UniqueConstraint("recording_id", "cache_key"),
+        UniqueConstraint("job_id"),
+        CheckConstraint("stage IN ('C2','C4','C5')", name="stage"),
+        CheckConstraint("generation >= 1", name="positive_generation"),
+        CheckConstraint(
+            "state IN ('queued','running','completed','failed','uncertain','cancelled')",
+            name="state",
+        ),
+    )
+    run_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    person_id: Mapped[UUID] = mapped_column(Uuid)
+    recording_id: Mapped[UUID] = mapped_column(Uuid)
+    session_id: Mapped[UUID] = mapped_column(Uuid, ForeignKey("sessions.id"))
+    job_id: Mapped[UUID] = mapped_column(Uuid, ForeignKey("jobs.id"))
+    quote_id: Mapped[UUID] = mapped_column(Uuid, ForeignKey("conversation_quotes.id"))
+    generation: Mapped[int] = mapped_column(Integer)
+    stage: Mapped[str] = mapped_column(String(2))
+    cache_key: Mapped[str] = mapped_column(String(64))
+    input_sha256: Mapped[str] = mapped_column(String(64))
+    intent_sha256: Mapped[str] = mapped_column(String(64))
+    intent: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    state: Mapped[str] = mapped_column(String(16))
+    checkpoint_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("conversation_checkpoints.id")
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    erased_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

@@ -50,6 +50,7 @@ from ac_platform.conversation_intelligence.entitlements import (
 from ac_platform.conversation_intelligence.models import (
     ConversationBudgetAccount,
     ConversationCheckpoint,
+    ConversationInferenceTask,
     ConversationMinuteAccount,
     ConversationPermission,
     ConversationQuote,
@@ -184,9 +185,7 @@ class _FencedExecutor:
     """Own a storage fence and all synchronous work until its thread is joined."""
 
     def __init__(self, root: Path) -> None:
-        self._executor = ThreadPoolExecutor(
-            max_workers=1, thread_name_prefix="conversation-worker"
-        )
+        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="conversation-worker")
         self._fence = _RecordingStorageFence(root)
         self._entered = False
 
@@ -223,9 +222,7 @@ class _FencedExecutor:
             raise release_error
         return False
 
-    async def run(
-        self, operation: Callable[..., _T], *args: Any, **kwargs: Any
-    ) -> _T:
+    async def run(self, operation: Callable[..., _T], *args: Any, **kwargs: Any) -> _T:
         if not self._entered:
             raise RuntimeError("storage fence is not active")
         return cast(_T, await _await_joined(self._submit(operation, *args, **kwargs)))
@@ -291,14 +288,10 @@ class OfflineConversationWorker:
             job = await self._job(db, work)
             await repository.renew(job, work.lease_token, lease_for=self.lease_for)
 
-    async def _heartbeat(
-        self, work: Work, stop: asyncio.Event
-    ) -> BaseException | None:
+    async def _heartbeat(self, work: Work, stop: asyncio.Event) -> BaseException | None:
         while True:
             try:
-                await asyncio.wait_for(
-                    stop.wait(), timeout=self.heartbeat_every.total_seconds()
-                )
+                await asyncio.wait_for(stop.wait(), timeout=self.heartbeat_every.total_seconds())
                 return None
             except TimeoutError:
                 pass
@@ -801,6 +794,15 @@ class OfflineConversationWorker:
                         )
                     )
                 ).all()
+                inference_tasks = (
+                    await db.scalars(
+                        select(ConversationInferenceTask).where(
+                            ConversationInferenceTask.recording_id == recording.id,
+                            ConversationInferenceTask.tenant_id == recording.tenant_id,
+                            ConversationInferenceTask.person_id == recording.person_id,
+                        )
+                    )
+                ).all()
                 expected = (
                     ObjectKey(
                         recording.tenant_id,
@@ -816,6 +818,15 @@ class OfflineConversationWorker:
                             ObjectKind.SIGNAL_FEATURES,
                         )
                         for run in runs
+                    ),
+                    *(
+                        ObjectKey(
+                            recording.tenant_id,
+                            recording.id,
+                            task.run_id,
+                            ObjectKind.PROVIDER_RESPONSE,
+                        )
+                        for task in inference_tasks
                     ),
                 )
                 receipt = await fenced.run(

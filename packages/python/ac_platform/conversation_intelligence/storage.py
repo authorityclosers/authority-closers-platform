@@ -41,6 +41,7 @@ class ObjectKind(StrEnum):
     SIGNAL_CHECKPOINT = "signal-checkpoint"
     TRANSCRIPT = "transcript"
     REPORT = "report"
+    PROVIDER_RESPONSE = "provider-response"
 
 
 @dataclass(frozen=True, slots=True)
