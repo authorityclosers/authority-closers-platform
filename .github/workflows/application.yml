@@ -229,6 +229,17 @@ jobs:
         env:
           AC_REQUIRE_RESTORE_INPUT_DOCKER_TEST: "1"
         run: pnpm validate
+      - name: Install locked registration browser
+        timeout-minutes: 5
+        run: uv run --frozen python -m playwright install --with-deps chromium
+      - name: Prove registration consent and server-rendered readiness
+        timeout-minutes: 5
+        env:
+          AC_REQUIRE_GOOGLE_REGISTRATION_BROWSER_TEST: "1"
+          AC_LEARNER_E2E_BASE_URL: http://127.0.0.1:3181
+        run: >-
+          uv run --frozen python scripts/verify-registration-browser.py
+          --evidence-dir "${{ runner.temp }}/registration-browser-${{ github.sha }}"
 
   package-release-images:
     if: github.event_name == 'workflow_dispatch'
