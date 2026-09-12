@@ -86,7 +86,7 @@ if R2_PROJECTED_ADDITIONAL_BYTES=8589934263 \
   exit 1
 fi
 
-# Exact storage and operation ceilings are valid; one unit above each is not.
+# The storage bound is unchanged: equality is valid, one byte above is not.
 write_storage_fixture 8589934592
 write_operations_fixture PutObject 0
 expect_generated_pass
@@ -94,12 +94,16 @@ write_storage_fixture 8589934593
 expect_generated_fail
 
 write_storage_fixture 0
-write_operations_fixture PutObject 700000
+write_operations_fixture PutObject 699999
 expect_generated_pass
+write_operations_fixture PutObject 700000
+expect_generated_fail
 write_operations_fixture PutObject 700001
 expect_generated_fail
-write_operations_fixture GetObject 7000000
+write_operations_fixture GetObject 6999999
 expect_generated_pass
+write_operations_fixture GetObject 7000000
+expect_generated_fail
 write_operations_fixture GetObject 7000001
 expect_generated_fail
 

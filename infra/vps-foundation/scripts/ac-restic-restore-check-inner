@@ -58,6 +58,12 @@ else
 fi
 # Repository lock acquired.
 
+# Reads also consume the R2 envelope; refuse all Restic calls while admission is paused.
+if ! /usr/local/libexec/authority-closers/r2-usage-guard >/dev/null 2>&1; then
+  printf 'AC_BACKUP_FAILURE=r2_quota_paused\n' >&2
+  exit 1
+fi
+
 [[ "$AC_FOUNDATION_RPO_TARGET_SECONDS" =~ ^[0-9]+$ ]]
 [[ "$AC_FOUNDATION_RESTORE_TARGET_SECONDS" =~ ^[0-9]+$ ]]
 
