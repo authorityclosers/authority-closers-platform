@@ -9,6 +9,7 @@ import sys
 from dataclasses import asdict
 from uuid import UUID
 
+from pydantic import ValidationError
 from sqlalchemy.exc import SQLAlchemyError
 
 from ac_platform.application.asyncio_runtime import run_async
@@ -64,6 +65,13 @@ async def _run(args: argparse.Namespace) -> int:
         raise VerificationEmailBootstrapError("AC_OPERATIONS_TENANT_ID is required")
     if environment in {"staging", "production"}:
         require_baked_release_id(settings.release_id)
+        if settings.email_provider != "resend":
+            raise VerificationEmailBootstrapError(
+                "staging and production require the reviewed Resend provider"
+            )
+    # Validate provider composition before opening a database transaction. A
+    # missing key/sender must never leave an audited intent or held job behind.
+    provider = create_email_provider_from_settings(settings)
     command = VerificationEmailBootstrapCommand(
         command_id=args.command_id,
         person_id=args.person_id,
@@ -84,7 +92,6 @@ async def _run(args: argparse.Namespace) -> int:
                 operations_tenant_id=settings.operations_tenant_id,
             ).prepare(command)
 
-        provider = create_email_provider_from_settings(settings)
         async with sessions() as session, session.begin():
             application = VerificationEmailBootstrapApplication(
                 session,
@@ -152,7 +159,19 @@ def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
         return run_async(_run(args))
-    except (VerificationEmailBootstrapError, OSError, ReleaseIdentityError, ValueError) as exc:
+    except ValidationError:
+        print(
+            "verification email bootstrap refused: deployment configuration is invalid",
+            file=sys.stderr,
+        )
+        return 2
+    except (
+        VerificationEmailBootstrapError,
+        PermanentProviderError,
+        OSError,
+        ReleaseIdentityError,
+        ValueError,
+    ) as exc:
         print(f"verification email bootstrap refused: {exc}", file=sys.stderr)
         return 2
     except SQLAlchemyError:
