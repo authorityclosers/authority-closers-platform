@@ -379,7 +379,14 @@ class Settings(BaseSettings):
             return
         if self.environment not in {"test", "staging", "production"}:
             raise ValueError("filesystem media requires test, staging, or production")
-        if self.media_provider_enabled or self.media_stress_fixtures_enabled:
+        if (
+            self.media_provider_enabled
+            or self.media_stress_fixtures_enabled
+            or self.media_public_films_delivery_enabled
+            or self.media_staging_public_films_delivery_enabled
+            or self.media_local_public_films_delivery_enabled
+            or self.media_local_avatar_enabled
+        ):
             raise ValueError("filesystem media cannot share provider or fixture activation")
         if self.media_max_upload_bytes != STUDIO_VIDEO_MAX_SOURCE_BYTES:
             raise ValueError("filesystem media requires the exact 2,000,000,000 byte source cap")
