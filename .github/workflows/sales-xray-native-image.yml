@@ -9,6 +9,7 @@ on:
         type: string
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -19,9 +20,12 @@ jobs:
   build-native-image:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    concurrency:
+      group: application-release-packaging
+      cancel-in-progress: false
     env:
       FROZEN_SHA: ${{ inputs.frozen_sha }}
-      NATIVE_TAG: ac-sales-xray-native:${{ inputs.frozen_sha }}
+      NATIVE_TAG: ghcr.io/authorityclosers/ac-sales-xray-native:${{ inputs.frozen_sha }}
       MAX_IMAGE_BYTES: "440000000"
       MAX_ARTIFACT_BYTES: "450000000"
       MAX_HELPER_BYTES: "20000000"
@@ -115,12 +119,46 @@ jobs:
           printf '%s' "$doctor_json" | python3 -c \
             'import json,sys; value=json.load(sys.stdin); assert value == {"ffmpeg": True, "ffprobe": True, "provider_calls": False}'
 
-          # docker save creates the self-contained image transport. The archive
-          # carries the tag for operator convenience; the config/image ID below
-          # remains the immutable runtime reference after docker load.
+          # docker save must retain the OCI index. The transport manifest digest
+          # is the offline runtime reference; the config/image ID is metadata
+          # bound to that manifest below.
           docker save --output "$RUNNER_TEMP/native-image.tar" "$NATIVE_TAG"
+          transport_index="$RUNNER_TEMP/native-image-index.json"
+          if ! tar --extract --to-stdout --file "$RUNNER_TEMP/native-image.tar" index.json > "$transport_index"; then
+            printf 'Native image transport has no OCI index.json; refusing an unproven runtime reference.\n' >&2
+            exit 1
+          fi
+          mapfile -t transport_manifests < <(
+            jq --raw-output --arg image "$NATIVE_TAG" \
+              '.manifests[] | select(.annotations["io.containerd.image.name"] == $image) | .digest' \
+              "$transport_index"
+          )
+          if [ "${#transport_manifests[@]}" -ne 1 ] \
+            || ! [[ "${transport_manifests[0]}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            printf 'OCI transport index does not contain exactly one manifest for %s.\n' \
+              "$NATIVE_TAG" >&2
+            exit 1
+          fi
+          transport_manifest_digest="${transport_manifests[0]}"
+          manifest_path="blobs/sha256/${transport_manifest_digest#sha256:}"
+          actual_transport_digest="sha256:$({
+            tar --extract --to-stdout --file "$RUNNER_TEMP/native-image.tar" "$manifest_path"
+          } | sha256sum | cut -d' ' -f1)"
+          [ "$actual_transport_digest" = "$transport_manifest_digest" ] || {
+            printf 'OCI transport manifest digest verification failed.\n' >&2
+            exit 1
+          }
+          transported_config_digest="$(
+            tar --extract --to-stdout --file "$RUNNER_TEMP/native-image.tar" "$manifest_path" \
+              | jq --raw-output '.config.digest'
+          )"
+          [ "$transported_config_digest" = "$image_id" ] || {
+            printf 'OCI transport manifest does not reference the built image config.\n' >&2
+            exit 1
+          }
           gzip -9 < "$RUNNER_TEMP/native-image.tar" > "$transport_file"
           rm -f "$RUNNER_TEMP/native-image.tar"
+          rm -f "$transport_index"
           gzip -t "$transport_file"
           transport_bytes="$(stat --format='%s' "$transport_file")"
           [[ "$transport_bytes" =~ ^[0-9]+$ && "$transport_bytes" -gt 0 ]] || {
@@ -143,7 +181,11 @@ jobs:
               "$image_id" "$loaded_id" >&2
             exit 1
           }
-          docker image inspect "$image_id" --format '{{.Id}}' | grep -Fx "$image_id"
+          loaded_runtime_id="$(docker image inspect --format '{{.Id}}' "$transport_manifest_digest")"
+          [ "$loaded_runtime_id" = "$image_id" ] || {
+            printf 'OCI transport manifest does not resolve to the loaded image config.\n' >&2
+            exit 1
+          }
 
           helper_files=(
             "scripts/native_runtime_helper.py"
@@ -187,7 +229,7 @@ jobs:
           transport_sha256="$(sha256sum "$transport_file" | cut -d' ' -f1)"
           helper_transport_sha256="$(sha256sum "$helper_transport_file" | cut -d' ' -f1)"
           repo_digest_count="$(printf '%s' "$repo_digests_json" | jq 'length')"
-          image_identity_type="docker_local_image_id"
+          image_identity_type="oci_transport_manifest"
           if [ "$repo_digest_count" -gt 0 ]; then
             registry_digest="$(printf '%s' "$repo_digests_json" | jq -r '.[0]')"
           else
@@ -196,6 +238,7 @@ jobs:
           export FROZEN_SHA NATIVE_TAG native_source_sha256 image_id image_architecture image_os
           export repo_digests_json dockerfile_sha256 context_tree_id doctor_json
           export transport_file transport_bytes transport_sha256 image_identity_type registry_digest
+          export transport_manifest_digest transported_config_digest
           export helper_transport_file helper_bytes helper_transport_sha256
           python3 - <<'PY'
           import json
@@ -219,7 +262,7 @@ jobs:
                   "architecture": os.environ["image_architecture"],
               },
               "image": {
-                  "expected_runtime_ref": os.environ["image_id"],
+                  "expected_runtime_ref": os.environ["transport_manifest_digest"],
                   "image_id": os.environ["image_id"],
                   "identity_type": os.environ["image_identity_type"],
                   "repository_digests": repository_digests,
@@ -230,8 +273,10 @@ jobs:
                   "filename": "native-image.tar.gz",
                   "bytes": int(os.environ["transport_bytes"]),
                   "sha256": os.environ["transport_sha256"],
+                  "manifest_digest": os.environ["transport_manifest_digest"],
+                  "config_digest": os.environ["transported_config_digest"],
                   "load_command": "docker load --input native-image.tar.gz",
-                  "inspect_command": "docker image inspect " + os.environ["image_id"],
+                  "inspect_command": "docker image inspect " + os.environ["transport_manifest_digest"],
               },
               "helper_source": {
                   "format": "tar-gzip",
@@ -262,11 +307,13 @@ jobs:
               encoding="utf-8",
           )
           env_lines = [
-              f"AC_NATIVE_IMAGE={os.environ['image_id']}",
+              f"AC_NATIVE_IMAGE={os.environ['transport_manifest_digest']}",
               f"AC_NATIVE_IMAGE_ID={os.environ['image_id']}",
               f"AC_NATIVE_IMAGE_TYPE={os.environ['image_identity_type']}",
               f"AC_NATIVE_REGISTRY_DIGEST={os.environ['registry_digest']}",
               "AC_NATIVE_TRANSPORT_FILE=native-image.tar.gz",
+              f"AC_NATIVE_TRANSPORT_MANIFEST_DIGEST={os.environ['transport_manifest_digest']}",
+              f"AC_NATIVE_TRANSPORT_CONFIG_DIGEST={os.environ['transported_config_digest']}",
               f"AC_NATIVE_TRANSPORT_SHA256={os.environ['transport_sha256']}",
               "AC_NATIVE_HELPER_FILE=native-helper.tar.gz",
               f"AC_NATIVE_HELPER_SHA256={os.environ['helper_transport_sha256']}",
@@ -292,6 +339,46 @@ jobs:
           }
           find "$artifact_dir" -maxdepth 1 -type f -printf '%f\n' | sort | \
             diff -u <(printf '%s\n' SHA256SUMS native-helper-files.sha256 native-helper.tar.gz native-image.env native-image.json native-image.tar.gz | sort) -
+
+      - name: Admit the native artifact under the pooled ceiling
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifact_dir="$RUNNER_TEMP/ac-sales-xray-native-${FROZEN_SHA}"
+          max_artifact_bytes=450000000
+          max_artifact_pool_bytes=450000000
+          candidate_bytes="$(du --bytes --summarize "$artifact_dir" | cut -f1)"
+          if [ "$candidate_bytes" -gt "$max_artifact_bytes" ]; then
+            printf 'Native artifact is %s bytes; refusing upload above %s bytes.\n' \
+              "$candidate_bytes" "$max_artifact_bytes" >&2
+            exit 1
+          fi
+
+          list_repository_artifacts() {
+            gh api --paginate \
+              --header 'Accept: application/vnd.github+json' \
+              --header 'X-GitHub-Api-Version: 2026-03-10' \
+              "/repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" \
+              | jq --slurp '[.[].artifacts[]]'
+          }
+
+          artifacts_before="$RUNNER_TEMP/native-artifacts-before.json"
+          list_repository_artifacts > "$artifacts_before"
+          retained_bytes="$(jq '[.[].size_in_bytes] | add // 0' "$artifacts_before")"
+          [[ "$retained_bytes" =~ ^[0-9]+$ ]] || {
+            printf 'Repository artifact usage could not be proven.\n' >&2
+            exit 1
+          }
+          projected_artifact_pool_bytes=$((retained_bytes + candidate_bytes))
+          if [ "$projected_artifact_pool_bytes" -gt "$max_artifact_pool_bytes" ]; then
+            printf 'Projected repository artifact pool is %s bytes; refusing upload above %s bytes.\n' \
+              "$projected_artifact_pool_bytes" "$max_artifact_pool_bytes" >&2
+            exit 1
+          fi
+          printf 'Native artifact is %s bytes; projected repository pool is %s bytes (ceiling %s).\n' \
+            "$candidate_bytes" "$projected_artifact_pool_bytes" "$max_artifact_pool_bytes"
 
       - name: Upload the offline native image artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
