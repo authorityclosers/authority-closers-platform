@@ -186,6 +186,12 @@ class MeResponse(BaseModel):
     permissions: list[str]
 
 
+class GoogleLinkResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    linked: bool
+
+
 class WorkspaceChoiceResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -2013,6 +2019,22 @@ def install_identity_http(
             permissions=sorted(auth.resolved.actor.permissions),
         )
 
+    @router.get("/me/google-link", response_model=GoogleLinkResponse)
+    async def google_link(
+        request: Request,
+        response: Response,
+        auth: AuthenticatedTransaction = actor_dependency,
+    ) -> GoogleLinkResponse:
+        if request.query_params:
+            raise DomainError("Google-link status is resolved only for the authenticated person.")
+        linked = await auth.identity.repository.has_provider_identity_for_issuers(
+            auth.resolved.actor.person_id,
+            ("accounts.google.com", "https://accounts.google.com"),
+        )
+        response.headers["cache-control"] = "private, no-store"
+        response.headers["pragma"] = "no-cache"
+        return GoogleLinkResponse(linked=linked)
+
     @router.get("/me/workspaces", response_model=WorkspacesResponse)
     async def workspaces(
         request: Request,
@@ -2124,6 +2146,7 @@ __all__ = [
     "AuthenticatedTransaction",
     "AuthenticationRequired",
     "ContextResponse",
+    "GoogleLinkResponse",
     "LearnerConsentRequired",
     "MeResponse",
     "PasswordChallengeRejected",

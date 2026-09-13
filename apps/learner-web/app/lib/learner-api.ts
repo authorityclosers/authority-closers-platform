@@ -59,6 +59,10 @@ export interface PasswordResetResponse {
   reset: true;
 }
 
+export interface GoogleLinkStatusResponse {
+  linked: boolean;
+}
+
 export type OnboardingStatus =
   | "not_started"
   | "in_progress"
@@ -598,6 +602,15 @@ async function parseBody(response: Response): Promise<unknown> {
   }
 }
 
+export function parseGoogleLinkStatusResponse(
+  body: unknown,
+): GoogleLinkStatusResponse {
+  if (!isRecord(body) || typeof body.linked !== "boolean") {
+    throw new Error("Learner API returned an invalid Google-link status.");
+  }
+  return { linked: body.linked };
+}
+
 function assertV1Path(path: string): void {
   if (!path.startsWith("/v1/") && path !== "/v1") {
     throw new Error("Learner API requires a same-origin /v1 path.");
@@ -925,6 +938,13 @@ export function createLearnerApi(
       ),
     me: (options: LearnerReadOptions = {}) =>
       request<MeResponse>("/v1/me", { ...options, cache: "no-store" }),
+    googleLinkStatus: async (options: LearnerReadOptions = {}) =>
+      parseGoogleLinkStatusResponse(
+        await request<unknown>("/v1/me/google-link", {
+          ...options,
+          cache: "no-store",
+        }),
+      ),
     communityProfile: (options: LearnerReadOptions = {}) =>
       request<CommunityProfileResponse>("/v1/community/profile", {
         ...options,

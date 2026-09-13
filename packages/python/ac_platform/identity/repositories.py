@@ -595,6 +595,24 @@ class AsyncSqlAlchemyIdentityRepository:
         )
         return identity_id is not None
 
+    async def has_provider_identity_for_issuers(
+        self, person_id: UUID, issuers: Sequence[str]
+    ) -> bool:
+        """Return whether one exact provider issuer is linked to the person."""
+
+        issuer_values = tuple(issuers)
+        if not issuer_values:
+            return False
+        identity_id = await self._session.scalar(
+            select(ProviderIdentity.id)
+            .where(
+                ProviderIdentity.person_id == person_id,
+                ProviderIdentity.issuer.in_(issuer_values),
+            )
+            .limit(1)
+        )
+        return identity_id is not None
+
     async def get_sole_active_tenant_id(self, person_id: UUID) -> UUID | None:
         """Return a tenant only when exactly one active scope currently exists."""
 
