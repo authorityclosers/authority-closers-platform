@@ -6,12 +6,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ForgotPasswordPage from "../forgot-password/page";
 import ResetPasswordPage from "../reset-password/page";
 import VerifyEmailPage from "../verify-email/page";
-import { createLearnerApi, type LearnerApi } from "../lib/learner-api";
+import {
+  ApiError,
+  createLearnerApi,
+  type LearnerApi,
+} from "../lib/learner-api";
 import * as apiModule from "../lib/learner-api";
 import { FREE_COURSE_SLUG } from "../lib/course-intent";
 import * as bridge from "../lib/dev-api-proxy";
 import { LoginForm } from "./login-form";
-import { PasswordResetForm, VerifyEmailFlow } from "./password-auth-forms";
+import {
+  PasswordResetForm,
+  RecoveryRequestForm,
+  VerifyEmailFlow,
+} from "./password-auth-forms";
 import { StagingAuthHandoff } from "./staging-auth-handoff";
 
 (
@@ -142,6 +150,89 @@ describe("password email activity continuity", () => {
     const login = renderToStaticMarkup(<LoginForm courseIntent={course} />);
     expect(login).toContain(`href="/forgot-password?course=${course}"`);
     expect(login).not.toContain("activity=");
+  });
+
+  it("shows pending verification guidance when opened without a token", async () => {
+    const resendPasswordVerification = vi.fn(async () => ({ accepted: true }));
+    vi.spyOn(apiModule, "createLearnerApi").mockReturnValue({
+      resendPasswordVerification,
+    } as unknown as LearnerApi);
+
+    window.history.replaceState(null, "", "/verify-email");
+    await mount(<VerifyEmailFlow />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector("h2")?.textContent).toBe(
+      "Check your inbox.",
+    );
+    expect(container.textContent).toContain("request a fresh link below");
+    expect(container.textContent).not.toContain("Link unavailable.");
+    const form = container.querySelector<HTMLFormElement>("form")!;
+    form.querySelector<HTMLInputElement>("[name=email]")!.value =
+      "learner@example.com";
+    await act(async () =>
+      form.dispatchEvent(
+        new Event("submit", { bubbles: true, cancelable: true }),
+      ),
+    );
+    expect(resendPasswordVerification).toHaveBeenCalledExactlyOnceWith(
+      "learner@example.com",
+    );
+    expect(container.textContent).toContain("pending verification");
+  });
+
+  it("keeps an invalid token in the unavailable-link state", async () => {
+    const verifyPasswordEmail = vi.fn(async () => {
+      throw new ApiError(400, "This verification link is invalid or expired.");
+    });
+    vi.spyOn(apiModule, "createLearnerApi").mockReturnValue({
+      verifyPasswordEmail,
+    } as unknown as LearnerApi);
+
+    window.history.replaceState(null, "", `/verify-email#token=${token}`);
+    await mount(<VerifyEmailFlow />);
+    await act(async () => await Promise.resolve());
+
+    expect(container.querySelector("h2")?.textContent).toBe(
+      "Link unavailable.",
+    );
+    expect(container.textContent).not.toContain("Check your inbox.");
+    expect(container.textContent).toContain("invalid or expired");
+  });
+
+  it("uses neutral recovery confirmation and links pending verification to resend", async () => {
+    const requestPasswordRecovery = vi.fn(async () => ({ accepted: true }));
+    vi.spyOn(apiModule, "createLearnerApi").mockReturnValue({
+      requestPasswordRecovery,
+    } as unknown as LearnerApi);
+
+    await mount(
+      <RecoveryRequestForm courseIntent={course} activityIntent={activity} />,
+    );
+    const form = container.querySelector<HTMLFormElement>("form")!;
+    form.querySelector<HTMLInputElement>("[name=email]")!.value =
+      "learner@example.com";
+    await act(async () =>
+      form.dispatchEvent(
+        new Event("submit", { bubbles: true, cancelable: true }),
+      ),
+    );
+
+    expect(requestPasswordRecovery).toHaveBeenCalledExactlyOnceWith(
+      "learner@example.com",
+      { courseIntent: course, activityIntent: activity, salesNext: null },
+    );
+    expect(container.textContent).toContain("account recovery email");
+    expect(container.textContent).not.toContain("active account");
+    expect(container.textContent).not.toContain("30-minute");
+    expect(
+      container
+        .querySelector<HTMLAnchorElement>('a[href^="/verify-email"]')
+        ?.getAttribute("href"),
+    ).toBe(`/verify-email?course=${course}&activity=${activity}`);
   });
 
   it("keeps the validated context in login and staging auth links", () => {

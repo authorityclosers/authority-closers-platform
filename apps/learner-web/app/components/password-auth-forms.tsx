@@ -355,6 +355,12 @@ export function RecoveryRequestForm({
     courseIntent,
     salesNext,
   );
+  const verifyEmailHref = authIntentHref(
+    ROUTES.verifyEmail,
+    activityIntent,
+    courseIntent,
+    salesNext,
+  );
 
   useEffect(() => {
     if (error) errorRef.current?.focus();
@@ -397,14 +403,18 @@ export function RecoveryRequestForm({
       {complete ? (
         <div className="auth-result" role="status">
           <p>
-            If the address belongs to an active account, a 30-minute reset link
-            is on its way.
+            If this address can receive an account recovery email, instructions
+            are on their way. If you are still verifying a new account, request
+            a fresh verification link instead.
           </p>
           <Link
             className="button button--outline button--full"
             href={loginHref}
           >
             Return to sign in
+          </Link>
+          <Link className="text-link" href={verifyEmailHref}>
+            Request a fresh verification link
           </Link>
         </div>
       ) : (
@@ -458,9 +468,9 @@ export function VerifyEmailFlow({
   salesNext?: SalesAuthNext;
 } = {}) {
   const started = useRef(false);
-  const [state, setState] = useState<"working" | "success" | "error">(
-    "working",
-  );
+  const [state, setState] = useState<
+    "working" | "pending" | "success" | "error"
+  >("working");
   const [message, setMessage] = useState("Verifying your email…");
   const [resendPending, setResendPending] = useState(false);
   const [resendComplete, setResendComplete] = useState(false);
@@ -508,8 +518,10 @@ export function VerifyEmailFlow({
     const token = fragmentToken();
     if (!token) {
       queueMicrotask(() => {
-        setState("error");
-        setMessage("This verification link is missing its one-time token.");
+        setState("pending");
+        setMessage(
+          "If you just registered, check your inbox for the verification email. If it has not arrived, request a fresh link below.",
+        );
       });
       return;
     }
@@ -542,9 +554,11 @@ export function VerifyEmailFlow({
       <h2>
         {state === "working"
           ? "One moment."
-          : state === "success"
-            ? "Email verified."
-            : "Link unavailable."}
+          : state === "pending"
+            ? "Check your inbox."
+            : state === "success"
+              ? "Email verified."
+              : "Link unavailable."}
       </h2>
       <p>{message}</p>
       {state === "success" ? (
@@ -552,12 +566,12 @@ export function VerifyEmailFlow({
           Continue to onboarding
         </Link>
       ) : null}
-      {state === "error" ? (
+      {state === "pending" || state === "error" ? (
         <>
           {resendComplete ? (
             <p className="form-message" role="status">
-              If the address has an unverified password account, a fresh link is
-              on its way.
+              If this address has a pending verification, a fresh link is on its
+              way.
             </p>
           ) : (
             <form className="stack-form" onSubmit={resend}>
