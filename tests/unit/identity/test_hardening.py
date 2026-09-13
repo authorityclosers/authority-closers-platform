@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session as DbSession
 
 from ac_platform.db.base import Base
+from ac_platform.db.models import model_metadata
 from ac_platform.identity.application import (
     AsyncIdentityApplication,
     ProductionTransactionRequiredError,
@@ -216,7 +217,7 @@ async def test_production_factory_is_async_only_and_requires_caller_transaction(
 
 def test_sqlalchemy_identity_store_round_trips_hashed_session_metadata() -> None:
     engine = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    model_metadata().create_all(engine)
     try:
         person_id = uuid4()
         now = NOW
@@ -345,7 +346,7 @@ async def test_account_deletion_keeps_processing_when_privacy_batch_is_locked() 
 
 def test_sqlalchemy_deletion_ends_all_memberships_in_same_transaction() -> None:
     engine = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(engine)
+    model_metadata().create_all(engine)
     try:
         person_id = uuid4()
         tenant_id = uuid4()
