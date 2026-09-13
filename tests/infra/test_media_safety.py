@@ -1141,10 +1141,31 @@ def test_old_scanner_rollback_does_not_prepare_or_require_temporary_disk(
 
 def _temp_setup_fixture(
     module: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> list:
+) -> tuple[list, list[tuple[str, int]]]:
     managed = tmp_path / "managed"
     managed.mkdir()
     temp = tmp_path / "scanner-temp"
+    # The controller runs as root and can inspect its mode-000 mountpoint.
+    # This allocation harness mocks privileged ownership/mount operations; keep
+    # its private directory traversable for an unprivileged POSIX pytest runner,
+    # while recording the exact restrictive modes requested by the controller.
+    permission_calls: list[tuple[str, int]] = []
+    real_mkdir, real_chmod = Path.mkdir, Path.chmod
+
+    def privileged_mkdir(path, mode=0o777, parents=False, exist_ok=False):
+        if path == temp and mode == 0:
+            permission_calls.append(("mkdir", mode))
+            mode = 0o700
+        return real_mkdir(path, mode=mode, parents=parents, exist_ok=exist_ok)
+
+    def privileged_chmod(path, mode, **kwargs):
+        if path == temp:
+            permission_calls.append(("chmod", mode))
+            mode |= 0o700
+        return real_chmod(path, mode, **kwargs)
+
+    monkeypatch.setattr(Path, "mkdir", privileged_mkdir)
+    monkeypatch.setattr(Path, "chmod", privileged_chmod)
     monkeypatch.setattr(module, "ROOT", managed)
     monkeypatch.setattr(module, "TEMP_ROOT", temp)
     monkeypatch.setattr(module, "TEMP_IMAGE", managed / "scanner-temp-v1.ext4")
@@ -1196,7 +1217,7 @@ def _temp_setup_fixture(
         ),
     )
     monkeypatch.setattr(module.os, "O_NOFOLLOW", getattr(os, "O_NOFOLLOW", 0), raising=False)
-    return calls
+    return calls, permission_calls
 
 
 def test_temporary_disk_creation_allocates_once_and_preserves_fixed_image(
@@ -1204,7 +1225,7 @@ def test_temporary_disk_creation_allocates_once_and_preserves_fixed_image(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    calls = _temp_setup_fixture(safety_module, tmp_path, monkeypatch)
+    calls, permissions = _temp_setup_fixture(safety_module, tmp_path, monkeypatch)
     safety_module.ensure_temp_root()
     first_bytes = safety_module.TEMP_IMAGE.read_bytes()
     assert len(first_bytes) == 4096
@@ -1222,6 +1243,13 @@ def test_temporary_disk_creation_allocates_once_and_preserves_fixed_image(
     safety_module.ensure_temp_root()
     assert safety_module.TEMP_IMAGE.read_bytes() == first_bytes
     assert [command[0] for command in calls].count("mkfs.ext4") == 1
+    assert permissions == [
+        ("mkdir", 0o000),
+        ("chmod", 0o000),
+        ("chmod", 0o750),
+        ("chmod", 0o000),
+        ("chmod", 0o750),
+    ]
 
 
 def test_interrupted_allocation_is_retained_and_blocks_reallocation(
@@ -1229,7 +1257,7 @@ def test_interrupted_allocation_is_retained_and_blocks_reallocation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    calls = _temp_setup_fixture(safety_module, tmp_path, monkeypatch)
+    calls, permissions = _temp_setup_fixture(safety_module, tmp_path, monkeypatch)
 
     def exhausted(*_args: object) -> None:
         raise OSError("synthetic disk full")
@@ -1241,6 +1269,7 @@ def test_interrupted_allocation_is_retained_and_blocks_reallocation(
     with pytest.raises(ValueError, match="Incomplete"):
         safety_module.ensure_temp_root()
     assert calls == []
+    assert permissions == [("mkdir", 0o000), ("chmod", 0o000), ("chmod", 0o000)]
 
 
 def test_temporary_mountpoint_with_old_debris_is_never_overlaid_or_erased(
@@ -1248,7 +1277,7 @@ def test_temporary_mountpoint_with_old_debris_is_never_overlaid_or_erased(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    calls = _temp_setup_fixture(safety_module, tmp_path, monkeypatch)
+    calls, permissions = _temp_setup_fixture(safety_module, tmp_path, monkeypatch)
     safety_module.TEMP_ROOT.mkdir()
     debris = safety_module.TEMP_ROOT / "retained"
     debris.write_bytes(b"owned old stream")
@@ -1256,6 +1285,7 @@ def test_temporary_mountpoint_with_old_debris_is_never_overlaid_or_erased(
         safety_module.ensure_temp_root()
     assert debris.read_bytes() == b"owned old stream"
     assert calls == []
+    assert permissions == []
 
 
 @pytest.mark.parametrize("container_identity", ["3:4", "3:5"])
