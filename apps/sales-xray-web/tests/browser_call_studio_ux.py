@@ -4,6 +4,8 @@ The API responses are bounded synthetic fixtures. No provider is called and no
 private audio is used; the WAV is generated as four seconds of silence.
 """
 
+import hashlib
+import json
 import os
 import wave
 from io import BytesIO
@@ -336,6 +338,7 @@ def main() -> None:
         page.get_by_role("button", name="Print / save PDF", exact=True).click()
         assert page.evaluate("window.__printCalls") == 1
 
+        page.get_by_role("tab", name="Call moments", exact=True).click()
         first_moment = page.locator(".studio-moment").first
         first_moment.click()
         assert first_moment.get_attribute("aria-pressed") == "true"
@@ -361,10 +364,13 @@ def main() -> None:
         page.set_viewport_size({"width": 1280, "height": 900})
         page.evaluate("window.__playMode = 'resolve'")
         open_report(page)
+        page.evaluate("window.__originalAudio = document.querySelector('audio')")
+        page.get_by_role("tab", name="Sales factors", exact=True).click()
         factors = page.locator('[aria-label="Sales factors"]')
         assert factors.locator("details").count() == 8
         factors.locator("summary").first.click()
         assert REPORT["dimensions"][0]["observation"] in factors.inner_text()
+        page.get_by_role("tab", name="Transcript", exact=True).click()
         page.locator("summary").filter(has_text="Read full transcript").click()
         page.get_by_role("searchbox", name="Search transcript phrases").fill("useful")
         assert page.locator("[data-segment-id]").count() == 1
@@ -372,6 +378,7 @@ def main() -> None:
         assert page.evaluate("window.__seekTimes.includes(2.5)")
         page.get_by_role("searchbox", name="Search transcript phrases").fill("")
         assert page.locator("[data-segment-id]").count() == 2
+        page.get_by_role("tab", name="Sound", exact=True).click()
         page.locator("summary").filter(has_text="Sound of the recording").click()
         page.get_by_text("-18.0 dBFS", exact=True).wait_for()
         page.get_by_role("combobox", name="Audio channel", exact=True).select_option("1")
@@ -381,11 +388,34 @@ def main() -> None:
         assert "Not available" in page.locator("output").inner_text()
         page.get_by_role("slider").fill("1")
         assert "190.0 Hz" in page.locator("output").inner_text()
+        # Every section is independently usable, while the same audio element remains mounted.
+        for tab_name in (
+            "Overview",
+            "Sales factors",
+            "Call moments",
+            "Transcript",
+            "Sound",
+            "Next steps",
+        ):
+            page.get_by_role("tab", name=tab_name, exact=True).click()
+            assert page.get_by_role("tabpanel").count() == 1
+            page.screenshot(
+                path=str(AUDIT_DIR / f"section-{tab_name.lower().replace(' ', '-')}.png"),
+                full_page=True,
+                animations="disabled",
+            )
+        assert page.evaluate("window.__originalAudio === document.querySelector('audio')")
+        page.get_by_role("tab", name="Transcript", exact=True).click()
+        assert page.get_by_role("searchbox", name="Search transcript phrases").input_value() == ""
+        page.get_by_role("tab", name="Sound", exact=True).click()
+        assert "190.0 Hz" in page.locator("output").inner_text()
+        assert page.get_by_role("combobox", name="Audio channel", exact=True).input_value() == "1"
         page.emulate_media(media="print")
         assert not page.locator(".studio-header").is_visible()
         assert not page.locator(".studio-report-actions").is_visible()
         assert not page.get_by_role("searchbox", name="Search transcript phrases").is_visible()
         assert not page.get_by_role("combobox", name="Audio channel", exact=True).is_visible()
+        assert not page.get_by_role("tablist").is_visible()
         assert report.is_visible()
         assert "AI draft · Dipak has not reviewed this" in report.inner_text()
         page.screenshot(
@@ -396,20 +426,38 @@ def main() -> None:
         language = page.locator(".studio-language-control select")
         assert language.count() == 1
         modes = (
-            ("en", "Upload your call", "Sound of the recording"),
-            ("hi", "कॉल अपलोड करें", "रिकॉर्डिंग की आवाज़"),
-            ("mr", "कॉल अपलोड करा", "रेकॉर्डिंगचा आवाज"),
-            ("en-hi-mixed", "Upload कॉल करें", "Sound of the recording · रिकॉर्डिंग की आवाज़"),
+            ("en", "Upload your call", "Sound of the recording", "Overview", "Transcript", "Sound"),
+            ("hi", "कॉल अपलोड करें", "रिकॉर्डिंग की आवाज़", "सारांश", "पूरी बातचीत", "आवाज़"),
+            ("mr", "कॉल अपलोड करा", "रेकॉर्डिंगचा आवाज", "सारांश", "संपूर्ण संभाषण", "आवाज"),
+            (
+                "en-hi-mixed",
+                "Upload कॉल करें",
+                "Sound of the recording · रिकॉर्डिंग की आवाज़",
+                "Overview · सारांश",
+                "Transcript · पूरी बातचीत",
+                "Sound · आवाज़",
+            ),
         )
-        for mode, expected_step, expected_measurement in modes:
+        for (
+            mode,
+            expected_step,
+            expected_measurement,
+            overview_tab,
+            transcript_tab,
+            sound_tab,
+        ) in modes:
             language.select_option(mode)
+            page.get_by_role("tab", name=sound_tab, exact=True).click()
             assert expected_step in page.locator(".studio-steps").inner_text()
             assert (
                 expected_measurement
                 in page.locator("summary").filter(has_text=expected_measurement).inner_text()
             )
+            assert "190.0 Hz" in page.locator("output").inner_text()
+            page.get_by_role("tab", name=transcript_tab, exact=True).click()
             assert TRANSCRIPT["segments"][1]["text"] in report.inner_text()
             assert REPORT["summary"] in report.inner_text()
+            page.get_by_role("tab", name=overview_tab, exact=True).click()
             page.set_viewport_size({"width": 1280, "height": 900})
             page.screenshot(
                 path=str(AUDIT_DIR / f"report-{mode}-desktop.png"),
@@ -418,6 +466,14 @@ def main() -> None:
             )
             page.set_viewport_size({"width": 320, "height": 780})
             assert_mobile_header_contained(page)
+            tab = page.get_by_role("tab", name=overview_tab, exact=True)
+            tab.focus()
+            tab.press("End")
+            assert page.locator('[role="tab"][aria-selected="true"]').evaluate(
+                "el => el === document.activeElement"
+            )
+            assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+            page.locator('[role="tab"][aria-selected="true"]').press("Home")
             page.screenshot(
                 path=str(AUDIT_DIR / f"report-{mode}-mobile.png"),
                 full_page=True,
@@ -425,6 +481,46 @@ def main() -> None:
             )
 
         browser.close()
+        root = Path(__file__).resolve().parents[3]
+        receipt = {
+            "schema": "ac.sales-xray.report-navigation-browser/1",
+            "source_commit": os.environ.get("SALES_XRAY_SOURCE_COMMIT", "see source file hashes"),
+            "source_files": {
+                str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest()
+                for path in [
+                    root / "apps/sales-xray-web/app/call-studio.tsx",
+                    root / "apps/sales-xray-web/app/report-explorer.tsx",
+                    root / "apps/sales-xray-web/app/report-explorer.module.css",
+                ]
+            },
+            "url": BASE_URL,
+            "fixture_api": True,
+            "media_play_substituted_for_recovery": True,
+            "provider_calls": 0,
+            "checks": [
+                "six usable sections",
+                "same media element across navigation",
+                "source moment seek and blocked/missing recovery",
+                "transcript filter and exact seek",
+                "retained sound channel and cursor",
+                "four language modes without changing source text",
+                "keyboard Home/End and selected focus at320px",
+                "print includes hidden sections and excludes tab controls",
+            ],
+            "result": "passed",
+            "artifacts": [
+                {
+                    "file": p.name,
+                    "sha256": hashlib.sha256(p.read_bytes()).hexdigest(),
+                    "bytes": p.stat().st_size,
+                }
+                for p in sorted(AUDIT_DIR.iterdir())
+                if p.suffix in {".png", ".pdf"}
+            ],
+        }
+        (AUDIT_DIR / "navigation-browser-receipt.json").write_text(
+            json.dumps(receipt, indent=2), encoding="utf-8"
+        )
 
 
 if __name__ == "__main__":

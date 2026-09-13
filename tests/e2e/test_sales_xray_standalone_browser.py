@@ -423,6 +423,7 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
                 "and seeks it."
             )
 
+            page.get_by_role("tab", name="Sound", exact=True).click()
             measurement_summary = (
                 page.locator("details").filter(has_text="Sound of the recording").locator("summary")
             )
@@ -465,10 +466,9 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
                 "The saved measurement chart switches from sound level to pitch estimate."
             )
 
+            page.get_by_role("tab", name="Sales factors", exact=True).click()
             factors = page.get_by_role("region", name="Sales factors")
-            expect(
-                factors.get_by_role("heading", name="Explore the sales factors")
-            ).to_be_visible()
+            expect(factors.get_by_role("heading", name="Explore the sales factors")).to_be_visible()
             factor_details = factors.locator("details")
             expect(factor_details).to_have_count(8)
             factor_details.first.locator("summary").click()
@@ -477,6 +477,7 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
                 "The report exposes all eight saved sales factors with bounded observations."
             )
 
+            page.get_by_role("tab", name="Transcript", exact=True).click()
             transcript = page.locator("details").filter(has_text="Read full transcript")
             expect(transcript.locator("summary")).to_be_visible()
             transcript.locator("summary").click()

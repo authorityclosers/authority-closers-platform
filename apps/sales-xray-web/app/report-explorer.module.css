@@ -1,0 +1,80 @@
+.explorer {
+  min-width: 0;
+  margin-block: 24px;
+}
+
+.tabs {
+  display: flex;
+  gap: 6px;
+  max-width: 100%;
+  padding: 5px;
+  overflow-x: auto;
+  background: var(--canvas, #f5f7fb);
+  border: 1px solid var(--border, #dbe2ef);
+  border-radius: 14px;
+  scrollbar-width: thin;
+}
+
+.tabs button {
+  flex: 1 0 auto;
+  min-height: 44px;
+  padding: 10px 15px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted, #55657a);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 650;
+  cursor: pointer;
+  transition:
+    color 140ms ease,
+    background-color 140ms ease;
+}
+
+.tabs button:hover {
+  background: var(--surface, #fff);
+  color: var(--ink, #203243);
+}
+
+.tabs button[aria-selected="true"] {
+  color: var(--accent, #3357ce);
+  background: var(--surface, #fff);
+  border-color: var(--border, #dbe2ef);
+  box-shadow: 0 2px 5px #2032430a;
+}
+
+.tabs button:focus-visible,
+.panel:focus-visible {
+  outline: 2px solid var(--accent, #3357ce);
+  outline-offset: -2px;
+}
+
+.panel {
+  min-width: 0;
+  padding-block-start: 22px;
+}
+
+.panel > section + section {
+  border-top: 1px solid var(--border, #dbe2ef);
+  padding-block-start: 24px;
+  margin-block-start: 24px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tabs button {
+    transition: none;
+  }
+}
+
+@media print {
+  .tabs {
+    display: none !important;
+  }
+
+  .panel,
+  .panel[hidden] {
+    display: block !important;
+    padding-block-start: 0;
+  }
+}

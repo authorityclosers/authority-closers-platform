@@ -403,6 +403,7 @@ def _exercise_browser(backend: BrowserBackend, evidence: Path) -> None:
             )
             assert page.locator("audio").evaluate("audio => audio.duration") == 1
             page.locator("audio").evaluate("audio => { audio.currentTime = 0.5; }")
+            page.get_by_role("tab", name="Call moments", exact=True).click()
             page.get_by_role("region", name="Sales call report").locator(
                 "button.studio-moment"
             ).first.click()
