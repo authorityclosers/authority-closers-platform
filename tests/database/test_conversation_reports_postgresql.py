@@ -128,7 +128,11 @@ async def _promote_worker_actor(engine: Any, prepared: WorkerPrepared) -> ActorC
     async with AsyncSession(engine) as database, database.begin():
         person = await database.get(Person, prepared.state.person_id)
         assert person is not None
-        person.email = "admin@authorityclosers.com"
+        # The browser proof can run against a shared disposable PostgreSQL
+        # instance.  Keep the actor admin-capable through its explicit
+        # capability set while avoiding a fixed-email collision with another
+        # test process or a prior interrupted run.
+        person.email = f"sales-xray-browser-{prepared.state.person_id}@example.test"
         person.email_verified_at = prepared.state.now
         membership = await database.scalar(
             select(Membership).where(
