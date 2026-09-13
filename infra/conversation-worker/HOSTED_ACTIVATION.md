@@ -75,7 +75,8 @@ AC_XRAY_GROQ_IDENTITY_DIR=/etc/authority-closers/secrets/sales-xray/identities/g
 AC_XRAY_INFISICAL_BINARY=/usr/local/bin/infisical
 ```
 
-`compose.hosted.yaml` merges the five AC_SALES_XRAY_* nonsecret settings and
+The release-owned `infra/application/compose.sales-xray-hosted.yaml` merges the
+five AC_SALES_XRAY_* nonsecret settings and
 approval/storage mounts into **api only**. The dedicated worker receives its
 service JSON and narrowly scoped credential references. Ordinary worker,
 migrator and frontend environment anchors are unchanged.
@@ -180,23 +181,27 @@ not claim this newly rendered supervisor was installed or restart-tested.
 
 ## Coordinated API/worker activation and rollback
 
-Stop old intake and drain accepted48k jobs before switching both API and dedicated
-worker to this16k release. Old quotes are refused with a prepare-again response;
-queued work is never rewritten. Add this overlay to the release task's complete
-existing Compose invocation, including its real environment and other overlays:
+The canonical application installer owns activation, update and rollback. Its
+`sales-xray-hosted.py` validator resolves the selected target release's immutable
+capability policy, external activation descriptor and SHA-256 sidecar. The
+descriptor binds the exact release, environment, overlay, native manifest, service
+configuration, approval and individual mount references. Managed operations scope
+is passed to validation only inside the existing secret-provider child process.
+An absent policy denotes an older disabled release; an enabled policy with missing
+or invalid activation input blocks deployment. Do not activate the overlay through
+an ad hoc Compose command.
 
-```sh
-docker compose -f infra/application/compose.yaml \
-  -f infra/conversation-worker/compose.hosted.yaml \
-  --profile sales-xray-hosted config --quiet
-docker compose -f infra/application/compose.yaml \
-  -f infra/conversation-worker/compose.hosted.yaml \
-  --profile sales-xray-hosted up -d --no-build api sales-xray-worker
-```
+The installer holds ingress and stops ordinary API/worker intake before granting
+the hosted worker its 960-second graceful drain. It checks that each existing
+hosted container actually exited with status zero. A surviving or forced-killed
+worker blocks database mutation and automatic restoration; the release stays on
+hold for recovery. Every subsequent Compose call, including rollback, selects the
+exact target release's hosted and filesystem-media settings. Ambient hosted
+configuration cannot override these selected inputs.
 
-Execute authenticated staging upload, report, playback, IDOR and deletion checks;
-then canary/rollback and promotion of the same immutable images, followed by
-production checks. Stop/drain the dedicated worker before rolling back its
-configuration/image. Remove the API activation overlay or explicitly disable its
-Sales Xray setting. Preserve source/checkpoints and audit history. No manual SQL
-recovery and no localhost demonstration-service exposure are part of this recipe.
+Old quotes are refused with a prepare-again response; queued work is never
+rewritten. Execute authenticated staging upload, report, playback, IDOR and deletion
+checks, then promote the accepted immutable images through the same installer and
+verify production. Preserve source/checkpoints and audit history. Numeric/official
+scoring remains separately gated, and a successful build or helper startup alone
+does not establish the learner journey.
