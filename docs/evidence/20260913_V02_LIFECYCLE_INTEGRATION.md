@@ -20,6 +20,14 @@ Combined verification:
   removal, normal drain, forced exit 137, surviving worker and failed-drain rollback.
 - Ruff check and formatting pass for the integrated test files.
 
+A broader application-release test pass exposed seven more outdated shell test
+fixtures after integration: the application probe omitted the real hosted
+selector, containment expected one combined service stop, and the startup assertion
+expected a literal worker name. The fixtures now include the actual selector and
+ordered stop helper, preserve the accepted-write/no-restore assertions, and check
+the release's worker array. All seven regressions pass in 8.30s; receipt:
+`D:/AC-authority-closers-release-audit/v02-lifecycle-application-02.xml`.
+
 External receipts are retained at
 `D:/AC-authority-closers-release-audit/v02-unit-048b3be.xml` and
 `D:/AC-authority-closers-release-audit/v02-lifecycle-e683f25-02.xml`.

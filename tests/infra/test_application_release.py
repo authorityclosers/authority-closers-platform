@@ -242,6 +242,9 @@ services:
     filesystem_selector = _installer_function(
         "filesystem_media_compose_file_for", "\n\nvalidate_filesystem_media_activation() {"
     )
+    hosted_selector = _installer_function(
+        "load_sales_xray_hosted_inputs", "\n\nsales_xray_hosted_enabled() {"
+    )
     practice_scope = _installer_function(
         "with_practice_pilot_scope", "\n\nvalidate_practice_pilot_references() {"
     )
@@ -258,6 +261,8 @@ with_release_secrets() {{
 }}
 {practice_scope}
 {filesystem_selector}
+sales_xray_hosted_inputs=()
+{hosted_selector}
 export AC_EXTERNAL_SIDE_EFFECTS_HOLD=true
 export AC_EMAIL_PROVIDER=fake
 export AC_PRACTICE_PILOT_ENABLED=false
@@ -1589,7 +1594,7 @@ def test_release_is_built_off_host_and_installed_with_backup_and_rollback() -> N
         'activate_edge_route "$edge_route_source"'
     )
     assert deployment.index('activate_edge_route "$edge_route_source"') < deployment.index(
-        "up --detach --no-deps --wait --wait-timeout 180 worker"
+        'up --detach --no-deps --wait --wait-timeout 180 "${runtime_workers[@]}"'
     )
     rollback = _installer_function("rollback_release", "\n\ncontain_forward_recovery() {")
     assert '[[ "$write_exposure_started" == 0 ]]' in rollback
@@ -1612,6 +1617,7 @@ def test_late_failure_after_an_accepted_write_is_forward_only(tmp_path: Path) ->
     containment = _installer_function(
         "contain_forward_recovery", "\n\nrecord_forward_recovery_required() {"
     )
+    hosted_stop = _installer_function("load_sales_xray_hosted_inputs", "\n\ncompose_for() {")
     finish = _installer_function("finish", "\ntrap finish EXIT")
     harness = f"""set -euo pipefail
 mutation_started=1
@@ -1633,8 +1639,13 @@ check_route() {{
   printf 'edge:verified\n' >> {shlex.quote(events.as_posix())}
 }}
 compose_for() {{
-  test "$*" = "/immutable/release stop --timeout 30 api worker learner-web admin-web coach-web"
-  printf 'services:stopped\n' >> {shlex.quote(events.as_posix())}
+  case "$*" in
+    "/immutable/release stop --timeout 30 api worker")
+      printf 'core:stopped\n' >> {shlex.quote(events.as_posix())} ;;
+    "/immutable/release stop --timeout 30 learner-web admin-web coach-web")
+      printf 'web:stopped\n' >> {shlex.quote(events.as_posix())} ;;
+    *) return 1 ;;
+  esac
 }}
 set_database_writer_access() {{
   test "$1" = fence
@@ -1650,6 +1661,8 @@ record_forward_recovery_required() {{
   printf recorded > {shlex.quote(recovery_recorded.as_posix())}
 }}
 cleanup_stages() {{ return 0; }}
+sales_xray_hosted_inputs=()
+{hosted_stop}
 {containment}
 {finish}
 trap finish EXIT
@@ -1667,7 +1680,8 @@ false
     assert events.read_text(encoding="utf-8").splitlines() == [
         "edge:hold",
         "edge:verified",
-        "services:stopped",
+        "core:stopped",
+        "web:stopped",
         "writers:fenced",
         "recovery:recorded",
     ]
