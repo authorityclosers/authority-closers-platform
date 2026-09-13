@@ -296,11 +296,12 @@ def test_native_owner_is_applied_to_staging_and_published_files(
 
     monkeypatch.setattr(native_runtime.os, "statvfs", lambda _path: Usage(), raising=False)
     monkeypatch.setattr(native_runtime.stat, "S_IMODE", lambda _mode: 0o700)
-    calls: list[Path] = []
+    staging_owners: list[tuple[int, int]] = []
 
     def runner(command: tuple[str, ...], _name: str, _timeout: float) -> None:
         mount = _output_mount(command)
-        calls.append(mount)
+        info = mount.stat()
+        staging_owners.append((info.st_uid, info.st_gid))
         _checkpoint_fixture(source, mount / "checkpoint")
 
     runtime = native_runtime.DockerNativeRuntime(
@@ -311,7 +312,10 @@ def test_native_owner_is_applied_to_staging_and_published_files(
         runner=runner,
     )
     runtime.inspect(source, tmp_path / "published", job_id=uuid4(), rate=16000)
-    assert calls and calls[0].stat().st_uid == owner[0]
+    # The staging directory is deliberately removed after publication. Capture
+    # its ownership while the reviewed runner still has the mount, then verify
+    # the durable output separately.
+    assert staging_owners == [owner]
     assert (tmp_path / "published").stat().st_uid == owner[0]
     assert (tmp_path / "published" / "features.aaf").stat().st_uid == owner[0]
 
