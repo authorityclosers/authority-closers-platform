@@ -825,6 +825,54 @@ def test_review_assignment_transition_preserves_0033_and_requires_empty_tables()
         )
 
 
+@pytest.mark.parametrize(
+    ("source_head", "target_head", "new_tables"),
+    (
+        (
+            "20260913_0034",
+            "20260913_0035",
+            (
+                "conversation_review_invitations",
+                "conversation_review_invitation_revocations",
+                "conversation_review_invitation_acceptances",
+            ),
+        ),
+        (
+            "20260913_0035",
+            "20260914_0036",
+            (
+                "conversation_visitors",
+                "conversation_visitor_claims",
+                "conversation_acquisition_usage",
+                "conversation_acquisition_settlements",
+            ),
+        ),
+    ),
+)
+def test_invitation_and_guest_migrations_preserve_existing_history(
+    source_head: str, target_head: str, new_tables: tuple[str, ...]
+) -> None:
+    source = {table: 3 for table in restore_drill.parity_tables_for_head(source_head)}
+    target = source | dict.fromkeys(new_tables, 0)
+    assert restore_drill._assert_migration_rehearsal_transition(
+        source, target, {}, source_head=source_head, target_head=target_head
+    ) == dict.fromkeys(new_tables, 0)
+    for table in new_tables:
+        with pytest.raises(restore_drill.DrillError, match="new-table row counts"):
+            restore_drill._assert_migration_rehearsal_transition(
+                source, target | {table: 1}, {}, source_head=source_head, target_head=target_head
+            )
+        incomplete = {key: value for key, value in target.items() if key != table}
+        with pytest.raises(restore_drill.DrillError, match="incomplete"):
+            restore_drill._assert_migration_rehearsal_transition(
+                source, incomplete, {}, source_head=source_head, target_head=target_head
+            )
+    with pytest.raises(restore_drill.DrillError, match="preserved source"):
+        restore_drill._assert_migration_rehearsal_transition(
+            source, target | {"persons": 2}, {}, source_head=source_head, target_head=target_head
+        )
+
+
 def test_direct_sales_xray_transition_preserves_0029_and_requires_all_new_tables_empty() -> None:
     source_head = restore_drill.DIRECT_SALES_XRAY_REHEARSAL_SOURCE_HEAD
     target_head = restore_drill.DIRECT_SALES_XRAY_REHEARSAL_TARGET_HEAD

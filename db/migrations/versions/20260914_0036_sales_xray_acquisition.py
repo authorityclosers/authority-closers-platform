@@ -118,4 +118,4 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    raise RuntimeError("Acquisition usage is immutable history; use a forward migration.")
+    raise RuntimeError("Acquisition usage is immutable history; recovery is forward-only.")
