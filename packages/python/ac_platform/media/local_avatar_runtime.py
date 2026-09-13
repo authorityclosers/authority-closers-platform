@@ -153,9 +153,7 @@ class LocalAvatarRuntime:
         ):
             raise MediaBadRequest("The local profile upload target or bytes are invalid.")
         now = datetime.now(UTC)
-        claims = self.storage.signer.verify(
-            token, now=now, token_type=self.storage.token_type
-        )  # noqa: S106 - bounded token kind, not a secret
+        claims = self.storage.signer.verify(token, now=now, token_type=self.storage.token_type)  # noqa: S106 - bounded token kind, not a secret
         digest = hashlib.sha256(body).hexdigest()
         if (
             claims.get("key") != key

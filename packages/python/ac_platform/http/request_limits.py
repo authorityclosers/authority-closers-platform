@@ -26,9 +26,7 @@ _UUID = r"[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}"
 _STUDIO_VIDEO_BYTES_PATH = re.compile(
     rf"/v1/admin/studio/programs/{_UUID}/video-uploads/{_UUID}/bytes"
 )
-_FILESYSTEM_AVATAR_BYTES_PATH = re.compile(
-    r"/v1/media/filesystem-avatar-upload/.{1,512}"
-)
+_FILESYSTEM_AVATAR_BYTES_PATH = re.compile(r"/v1/media/filesystem-avatar-upload/.{1,512}")
 _CONVERSATION_BYTES_PATH = re.compile(rf"/v1/conversation/recordings/{_UUID}/source")
 _CONVERSATION_DRAFT_IMPORT_PATH = re.compile(rf"/v1/admin/conversation/runs/{_UUID}/draft")
 

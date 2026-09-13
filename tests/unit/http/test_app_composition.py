@@ -107,10 +107,10 @@ def test_deployment_composes_explicit_filesystem_video_profile(
 ) -> None:
     settings = _deployment_settings(environment).model_copy(
         update={
-                "media_filesystem_enabled": True,
-                "media_filesystem_root": str(tmp_path / "video-objects"),
-                "media_filesystem_avatar_root": str(tmp_path / "avatar-objects"),
-                "media_scanner_unix_socket": "/run/ac-media-safety/clamd.sock",
+            "media_filesystem_enabled": True,
+            "media_filesystem_root": str(tmp_path / "video-objects"),
+            "media_filesystem_avatar_root": str(tmp_path / "avatar-objects"),
+            "media_scanner_unix_socket": "/run/ac-media-safety/clamd.sock",
             "media_max_upload_bytes": 2_000_000_000,
             "public_app_url": (
                 AnyHttpUrl("https://learner-staging.authorityclosers.com")

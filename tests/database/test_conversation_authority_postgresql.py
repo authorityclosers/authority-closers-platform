@@ -581,8 +581,7 @@ def test_authority_runs_c2_c4_c5_and_reuses_cached_effect(
                 account = MinuteAccount.from_dict(minutes.snapshot)
                 assert account.available_seconds == audio_balance
                 assert [
-                    reservation.quote.entitlement_seconds
-                    for reservation in account.reservations
+                    reservation.quote.entitlement_seconds for reservation in account.reservations
                 ] == [120, 0, 0, 0]
 
             async with setup.sessions() as database, database.begin():
