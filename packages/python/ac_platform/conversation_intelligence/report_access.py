@@ -95,6 +95,8 @@ def project_report(report: ReportDraft, *, access: ReportAccess) -> dict[str, An
         "closing_analysis": [item.model_dump(mode="json") for item in report.closing_analysis],
         "verdict": report.verdict,
     }
+    if report.overview is not None:
+        fields["overview"] = report.overview.model_dump(mode="json")
     return {
         "schema": "ac.sales-xray.report-access/2",
         "access": access.value,

@@ -14,6 +14,7 @@ from ac_platform.conversation_intelligence.report_access import (
     project_report,
 )
 from ac_platform.conversation_intelligence.reports import parse_report_draft
+from tests.conversation_overview_fixtures import overview_for
 from tests.unit.conversation_intelligence.test_reports import _payload, _transcript
 
 
@@ -119,3 +120,29 @@ def test_envelope_rejects_a_different_recording_source_or_transcript(change):
 def test_envelope_rejects_request_shaped_binding():
     with pytest.raises(ValueError, match="server-resolved"):
         project_bound_report(_report(), access=ReportAccess.GUEST, source={"recording_id": "mine"})
+
+
+@pytest.mark.parametrize("access", list(ReportAccess))
+def test_complete_dipak_overview_reaches_both_private_owners(access):
+    transcript = _transcript()
+    payload = _payload(transcript)
+    payload["overview"] = overview_for(payload)
+    report = parse_report_draft(payload, transcript, source_label="My call")
+    source = ReportSourceBinding(uuid4(), uuid4(), report.source_sha256, report.transcript_revision)
+    envelope = project_bound_report(report, access=access, source=source)
+    assert envelope["report"]["content"]["overview"] == report.overview.model_dump(mode="json")
+    assert envelope["report"]["content"]["overview"]["progress"] is None
+    assert envelope["report"]["numeric_publication"] is False
+    assert "report_sections" not in envelope["report"]["content"]
+
+
+def test_overview_cannot_carry_unvalidated_provider_trace_fields():
+    transcript = _transcript()
+    payload = _payload(transcript)
+    payload["overview"] = overview_for(payload)
+    report = parse_report_draft(payload, transcript, source_label="My call")
+    invalid = report.model_copy(
+        update={"overview": {**report.overview.model_dump(), "provider_trace": "private"}}
+    )
+    with pytest.warns(UserWarning, match="Pydantic serializer warnings"), pytest.raises(ValueError):
+        project_report(invalid, access=ReportAccess.GUEST)
