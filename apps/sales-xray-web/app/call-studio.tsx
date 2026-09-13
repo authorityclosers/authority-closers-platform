@@ -108,7 +108,7 @@ const DISPLAY_COPY: Record<
     languageLabel: string;
     sourceMoments: string;
     evidenceFindings: string;
-    dimensionsChecked: string;
+    dimensionsObserved: string;
     scoreHold: string;
     scoreHoldDetail: string;
     sourceMomentsHeading: string;
@@ -131,7 +131,7 @@ const DISPLAY_COPY: Record<
     languageLabel: "Display language",
     sourceMoments: "Source moments",
     evidenceFindings: "Evidence-backed findings",
-    dimensionsChecked: "Dimensions observed",
+    dimensionsObserved: "Dimensions observed",
     scoreHold: "Score publication",
     scoreHoldDetail: "No approved score · source 95 / declared 100",
     sourceMomentsHeading: "Moments from your call",
@@ -158,7 +158,7 @@ const DISPLAY_COPY: Record<
     languageLabel: "दिखाने की भाषा",
     sourceMoments: "स्रोत क्षण",
     evidenceFindings: "सबूत से जुड़े निष्कर्ष",
-    dimensionsChecked: "देखे गए आयाम",
+    dimensionsObserved: "देखे गए आयाम",
     scoreHold: "स्कोर प्रकाशन",
     scoreHoldDetail: "कोई approved score नहीं · source 95 / declared 100",
     sourceMomentsHeading: "आपकी कॉल के क्षण",
@@ -184,7 +184,7 @@ const DISPLAY_COPY: Record<
     languageLabel: "दाखवण्याची भाषा",
     sourceMoments: "स्रोत क्षण",
     evidenceFindings: "पुराव्याशी जोडलेले निष्कर्ष",
-    dimensionsChecked: "निरीक्षित आयाम",
+    dimensionsObserved: "निरीक्षित आयाम",
     scoreHold: "स्कोअर प्रकाशन",
     scoreHoldDetail: "Approved score नाही · source 95 / declared 100",
     sourceMomentsHeading: "तुमच्या कॉलमधले क्षण",
@@ -209,7 +209,7 @@ const DISPLAY_COPY: Record<
     languageLabel: "Display language · भाषा",
     sourceMoments: "Source moments · स्रोत क्षण",
     evidenceFindings: "Evidence-backed findings · सबूत",
-    dimensionsChecked: "Dimensions observed · देखे गए आयाम",
+    dimensionsObserved: "Dimensions observed · देखे गए आयाम",
     scoreHold: "Score publication · स्कोर",
     scoreHoldDetail: "No approved score · source 95 / declared 100",
     sourceMomentsHeading: "Moments from your call · आपकी कॉल के क्षण",
@@ -1878,7 +1878,7 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
                 <small>Findings linked to the source</small>
               </div>
               <div className="studio-report-metric" role="listitem">
-                <span>{copy.dimensionsChecked}</span>
+                <span>{copy.dimensionsObserved}</span>
                 <strong>
                   {job.report.dimensions.length
                     ? `${observedDimensions}/${job.report.dimensions.length}`

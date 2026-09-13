@@ -1,7 +1,7 @@
 {
   "receipt_version": 1,
-  "captured_at": "2026-09-13T22:09:32.3712308+05:30",
-  "source_revision": "20abc74c28283013b0ad843ac5f2cec39674b5ab",
+  "captured_at": "2026-09-13T22:17:27.0771485+05:30",
+  "source_revision": "587695f766e132643bd3f1a4f86c17700c78ba02",
   "build": {
     "mode": "Next production build served by next start",
     "command": "pnpm --filter @ac/sales-xray-web build",
@@ -9,8 +9,8 @@
     "node": "v24.19.0"
   },
   "browser": {
-    "command": "SALES_XRAY_BASE_URL=http://127.0.0.1:3187 with_server.py --server \"pnpm --dir apps/sales-xray-web exec next start --hostname 127.0.0.1 --port 3187\" --port 3187 -- python apps/sales-xray-web/tests/browser_call_studio_ux.py",
-    "base_url": "http://127.0.0.1:3187",
+    "command": "SALES_XRAY_BASE_URL=http://127.0.0.1:3188 with_server.py --server \"pnpm --dir apps/sales-xray-web exec next start --hostname 127.0.0.1 --port 3188\" --port 3188 -- python apps/sales-xray-web/tests/browser_call_studio_ux.py",
+    "base_url": "http://127.0.0.1:3188",
     "fixture": "Synthetic source-bound report, transcript and four seconds of generated silence; no provider or private audio.",
     "assertions": [
       "Opened the mounted complete report from a saved recording.",
@@ -34,7 +34,7 @@
     ]
   },
   "tested_source_sha256": {
-    "apps/sales-xray-web/app/call-studio.tsx": "7E7CABD6BCD37B2AD1D1397AE1C7EACB8E4ADDF0F1F22F3BCE9BF4BAA3706DCA",
+    "apps/sales-xray-web/app/call-studio.tsx": "CCB3A90C2407642A29A926FAEECFEC6A54B366B62A32D210B125E73A433EC5DB",
     "apps/sales-xray-web/app/styles.css": "E684F3D63DED9B903A19EE91D13F1A7D49E671FC294B992198156B568A73F11E",
     "apps/sales-xray-web/tests/browser_call_studio_ux.py": "62DE0323A3CD06B0B8E53423A9D2DEAAB926C5945AD94E67276053F56A492591"
   }
