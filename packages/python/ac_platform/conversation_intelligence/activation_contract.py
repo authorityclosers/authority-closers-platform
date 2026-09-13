@@ -166,6 +166,8 @@ class StageApproval(_StrictFrozenModel):
         else:
             if self.entitlement_seconds is None:
                 raise ValueError("text_entitlement_required")
+            if self.entitlement_seconds != 0:
+                raise ValueError("provider_entitlement_must_be_zero")
             if self.max_completion_tokens < 1:
                 raise ValueError("text_completion_tokens_required")
             if self.profile_sha256 is None and self.stage == "C5":

@@ -98,12 +98,10 @@ class PlanManifest(BaseModel):
             or c4.max_completion_tokens < 256
             or c5.max_completion_tokens < 256
             or content_hash(self.profile) != c5.profile_sha256
-            or self.max_entitlement_seconds
-            != (
-                (self.duration_ms + 999) // 1000
-                + c4.max_requests * int(c4.entitlement_seconds or 0)
-                + int(c5.entitlement_seconds or 0)
-            )
+            # The user's minute allowance is for unique call audio. C2/C4/C5
+            # provider requests have separate request/token/budget approvals and
+            # must not add the same audio duration or text work to that ledger.
+            or self.max_entitlement_seconds != (self.duration_ms + 999) // 1000
         ):
             raise ValueError("processing_plan_bounds_invalid")
         return self
@@ -356,11 +354,9 @@ class ConversationProcessingPlans:
                 profile_revision=str(profile["revision"]) if stage == "C5" else None,
             )
         c4, c5 = approvals["C4"], approvals["C5"]
-        maximum_seconds = (
-            (source.duration_ms + 999) // 1000
-            + c4.max_requests * int(c4.entitlement_seconds or 0)
-            + int(c5.entitlement_seconds or 0)
-        )
+        # Reserve only the unique source-audio duration. Provider stages are
+        # governed by their own max-request/token and zero-cost budget approvals.
+        maximum_seconds = (source.duration_ms + 999) // 1000
         minutes = await self.db.get(
             ConversationMinuteAccount, (recording.tenant_id, recording.person_id)
         )

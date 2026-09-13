@@ -377,11 +377,10 @@ class ConversationAuthority:
         now: datetime,
     ) -> StageApproval:
         bundle, approval = await self.approval(app, actor, recording, plan, now)
-        seconds = (
-            (plan.duration_ms + 999) // 1000
-            if approval.stage == "C2"
-            else approval.entitlement_seconds
-        )
+        # User minutes are charged once by the local C1 audio inspection. Hosted
+        # provider stages use their own request/token/budget approvals and must
+        # never charge the same source audio again.
+        seconds = 0
         if (
             row.budget_scope_id != bundle.budget_scope_id
             or quote.max_cost_paise != 0
@@ -476,9 +475,7 @@ class ConversationAuthority:
                 approval.retention_ref,
                 approval.professional_gate_ref,
                 approval.pricing_ref,
-                (plan.duration_ms + 999) // 1000
-                if approval.stage == "C2"
-                else int(approval.entitlement_seconds or 0),
+                0,
                 0,
                 int(now.timestamp()),
                 min(int(now.timestamp()) + 900, bundle.expires_at_epoch, approval.expires_at_epoch),

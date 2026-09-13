@@ -274,6 +274,14 @@ def test_stage_entitlement_completion_and_profile_constraints(
         load_hosted_approval_bundle(payload)
 
 
+def test_provider_stage_cannot_add_a_second_audio_minute_charge() -> None:
+    stage = _stage(stage="C4", entitlement_seconds=0, max_completion_tokens=800)
+    payload = json.loads(_bundle(stages=(stage,)).to_json())
+    payload["stages"][0]["entitlement_seconds"] = 1
+    with pytest.raises(ActivationContractError, match="provider_entitlement_must_be_zero"):
+        load_hosted_approval_bundle(payload)
+
+
 def test_c5_requires_profile_digest_and_text_stage_accepts_zero_allowance() -> None:
     stage = _stage(
         stage="C5",

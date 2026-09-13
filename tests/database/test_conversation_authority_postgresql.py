@@ -560,6 +560,22 @@ def test_authority_runs_c2_c4_c5_and_reuses_cached_effect(
             await completed_checkpoint(setup.sessions, c5_run)
             assert setup.broker.calls == 3
 
+            # The local C1 source-audio reservation is the only user-minute
+            # charge. Hosted C2/C4/C5 provider reservations stay zero-minute
+            # records while provider request/budget controls still apply.
+            async with setup.sessions() as database:
+                minutes = await database.get(
+                    ConversationMinuteAccount,
+                    (setup.actor.tenant_id, setup.actor.person_id),
+                )
+                assert minutes is not None
+                account = MinuteAccount.from_dict(minutes.snapshot)
+                assert account.available_seconds == 599
+                assert [
+                    reservation.quote.entitlement_seconds
+                    for reservation in account.reservations
+                ] == [120, 0, 0, 0]
+
             async with setup.sessions() as database, database.begin():
                 report = await ConversationReports(_application(setup, database)).get(
                     setup.actor, UUID(c5_run["id"])

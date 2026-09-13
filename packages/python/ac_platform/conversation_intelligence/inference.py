@@ -299,10 +299,10 @@ class ConversationInference:
             or quote.provider_model != plan.prepared.model
             or quote.operation != plan.prepared.operation
             or quote.input_sha256 != plan.prepared.input_sha256
-            or (
-                plan.checkpoint.stage == "C2"
-                and quote.entitlement_seconds != (plan.duration_ms + 999) // 1000
-            )
+            # Hosted provider work is metered separately from the one source
+            # audio charge made by local C1. Offline callers retain their
+            # existing quote semantics.
+            or (self.authority is not None and quote.entitlement_seconds != 0)
             or permission.quote_fingerprint != quote.fingerprint
             or permission.approved_by != str(actor.person_id)
             or not quote.created_at_epoch

@@ -26,12 +26,12 @@ def saved_plan() -> ConversationProcessingPlan:
     profile = {"revision": "frozen-fixture-v1", "weights_actual": 95, "weights_declared": 100}
     stages = (
         _stage(),
-        _stage(stage="C4", entitlement_seconds=2, max_completion_tokens=1400).model_copy(
+        _stage(stage="C4", entitlement_seconds=0, max_completion_tokens=1400).model_copy(
             update={"recipe_revision": FACT_RECIPE}
         ),
         _stage(
             stage="C5",
-            entitlement_seconds=3,
+            entitlement_seconds=0,
             max_completion_tokens=1400,
             profile_sha256=content_hash(profile),
         ).model_copy(update={"recipe_revision": COACHING_RECIPE}),
@@ -52,7 +52,7 @@ def saved_plan() -> ConversationProcessingPlan:
         profile=profile,
         created_at_epoch=1000,
         expires_at_epoch=1800,
-        max_entitlement_seconds=70,
+        max_entitlement_seconds=61,
     )
     return ConversationProcessingPlan(
         id=uuid4(),
@@ -102,7 +102,7 @@ def test_saved_plan_preserves_actual_weight_discrepancy_and_finite_bound() -> No
     value = manifest_for(saved_plan())
     assert value.profile["weights_actual"] == 95
     assert value.profile["weights_declared"] == 100
-    assert value.max_entitlement_seconds == 61 + 3 * 2 + 3
+    assert value.max_entitlement_seconds == 61
 
 
 @pytest.mark.parametrize("alteration", ["source", "profile", "price", "recipient", "erased"])
