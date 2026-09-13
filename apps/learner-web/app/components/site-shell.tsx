@@ -43,7 +43,6 @@ import { initialsForDisplayName } from "../lib/profile-identity";
 import { ROUTES } from "../lib/routes";
 import { SignOutControl } from "./sign-out-control";
 import { usePracticeNavigationAvailability } from "./practice-availability";
-import { requestReviewNavigation } from "../sales-xray/review/review-navigation";
 import {
   CommandPalette,
   getDefaultCommandPaletteItems,
@@ -430,12 +429,10 @@ function LearnerShellContent({
     // Graceful fallback for non-Router execution
   }
 
-  function navigateWithReviewGuard(destination: string): void {
+  function navigateTo(destination: string): void {
     const currentRouter = router;
-    requestReviewNavigation(() => {
-      if (currentRouter) currentRouter.push(destination);
-      else window.location.assign(destination);
-    });
+    if (currentRouter) currentRouter.push(destination);
+    else window.location.assign(destination);
   }
 
   const commandPaletteItems: CommandPaletteItem[] =
@@ -444,7 +441,7 @@ function LearnerShellContent({
       const destination = item.href;
       return {
         ...item,
-        onSelect: () => navigateWithReviewGuard(destination),
+        onSelect: () => navigateTo(destination),
       };
     });
 
@@ -453,10 +450,10 @@ function LearnerShellContent({
       openCommandPalette();
     },
     onNavigateHome: () => {
-      navigateWithReviewGuard(ROUTES.dashboard);
+      navigateTo(ROUTES.dashboard);
     },
     onNavigateLearning: () => {
-      navigateWithReviewGuard(learningHref);
+      navigateTo(learningHref);
     },
   });
 

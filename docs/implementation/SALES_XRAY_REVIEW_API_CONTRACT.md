@@ -1,5 +1,32 @@
 # Sales Xray review API contract
 
+> Superseded access mode (2026-09-13): the user requires reviewer-only login and
+> workspace access, separate from learners. The Academy form/session statements
+> below record the prior implementation and no longer authorize release. See
+> `REVIEWER_ACCESS_SEPARATION.md`. The legacy learner reviewer routes are held;
+> source binding and append-only feedback contracts remain applicable.
+
+## Current interim transport boundary
+
+The generic learner review routes listed in the historical contract below are
+not installed and return 404. Admin assignment/invitation creation retains its
+authorization checks and returns 503 without creating an assignment, invitation
+or email outbox event. Existing Admin list and revoke routes remain installed.
+
+`GET /v1/admin/conversation/review-assignments/{assignment_id}` is a separate
+private, no-store Admin detail read. It accepts no scope query parameters and
+requires the canonical AC operations Admin authority. It returns `assignment`,
+`lifecycle`, source retention metadata, review/report/checkpoint metadata,
+`feedback` (at most 100 items), `feedback_count`, `available_feedback_count`
+and `feedback_truncated`. Feedback envelopes distinguish `available`, `erased`
+and `unavailable`; only available entries include substantive `payload`.
+Revoked or expired reviewer access does not erase Admin history. Current source
+permission and retention still gate content. No source/report/transcript payload
+or audio URL is returned. Unknown assignments return 404 and mismatched immutable
+bindings return 409. This endpoint never calls the reviewer read API.
+
+## Historical shared-session contract
+
 This contract defines the server-managed review handoff from a completed Sales
 Xray run to an assigned verified reviewer.  It defines transport shapes only;
 the application loads every binding from the database and applies the existing

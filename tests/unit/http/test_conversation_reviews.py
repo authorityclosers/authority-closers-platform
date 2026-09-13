@@ -63,6 +63,11 @@ class _ReviewService:
         self.calls.calls.append(("invite", actor.person_id, (intent, key)))
         return {"id": str(ASSIGNMENT_ID), "state": "pending"}
 
+    async def _admin(self, actor: Any) -> None:
+        self.calls.calls.append(("_admin", actor.person_id, None))
+        if self.calls.error is not None:
+            raise self.calls.error
+
     async def revoke_invitation(self, actor: Any, invitation_id: UUID, key: str) -> dict[str, Any]:
         self.calls.calls.append(("revoke_invitation", actor.person_id, (invitation_id, key)))
         return {"id": str(invitation_id), "state": "revoked"}
@@ -80,6 +85,19 @@ class _ReviewService:
         if self.calls.error is not None:
             raise self.calls.error
         return {"id": str(assignment_id), "state": "assigned"}
+
+    async def admin_details(self, actor: Any, assignment_id: UUID) -> dict[str, Any]:
+        self.calls.calls.append(("admin_details", actor.person_id, assignment_id))
+        return {
+            "assignment": {"id": str(assignment_id), "state": "submitted"},
+            "lifecycle": {"state": "submitted", "revocation": None},
+            "source": {"content_state": "retained"},
+            "review": {"run_state": "completed"},
+            "feedback": [],
+            "feedback_count": 0,
+            "available_feedback_count": 0,
+            "feedback_truncated": False,
+        }
 
     async def submissions(self, actor: Any, assignment_id: UUID) -> dict[str, Any]:
         self.calls.calls.append(("submissions", actor.person_id, assignment_id))
@@ -204,6 +222,27 @@ async def test_admin_assignment_routes_require_admin_host_and_bind_current_actor
         assert calls.calls[-1][0] == "list"
         assert calls.calls[-1][1] == ACTOR.person_id
 
+        details = await client.get(f"/v1/admin/conversation/review-assignments/{ASSIGNMENT_ID}")
+        assert details.status_code == 200
+        assert details.headers["cache-control"] == "private, no-store"
+        assert calls.calls[-1][0] == "admin_details"
+        assert calls.calls[-1][1] == ACTOR.person_id
+
+        denied_details = await _request(
+            application,
+            "GET",
+            f"/v1/admin/conversation/review-assignments/{ASSIGNMENT_ID}",
+        )
+        assert denied_details.status_code == 403
+        assert all(
+            call[0] != "admin_details" or call[2] != ASSIGNMENT_ID for call in calls.calls[:-1]
+        )
+
+        scoped_details = await client.get(
+            f"/v1/admin/conversation/review-assignments/{ASSIGNMENT_ID}?tenant_id=other"
+        )
+        assert scoped_details.status_code == 422
+
         invalid_scope = await client.get(
             "/v1/admin/conversation/review-assignments?tenant_id=other"
         )
@@ -220,9 +259,9 @@ async def test_admin_assignment_routes_require_admin_host_and_bind_current_actor
             headers={"Origin": "https://admin.test", "Idempotency-Key": "assign-1"},
             json=intent,
         )
-        assert created.status_code == 201
-        assert calls.calls[-1][0] == "create"
-        assert calls.calls[-1][2][1] == "assign-1"
+        assert created.status_code == 503
+        assert calls.calls[-1][0] == "_admin"
+        assert all(call[0] != "create" for call in calls.calls)
 
         revoked = await client.post(
             f"/v1/admin/conversation/review-assignments/{ASSIGNMENT_ID}/revoke",
@@ -241,9 +280,9 @@ async def test_admin_assignment_routes_require_admin_host_and_bind_current_actor
                 "expires_at_epoch": 2_000_000_000,
             },
         )
-        assert invitation.status_code == 201
-        assert calls.calls[-1][0] == "invite"
-        assert calls.calls[-1][2][1] == "invite-1"
+        assert invitation.status_code == 503
+        assert calls.calls[-1][0] == "_admin"
+        assert all(call[0] != "invite" for call in calls.calls)
 
         invite_revoked = await client.post(
             f"/v1/admin/conversation/review-invitations/{ASSIGNMENT_ID}/revoke",
@@ -262,6 +301,21 @@ async def test_admin_assignment_routes_require_admin_host_and_bind_current_actor
     assert blocked.status_code == 403
     assert all(call[0] != "create" or call[2][1] != "assign-2" for call in calls.calls)
 
+    blocked_invitation = await _request(
+        application,
+        "POST",
+        "/v1/admin/conversation/review-invitations",
+        headers={"Origin": "https://learner.test", "Idempotency-Key": "invite-2"},
+        json={
+            "run_id": str(uuid4()),
+            "invited_email": "reviewer@example.test",
+            "allowed_lenses": ["sales"],
+            "expires_at_epoch": 2_000_000_000,
+        },
+    )
+    assert blocked_invitation.status_code == 403
+    assert all(call[0] != "invite" or call[2][1] != "invite-2" for call in calls.calls)
+
     accepted = await _request(
         application,
         "POST",
@@ -269,8 +323,8 @@ async def test_admin_assignment_routes_require_admin_host_and_bind_current_actor
         headers={"Origin": "https://learner.test"},
         json={"token": "t" * 48},
     )
-    assert accepted.status_code == 201
-    assert calls.calls[-1][0] == "accept_invitation"
+    assert accepted.status_code == 404
+    assert calls.calls[-1][0] == "revoke_invitation"
 
     malformed = await _request(
         application,
@@ -280,61 +334,82 @@ async def test_admin_assignment_routes_require_admin_host_and_bind_current_actor
         json={"token": "é" * 40},
     )
     assert malformed.status_code == 404
+    assert calls.calls[-1][0] == "revoke_invitation"
 
 
 @pytest.mark.asyncio
-async def test_reviewer_submission_uses_body_idempotency_and_rejects_author_injection(
+async def test_held_admin_writes_preserve_canonical_admin_denial(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = _ServiceCalls(error=ConversationDenied("The Admin account is not authorized."))
+    application = _create_app(monkeypatch, service_calls=calls)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=application, raise_app_exceptions=False),
+        base_url="https://admin.test",
+    ) as client:
+        for path, body, key in (
+            (
+                "/v1/admin/conversation/review-assignments",
+                {
+                    "run_id": str(uuid4()),
+                    "reviewer_person_id": str(uuid4()),
+                    "allowed_lenses": ["sales"],
+                    "expires_at_epoch": 2_000_000_000,
+                },
+                "unauthorized-assignment",
+            ),
+            (
+                "/v1/admin/conversation/review-invitations",
+                {
+                    "run_id": str(uuid4()),
+                    "invited_email": "reviewer@example.test",
+                    "allowed_lenses": ["sales"],
+                    "expires_at_epoch": 2_000_000_000,
+                },
+                "unauthorized-invitation",
+            ),
+        ):
+            denied = await client.post(
+                path,
+                headers={"Origin": "https://admin.test", "Idempotency-Key": key},
+                json=body,
+            )
+            assert denied.status_code == 403
+            assert calls.calls[-1][0] == "_admin"
+    assert all(call[0] not in {"create", "invite"} for call in calls.calls)
+
+
+@pytest.mark.asyncio
+async def test_legacy_learner_review_routes_fail_closed_before_reviewer_auth(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls = _ServiceCalls()
     application = _create_app(monkeypatch, service_calls=calls)
-    feedback = {
-        "idempotency_key": "feedback-1",
-        "lens": "sales",
-        "evidence_refs": [{"checkpoint_id": str(uuid4()), "span_id": "span-1"}],
-        "confidence": "high",
-        "feedback": "The opening established the buyer context.",
-    }
     assignment_path = f"/v1/conversation/review-assignments/{ASSIGNMENT_ID}"
-    assignment = await _request(application, "GET", assignment_path)
-    assert assignment.status_code == 200
-    assert assignment.headers["cache-control"] == "private, no-store"
-
-    submissions = await _request(application, "GET", f"{assignment_path}/submissions")
-    assert submissions.status_code == 200
-    submitted = await _request(
-        application,
-        "POST",
-        f"{assignment_path}/submissions",
-        headers={"Origin": "https://learner.test"},
-        json=feedback,
+    paths = (
+        ("GET", assignment_path),
+        ("GET", f"{assignment_path}/submissions"),
+        ("POST", f"{assignment_path}/submissions"),
+        ("GET", f"{assignment_path}/source"),
+        ("POST", "/v1/conversation/review-invitations/accept"),
     )
-    assert submitted.status_code == 201
-    assert calls.calls[-1][0] == "submit"
-    assert calls.calls[-1][2][1].idempotency_key == "feedback-1"
-
-    injected_author = await _request(
-        application,
-        "POST",
-        f"{assignment_path}/submissions",
-        headers={"Origin": "https://learner.test"},
-        json=feedback | {"author_person_id": str(uuid4())},
-    )
-    assert injected_author.status_code == 422
-
-    unknown_query = await _request(application, "GET", assignment_path + "?tenant_id=other")
-    assert unknown_query.status_code == 422
+    for method, path in paths:
+        response = await _request(
+            application,
+            method,
+            path,
+            headers={"Origin": "https://learner.test"},
+            json={"token": "t" * 48} if method == "POST" else None,
+        )
+        assert response.status_code == 404
+    assert calls.calls == []
 
 
 @pytest.mark.asyncio
-async def test_review_errors_are_redacted_and_playback_is_private_bounded_and_cleaned(
+async def test_legacy_learner_review_source_does_not_reach_storage(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    calls = _ServiceCalls(
-        error=ConversationDenied(
-            "provider token=sk_sensitive-review-token user@example.test from 192.0.2.8"
-        )
-    )
+    calls = _ServiceCalls()
     storage = _Storage()
     closed: list[bool] = []
     application = _create_app(
@@ -344,26 +419,13 @@ async def test_review_errors_are_redacted_and_playback_is_private_bounded_and_cl
         auth_closed=closed,
     )
     assignment_path = f"/v1/conversation/review-assignments/{ASSIGNMENT_ID}"
-    denied = await _request(application, "GET", assignment_path)
-    assert denied.status_code == 403
-    assert "sk_sensitive-review-token" not in denied.text
-    assert "user@example.test" not in denied.text
-    assert "192.0.2.8" not in denied.text
-
-    calls.error = None
     playback = await _request(
         application,
         "GET",
         f"{assignment_path}/source",
         headers={"Range": "bytes=1-4"},
     )
-    assert playback.status_code == 206
-    assert playback.content == SOURCE_BYTES[1:5]
-    assert playback.headers["cache-control"] == "private, no-store"
-    assert playback.headers["content-range"] == f"bytes 1-4/{len(SOURCE_BYTES)}"
-    assert playback.headers["x-content-type-options"] == "nosniff"
-    assert storage.keys and storage.keys[-1].recording_id == RECORDING_ID
-    assert closed
-
-    missing_scope = await _request(application, "GET", f"{assignment_path}/source?tenant_id=other")
-    assert missing_scope.status_code == 422
+    assert playback.status_code == 404
+    assert calls.calls == []
+    assert storage.keys == []
+    assert closed == []

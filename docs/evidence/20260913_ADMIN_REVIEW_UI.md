@@ -115,6 +115,25 @@ They are not evidence of the completed workflow.
 
 ## Release boundary
 
+Integration proof: the UI was applied to consolidation baseline
+`ef6f9514f682048ab210a01400ac434dd00346ca` as `d04d067`, preserving the
+consolidation shell navigation and People footer. The Admin review selects its
+Sales Xray navigation item. Combined Admin review/shell tests passed (36);
+combined learner review/shell tests passed (21). Both combined production Next
+builds passed. Browser source hashes above describe the original UI packet;
+the combined shell retains additional release functionality.
+
 The final UI commit must be integrated into the consolidated release. Its exact
 Linux CI/image validation and staging/production deployment smoke are separate
 steps. This local evidence does not claim the UI is deployed.
+
+PR control-plane validation exposed ShellCheck SC2016 in the existing hosted
+input loader. Its single-quoted command intentionally expands the managed
+Operations tenant in the secret-scoped child, so the command now has a scoped
+SC2016 annotation explaining that behavior. Shell syntax is unchanged and passed
+`bash -n`; the existing hosted lifecycle tests exercise the child scope.
+On this Windows host, 17 hosted lifecycle tests passed and 16 POSIX ownership
+tests were skipped. The merged release repair requires those ownership tests
+under root in a separate Linux CI gate; the skips do not satisfy that gate.
+ShellCheck 0.11.0 subsequently passed on every tracked shell script using the
+official Windows release archive verified against its published SHA-256 digest.
