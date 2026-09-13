@@ -31,7 +31,10 @@ from ac_platform.identity.models import Session as IdentitySession
 from tests.database.test_conversation_intake_postgresql import policy
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
 from tests.database.test_conversation_postgresql import run, seed
-from tests.database.test_conversation_reports_postgresql import _build_fixture
+from tests.database.test_conversation_reports_postgresql import (
+    _build_fixture,
+    shared_provider_admin_context,
+)
 
 
 @pytest.fixture(scope="module")
@@ -123,11 +126,12 @@ def test_cookie_authenticated_saved_report_history_transcript_and_private_playba
                     json=fixture.intent.model_dump(mode="json"),
                 )
                 assert blocked_origin.status_code == 403
-                imported = await client.post(
-                    f"http://admin.test{admin_path}",
-                    headers=admin_headers,
-                    json=fixture.intent.model_dump(mode="json"),
-                )
+                with shared_provider_admin_context(fixture):
+                    imported = await client.post(
+                        f"http://admin.test{admin_path}",
+                        headers=admin_headers,
+                        json=fixture.intent.model_dump(mode="json"),
+                    )
                 assert imported.status_code == 201, imported.text
                 assert imported.headers["cache-control"] == "private, no-store"
                 report = await client.get(report_path, headers=cookie(token))

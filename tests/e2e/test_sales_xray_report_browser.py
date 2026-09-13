@@ -57,7 +57,7 @@ from tests.database.test_conversation_reporting_pipeline_postgresql import (
 )
 from tests.database.test_conversation_reports_postgresql import (
     _build_fixture,
-    _import_for_fixture,
+    shared_import_for_fixture,
 )
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -196,7 +196,7 @@ def _make_live_backend(
                     )
                 )
                 if mode == "imported":
-                    await _import_for_fixture(
+                    await shared_import_for_fixture(
                         database,
                         fixture,
                         fixture.actor,

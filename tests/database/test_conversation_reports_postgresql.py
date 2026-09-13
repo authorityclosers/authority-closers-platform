@@ -10,6 +10,8 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -180,7 +182,18 @@ async def _report_count(sessions: async_sessionmaker[AsyncSession], fixture: Rep
         )
 
 
-async def _import_for_fixture(
+@contextmanager
+def shared_provider_admin_context(fixture: ReportFixture) -> Iterator[None]:
+    """Temporarily admit this disposable actor without changing production policy."""
+
+    with patch(
+        "ac_platform.conversation_intelligence.provider_admin.CONTROL_ACCOUNT",
+        f"sales-xray-browser-{fixture.prepared.state.person_id}@example.test",
+    ):
+        yield
+
+
+async def shared_import_for_fixture(
     database: AsyncSession,
     fixture: ReportFixture,
     actor: ActorContext,
@@ -196,10 +209,7 @@ async def _import_for_fixture(
     verified-email, active-membership, and ``admin_surface`` checks.
     """
 
-    with patch(
-        "ac_platform.conversation_intelligence.provider_admin.CONTROL_ACCOUNT",
-        f"sales-xray-browser-{fixture.prepared.state.person_id}@example.test",
-    ):
+    with shared_provider_admin_context(fixture):
         return await _reports(database, fixture).import_internal_draft(
             actor,
             fixture.prepared.run_id,
@@ -216,7 +226,7 @@ async def _import_valid(
     key: str = "report-import-valid",
 ) -> dict[str, Any]:
     async with sessions() as database, database.begin():
-        return await _import_for_fixture(
+        return await shared_import_for_fixture(
             database,
             fixture,
             fixture.actor,
@@ -266,6 +276,27 @@ def test_source_bound_report_import_read_and_replay(
     run(exercise())
 
 
+def test_unique_fixture_actor_requires_shared_provider_admin_seam(
+    postgres_harness: Any, report_fixture: ReportFixture
+) -> None:
+    async def exercise() -> None:
+        engine = create_async_engine(postgres_harness.url)
+        try:
+            async with AsyncSession(engine) as database, database.begin():
+                with pytest.raises(ConversationDenied, match="verified AC control account"):
+                    await _reports(database, report_fixture).import_internal_draft(
+                        report_fixture.actor,
+                        report_fixture.prepared.run_id,
+                        report_fixture.intent,
+                        storage=report_fixture.prepared.storage,
+                        key="report-requires-shared-provider-admin-seam",
+                    )
+        finally:
+            await engine.dispose()
+
+    run(exercise())
+
+
 def test_forged_native_hash_quote_and_timing_are_rejected(
     postgres_harness: Any, report_fixture: ReportFixture
 ) -> None:
@@ -283,7 +314,7 @@ def test_forged_native_hash_quote_and_timing_are_rejected(
             )
             with pytest.raises(ConversationError, match="does not match its receipt"):
                 async with sessions() as database, database.begin():
-                    await _import_for_fixture(
+                    await shared_import_for_fixture(
                         database,
                         report_fixture,
                         report_fixture.actor,
@@ -296,7 +327,7 @@ def test_forged_native_hash_quote_and_timing_are_rejected(
             bad_quote = report_fixture.intent.model_copy(update={"report": bad_quote_payload})
             with pytest.raises(ConversationError, match="draft or its exact transcript evidence"):
                 async with sessions() as database, database.begin():
-                    await _import_for_fixture(
+                    await shared_import_for_fixture(
                         database,
                         report_fixture,
                         report_fixture.actor,
@@ -322,7 +353,7 @@ def test_forged_native_hash_quote_and_timing_are_rejected(
             )
             with pytest.raises(ConversationError, match="draft or its exact transcript evidence"):
                 async with sessions() as database, database.begin():
-                    await _import_for_fixture(
+                    await shared_import_for_fixture(
                         database,
                         report_fixture,
                         report_fixture.actor,
@@ -377,7 +408,7 @@ def test_another_owner_and_tenant_cannot_read_or_import_source_bound_report(
             other = await seed(engine, role="owner")
             async with sessions() as database, database.begin():
                 with pytest.raises(ConversationDenied):
-                    await _import_for_fixture(
+                    await shared_import_for_fixture(
                         database,
                         report_fixture,
                         other.actor,
@@ -391,7 +422,7 @@ def test_another_owner_and_tenant_cannot_read_or_import_source_bound_report(
                         other_tenant, report_fixture.prepared.run_id
                     )
                 with pytest.raises(ConversationNotFound):
-                    await _import_for_fixture(
+                    await shared_import_for_fixture(
                         database,
                         report_fixture,
                         other_tenant,
