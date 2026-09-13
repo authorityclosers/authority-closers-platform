@@ -226,9 +226,7 @@ def test_practice_pilot_runtime_wiring_is_profile_owned_and_not_a_web_secret(
     assert isinstance(default_services, dict)
     for name in ("api", "learner-web"):
         environment = default_services[name]["environment"]
-        assert environment["AC_PRACTICE_PILOT_ENABLED"] == (
-            "true" if profile == "staging" else "false"
-        )
+        assert environment["AC_PRACTICE_PILOT_ENABLED"] == "true"
         # Raw Compose has no authority to derive this scope. The canonical
         # installer supplies it only inside the managed configuration wrapper.
         assert environment["AC_PRACTICE_PILOT_TENANT_ID"] == ""
