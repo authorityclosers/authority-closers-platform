@@ -1678,14 +1678,19 @@ def install_identity_http(
     ) -> Response:
         _require_surface_host(request, settings, surface)
         safe_return_path = normalize_return_path(return_path)
+        if surface == "sales_xray" and authorization_type is ProviderAuthorizationType.LINK:
+            raise InvalidAuthTransaction(
+                "Manage linked identities through your Academy account settings."
+            )
         if (
             surface == "sales_xray"
-            and authorization_type is not ProviderAuthorizationType.AUTHENTICATE
+            and authorization_type is ProviderAuthorizationType.AUTHENTICATE
+            and consent
         ):
-            raise InvalidAuthTransaction(
-                "Sales Xray signs in existing AC accounts. Manage account registration "
-                "and linked identities through the learner application."
-            )
+            # One consent-aware Google button serves new and existing people.
+            # REGISTER already resolves a linked provider key to the same person;
+            # it never links another person's account by an email match.
+            authorization_type = ProviderAuthorizationType.REGISTER
         if (
             surface in {"admin", "coach"}
             and authorization_type is ProviderAuthorizationType.REGISTER
@@ -1694,10 +1699,17 @@ def install_identity_http(
                 "Studio and admin identities must be provisioned through the reviewed identity "
                 "and membership bootstrap path before they can sign in with Google."
             )
-        if surface == "learner" and authorization_type is ProviderAuthorizationType.REGISTER:
+        if (
+            surface in {"learner", "sales_xray"}
+            and authorization_type is ProviderAuthorizationType.REGISTER
+        ):
             if not consent:
                 raise LearnerConsentRequired(
                     "Explicit learner consent is required before Google registration."
+                )
+            if surface == "sales_xray" and client_consent_version is None:
+                raise LearnerConsentRequired(
+                    "Review the current Academy Terms and Privacy Policy before continuing."
                 )
             consent_version = (settings.learner_consent_version or "").strip()
             if settings.public_learner_tenant_id is None or not consent_version:
@@ -1776,9 +1788,9 @@ def install_identity_http(
             _require_surface_host(request, settings, transaction.surface)
             if (
                 transaction.surface == "sales_xray"
-                and transaction.authorization_type is not ProviderAuthorizationType.AUTHENTICATE
+                and transaction.authorization_type is ProviderAuthorizationType.LINK
             ):
-                raise InvalidAuthTransaction("Sales Xray accepts existing-account sign-in only.")
+                raise InvalidAuthTransaction("Link identities through Academy account settings.")
             if not hmac.compare_digest(transaction.state, state_value):
                 raise InvalidAuthTransaction("The callback state does not match the transaction.")
         except InvalidAuthTransaction as error:
@@ -1825,7 +1837,7 @@ def install_identity_http(
                 transaction_cookie_names=transaction_cookie_names,
             )
         if (
-            transaction.surface == "learner"
+            transaction.surface in {"learner", "sales_xray"}
             and transaction.authorization_type is ProviderAuthorizationType.REGISTER
         ):
             required_consent_version = (settings.learner_consent_version or "").strip()
@@ -1906,7 +1918,7 @@ def install_identity_http(
                         user_agent=request.headers.get("user-agent"),
                     )
                     session_token = registered.session.token
-                    if transaction.surface == "learner":
+                    if transaction.surface in {"learner", "sales_xray"}:
                         tenant_id = await ensure_public_learner(
                             database,
                             registered.person.id,
@@ -1925,7 +1937,10 @@ def install_identity_http(
                     # unscoped session; the learner surface must select its
                     # existing learner context just as password login does.
                     existing_learner_tenant_id = settings.public_learner_tenant_id
-                    if transaction.surface == "learner" and existing_learner_tenant_id is not None:
+                    if (
+                        transaction.surface in {"learner", "sales_xray"}
+                        and existing_learner_tenant_id is not None
+                    ):
                         membership = await database.scalar(
                             select(Membership).where(
                                 Membership.tenant_id == existing_learner_tenant_id,

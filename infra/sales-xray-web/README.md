@@ -14,17 +14,24 @@ Deploy staging first, validate it, then promote the same verified image to produ
 
 The core API receives the source profile's exact `AC_SALES_XRAY_APP_URL`. Password
 login uses the existing same-origin AC endpoint and host-only session cookie.
-Existing-account Google sign-in uses a signed `sales_xray` authentication surface;
-registration and linking through that surface are rejected. Register these exact
+Google entry uses a signed `sales_xray` authentication surface. Consent-aware
+entry creates or reuses the same canonical Academy person and selects the public
+Academy context. Supply `consent=true` and the current `consent_version` to the
+authenticate entry, or use explicit register with the same consent fields. The
+callback returns to its signed same-host path; guest report ownership still
+requires the separate current guest/account claim. Provider linking remains in
+Academy settings. Register these exact
 callbacks on the current approved Google web client before Google browser testing:
 
 - `https://salesxray-staging.authorityclosers.com/v1/auth/google/callback`
 - `https://salesxray.authorityclosers.com/v1/auth/google/callback`
 
-The app fetches `/v1/me/workspaces` and requires explicit selection when the session
-has no selected tenant, including a sole available workspace. Selection uses the
-canonical `/v1/context` endpoint and does not infer membership or grant access.
-The learner app supplies registration/recovery; no second identity store is added.
+The existing app fetches `/v1/me/workspaces` when no tenant is selected and uses
+the canonical `/v1/context` endpoint. A completed consent-aware Google entry has
+its public Academy learner context selected by the server. Registration and
+recovery use canonical Academy identity; no second identity store is added. The
+new acquisition frontend and hosted onboarding acceptance must accompany the
+server entry before the public funnel is advertised as live.
 
 Source-owned core Caddy routes send `/v1` and `/v1/*` on each exact host to its AC
 API. Other paths go to its companion edge alias. The hold routes include the same
