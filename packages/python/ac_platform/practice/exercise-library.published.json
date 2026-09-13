@@ -3,7 +3,7 @@
   "publication": {
     "version": "2026-09-13.v1",
     "reviewer": "Luna independent reviewer (Codex agent)",
-    "approver": "Authority Closers <admin@authorityclosers.com>",
+    "approver": "Codex release coordinator under user delegation (Authority Closers workspace owner)",
     "reviewed_at": "2026-09-13",
     "scope": "formative daily practice only"
   },

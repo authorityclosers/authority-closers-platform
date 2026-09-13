@@ -15,8 +15,9 @@ receipt, not a deployment or content-approval record.
 - Arcade legacy cursor compatibility: `b007a68` (source `c1fcfce`).
 - Practice activation receipt validation: `e85c1de`.
 - Canonical daily-selection policy is approved for the three published sets and
-  records the independent Luna review plus the Authority Closers coordinator
-  approval identity; it remains formative-only and cannot grant course access.
+  records the independent Luna review plus the Codex release coordinator's
+  approval under user delegation; it remains formative-only and cannot grant
+  course access.
 - Academy-scoped opt-in discovery, profile projection, mutual connections,
   block/report and learner UI: `cd73213`, `f822087` (sources `a4564ee`,
   `317e898`).
