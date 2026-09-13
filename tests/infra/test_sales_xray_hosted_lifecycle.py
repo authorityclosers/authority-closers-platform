@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 APPLICATION = ROOT / "infra" / "application"
 INSTALLER = APPLICATION / "scripts" / "install-application-release.sh"
 VALIDATOR = APPLICATION / "scripts" / "sales-xray-hosted.py"
+WORKER_OVERLAY = ROOT / "infra" / "conversation-worker" / "compose.hosted.yaml"
 RELEASE_ID = "a" * 40
 OPERATIONS_TENANT = "10000000-0000-4000-8000-000000000001"
 
@@ -66,26 +67,23 @@ def _make_release(
     )
     (release / "scripts" / "sales-xray-hosted.py").write_bytes(VALIDATOR.read_bytes())
     (release / "environments" / f"{environment}.env").write_text(
-        f"AC_COMPOSE_PROJECT=ac-application-{environment}\n"
-        f"AC_OPERATIONS_TENANT_ID={OPERATIONS_TENANT}\n",
+        f"AC_COMPOSE_PROJECT=ac-application-{environment}\n",
         encoding="utf-8",
     )
     (release / "release-images.env").write_text("", encoding="utf-8")
 
-    service = tmp_path / "service.json"
-    service.write_bytes(
+    approval = tmp_path / "approval.json"
+    approval.write_bytes(
         _json_bytes(
             {
+                "schema": "ac.sales-xray.hosted-approval/1",
                 "environment": environment,
-                "native_image_ref": "sha256:" + "b" * 64,
-                "operations_tenant_id": OPERATIONS_TENANT,
-                "release_id": release_id,
+                "provider_control_tenant_id": OPERATIONS_TENANT,
             }
         )
     )
-    approval = tmp_path / "approval.json"
-    approval.write_bytes(_json_bytes({"provider_control_tenant_id": OPERATIONS_TENANT}))
     env_file = tmp_path / "compose.env"
+    service = tmp_path / "service.json"
     paths = {
         "service": service,
         "approval": approval,
@@ -98,6 +96,44 @@ def _make_release(
         "infisical": tmp_path / "infisical",
         "env": env_file,
     }
+    service.write_bytes(
+        _json_bytes(
+            {
+                "schema_version": "ac.sales_xray.worker_service/1",
+                "environment": environment,
+                "release_id": release_id,
+                "operations_tenant_id": OPERATIONS_TENANT,
+                "sales_xray_enabled": True,
+                "sales_xray_approval_path": "/run/ac-sales-xray/approval.json",
+                "sales_xray_approval_sha256": hashlib.sha256(approval.read_bytes()).hexdigest(),
+                "sales_xray_storage_root": _portable(paths["storage"]),
+                "sales_xray_scratch_root": _portable(paths["scratch"]),
+                "database_url_file": "/run/ac-sales-xray/database-url",
+                "native_socket_path": _portable(paths["socket"] / "native.sock"),
+                "native_image_ref": "sha256:" + "b" * 64,
+                "providers": [
+                    {
+                        "credential_ref": "ref:elevenlabs",
+                        "provider_id": "elevenlabs",
+                        "executable": "/opt/infisical",
+                        "project_ref": "project",
+                        "environment_ref": "dev",
+                        "secret_path_ref": "/sales-xray-test/elevenlabs",
+                        "token_file_ref": "/run/ac-sales-xray/identities/elevenlabs/token",
+                    },
+                    {
+                        "credential_ref": "ref:groq",
+                        "provider_id": "groq",
+                        "executable": "/opt/infisical",
+                        "project_ref": "project",
+                        "environment_ref": "dev",
+                        "secret_path_ref": "/sales-xray-test/groq",
+                        "token_file_ref": "/run/ac-sales-xray/identities/groq/token",
+                    },
+                ],
+            }
+        )
+    )
     env_values = {
         "AC_XRAY_APPROVAL_FILE": _portable(approval),
         "AC_XRAY_APPROVAL_SHA256": hashlib.sha256(approval.read_bytes()).hexdigest(),
@@ -158,14 +194,43 @@ def _make_release(
 
 
 def _validator_result(
-    release: Path, environment: str = "staging"
+    release: Path,
+    environment: str = "staging",
+    operations_tenant_id: str | None = OPERATIONS_TENANT,
 ) -> subprocess.CompletedProcess[str]:
+    command = [sys.executable, str(VALIDATOR), "compose-inputs", str(release), environment]
+    if operations_tenant_id is not None:
+        command.extend(["--operations-tenant-id", operations_tenant_id])
     return subprocess.run(  # noqa: S603 - fixed validator and test-controlled release
-        [sys.executable, str(VALIDATOR), "compose-inputs", str(release), environment],
+        command,
         capture_output=True,
         check=False,
         text=True,
     )
+
+
+def test_source_overlay_and_per_environment_capabilities_are_archive_inputs() -> None:
+    overlay = APPLICATION / "compose.sales-xray-hosted.yaml"
+    assert overlay.read_bytes() == WORKER_OVERLAY.read_bytes()
+    for environment in ("staging", "production"):
+        capability_path = (
+            APPLICATION / "capabilities" / f"sales-xray-hosted-{environment}.json"
+        )
+        capability = json.loads(capability_path.read_text(encoding="utf-8"))
+        assert capability == {
+            "schema_version": "ac.sales_xray.hosted_policy/1",
+            "environment": environment,
+            "enabled": True,
+            "activation_file_template": (
+                "/etc/authority-closers/sales-xray/{environment}/"
+                "activation-{release_id}.json"
+            ),
+            "activation_sha256_file_template": (
+                "/etc/authority-closers/sales-xray/{environment}/"
+                "activation-{release_id}.json.sha256"
+            ),
+            "previous_release_policy": "exact_target_release",
+        }
 
 
 def test_hosted_validator_projects_only_target_release_inputs(tmp_path: Path) -> None:
@@ -255,6 +320,45 @@ def test_hosted_validator_rejects_compose_environment_key_injection(tmp_path: Pa
     assert result.returncode != 0
 
 
+def test_hosted_validator_requires_managed_runtime_operations_scope(tmp_path: Path) -> None:
+    release, _ = _make_release(tmp_path)
+
+    missing = _validator_result(release, operations_tenant_id=None)
+    mismatched = _validator_result(
+        release, operations_tenant_id="20000000-0000-4000-8000-000000000002"
+    )
+
+    assert missing.returncode != 0
+    assert mismatched.returncode != 0
+    assert OPERATIONS_TENANT not in missing.stderr
+    assert OPERATIONS_TENANT not in mismatched.stderr
+
+
+def test_hosted_validator_uses_explicit_managed_scope_over_ambient_value(
+    tmp_path: Path,
+) -> None:
+    release, _ = _make_release(tmp_path)
+    command = [
+        sys.executable,
+        str(VALIDATOR),
+        "compose-inputs",
+        str(release),
+        "staging",
+        "--operations-tenant-id",
+        OPERATIONS_TENANT,
+    ]
+    environment = os.environ.copy()
+    environment["AC_OPERATIONS_TENANT_ID"] = "20000000-0000-4000-8000-000000000002"
+    result = subprocess.run(  # noqa: S603 - fixed validator and test-controlled release
+        command,
+        capture_output=True,
+        check=False,
+        text=True,
+        env=environment,
+    )
+    assert result.returncode == 0, result.stderr
+
+
 @pytest.mark.skipif(os.name != "posix", reason="POSIX ownership and mode boundary")
 def test_hosted_validator_rejects_writable_external_activation_parent(tmp_path: Path) -> None:
     release, paths = _make_release(tmp_path)
@@ -302,6 +406,7 @@ target_environment=staging
 release_dir={shlex.quote(str(release).replace('\\\\', '/'))}
 compose_project=ac-application-staging
 with_practice_pilot_scope() {{ "$@"; }}
+with_release_secrets() {{ env AC_OPERATIONS_TENANT_ID="$TEST_OPERATIONS_TENANT" "$@"; }}
 export PATH={shlex.quote(_bash_path(fake_bin))}:$PATH
 export AC_XRAY_SERVICE_CONFIG=https://ambient.invalid
 {functions}
@@ -309,6 +414,7 @@ compose_for "$release_dir" config
 """
     environment = os.environ.copy()
     environment["AC_CAPTURE"] = _bash_path(capture)
+    environment["TEST_OPERATIONS_TENANT"] = OPERATIONS_TENANT
     result = subprocess.run(  # noqa: S603 - fixed Bash function and test-controlled paths
         [_bash_executable(), "-s"],
         input=script,
@@ -329,11 +435,188 @@ compose_for "$release_dir" config
     assert args[-1] == "ambient=unset"
 
 
+def test_installer_gives_hosted_worker_the_full_graceful_drain_timeout(
+    tmp_path: Path,
+) -> None:
+    installer = INSTALLER.read_text(encoding="utf-8")
+    start = installer.index("sales_xray_hosted_inputs=()")
+    end = installer.index('\n\ncompose_for "$release_dir" config --quiet', start)
+    functions = installer[start:end]
+    capture = tmp_path / "drain-calls"
+    release = tmp_path / ("e" * 40)
+    script = f"""#!/usr/bin/env bash
+set -euo pipefail
+{functions}
+sales_xray_hosted_enabled() {{ return 0; }}
+compose_for() {{
+  printf 'CALL\\n' >> "$AC_CAPTURE"
+  printf '%s\\n' "$@" >> "$AC_CAPTURE"
+  if [[ "$2" == ps && "$3" == --all ]]; then
+    printf 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\\n'
+  fi
+}}
+docker() {{
+  printf 'DOCKER\\n' >> "$AC_CAPTURE"
+  printf '%s\\n' "$@" >> "$AC_CAPTURE"
+  printf 'exited %s\\n' "$TEST_EXIT"
+}}
+stop_hosted_sales_xray_worker {shlex.quote(str(release).replace('\\\\', '/'))}
+"""
+    environment = os.environ.copy()
+    environment["AC_CAPTURE"] = _bash_path(capture)
+    environment["TEST_EXIT"] = "0"
+    result = subprocess.run(  # noqa: S603 - fixed Bash function and test-controlled paths
+        [_bash_executable(), "-s"],
+        input=script,
+        capture_output=True,
+        check=False,
+        text=True,
+        env=environment,
+    )
+    assert result.returncode == 0, result.stderr
+    calls = capture.read_text(encoding="utf-8").splitlines()
+    assert calls[:6] == [
+        "CALL",
+        str(release),
+        "stop",
+        "--timeout",
+        "960",
+        "sales-xray-worker",
+    ]
+    assert calls[6:] == [
+        "CALL",
+        str(release),
+        "ps",
+        "--status",
+        "running",
+        "--services",
+        "CALL",
+        str(release),
+        "ps",
+        "--all",
+        "--quiet",
+        "sales-xray-worker",
+        "DOCKER",
+        "inspect",
+        "--type",
+        "container",
+        "--format",
+        "{{.State.Status}} {{.State.ExitCode}}",
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    ]
+
+
+def test_installer_rejects_hosted_worker_that_survives_drain(tmp_path: Path) -> None:
+    installer = INSTALLER.read_text(encoding="utf-8")
+    start = installer.index("sales_xray_hosted_inputs=()")
+    end = installer.index('\n\ncompose_for "$release_dir" config --quiet', start)
+    functions = installer[start:end]
+    release = tmp_path / ("f" * 40)
+    script = f"""#!/usr/bin/env bash
+set -euo pipefail
+{functions}
+sales_xray_hosted_enabled() {{ return 0; }}
+compose_for() {{
+  if [[ "$2" == ps && "$3" == --all ]]; then
+    printf 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\\n'
+  fi
+}}
+docker() {{ printf 'exited 137\\n'; }}
+stop_hosted_sales_xray_worker {shlex.quote(str(release).replace('\\\\', '/'))}
+"""
+    result = subprocess.run(  # noqa: S603 - fixed Bash function and test-controlled paths
+        [_bash_executable(), "-s"],
+        input=script,
+        capture_output=True,
+        check=False,
+        text=True,
+        env=os.environ.copy(),
+    )
+    assert result.returncode != 0
+    assert "did not exit cleanly" in result.stderr
+
+
+def test_installer_stops_core_then_drains_hosted_then_stops_web(tmp_path: Path) -> None:
+    installer = INSTALLER.read_text(encoding="utf-8")
+    start = installer.index("sales_xray_hosted_inputs=()")
+    end = installer.index('\n\ncompose_for "$release_dir" config --quiet', start)
+    functions = installer[start:end]
+    capture = tmp_path / "ordered-calls"
+    release = tmp_path / ("b" * 40)
+    release_arg = str(release).replace(chr(92), "/")
+    script = (
+        "#!/usr/bin/env bash\n"
+        "set -euo pipefail\n"
+        + functions
+        + "\nsales_xray_hosted_enabled() { return 0; }\n"
+        + "compose_for() {\n"
+        + "  printf '%s\\n' \"$@\" >> \"$AC_CAPTURE\"\n"
+        + "  if [[ \"$2\" == ps && \"$3\" == --all ]]; then\n"
+        + "    printf 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\\n'\n"
+        + "  fi\n}\n"
+        + "docker() { printf 'exited 0\\n'; }\n"
+        + f"stop_application_services_with_hosted_drain {release_arg} true\n"
+    )
+    environment = os.environ.copy()
+    environment["AC_CAPTURE"] = _bash_path(capture)
+    result = subprocess.run(  # noqa: S603 - fixed Bash function and test-controlled paths
+        [_bash_executable(), "-s"],
+        input=script,
+        capture_output=True,
+        check=False,
+        text=True,
+        env=environment,
+    )
+    assert result.returncode == 0, result.stderr
+    calls = capture.read_text(encoding="utf-8").splitlines()
+    core_index = calls.index("api")
+    hosted_index = calls.index("sales-xray-worker")
+    web_index = calls.index("learner-web")
+    assert calls[core_index - 2 : core_index] == ["--timeout", "30"]
+    assert calls[hosted_index - 2 : hosted_index] == ["--timeout", "960"]
+    assert calls[web_index - 2 : web_index] == ["--timeout", "30"]
+    assert core_index < hosted_index < web_index
+
+def test_installer_does_not_fence_after_failed_hosted_drain(tmp_path: Path) -> None:
+    installer = INSTALLER.read_text(encoding="utf-8")
+    rollback_start = installer.index("rollback_release()")
+    start = installer.index('  if [[ "$rollback_failed" == 0 ]]; then', rollback_start)
+    end = installer.index('  if [[ "$rollback_failed" == 0 && "$backup_ready"', start)
+    rollback_fence_block = installer[start:end]
+    capture = tmp_path / "fence-calls"
+    state = tmp_path / "rollback-state"
+    script = (
+        "#!/usr/bin/env bash\n"
+        "set -euo pipefail\n"
+        "rollback_failed=1\n"
+        "database_mutation_started=1\n"
+        "rollback_fenced=0\n"
+        "backup_ready=1\n"
+        "set_database_writer_access() { printf 'fence\\n' >> \"$AC_CAPTURE\"; }\n"
+        + rollback_fence_block
+        + "printf '%s %s\\n' \"$rollback_failed\" \"$rollback_fenced\" > \"$AC_STATE\"\n"
+    )
+    environment = os.environ.copy()
+    environment["AC_CAPTURE"] = _bash_path(capture)
+    environment["AC_STATE"] = _bash_path(state)
+    result = subprocess.run(  # noqa: S603 - fixed Bash block and test-controlled paths
+        [_bash_executable(), "-s"],
+        input=script,
+        capture_output=True,
+        check=False,
+        text=True,
+        env=environment,
+    )
+    assert result.returncode == 0, result.stderr
+    assert state.read_text(encoding="utf-8").strip() == "1 0"
+    assert not capture.exists()
+
 def test_installer_lifecycle_names_hosted_worker_for_drain_and_restart() -> None:
     installer = INSTALLER.read_text(encoding="utf-8")
-    assert "rollback_services+=(sales-xray-worker)" in installer
-    assert "containment_services+=(sales-xray-worker)" in installer
-    assert "writer_services+=(sales-xray-worker)" in installer
+    assert "stop_hosted_sales_xray_worker" in installer
+    assert 'stop --timeout 960 sales-xray-worker' in installer
+    assert 'compose_for "$target_release" stop --timeout 30 api worker' in installer
+    assert 'stop_application_services_with_hosted_drain "$writer_release" false' in installer
     assert "runtime_workers+=(sales-xray-worker)" in installer
     assert '"${hosted_profiles[@]}"' in installer
     assert "--remove-orphans" in installer

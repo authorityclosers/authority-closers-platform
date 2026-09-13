@@ -705,7 +705,14 @@ load_sales_xray_hosted_inputs() {
   }
   local hosted_output=''
   if ! hosted_output="$(
-    python3 "$validator" compose-inputs "$target_release" "$target_environment"
+    # Infisical supplies the managed operations scope only to this child. Pass
+    # it to the release validator as an explicit bounded argument; never copy
+    # the tenant into a committed release profile or print the secret scope.
+    with_release_secrets \
+      sh -euc '
+        exec python3 "$1" compose-inputs "$2" "$3" \
+          --operations-tenant-id "${AC_OPERATIONS_TENANT_ID:-}"
+      ' sh "$validator" "$target_release" "$target_environment"
   )"; then
     printf 'Hosted Sales Xray activation policy is invalid or disabled.\n' >&2
     return 2
@@ -721,6 +728,53 @@ load_sales_xray_hosted_inputs() {
 
 sales_xray_hosted_enabled() {
   load_sales_xray_hosted_inputs "$1"
+}
+
+stop_hosted_sales_xray_worker() {
+  local target_release="$1"
+  local hosted_status=0
+  local running_services=''
+  local container_ids=''
+  local container_id=''
+  local container_state=''
+  if sales_xray_hosted_enabled "$target_release"; then
+    # compose.sales-xray-hosted.yaml grants the worker a 16-minute graceful
+    # drain. The core 30-second stop below is only for the ordinary services.
+    compose_for "$target_release" stop --timeout 960 sales-xray-worker || return 1
+    running_services="$(compose_for "$target_release" ps --status running --services)" || return 1
+    case $'\n'"${running_services}"$'\n' in
+      *$'\n'sales-xray-worker$'\n'*)
+        printf 'Hosted Sales Xray worker remained running after its drain timeout.\n' >&2
+        return 1
+        ;;
+    esac
+    container_ids="$(compose_for "$target_release" ps --all --quiet sales-xray-worker)" || return 1
+    while IFS= read -r container_id; do
+      [[ -n "$container_id" ]] || continue
+      [[ "$container_id" =~ ^[0-9a-f]{64}$ ]] || {
+        printf 'Hosted Sales Xray worker container identity is invalid.\n' >&2
+        return 1
+      }
+      container_state="$(docker inspect --type container --format '{{.State.Status}} {{.State.ExitCode}}' "$container_id")" || return 1
+      [[ "$container_state" == "exited 0" ]] || {
+        printf 'Hosted Sales Xray worker did not exit cleanly after its drain.\n' >&2
+        return 1
+      }
+    done <<< "$container_ids"
+  else
+    hosted_status=$?
+    [[ "$hosted_status" -eq 1 ]] || return 1
+  fi
+}
+
+stop_application_services_with_hosted_drain() {
+  local target_release="$1"
+  local stop_web="${2:-false}"
+  compose_for "$target_release" stop --timeout 30 api worker || return 1
+  stop_hosted_sales_xray_worker "$target_release" || return 1
+  if [[ "$stop_web" == true ]]; then
+    compose_for "$target_release" stop --timeout 30 learner-web admin-web coach-web || return 1
+  fi
 }
 
 compose_for() {
@@ -1257,8 +1311,7 @@ restore_current_link() {
 }
 
 rollback_release() {
-  local rollback_failed=0 rollback_fenced=0 hosted_status=0
-  local -a rollback_services=(api worker learner-web admin-web coach-web)
+  local rollback_failed=0 rollback_fenced=0
   [[ "$write_exposure_started" == 0 ]] || {
     printf 'FAIL  Destructive rollback is forbidden after write exposure.\n' >&2
     return 1
@@ -1278,26 +1331,24 @@ rollback_release() {
     # behind with a valid-looking immutable backup name.
     rm -- "$backup_file" || rollback_failed=1
   fi
-  if sales_xray_hosted_enabled "$release_dir"; then
-    rollback_services+=(sales-xray-worker)
+  if [[ "$rollback_failed" == 0 ]] &&
+    stop_application_services_with_hosted_drain "$release_dir" true; then
+    :
   else
-    hosted_status=$?
-    [[ "$hosted_status" -eq 1 ]] || rollback_failed=1
+    rollback_failed=1
   fi
   if [[ "$rollback_failed" == 0 ]]; then
-    compose_for "$release_dir" stop --timeout 30 "${rollback_services[@]}" \
-      >/dev/null 2>&1 || rollback_failed=1
-  fi
-  if [[ "$database_mutation_started" == 1 ]]; then
-    if set_database_writer_access fence; then
-      rollback_fenced=1
+    if [[ "$database_mutation_started" == 1 ]]; then
+      if set_database_writer_access fence; then
+        rollback_fenced=1
+      else
+        rollback_failed=1
+      fi
     else
-      rollback_failed=1
+      rollback_fenced=1
     fi
-  else
-    rollback_fenced=1
   fi
-  if [[ "$backup_ready" == 1 && "$rollback_fenced" == 1 ]]; then
+  if [[ "$rollback_failed" == 0 && "$backup_ready" == 1 && "$rollback_fenced" == 1 ]]; then
     # shellcheck disable=SC2016  # PostgreSQL container variables expand inside `sh -euc`.
     if ! compose_for "$release_dir" exec -T postgres sh -euc '
       export PGPASSWORD="$POSTGRES_PASSWORD"
@@ -1336,8 +1387,7 @@ rollback_release() {
 }
 
 contain_forward_recovery() {
-  local containment_failed=0 hosted_status=0
-  local -a containment_services=(api worker learner-web admin-web coach-web)
+  local containment_failed=0
   # Exposure has already happened, so containment is forward-only: restore the
   # candidate's reviewed maintenance route and stop every application writer,
   # but never restore the pre-migration database or an older application.
@@ -1349,19 +1399,13 @@ contain_forward_recovery() {
   else
     containment_failed=1
   fi
-  if sales_xray_hosted_enabled "$release_dir"; then
-    containment_services+=(sales-xray-worker)
-  else
-    hosted_status=$?
-    [[ "$hosted_status" -eq 1 ]] || containment_failed=1
-  fi
-  if [[ "$containment_failed" == 0 ]] && compose_for "$release_dir" stop --timeout 30 \
-    "${containment_services[@]}"; then
+  if [[ "$containment_failed" == 0 ]] &&
+    stop_application_services_with_hosted_drain "$release_dir" true; then
     forward_recovery_services_stopped=true
   else
     containment_failed=1
   fi
-  if set_database_writer_access fence; then
+  if [[ "$containment_failed" == 0 ]] && set_database_writer_access fence; then
     forward_recovery_writers_fenced=true
   else
     containment_failed=1
@@ -1426,17 +1470,10 @@ writer_release="$release_dir"
 if [[ -n "$previous_release" ]]; then
   writer_release="$previous_release"
 fi
-writer_services=(api worker)
-if sales_xray_hosted_enabled "$writer_release"; then
-  writer_services+=(sales-xray-worker)
-else
-  hosted_status=$?
-  [[ "$hosted_status" -eq 1 ]] || {
-    printf 'Previous release hosted Sales Xray activation policy is invalid.\n' >&2
-    exit 1
-  }
-fi
-compose_for "$writer_release" stop --timeout 30 "${writer_services[@]}"
+stop_application_services_with_hosted_drain "$writer_release" false || {
+ printf 'Previous release hosted Sales Xray worker did not drain safely.\n' >&2
+ exit 1
+}
 database_mutation_started=1
 compose_for "$release_dir" up --detach --wait --wait-timeout 180 postgres
 set_database_writer_access fence

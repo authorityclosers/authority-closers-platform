@@ -215,26 +215,6 @@ def _read_sidecar(path: Path) -> str:
     return text[:-1]
 
 
-def _profile_value(release: Path, environment: str, key: str) -> str:
-    raw = _regular_bytes(release / "environments" / f"{environment}.env", 64 * 1024)
-    try:
-        text = raw.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        raise _fail("release environment profile is not UTF-8") from exc
-    values = []
-    for line in text.splitlines():
-        if not line or line.startswith("#"):
-            continue
-        if "=" not in line:
-            raise _fail("release environment profile has a malformed assignment")
-        name, value = line.split("=", 1)
-        if name == key:
-            values.append(value)
-    if len(values) != 1 or not values[0]:
-        raise _fail(f"release environment profile must contain one {key}")
-    return values[0]
-
-
 def _checked_uuid(value: object, field: str) -> str:
     if not isinstance(value, str):
         raise _fail(f"{field} must be a canonical UUID")
@@ -274,7 +254,11 @@ def _parse_env(raw: bytes) -> dict[str, str]:
 
 
 def _load_activation(
-    value: dict[str, Any], release: Path, release_id: str, environment: str
+    value: dict[str, Any],
+    release: Path,
+    release_id: str,
+    environment: str,
+    managed_operations_tenant: str,
 ) -> tuple[Path, Path]:
     expected_keys = {
         "schema_version",
@@ -343,19 +327,26 @@ def _load_activation(
         raise _fail("service config compose digest differs from the descriptor")
     service = _json_file(service_path, MAX_REFERENCE_BYTES, trusted=True)
     if (
-        service.get("release_id") != release_id
+        service.get("schema_version") != "ac.sales_xray.worker_service/1"
+        or service.get("sales_xray_enabled") is not True
+        or service.get("release_id") != release_id
         or service.get("environment") != environment
+        or service.get("sales_xray_approval_path") != "/run/ac-sales-xray/approval.json"
+        or service.get("sales_xray_approval_sha256")
+        != _checked_sha(value["approval_sha256"], "approval_sha256")
+        or service.get("sales_xray_storage_root") != env["AC_XRAY_STORAGE_ROOT"]
+        or service.get("sales_xray_scratch_root") != env["AC_XRAY_SCRATCH_ROOT"]
+        or service.get("database_url_file") != "/run/ac-sales-xray/database-url"
+        or service.get("native_socket_path")
+        != env["AC_XRAY_NATIVE_SOCKET_DIR"].rstrip("/") + "/native.sock"
         or service.get("native_image_ref") != value["native_image_ref"]
     ):
-        raise _fail("service config is not bound to this release and native image")
+        raise _fail("service config is not bound to the reviewed mounts and image")
     operations_tenant = _checked_uuid(
         service.get("operations_tenant_id"), "service.operations_tenant_id"
     )
-    if operations_tenant != _checked_uuid(
-        _profile_value(release, environment, "AC_OPERATIONS_TENANT_ID"),
-        "AC_OPERATIONS_TENANT_ID",
-    ):
-        raise _fail("service operations tenant differs from the release profile")
+    if operations_tenant != managed_operations_tenant:
+        raise _fail("service operations tenant differs from managed runtime scope")
     approval_path = _checked_absolute(value["approval_file"], "approval_file")
     approval_raw = _regular_bytes(approval_path, MAX_REFERENCE_BYTES, trusted=True)
     if _sha256(approval_raw) != _checked_sha(value["approval_sha256"], "approval_sha256"):
@@ -363,6 +354,11 @@ def _load_activation(
     if env["AC_XRAY_APPROVAL_SHA256"] != value["approval_sha256"]:
         raise _fail("approval compose digest differs from the descriptor")
     approval = _json_file(approval_path, MAX_REFERENCE_BYTES, trusted=True)
+    if (
+        approval.get("schema") != "ac.sales-xray.hosted-approval/1"
+        or approval.get("environment") != environment
+    ):
+        raise _fail("approval is not bound to the selected environment")
     if _checked_uuid(
         approval.get("provider_control_tenant_id"),
         "approval.provider_control_tenant_id",
@@ -371,10 +367,15 @@ def _load_activation(
     return overlay, env_path
 
 
-def compose_inputs(release: Path, environment: str) -> tuple[Path, Path, str] | None:
+def compose_inputs(
+    release: Path, environment: str, operations_tenant_id: str | None = None
+) -> tuple[Path, Path, str] | None:
     capability, release_id = _load_capability(release, environment)
     if capability is None:
         return None
+    managed_operations_tenant = _checked_uuid(
+        operations_tenant_id, "managed AC_OPERATIONS_TENANT_ID"
+    )
     activation_path = _resolve_template(
         capability["activation_file_template"],
         "activation_file_template",
@@ -392,7 +393,13 @@ def compose_inputs(release: Path, environment: str) -> tuple[Path, Path, str] | 
     if _sha256(activation_raw) != expected_sha:
         raise _fail("activation descriptor digest differs from the release policy")
     descriptor = _json_file(activation_path, MAX_ACTIVATION_BYTES, trusted=True)
-    overlay, env_path = _load_activation(descriptor, release, release_id, environment)
+    overlay, env_path = _load_activation(
+        descriptor,
+        release,
+        release_id,
+        environment,
+        managed_operations_tenant,
+    )
     return overlay, env_path, descriptor["compose_profile"]
 
 
@@ -401,9 +408,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("command", choices=("compose-inputs",))
     parser.add_argument("release", type=Path)
     parser.add_argument("environment", choices=("staging", "production"))
+    parser.add_argument("--operations-tenant-id")
     args = parser.parse_args(argv)
     try:
-        result = compose_inputs(args.release, args.environment)
+        result = compose_inputs(
+            args.release, args.environment, args.operations_tenant_id
+        )
         if result is not None:
             for value in result:
                 print(value)
