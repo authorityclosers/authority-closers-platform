@@ -372,7 +372,7 @@ adapters are not yet proven in this deployed pipeline; listing a price does not
 activate a model. No free-tier discount or batch discount is assumed.
 
 At a conservative planning exchange rate of INR 100/USD, plus an **assumed** 18%
-tax and 5% exchange/payment buffer: 9.84 × 100 × 1.18 × 1.05 = **INR 1,219.54**.
+tax and 5% exchange/payment buffer: 9.84 × 100 × 1.18 × 1.05 = **INR 1,219.18**.
 Actual tax, exchange rate and invoice rounding depend on the billing account.
 Target INR 1,200–1,500; the proposed absolute ceiling is INR 2,000, including retries
 and failed/unknown attempts. This excludes human annotation, development, hosting,
