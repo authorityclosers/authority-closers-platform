@@ -23,8 +23,25 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("@ac/operations-web/session", async (original) => ({
   ...(await original<typeof import("@ac/operations-web/session")>()),
-  AdminSessionProvider: ({ children }: { children: React.ReactNode }) =>
+  AdminSessionProvider: ({
     children,
+    renderBoundary,
+  }: {
+    children: React.ReactNode;
+    renderBoundary?: (
+      boundary: React.ReactNode,
+      state: session.AdminSessionState,
+    ) => React.ReactNode;
+  }) =>
+    account?.status !== "ready" && renderBoundary
+      ? renderBoundary(
+          <section className="studio-boundary panel" role="status">
+            <h2>Checking your account…</h2>
+            <p>Your workspace will return after your session is verified.</p>
+          </section>,
+          account,
+        )
+      : children,
   useAdminSession: vi.fn(),
 }));
 (
@@ -289,6 +306,81 @@ it("keeps one active destination for nested course routes in both menus", async 
     "var(--panel)",
   );
 });
+it("persists the desktop sidebar collapse preference with icon labels intact", async () => {
+  await render(
+    <CoachShell>
+      <h1>Course editor</h1>
+    </CoachShell>,
+  );
+  const toggle = host.querySelector(
+    'button[aria-label="Collapse Studio navigation"]',
+  ) as HTMLButtonElement;
+  expect(toggle).not.toBeNull();
+  expect(toggle.getAttribute("aria-expanded")).toBe("true");
+  await act(async () => toggle.click());
+  expect(
+    host
+      .querySelector('button[aria-label="Expand Studio navigation"]')
+      ?.getAttribute("aria-expanded"),
+  ).toBe("false");
+  expect(host.querySelector('a[title="Courses"]')).not.toBeNull();
+  expect(localStorage.getItem("ac:coach-sidebar-collapsed")).toBe("true");
+  await render(null);
+  await render(
+    <CoachShell>
+      <h1>Course editor</h1>
+    </CoachShell>,
+  );
+  expect(
+    host.querySelector('button[aria-label="Expand Studio navigation"]'),
+  ).not.toBeNull();
+});
+it("opens and closes the mobile drawer with focus return", async () => {
+  await render(
+    <CoachShell>
+      <h1>Course editor</h1>
+    </CoachShell>,
+  );
+  const toggle = host.querySelector(
+    'button[aria-label="Open Studio navigation"]',
+  ) as HTMLButtonElement;
+  await act(async () => toggle.click());
+  expect(host.querySelector(".coach-workspace")?.className).toContain(
+    "is-mobile-nav-open",
+  );
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+  expect(document.activeElement?.getAttribute("title")).toBe("Dashboard");
+  await act(async () =>
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })),
+  );
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+  expect(host.querySelector(".coach-workspace")?.className).not.toContain(
+    "is-mobile-nav-open",
+  );
+  expect(document.activeElement).toBe(toggle);
+});
+it("provides account actions without exposing a long email in the shell", async () => {
+  await render(
+    <CoachShell>
+      <h1>Course editor</h1>
+    </CoachShell>,
+  );
+  const accountToggle = host.querySelector(
+    'button[aria-controls="coach-account-menu"]',
+  ) as HTMLButtonElement;
+  await act(async () => accountToggle.click());
+  expect(host.querySelector('[role="menu"]')).not.toBeNull();
+  expect(host.textContent).toContain("coach@example.test");
+  const fetcher = vi
+    .spyOn(globalThis, "fetch")
+    .mockResolvedValue(new Response("", { status: 503 }));
+  await act(async () => button("Sign out").click());
+  expect(fetcher).toHaveBeenCalledWith("/v1/auth/logout", {
+    method: "POST",
+    credentials: "same-origin",
+  });
+  expect(host.textContent).toContain("couldn’t confirm sign-out");
+});
 it("shows a real sign-in action when the session is denied", async () => {
   account = { status: "denied", error: "denied", session: null };
   await render(
@@ -298,6 +390,19 @@ it("shows a real sign-in action when the session is denied", async () => {
   );
   expect(host.textContent).not.toContain("Private content");
   expect(host.querySelector('a[href="/login"]')).not.toBeNull();
+  expect(host.querySelector(".coach-account-signin")).not.toBeNull();
+});
+it("keeps a human-readable shell while access is still being checked", async () => {
+  account = { status: "loading", error: null, session: null };
+  await render(
+    <CoachShell>
+      <h1>Private content</h1>
+    </CoachShell>,
+  );
+  expect(host.textContent).toContain("Checking your account");
+  expect(host.textContent).not.toContain("Private content");
+  expect(host.querySelector('[role="status"]')).not.toBeNull();
+  expect(host.textContent).toContain("Checking access");
 });
 it("saves and restores browser-only theme and reduced motion", async () => {
   await render(

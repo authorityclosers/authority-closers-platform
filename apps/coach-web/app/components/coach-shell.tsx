@@ -1,18 +1,31 @@
 "use client";
 import Link from "next/link";
-import { type CSSProperties, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { usePathname } from "next/navigation";
 import { AcademyMark } from "@ac/ui";
 import {
   BookOpen,
   ChevronRight,
   ClipboardCheck,
+  ChevronDown,
+  LogOut,
   LayoutDashboard,
+  Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
   Settings2,
+  X,
 } from "lucide-react";
 import { CoachPreferencesProvider } from "./coach-preferences";
 import {
   AdminSessionProvider,
+  type AdminSessionState,
   useAdminSession,
 } from "@ac/operations-web/session";
 export const coachNavigation = [
@@ -35,15 +48,42 @@ const coachThemeBridge = {
   "--theme-border": "var(--line)",
 } as CSSProperties;
 
+const SIDEBAR_PREFERENCE_KEY = "ac:coach-sidebar-collapsed";
+
 export function isCoachRouteActive(pathname: string, href: string) {
   return (
     pathname === href || (href !== "/studio" && pathname.startsWith(href + "/"))
   );
 }
 
-function Workspace({ children }: { children: ReactNode }) {
-  const state = useAdminSession();
+function Workspace({
+  children,
+  sessionState,
+  boundary,
+}: {
+  children: ReactNode;
+  sessionState?: AdminSessionState;
+  boundary?: ReactNode;
+}) {
+  const contextState = useAdminSession();
+  const state = sessionState ?? contextState;
   const pathname = usePathname();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return window.localStorage.getItem(SIDEBAR_PREFERENCE_KEY) === "true";
+    } catch {
+      return false;
+    }
+  });
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState("");
+  const mobileToggleRef = useRef<HTMLButtonElement>(null);
+  const mobileCloseRef = useRef<HTMLButtonElement>(null);
+  const firstNavRef = useRef<HTMLAnchorElement>(null);
+  const accountTriggerRef = useRef<HTMLButtonElement>(null);
   const active = coachNavigation.find((item) =>
     isCoachRouteActive(pathname, item.href),
   );
@@ -51,6 +91,7 @@ function Workspace({ children }: { children: ReactNode }) {
     state.status === "ready"
       ? state.session.displayName || state.session.email
       : "Your account";
+  const email = state.status === "ready" ? state.session.email : "";
   const initials =
     state.status === "ready"
       ? (state.session.displayName || state.session.email)
@@ -61,24 +102,190 @@ function Workspace({ children }: { children: ReactNode }) {
           .join("")
           .toUpperCase()
       : "";
-  return (
-    <div className="coach-workspace" style={coachThemeBridge}>
-      <aside className="coach-sidebar">
-        <Link href="/studio" className="coach-brand">
-          <AcademyMark width={40} height={40} aria-hidden="true" />
-          <span>
-            Academy Studio<small>by Cohorva</small>
-          </span>
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        SIDEBAR_PREFERENCE_KEY,
+        String(sidebarCollapsed),
+      );
+    } catch {
+      // A blocked browser store should not make the workspace unusable.
+    }
+  }, [sidebarCollapsed]);
+
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const focusTimer = window.setTimeout(() => firstNavRef.current?.focus(), 0);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setMobileNavOpen(false);
+        window.setTimeout(() => mobileToggleRef.current?.focus(), 0);
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.clearTimeout(focusTimer);
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [mobileNavOpen]);
+
+  useEffect(() => {
+    if (!accountOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setAccountOpen(false);
+        window.setTimeout(() => accountTriggerRef.current?.focus(), 0);
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [accountOpen]);
+
+  function closeMobileNav() {
+    setMobileNavOpen(false);
+    window.setTimeout(() => mobileToggleRef.current?.focus(), 0);
+  }
+
+  async function signOut() {
+    if (signingOut) return;
+    setSigningOut(true);
+    setSignOutError("");
+    try {
+      const response = await fetch("/v1/auth/logout", {
+        method: "POST",
+        credentials: "same-origin",
+      });
+      if (!response.ok) throw new Error();
+      // Full navigation keeps the existing course beforeunload guard in place
+      // while discarding the privileged document and route cache.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- Confirmed sign-out must discard the privileged document and route cache.
+      window.location.assign("/login");
+    } catch {
+      setSignOutError("We couldn’t confirm sign-out. Please try again.");
+      setSigningOut(false);
+    }
+  }
+
+  const workspaceClassName = [
+    "coach-workspace",
+    sidebarCollapsed ? "is-sidebar-collapsed" : "",
+    mobileNavOpen ? "is-mobile-nav-open" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  function sessionMessage() {
+    if (boundary) return boundary;
+    if (state.status === "loading") {
+      return (
+        <section
+          className="coach-session-message"
+          role="status"
+          aria-busy="true"
+        >
+          <div className="coach-session-loading-mark" aria-hidden="true" />
+          <h1>Opening your workspace…</h1>
+          <p>
+            We’re checking your Studio access. Your courses will appear here in
+            a moment.
+          </p>
+        </section>
+      );
+    }
+    if (state.status === "error") {
+      return (
+        <section className="coach-session-message" role="alert">
+          <h1>We couldn’t check your account</h1>
+          <p>
+            Your workspace is still protected. Reload this page to reconnect,
+            then try again.
+          </p>
+          <Link href="/login" className="button button-primary">
+            Sign in again
+          </Link>
+        </section>
+      );
+    }
+    return (
+      <section className="coach-session-message" role="alert">
+        <h1>Let’s get you into Studio.</h1>
+        <p>Sign in with the account assigned to your academy.</p>
+        <Link href="/login" className="button button-primary">
+          Sign in
         </Link>
+      </section>
+    );
+  }
+
+  return (
+    <div className={workspaceClassName} style={coachThemeBridge}>
+      <aside
+        className="coach-sidebar"
+        id="coach-sidebar"
+        aria-label="Studio workspace navigation"
+      >
+        <div className="coach-sidebar-head">
+          <Link
+            href="/studio"
+            className="coach-brand"
+            aria-label="Academy Studio home"
+          >
+            <AcademyMark width={40} height={40} aria-hidden="true" />
+            <span>
+              Academy Studio<small>by Cohorva</small>
+            </span>
+          </Link>
+          <button
+            ref={mobileCloseRef}
+            className="coach-mobile-close"
+            type="button"
+            aria-label="Close Studio navigation"
+            onClick={closeMobileNav}
+          >
+            <X size={20} aria-hidden="true" />
+          </button>
+          <button
+            className="coach-sidebar-toggle"
+            type="button"
+            aria-label={
+              sidebarCollapsed
+                ? "Expand Studio navigation"
+                : "Collapse Studio navigation"
+            }
+            aria-expanded={!sidebarCollapsed}
+            aria-controls="coach-sidebar"
+            title={
+              sidebarCollapsed ? "Expand navigation" : "Collapse navigation"
+            }
+            onClick={() => setSidebarCollapsed((current) => !current)}
+          >
+            {sidebarCollapsed ? (
+              <PanelLeftOpen size={19} aria-hidden="true" />
+            ) : (
+              <PanelLeftClose size={19} aria-hidden="true" />
+            )}
+          </button>
+        </div>
         <div className="coach-sidebar-label">YOUR WORKSPACE</div>
         <nav aria-label="Coach workspace">
-          {coachNavigation.map(({ href, label, icon: Icon }) => (
+          {coachNavigation.map(({ href, label, icon: Icon }, index) => (
             <Link
               key={href}
               href={href}
+              ref={index === 0 ? firstNavRef : undefined}
+              title={label}
               aria-current={
                 isCoachRouteActive(pathname, href) ? "page" : undefined
               }
+              onClick={() => {
+                if (mobileNavOpen) closeMobileNav();
+              }}
             >
               <Icon size={20} aria-hidden="true" />
               <span>{label}</span>
@@ -94,20 +301,113 @@ function Workspace({ children }: { children: ReactNode }) {
               <strong>Your way of teaching.</strong>
             </p>
           </div>
-          <Link href="/studio/settings" className="coach-account-link">
-            <span className="coach-avatar" aria-hidden="true">
-              {initials}
-            </span>
-            <span>
-              {name}
-              <small>Account & preferences</small>
-            </span>
-            <Settings2 size={17} aria-hidden="true" />
-          </Link>
+          {state.status === "ready" ? (
+            <div className="coach-account-wrap">
+              <button
+                ref={accountTriggerRef}
+                className="coach-account-link"
+                type="button"
+                aria-expanded={accountOpen}
+                aria-haspopup="menu"
+                aria-controls="coach-account-menu"
+                onClick={() => {
+                  setSignOutError("");
+                  setAccountOpen((current) => !current);
+                }}
+              >
+                <span className="coach-avatar" aria-hidden="true">
+                  {initials}
+                </span>
+                <span className="coach-account-copy">
+                  <strong>{name}</strong>
+                  <small title={email}>{email}</small>
+                </span>
+                <ChevronDown
+                  className="coach-account-chevron"
+                  size={17}
+                  aria-hidden="true"
+                />
+              </button>
+              {accountOpen && (
+                <div
+                  className="coach-account-menu"
+                  id="coach-account-menu"
+                  role="menu"
+                  aria-label="Account actions"
+                >
+                  <div className="coach-account-menu-heading">
+                    <strong>{name}</strong>
+                    <span title={email}>{email}</span>
+                  </div>
+                  <Link
+                    href="/studio/settings"
+                    role="menuitem"
+                    onClick={() => setAccountOpen(false)}
+                  >
+                    <Settings2 size={16} aria-hidden="true" />
+                    Account & preferences
+                  </Link>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => void signOut()}
+                    disabled={signingOut}
+                  >
+                    <LogOut size={16} aria-hidden="true" />
+                    {signingOut ? "Signing out…" : "Sign out"}
+                  </button>
+                  {signOutError && (
+                    <p className="coach-signout-error" role="alert">
+                      {signOutError}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : state.status === "denied" ? (
+            <Link className="coach-account-signin" href="/login">
+              <span className="coach-avatar" aria-hidden="true">
+                ?
+              </span>
+              <span>Sign in</span>
+            </Link>
+          ) : (
+            <div className="coach-account-pending" role="status">
+              <span className="coach-avatar" aria-hidden="true">
+                …
+              </span>
+              <span>
+                {state.status === "error"
+                  ? "Access needs checking"
+                  : "Checking access…"}
+              </span>
+            </div>
+          )}
         </div>
       </aside>
+      <button
+        className="coach-nav-scrim"
+        type="button"
+        aria-label="Close Studio navigation"
+        onClick={closeMobileNav}
+      />
       <div className="coach-stage">
         <header className="coach-topbar">
+          <button
+            ref={mobileToggleRef}
+            className="coach-mobile-toggle"
+            type="button"
+            aria-label="Open Studio navigation"
+            aria-expanded={mobileNavOpen}
+            aria-controls="coach-sidebar"
+            onClick={() => {
+              setAccountOpen(false);
+              setMobileNavOpen(true);
+            }}
+          >
+            <Menu size={20} aria-hidden="true" />
+            <span>Menu</span>
+          </button>
           <Link className="coach-mobile-brand" href="/studio">
             <AcademyMark width={32} height={32} aria-hidden="true" />
             <span>Academy Studio</span>
@@ -127,29 +427,29 @@ function Workspace({ children }: { children: ReactNode }) {
               </>
             )}
           </nav>
-          <Link
-            href="/studio/settings"
-            className="coach-top-account"
-            aria-label={`Account settings for ${name}`}
-          >
-            <span>{name}</span>
-            <span className="coach-avatar" aria-hidden="true">
-              {initials}
+          {state.status === "ready" ? (
+            <Link
+              href="/studio/settings"
+              className="coach-top-account"
+              aria-label={`Account settings for ${name}`}
+            >
+              <span title={email}>{name}</span>
+              <span className="coach-avatar" aria-hidden="true">
+                {initials}
+              </span>
+            </Link>
+          ) : state.status === "denied" ? (
+            <Link href="/login" className="coach-top-signin">
+              Sign in
+            </Link>
+          ) : (
+            <span className="coach-top-account-pending" role="status">
+              Checking access…
             </span>
-          </Link>
+          )}
         </header>
         <main id="admin-content" className="coach-content" tabIndex={-1}>
-          {state.status === "denied" ? (
-            <section className="coach-session-message" role="alert">
-              <h1>Let’s get you into Studio.</h1>
-              <p>Sign in with the account assigned to your academy.</p>
-              <Link href="/login" className="button button-primary">
-                Sign in
-              </Link>
-            </section>
-          ) : (
-            children
-          )}
+          {state.status === "ready" ? children : sessionMessage()}
         </main>
       </div>
       <nav className="coach-mobile-nav" aria-label="Coach mobile navigation">
@@ -173,7 +473,15 @@ export function CoachShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   return (
     <CoachPreferencesProvider>
-      <AdminSessionProvider refreshKey={pathname} revalidateOnFocus>
+      <AdminSessionProvider
+        refreshKey={pathname}
+        revalidateOnFocus
+        renderBoundary={(boundary, state) => (
+          <Workspace sessionState={state} boundary={boundary}>
+            {null}
+          </Workspace>
+        )}
+      >
         <Workspace>{children}</Workspace>
       </AdminSessionProvider>
     </CoachPreferencesProvider>
