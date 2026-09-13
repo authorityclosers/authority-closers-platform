@@ -6,6 +6,7 @@
 import {
   ArrowLeft,
   ArrowUpRight,
+  AudioLines,
   BarChart2,
   Bell,
   BookOpen,
@@ -102,6 +103,7 @@ export type LearnerCurrent =
   | "notifications"
   | "profile"
   | "settings"
+  | "sales-xray"
   | "course"
   | "certificate"
   | "none";
@@ -640,6 +642,7 @@ function LearnerShellContent({
   const isNotifications = current === "notifications";
   const isProfile = current === "profile";
   const isSettings = current === "settings";
+  const isSalesXray = current === "sales-xray";
 
   const effectiveDisplayName = identity.displayName;
   const effectiveTenantIdentity = tenantIdentity ?? DEFAULT_TENANT_IDENTITY;
@@ -699,6 +702,14 @@ function LearnerShellContent({
               },
             ]
           : []),
+        {
+          id: "sales-xray",
+          label: "Sales Xray",
+          href: "/sales-xray",
+          current: isSalesXray,
+          icon: <AudioLines size={20} strokeWidth={1.85} aria-hidden="true" />,
+          title: "Sales Xray",
+        },
         {
           id: "progress",
           label: "Progress",
