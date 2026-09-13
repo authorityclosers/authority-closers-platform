@@ -185,22 +185,6 @@ async def _exercise(schema_url) -> None:
                 operations_id,
                 permissions=frozenset({"catalog_read", "catalog_write", "catalog_publish"}),
             )
-            capability = CapabilityApplication(database, operations_tenant_id=operations_id)
-            await capability.bootstrap_first_manager(
-                person_id=manager_id,
-                command_id=uuid4(),
-                reason="PostgreSQL Free Course test bootstrap",
-            )
-            for permission in ("platform_catalog_write", "platform_catalog_publish"):
-                await capability.grant(
-                    actor,
-                    command_id=uuid4(),
-                    subject_person_id=manager_id,
-                    permission=permission,
-                    scope=CapabilityScope("platform"),
-                    reason="PostgreSQL Free Course test authority",
-                )
-
             signer = MediaSigner(b"postgres-free-course-test-signing-key-32bytes")
             storage = InMemoryPrivateObjectStorage(signer)
             source_prefix = (
@@ -254,6 +238,45 @@ async def _exercise(schema_url) -> None:
             assert source_asset is not None
             source_asset.current_version_id = source_version_id
             database.add(
+                MediaUploadIntent(
+                    id=uuid4(),
+                    tenant_id=operations_id,
+                    actor_person_id=manager_id,
+                    asset_id=source_asset_id,
+                    version_id=source_version_id,
+                    object_key=original.object_key,
+                    filename="approved-test-video.mp4",
+                    content_type="video/mp4",
+                    declared_bytes=original.content_length,
+                    checksum_sha256=original.checksum_sha256,
+                    expires_at=NOW - timedelta(minutes=1),
+                    max_bytes=original.content_length,
+                    state=MediaLifecycle.READY.value,
+                    idempotency_key="postgres-free-course-source-upload",
+                    request_fingerprint="a" * 64,
+                    completion_fingerprint="b" * 64,
+                    created_at=NOW,
+                    updated_at=NOW,
+                )
+            )
+            await database.flush()
+            source_upload = (
+                await database.execute(
+                    select(MediaUploadIntent).where(
+                        MediaUploadIntent.asset_id == source_asset_id,
+                        MediaUploadIntent.version_id == source_version_id,
+                    )
+                )
+            ).scalar_one()
+            database.add(
+                StudioVideoUpload(
+                    upload_id=source_upload.id,
+                    tenant_id=operations_id,
+                    program_id=source_program_id,
+                    created_at=NOW,
+                )
+            )
+            database.add(
                 MediaRendition(
                     id=uuid4(),
                     tenant_id=operations_id,
@@ -268,17 +291,33 @@ async def _exercise(schema_url) -> None:
             )
             await database.flush()
 
-            publication = await FreeCoursePublicationApplication(
-                database,
-                operations_tenant_id=operations_id,
-                public_tenant_id=public_id,
-                clock=lambda: NOW,
-            ).apply(
-                actor=actor,
-                source_program_id=source_program_id,
-                command_id=uuid4(),
-                reason="PostgreSQL reviewed Free Course publication",
-            )
+            async def test_platform_projection(*_args, **_kwargs):
+                return frozenset({"platform_catalog_write", "platform_catalog_publish"})
+
+            # The harness is module-scoped; reserve the canonical slug and
+            # durable capability history for the independent legacy adoption
+            # fixture below while exercising the same publication path here.
+            with (
+                patch(
+                    "ac_platform.catalog.free_course_publication.AUTHORITY_CLOSERS_FREE_COURSE_SLUG",
+                    f"postgres-free-course-publication-{uuid4().hex}",
+                ),
+                patch(
+                    "ac_platform.authorization.platform.platform_projection",
+                    new=test_platform_projection,
+                ),
+            ):
+                publication = await FreeCoursePublicationApplication(
+                    database,
+                    operations_tenant_id=operations_id,
+                    public_tenant_id=public_id,
+                    clock=lambda: NOW,
+                ).apply(
+                    actor=actor,
+                    source_program_id=source_program_id,
+                    command_id=uuid4(),
+                    reason="PostgreSQL reviewed Free Course publication",
+                )
             assert publication.video_activity_id
 
             port = SignedMediaDeliveryPort(
@@ -293,22 +332,26 @@ async def _exercise(schema_url) -> None:
                 delivery_port=port,
                 delivery_activity_resolver=resolve_catalog_activity,
             )
-            promoted = await FreeCourseMediaPromotionApplication(
-                database,
-                service=service,
-                operations_tenant_id=operations_id,
-                public_tenant_id=public_id,
-                clock=lambda: NOW,
-            ).apply(
-                actor=actor,
-                publication_command_id=publication.command_id,
-                command_id=uuid4(),
-                activity_id=publication.video_activity_id,
-                source_asset_id=source_asset_id,
-                source_version_id=source_version_id,
-                media_owner_person_id=manager_id,
-                approval_reference="PG-FREE-COURSE-HTTP-TEST",
-            )
+            with patch(
+                "ac_platform.catalog.free_course_media.platform_projection",
+                new=test_platform_projection,
+            ):
+                promoted = await FreeCourseMediaPromotionApplication(
+                    database,
+                    service=service,
+                    operations_tenant_id=operations_id,
+                    public_tenant_id=public_id,
+                    clock=lambda: NOW,
+                ).apply(
+                    actor=actor,
+                    publication_command_id=publication.command_id,
+                    command_id=uuid4(),
+                    activity_id=publication.video_activity_id,
+                    source_asset_id=source_asset_id,
+                    source_version_id=source_version_id,
+                    media_owner_person_id=manager_id,
+                    approval_reference="PG-FREE-COURSE-HTTP-TEST",
+                )
             binding = await database.get(ActivityMediaBinding, promoted.binding_id)
             assert binding is not None and binding.state == "approved"
 
