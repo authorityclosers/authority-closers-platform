@@ -16,6 +16,7 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 
 from ac_platform.conversation_intelligence.application import (
+    AUDIOATLAS_HOSTED_RECIPE,
     AUDIOATLAS_RECIPE,
     ConversationApplication,
     ConversationConflict,
@@ -99,6 +100,7 @@ async def issue(
     key: str = "intake-quote",
     source: bytes = b"synthetic local audio",
     allowed_tenants: tuple[UUID, ...] | None = None,
+    acoustic_recipe: str = AUDIOATLAS_RECIPE,
 ) -> tuple[IntakeIntent, dict[str, Any]]:
     intent = make_intent(source)
     await add_allowance(engine, state.tenant_id, state.person_id)
@@ -106,7 +108,7 @@ async def issue(
     async with AsyncSession(engine) as database, database.begin():
         intake = ConversationIntake(
             ConversationApplication(database, clock=lambda: state.now),
-            policy(scope_id, *allowed),
+            replace(policy(scope_id, *allowed), acoustic_recipe=acoustic_recipe),
         )
         view = await intake.prepare(state.actor, intent, key=key)
     return intent, view
@@ -172,6 +174,35 @@ def test_quote_issuance_is_not_consent_and_requires_exact_acceptance(postgres_ha
                     )
                     == 1
                 )
+        finally:
+            await engine.dispose()
+
+    run(exercise())
+
+
+def test_recipe_cutover_rejects_old_quote_acceptance_and_upload(postgres_harness):
+    async def exercise() -> None:
+        engine = create_async_engine(postgres_harness.url)
+        try:
+            state = await seed(engine)
+            scope_id = await seed_budget(engine)
+            _, view = await issue(engine, state, scope_id)
+            async with AsyncSession(engine) as database, database.begin():
+                intake = ConversationIntake(
+                    app(database, state),
+                    replace(policy(scope_id, state.tenant_id),
+                            acoustic_recipe=AUDIOATLAS_HOSTED_RECIPE),
+                )
+                with pytest.raises(ConversationConflict, match="recipe changed"):
+                    await intake.accept(
+                        state.actor, UUID(view["id"]),
+                        QuoteAcceptance(quote_fingerprint=view["quote_fingerprint"],
+                                        privacy_revision=view["privacy_revision"], accepted=True),
+                    )
+                with pytest.raises(ConversationConflict, match="recipe changed"):
+                    await intake.require_accepted(
+                        state.actor, UUID(view["recording_id"]), UUID(view["id"]),
+                    )
         finally:
             await engine.dispose()
 
@@ -368,7 +399,10 @@ def test_quote_key_replay_and_conflict_are_transactional(postgres_harness):
     run(exercise())
 
 
-def test_approval_then_bounded_source_storage_and_local_run(postgres_harness, tmp_path: Path):
+@pytest.mark.parametrize("acoustic_recipe", [AUDIOATLAS_RECIPE, AUDIOATLAS_HOSTED_RECIPE])
+def test_approval_then_bounded_source_storage_and_local_run(
+    postgres_harness, tmp_path: Path, acoustic_recipe: str
+):
     async def exercise() -> None:
         engine = create_async_engine(postgres_harness.url)
         source = b"RIFF synthetic local audio fixture"
@@ -377,7 +411,8 @@ def test_approval_then_bounded_source_storage_and_local_run(postgres_harness, tm
             state = await seed(engine)
             scope_id = await seed_budget(engine)
             intent, view = await issue(
-                engine, state, scope_id, source=source, key="approved-source"
+                engine, state, scope_id, source=source, key="approved-source",
+                acoustic_recipe=acoustic_recipe,
             )
             quote_id = UUID(view["id"])
             recording_id = UUID(view["recording_id"])
@@ -387,8 +422,12 @@ def test_approval_then_bounded_source_storage_and_local_run(postgres_harness, tm
                 accepted=True,
             )
             recipe_revision = view["recipe_revision"]
+            assert recipe_revision == acoustic_recipe
             async with AsyncSession(engine) as database, database.begin():
-                intake = ConversationIntake(app(database, state), policy(scope_id, state.tenant_id))
+                intake = ConversationIntake(
+                    app(database, state),
+                    replace(policy(scope_id, state.tenant_id), acoustic_recipe=acoustic_recipe),
+                )
                 await intake.accept(state.actor, quote_id, acceptance)
                 stored = await app(database, state).store_source(
                     state.actor,

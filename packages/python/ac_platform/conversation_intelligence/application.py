@@ -54,6 +54,8 @@ from ac_platform.tenancy.models import Membership, Tenant
 LOCAL_JOB = "conversation.inspect_local.v1"
 DELETE_JOB = "conversation.erase_local.v1"
 AUDIOATLAS_RECIPE = "audioatlas-48000-v1"
+AUDIOATLAS_HOSTED_RECIPE = "audioatlas-16000-v1"
+AUDIOATLAS_RECIPES = {AUDIOATLAS_RECIPE: 48000, AUDIOATLAS_HOSTED_RECIPE: 16000}
 
 
 class ConversationError(ValueError):
@@ -448,7 +450,7 @@ class ConversationApplication:
             or quote.account_id != str(actor.person_id)
             or quote.budget_scope_id != str(quoted.budget_scope_id)
             or quote.recipe_revision != intent.recipe_revision
-            or intent.recipe_revision != AUDIOATLAS_RECIPE
+            or intent.recipe_revision not in AUDIOATLAS_RECIPES
             or quote.provider_id != "local"
             or quote.max_cost_paise != 0
             or quote.operation != "inspect_audioatlas"
@@ -695,20 +697,22 @@ class ConversationApplication:
             )
         )
         if checkpoint.stage == "C1":
+            decode_rate = AUDIOATLAS_RECIPES.get(checkpoint.revision)
             if (
                 storage is None
                 or feature_blob_id is None
                 or (existing is None and feature_blob_id != run.id)
                 or (existing is not None and feature_blob_id != existing.feature_blob_id)
-                or checkpoint.revision != AUDIOATLAS_RECIPE
+                or decode_rate is None
+                or checkpoint.revision != run.recipe_revision
                 or json.loads(checkpoint.config_json)
-                != {"decode_rate": 48000, "window_profile": "audioatlas-40ms-10ms"}
+                != {"decode_rate": decode_rate, "window_profile": "audioatlas-40ms-10ms"}
             ):
                 raise ConversationConflict("A verified feature artifact is required.")
             try:
                 meta = payload["acoustics"]
                 expected = _feature_metadata(
-                    48000, payload["source_channels"], meta["sample_count"]
+                    decode_rate, payload["source_channels"], meta["sample_count"]
                 )
                 if (
                     payload["schema"] != "ac.sales-xray.signal-checkpoint/1"
@@ -718,10 +722,11 @@ class ConversationApplication:
                     or meta["feature_sha256"] != payload["feature_sha256"]
                     or payload["native_receipt"]["source_sha256"] != NATIVE_SOURCE_SHA256
                     or payload["native_receipt"]["rows"] != meta["rows"]
-                    or payload["timebase"]["rate"] != 48000
+                    or payload["timebase"]["rate"] != decode_rate
                     or payload["timebase"]["clock"] != "decoded_audio_track"
                     or payload["timebase"]["silence_removed"] is not False
-                    or payload["media_duration_ms"] != round(meta["sample_count"] / 48000 * 1000)
+                    or payload["media_duration_ms"]
+                    != round(meta["sample_count"] / decode_rate * 1000)
                 ):
                     raise ValueError("inconsistent signal metadata")
                 feature_key = ObjectKey(

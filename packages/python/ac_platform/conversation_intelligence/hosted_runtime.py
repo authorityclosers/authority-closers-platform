@@ -19,6 +19,7 @@ from ac_platform.conversation_intelligence.activation_contract import (
     HostedApprovalBundle,
     load_hosted_approval_bundle,
 )
+from ac_platform.conversation_intelligence.application import AUDIOATLAS_HOSTED_RECIPE
 from ac_platform.conversation_intelligence.authority import ConversationAuthority
 from ac_platform.conversation_intelligence.intake import IntakePolicy
 from ac_platform.conversation_intelligence.storage import PrivateLocalRecordingStorage
@@ -126,6 +127,7 @@ def compose_hosted_intake(settings: HostedConversationSettings) -> ConversationI
             authorization_ref=bundle.intake_authorization_ref,
             retention_ref=bundle.intake_retention_ref,
             retention_days=bundle.retention_days,
+            acoustic_recipe=AUDIOATLAS_HOSTED_RECIPE,
         ),
         storage=PrivateLocalRecordingStorage(storage_path),
         scratch=PrivateLocalRecordingStorage(scratch_path),

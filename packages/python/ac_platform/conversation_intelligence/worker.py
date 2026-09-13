@@ -24,6 +24,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ac_platform.conversation_intelligence.application import (
+    AUDIOATLAS_HOSTED_RECIPE,
     AUDIOATLAS_RECIPE,
     DELETE_JOB,
     LOCAL_JOB,
@@ -317,6 +318,9 @@ class OfflineConversationWorker:
         self.environment = environment
         self.native_runtime = native_runtime
         self.c1_rate = c1_rate
+        self.c1_recipe = (
+            AUDIOATLAS_HOSTED_RECIPE if c1_rate == HOSTED_C1_RATE else AUDIOATLAS_RECIPE
+        )
         self.lease_for, self.heartbeat_every = lease_for, heartbeat_every
 
     async def claim(self) -> Work | None:
@@ -506,13 +510,14 @@ class OfflineConversationWorker:
             or run.state not in {"queued", "running"}
             or quoted is None
             or quoted.revoked_at is not None
-            or run.recipe_revision != AUDIOATLAS_RECIPE
+            or run.recipe_revision != self.c1_recipe
         ):
             raise ConversationConflict("The run or quote no longer authorizes processing.")
         quote = Quote.from_dict(quoted.quote)
         execution = ExecutionPermission.from_dict(quoted.execution_permission)
         if (
             quote.provider_id != "local"
+            or quote.recipe_revision != self.c1_recipe
             or quote.provider_model != "audioatlas"
             or quote.operation != "inspect_audioatlas"
             or quote.max_cost_paise != 0
@@ -747,7 +752,7 @@ class OfflineConversationWorker:
                 c1_key = build_checkpoint(
                     binding,
                     "C1",
-                    AUDIOATLAS_RECIPE,
+                    self.c1_recipe,
                     c1_config,
                     (c0,),
                     "0" * 64,
@@ -819,7 +824,7 @@ class OfflineConversationWorker:
                 c1 = build_checkpoint(
                     binding,
                     "C1",
-                    AUDIOATLAS_RECIPE,
+                    self.c1_recipe,
                     c1_config,
                     (c0,),
                     content_hash(result),

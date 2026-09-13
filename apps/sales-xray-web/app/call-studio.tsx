@@ -83,6 +83,10 @@ const PLAN_STATES = new Set([
 ]);
 const PLAN_STAGES = new Set(["C2", "C4", "C5"]);
 const PROCESSING_STAGES = new Set(["C1", "C2", "C3", "C4", "C5", "C6"]);
+const LOCAL_MEASUREMENT_RECIPES = new Set([
+  "audioatlas-48000-v1",
+  "audioatlas-16000-v1",
+]);
 
 function planObject(value: unknown, code: string): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value))
@@ -859,7 +863,7 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
             : "This saved call has an analysis run, but its report is not ready yet.",
       });
       if (
-        run.recipe_revision === "audioatlas-48000-v1" &&
+        LOCAL_MEASUREMENT_RECIPES.has(run.recipe_revision) &&
         run.state === "completed"
       ) {
         await requestProcessingPlan(recording.id, current);

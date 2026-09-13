@@ -430,18 +430,12 @@ class ConversationReports:
             raise ConversationConflict(
                 "Finish this recording's local analysis before importing a draft."
             )
-        signal = await self.database.scalar(
-            select(ConversationCheckpoint)
-            .where(
-                ConversationCheckpoint.recording_id == recording.id,
-                ConversationCheckpoint.tenant_id == actor.tenant_id,
-                ConversationCheckpoint.person_id == actor.person_id,
-                ConversationCheckpoint.stage == "C1",
-                ConversationCheckpoint.erased_at.is_(None),
-            )
-            .order_by(ConversationCheckpoint.created_at.desc())
-            .limit(1)
+        from ac_platform.conversation_intelligence.inference import ConversationInference
+
+        source_plan = await ConversationInference(self.application).plan_transcription(
+            recording, signal_recipe=run_row.recipe_revision
         )
+        signal = await self.database.get(ConversationCheckpoint, source_plan.signal_id)
         if signal is None or signal.payload is None or signal.manifest is None:
             raise ConversationConflict("A verified local audio checkpoint is required.")
         duration = signal.payload.get("media_duration_ms")

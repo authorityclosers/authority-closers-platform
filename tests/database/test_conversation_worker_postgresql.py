@@ -147,6 +147,7 @@ async def _add_quote(
     source_sha256: str,
     *,
     now: datetime | None = None,
+    recipe_revision: str = AUDIOATLAS_RECIPE,
 ) -> UUID:
     quote_id = uuid4()
     # Commands in this harness use build_application(..., state)'s frozen clock.
@@ -160,7 +161,7 @@ async def _add_quote(
         budget_scope_id=str(scope_id),
         provider_id="local",
         provider_model="audioatlas",
-        recipe_revision=AUDIOATLAS_RECIPE,
+        recipe_revision=recipe_revision,
         operation="inspect_audioatlas",
         input_sha256=source_sha256,
         privacy_revision="synthetic-local-privacy-v1",

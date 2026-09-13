@@ -15,9 +15,16 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from ac_platform.conversation_intelligence.application import AUDIOATLAS_RECIPE
+from ac_platform.conversation_intelligence.application import (
+    AUDIOATLAS_HOSTED_RECIPE,
+    AUDIOATLAS_RECIPE,
+)
 from ac_platform.conversation_intelligence.contracts import RunIntent
-from ac_platform.conversation_intelligence.models import ConversationCheckpoint
+from ac_platform.conversation_intelligence.inference import ConversationInference
+from ac_platform.conversation_intelligence.models import (
+    ConversationCheckpoint,
+    ConversationRecording,
+)
 from ac_platform.conversation_intelligence.signals import inspect_media
 from ac_platform.conversation_intelligence.worker import HostedConversationWorker
 from tests.database.test_conversation_postgresql import application as build_application
@@ -57,6 +64,12 @@ def test_hosted_c1_uses_16k_and_reuses_it_without_reusing_local_48k(
 
         try:
             assert await prepared.worker.run_once()
+            async with sessions() as database:
+                recording = await database.get(ConversationRecording, prepared.recording_id)
+                assert recording is not None
+                local_plan = await ConversationInference(
+                    build_application(database, prepared.state)
+                ).plan_transcription(recording)
             hosted = HostedConversationWorker(
                 sessions,
                 storage=prepared.storage,
@@ -71,6 +84,7 @@ def test_hosted_c1_uses_16k_and_reuses_it_without_reusing_local_48k(
                     prepared.recording_id,
                     prepared.scope_id,
                     hashlib.sha256(prepared.data).hexdigest(),
+                    recipe_revision=AUDIOATLAS_HOSTED_RECIPE,
                 )
                 async with sessions() as database, database.begin():
                     requested = await build_application(database, prepared.state).request_run(
@@ -79,7 +93,7 @@ def test_hosted_c1_uses_16k_and_reuses_it_without_reusing_local_48k(
                             recording_id=prepared.recording_id,
                             source_revision="1",
                             quote_id=quote,
-                            recipe_revision=AUDIOATLAS_RECIPE,
+                            recipe_revision=AUDIOATLAS_HOSTED_RECIPE,
                         ),
                         key=f"hosted-profile-run-{uuid4().hex}",
                     )
@@ -98,6 +112,53 @@ def test_hosted_c1_uses_16k_and_reuses_it_without_reusing_local_48k(
                 ).all()
                 assert len(checkpoints) == 2
                 assert {c.payload["timebase"]["rate"] for c in checkpoints} == {16000, 48000}
+                recording = await database.get(ConversationRecording, prepared.recording_id)
+                assert recording is not None
+                hosted_plan = await ConversationInference(
+                    build_application(database, prepared.state)
+                ).plan_transcription(recording)
+                hosted_signal = next(
+                    c for c in checkpoints if c.payload["timebase"]["rate"] == 16000
+                )
+                assert hosted_plan.signal_id == hosted_signal.id
+                assert hosted_plan.checkpoint.cache_key == local_plan.checkpoint.cache_key
+                original_run_plan = await ConversationInference(
+                    build_application(database, prepared.state)
+                ).plan_transcription(recording, signal_recipe=AUDIOATLAS_RECIPE)
+                assert original_run_plan.signal_id == local_plan.signal_id
+                assert original_run_plan.signal_id != hosted_plan.signal_id
+            _assert_scratch_empty(prepared.scratch)
+        finally:
+            await engine.dispose()
+
+    run(exercise())
+
+
+def test_hosted_worker_rejects_48k_quote_before_native_execution(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    async def exercise() -> None:
+        prepared = await _prepare(postgres_harness, tmp_path)
+        engine = create_async_engine(postgres_harness.url)
+        sessions = async_sessionmaker(engine, expire_on_commit=False)
+
+        class MustNotRun:
+            def inspect(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+                pytest.fail("Hosted worker reinterpreted a 48k quote as 16k")
+
+        try:
+            hosted = HostedConversationWorker(
+                sessions, storage=prepared.storage, scratch=prepared.scratch,
+                environment="staging", native_runtime=MustNotRun(),
+            )
+            with pytest.raises(RuntimeError, match="conversation job failed"):
+                await hosted.run_once()
+            async with sessions() as database:
+                assert not list(await database.scalars(
+                    select(ConversationCheckpoint).where(
+                        ConversationCheckpoint.recording_id == prepared.recording_id,
+                    )
+                ))
             _assert_scratch_empty(prepared.scratch)
         finally:
             await engine.dispose()

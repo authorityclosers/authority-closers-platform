@@ -15,7 +15,8 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 
 from ac_platform.conversation_intelligence.application import (
-    AUDIOATLAS_RECIPE,
+    AUDIOATLAS_HOSTED_RECIPE,
+    AUDIOATLAS_RECIPES,
     ConversationApplication,
     ConversationConflict,
     ConversationDenied,
@@ -139,7 +140,9 @@ class ConversationInference:
         self.database = application.database
         self.authority = authority
 
-    async def plan_transcription(self, recording: ConversationRecording) -> TranscriptionPlan:
+    async def plan_transcription(
+        self, recording: ConversationRecording, *, signal_recipe: str | None = None
+    ) -> TranscriptionPlan:
         """Internal only: caller must already lock and authorize this recording."""
         binding = binding_for(recording)
         c0 = build_checkpoint(
@@ -157,32 +160,50 @@ class ConversationInference:
                 }
             ),
         )
-        c1 = build_checkpoint(
-            binding,
-            "C1",
-            AUDIOATLAS_RECIPE,
-            {"decode_rate": 48000, "window_profile": "audioatlas-40ms-10ms"},
-            (c0,),
-            "0" * 64,
-        )
+        # Both exact measurement profiles can establish duration. Prefer the
+        # hosted profile when both exist; C2 still depends only on C0, so a
+        # measurement/profile change cannot trigger another transcription.
+        if signal_recipe is not None and signal_recipe not in AUDIOATLAS_RECIPES:
+            raise ConversationConflict("The requested measurement recipe is unavailable.")
+        c1_templates = {
+            revision: build_checkpoint(
+                binding,
+                "C1",
+                revision,
+                {"decode_rate": rate, "window_profile": "audioatlas-40ms-10ms"},
+                (c0,),
+                "0" * 64,
+            )
+            for revision, rate in AUDIOATLAS_RECIPES.items()
+            if signal_recipe is None or revision == signal_recipe
+        }
         rows = (
             await self.database.scalars(
                 select(ConversationCheckpoint).where(
                     ConversationCheckpoint.recording_id == recording.id,
                     ConversationCheckpoint.tenant_id == recording.tenant_id,
                     ConversationCheckpoint.person_id == recording.person_id,
-                    ConversationCheckpoint.cache_key.in_((c0.cache_key, c1.cache_key)),
+                    ConversationCheckpoint.cache_key.in_(
+                        (c0.cache_key, *(c.cache_key for c in c1_templates.values()))
+                    ),
                     ConversationCheckpoint.erased_at.is_(None),
                 )
             )
         ).all()
-        by_stage = {row.stage: row for row in rows}
+        ordered = sorted(
+            rows,
+            key=lambda row: (
+                AUDIOATLAS_HOSTED_RECIPE in c1_templates
+                and row.cache_key == c1_templates[AUDIOATLAS_HOSTED_RECIPE].cache_key
+            ),
+        )
+        by_stage = {row.stage: row for row in ordered}
         if set(by_stage) != {"C0", "C1"}:
             raise ConversationConflict("Finish local audio inspection before transcription.")
         if verified_checkpoint(by_stage["C0"], binding) != c0:
             raise ConversationConflict("The original recording checkpoint changed.")
         actual_c1 = verified_checkpoint(by_stage["C1"], binding)
-        if actual_c1.parents != c1.parents:
+        if actual_c1.parents != (("C0", c0.manifest_sha256),):
             raise ConversationConflict("The measured recording has different source parents.")
         payload = by_stage["C1"].payload
         assert payload is not None

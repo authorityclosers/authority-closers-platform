@@ -7,6 +7,21 @@ plan advancement, then admitted C2/C4/C5 inference. Persisted checkpoints remain
 reusable when a judge/profile changes. Existing authorization, minute and money
 reservations, publication fences and retention remain in the domain workers.
 
+Hosted intake issues the exact `audioatlas-16000-v1` recipe. Local 48 kHz work
+retains `audioatlas-48000-v1`. The quote, worker and publication checks bind the
+recipe to its exact rate, window profile, native source, source bytes and retained
+feature artifact. A hosted worker rejects a pending 48 kHz quote before execution;
+intake and the run route reject pre-cutover quotes with an instruction to prepare
+the call again. Stop old intake and drain its accepted jobs before changing the
+API/worker together; do not reinterpret or manually rewrite queued quotes.
+
+Transcription planning and private draft import use the same verified C1 selector.
+Planning prefers the hosted profile when both exist; an import attached to an
+existing run selects that run's exact recipe. C2 still depends on the original
+C0 source checkpoint, so changing the measurement or coaching profile reuses the
+transcript. PostgreSQL tests cover separate C1 persistence, reuse, unchanged C2
+identity, exact quote admission and refusal to execute a quote for another rate.
+
 `python -m ac_platform.conversation_intelligence.service --config <absolute-file>
 --sha256 <manifest-digest>` is the supervised entry point. `--check` validates
 references and the installed exact release without reading credentials or

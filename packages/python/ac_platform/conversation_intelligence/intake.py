@@ -1,7 +1,7 @@
 """Server-issued local intake quotes, exact consent and current AC entitlements.
 
 The UI cannot activate a provider, grant itself minutes, or choose a budget scope.
-This initial runtime admits the tested offline recipe only.
+The server selects an exact, versioned AudioAtlas measurement recipe.
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ from sqlalchemy import select
 
 from ac_platform.conversation_intelligence.application import (
     AUDIOATLAS_RECIPE,
+    AUDIOATLAS_RECIPES,
     ConversationApplication,
     ConversationConflict,
     ConversationDenied,
@@ -56,6 +57,7 @@ class IntakePolicy:
     authorization_ref: str
     retention_ref: str
     retention_days: int = 7
+    acoustic_recipe: str = AUDIOATLAS_RECIPE
 
     def __post_init__(self) -> None:
         if (
@@ -65,6 +67,7 @@ class IntakePolicy:
             or any(type(value) is not UUID for value in self.tenant_ids)
             or type(self.retention_days) is not int
             or not 1 <= self.retention_days <= 7
+            or self.acoustic_recipe not in AUDIOATLAS_RECIPES
         ):
             raise ValueError("An exact internal workspace and bounded retention are required.")
         require_text(self.authorization_ref, "intake authorization")
@@ -113,6 +116,8 @@ class ConversationIntake:
             raise ConversationDenied("This analysis quote is unavailable.")
         quote = Quote.from_dict(row.quote)
         now = utc(self.application.clock())
+        if quote.recipe_revision != self.policy.acoustic_recipe:
+            raise ConversationConflict("The analysis recipe changed. Prepare this call again.")
         if quote.expires_at_epoch <= now.timestamp():
             raise ConversationConflict("The quote expired. Prepare this call again.")
         await self.application.get(actor, row.recording_id)
@@ -203,7 +208,7 @@ class ConversationIntake:
             str(self.policy.budget_scope_id),
             "local",
             "audioatlas",
-            AUDIOATLAS_RECIPE,
+            self.policy.acoustic_recipe,
             "inspect_audioatlas",
             intent.source_sha256,
             PRIVACY_REVISION,
