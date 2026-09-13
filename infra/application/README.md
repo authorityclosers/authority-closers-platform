@@ -356,7 +356,10 @@ root (`/srv/authority-closers/volumes/media-video/staging` or
 `/srv/authority-closers/volumes/media-video/production`) into API and worker at
 `/var/lib/ac-media`, and the scanner socket directory at
 `/run/ac-media-safety`. The application uses
-`/var/lib/ac-media/video-objects` as its marked private store. Rollback resolves
+`/var/lib/ac-media/video-objects` as its marked private Studio store and
+`/var/lib/ac-media/avatar-objects` as a separate marked profile-photo store;
+the two roots are never shared. The installer requires the environment-owned
+host `avatar-objects` directory alongside `video-objects`. Rollback resolves
 the target release's own selector, so it cannot inherit the candidate setting.
 
 The profile admits exactly 2,000,000,000 source bytes, streams uploads into

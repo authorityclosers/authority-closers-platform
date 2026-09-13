@@ -385,6 +385,7 @@ def test_runtime_containers_are_not_privileged_or_host_published() -> None:
 def test_filesystem_media_companion_uses_reviewed_environment_roots() -> None:
     assert "AC_MEDIA_FILESYSTEM_HOST_ROOT:?" in FILESYSTEM_COMPOSE
     assert "AC_MEDIA_SCANNER_HOST_ROOT:?" in FILESYSTEM_COMPOSE
+    assert "AC_MEDIA_FILESYSTEM_AVATAR_ROOT: /var/lib/ac-media/avatar-objects" in FILESYSTEM_COMPOSE
     assert "/srv/authority-closers/volumes/media-video:" not in FILESYSTEM_COMPOSE
     assert "/srv/authority-closers/volumes/media-safety-socket:" not in FILESYSTEM_COMPOSE
     assert "create_host_path: false" in FILESYSTEM_COMPOSE
@@ -399,6 +400,7 @@ def test_filesystem_media_companion_bounds_transcoding_worker_memory() -> None:
 def test_installer_requires_canonical_prepared_filesystem_roots() -> None:
     assert "stat -c '%u:%g:%a' -- \"$media_filesystem_host_root\"" in INSTALLER
     assert "10001:10001:700" in INSTALLER
+    assert '"$media_filesystem_host_root/avatar-objects"' in INSTALLER
     assert "stat -c '%u:%g:%a' -- \"$media_scanner_host_root\"" in INSTALLER
     assert "100:100:755" in INSTALLER
     assert "stat -c '%u:%g' -- \"$media_scanner_host_root\"" in INSTALLER

@@ -129,6 +129,7 @@ class Settings(BaseSettings):
     # and scanner endpoint is configured together.
     media_filesystem_enabled: bool = False
     media_filesystem_root: str | None = None
+    media_filesystem_avatar_root: str | None = None
     media_scanner_unix_socket: str | None = None
     media_scanner_host: str | None = None
     media_scanner_port: int = 3310
@@ -418,6 +419,7 @@ class Settings(BaseSettings):
 
         for field in (
             "media_filesystem_root",
+            "media_filesystem_avatar_root",
             "media_scanner_unix_socket",
             "media_scanner_host",
         ):
@@ -426,6 +428,7 @@ class Settings(BaseSettings):
                 object.__setattr__(self, field, None)
         configured = (
             self.media_filesystem_root,
+            self.media_filesystem_avatar_root,
             self.media_scanner_unix_socket,
             self.media_scanner_host,
         )
@@ -447,6 +450,7 @@ class Settings(BaseSettings):
         if self.media_max_upload_bytes != STUDIO_VIDEO_MAX_SOURCE_BYTES:
             raise ValueError("filesystem media requires the exact 2,000,000,000 byte source cap")
         root = self.media_filesystem_root
+        avatar_root = self.media_filesystem_avatar_root
         if (
             not root
             or root != root.strip()
@@ -459,6 +463,26 @@ class Settings(BaseSettings):
         ):
             raise ValueError(
                 "AC_MEDIA_FILESYSTEM_ROOT must be the absolute video-objects directory"
+            )
+        if self.environment in {"staging", "production"} and not avatar_root:
+            raise ValueError(
+                "AC_MEDIA_FILESYSTEM_AVATAR_ROOT must be the absolute avatar-objects directory"
+            )
+        if avatar_root and (
+            avatar_root != avatar_root.strip()
+            or not Path(avatar_root).is_absolute()
+            or Path(avatar_root).name != "avatar-objects"
+            or ".." in Path(avatar_root).parts
+            or "://" in avatar_root
+            or avatar_root.startswith(("//", "\\\\"))
+            or any(ord(character) < 0x20 or ord(character) == 0x7F for character in avatar_root)
+        ):
+            raise ValueError(
+                "AC_MEDIA_FILESYSTEM_AVATAR_ROOT must be the absolute avatar-objects directory"
+            )
+        if avatar_root and Path(avatar_root).parent != Path(root).parent:
+            raise ValueError(
+                "AC_MEDIA_FILESYSTEM_AVATAR_ROOT must remain beside the video-objects directory"
             )
         if (self.media_scanner_unix_socket is None) == (self.media_scanner_host is None):
             raise ValueError("filesystem media requires exactly one ClamAV endpoint")

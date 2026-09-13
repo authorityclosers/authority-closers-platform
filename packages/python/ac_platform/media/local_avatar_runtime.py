@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -27,7 +27,12 @@ from ac_platform.media.api_contracts import (
     UploadIntentResponse,
 )
 from ac_platform.media.contracts import EphemeralMediaUrl
-from ac_platform.media.delivery import MediaTokenType, PrivateMediaDeliveryHandler
+from ac_platform.media.delivery import (
+    MediaDeliveryAuthorizer,
+    MediaDeliveryResult,
+    MediaTokenType,
+    PrivateMediaDeliveryHandler,
+)
 from ac_platform.media.errors import (
     MediaBadRequest,
     MediaConfigurationError,
@@ -39,6 +44,7 @@ from ac_platform.media.local_avatar_storage import (
     LOCAL_AVATAR_ORIGIN,
     MAX_AVATAR_BYTES,
     UPLOAD_PREFIX,
+    FilesystemAvatarStorage,
     LocalAvatarStorage,
 )
 from ac_platform.media.models import (
@@ -48,6 +54,7 @@ from ac_platform.media.models import (
     MediaUploadIntent,
     MediaVersion,
 )
+from ac_platform.media.policy import MediaCorsPolicy, SignedMediaDeliveryPort
 from ac_platform.media.runtime import MediaRuntime, _derive
 from ac_platform.media.service import MediaService
 from ac_platform.media.signing import MediaSigner
@@ -146,7 +153,9 @@ class LocalAvatarRuntime:
         ):
             raise MediaBadRequest("The local profile upload target or bytes are invalid.")
         now = datetime.now(UTC)
-        claims = self.storage.signer.verify(token, now=now, token_type="local-avatar-upload")  # noqa: S106 - token kind
+        claims = self.storage.signer.verify(
+            token, now=now, token_type=self.storage.token_type
+        )  # noqa: S106 - bounded token kind, not a secret
         digest = hashlib.sha256(body).hexdigest()
         if (
             claims.get("key") != key
@@ -282,6 +291,64 @@ class LocalAvatarRuntime:
             return False
 
 
+class _AvatarDeliveryHandler(PrivateMediaDeliveryHandler):
+    """Use avatar storage only for avatar keys; preserve the prior media graph."""
+
+    def __init__(
+        self,
+        *,
+        previous: PrivateMediaDeliveryHandler,
+        storage: LocalAvatarStorage,
+        signer: MediaSigner,
+        delivery_port: SignedMediaDeliveryPort,
+        cors_policy: MediaCorsPolicy,
+        authorizer: Callable[[Mapping[str, object], MediaTokenType], bool]
+        | MediaDeliveryAuthorizer,
+        max_object_bytes: int,
+    ) -> None:
+        super().__init__(
+            storage=storage,
+            signer=signer,
+            delivery_port=delivery_port,
+            cors_policy=cors_policy,
+            authorizer=authorizer,
+            max_object_bytes=max_object_bytes,
+        )
+        self._previous = previous
+        self._avatar_storage = storage
+
+    def serve(
+        self,
+        *,
+        token: str,
+        token_type: str,
+        object_key: str,
+        method: str = "GET",
+        origin: str | None = None,
+        range_header: str | None = None,
+        now: datetime | None = None,
+    ) -> MediaDeliveryResult:
+        if self._avatar_storage.owns(object_key):
+            return super().serve(
+                token=token,
+                token_type=token_type,
+                object_key=object_key,
+                method=method,
+                origin=origin,
+                range_header=range_header,
+                now=now,
+            )
+        return self._previous.serve(
+            token=token,
+            token_type=token_type,
+            object_key=object_key,
+            method=method,
+            origin=origin,
+            range_header=range_header,
+            now=now,
+        )
+
+
 def compose_local_avatar_runtime(settings: Settings, base: MediaRuntime) -> MediaRuntime:
     from ac_platform.development.seed import require_local_target
 
@@ -329,7 +396,8 @@ def compose_local_avatar_runtime(settings: Settings, base: MediaRuntime) -> Medi
             checker = prior.authorizer
             return checker(claims, kind) if callable(checker) else checker.authorize(claims, kind)
 
-        return PrivateMediaDeliveryHandler(
+        return _AvatarDeliveryHandler(
+            previous=prior,
             storage=storage,
             signer=prior.signer,
             delivery_port=prior.delivery_port,
@@ -342,5 +410,83 @@ def compose_local_avatar_runtime(settings: Settings, base: MediaRuntime) -> Medi
         base,
         service=service,
         local_avatar_runtime=local,
+        authenticated_delivery_handler_factory=factory,
+    )
+
+
+def compose_filesystem_avatar_runtime(settings: Settings, base: MediaRuntime) -> MediaRuntime:
+    """Compose deployment profile avatars beside, never inside, Studio video."""
+
+    from ac_platform.media.clamav_scanner import ClamAVContentScanner, ClamAVScannerConfig
+
+    if (
+        settings.environment not in {"staging", "production"}
+        or not settings.media_filesystem_enabled
+        or not settings.media_filesystem_avatar_root
+        or base.environment != settings.environment
+        or base.media_delivery is None
+        or base.media_cors_policy is None
+        or base.authenticated_delivery_handler_factory is None
+    ):
+        raise MediaConfigurationError(
+            "Deployment profile photos require the reviewed filesystem media composition."
+        )
+    scanner_config = ClamAVScannerConfig(
+        unix_socket=settings.media_scanner_unix_socket,
+        host=settings.media_scanner_host,
+        port=settings.media_scanner_port,
+        max_content_bytes=MAX_AVATAR_BYTES,
+        total_timeout_seconds=min(settings.media_scanner_total_timeout_seconds, 120.0),
+    )
+    storage = FilesystemAvatarStorage(
+        root=Path(settings.media_filesystem_avatar_root),
+        signer=MediaSigner(
+            _derive(
+                settings.session_token_pepper.get_secret_value(),
+                b"filesystem-avatar-upload-v1",
+            )
+        ),
+        fallback=base.service.storage,
+        origin=str(settings.public_app_url).rstrip("/"),
+    )
+    service = LocalAvatarMediaService(
+        storage=storage,
+        signer=base.service.signer,
+        webhook_secret=base.service.webhook_secret,
+        scanner=ClamAVContentScanner(scanner_config),
+        processor=LocalAvatarProcessor(),
+        delivery_port=base.media_delivery,
+        delivery_activity_resolver=base.service.delivery_activity_resolver,
+        max_upload_bytes=MAX_AVATAR_BYTES,
+        quota_bytes_per_actor=25 * 1024 * 1024,
+        quota_uploads_per_actor=10,
+        media_config=base.media_config,
+    )
+    filesystem_avatar = LocalAvatarRuntime(storage, service)
+    prior_factory = base.authenticated_delivery_handler_factory
+
+    def factory(database: Session, actor: ActorContext) -> PrivateMediaDeliveryHandler:
+        prior = prior_factory(database, actor)
+
+        def authorize(claims: Mapping[str, object], kind: MediaTokenType) -> bool:
+            if kind == "read":
+                return filesystem_avatar.authorize_read(database, actor, claims)
+            checker = prior.authorizer
+            return checker(claims, kind) if callable(checker) else checker.authorize(claims, kind)
+
+        return _AvatarDeliveryHandler(
+            previous=prior,
+            storage=storage,
+            signer=prior.signer,
+            delivery_port=prior.delivery_port,
+            cors_policy=prior.cors_policy,
+            authorizer=authorize,
+            max_object_bytes=prior.max_object_bytes,
+        )
+
+    return replace(
+        base,
+        service=service,
+        filesystem_avatar_runtime=filesystem_avatar,
         authenticated_delivery_handler_factory=factory,
     )

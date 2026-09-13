@@ -276,6 +276,9 @@ def create_app(
         RequestBodyLimitMiddleware,
         local_avatar_upload_enabled=settings.environment == "local"
         and settings.media_local_avatar_enabled,
+        filesystem_avatar_upload_enabled=(
+            resolved_media_runtime.filesystem_avatar_runtime is not None
+        ),
         studio_video_upload_max_bytes=studio_video_max_source_bytes,
         conversation_upload_max_bytes=resolved_conversation.storage.max_bytes
         if resolved_conversation

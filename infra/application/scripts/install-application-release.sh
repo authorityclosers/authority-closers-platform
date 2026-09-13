@@ -552,6 +552,14 @@ validate_filesystem_media_activation() {
     printf 'Filesystem media temporary directory ownership or mode is not canonical.\n' >&2
     return 1
   }
+  [[ -d "$media_filesystem_host_root/avatar-objects" && ! -L "$media_filesystem_host_root/avatar-objects" ]] || {
+    printf 'Filesystem avatar host root is not a prepared private directory.\n' >&2
+    return 1
+  }
+  [[ "$(stat -c '%u:%g:%a' -- "$media_filesystem_host_root/avatar-objects")" == 10001:10001:700 ]] || {
+    printf 'Filesystem avatar host root ownership or mode is not canonical.\n' >&2
+    return 1
+  }
   [[ -d "$media_scanner_host_root" && ! -L "$media_scanner_host_root" ]] || {
     printf 'ClamAV scanner socket root is not a prepared private directory.\n' >&2
     return 1
@@ -880,6 +888,7 @@ compose_for() {
         -u AC_MEDIA_PUBLIC_FILMS_ROOT \
         -u AC_MEDIA_FILESYSTEM_ENABLED \
         -u AC_MEDIA_FILESYSTEM_ROOT \
+        -u AC_MEDIA_FILESYSTEM_AVATAR_ROOT \
         -u AC_MEDIA_SCANNER_UNIX_SOCKET \
         -u AC_MEDIA_SCANNER_HOST \
         -u AC_MEDIA_MAX_UPLOAD_BYTES \

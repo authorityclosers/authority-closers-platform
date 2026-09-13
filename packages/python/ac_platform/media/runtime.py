@@ -61,6 +61,7 @@ class MediaRuntime:
     service: MediaService
     telemetry: TelemetryRecorder
     local_avatar_runtime: LocalAvatarRuntime | None = None
+    filesystem_avatar_runtime: LocalAvatarRuntime | None = None
     environment: str = "local"
     media_config: MediaProviderConfig | None = None
     activation_verifier: MediaProviderActivationVerifier | None = None
@@ -299,7 +300,12 @@ def create_default_media_runtime(settings: Settings) -> MediaRuntime:
             max_store_bytes=8 * 1024**3,
             scanner_config=scanner_config,
         )
-        return compose_filesystem_studio_video_delivery(settings, runtime)
+        runtime = compose_filesystem_studio_video_delivery(settings, runtime)
+        if settings.environment not in {"staging", "production"}:
+            return runtime
+        from ac_platform.media.local_avatar_runtime import compose_filesystem_avatar_runtime
+
+        return compose_filesystem_avatar_runtime(settings, runtime)
 
     runtime = create_media_runtime(settings)
     if settings.media_public_films_delivery_enabled:

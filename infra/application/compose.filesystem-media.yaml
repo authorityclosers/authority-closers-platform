@@ -7,6 +7,7 @@ services:
     environment:
       AC_MEDIA_FILESYSTEM_ENABLED: "true"
       AC_MEDIA_FILESYSTEM_ROOT: /var/lib/ac-media/video-objects
+      AC_MEDIA_FILESYSTEM_AVATAR_ROOT: /var/lib/ac-media/avatar-objects
       AC_MEDIA_SCANNER_UNIX_SOCKET: /run/ac-media-safety/clamd.sock
       AC_MEDIA_MAX_UPLOAD_BYTES: "2000000000"
     volumes:
@@ -32,6 +33,7 @@ services:
     environment:
       AC_MEDIA_FILESYSTEM_ENABLED: "true"
       AC_MEDIA_FILESYSTEM_ROOT: /var/lib/ac-media/video-objects
+      AC_MEDIA_FILESYSTEM_AVATAR_ROOT: /var/lib/ac-media/avatar-objects
       AC_MEDIA_SCANNER_UNIX_SOCKET: /run/ac-media-safety/clamd.sock
       AC_MEDIA_MAX_UPLOAD_BYTES: "2000000000"
       TMPDIR: /var/lib/ac-media/tmp

@@ -55,6 +55,7 @@ _PRESIGNED_AWS_REQUIRED_QUERY_NAMES = frozenset(
 _PRESIGNED_AWS_OPTIONAL_QUERY_NAMES = frozenset({"x-amz-security-token", "x-amz-content-sha256"})
 _LOCAL_UPLOAD_CONTRACT = object()
 _LOCAL_AVATAR_UPLOAD_CONTRACT = object()
+_FILESYSTEM_AVATAR_UPLOAD_CONTRACT = object()
 _STUDIO_VIDEO_UPLOAD_CONTRACT = object()
 _S3_UPLOAD_CONTRACT = object()
 
@@ -113,6 +114,13 @@ class StorageUploadIntent:
         )
         if self._contract is _LOCAL_AVATAR_UPLOAD_CONTRACT and not local_avatar:
             raise MediaStorageUnavailable("The local avatar upload origin is invalid.")
+        filesystem_avatar = (
+            self._contract is _FILESYSTEM_AVATAR_UPLOAD_CONTRACT
+            and parsed.scheme == "https"
+            and parsed.path.startswith("/v1/media/filesystem-avatar-upload/")
+        )
+        if self._contract is _FILESYSTEM_AVATAR_UPLOAD_CONTRACT and not filesystem_avatar:
+            raise MediaStorageUnavailable("The filesystem avatar upload origin is invalid.")
         if (
             (parsed.scheme != "https" and not local_avatar)
             or not parsed_hostname
@@ -167,6 +175,7 @@ class StorageUploadIntent:
         if self._contract not in {
             _LOCAL_UPLOAD_CONTRACT,
             _LOCAL_AVATAR_UPLOAD_CONTRACT,
+            _FILESYSTEM_AVATAR_UPLOAD_CONTRACT,
             _S3_UPLOAD_CONTRACT,
         }:
             raise MediaStorageUnavailable(
@@ -175,6 +184,7 @@ class StorageUploadIntent:
         if self._contract in {
             _LOCAL_UPLOAD_CONTRACT,
             _LOCAL_AVATAR_UPLOAD_CONTRACT,
+            _FILESYSTEM_AVATAR_UPLOAD_CONTRACT,
         } and seen_query_names != {"token"}:
             raise MediaStorageUnavailable(
                 "The generic upload intent requires the bounded local token contract."

@@ -26,6 +26,9 @@ _UUID = r"[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}"
 _STUDIO_VIDEO_BYTES_PATH = re.compile(
     rf"/v1/admin/studio/programs/{_UUID}/video-uploads/{_UUID}/bytes"
 )
+_FILESYSTEM_AVATAR_BYTES_PATH = re.compile(
+    r"/v1/media/filesystem-avatar-upload/.{1,512}"
+)
 _CONVERSATION_BYTES_PATH = re.compile(rf"/v1/conversation/recordings/{_UUID}/source")
 _CONVERSATION_DRAFT_IMPORT_PATH = re.compile(rf"/v1/admin/conversation/runs/{_UUID}/draft")
 
@@ -112,11 +115,13 @@ class RequestBodyLimitMiddleware:
         app: Callable[[Scope, Receive, Send], Awaitable[None]],
         *,
         local_avatar_upload_enabled: bool = False,
+        filesystem_avatar_upload_enabled: bool = False,
         studio_video_upload_max_bytes: int | None = None,
         conversation_upload_max_bytes: int | None = None,
     ) -> None:
         self.app = app
         self.local_avatar_upload_enabled = local_avatar_upload_enabled is True
+        self.filesystem_avatar_upload_enabled = filesystem_avatar_upload_enabled is True
         if studio_video_upload_max_bytes is not None and (
             type(studio_video_upload_max_bytes) is not int
             or not 1 <= studio_video_upload_max_bytes <= 8 * 1024**3
@@ -177,6 +182,12 @@ class RequestBodyLimitMiddleware:
             self.local_avatar_upload_enabled
             and scope.get("method") == "PUT"
             and scope.get("path", "").startswith("/v1/media/local-avatar-upload/")
+        ):
+            limit = 5 * 1024 * 1024
+        if (
+            self.filesystem_avatar_upload_enabled
+            and scope.get("method") == "PUT"
+            and _FILESYSTEM_AVATAR_BYTES_PATH.fullmatch(scope.get("path", ""))
         ):
             limit = 5 * 1024 * 1024
         if (_declared_length(scope) or 0) > limit:

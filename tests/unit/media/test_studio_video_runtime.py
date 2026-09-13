@@ -156,6 +156,7 @@ def test_explicit_filesystem_profile_composes_deployment_graph(tmp_path: Path) -
         update={
             "media_filesystem_enabled": True,
             "media_filesystem_root": str(tmp_path / "video-objects"),
+            "media_filesystem_avatar_root": str(tmp_path / "avatar-objects"),
             "media_scanner_unix_socket": "/run/ac-media-safety/clamd.sock",
             "media_max_upload_bytes": 2_000_000_000,
         }
@@ -185,6 +186,7 @@ def test_filesystem_profile_rejects_unmounted_tcp_scanner(tmp_path: Path) -> Non
         update={
             "media_filesystem_enabled": True,
             "media_filesystem_root": str(tmp_path / "video-objects"),
+            "media_filesystem_avatar_root": str(tmp_path / "avatar-objects"),
             "media_scanner_unix_socket": None,
             "media_scanner_host": "127.0.0.1",
             "media_max_upload_bytes": 2_000_000_000,
