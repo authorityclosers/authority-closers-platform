@@ -54,8 +54,15 @@ def main() -> None:
                 {"parts": [{"text": "Synthetic API connectivity test. Reply with READY only."}]}
             ],
             "generationConfig": {
-                "maxOutputTokens": 16,
+                # The limit includes thinking: 16 tokens produced HTTP 200 with
+                # no answer on Gemini 3.8. Keep a small, fixed total allowance.
+                "maxOutputTokens": 256,
                 "temperature": 0,
+                "thinkingConfig": (
+                    {"thinkingLevel": "LOW"}
+                    if args.model == "gemini-3.8-flash"
+                    else {"thinkingBudget": 0}
+                ),
             },
         }
         provider_id = "groq" if args.model == "openai/gpt-oss-120b" else "gemini"
@@ -180,6 +187,7 @@ def main() -> None:
             "customer_recording_bytes": 0,
             "max_paid_paise": 0,
             "credit_purchases": 0,
+            "max_output_tokens": (None if audio else 256),
         }
         try:
             result = (
@@ -189,7 +197,7 @@ def main() -> None:
             )
             candidates = result.data.get("candidates", [])
             parts = candidates[0].get("content", {}).get("parts", []) if candidates else []
-            generated = "".join(p.get("text", "") for p in parts)
+            generated = "".join(p.get("text", "") for p in parts if not p.get("thought"))
             if provider_id == "groq":
                 choices = result.data.get("choices", [])
                 generated = choices[0].get("message", {}).get("content", "") if choices else ""
@@ -206,6 +214,8 @@ def main() -> None:
                 usage=result.usage,
                 response_sha256=result.response_sha256,
             )
+            if provider_id == "gemini":
+                receipt["finish_reason"] = candidates[0].get("finishReason") if candidates else None
         except ProviderError as error:
             receipt.update(
                 generation_worked=False, error_code=str(error), diagnostic=error.diagnostic
