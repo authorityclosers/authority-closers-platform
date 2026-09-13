@@ -4,6 +4,7 @@
   "release_id": "REPLACE_WITH_FROZEN_INTEGRATED_RELEASE_SHA40",
   "operations_tenant_id": "REPLACE_WITH_CANONICAL_CONFIGURED_OPERATIONS_TENANT_UUID",
   "sales_xray_enabled": true,
+  "bootstrap_only": false,
   "sales_xray_approval_path": "/run/ac-sales-xray/approval.json",
   "sales_xray_approval_sha256": "REPLACE_WITH_EXACT_APPROVAL_FILE_SHA256",
   "sales_xray_storage_root": "/srv/authority-closers/sales-xray/staging/storage",

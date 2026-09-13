@@ -11,7 +11,10 @@ from typing import Any
 import pytest
 
 from ac_platform.conversation_intelligence import service
-from ac_platform.conversation_intelligence.service_config import load_service_config
+from ac_platform.conversation_intelligence.service_config import (
+    WorkerServiceConfig,
+    load_service_config,
+)
 
 from .test_service_config import manifest, write_config
 
@@ -139,6 +142,42 @@ async def test_shutdown_disposes_engine_and_stops_new_work(
     assert engine_options["hide_parameters"] is True
     assert engine_options["echo"] is False
     assert engine_options["pool_size"] == 2 and engine_options["max_overflow"] == 0
+
+
+@pytest.mark.asyncio
+async def test_bootstrap_waits_idle_without_database_queue_or_provider_access(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    value = manifest(tmp_path)
+    value["bootstrap_only"] = True
+    value["providers"] = []
+    config = load_service_config(*write_config(tmp_path, value))
+    stop = asyncio.Event()
+    validated: list[WorkerServiceConfig] = []
+
+    monkeypatch.setattr(
+        service,
+        "validate_bootstrap_configuration",
+        lambda received: validated.append(received),
+    )
+    monkeypatch.setattr(
+        service,
+        "configured_launchers",
+        lambda _config: pytest.fail("bootstrap must not inspect provider identities"),
+    )
+    monkeypatch.setattr(
+        service,
+        "create_async_engine",
+        lambda *_args, **_kwargs: pytest.fail("bootstrap must not open the database"),
+    )
+
+    task = asyncio.create_task(service.run_service(config, stop))
+    await asyncio.sleep(0)
+    assert not task.done()
+    assert validated == [config]
+    stop.set()
+
+    assert await task == service.ConversationWorkerRunnerSummary()
 
 
 def test_cli_failure_outputs_no_exception_payload(

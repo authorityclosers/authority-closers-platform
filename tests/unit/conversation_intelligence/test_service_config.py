@@ -72,6 +72,25 @@ def test_configuration_check_reads_no_credential_or_dotenv(
         verify_installed_release(config, mismatch)
 
 
+def test_bootstrap_manifest_allows_no_provider_launchers(tmp_path: Path) -> None:
+    value = manifest(tmp_path)
+    value["bootstrap_only"] = True
+    value["providers"] = []
+
+    config = load_service_config(*write_config(tmp_path, value))
+
+    assert config.bootstrap_only is True
+    assert config.providers == []
+
+
+def test_active_manifest_requires_provider_launchers(tmp_path: Path) -> None:
+    value = manifest(tmp_path)
+    value["providers"] = []
+
+    with pytest.raises(ValueError, match="^worker_config_invalid$"):
+        load_service_config(*write_config(tmp_path, value))
+
+
 @pytest.mark.parametrize("change", ["tamper", "duplicate", "unexpected", "local", "alias"])
 def test_rejects_modified_or_ambiguous_configuration(tmp_path: Path, change: str) -> None:
     value = manifest(tmp_path)

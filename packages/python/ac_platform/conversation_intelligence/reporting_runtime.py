@@ -16,6 +16,7 @@ from pathlib import Path
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from ac_platform.conversation_intelligence.activation_contract import HostedApprovalBundle
 from ac_platform.conversation_intelligence.authority import ConversationAuthority
 from ac_platform.conversation_intelligence.broker_router import FixedProviderRouter, ProviderRoute
 from ac_platform.conversation_intelligence.hosted_runtime import (
@@ -39,6 +40,24 @@ class HostedReportingRuntime:
     inference: ConversationInferenceWorker
     plans: ProcessingPlanScheduler
     retention: ConversationRetentionScheduler
+
+
+def validate_bootstrap_approval(bundle: HostedApprovalBundle) -> None:
+    """Accept only an inert approval while the canonical identity is created.
+
+    Bootstrap is a release sequencing posture, not a provider or queue mode.
+    The service caller validates the pinned artifact and then invokes this
+    boundary before it can compose any database-backed worker.
+    """
+
+    if (
+        bundle.allowances
+        or bundle.stages
+        or bundle.acquisition_policy is not None
+        or bundle.budget_cap_paise != 0
+        or bundle.paid_approval_ref is not None
+    ):
+        raise ValueError("worker_bootstrap_approval_not_empty")
 
 
 def compose_hosted_reporting(

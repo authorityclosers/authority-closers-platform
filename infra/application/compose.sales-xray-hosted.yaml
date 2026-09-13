@@ -10,7 +10,7 @@ services:
       AC_SALES_XRAY_APPROVAL_SHA256: ${AC_XRAY_APPROVAL_SHA256:?exact hosted approval digest required}
       AC_SALES_XRAY_STORAGE_ROOT: ${AC_XRAY_STORAGE_ROOT:?environment-specific private store required}
       AC_SALES_XRAY_SCRATCH_ROOT: ${AC_XRAY_SCRATCH_ROOT:?separate environment-specific scratch required}
-      AC_SALES_XRAY_ACQUISITION_ENABLED: "true"
+      AC_SALES_XRAY_ACQUISITION_ENABLED: ${AC_XRAY_ACQUISITION_ENABLED:?explicit hosted acquisition posture required}
       AC_SALES_XRAY_NATIVE_SOCKET_PATH: ${AC_XRAY_NATIVE_SOCKET_DIR:?private native-helper socket directory required}/native.sock
       AC_SALES_XRAY_NATIVE_IMAGE_REF: ${AC_XRAY_NATIVE_IMAGE_REF:?verified native image required}
       AC_SALES_XRAY_CHALLENGE_SECRET_FILE: /run/ac-sales-xray/challenge-secret

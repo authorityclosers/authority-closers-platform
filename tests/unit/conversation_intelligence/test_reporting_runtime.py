@@ -138,6 +138,15 @@ def _current_bundle(
     return _bundle(stages, issued_at_epoch=now - 10, expires_at_epoch=expires)
 
 
+def test_bootstrap_approval_boundary_requires_empty_free_bundle() -> None:
+    now = int(datetime.now(UTC).timestamp())
+    inert = _bundle((), issued_at_epoch=now - 60, expires_at_epoch=now + 3_600)
+
+    runtime_module.validate_bootstrap_approval(inert)
+    with pytest.raises(ValueError, match="worker_bootstrap_approval_not_empty"):
+        runtime_module.validate_bootstrap_approval(_current_bundle())
+
+
 def _launcher(provider: str) -> InfisicalLauncher:
     return InfisicalLauncher(
         executable="infisical",

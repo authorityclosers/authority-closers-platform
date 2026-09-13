@@ -38,6 +38,24 @@ and manifest-to-configuration binding; a mutable tag or an unrelated image ID
 does not establish image identity. Use the manifest reference when the store
 supports it.
 
+The one-time migration bootstrap is a separate, explicit service manifest. Set
+`bootstrap_only` to `true`, set `providers` to `[]`, and install an approval
+whose `allowances` and `stages` are both empty, has no `acquisition_policy`, and
+has no paid budget (`budget_cap_paise` is zero and `paid_approval_ref` is absent).
+Its release environment file must set `AC_XRAY_ACQUISITION_ENABLED=false`.
+The bootstrap worker validates those exact bindings and then waits for SIGTERM;
+it does not open the database, inspect queues, read provider identities or call a
+provider. The API overlay receives the same false value and therefore does not
+install guest acquisition routes.
+
+Run migration `0037`, then run the supported `processing_cli` provisioning path
+against that migrated database to obtain the actual processing principal UUID.
+Retain the bootstrap files as an audit record. A subsequent versioned activation
+must use the same immutable image with `bootstrap_only=false`, approved provider
+launchers, the real principal-bound policy, and
+`AC_XRAY_ACQUISITION_ENABLED=true`; reapply it through the canonical installer.
+Do not invent principal IDs or replace the bootstrap artifact in place.
+
 For production, replace both the environment and every staging path with their
 separate production counterpart; use its own approved bundle and DB credential.
 Neither environment adopts or copies private test audio from a local directory.
@@ -80,6 +98,7 @@ AC_XRAY_INFISICAL_BINARY=/usr/local/bin/infisical
 AC_XRAY_NATIVE_IMAGE_REF=<verified immutable native transport image reference>
 AC_XRAY_CHALLENGE_SECRET_FILE=/etc/authority-closers/secrets/sales-xray/staging/challenge-secret
 AC_XRAY_CHALLENGE_SITE_KEY=<public site key for the exact Sales Xray host>
+AC_XRAY_ACQUISITION_ENABLED=true
 AC_XRAY_ACQUISITION_POLICY_REVISION=<approved acquisition policy revision>
 ```
 

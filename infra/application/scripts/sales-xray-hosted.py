@@ -58,6 +58,7 @@ ABSOLUTE_ENV_KEYS = {
 ENV_KEYS = ABSOLUTE_ENV_KEYS | {
     "AC_XRAY_SERVICE_SHA256",
     "AC_XRAY_APPROVAL_SHA256",
+    "AC_XRAY_ACQUISITION_ENABLED",
     "AC_XRAY_NATIVE_IMAGE_REF",
     "AC_XRAY_CHALLENGE_SITE_KEY",
     "AC_XRAY_ACQUISITION_POLICY_REVISION",
@@ -296,6 +297,8 @@ def _parse_env(raw: bytes) -> dict[str, str]:
     _validate_challenge_secret_reference(result["AC_XRAY_CHALLENGE_SECRET_FILE"])
     for key in ("AC_XRAY_SERVICE_SHA256", "AC_XRAY_APPROVAL_SHA256"):
         _checked_sha(result[key], key)
+    if result["AC_XRAY_ACQUISITION_ENABLED"] not in {"true", "false"}:
+        raise _fail("AC_XRAY_ACQUISITION_ENABLED must be the literal true or false")
     if IMAGE_REF.fullmatch(result["AC_XRAY_NATIVE_IMAGE_REF"]) is None:
         raise _fail("native image environment reference is not immutable")
     if re.fullmatch(r"[A-Za-z0-9_-]{3,256}", result["AC_XRAY_CHALLENGE_SITE_KEY"]) is None:
@@ -304,6 +307,38 @@ def _parse_env(raw: bytes) -> dict[str, str]:
     if re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", revision) is None:
         raise _fail("acquisition policy revision is invalid")
     return result
+
+
+def _validate_service_mode(
+    service: dict[str, Any], env: dict[str, str], approval: dict[str, Any]
+) -> None:
+    """Bind the worker posture, API acquisition flag and approval artifact."""
+
+    bootstrap_only = service.get("bootstrap_only", False)
+    if type(bootstrap_only) is not bool:
+        raise _fail("service.bootstrap_only must be a boolean")
+    providers = service.get("providers")
+    if not isinstance(providers, list):
+        raise _fail("service.providers must be a list")
+    acquisition_enabled = env["AC_XRAY_ACQUISITION_ENABLED"] == "true"
+    if bootstrap_only and acquisition_enabled:
+        raise _fail("bootstrap service must disable API acquisition")
+    if not bootstrap_only and not acquisition_enabled:
+        raise _fail("active worker must enable API acquisition")
+    policy = approval.get("acquisition_policy")
+    if bootstrap_only:
+        if providers:
+            raise _fail("bootstrap service must not configure providers")
+        if approval.get("allowances") != [] or approval.get("stages") != []:
+            raise _fail("bootstrap approval must have empty allowances and stages")
+        if policy is not None:
+            raise _fail("bootstrap approval must not contain an acquisition policy")
+        if approval.get("budget_cap_paise", 0) != 0:
+            raise _fail("bootstrap approval must have zero paid budget")
+        if approval.get("paid_approval_ref") is not None:
+            raise _fail("bootstrap approval must not contain paid approval")
+    elif not providers:
+        raise _fail("active worker must configure at least one provider")
 
 
 def _load_activation(
@@ -419,6 +454,7 @@ def _load_activation(
         "approval.provider_control_tenant_id",
     ) != operations_tenant:
         raise _fail("approval control tenant differs from service operations tenant")
+    _validate_service_mode(service, env, approval)
     return overlay, env_path
 
 

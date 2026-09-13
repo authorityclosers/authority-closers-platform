@@ -125,6 +125,7 @@ def _make_release(
                 "release_id": release_id,
                 "operations_tenant_id": OPERATIONS_TENANT,
                 "sales_xray_enabled": True,
+                "bootstrap_only": False,
                 "sales_xray_approval_path": "/run/ac-sales-xray/approval.json",
                 "sales_xray_approval_sha256": hashlib.sha256(approval.read_bytes()).hexdigest(),
                 "sales_xray_storage_root": _portable(paths["storage"]),
@@ -162,6 +163,7 @@ def _make_release(
     env_values = {
         "AC_XRAY_APPROVAL_FILE": _portable(approval),
         "AC_XRAY_APPROVAL_SHA256": hashlib.sha256(approval.read_bytes()).hexdigest(),
+        "AC_XRAY_ACQUISITION_ENABLED": "true",
         "AC_XRAY_DATABASE_URL_FILE": _portable(paths["database"]),
         "AC_XRAY_ELEVENLABS_IDENTITY_DIR": _portable(paths["elevenlabs"]),
         "AC_XRAY_GROQ_IDENTITY_DIR": _portable(paths["groq"]),
@@ -242,6 +244,34 @@ def _validator_result(
     )
 
 
+def _refresh_activation_inputs(paths: dict[str, Path]) -> None:
+    """Rebind the disposable descriptor after a controlled fixture mutation."""
+
+    service = json.loads(paths["service"].read_bytes())
+    approval_sha = hashlib.sha256(paths["approval"].read_bytes()).hexdigest()
+    service["sales_xray_approval_sha256"] = approval_sha
+    paths["service"].write_bytes(_json_bytes(service))
+    env_values = dict(
+        line.split("=", 1) for line in paths["env"].read_text(encoding="utf-8").splitlines()
+    )
+    env_values["AC_XRAY_SERVICE_SHA256"] = hashlib.sha256(
+        paths["service"].read_bytes()
+    ).hexdigest()
+    env_values["AC_XRAY_APPROVAL_SHA256"] = approval_sha
+    paths["env"].write_text(
+        "".join(f"{key}={value}\n" for key, value in sorted(env_values.items())),
+        encoding="utf-8",
+    )
+    descriptor = json.loads(paths["descriptor"].read_bytes())
+    descriptor["compose_env_sha256"] = hashlib.sha256(paths["env"].read_bytes()).hexdigest()
+    descriptor["service_config_sha256"] = env_values["AC_XRAY_SERVICE_SHA256"]
+    descriptor["approval_sha256"] = env_values["AC_XRAY_APPROVAL_SHA256"]
+    paths["descriptor"].write_bytes(_json_bytes(descriptor))
+    paths["digest"].write_bytes(
+        (hashlib.sha256(paths["descriptor"].read_bytes()).hexdigest() + "\n").encode("ascii")
+    )
+
+
 def test_source_overlay_and_per_environment_capabilities_are_archive_inputs() -> None:
     overlay = APPLICATION / "compose.sales-xray-hosted.yaml"
     assert overlay.read_bytes() == WORKER_OVERLAY.read_bytes()
@@ -287,6 +317,65 @@ def test_hosted_validator_supports_the_production_policy_shape(activation_root: 
         str(paths["env"]),
         "sales-xray-hosted",
     ]
+
+
+def test_hosted_validator_accepts_explicit_inert_bootstrap(activation_root: Path) -> None:
+    release, paths = _make_release(activation_root)
+    service = json.loads(paths["service"].read_bytes())
+    service["bootstrap_only"] = True
+    service["providers"] = []
+    paths["service"].write_bytes(_json_bytes(service))
+    approval = json.loads(paths["approval"].read_bytes())
+    approval.update({"allowances": [], "stages": []})
+    paths["approval"].write_bytes(_json_bytes(approval))
+    env = dict(line.split("=", 1) for line in paths["env"].read_text().splitlines())
+    env["AC_XRAY_ACQUISITION_ENABLED"] = "false"
+    paths["env"].write_text(
+        "".join(f"{key}={value}\n" for key, value in sorted(env.items())), encoding="utf-8"
+    )
+    _refresh_activation_inputs(paths)
+
+    result = _validator_result(release)
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_hosted_validator_rejects_nonempty_bootstrap_authority(activation_root: Path) -> None:
+    release, paths = _make_release(activation_root)
+    service = json.loads(paths["service"].read_bytes())
+    service["bootstrap_only"] = True
+    service["providers"] = []
+    paths["service"].write_bytes(_json_bytes(service))
+    approval = json.loads(paths["approval"].read_bytes())
+    approval.update({"allowances": [{"synthetic": "must-not-authorize"}], "stages": []})
+    paths["approval"].write_bytes(_json_bytes(approval))
+    env = dict(line.split("=", 1) for line in paths["env"].read_text().splitlines())
+    env["AC_XRAY_ACQUISITION_ENABLED"] = "false"
+    paths["env"].write_text(
+        "".join(f"{key}={value}\n" for key, value in sorted(env.items())), encoding="utf-8"
+    )
+    _refresh_activation_inputs(paths)
+
+    assert _validator_result(release).returncode != 0
+
+
+def test_hosted_validator_rejects_bootstrap_acquisition_mismatch(activation_root: Path) -> None:
+    release, paths = _make_release(activation_root)
+    service = json.loads(paths["service"].read_bytes())
+    service["bootstrap_only"] = True
+    service["providers"] = []
+    paths["service"].write_bytes(_json_bytes(service))
+    approval = json.loads(paths["approval"].read_bytes())
+    approval.update({"allowances": [], "stages": []})
+    paths["approval"].write_bytes(_json_bytes(approval))
+    env = dict(line.split("=", 1) for line in paths["env"].read_text().splitlines())
+    env["AC_XRAY_ACQUISITION_ENABLED"] = "true"
+    paths["env"].write_text(
+        "".join(f"{key}={value}\n" for key, value in sorted(env.items())), encoding="utf-8"
+    )
+    _refresh_activation_inputs(paths)
+
+    assert _validator_result(release).returncode != 0
 
 
 def test_rollback_target_uses_its_own_release_descriptor(activation_root: Path) -> None:

@@ -17,8 +17,12 @@ from pathlib import Path
 
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from ac_platform.conversation_intelligence.hosted_runtime import PinnedApprovalLoader
 from ac_platform.conversation_intelligence.inference_broker import InfisicalLauncher
-from ac_platform.conversation_intelligence.reporting_runtime import compose_hosted_reporting
+from ac_platform.conversation_intelligence.reporting_runtime import (
+    compose_hosted_reporting,
+    validate_bootstrap_approval,
+)
 from ac_platform.conversation_intelligence.runner import (
     ConversationWorkerRunner,
     ConversationWorkerRunnerSummary,
@@ -78,10 +82,29 @@ def configured_launchers(config: WorkerServiceConfig) -> dict[str, InfisicalLaun
     }
 
 
+def validate_bootstrap_configuration(config: WorkerServiceConfig) -> None:
+    """Validate the pinned inert approval before entering bootstrap idle mode."""
+
+    if not config.bootstrap_only:
+        raise ValueError("worker_bootstrap_mode_required")
+    bundle = PinnedApprovalLoader(
+        Path(config.sales_xray_approval_path),
+        config.sales_xray_approval_sha256,
+        config.environment,
+        config.operations_tenant_id,
+    )()
+    validate_bootstrap_approval(bundle)
+
+
 async def run_service(
     config: WorkerServiceConfig, stop: asyncio.Event
 ) -> ConversationWorkerRunnerSummary:
     """Compose the four real database workers and run one serial consumer."""
+    if config.bootstrap_only:
+        validate_bootstrap_configuration(config)
+        await stop.wait()
+        return ConversationWorkerRunnerSummary()
+
     from ac_platform.conversation_intelligence.native_runtime import SocketNativeRuntime
 
     launchers = configured_launchers(config)
@@ -153,7 +176,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         config = load_service_config(args.config, args.sha256)
         verify_installed_release(config, _INSTALLED_RELEASE)
-        configured_launchers(config)
+        if config.bootstrap_only:
+            validate_bootstrap_configuration(config)
+        else:
+            configured_launchers(config)
         if args.check:
             print("worker_config_valid")
             return 0

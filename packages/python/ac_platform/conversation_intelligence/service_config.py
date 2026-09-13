@@ -77,6 +77,9 @@ class WorkerServiceConfig(StrictConfig):
     release_id: Annotated[str, Field(pattern=r"^[0-9a-f]{40}$")]
     operations_tenant_id: UUID
     sales_xray_enabled: Literal[True] = True
+    # Explicit migration bootstrap only.  It is a release-owned, temporary
+    # service posture; the normal worker remains provider-backed by default.
+    bootstrap_only: bool = False
     sales_xray_approval_path: str
     sales_xray_approval_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
     sales_xray_storage_root: str
@@ -84,7 +87,7 @@ class WorkerServiceConfig(StrictConfig):
     database_url_file: str
     native_socket_path: str
     native_image_ref: Annotated[str, Field(pattern=r"^(?:[A-Za-z0-9._/-]+@)?sha256:[0-9a-f]{64}$")]
-    providers: Annotated[list[ProviderLauncherConfig], Field(min_length=1, max_length=3)]
+    providers: Annotated[list[ProviderLauncherConfig], Field(min_length=0, max_length=3)]
 
     @field_validator("operations_tenant_id", mode="before")
     @classmethod
@@ -119,6 +122,11 @@ class WorkerServiceConfig(StrictConfig):
             raise ValueError("worker_provider_scope_invalid")
         if len({p.provider_id for p in self.providers}) != len(self.providers):
             raise ValueError("worker_provider_scope_invalid")
+        if self.bootstrap_only:
+            if self.providers:
+                raise ValueError("worker_bootstrap_providers_forbidden")
+        elif not self.providers:
+            raise ValueError("worker_providers_required")
         return self
 
 
