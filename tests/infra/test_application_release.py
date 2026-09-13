@@ -390,6 +390,12 @@ def test_filesystem_media_companion_uses_reviewed_environment_roots() -> None:
     assert "create_host_path: false" in FILESYSTEM_COMPOSE
 
 
+def test_filesystem_media_companion_bounds_transcoding_worker_memory() -> None:
+    worker = re.search(r"(?ms)^  worker:\n(.*)$", FILESYSTEM_COMPOSE)
+    assert worker is not None
+    assert re.search(r"(?m)^    mem_limit: 2g$", worker.group(1))
+
+
 def test_installer_requires_canonical_prepared_filesystem_roots() -> None:
     assert "stat -c '%u:%g:%a' -- \"$media_filesystem_host_root\"" in INSTALLER
     assert "10001:10001:700" in INSTALLER

@@ -24,6 +24,11 @@ services:
           create_host_path: false
 
   worker:
+    # The Studio path transcodes the source to HLS and a progressive fallback.
+    # A 4K frame alone is ~12 MiB before libx264 lookahead and FFmpeg buffers;
+    # keep this bounded at 2 GiB so the reviewed 4K source cap does not run
+    # inside the generic 512 MiB worker limit.
+    mem_limit: 2g
     environment:
       AC_MEDIA_FILESYSTEM_ENABLED: "true"
       AC_MEDIA_FILESYSTEM_ROOT: /var/lib/ac-media/video-objects
