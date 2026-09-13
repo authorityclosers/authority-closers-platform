@@ -147,6 +147,7 @@ def test_stream_sends_cookie_line_then_bytes_without_putting_cookie_in_argv(
 ) -> None:
     token = "A" * 43
     process = _FakeProcess()
+    process_stdin = process.stdin
     argv: list[list[str]] = []
     monkeypatch.setattr(
         uploader.subprocess,
@@ -162,10 +163,10 @@ def test_stream_sends_cookie_line_then_bytes_without_putting_cookie_in_argv(
     )
 
     assert code == 204
-    assert bytes(process.stdin.data) == token.encode() + b"\nvideo-bytes"
+    assert bytes(process_stdin.data) == token.encode() + b"\nvideo-bytes"
     assert token not in " ".join(argv[0])
     assert argv[0][-1] == shlex.quote("safe-command")
-    assert process.stdin.closed
+    assert process_stdin.closed
 
 
 def test_remote_command_shell_metacharacters_are_contained_in_bash_c_argument(
@@ -205,3 +206,30 @@ def test_stream_failure_is_bounded_and_does_not_echo_cookie(
 
     assert token not in str(error.value)
     assert process.killed
+
+
+def test_real_subprocess_accepts_detached_closed_stdin(
+    uploader: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real_popen = uploader.subprocess.Popen
+
+    def local_process(_args, **kwargs):
+        return real_popen(
+            [
+                sys.executable,
+                "-c",
+                "import sys; sys.stdin.buffer.read(); sys.stdout.buffer.write(b'\\n204')",
+            ],
+            **kwargs,
+        )
+
+    monkeypatch.setattr(uploader.subprocess, "Popen", local_process)
+    code, body = uploader._run_remote(
+        ssh_target="ac",
+        command="safe-command",
+        cookie="C" * 43,
+        stream=io.BytesIO(b"video-bytes"),
+    )
+
+    assert code == 204
+    assert body == b""

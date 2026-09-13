@@ -316,14 +316,18 @@ def _run_remote(
     assert process.stdin is not None
     assert process.stdout is not None
     assert process.stderr is not None
+    stdin = process.stdin
     try:
-        process.stdin.write(cookie.encode("ascii") + b"\n")
+        stdin.write(cookie.encode("ascii") + b"\n")
         if body:
-            process.stdin.write(body + b"\n")
+            stdin.write(body + b"\n")
         if stream is not None:
             while chunk := stream.read(1024 * 1024):
-                process.stdin.write(chunk)
-        process.stdin.close()
+                stdin.write(chunk)
+        stdin.close()
+        # communicate() owns stdin unless it is detached. Some supported
+        # Python runtimes otherwise flush the already-closed pipe again.
+        process.stdin = None
     except (BrokenPipeError, OSError) as error:
         with suppress(Exception):
             process.kill()
