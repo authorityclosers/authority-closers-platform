@@ -627,7 +627,7 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
             assert not browser_errors
             # Next's navigation probe and a completed authentication response can
             # be cancelled when a full document navigation replaces the page.
-            # Preserve every event in the receipt; only accept the two API
+            # Preserve every event in the receipt; only accept the three API
             # cancellations after their exact success status and session effects
             # have independently passed above. Other failures still fail proof.
             accepted_aborts = {"HEAD /: net::ERR_ABORTED"}
@@ -637,6 +637,11 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
                 (
                     "GET",
                     f"/v1/conversation/recordings/{backend.account.recording_id}/measurements",
+                    401,
+                ),
+                (
+                    "GET",
+                    f"/v1/conversation/recordings/{backend.account.recording_id}/source",
                     401,
                 ),
             ):
