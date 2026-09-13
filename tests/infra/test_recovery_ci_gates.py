@@ -155,3 +155,21 @@ def test_historical_and_codec_proofs_cannot_silently_lose_prerequisites() -> Non
     ]
     validate = _required_step(application, "Validate application")
     assert application["steps"].index(codec) < application["steps"].index(validate)
+
+
+def test_sales_xray_static_preview_is_built_before_application_validation() -> None:
+    job = _validation_job("application.yml")
+    preview = _required_step(job, "PRE-VALIDATION: Build Sales Xray static preview")
+    assert preview["env"] == {
+        "AC_SALES_XRAY_STATIC_PREVIEW": "1",
+        "NEXT_TELEMETRY_DISABLED": "1",
+    }
+    assert shlex.split(preview["run"]) == [
+        "pnpm",
+        "--filter",
+        "@ac/sales-xray-web",
+        "build",
+    ]
+    install = _required_step(job, "Install locked dependencies")
+    validate = _required_step(job, "Validate application")
+    assert job["steps"].index(install) < job["steps"].index(preview) < job["steps"].index(validate)
