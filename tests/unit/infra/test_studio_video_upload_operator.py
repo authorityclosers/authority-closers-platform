@@ -101,6 +101,7 @@ def test_remote_command_pins_loopback_host_and_never_contains_cookie(uploader: M
     assert "http://127.0.0.1:8080" in command
     assert "Host: coach.authorityclosers.com" in command
     assert "Origin: https://coach.authorityclosers.com" in command
+    assert "curl --disable --noproxy '*'" in command
     assert "AC_SESSION" in command
     assert "secret" not in command
 
@@ -132,7 +133,7 @@ class _FakeProcess:
         self.returncode = returncode
         self.killed = False
 
-    def communicate(self) -> tuple[bytes, bytes]:
+    def communicate(self, timeout: int | None = None) -> tuple[bytes, bytes]:
         return b"\n204", b""
 
     def kill(self) -> None:
@@ -160,6 +161,7 @@ def test_stream_sends_cookie_line_then_bytes_without_putting_cookie_in_argv(
         command="safe-command",
         cookie=token,
         stream=io.BytesIO(b"video-bytes"),
+        stream_bytes=len(b"video-bytes"),
     )
 
     assert code == 204
@@ -202,10 +204,42 @@ def test_stream_failure_is_bounded_and_does_not_echo_cookie(
             command="safe-command",
             cookie=token,
             stream=io.BytesIO(b"video-bytes"),
+            stream_bytes=len(b"video-bytes"),
         )
 
     assert token not in str(error.value)
     assert process.killed
+
+
+def test_stream_rejects_bytes_beyond_admitted_length_and_kills_process(
+    uploader: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    process = _FakeProcess()
+    monkeypatch.setattr(uploader.subprocess, "Popen", lambda *args, **kwargs: process)
+
+    with pytest.raises(uploader.UploadOperatorError, match="changed during streaming"):
+        uploader._run_remote(
+            ssh_target="ac",
+            command="safe-command",
+            cookie="B" * 43,
+            stream=io.BytesIO(b"video-bytes-extra"),
+            stream_bytes=len(b"video-bytes"),
+        )
+
+    assert process.killed
+
+
+def test_hidden_cookie_prompt_refuses_echo_fallback(
+    uploader: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv(uploader.SESSION_COOKIE_ENV, raising=False)
+
+    def echoing_prompt(_prompt: str) -> str:
+        raise uploader.getpass.GetPassWarning("echo fallback")
+
+    monkeypatch.setattr(uploader.getpass, "getpass", echoing_prompt)
+    with pytest.raises(uploader.UploadOperatorError, match="Hidden session input"):
+        uploader._read_session_cookie()
 
 
 def test_real_subprocess_accepts_detached_closed_stdin(
@@ -229,6 +263,7 @@ def test_real_subprocess_accepts_detached_closed_stdin(
         command="safe-command",
         cookie="C" * 43,
         stream=io.BytesIO(b"video-bytes"),
+        stream_bytes=len(b"video-bytes"),
     )
 
     assert code == 204

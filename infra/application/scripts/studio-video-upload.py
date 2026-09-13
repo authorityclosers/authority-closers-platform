@@ -20,6 +20,7 @@ import argparse
 import getpass
 import hashlib
 import json
+import math
 import os
 import re
 import shlex
@@ -28,6 +29,7 @@ import subprocess
 import sys
 import time
 import uuid
+import warnings
 from collections.abc import Mapping, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
@@ -37,6 +39,9 @@ from typing import BinaryIO
 from urllib.parse import urlsplit
 
 MAX_SOURCE_BYTES = 2_000_000_000
+MAX_RESPONSE_BYTES = 1 * 1024 * 1024
+MAX_POLL_SECONDS = 60.0
+MAX_POLL_TIMEOUT_SECONDS = 3600.0
 SESSION_COOKIE_ENV = "AC_STUDIO_SESSION_COOKIE"
 SESSION_PATTERN = re.compile(r"[A-Za-z0-9_-]{43,512}\Z")
 UUID_PATTERN = re.compile(r"[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}\Z")
@@ -150,8 +155,17 @@ def inspect_file(path: Path) -> FileEnvelope:
     digest = hashlib.sha256()
     try:
         with path.open("rb") as stream:
-            while chunk := stream.read(1024 * 1024):
+            remaining = info.st_size
+            while remaining:
+                chunk = stream.read(min(1024 * 1024, remaining))
+                if not chunk:
+                    raise UploadOperatorError(
+                        "The video changed while its checksum was calculated."
+                    )
                 digest.update(chunk)
+                remaining -= len(chunk)
+            if stream.read(1):
+                raise UploadOperatorError("The video changed while its checksum was calculated.")
     except OSError as error:
         raise UploadOperatorError(
             "The video could not be read for checksum calculation."
@@ -259,9 +273,10 @@ def _remote_command(
     if read_body_line:
         prefix.append("IFS= read -r AC_BODY")
     curl = [
-        "curl --config /dev/fd/3 --http1.1 --silent --show-error "
+        "curl --disable --noproxy '*' --config /dev/fd/3 --http1.1 --silent --show-error "
         "--write-out '\\n%{http_code}' --connect-timeout 15 "
-        f"--max-time {int(timeout_seconds)} --request {shlex.quote(method)}",
+        f"--max-time {int(timeout_seconds)} --max-filesize {MAX_RESPONSE_BYTES} "
+        f"--request {shlex.quote(method)}",
         f"--header {shlex.quote(f'Host: {profile.host}')} "
         f"--header {shlex.quote(f'Origin: {profile.origin}')} "
         "--header 'Expect:'",
@@ -300,30 +315,55 @@ def _run_remote(
     body: bytes = b"",
     ssh_binary: str = "ssh",
     stream: BinaryIO | None = None,
+    stream_bytes: int | None = None,
 ) -> tuple[int, bytes]:
     if ssh_target != "ac":
         raise UploadOperatorError("The operator tool permits only the reviewed SSH alias 'ac'.")
+    if stream is not None and (type(stream_bytes) is not int or stream_bytes < 0):
+        raise UploadOperatorError("The streamed video length is required.")
     # OpenSSH joins remote arguments into one login-shell command. Quote the
     # complete payload so semicolons and process substitution are interpreted
     # only by the intended ``bash -c`` process on the reviewed host.
-    remote_argv = [ssh_binary, "-T", ssh_target, "bash", "-c", shlex.quote(command)]
+    remote_argv = [
+        ssh_binary,
+        "-T",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "ConnectTimeout=15",
+        "-o",
+        "ServerAliveInterval=30",
+        "-o",
+        "ServerAliveCountMax=2",
+        ssh_target,
+        "bash",
+        "-c",
+        shlex.quote(command),
+    ]
     process = subprocess.Popen(  # noqa: S603 - the SSH alias and command are pinned above
         remote_argv,
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
     )
     assert process.stdin is not None
     assert process.stdout is not None
-    assert process.stderr is not None
     stdin = process.stdin
     try:
         stdin.write(cookie.encode("ascii") + b"\n")
         if body:
             stdin.write(body + b"\n")
         if stream is not None:
-            while chunk := stream.read(1024 * 1024):
+            remaining = stream_bytes
+            assert remaining is not None
+            while remaining:
+                chunk = stream.read(min(1024 * 1024, remaining))
+                if not chunk:
+                    raise UploadOperatorError("The video changed during streaming.")
                 stdin.write(chunk)
+                remaining -= len(chunk)
+            if stream.read(1):
+                raise UploadOperatorError("The video changed during streaming.")
         stdin.close()
         # communicate() owns stdin unless it is detached. Some supported
         # Python runtimes otherwise flush the already-closed pipe again.
@@ -331,11 +371,29 @@ def _run_remote(
     except (BrokenPipeError, OSError) as error:
         with suppress(Exception):
             process.kill()
-        process.wait(timeout=10)
+        with suppress(Exception):
+            process.wait(timeout=10)
         raise UploadOperatorError(
             "The SSH/API stream closed before the upload completed."
         ) from error
-    stdout, _stderr = process.communicate()
+    except UploadOperatorError:
+        with suppress(Exception):
+            stdin.close()
+        with suppress(Exception):
+            process.kill()
+        with suppress(Exception):
+            process.wait(timeout=10)
+        raise
+    try:
+        stdout, _stderr = process.communicate(timeout=30)
+    except subprocess.TimeoutExpired as error:
+        with suppress(Exception):
+            process.kill()
+        with suppress(Exception):
+            process.wait(timeout=10)
+        raise UploadOperatorError("The SSH/API command timed out.") from error
+    if len(stdout) > MAX_RESPONSE_BYTES:
+        raise UploadOperatorError("The SSH API response exceeded the bounded response limit.")
     if process.returncode not in {0, 22}:
         raise UploadOperatorError("The SSH/API command failed before a canonical response arrived.")
     return _status_from_output(stdout)
@@ -433,6 +491,7 @@ def put_video(
                 cookie=cookie,
                 ssh_binary=ssh_binary,
                 stream=stream,
+                stream_bytes=file.byte_length,
             )
     except OSError as error:
         raise UploadOperatorError("The video could not be opened for streaming.") from error
@@ -477,6 +536,13 @@ def complete_and_poll(
     poll_seconds: float,
     poll_timeout: float,
 ) -> dict[str, object]:
+    if (
+        not math.isfinite(poll_seconds)
+        or not 0 < poll_seconds <= MAX_POLL_SECONDS
+        or not math.isfinite(poll_timeout)
+        or not 0 < poll_timeout <= MAX_POLL_TIMEOUT_SECONDS
+    ):
+        raise UploadOperatorError("Polling intervals and timeout exceed bounded limits.")
     key = uuid.uuid4().hex
     path = (
         f"/v1/admin/studio/programs/{_require_uuid(program_id, 'program_id')}"
@@ -535,18 +601,30 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _read_session_cookie() -> str:
+    cookie = os.environ.get(SESSION_COOKIE_ENV)
+    if cookie is not None:
+        return cookie
+    # Refuse getpass's no-terminal fallback before it echoes the value on
+    # ordinary stdin.
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", getpass.GetPassWarning)
+        try:
+            return getpass.getpass("Coach session cookie (hidden; never logged): ")
+        except getpass.GetPassWarning as error:
+            raise UploadOperatorError(
+                "Hidden session input is unavailable; use the private ephemeral environment."
+            ) from error
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
-        if args.poll_seconds <= 0 or args.poll_timeout <= 0:
-            raise UploadOperatorError("Polling intervals and timeout must be positive.")
         profile = edge_profile(args.origin)
         filename = _safe_filename(args.filename or args.video.name)
         content_type = _content_type(filename, args.content_type)
         file = inspect_file(args.video)
-        cookie = os.environ.get(SESSION_COOKIE_ENV)
-        if cookie is None:
-            cookie = getpass.getpass("Coach session cookie (hidden; never logged): ")
+        cookie = _read_session_cookie()
         if SESSION_PATTERN.fullmatch(cookie) is None:
             raise UploadOperatorError("The Coach session cookie is malformed.")
         intent = create_intent(
