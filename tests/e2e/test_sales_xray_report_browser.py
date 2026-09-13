@@ -135,8 +135,10 @@ async def _generate_durable_report(postgres_harness: Any, fixture: Any) -> None:
         await engine.dispose()
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def postgres_harness() -> Any:
+    # Each browser flow has its own verified control account in an isolated
+    # schema, rather than colliding on the account's canonical email.
     yield from _postgres_harness.__wrapped__()
 
 
@@ -284,7 +286,7 @@ def _make_live_backend(
         assert "error_type" not in control, control.get("error_type")
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def live_backend(
     postgres_harness: Any,
     tmp_path_factory: pytest.TempPathFactory,
@@ -293,7 +295,7 @@ def live_backend(
     yield from _make_live_backend(postgres_harness, tmp_path_factory, request, mode="imported")
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def durable_live_backend(
     postgres_harness: Any,
     tmp_path_factory: pytest.TempPathFactory,
@@ -443,11 +445,12 @@ def _exercise_browser(backend: BrowserBackend, evidence: Path) -> None:
             )
             expect(page.get_by_role("button", name="Continue to analysis")).to_be_enabled()
             page.get_by_role("button", name="Continue to analysis").click()
-            expect(page.get_by_role("heading", name="Ready to analyze")).to_be_visible()
+            expect(page.get_by_role("heading", name="Ready to upload privately")).to_be_visible()
             expect(page.get_by_text("₹0 · local audio measurements", exact=True)).to_be_visible()
-            expect(page.get_by_role("button", name="Analyze my call")).to_be_disabled()
+            upload = page.get_by_role("button", name="Upload and measure privately")
+            expect(upload).to_be_disabled()
             page.get_by_role("checkbox").check()
-            page.get_by_role("button", name="Analyze my call").click()
+            upload.click()
             expect(page.get_by_role("heading", name="Local audio analysis is ready")).to_be_visible(
                 timeout=45000
             )

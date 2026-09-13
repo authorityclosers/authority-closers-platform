@@ -1012,66 +1012,76 @@ describe("CallStudio", () => {
     expect(container.textContent).not.toContain("Your call is being processed");
   });
 
-  it("opens a saved recording, binds its report, and returns to the saved draft", async () => {
-    const originalHandler = handleApi;
-    const savedRecording = {
-      id: "recording-1",
-      state: "completed",
-      source_revision: "source-1",
-      source_sha256: "00".repeat(32),
-      source_bytes: 128,
-      content_type: "audio/wav",
-      created_at: "2026-09-13T00:00:00Z",
-      latest_run: {
-        id: "run-1",
+  it.each(["audioatlas-48000-v1", "audioatlas-16000-v1"] as const)(
+    "opens a saved %s recording, binds its report, and returns to the saved draft",
+    async (recipeRevision) => {
+      const originalHandler = handleApi;
+      const savedRecording = {
+        id: "recording-1",
         state: "completed",
-        recipe_revision: "dipak-report-v1",
-        provider_calls: 0,
-        has_report: true,
-      },
-      has_report: true,
-    };
-    handleApi = (path, init) => {
-      if (path.endsWith("/recordings"))
-        return response({ recordings: [savedRecording] });
-      if (path.endsWith("/recordings/recording-1/transcript"))
-        return response(transcript);
-      if (path.endsWith("/runs/run-1/report"))
-        return response({
+        source_revision: "source-1",
+        source_sha256: "00".repeat(32),
+        source_bytes: 128,
+        content_type: "audio/wav",
+        created_at: "2026-09-13T00:00:00Z",
+        latest_run: {
           id: "run-1",
-          recording_id: "recording-1",
           state: "completed",
-          message: "Saved report ready.",
-          report,
-        });
-      return originalHandler(path, init);
-    };
-    await render();
-    expect(container.textContent).toContain("Saved calls");
-    expect(container.textContent).toContain("Open report");
-    await act(async () => getButton("Sales call").click());
-    await flush();
+          recipe_revision: recipeRevision,
+          provider_calls: 0,
+          has_report: true,
+        },
+        has_report: true,
+      };
+      handleApi = (path, init) => {
+        if (path.endsWith("/recordings"))
+          return response({ recordings: [savedRecording] });
+        if (path.endsWith("/recordings/recording-1/transcript"))
+          return response(transcript);
+        if (path.endsWith("/runs/run-1/report"))
+          return response({
+            id: "run-1",
+            recording_id: "recording-1",
+            state: "completed",
+            message: "Saved report ready.",
+            report,
+          });
+        return originalHandler(path, init);
+      };
+      await render();
+      expect(container.textContent).toContain("Saved calls");
+      expect(container.textContent).toContain("Open report");
+      await act(async () => getButton("Sales call").click());
+      await flush();
 
-    expect(container.textContent).toContain("Sales call");
-    expect(container.textContent).toContain(
-      "The prospect asked for a clear next step.",
-    );
-    expect(container.textContent).toContain(
-      "Speaker labels remain unverified.",
-    );
-    expect(container.querySelector("audio")?.getAttribute("src")).toBe(
-      "/v1/conversation/recordings/recording-1/source",
-    );
-    const transcriptIndex = requests.findIndex((request) =>
-      request.url.endsWith("/recordings/recording-1/transcript"),
-    );
-    const reportIndex = requests.findIndex((request) =>
-      request.url.endsWith("/runs/run-1/report"),
-    );
-    expect(transcriptIndex).toBeGreaterThanOrEqual(0);
-    expect(reportIndex).toBeGreaterThanOrEqual(0);
-    expect(reportIndex).toBeLessThan(transcriptIndex);
-  });
+      expect(container.textContent).toContain("Sales call");
+      expect(container.textContent).toContain(
+        "The prospect asked for a clear next step.",
+      );
+      expect(container.textContent).toContain(
+        "Speaker labels remain unverified.",
+      );
+      expect(container.querySelector("audio")?.getAttribute("src")).toBe(
+        "/v1/conversation/recordings/recording-1/source",
+      );
+      const transcriptIndex = requests.findIndex((request) =>
+        request.url.endsWith("/recordings/recording-1/transcript"),
+      );
+      const reportIndex = requests.findIndex((request) =>
+        request.url.endsWith("/runs/run-1/report"),
+      );
+      expect(transcriptIndex).toBeGreaterThanOrEqual(0);
+      expect(reportIndex).toBeGreaterThanOrEqual(0);
+      expect(reportIndex).toBeLessThan(transcriptIndex);
+      expect(
+        requests.filter(
+          (request) =>
+            request.url.endsWith("/recordings/recording-1/plan/quote") &&
+            request.init.method === "POST",
+        ),
+      ).toHaveLength(0);
+    },
+  );
 
   it("plays a pending saved call without requiring a transcript", async () => {
     const originalHandler = handleApi;
