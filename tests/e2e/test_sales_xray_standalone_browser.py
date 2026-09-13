@@ -466,9 +466,7 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
             )
 
             factors = page.get_by_role("region", name="Sales factors")
-            expect(
-                factors.get_by_role("heading", name="Explore the sales factors")
-            ).to_be_visible()
+            expect(factors.get_by_role("heading", name="Explore the sales factors")).to_be_visible()
             factor_details = factors.locator("details")
             expect(factor_details).to_have_count(8)
             factor_details.first.locator("summary").click()

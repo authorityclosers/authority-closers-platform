@@ -553,7 +553,9 @@ def test_receipt_path_writes_only_redacted_plan(tmp_path: Path) -> None:
 
 
 @pytest.mark.skipif(PWSH is None, reason="PowerShell 7 is required")
-def test_apply_staging_preserves_config_accepts_reordered_readback_and_never_mutates_production() -> None:
+def test_apply_staging_preserves_config_accepts_reordered_readback_and_never_mutates_production() -> (
+    None
+):
     production_record = _matching_records()[HOSTS[1]]
     with _CloudflareMock(
         config=_live_config(),
