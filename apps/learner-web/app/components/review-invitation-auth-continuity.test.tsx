@@ -4,10 +4,6 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import * as apiModule from "../lib/learner-api";
-import {
-  reviewInvitationFragment,
-  reviewInvitationHref,
-} from "../lib/review-invitation-auth";
 import { LoginForm } from "./login-form";
 import {
   PasswordResetForm,
@@ -17,7 +13,7 @@ import {
 } from "./password-auth-forms";
 
 const token = "invitation-fixture-" + "k".repeat(48);
-const fragment = reviewInvitationFragment(token);
+const fragment = `#review_invitation=${token}`;
 let root: Root;
 let container: HTMLDivElement;
 
@@ -38,8 +34,16 @@ afterEach(async () => {
   window.history.replaceState(null, "", "/");
 });
 
-describe("review invitation authentication continuity", () => {
-  it("retains the invitation after a successful password reset without sending it to reset", async () => {
+function expectNoReviewerEntry() {
+  expect(container.textContent).not.toMatch(
+    /review invitation|invited email|open review|continue to review|return to invitation/i,
+  );
+  expect(container.querySelector('a[href*="review"]')).toBeNull();
+  expect(container.innerHTML).not.toContain(token);
+}
+
+describe("learner authentication excludes reviewer handoffs", () => {
+  it("returns a password reset to learner sign-in and clears unrelated invitation material", async () => {
     const resetPassword = vi.fn(async () => ({ password_reset: true }));
     vi.spyOn(apiModule, "createLearnerApi").mockReturnValue({
       resetPassword,
@@ -51,7 +55,7 @@ describe("review invitation authentication continuity", () => {
       `/reset-password${fragment}&token=${resetToken}`,
     );
     await act(async () => root.render(<PasswordResetForm />));
-    expect(window.location.hash).toBe(fragment);
+    expect(window.location.hash).toBe("");
     expect(window.history.state).toEqual({ __NA: true });
     const form = container.querySelector("form")!;
     form.querySelector<HTMLInputElement>('[name="password"]')!.value =
@@ -67,12 +71,11 @@ describe("review invitation authentication continuity", () => {
       resetToken,
       "synthetic-password-for-test",
     );
-    expect(
-      container.querySelector(`a[href="/login${fragment}"]`),
-    ).not.toBeNull();
+    expect(container.querySelector('a[href="/login"]')).not.toBeNull();
+    expectNoReviewerEntry();
   });
 
-  it("keeps a successful verification handoff pointed at the invited review", async () => {
+  it("keeps successful learner verification pointed at onboarding", async () => {
     const verifyPasswordEmail = vi.fn(async () => ({ authenticated: true }));
     vi.spyOn(apiModule, "createLearnerApi").mockReturnValue({
       verifyPasswordEmail,
@@ -87,15 +90,15 @@ describe("review invitation authentication continuity", () => {
     expect(verifyPasswordEmail).toHaveBeenCalledExactlyOnceWith(
       verificationToken,
     );
-    expect(window.location.hash).toBe(fragment);
+    expect(window.location.hash).toBe("");
     expect(
-      container.querySelector(`a[href="${reviewInvitationHref(token)}"]`)
-        ?.textContent,
-    ).toContain("Continue to review");
+      container.querySelector('a[href="/onboarding"]')?.textContent,
+    ).toContain("Continue to onboarding");
+    expectNoReviewerEntry();
   });
-  it("returns successful password sign-in to the invitation without putting it in auth requests", async () => {
+  it("ignores invitation fragments during learner sign-in and completes normal onboarding routing", async () => {
     const loginPassword = vi.fn(async () => ({}));
-    const onboarding = vi.fn();
+    const onboarding = vi.fn(async () => ({ status: "completed" }));
     vi.spyOn(apiModule, "createLearnerApi").mockReturnValue({
       loginPassword,
       onboarding,
@@ -104,13 +107,13 @@ describe("review invitation authentication continuity", () => {
       .spyOn(window.location, "assign")
       .mockImplementation(() => {});
     await act(async () => root.render(<LoginForm />));
+    expect(container.querySelector('a[href="/register"]')).not.toBeNull();
     expect(
-      container.querySelector(`a[href="/register${fragment}"]`),
+      container.querySelector('a[href="/forgot-password"]'),
     ).not.toBeNull();
     expect(
-      container.querySelector(`a[href="/forgot-password${fragment}"]`),
+      container.querySelector('a[href*="/v1/auth/google"]'),
     ).not.toBeNull();
-    expect(container.querySelector('a[href*="/v1/auth/google"]')).toBeNull();
     const form = container.querySelector("form")!;
     form.querySelector<HTMLInputElement>('[name="email"]')!.value =
       "reviewer@example.test";
@@ -125,13 +128,12 @@ describe("review invitation authentication continuity", () => {
       "reviewer@example.test",
       "synthetic-password-for-test",
     );
-    expect(onboarding).not.toHaveBeenCalled();
-    expect(navigate).toHaveBeenCalledExactlyOnceWith(
-      reviewInvitationHref(token),
-    );
+    expect(onboarding).toHaveBeenCalledOnce();
+    expect(navigate).toHaveBeenCalledExactlyOnceWith("/home");
+    expectNoReviewerEntry();
   });
 
-  it("keeps the invitation through registration and verification help without weakening consent", async () => {
+  it("keeps learner registration and verification help free of reviewer UI while retaining consent", async () => {
     const registerPassword = vi.fn(async () => ({
       status: "verification_required",
     }));
@@ -168,31 +170,18 @@ describe("review invitation authentication continuity", () => {
       expect.objectContaining({ consent: true }),
     );
     expect(JSON.stringify(registerPassword.mock.calls)).not.toContain(token);
-    expect(
-      container.querySelector(`a[href="/login${fragment}"]`),
-    ).not.toBeNull();
-    expect(
-      container.querySelector(`a[href="/verify-email${fragment}"]`),
-    ).not.toBeNull();
+    expect(container.querySelector('a[href="/login"]')).not.toBeNull();
+    expect(container.querySelector('a[href="/verify-email"]')).not.toBeNull();
     window.history.replaceState({ __NA: true }, "", `/verify-email${fragment}`);
     await act(async () => root.render(<VerifyEmailFlow />));
     expect(verifyPasswordEmail).not.toHaveBeenCalled();
-    expect(window.location.hash).toBe(fragment);
+    expect(window.location.hash).toBe("");
     expect(window.history.state).toEqual({ __NA: true });
-    expect(
-      container.querySelector(`a[href="/login${fragment}"]`),
-    ).not.toBeNull();
-    expect(container.textContent).toContain(
-      "Keep this tab open while you verify your email",
-    );
-    expect(
-      container.querySelector(
-        'a[href^="/sales-xray/review/invite#review_invitation="]',
-      ),
-    ).not.toBeNull();
+    expect(container.querySelector('a[href="/login"]')).not.toBeNull();
+    expectNoReviewerEntry();
   });
 
-  it("preserves the invitation on recovery links and excludes it from recovery requests", async () => {
+  it("keeps recovery requests and completion links in the learner flow", async () => {
     const requestPasswordRecovery = vi.fn(async () => ({ accepted: true }));
     vi.spyOn(apiModule, "createLearnerApi").mockReturnValue({
       requestPasswordRecovery,
@@ -209,11 +198,8 @@ describe("review invitation authentication continuity", () => {
     expect(JSON.stringify(requestPasswordRecovery.mock.calls)).not.toContain(
       token,
     );
-    expect(
-      container.querySelector(`a[href="/login${fragment}"]`),
-    ).not.toBeNull();
-    expect(
-      container.querySelector(`a[href="/verify-email${fragment}"]`),
-    ).not.toBeNull();
+    expect(container.querySelector('a[href="/login"]')).not.toBeNull();
+    expect(container.querySelector('a[href="/verify-email"]')).not.toBeNull();
+    expectNoReviewerEntry();
   });
 });

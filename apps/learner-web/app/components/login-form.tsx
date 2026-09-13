@@ -30,12 +30,6 @@ import {
   type OnboardingStatus,
 } from "../lib/learner-api";
 import { ROUTES } from "../lib/routes";
-import {
-  readReviewInvitationToken,
-  reviewInvitationHref,
-  useReviewInvitationToken,
-  withReviewInvitationToken,
-} from "../lib/review-invitation-auth";
 import { userFacingRequestError } from "../lib/user-facing-error";
 
 function errorMessage(error: unknown): string {
@@ -101,7 +95,6 @@ export function LoginForm({
   const [error, setError] = useState<string | null>(null);
   const [verificationRequired, setVerificationRequired] = useState(false);
   const [passwordVisible, setPasswordVisible] = useState(false);
-  const invitationToken = useReviewInvitationToken();
   const errorRef = useRef<HTMLDivElement>(null);
   const authenticateUrl = stagingBridge
     ? stagingHref(
@@ -118,22 +111,23 @@ export function LoginForm({
         activityIntent,
         salesNext,
       );
-  const registrationHref = withReviewInvitationToken(
-    authIntentHref(ROUTES.register, activityIntent, courseIntent, salesNext),
-    invitationToken,
+  const registrationHref = authIntentHref(
+    ROUTES.register,
+    activityIntent,
+    courseIntent,
+    salesNext,
   );
-  const verificationHref = withReviewInvitationToken(
-    authIntentHref(ROUTES.verifyEmail, activityIntent, courseIntent, salesNext),
-    invitationToken,
+  const verificationHref = authIntentHref(
+    ROUTES.verifyEmail,
+    activityIntent,
+    courseIntent,
+    salesNext,
   );
-  const forgotPasswordHref = withReviewInvitationToken(
-    authIntentHref(
-      ROUTES.forgotPassword,
-      activityIntent,
-      courseIntent,
-      salesNext,
-    ),
-    invitationToken,
+  const forgotPasswordHref = authIntentHref(
+    ROUTES.forgotPassword,
+    activityIntent,
+    courseIntent,
+    salesNext,
   );
 
   useEffect(() => {
@@ -153,11 +147,6 @@ export function LoginForm({
         String(values.get("email") ?? ""),
         String(values.get("password") ?? ""),
       );
-      const invitation = readReviewInvitationToken(window.location.hash);
-      if (invitation) {
-        window.location.assign(reviewInvitationHref(invitation));
-        return;
-      }
       try {
         const onboarding = await api.onboarding();
         window.location.assign(
@@ -202,9 +191,7 @@ export function LoginForm({
       <p className="auth-card__intro">
         {stagingBridge
           ? "Use your verified staging email and password. Account creation, recovery, and Google sign-in continue on the deployed staging surface."
-          : invitationToken
-            ? "Use the invited email address and password. The secure invitation handoff stays in this browser tab until acceptance."
-            : "Use your verified email and password, or continue with Google."}
+          : "Use your verified email and password, or continue with Google."}
       </p>
       {sessionExpired ? (
         <div className="auth-notice" role="status">
@@ -294,35 +281,16 @@ export function LoginForm({
           </Link>
         )}
       </form>
-      {invitationToken ? (
-        <p className="form-message" role="note">
-          To use Google, return to the invitation and open sign-in in another
-          tab.{" "}
-          <Link href={reviewInvitationHref(invitationToken)}>
-            Return to invitation
-          </Link>
-        </p>
-      ) : (
-        <>
-          <div className="auth-divider" aria-hidden="true">
-            <span>or</span>
-          </div>
-          <a
-            className="button button--outline button--full"
-            href={authenticateUrl}
-          >
-            {stagingBridge
-              ? "Continue with Google on staging"
-              : "Continue with Google"}
-          </a>
-        </>
-      )}
+      <div className="auth-divider" aria-hidden="true">
+        <span>or</span>
+      </div>
+      <a className="button button--outline button--full" href={authenticateUrl}>
+        {stagingBridge
+          ? "Continue with Google on staging"
+          : "Continue with Google"}
+      </a>
       <div className="auth-card__footer">
-        <span>
-          {invitationToken
-            ? "First time here?"
-            : "First time here—including with Google?"}
-        </span>
+        <span>First time here—including with Google?</span>
         {stagingBridge ? (
           <a href={stagingHref(registrationHref)}>Create on deployed staging</a>
         ) : (

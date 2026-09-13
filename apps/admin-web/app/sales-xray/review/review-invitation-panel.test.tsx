@@ -23,6 +23,32 @@ function value(input: HTMLInputElement, text: string) {
   input.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
+it("does not send invitations before dedicated reviewer admission is available", async () => {
+  const send = vi.mocked(createReviewInvitation);
+  send.mockReset();
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  try {
+    await act(async () =>
+      root.render(<ReviewInvitationPanel initialRunId={runId} />),
+    );
+    const button = [...container.querySelectorAll("button")].find((item) =>
+      item.textContent?.includes("Reviewer sign-in setup pending"),
+    )!;
+    expect(button.disabled).toBe(true);
+    await act(async () => button.click());
+    expect(send).not.toHaveBeenCalled();
+    expect(container.textContent).toContain(
+      "You can still revoke an existing invitation below.",
+    );
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+    send.mockReset();
+  }
+});
+
 it("recovers from synchronous malformed-email validation without exposing schema errors", async () => {
   const send = vi.mocked(createReviewInvitation);
   send.mockReset();
@@ -35,7 +61,9 @@ it("recovers from synchronous malformed-email validation without exposing schema
   const root = createRoot(container);
   try {
     await act(async () =>
-      root.render(<ReviewInvitationPanel initialRunId={runId} />),
+      root.render(
+        <ReviewInvitationPanel initialRunId={runId} invitationsAvailable />,
+      ),
     );
     const email =
       container.querySelector<HTMLInputElement>("#invitation-email")!;
@@ -71,7 +99,9 @@ it("retries the same invitation safely, gives edited invitations a new identity,
   const root = createRoot(container);
   try {
     await act(async () =>
-      root.render(<ReviewInvitationPanel initialRunId={runId} />),
+      root.render(
+        <ReviewInvitationPanel initialRunId={runId} invitationsAvailable />,
+      ),
     );
     const email =
       container.querySelector<HTMLInputElement>("#invitation-email")!;
@@ -131,7 +161,9 @@ it("preserves a draft when the selected analysis arrives after initial loading",
   const container = document.createElement("div");
   const root = createRoot(container);
   try {
-    await act(async () => root.render(<ReviewInvitationPanel />));
+    await act(async () =>
+      root.render(<ReviewInvitationPanel invitationsAvailable />),
+    );
     await act(async () =>
       value(
         container.querySelector<HTMLInputElement>("#invitation-email")!,
@@ -139,7 +171,9 @@ it("preserves a draft when the selected analysis arrives after initial loading",
       ),
     );
     await act(async () =>
-      root.render(<ReviewInvitationPanel initialRunId={runId} />),
+      root.render(
+        <ReviewInvitationPanel initialRunId={runId} invitationsAvailable />,
+      ),
     );
     expect(
       container.querySelector<HTMLInputElement>("#invitation-email")!.value,

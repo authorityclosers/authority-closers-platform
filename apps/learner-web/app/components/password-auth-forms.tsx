@@ -24,13 +24,6 @@ import { authIntentHref, type SalesAuthNext } from "../lib/sales-auth-return";
 import { createLearnerApi } from "../lib/learner-api";
 import { ROUTES } from "../lib/routes";
 import {
-  readReviewInvitationToken,
-  reviewInvitationFragment,
-  reviewInvitationHref,
-  useReviewInvitationToken,
-  withReviewInvitationToken,
-} from "../lib/review-invitation-auth";
-import {
   LEARNER_CONSENT_COPY,
   LEARNER_POLICY_VERSION,
 } from "../lib/learner-policy";
@@ -46,11 +39,10 @@ function requestErrorMessage(error: unknown): string {
 function fragmentToken(): string | null {
   const parameters = new URLSearchParams(window.location.hash.slice(1));
   const token = parameters.get("token");
-  const invitation = readReviewInvitationToken(window.location.hash);
   window.history.replaceState(
     window.history.state,
     "",
-    `${window.location.pathname}${window.location.search}${invitation ? reviewInvitationFragment(invitation) : ""}`,
+    `${window.location.pathname}${window.location.search}`,
   );
   return token;
 }
@@ -79,14 +71,11 @@ export function RegistrationForm({
     courseIntent,
     salesNext,
   );
-  const invitationToken = useReviewInvitationToken();
-  const invitationLoginHref = withReviewInvitationToken(
-    loginHref,
-    invitationToken,
-  );
-  const invitationVerifyHref = withReviewInvitationToken(
-    authIntentHref(ROUTES.verifyEmail, activityIntent, courseIntent, salesNext),
-    invitationToken,
+  const verifyHref = authIntentHref(
+    ROUTES.verifyEmail,
+    activityIntent,
+    courseIntent,
+    salesNext,
   );
   const [pending, setPending] = useState(false);
   const [complete, setComplete] = useState(false);
@@ -138,13 +127,10 @@ export function RegistrationForm({
           If that address can be registered, a verification link is on its way.
           The link expires after 24 hours.
         </p>
-        <Link
-          className="button button--outline button--full"
-          href={invitationLoginHref}
-        >
+        <Link className="button button--outline button--full" href={loginHref}>
           Return to sign in
         </Link>
-        <Link className="text-link" href={invitationVerifyHref}>
+        <Link className="text-link" href={verifyHref}>
           Need a fresh verification link?
         </Link>
       </div>
@@ -289,67 +275,55 @@ export function RegistrationForm({
           <ArrowRight size={17} aria-hidden="true" />
         </button>
       </form>
-      {invitationToken ? (
-        <p className="form-message" role="note">
-          To use Google, return to the invitation and open sign-in in another
-          tab.{" "}
-          <Link href={reviewInvitationHref(invitationToken)}>
-            Return to invitation
-          </Link>
-        </p>
-      ) : (
-        <>
-          <div className="auth-divider" aria-hidden="true">
-            <span>or</span>
-          </div>
-          <form
-            className="stack-form"
-            action={googleAuthStartUrl(
-              "register",
-              courseIntent,
-              activityIntent,
-              salesNext,
-            )}
-            method="get"
-          >
-            <input type="hidden" name="action" value="register" />
-            <input type="hidden" name="surface" value="learner" />
-            <input
-              type="hidden"
-              name="return_path"
-              value={googleAuthReturnPath(
-                "register",
-                courseIntent,
-                activityIntent,
-                salesNext,
-              )}
-            />
-            <input
-              type="hidden"
-              name="consent"
-              value="true"
-              disabled={!hydrated || !consentGranted}
-            />
-            <input
-              type="hidden"
-              name="consent_version"
-              value={LEARNER_POLICY_VERSION}
-              disabled={!hydrated || !consentGranted}
-            />
-            <button
-              className="button button--outline button--full"
-              type="submit"
-              disabled={!hydrated || !consentGranted || pending}
-            >
-              Continue with Google
-              <ArrowRight size={17} aria-hidden="true" />
-            </button>
-          </form>
-        </>
-      )}
+      <div className="auth-divider" aria-hidden="true">
+        <span>or</span>
+      </div>
+      <form
+        className="stack-form"
+        action={googleAuthStartUrl(
+          "register",
+          courseIntent,
+          activityIntent,
+          salesNext,
+        )}
+        method="get"
+      >
+        <input type="hidden" name="action" value="register" />
+        <input type="hidden" name="surface" value="learner" />
+        <input
+          type="hidden"
+          name="return_path"
+          value={googleAuthReturnPath(
+            "register",
+            courseIntent,
+            activityIntent,
+            salesNext,
+          )}
+        />
+        <input
+          type="hidden"
+          name="consent"
+          value="true"
+          disabled={!hydrated || !consentGranted}
+        />
+        <input
+          type="hidden"
+          name="consent_version"
+          value={LEARNER_POLICY_VERSION}
+          disabled={!hydrated || !consentGranted}
+        />
+        <button
+          className="button button--outline button--full"
+          type="submit"
+          disabled={!hydrated || !consentGranted || pending}
+        >
+          Continue with Google
+          <ArrowRight size={17} aria-hidden="true" />
+        </button>
+      </form>
       <div className="auth-card__footer">
         <span>Already verified?</span>
-        <Link href={invitationLoginHref}>Sign in</Link>
+        <Link href={loginHref}>Sign in</Link>
       </div>
     </div>
   );
@@ -373,14 +347,17 @@ export function RecoveryRequestForm({
   const [complete, setComplete] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const errorRef = useRef<HTMLDivElement>(null);
-  const invitationToken = useReviewInvitationToken();
-  const loginHref = withReviewInvitationToken(
-    authIntentHref(ROUTES.login, activityIntent, courseIntent, salesNext),
-    invitationToken,
+  const loginHref = authIntentHref(
+    ROUTES.login,
+    activityIntent,
+    courseIntent,
+    salesNext,
   );
-  const verifyEmailHref = withReviewInvitationToken(
-    authIntentHref(ROUTES.verifyEmail, activityIntent, courseIntent, salesNext),
-    invitationToken,
+  const verifyEmailHref = authIntentHref(
+    ROUTES.verifyEmail,
+    activityIntent,
+    courseIntent,
+    salesNext,
   );
 
   useEffect(() => {
@@ -496,16 +473,17 @@ export function VerifyEmailFlow({
   const [resendPending, setResendPending] = useState(false);
   const [resendComplete, setResendComplete] = useState(false);
   const [resendError, setResendError] = useState<string | null>(null);
-  const invitationToken = useReviewInvitationToken();
   const onboardingHref = authIntentHref(
     ROUTES.onboarding,
     activityIntent,
     courseIntent,
     salesNext,
   );
-  const loginHref = withReviewInvitationToken(
-    authIntentHref(ROUTES.login, activityIntent, courseIntent, salesNext),
-    invitationToken,
+  const loginHref = authIntentHref(
+    ROUTES.login,
+    activityIntent,
+    courseIntent,
+    salesNext,
   );
 
   async function resend(event: FormEvent<HTMLFormElement>) {
@@ -581,30 +559,9 @@ export function VerifyEmailFlow({
               : "Link unavailable."}
       </h2>
       <p>{message}</p>
-      {invitationToken && state === "pending" ? (
-        <div className="form-message" role="note">
-          <p>
-            Keep this tab open while you verify your email in another tab. Then
-            return here to open your review.
-          </p>
-          <Link
-            className="button button--outline button--full"
-            href={reviewInvitationHref(invitationToken)}
-          >
-            I&apos;ve verified my email — open review
-          </Link>
-        </div>
-      ) : null}
       {state === "success" ? (
-        <Link
-          className="button button--ink button--full"
-          href={
-            invitationToken
-              ? reviewInvitationHref(invitationToken)
-              : onboardingHref
-          }
-        >
-          {invitationToken ? "Continue to review" : "Continue to onboarding"}
+        <Link className="button button--ink button--full" href={onboardingHref}>
+          Continue to onboarding
         </Link>
       ) : null}
       {state === "pending" || state === "error" ? (
@@ -669,19 +626,17 @@ export function PasswordResetForm({
   const [error, setError] = useState<string | null>(null);
   const [passwordVisible, setPasswordVisible] = useState(false);
   const errorRef = useRef<HTMLDivElement>(null);
-  const invitationToken = useReviewInvitationToken();
-  const forgotPasswordHref = withReviewInvitationToken(
-    authIntentHref(
-      ROUTES.forgotPassword,
-      activityIntent,
-      courseIntent,
-      salesNext,
-    ),
-    invitationToken,
+  const forgotPasswordHref = authIntentHref(
+    ROUTES.forgotPassword,
+    activityIntent,
+    courseIntent,
+    salesNext,
   );
-  const loginHref = withReviewInvitationToken(
-    authIntentHref(ROUTES.login, activityIntent, courseIntent, salesNext),
-    invitationToken,
+  const loginHref = authIntentHref(
+    ROUTES.login,
+    activityIntent,
+    courseIntent,
+    salesNext,
   );
 
   useEffect(() => {

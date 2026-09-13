@@ -8,7 +8,7 @@ bounded request DTOs and private source playback to HTTP.
 from __future__ import annotations
 
 import re
-from typing import Annotated, Any
+from typing import Annotated, Any, NoReturn
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Query, Request, Response
@@ -56,6 +56,10 @@ def _raise_conversation(error: ConversationError) -> HTTPException:
     return HTTPException(status, sanitize_error(error, max_length=512))
 
 
+def _reviewer_capability_unavailable() -> NoReturn:
+    raise HTTPException(503, "Reviewer access is not available.")
+
+
 def install_conversation_review_http(
     app: FastAPI,
     *,
@@ -98,6 +102,13 @@ def install_conversation_review_http(
         if write:
             require_safe_origin(request, settings)
 
+    async def reviewer_write_hold(auth: AuthenticatedTransaction) -> NoReturn:
+        try:
+            await review_service(auth)._admin(auth.resolved.actor)
+        except ConversationError as error:
+            raise _raise_conversation(error) from None
+        _reviewer_capability_unavailable()
+
     @admin.get("/review-assignments")
     async def list_assignments(
         request: Request,
@@ -119,6 +130,21 @@ def install_conversation_review_http(
         except ConversationError as error:
             raise _raise_conversation(error) from None
 
+    @admin.get("/review-assignments/{assignment_id}")
+    async def admin_review_details(
+        assignment_id: UUID,
+        request: Request,
+        response: Response,
+        auth: AuthenticatedTransaction = function_dependency,
+    ) -> Any:
+        """Operations read of saved review history; never impersonate a reviewer."""
+
+        admin_scope(request, response)
+        try:
+            return await review_service(auth).admin_details(auth.resolved.actor, assignment_id)
+        except ConversationError as error:
+            raise _raise_conversation(error) from None
+
     @admin.post("/review-assignments", status_code=201)
     async def create_assignment(
         intent: ReviewAssignmentCreateRequest,
@@ -128,10 +154,7 @@ def install_conversation_review_http(
         auth: AuthenticatedTransaction = function_dependency,
     ) -> Any:
         admin_scope(request, response, write=True)
-        try:
-            return await review_service(auth).create(auth.resolved.actor, intent, key)
-        except ConversationError as error:
-            raise _raise_conversation(error) from None
+        await reviewer_write_hold(auth)
 
     @admin.post("/review-invitations", status_code=201)
     async def create_invitation(
@@ -142,10 +165,7 @@ def install_conversation_review_http(
         auth: AuthenticatedTransaction = function_dependency,
     ) -> Any:
         admin_scope(request, response, write=True)
-        try:
-            return await review_service(auth).invite(auth.resolved.actor, intent, key)
-        except ConversationError as error:
-            raise _raise_conversation(error) from None
+        await reviewer_write_hold(auth)
 
     @admin.post("/review-invitations/{invitation_id}/revoke")
     async def revoke_invitation(
@@ -303,7 +323,11 @@ def install_conversation_review_http(
         )
 
     app.include_router(admin)
-    app.include_router(learner)
+    # The legacy learner-mounted review routes are intentionally dormant. They
+    # authorize the generic learner session dependency and cannot enforce the
+    # reviewer-only audience required by the current access contract. Keep the
+    # handlers available as implementation material for the dedicated reviewer
+    # resolver, but do not expose them until that server-owned gate exists.
 
 
 __all__ = ["install_conversation_review_http"]

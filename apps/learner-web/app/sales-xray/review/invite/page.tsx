@@ -1,10 +1,5 @@
-import { LearnerShell } from "../../../components/site-shell";
-import { ReviewInvitationAcceptance } from "../review-invitation-acceptance";
+import { notFound } from "next/navigation";
 
 export default function ReviewInvitationPage() {
-  return (
-    <LearnerShell current="sales-xray">
-      <ReviewInvitationAcceptance />
-    </LearnerShell>
-  );
+  notFound();
 }

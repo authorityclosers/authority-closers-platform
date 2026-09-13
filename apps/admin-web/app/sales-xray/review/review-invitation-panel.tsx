@@ -21,6 +21,11 @@ const lensLabels: Record<ReviewMode, string> = {
   ux: "Experience reviewer",
 };
 
+// New invitations stay unavailable until the dedicated reviewer session/claim
+// flow replaces the retired Academy handoff. This is a capability hold, never
+// an assertion that a queued email grants reviewer access.
+export const REVIEWER_INVITATIONS_AVAILABLE = false;
+
 type Mutation =
   | { status: "idle" }
   | { status: "submitting" }
@@ -42,9 +47,11 @@ function validUuid(value: string): boolean {
 export function ReviewInvitationPanel({
   initialRunId = "",
   runs = [],
+  invitationsAvailable = REVIEWER_INVITATIONS_AVAILABLE,
 }: {
   initialRunId?: string;
   runs?: readonly ReviewAssignment[];
+  invitationsAvailable?: boolean;
 }) {
   const [runInput, setRunId] = useState<string | null>(null);
   const runId = runInput ?? initialRunId;
@@ -83,6 +90,7 @@ export function ReviewInvitationPanel({
   }
 
   async function submit() {
+    if (!invitationsAvailable) return;
     if (creating.current) return;
     const error = validate();
     if (error) {
@@ -169,6 +177,7 @@ export function ReviewInvitationPanel({
   }
 
   const busy = mutation.status === "submitting";
+  const createDisabled = busy || !invitationsAvailable;
   const revoking = revokeMutation.status === "submitting";
   return (
     <section className={styles.panel} aria-labelledby="review-invitation-title">
@@ -176,9 +185,9 @@ export function ReviewInvitationPanel({
         <span className={styles.eyebrow}>Grow your review team</span>
         <h2 id="review-invitation-title">Invite a reviewer</h2>
         <p>
-          Choose a saved analysis, add their email, and select what you would
-          like them to review. They will need to sign in with that verified
-          email.
+          {invitationsAvailable
+            ? "Choose a saved analysis, add their email, and select what you would like them to review."
+            : "New invitations are paused while dedicated reviewer sign-in is configured. You can still revoke an existing invitation below."}
         </p>
       </div>
       <div className={styles.form}>
@@ -189,7 +198,7 @@ export function ReviewInvitationPanel({
             list="review-known-runs"
             value={runId}
             onChange={(event) => setRunId(event.target.value)}
-            disabled={busy}
+            disabled={createDisabled}
           />
           <datalist id="review-known-runs">
             {[...new Map(runs.map((run) => [run.run_id, run])).values()].map(
@@ -212,7 +221,7 @@ export function ReviewInvitationPanel({
             type="email"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
-            disabled={busy}
+            disabled={createDisabled}
           />
         </label>
         <fieldset>
@@ -230,7 +239,7 @@ export function ReviewInvitationPanel({
                         : current.filter((item) => item !== lens),
                     )
                   }
-                  disabled={busy}
+                  disabled={createDisabled}
                 />
                 <span>{lensLabels[lens]}</span>
               </label>
@@ -246,17 +255,21 @@ export function ReviewInvitationPanel({
             id="invitation-expiry"
             value={expiry}
             onChange={(event) => setExpiry(event.target.value)}
-            disabled={busy}
+            disabled={createDisabled}
           />
         </label>
         <button
           className="button button-primary"
           type="button"
           onClick={submit}
-          disabled={busy}
+          disabled={createDisabled}
         >
           <Mail size={15} aria-hidden="true" />
-          {busy ? "Sending invitation…" : "Send invitation"}
+          {!invitationsAvailable
+            ? "Reviewer sign-in setup pending"
+            : busy
+              ? "Sending invitation…"
+              : "Send invitation"}
         </button>
       </div>
       {mutation.status === "success" ? (

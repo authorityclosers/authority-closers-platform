@@ -715,6 +715,13 @@ class ConversationReviewService:
         ).all()
         return {"items": [self._feedback_view(row) for row in rows]}
 
+    async def admin_details(self, actor: ActorContext, assignment_id: UUID) -> dict[str, Any]:
+        """Return the separate operations read projection for one assignment."""
+
+        from .review_admin_details import load_admin_review_details
+
+        return await load_admin_review_details(self, actor, assignment_id)
+
     async def submit(
         self, actor: ActorContext, assignment_id: UUID, intent: ReviewFeedbackRequest
     ) -> dict[str, Any]:

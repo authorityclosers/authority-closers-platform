@@ -6,6 +6,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: vi.fn() }),
 }));
+vi.mock("./admin-review-details", () => ({
+  AdminReviewDetails: ({ assignmentId }: { assignmentId: string }) => (
+    <div data-admin-detail={assignmentId} />
+  ),
+}));
 
 import { ReviewWorkspace } from "./review-workspace";
 
@@ -176,10 +181,13 @@ async function settle() {
   });
 }
 
-async function render(props: { assignmentId?: string } = {}) {
+async function render(
+  props: { assignmentId?: string; assignmentsAvailable?: boolean } = {},
+) {
   await act(async () =>
     root.render(
       <ReviewWorkspace
+        assignmentsAvailable
         {...props}
         academyOrigin="https://learner.authorityclosers.com"
       />,
@@ -189,6 +197,28 @@ async function render(props: { assignmentId?: string } = {}) {
 }
 
 describe("Admin review assignment workspace", () => {
+  it("loads exact Admin details outside the recent queue and keeps new assignments paused", async () => {
+    queueResponses = [jsonResponse({ items: [] })];
+    await render({ assignmentId: ids.assignment, assignmentsAvailable: false });
+    expect(
+      container.querySelector(`[data-admin-detail="${ids.assignment}"]`),
+    ).not.toBeNull();
+    expect(container.textContent).not.toContain(
+      "Assignment not found in the current server response",
+    );
+    const form = container.querySelector<HTMLFormElement>("form")!;
+    await act(async () =>
+      form.dispatchEvent(
+        new Event("submit", { bubbles: true, cancelable: true }),
+      ),
+    );
+    expect(
+      fetchMock.mock.calls.some(([, init]) => init?.method === "POST"),
+    ).toBe(false);
+    expect(
+      container.querySelector('a[href*="sales-xray/review/invite"]'),
+    ).toBeNull();
+  });
   it("loads the queue after Strict Mode replays the mount effects", async () => {
     queueResponses = Array.from({ length: 4 }, () =>
       jsonResponse({ items: [wireAssignment] }),
@@ -211,7 +241,7 @@ describe("Admin review assignment workspace", () => {
 
     expect(container.textContent).toContain("Your review assignments");
     expect(container.textContent).toContain("Reviewer 44444444…4444");
-    expect(container.textContent).toContain("Open in Academy");
+    expect(container.textContent).not.toContain("Open in Academy");
     expect(container.textContent).not.toContain("Dipak");
     expect(container.textContent).not.toContain("PREVIEW DATA");
     expect(container.textContent).toContain(

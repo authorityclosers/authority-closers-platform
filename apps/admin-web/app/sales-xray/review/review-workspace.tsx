@@ -7,7 +7,6 @@ import {
   CheckCircle2,
   CircleAlert,
   Clock3,
-  ExternalLink,
   FileCheck2,
   LoaderCircle,
   Plus,
@@ -20,7 +19,6 @@ import {
 import { AdminShell } from "../../components/admin-shell";
 import { SectionHeading } from "../../components/ops-primitives";
 import {
-  buildAcademyReviewLink,
   createReviewAssignment,
   loadReviewAssignments,
   newReviewIdempotencyKey,
@@ -32,7 +30,11 @@ import {
   type ReviewQueueState,
 } from "./review-api";
 import styles from "./review-workspace.module.css";
-import { ReviewInvitationPanel } from "./review-invitation-panel";
+import { AdminReviewDetails } from "./admin-review-details";
+import {
+  ReviewInvitationPanel,
+  REVIEWER_INVITATIONS_AVAILABLE,
+} from "./review-invitation-panel";
 import { localReviewDate, reviewDateEpoch } from "./review-date";
 
 const lensLabels: Record<ReviewMode, { label: string; detail: string }> = {
@@ -196,7 +198,6 @@ function AssignmentStatePill({ state }: { state: ReviewAssignment["state"] }) {
 
 function AssignmentSummary({
   assignment,
-  academyOrigin,
   detail,
   onRevoke,
   revoking,
@@ -207,7 +208,6 @@ function AssignmentSummary({
   onRevoke: (assignment: ReviewAssignment) => void;
   revoking: boolean;
 }) {
-  const academyLink = buildAcademyReviewLink(academyOrigin, assignment.id);
   return (
     <article
       className={`${styles.assignmentCard} ${detail ? styles.assignmentCardDetail : ""}`}
@@ -257,18 +257,9 @@ function AssignmentSummary({
         </details>
       ) : null}
       <div className={styles.assignmentActions}>
-        {academyLink ? (
-          <a
-            className="button button-secondary"
-            href={academyLink}
-            target="_blank"
-            rel="noreferrer"
-          >
-            <ExternalLink size={15} aria-hidden="true" /> Open in Academy
-          </a>
-        ) : (
-          <span className={styles.mutedAction}>Academy link unavailable</span>
-        )}
+        <span className={styles.mutedAction}>
+          Dedicated reviewer sign-in is being configured.
+        </span>
         {assignment.state !== "revoked" && assignment.state !== "expired" ? (
           <button
             className={`button ${styles.buttonDanger}`}
@@ -292,9 +283,11 @@ function AssignmentSummary({
 export function ReviewWorkspace({
   assignmentId,
   academyOrigin,
+  assignmentsAvailable = REVIEWER_INVITATIONS_AVAILABLE,
 }: {
   assignmentId?: string;
   academyOrigin?: string | null;
+  assignmentsAvailable?: boolean;
 }) {
   const [queue, setQueue] = useState<ReviewQueueState>({
     status: "loading",
@@ -414,6 +407,7 @@ export function ReviewWorkspace({
   );
 
   function submitCreate() {
+    if (!assignmentsAvailable) return;
     const validated = validateCreateIntent(
       runId,
       reviewerPersonId,
@@ -434,6 +428,7 @@ export function ReviewWorkspace({
   }
 
   function retryCreate() {
+    if (!assignmentsAvailable) return;
     if (!createIntent.current || !createKey.current) return;
     beginCreate(createIntent.current, createKey.current);
   }
@@ -494,9 +489,6 @@ export function ReviewWorkspace({
 
   const isCreating = createMutation.status === "submitting";
   const isRevoking = revokeMutation.status === "submitting";
-  const detailMissing = Boolean(
-    assignmentId && queue.status === "ready" && !selectedAssignment,
-  );
 
   return (
     <AdminShell
@@ -528,11 +520,10 @@ export function ReviewWorkspace({
             <ShieldCheck size={20} />
           </div>
           <div>
-            <h2>Bring your experts into the conversation.</h2>
+            <h2>Review feedback and manage existing access.</h2>
             <p>
-              Invite someone by email to review a saved analysis. They can
-              listen, leave precise feedback, and suggest corrections inside
-              Academy.
+              Inspect saved feedback and revoke existing access. New invitations
+              are paused until dedicated reviewer sign-in is ready.
             </p>
           </div>
           <span className={styles.noticeCode}>Private review access</span>
@@ -547,7 +538,7 @@ export function ReviewWorkspace({
               eyebrow="Selected review"
               id="assignment-detail-title"
               title="Review access"
-              body="Check the review status and open the workspace for the assigned reviewer."
+              body="Check review status and manage this assignment."
             />
             <AssignmentSummary
               assignment={selectedAssignment}
@@ -561,28 +552,8 @@ export function ReviewWorkspace({
           </section>
         ) : null}
 
-        {detailMissing ? (
-          <section className={styles.panel} role="alert">
-            <div className={styles.queueStateCompact}>
-              <CircleAlert size={24} aria-hidden="true" />
-              <div>
-                <strong>
-                  Assignment not found in the current server response.
-                </strong>
-                <p>
-                  Refresh the queue or return to the assignment list. No
-                  client-provided ID is treated as an assignment.
-                </p>
-              </div>
-              <button
-                className="button button-secondary"
-                type="button"
-                onClick={requestQueueRefresh}
-              >
-                <RefreshCw size={15} aria-hidden="true" /> Retry queue
-              </button>
-            </div>
-          </section>
+        {assignmentId ? (
+          <AdminReviewDetails assignmentId={assignmentId} />
         ) : null}
 
         <ReviewInvitationPanel
@@ -685,7 +656,11 @@ export function ReviewWorkspace({
                 eyebrow="Existing account"
                 id="create-title"
                 title="Create a reviewer assignment"
-                body="For an existing verified reviewer whose account ID you already have. Use the email invitation above for everyone else."
+                body={
+                  assignmentsAvailable
+                    ? "Assign an existing authorized reviewer."
+                    : "New assignments are paused until dedicated reviewer sign-in is ready."
+                }
               />
               <form
                 className={styles.formStack}
@@ -807,7 +782,7 @@ export function ReviewWorkspace({
                 <button
                   className="button button-primary"
                   type="submit"
-                  disabled={isCreating}
+                  disabled={isCreating || !assignmentsAvailable}
                 >
                   {isCreating ? (
                     <LoaderCircle
@@ -818,7 +793,11 @@ export function ReviewWorkspace({
                   ) : (
                     <Plus size={15} aria-hidden="true" />
                   )}
-                  {isCreating ? "Creating assignment…" : "Create assignment"}
+                  {!assignmentsAvailable
+                    ? "Reviewer sign-in setup pending"
+                    : isCreating
+                      ? "Creating assignment…"
+                      : "Create assignment"}
                 </button>
               </form>
               {createMutation.status === "success" ? (
