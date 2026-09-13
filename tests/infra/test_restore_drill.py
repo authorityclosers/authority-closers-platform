@@ -703,9 +703,7 @@ def test_processing_ownership_rehearsal_config_accepts_0036_to_0037(
 
 
 def test_processing_ownership_parity_contract_tracks_0037_tables() -> None:
-    assert restore_drill.parity_contract_for_head("20260914_0037") == (
-        "ac-postgres-parity-v17"
-    )
+    assert restore_drill.parity_contract_for_head("20260914_0037") == ("ac-postgres-parity-v17")
     assert restore_drill.parity_tables_for_head("20260914_0037") == (
         restore_drill.ACQUISITION_PARITY_TABLES
         + restore_drill.PROCESSING_OWNERSHIP_PARITY_NEW_TABLES

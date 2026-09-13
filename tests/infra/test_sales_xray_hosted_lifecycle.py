@@ -254,9 +254,7 @@ def _refresh_activation_inputs(paths: dict[str, Path]) -> None:
     env_values = dict(
         line.split("=", 1) for line in paths["env"].read_text(encoding="utf-8").splitlines()
     )
-    env_values["AC_XRAY_SERVICE_SHA256"] = hashlib.sha256(
-        paths["service"].read_bytes()
-    ).hexdigest()
+    env_values["AC_XRAY_SERVICE_SHA256"] = hashlib.sha256(paths["service"].read_bytes()).hexdigest()
     env_values["AC_XRAY_APPROVAL_SHA256"] = approval_sha
     paths["env"].write_text(
         "".join(f"{key}={value}\n" for key, value in sorted(env_values.items())),

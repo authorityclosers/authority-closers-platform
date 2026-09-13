@@ -318,6 +318,7 @@ def test_native_preflight_timeout_does_not_reserve_usage(
     async def exercise() -> None:
         setup = await _setup(postgres_harness, tmp_path)
         try:
+
             def timed_out(
                 _source: Path, _outdir: Path, *, job_id: UUID, rate: Any
             ) -> dict[str, Any]:

@@ -27,6 +27,7 @@ IMAGE = "sha256:" + "a" * 64
 def test_socket_preflight_uses_only_remaining_request_budget(tmp_path: Path) -> None:
     def exchange(_: bytes) -> bytes:
         return b"{}"
+
     runtime = SocketNativeRuntime(
         tmp_path / "native.sock",
         workspace_root=tmp_path,
@@ -34,9 +35,7 @@ def test_socket_preflight_uses_only_remaining_request_budget(tmp_path: Path) -> 
         timeout_seconds=750,
         exchange=exchange,
     )
-    bounded = _preflight_with_deadline(
-        NativeUploadPreflight(runtime), deadline=100, now=lambda: 35
-    )
+    bounded = _preflight_with_deadline(NativeUploadPreflight(runtime), deadline=100, now=lambda: 35)
 
     assert isinstance(bounded.runtime, SocketNativeRuntime)
     assert bounded.runtime.timeout_seconds == 65

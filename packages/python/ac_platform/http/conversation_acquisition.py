@@ -154,9 +154,7 @@ def install_acquisition_http(
                     allowance = await result(app.allowance(actor=auth.resolved.actor))
                     return {"state": "account", "allowance": allowance}
                 try:
-                    allowance = await app.allowance(
-                        token=current, actor=auth.resolved.actor
-                    )
+                    allowance = await app.allowance(token=current, actor=auth.resolved.actor)
                 except ConversationConflict:
                     # An unclaimed visitor remains the current owner until
                     # the explicit POST /claim action.  Resolve its allowance

@@ -251,9 +251,7 @@ def _metadata_actor_constraints(postgres_harness: Any) -> None:
         assert f"ck_{table}_one_actor" in checks
         foreign_keys = inspector.get_foreign_keys(table)
         constrained = {
-            column
-            for foreign_key in foreign_keys
-            for column in foreign_key["constrained_columns"]
+            column for foreign_key in foreign_keys for column in foreign_key["constrained_columns"]
         }
         assert {"session_id", "processing_lease_id"} <= constrained
 
@@ -271,9 +269,7 @@ def test_first_guest_acceptance_bootstraps_shared_budget_without_learner_grant(
             guest, measured, intent, _ = await _guest(
                 engine, state, duration_seconds=7, marker="budget-bootstrap"
             )
-            actor = await _processing_actor(
-                engine, state, measured.submission_id, guest.token
-            )
+            actor = await _processing_actor(engine, state, measured.submission_id, guest.token)
             assert actor.person_id == processing_person_id
 
             now_epoch = int(state.now.timestamp())
@@ -311,9 +307,7 @@ def test_first_guest_acceptance_bootstraps_shared_budget_without_learner_grant(
                     intake_policy,
                     authority=authority,
                 )
-                quote = await intake.prepare(
-                    actor, intent, key="guest-budget-bootstrap"
-                )
+                quote = await intake.prepare(actor, intent, key="guest-budget-bootstrap")
                 accepted = await intake.accept(
                     actor,
                     UUID(quote["id"]),
@@ -323,17 +317,13 @@ def test_first_guest_acceptance_bootstraps_shared_budget_without_learner_grant(
                         accepted=True,
                     ),
                 )
-                replay = await intake.prepare(
-                    actor, intent, key="guest-budget-bootstrap"
-                )
+                replay = await intake.prepare(actor, intent, key="guest-budget-bootstrap")
 
             assert accepted["state"] == "accepted"
             assert replay["id"] == quote["id"]
 
             async with AsyncSession(engine) as database, database.begin():
-                budget = await database.get(
-                    ConversationBudgetAccount, bundle.budget_scope_id
-                )
+                budget = await database.get(ConversationBudgetAccount, bundle.budget_scope_id)
                 assert budget is not None
                 snapshot = BudgetAccount.from_dict(budget.snapshot)
                 assert snapshot.scope_id == str(bundle.budget_scope_id)
@@ -365,10 +355,7 @@ def test_first_guest_acceptance_bootstraps_shared_budget_without_learner_grant(
                     await database.scalar(
                         select(func.count())
                         .select_from(ConversationBudgetAccount)
-                        .where(
-                            ConversationBudgetAccount.scope_id
-                            == bundle.budget_scope_id
-                        )
+                        .where(ConversationBudgetAccount.scope_id == bundle.budget_scope_id)
                     )
                     == 1
                 )
@@ -446,9 +433,7 @@ def test_guest_processing_principal_is_non_login_and_intake_binds_each_submissio
                     )
                 )
                 assert principal is not None
-                member = await database.get(
-                    Membership, (state.tenant_id, principal_person_id)
-                )
+                member = await database.get(Membership, (state.tenant_id, principal_person_id))
                 assert member is not None and member.role == "processing"
                 assert (
                     await database.scalar(
@@ -481,9 +466,7 @@ def test_guest_processing_principal_is_non_login_and_intake_binds_each_submissio
                 intake = ConversationIntake(
                     ConversationApplication(database, clock=lambda: state.now), intake_policy
                 )
-                first_view = await intake.prepare(
-                    first_actor, first_intent, key="same-browser-key"
-                )
+                first_view = await intake.prepare(first_actor, first_intent, key="same-browser-key")
                 first_replay = await intake.prepare(
                     first_actor, first_intent, key="same-browser-key"
                 )
@@ -528,9 +511,7 @@ def test_guest_processing_principal_is_non_login_and_intake_binds_each_submissio
                 assert second_linked.recording_id == UUID(second_view["recording_id"])
                 assert linked.source_sha256 == first_intent.source_sha256
                 assert second_linked.source_sha256 == second_intent.source_sha256
-                acceptance = await database.get(
-                    ConversationQuoteAcceptance, UUID(first_view["id"])
-                )
+                acceptance = await database.get(ConversationQuoteAcceptance, UUID(first_view["id"]))
                 assert acceptance is not None
                 assert acceptance.session_id is None
                 assert acceptance.processing_lease_id == first_actor.processing_lease_id
@@ -551,16 +532,17 @@ def test_guest_processing_principal_is_non_login_and_intake_binds_each_submissio
                         ConversationMinuteAccount.person_id == principal_person_id,
                     )
                 )
-                assert minute is not None and MinuteAccount.from_dict(
-                    minute.snapshot
-                ).available_seconds == 0
+                assert (
+                    minute is not None
+                    and MinuteAccount.from_dict(minute.snapshot).available_seconds == 0
+                )
                 usage = await database.get(ConversationAcquisitionUsage, first_usage_id)
                 assert usage is not None and usage.reserved_seconds == 7
 
                 with pytest.raises(ConversationNotFound):
-                    await ConversationApplication(
-                        database, clock=lambda: state.now
-                    ).get(second_actor, UUID(first_view["recording_id"]))
+                    await ConversationApplication(database, clock=lambda: state.now).get(
+                        second_actor, UUID(first_view["recording_id"])
+                    )
                 with pytest.raises(ConversationNotFound):
                     await GuestOwnership(
                         AcquisitionSessions(
@@ -569,9 +551,7 @@ def test_guest_processing_principal_is_non_login_and_intake_binds_each_submissio
                             policy_revision="guest-processing-v1",
                             clock=lambda: state.now,
                         )
-                    ).require_submission_owner(
-                        second_source.submission_id, token=first.token
-                    )
+                    ).require_submission_owner(second_source.submission_id, token=first.token)
 
                 # The database one_actor check rejects both identities bound at once.
                 acceptance.session_id = state.session_id
@@ -632,9 +612,7 @@ def test_processing_actor_runs_c1_without_double_charging_guest_minutes(
                     quote_id=UUID(view["id"]),
                     recipe_revision=view["recipe_revision"],
                 )
-                run_view = await app.request_run(
-                    actor, run_intent, key="guest-worker-run"
-                )
+                run_view = await app.request_run(actor, run_intent, key="guest-worker-run")
                 assert run_view["state"] == "queued"
 
             async with AsyncSession(engine) as database, database.begin():
@@ -675,9 +653,7 @@ def test_processing_actor_runs_c1_without_double_charging_guest_minutes(
                 assert len(audit) == 1
                 assert audit[0].actor_type == "system"
                 assert audit[0].actor_person_id == actor.person_id
-                assert audit[0].payload["processing_lease_id"] == str(
-                    actor.processing_lease_id
-                )
+                assert audit[0].payload["processing_lease_id"] == str(actor.processing_lease_id)
 
             sessions = async_sessionmaker(engine, expire_on_commit=False)
             await _reconcile(sessions, state)
@@ -699,19 +675,19 @@ def test_processing_actor_runs_c1_without_double_charging_guest_minutes(
                 checkpoints = (
                     await database.scalars(
                         select(ConversationCheckpoint)
-                        .where(
-                            ConversationCheckpoint.recording_id
-                            == UUID(view["recording_id"])
-                        )
+                        .where(ConversationCheckpoint.recording_id == UUID(view["recording_id"]))
                         .order_by(ConversationCheckpoint.stage)
                     )
                 ).all()
                 assert [checkpoint.stage for checkpoint in checkpoints] == ["C0", "C1"]
                 assert checkpoints[-1].payload is not None
                 assert checkpoints[-1].payload["media_duration_ms"] == 1000
-                assert await acquisition_seconds(
-                    database, tenant_id=state.tenant_id, visitor_id=guest.visitor_id
-                ) == 1
+                assert (
+                    await acquisition_seconds(
+                        database, tenant_id=state.tenant_id, visitor_id=guest.visitor_id
+                    )
+                    == 1
+                )
                 minute = await database.get(
                     ConversationMinuteAccount, (state.tenant_id, principal_person_id)
                 )
@@ -781,15 +757,11 @@ def test_processing_lease_fence_preserves_claimed_owner_scope(
                     lease.revoked_at = state.now
 
             async with AsyncSession(engine) as database, database.begin():
-                check_now = (
-                    state.now + timedelta(minutes=6)
-                    if mutation == "expire"
-                    else state.now
-                )
+                check_now = state.now + timedelta(minutes=6) if mutation == "expire" else state.now
                 with pytest.raises(ConversationDenied):
-                    await ConversationApplication(
-                        database, clock=lambda: check_now
-                    ).get(processing_actor, UUID(view["recording_id"]))
+                    await ConversationApplication(database, clock=lambda: check_now).get(
+                        processing_actor, UUID(view["recording_id"])
+                    )
                 scope = await GuestOwnership(
                     AcquisitionSessions(
                         database,
@@ -838,9 +810,7 @@ def test_processing_actor_rejects_reserved_source_mismatch_and_suspended_claim_o
                     policy(scope_id, state.tenant_id),
                 )
                 with pytest.raises(ConversationDenied):
-                    await intake.prepare(
-                        processing_actor, wrong_duration, key="duration-mismatch"
-                    )
+                    await intake.prepare(processing_actor, wrong_duration, key="duration-mismatch")
                 view = await intake.prepare(processing_actor, intent, key="duration-match")
                 assert view["recording_id"]
 
@@ -862,9 +832,9 @@ def test_processing_actor_rejects_reserved_source_mismatch_and_suspended_claim_o
 
             async with AsyncSession(engine) as database, database.begin():
                 with pytest.raises(ConversationDenied):
-                    await ConversationApplication(
-                        database, clock=lambda: state.now
-                    ).get(processing_actor, UUID(view["recording_id"]))
+                    await ConversationApplication(database, clock=lambda: state.now).get(
+                        processing_actor, UUID(view["recording_id"])
+                    )
                 principal_member = await database.get(
                     Membership, (state.tenant_id, principal_person_id)
                 )
@@ -899,9 +869,7 @@ def test_claimed_owner_can_delete_after_execution_and_permission_expiry(
                     ConversationApplication(database, clock=lambda: state.now),
                     policy(scope_id, state.tenant_id),
                 )
-                view = await intake.prepare(
-                    processing_actor, intent, key="owner-delete-quote"
-                )
+                view = await intake.prepare(processing_actor, intent, key="owner-delete-quote")
                 await intake.accept(
                     processing_actor,
                     UUID(view["id"]),
@@ -917,13 +885,9 @@ def test_claimed_owner_can_delete_after_execution_and_permission_expiry(
                     policy_revision="guest-processing-v1",
                     clock=lambda: state.now,
                 ).claim(guest.token, state.actor)
-                recording = await database.get(
-                    ConversationRecording, UUID(view["recording_id"])
-                )
+                recording = await database.get(ConversationRecording, UUID(view["recording_id"]))
                 assert recording is not None
-                permission = await database.get(
-                    ConversationPermission, recording.permission_id
-                )
+                permission = await database.get(ConversationPermission, recording.permission_id)
                 assert permission is not None
                 clock_now = state.now + timedelta(hours=2)
                 permission.expires_at = clock_now - timedelta(seconds=1)
@@ -958,9 +922,9 @@ def test_claimed_owner_can_delete_after_execution_and_permission_expiry(
                         key="wrong-owner-account",
                     )
                 with pytest.raises(ConversationDenied):
-                    await ConversationApplication(
-                        database, clock=lambda: clock_now
-                    ).get(processing_actor, UUID(view["recording_id"]))
+                    await ConversationApplication(database, clock=lambda: clock_now).get(
+                        processing_actor, UUID(view["recording_id"])
+                    )
 
                 ownership = GuestOwnership(
                     AcquisitionSessions(
@@ -980,10 +944,14 @@ def test_claimed_owner_can_delete_after_execution_and_permission_expiry(
                     actor=state.actor,
                     key="owner-delete",
                 )
-                assert deleted == replay == {
-                    "id": view["recording_id"],
-                    "state": "deleting",
-                }
+                assert (
+                    deleted
+                    == replay
+                    == {
+                        "id": view["recording_id"],
+                        "state": "deleting",
+                    }
+                )
                 delete_jobs = (
                     await database.scalars(
                         select(Job).where(
@@ -1096,9 +1064,7 @@ def test_processing_admission_does_not_hold_tenant_acquisition_lock(
 
 
 @pytest.mark.parametrize("mutation", ["claim", "revoke"])
-def test_visitor_read_scope_fences_only_same_visitor(
-    postgres_harness: Any, mutation: str
-) -> None:
+def test_visitor_read_scope_fences_only_same_visitor(postgres_harness: Any, mutation: str) -> None:
     """A retained read blocks only that visitor's ownership mutation."""
 
     async def exercise() -> None:
@@ -1113,17 +1079,13 @@ def test_visitor_read_scope_fences_only_same_visitor(
             second, _, _, _ = await _guest(
                 engine, state, duration_seconds=3, marker=f"other-{mutation}"
             )
-            actor = await _processing_actor(
-                engine, state, first_source.submission_id, first.token
-            )
+            actor = await _processing_actor(engine, state, first_source.submission_id, first.token)
             async with AsyncSession(engine) as database, database.begin():
                 intake = ConversationIntake(
                     ConversationApplication(database, clock=lambda: state.now),
                     policy(scope_id, state.tenant_id),
                 )
-                view = await intake.prepare(
-                    actor, first_intent, key=f"reader-quote-{mutation}"
-                )
+                view = await intake.prepare(actor, first_intent, key=f"reader-quote-{mutation}")
                 await intake.accept(
                     actor,
                     UUID(view["id"]),
@@ -1147,9 +1109,7 @@ def test_visitor_read_scope_fences_only_same_visitor(
                             policy_revision="guest-processing-v1",
                             clock=lambda: state.now,
                         )
-                    ).require_submission_owner(
-                        first_source.submission_id, token=first.token
-                    )
+                    ).require_submission_owner(first_source.submission_id, token=first.token)
                     entered.set()
                     await release.wait()
 
@@ -1194,9 +1154,7 @@ def test_visitor_read_scope_fences_only_same_visitor(
                 mutation_task = asyncio.create_task(mutate_owner())
                 await asyncio.sleep(0.2)
                 assert not mutation_done.is_set()
-                visitor_id, usage_id = await asyncio.wait_for(
-                    issue_other_guest(), timeout=2
-                )
+                visitor_id, usage_id = await asyncio.wait_for(issue_other_guest(), timeout=2)
             finally:
                 release.set()
                 await asyncio.wait_for(reader, timeout=3)

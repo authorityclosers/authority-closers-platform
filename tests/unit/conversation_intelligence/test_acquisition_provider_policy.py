@@ -144,9 +144,10 @@ def test_only_matching_processing_actor_can_select_policy() -> None:
     )
     assert approval is not None
     ordinary = ActorContext(PROCESSING_PERSON_ID, uuid4(), TENANT_ID)
-    assert ConversationAuthority.stage_approval(
-        bundle, ordinary, source_sha256=SOURCE_SHA, stage="C2"
-    ) is None
+    assert (
+        ConversationAuthority.stage_approval(bundle, ordinary, source_sha256=SOURCE_SHA, stage="C2")
+        is None
+    )
     with pytest.raises(ConversationDenied):
         ConversationAuthority(
             lambda: bundle, environment="test", operations_tenant_id=TENANT_ID

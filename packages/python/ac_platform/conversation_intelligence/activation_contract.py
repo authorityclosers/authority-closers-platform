@@ -140,9 +140,7 @@ class StageApproval(_StrictFrozenModel):
     expires_at_epoch: StrictInt = Field(gt=0)
     max_requests: StrictInt = Field(ge=1, le=64)
     entitlement_seconds: StrictInt | None = Field(default=None, ge=0, le=86_400)
-    zero_cost_basis: Literal[
-        "verified_free_allowance", "synthetic", "paid_pricing_evidence"
-    ]
+    zero_cost_basis: Literal["verified_free_allowance", "synthetic", "paid_pricing_evidence"]
     price_evidence_sha256: str = Field(pattern=_DIGEST)
     max_cost_paise: StrictInt = Field(default=0, ge=0, le=2_147_483_647)
     max_source_duration_ms: StrictInt = Field(ge=1, le=14_400_000)
@@ -227,9 +225,7 @@ class AcquisitionStagePolicy(_StrictFrozenModel):
     expires_at_epoch: StrictInt = Field(gt=0)
     max_requests: StrictInt = Field(ge=1, le=64)
     entitlement_seconds: StrictInt | None = Field(default=None, ge=0, le=86_400)
-    zero_cost_basis: Literal[
-        "verified_free_allowance", "synthetic", "paid_pricing_evidence"
-    ]
+    zero_cost_basis: Literal["verified_free_allowance", "synthetic", "paid_pricing_evidence"]
     price_evidence_sha256: str = Field(pattern=_DIGEST)
     max_cost_paise: StrictInt = Field(default=0, ge=0, le=2_147_483_647)
     max_source_duration_ms: StrictInt = Field(ge=1, le=14_400_000)
@@ -455,10 +451,7 @@ class HostedApprovalBundle(_StrictFrozenModel):
                 or policy.max_stored_source_bytes > self.max_stored_source_bytes
             ):
                 raise ValueError("acquisition_policy_expiry_or_capacity_invalid")
-            if any(
-                item.expires_at_epoch <= self.issued_at_epoch
-                for item in policy.stages
-            ):
+            if any(item.expires_at_epoch <= self.issued_at_epoch for item in policy.stages):
                 raise ValueError("acquisition_stage_expiry_outside_bundle")
             if policy.id in approval_ids:
                 raise ValueError("duplicate_approval_id")
