@@ -61,6 +61,7 @@ const catalogEntrySchema = z
     protocol: z.string().min(1),
     status: z.enum(["implemented", "planned"]),
     readiness: z.string().min(1),
+    deployment: z.enum(["hosted", "gateway", "local", "deterministic_tool"]),
     models: z.array(modelSchema),
     note: z.string(),
   })

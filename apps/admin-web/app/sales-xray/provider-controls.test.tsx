@@ -2,6 +2,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import liveCatalogFixture from "./provider-catalog.fixture.json";
 
 import {
   buildConfiguration,
@@ -34,6 +35,7 @@ const catalog = [
     protocol: "local_process",
     status: "implemented" as const,
     readiness: "transport_available",
+    deployment: "deterministic_tool" as const,
     models: [
       {
         model_id: "audioatlas",
@@ -51,6 +53,7 @@ const catalog = [
     protocol: "groq_openai_compatible_https",
     status: "implemented" as const,
     readiness: "transport_available",
+    deployment: "hosted" as const,
     models: [
       {
         model_id: "openai/gpt-oss-120b",
@@ -70,6 +73,7 @@ const catalog = [
     protocol: "ollama_http",
     status: "planned" as const,
     readiness: "planned_no_transport",
+    deployment: "local" as const,
     models: [],
     note: "Planned local option.",
   },
@@ -118,8 +122,8 @@ async function renderPanel() {
   });
 }
 
-afterEach(() => {
-  root.unmount();
+afterEach(async () => {
+  await act(async () => root.unmount());
   host.remove();
   vi.restoreAllMocks();
 });
@@ -162,6 +166,19 @@ describe("provider control access boundaries", () => {
 });
 
 describe("provider control contract", () => {
+  it("renders the complete catalog returned by the deployed API", async () => {
+    fetchMock.mockResolvedValue(jsonResponse(liveCatalogFixture));
+    await renderPanel();
+    expect(host.textContent).not.toContain("Provider controls unavailable");
+    expect(host.textContent).toContain("Choose providers and models");
+    const addModel = Array.from(host.querySelectorAll("button")).find(
+      (button) => button.textContent?.includes("Add model"),
+    );
+    expect(addModel).toBeDefined();
+    await act(async () => addModel?.click());
+    expect(host.querySelector("select")).not.toBeNull();
+  });
+
   it("renders server catalog statuses and makes one same-origin read", async () => {
     fetchMock.mockResolvedValue(jsonResponse(payload()));
 
