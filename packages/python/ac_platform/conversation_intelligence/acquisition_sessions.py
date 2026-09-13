@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import SessionTransactionOrigin
 
@@ -24,6 +24,11 @@ from ac_platform.conversation_intelligence.acquisition_models import (
     ConversationAcquisitionUsage,
     ConversationVisitor,
     ConversationVisitorClaim,
+)
+from ac_platform.conversation_intelligence.acquisition_usage import (
+    ALLOWANCE_SECONDS,
+    acquisition_seconds,
+    existing_account_seconds,
 )
 from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
@@ -37,7 +42,6 @@ from ac_platform.tenancy.models import Tenant
 
 _TOKEN = re.compile(r"^[A-Za-z0-9_-]{43}$")
 _DIGEST = re.compile(r"^[0-9a-f]{64}$")
-ALLOWANCE_SECONDS = 6000
 
 
 @dataclass(frozen=True)
@@ -200,28 +204,17 @@ class AcquisitionSessions:
         return None, actor.person_id
 
     async def _used(self, visitor_id: UUID | None, person_id: UUID | None) -> int:
-        usage = ConversationAcquisitionUsage
+        total = await acquisition_seconds(
+            self.database,
+            tenant_id=self.tenant_id,
+            visitor_id=visitor_id,
+            person_id=person_id,
+        )
         if person_id is not None:
-            claimed = select(ConversationVisitorClaim.visitor_id).where(
-                ConversationVisitorClaim.tenant_id == self.tenant_id,
-                ConversationVisitorClaim.person_id == person_id,
+            total += await existing_account_seconds(
+                self.database, tenant_id=self.tenant_id, person_id=person_id
             )
-            owner = or_(usage.person_id == person_id, usage.visitor_id.in_(claimed))
-        else:
-            owner = usage.visitor_id == visitor_id
-        charged = func.coalesce(
-            ConversationAcquisitionSettlement.charged_seconds, usage.reserved_seconds
-        )
-        total = await self.database.scalar(
-            select(func.coalesce(func.sum(charged), 0))
-            .select_from(usage)
-            .outerjoin(
-                ConversationAcquisitionSettlement,
-                ConversationAcquisitionSettlement.usage_id == usage.id,
-            )
-            .where(usage.tenant_id == self.tenant_id, owner)
-        )
-        return int(total or 0)
+        return total
 
     async def allowance(
         self, *, token: str | None = None, actor: ActorContext | None = None

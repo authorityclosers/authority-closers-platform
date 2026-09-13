@@ -1,4 +1,4 @@
-"""Guest API projection must omit deep report text, not merely hide its controls."""
+"""The complete qualitative overview is free; ownership and source bounds remain."""
 
 import json
 from copy import deepcopy
@@ -22,25 +22,30 @@ def _report():
     payload = _payload(transcript)
     for name in ("objection_analysis", "closing_analysis"):
         payload[name] = deepcopy(payload[name])
-        payload[name][0]["explanation"] = f"PRIVATE_{name}_DETAIL"
-    payload["verdict"] = "PRIVATE_FULL_COACHING_VERDICT"
+        payload[name][0]["explanation"] = f"OVERVIEW_{name}_DETAIL"
+    payload["verdict"] = "FREE_FULL_COACHING_VERDICT"
     payload["improvements"] = [deepcopy(payload["improvements"][0]) for _ in range(3)]
     for index, finding in enumerate(payload["improvements"]):
         finding["explanation"] = f"ACTION_{index}"
     return parse_report_draft(payload, transcript, source_label="My call")
 
 
-def test_guest_gets_useful_evidence_and_one_action_without_locked_payload():
+def test_guest_gets_all_priorities_and_verdict_in_free_overview():
     view = project_report(_report(), access=ReportAccess.GUEST)
     encoded = json.dumps(view)
-    assert "PRIVATE_" not in encoded
-    assert "ACTION_0" in encoded
-    assert "ACTION_1" not in encoded and "ACTION_2" not in encoded
+    assert all(f"ACTION_{i}" in encoded for i in range(3))
+    assert "OVERVIEW_objection_analysis_DETAIL" in encoded
+    assert "OVERVIEW_closing_analysis_DETAIL" in encoded
+    assert "FREE_FULL_COACHING_VERDICT" in encoded
     assert len(view["content"]["dimensions"]) == 8
     assert view["content"]["strengths"][0]["evidence"][0]["start_ms"] == 0
-    assert "improvements" not in view["content"]
+    assert len(view["content"]["improvements"]) == 3
+    assert view["content"]["next_action"] == view["content"]["improvements"][0]
     assert "report_sections" not in view["content"]
     assert view["sections"][-1]["access"] == "sign_in"
+    assert view["sections"][-1]["id"] == "history"
+    assert all(section["access"] == "available" for section in view["sections"][:-1])
+    assert view["schema"] == "ac.sales-xray.report-access/2"
     assert view["numeric_publication"] is False
 
 
@@ -49,7 +54,7 @@ def test_claimed_account_gets_complete_coaching_without_internal_provenance_dump
     before = report.model_dump_json()
     view = project_report(report, access=ReportAccess.ACCOUNT)
     assert len(view["content"]["improvements"]) == 3
-    assert view["content"]["verdict"] == "PRIVATE_FULL_COACHING_VERDICT"
+    assert view["content"]["verdict"] == "FREE_FULL_COACHING_VERDICT"
     assert view["unlock"] is None
     assert all(section["access"] == "available" for section in view["sections"])
     assert "source_sha256" not in view and "report_sections" not in view
@@ -68,7 +73,7 @@ def test_projection_revalidates_bypassed_model_construction():
         project_report(invalid, access=ReportAccess.GUEST)
 
 
-def test_envelope_keeps_recording_and_transcript_binding_without_locked_details():
+def test_envelope_keeps_recording_binding_and_complete_free_overview():
     report = _report()
     source = ReportSourceBinding(uuid4(), uuid4(), report.source_sha256, report.transcript_revision)
     envelope = project_bound_report(report, access=ReportAccess.GUEST, source=source)
@@ -77,7 +82,28 @@ def test_envelope_keeps_recording_and_transcript_binding_without_locked_details(
     assert envelope["source_sha256"] == report.source_sha256
     assert envelope["transcript_revision"] == report.transcript_revision
     assert envelope["report"] == project_report(report, access=ReportAccess.GUEST)
-    assert "PRIVATE_" not in json.dumps(envelope)
+    assert "FREE_FULL_COACHING_VERDICT" in json.dumps(envelope)
+    assert envelope["schema"] == "ac.sales-xray.report-envelope/2"
+
+
+def test_free_overview_is_identical_after_claim_and_omits_internal_fields():
+    report = _report()
+    guest = project_report(report, access=ReportAccess.GUEST)
+    account = project_report(report, access=ReportAccess.ACCOUNT)
+    assert guest["content"] == account["content"]
+    assert set(guest["content"]) == {
+        "summary",
+        "strengths",
+        "missed_opportunities",
+        "dimensions",
+        "next_action",
+        "improvements",
+        "objection_analysis",
+        "closing_analysis",
+        "verdict",
+    }
+    assert "report_sections" not in json.dumps(guest)
+    assert guest["numeric_publication"] is False
 
 
 @pytest.mark.parametrize(

@@ -1,5 +1,10 @@
 # Sales Xray production acceptance
 
+Latest scope correction: the founder approved Dipak's entire fourteen-point
+report as the free Overview. See `20260914_DIPAK_FREE_OVERVIEW_DECISION.md` for
+the source, full section list and version-2 access contract. It supersedes the
+one-action/locked-verdict partition recorded below as earlier foundation evidence.
+
 The founder's full request, repeated in the attachment on this turn, is the
 current release objective. The existing Codex goal remains active, but its
 objective text cannot be edited with the available goal tools. This record and

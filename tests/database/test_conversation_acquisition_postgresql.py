@@ -45,8 +45,14 @@ from ac_platform.http.problem import register_problem_handlers
 from ac_platform.identity.models import Person
 from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.identity.services import VerifiedProviderAssertion
+from tests.database.test_conversation_postgresql import (
+    application,
+    run,
+    seed,
+    seed_budget,
+    seed_run_intent,
+)
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
-from tests.database.test_conversation_postgresql import run, seed
 
 
 @pytest.fixture(scope="module")
@@ -70,6 +76,99 @@ def source(seconds=60):
 async def issue(engine, state):
     async with AsyncSession(engine) as db, db.begin():
         return await service(db, state).issue()
+
+
+def test_existing_run_usage_is_preserved_when_guest_claims_account(postgres_harness):
+    async def exercise():
+        engine = create_async_engine(postgres_harness.url)
+        try:
+            state = await seed(engine)
+            intent = await seed_run_intent(engine, state, await seed_budget(engine))
+            async with AsyncSession(engine) as db, db.begin():
+                await application(db, state).request_run(state.actor, intent, key="existing-run")
+            guest = await issue(engine, state)
+            async with AsyncSession(engine) as db, db.begin():
+                app = service(db, state)
+                await app.reserve(source(5800), token=guest.token)
+                await app.claim(guest.token, state.actor)
+                assert (await app.allowance(actor=state.actor))["available_seconds"] == 80
+                with pytest.raises(ConversationDenied, match="100 minutes"):
+                    await app.reserve(source(81), actor=state.actor)
+                last = await app.reserve(source(80), actor=state.actor)
+                assert (await app.allowance(actor=state.actor))["available_seconds"] == 0
+                # Confirmed no-work releases only its own reservation. The
+                # existing queued run's 120 seconds remain committed.
+                await app.settle(last, charged_seconds=0, receipt_sha256="a" * 64, no_work=True)
+                assert (await app.allowance(actor=state.actor))["available_seconds"] == 80
+        finally:
+            await engine.dispose()
+
+    run(exercise())
+
+
+def test_existing_upload_cannot_bypass_claimed_guest_minutes(postgres_harness):
+    async def exercise():
+        engine = create_async_engine(postgres_harness.url)
+        try:
+            state = await seed(engine)
+            intent = await seed_run_intent(engine, state, await seed_budget(engine))
+            guest = await issue(engine, state)
+            async with AsyncSession(engine) as db, db.begin():
+                app = service(db, state)
+                await app.reserve(source(5900), token=guest.token)
+                await app.claim(guest.token, state.actor)
+            async with AsyncSession(engine) as db, db.begin():
+                # The existing fixture has 180 untouched seconds and would
+                # accept this 120-second job without the combined allowance.
+                with pytest.raises(ConversationDenied, match="100 minutes"):
+                    await application(db, state).request_run(
+                        state.actor, intent, key="must-not-enqueue"
+                    )
+                assert (await service(db, state).allowance(actor=state.actor))[
+                    "available_seconds"
+                ] == 100
+        finally:
+            await engine.dispose()
+
+    run(exercise())
+
+
+def test_existing_and_acquisition_uploads_cannot_race_two_pools(postgres_harness):
+    async def exercise():
+        engine = create_async_engine(postgres_harness.url)
+        try:
+            state = await seed(engine)
+            intent = await seed_run_intent(engine, state, await seed_budget(engine))
+            guest = await issue(engine, state)
+            async with AsyncSession(engine) as db, db.begin():
+                app = service(db, state)
+                await app.reserve(source(5800), token=guest.token)
+                await app.claim(guest.token, state.actor)
+
+            async def existing_upload():
+                async with AsyncSession(engine) as db, db.begin():
+                    return await application(db, state).request_run(
+                        state.actor, intent, key="legacy-race"
+                    )
+
+            async def acquisition_upload():
+                async with AsyncSession(engine) as db, db.begin():
+                    return await service(db, state).reserve(source(100), actor=state.actor)
+
+            results = await asyncio.wait_for(
+                asyncio.gather(existing_upload(), acquisition_upload(), return_exceptions=True),
+                timeout=15,
+            )
+            assert sum(isinstance(item, ConversationDenied) for item in results) == 1
+            assert not any(isinstance(item, DBAPIError) for item in results)
+            async with AsyncSession(engine) as db, db.begin():
+                assert (await service(db, state).allowance(actor=state.actor))[
+                    "available_seconds"
+                ] in {80, 100}
+        finally:
+            await engine.dispose()
+
+    run(exercise())
 
 
 def test_forward_migration_matches_registry_and_guests_are_not_people(postgres_harness):
