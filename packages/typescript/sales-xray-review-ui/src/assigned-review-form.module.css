@@ -1,4 +1,5 @@
 .form {
+  --review-accent: var(--theme-primary, #3156d3);
   display: grid;
   gap: 1.15rem;
   padding: 1.35rem;
@@ -7,6 +8,152 @@
   background: #fff;
   box-shadow: 0 12px 34px rgb(22 57 94 / 7%);
   color: #1b3551;
+}
+
+.reviewLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+.callColumn,
+.feedbackColumn,
+.findings {
+  display: grid;
+  min-width: 0;
+  gap: 1rem;
+}
+.feedbackColumn {
+  border: 1px solid #dce6f0;
+  border-radius: 1rem;
+  padding: 1.2rem;
+  background: #fff;
+}
+.feedbackColumn .fieldGrid {
+  grid-template-columns: 1fr;
+}
+.feedbackColumn .lensGrid {
+  gap: 0.4rem;
+}
+.feedbackColumn .lensButton {
+  padding: 0.6rem;
+  min-height: 4.5rem;
+}
+.feedbackColumn .lensButton small {
+  line-height: 1.4;
+}
+.feedbackColumn textarea {
+  min-height: 9rem;
+}
+.reviewPrompt {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.65;
+  color: #3d5873;
+}
+.selectedMoment {
+  margin: 0;
+  padding: 0.65rem 0.75rem;
+  font-size: 0.8rem;
+  border-radius: 0.6rem;
+  background: #edf3fc;
+  color: #24438d;
+}
+.findings {
+  padding: 0.5rem 0.25rem;
+}
+.findingGroup {
+  border-bottom: 1px solid #dce6f0;
+  padding: 0.8rem 0;
+}
+.findingGroup summary {
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 650;
+  min-height: 1.75rem;
+}
+.findingGroup summary span {
+  margin-left: 0.65rem;
+  border-radius: 0.4rem;
+  padding: 0.15rem 0.5rem;
+  color: #516983;
+  background: #edf3f9;
+  font-size: 0.75rem;
+}
+.findingGroup article {
+  padding: 0.4rem 0;
+}
+.findingGroup h4 {
+  margin-bottom: 0.4rem;
+  font-size: 0.95rem;
+}
+.findingGroup p,
+.findingGroup blockquote {
+  margin: 0.5rem 0;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+.findingGroup blockquote {
+  border-left: 3px solid #90b6db;
+  padding-left: 0.7rem;
+  color: #516983;
+}
+.clipSearch {
+  display: grid;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.clipSearch input {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 2.75rem;
+  border: 1px solid #cddbe9;
+  border-radius: 0.55rem;
+  padding: 0.65rem;
+  background: #fff;
+  color: #1b3551;
+  font: inherit;
+}
+.form :is(summary, button, input):focus-visible {
+  outline: 3px solid var(--review-accent);
+  outline-offset: 3px;
+}
+
+@media (max-width: 1100px) {
+  .reviewLayout {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 480px) {
+  .form {
+    padding: 0.85rem;
+  }
+  .feedbackColumn {
+    padding: 0.85rem;
+  }
+  .form .lensGrid {
+    grid-template-columns: 1fr;
+  }
+  .feedbackColumn .lensButton {
+    min-height: 2.75rem;
+  }
+}
+:global(html[data-theme="dark"]) .form :is(.feedbackColumn, .clipSearch input) {
+  color: var(--theme-text, #edf2fb);
+  background: var(--theme-surface, #101a2b);
+  border-color: var(--theme-border, #34425a);
+}
+:global(html[data-theme="dark"]) .form .findingGroup {
+  border-color: var(--theme-border, #34425a);
+}
+:global(html[data-theme="dark"])
+  .form
+  :is(.selectedMoment, .findingGroup summary span) {
+  background: #203b5b;
+  color: #d0e0ff;
 }
 
 .header,

@@ -3,6 +3,19 @@
   gap: 1.25rem;
 }
 
+.advancedTitle {
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 650;
+  line-height: 1.5;
+}
+.advancedTitle + section {
+  margin-top: 1.25rem;
+}
+.lineage summary {
+  cursor: pointer;
+}
+
 .breadcrumbRow {
   display: flex;
   flex-wrap: wrap;

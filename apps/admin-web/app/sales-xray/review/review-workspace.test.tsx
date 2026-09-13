@@ -209,9 +209,7 @@ describe("Admin review assignment workspace", () => {
     queueResponses = [jsonResponse({ items: [wireAssignment] })];
     await render({ assignmentId: ids.assignment });
 
-    expect(container.textContent).toContain(
-      "Active and historical assignments",
-    );
+    expect(container.textContent).toContain("Your review assignments");
     expect(container.textContent).toContain("Reviewer 44444444…4444");
     expect(container.textContent).toContain("Open in Academy");
     expect(container.textContent).not.toContain("Dipak");
@@ -233,14 +231,17 @@ describe("Admin review assignment workspace", () => {
 
   it("creates an assignment, keeps confirmed success, and retains it when a later queue refresh fails", async () => {
     await render();
-    const inputs = container.querySelectorAll<HTMLInputElement>("input");
+    const inputs = [
+      container.querySelector<HTMLInputElement>("#review-run-id")!,
+      container.querySelector<HTMLInputElement>("#reviewer-person-id")!,
+    ];
     await act(async () => {
       setInputValue(inputs[0]!, ids.run);
       setInputValue(inputs[1]!, ids.reviewer);
     });
     await act(async () => {
       container
-        .querySelector<HTMLButtonElement>("button.button-primary")!
+        .querySelector<HTMLButtonElement>("form button.button-primary")!
         .click();
       await Promise.resolve();
       await Promise.resolve();
@@ -278,7 +279,10 @@ describe("Admin review assignment workspace", () => {
 
   it("reuses the same idempotency key after a retryable create failure", async () => {
     await render();
-    const inputs = container.querySelectorAll<HTMLInputElement>("input");
+    const inputs = [
+      container.querySelector<HTMLInputElement>("#review-run-id")!,
+      container.querySelector<HTMLInputElement>("#reviewer-person-id")!,
+    ];
     await act(async () => {
       setInputValue(inputs[0]!, ids.run);
       setInputValue(inputs[1]!, ids.reviewer);
@@ -301,7 +305,7 @@ describe("Admin review assignment workspace", () => {
     });
     await act(async () => {
       container
-        .querySelector<HTMLButtonElement>("button.button-primary")!
+        .querySelector<HTMLButtonElement>("form button.button-primary")!
         .click();
       await Promise.resolve();
       await Promise.resolve();
@@ -334,7 +338,7 @@ describe("Admin review assignment workspace", () => {
   it("shows the dynamic assignment detail and applies a server-confirmed revoke", async () => {
     queueResponses = [jsonResponse({ items: [wireAssignment] })];
     await render({ assignmentId: ids.assignment });
-    expect(container.textContent).toContain("Assignment lineage");
+    expect(container.textContent).toContain("Review access");
     expect(container.textContent).toContain(ids.tenant);
     await act(async () => {
       [...container.querySelectorAll("button")]

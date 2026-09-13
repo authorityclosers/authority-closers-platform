@@ -363,11 +363,12 @@ export function AdminShell({
           <footer className="admin-footer">
             <span>{PLATFORM_BRAND.name} / Academy operations</span>
             <span>
-              {footerText ?? (surface === "studio"
-                ? "TENANT-SCOPED · SERVER-AUTHORIZED · NO STORE"
-                : active === "people"
-                  ? "ACADEMY LEARNER RECORDS · AUDITED ACCESS"
-                  : "PREVIEW DATA · NO RECORDS ASSERTED")}
+              {footerText ??
+                (surface === "studio"
+                  ? "TENANT-SCOPED · SERVER-AUTHORIZED · NO STORE"
+                  : active === "people"
+                    ? "ACADEMY LEARNER RECORDS · AUDITED ACCESS"
+                    : "PREVIEW DATA · NO RECORDS ASSERTED")}
             </span>
           </footer>
         </main>

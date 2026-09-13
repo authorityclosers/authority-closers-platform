@@ -32,11 +32,13 @@ import {
   type ReviewQueueState,
 } from "./review-api";
 import styles from "./review-workspace.module.css";
+import { ReviewInvitationPanel } from "./review-invitation-panel";
+import { localReviewDate, reviewDateEpoch } from "./review-date";
 
 const lensLabels: Record<ReviewMode, { label: string; detail: string }> = {
-  sales: { label: "Sales", detail: "Context and adjudication" },
-  technical: { label: "Technical", detail: "Transcript and measurement" },
-  ux: { label: "UX", detail: "Attribution and alignment" },
+  sales: { label: "Sales expert", detail: "Coaching and call quality" },
+  technical: { label: "Developer", detail: "Transcript and analysis accuracy" },
+  ux: { label: "Experience reviewer", detail: "Clarity and ease of use" },
 };
 
 const stateLabels: Record<ReviewAssignment["state"], string> = {
@@ -116,9 +118,9 @@ function validateCreateIntent(
   if (allowedLenses.length === 0) {
     errors.allowedLenses = "Choose at least one review lens.";
   }
-  const expiresAtEpoch = Number(expiry.trim());
+  const expiresAtEpoch = reviewDateEpoch(expiry.trim());
   if (!Number.isInteger(expiresAtEpoch) || expiresAtEpoch <= 0) {
-    errors.expiresAtEpoch = "Enter expiry as UTC epoch seconds.";
+    errors.expiresAtEpoch = "Choose a valid date and time.";
   } else if (expiresAtEpoch <= Math.floor(Date.now() / 1000)) {
     errors.expiresAtEpoch = "Expiry must be in the future.";
   }
@@ -239,7 +241,8 @@ function AssignmentSummary({
         </div>
       </dl>
       {detail ? (
-        <div className={styles.lineage}>
+        <details className={styles.lineage}>
+          <summary>Technical details</summary>
           <span>
             <strong>Tenant</strong> <code>{assignment.tenant_id}</code>
           </span>
@@ -251,7 +254,7 @@ function AssignmentSummary({
             <strong>Checkpoint</strong> <code>{assignment.checkpoint.id}</code>{" "}
             · {assignment.checkpoint.stage}
           </span>
-        </div>
+        </details>
       ) : null}
       <div className={styles.assignmentActions}>
         {academyLink ? (
@@ -303,7 +306,7 @@ export function ReviewWorkspace({
     ...reviewLenses,
   ]);
   const [expiry, setExpiry] = useState(() =>
-    String(Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60),
+    localReviewDate(Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60),
   );
   const [formErrors, setFormErrors] = useState<FormErrors>({});
   const [createMutation, setCreateMutation] = useState<CreateMutation>({
@@ -497,13 +500,15 @@ export function ReviewWorkspace({
 
   return (
     <AdminShell
-      active="overview"
+      active="sales-xray"
       surface="operations"
-      eyebrow="Sales Xray / assignment management"
+      eyebrow="Sales Xray / Review team"
       title={
-        assignmentId ? "Review assignment" : "Conversation review assignments"
+        assignmentId
+          ? "Review assignment"
+          : "Better analysis starts with your team."
       }
-      description="Create and revoke reviewer assignments, then hand off the work to Academy."
+      description="Invite reviewers, choose their perspective, and manage access to each conversation."
       footerText="Review assignments · Saved changes confirmed by the service"
     >
       <div className={styles.workspace}>
@@ -523,14 +528,14 @@ export function ReviewWorkspace({
             <ShieldCheck size={20} />
           </div>
           <div>
-            <h2>Prepare an Academy handoff.</h2>
+            <h2>Bring your experts into the conversation.</h2>
             <p>
-              Use a saved run and a verified reviewer person ID. The server
-              checks access, lineage, retention, and expiry before confirming
-              the assignment.
+              Invite someone by email to review a saved analysis. They can
+              listen, leave precise feedback, and suggest corrections inside
+              Academy.
             </p>
           </div>
-          <span className={styles.noticeCode}>ADMIN · MANAGE ONLY</span>
+          <span className={styles.noticeCode}>Private review access</span>
         </div>
 
         {assignmentId && selectedAssignment ? (
@@ -539,10 +544,10 @@ export function ReviewWorkspace({
             aria-labelledby="assignment-detail-title"
           >
             <SectionHeading
-              eyebrow="Server response"
+              eyebrow="Selected review"
               id="assignment-detail-title"
-              title="Assignment lineage"
-              body="Review the confirmed lineage and open the Academy handoff when the reviewer is ready."
+              title="Review access"
+              body="Check the review status and open the workspace for the assigned reviewer."
             />
             <AssignmentSummary
               assignment={selectedAssignment}
@@ -580,12 +585,17 @@ export function ReviewWorkspace({
           </section>
         ) : null}
 
+        <ReviewInvitationPanel
+          key={assignmentId ?? "queue"}
+          initialRunId={selectedAssignment?.run_id}
+          runs={queue.items}
+        />
         <div className={styles.layout}>
           <section className={styles.panel} aria-labelledby="queue-title">
             <div className={styles.panelHeader}>
               <div>
-                <span className={styles.eyebrow}>Server queue · 50 max</span>
-                <h2 id="queue-title">Active and historical assignments</h2>
+                <span className={styles.eyebrow}>Review activity</span>
+                <h2 id="queue-title">Your review assignments</h2>
               </div>
               <button
                 className="icon-button"
@@ -602,7 +612,8 @@ export function ReviewWorkspace({
               </button>
             </div>
             <p className={styles.panelIntro}>
-              Open an assignment for its lineage, expiry, and Academy handoff.
+              Track submitted feedback and manage active review access. Showing
+              up to 50 recent assignments.
             </p>
             <StatePanel state={queue} onRetry={requestQueueRefresh} />
             {queue.status === "error" && queue.items.length > 0 ? (
@@ -665,172 +676,187 @@ export function ReviewWorkspace({
             ) : null}
           </section>
 
-          <section className={styles.panel} aria-labelledby="create-title">
-            <SectionHeading
-              eyebrow="Admin command"
-              id="create-title"
-              title="Create a reviewer assignment"
-              body="Enter the saved run and reviewer person UUIDs, choose the review lenses, and set a future expiry."
-            />
-            <form
-              className={styles.formStack}
-              onSubmit={(event) => {
-                event.preventDefault();
-                submitCreate();
-              }}
-            >
-              <label className={styles.field} htmlFor="review-run-id">
-                <span>
-                  Run ID <small>canonical UUID</small>
-                </span>
-                <input
-                  id="review-run-id"
-                  value={runId}
-                  onChange={(event) => setRunId(event.target.value)}
-                  placeholder="e.g. 01234567-89ab-4cde-8123-456789abcdef"
-                  aria-invalid={Boolean(formErrors.runId)}
-                  aria-describedby={
-                    formErrors.runId ? "review-run-id-error" : undefined
-                  }
-                  disabled={isCreating}
-                />
-                {formErrors.runId ? (
-                  <span className={styles.fieldError} id="review-run-id-error">
-                    {formErrors.runId}
-                  </span>
-                ) : null}
-              </label>
-              <label className={styles.field} htmlFor="reviewer-person-id">
-                <span>
-                  Reviewer person ID{" "}
-                  <small>canonical UUID · server checks membership</small>
-                </span>
-                <input
-                  id="reviewer-person-id"
-                  value={reviewerPersonId}
-                  onChange={(event) => setReviewerPersonId(event.target.value)}
-                  placeholder="e.g. 01234567-89ab-4cde-8123-456789abcdef"
-                  aria-invalid={Boolean(formErrors.reviewerPersonId)}
-                  aria-describedby={
-                    formErrors.reviewerPersonId
-                      ? "reviewer-person-id-error"
-                      : undefined
-                  }
-                  disabled={isCreating}
-                />
-                {formErrors.reviewerPersonId ? (
-                  <span
-                    className={styles.fieldError}
-                    id="reviewer-person-id-error"
-                  >
-                    {formErrors.reviewerPersonId}
-                  </span>
-                ) : null}
-              </label>
-              <fieldset className={styles.lensFieldset}>
-                <legend>Allowed review lenses</legend>
-                <p>Choose the review lanes for this handoff.</p>
-                <div className={styles.lensGrid}>
-                  {reviewLenses.map((lens) => (
-                    <label className={styles.lensOption} key={lens}>
-                      <input
-                        type="checkbox"
-                        checked={allowedLenses.includes(lens)}
-                        onChange={(event) => {
-                          setAllowedLenses((current) =>
-                            event.target.checked
-                              ? [...current, lens]
-                              : current.filter((item) => item !== lens),
-                          );
-                        }}
-                        disabled={isCreating}
-                      />
-                      <span>
-                        <strong>{lensLabels[lens].label}</strong>
-                        <small>{lensLabels[lens].detail}</small>
-                      </span>
-                    </label>
-                  ))}
-                </div>
-                {formErrors.allowedLenses ? (
-                  <span className={styles.fieldError}>
-                    {formErrors.allowedLenses}
-                  </span>
-                ) : null}
-              </fieldset>
-              <label className={styles.field} htmlFor="review-expiry">
-                <span>
-                  Expiry{" "}
-                  <small>UTC epoch seconds · server caps at 30 days</small>
-                </span>
-                <input
-                  id="review-expiry"
-                  type="number"
-                  min={1}
-                  value={expiry}
-                  onChange={(event) => setExpiry(event.target.value)}
-                  aria-invalid={Boolean(formErrors.expiresAtEpoch)}
-                  aria-describedby={
-                    formErrors.expiresAtEpoch
-                      ? "review-expiry-error"
-                      : undefined
-                  }
-                  disabled={isCreating}
-                />
-                {formErrors.expiresAtEpoch ? (
-                  <span className={styles.fieldError} id="review-expiry-error">
-                    {formErrors.expiresAtEpoch}
-                  </span>
-                ) : null}
-              </label>
-              <button
-                className="button button-primary"
-                type="submit"
-                disabled={isCreating}
+          <details className={styles.panel}>
+            <summary className={styles.advancedTitle}>
+              Advanced: assign an existing reviewer by ID
+            </summary>
+            <section aria-labelledby="create-title">
+              <SectionHeading
+                eyebrow="Existing account"
+                id="create-title"
+                title="Create a reviewer assignment"
+                body="For an existing verified reviewer whose account ID you already have. Use the email invitation above for everyone else."
+              />
+              <form
+                className={styles.formStack}
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  submitCreate();
+                }}
               >
-                {isCreating ? (
-                  <LoaderCircle size={15} className="spin" aria-hidden="true" />
-                ) : (
-                  <Plus size={15} aria-hidden="true" />
-                )}
-                {isCreating ? "Creating assignment…" : "Create assignment"}
-              </button>
-            </form>
-            {createMutation.status === "success" ? (
-              <div
-                className={styles.successNotice}
-                role="status"
-                aria-live="polite"
-              >
-                <CheckCircle2 size={18} aria-hidden="true" />
-                <div>
-                  <strong>Assignment created and confirmed.</strong>
+                <label className={styles.field} htmlFor="review-run-id">
                   <span>
-                    {shortId(createMutation.assignment.id)} is now in the server
-                    response.
+                    Run ID <small>canonical UUID</small>
                   </span>
+                  <input
+                    id="review-run-id"
+                    value={runId}
+                    onChange={(event) => setRunId(event.target.value)}
+                    placeholder="e.g. 01234567-89ab-4cde-8123-456789abcdef"
+                    aria-invalid={Boolean(formErrors.runId)}
+                    aria-describedby={
+                      formErrors.runId ? "review-run-id-error" : undefined
+                    }
+                    disabled={isCreating}
+                  />
+                  {formErrors.runId ? (
+                    <span
+                      className={styles.fieldError}
+                      id="review-run-id-error"
+                    >
+                      {formErrors.runId}
+                    </span>
+                  ) : null}
+                </label>
+                <label className={styles.field} htmlFor="reviewer-person-id">
+                  <span>
+                    Reviewer person ID{" "}
+                    <small>canonical UUID · server checks membership</small>
+                  </span>
+                  <input
+                    id="reviewer-person-id"
+                    value={reviewerPersonId}
+                    onChange={(event) =>
+                      setReviewerPersonId(event.target.value)
+                    }
+                    placeholder="e.g. 01234567-89ab-4cde-8123-456789abcdef"
+                    aria-invalid={Boolean(formErrors.reviewerPersonId)}
+                    aria-describedby={
+                      formErrors.reviewerPersonId
+                        ? "reviewer-person-id-error"
+                        : undefined
+                    }
+                    disabled={isCreating}
+                  />
+                  {formErrors.reviewerPersonId ? (
+                    <span
+                      className={styles.fieldError}
+                      id="reviewer-person-id-error"
+                    >
+                      {formErrors.reviewerPersonId}
+                    </span>
+                  ) : null}
+                </label>
+                <fieldset className={styles.lensFieldset}>
+                  <legend>Allowed review lenses</legend>
+                  <p>Choose the review lanes for this handoff.</p>
+                  <div className={styles.lensGrid}>
+                    {reviewLenses.map((lens) => (
+                      <label className={styles.lensOption} key={lens}>
+                        <input
+                          type="checkbox"
+                          checked={allowedLenses.includes(lens)}
+                          onChange={(event) => {
+                            setAllowedLenses((current) =>
+                              event.target.checked
+                                ? [...current, lens]
+                                : current.filter((item) => item !== lens),
+                            );
+                          }}
+                          disabled={isCreating}
+                        />
+                        <span>
+                          <strong>{lensLabels[lens].label}</strong>
+                          <small>{lensLabels[lens].detail}</small>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  {formErrors.allowedLenses ? (
+                    <span className={styles.fieldError}>
+                      {formErrors.allowedLenses}
+                    </span>
+                  ) : null}
+                </fieldset>
+                <label className={styles.field} htmlFor="review-expiry">
+                  <span>
+                    Expiry <small>Your local time · within 30 days</small>
+                  </span>
+                  <input
+                    id="review-expiry"
+                    type="datetime-local"
+                    value={expiry}
+                    onChange={(event) => setExpiry(event.target.value)}
+                    aria-invalid={Boolean(formErrors.expiresAtEpoch)}
+                    aria-describedby={
+                      formErrors.expiresAtEpoch
+                        ? "review-expiry-error"
+                        : undefined
+                    }
+                    disabled={isCreating}
+                  />
+                  {formErrors.expiresAtEpoch ? (
+                    <span
+                      className={styles.fieldError}
+                      id="review-expiry-error"
+                    >
+                      {formErrors.expiresAtEpoch}
+                    </span>
+                  ) : null}
+                </label>
+                <button
+                  className="button button-primary"
+                  type="submit"
+                  disabled={isCreating}
+                >
+                  {isCreating ? (
+                    <LoaderCircle
+                      size={15}
+                      className="spin"
+                      aria-hidden="true"
+                    />
+                  ) : (
+                    <Plus size={15} aria-hidden="true" />
+                  )}
+                  {isCreating ? "Creating assignment…" : "Create assignment"}
+                </button>
+              </form>
+              {createMutation.status === "success" ? (
+                <div
+                  className={styles.successNotice}
+                  role="status"
+                  aria-live="polite"
+                >
+                  <CheckCircle2 size={18} aria-hidden="true" />
+                  <div>
+                    <strong>Assignment created and confirmed.</strong>
+                    <span>
+                      {shortId(createMutation.assignment.id)} is now in the
+                      server response.
+                    </span>
+                  </div>
                 </div>
-              </div>
-            ) : null}
-            {createMutation.status === "error" ? (
-              <div className={styles.mutationError} role="alert">
-                <CircleAlert size={18} aria-hidden="true" />
-                <div>
-                  <strong>Assignment was not confirmed.</strong>
-                  <span>{createMutation.message}</span>
+              ) : null}
+              {createMutation.status === "error" ? (
+                <div className={styles.mutationError} role="alert">
+                  <CircleAlert size={18} aria-hidden="true" />
+                  <div>
+                    <strong>Assignment was not confirmed.</strong>
+                    <span>{createMutation.message}</span>
+                  </div>
+                  {createMutation.retryable ? (
+                    <button
+                      className="button button-secondary"
+                      type="button"
+                      onClick={retryCreate}
+                    >
+                      Retry same request
+                    </button>
+                  ) : null}
                 </div>
-                {createMutation.retryable ? (
-                  <button
-                    className="button button-secondary"
-                    type="button"
-                    onClick={retryCreate}
-                  >
-                    Retry same request
-                  </button>
-                ) : null}
-              </div>
-            ) : null}
-          </section>
+              ) : null}
+            </section>
+          </details>
         </div>
 
         {revokeTarget ? (
@@ -905,21 +931,6 @@ export function ReviewWorkspace({
             </div>
           </div>
         ) : null}
-
-        <section
-          className={styles.boundaryPanel}
-          aria-labelledby="review-boundary-title"
-        >
-          <div>
-            <span className={styles.eyebrow}>Workflow boundary</span>
-            <h2 id="review-boundary-title">Handoff to Academy</h2>
-            <p>
-              Admin controls the assignment lifecycle. Academy handles the
-              evidence review and submission.
-            </p>
-          </div>
-          <span className={styles.noticeCode}>ADMIN → ACADEMY</span>
-        </section>
       </div>
     </AdminShell>
   );
