@@ -1053,8 +1053,7 @@ def test_environment_profiles_isolate_state_hosts_and_edge_aliases() -> None:
         in staging
     )
     assert (
-        "AC_MEDIA_SCANNER_HOST_ROOT=/srv/authority-closers/volumes/media-safety-socket"
-        in staging
+        "AC_MEDIA_SCANNER_HOST_ROOT=/srv/authority-closers/volumes/media-safety-socket" in staging
     )
     assert "AC_MEDIA_FILESYSTEM_ENABLED=true" in production
     assert (

@@ -441,11 +441,7 @@ def test_dispatch_uses_target_policy_scrubs_flags_and_rejects_legacy_overlap(
     if os.name == "nt":
         binary_path = "/" + binary_path[0].lower() + binary_path[2:]
     function = _installer_function("compose_for", '\n\ncompose_for "$release_dir" config --quiet')
-    filesystem_selector = (
-        "filesystem_media_compose_file_for() {\n"
-        "  return 0\n"
-        "}\n"
-    )
+    filesystem_selector = "filesystem_media_compose_file_for() {\n  return 0\n}\n"
     practice_scope = _installer_function(
         "with_practice_pilot_scope", "\n\nvalidate_practice_pilot_references() {"
     )

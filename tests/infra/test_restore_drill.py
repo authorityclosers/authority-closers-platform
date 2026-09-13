@@ -605,12 +605,8 @@ def test_direct_sales_xray_rehearsal_config_accepts_0029_to_0031(
     config = restore_drill._config_from_args(args)
 
     assert config.backup_release_id == "d" * 40
-    assert config.expected_migration_head == (
-        restore_drill.DIRECT_SALES_XRAY_REHEARSAL_TARGET_HEAD
-    )
-    assert config.source_migration_head == (
-        restore_drill.DIRECT_SALES_XRAY_REHEARSAL_SOURCE_HEAD
-    )
+    assert config.expected_migration_head == (restore_drill.DIRECT_SALES_XRAY_REHEARSAL_TARGET_HEAD)
+    assert config.source_migration_head == (restore_drill.DIRECT_SALES_XRAY_REHEARSAL_SOURCE_HEAD)
 
 
 def test_migration_rehearsal_transition_requires_exact_preservation_and_derivations() -> None:
