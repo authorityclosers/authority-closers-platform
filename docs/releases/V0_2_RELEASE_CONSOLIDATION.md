@@ -32,10 +32,10 @@ limitations remain recorded even after a newer version supersedes them.
 | Documentation and cleanup | Release notes explain changes from the prior deployed baseline and material limitations. Final version/tag points at accepted `main`. Only then remove worktrees/branches whose work is merged or explicitly preserved elsewhere. |
 
 The active core candidate at this record is
-`69db2257b2671baa3aefc7902e69078f381a649d`. Its targeted regression passed and
-replacement CI run `34746866804` is in progress. It is an intermediate candidate,
-not the final v0.2 release declaration. Sales hosted/reviewer work and the newly
-reported avatar-storage failure remain active owned work.
+`69db2257b2671baa3aefc7902e69078f381a649d`. Replacement CI run `34746866804`
+passed full Linux validation and image construction. Its interrupted deployment
+is being checked against actual controller and server state before resumption.
+It is an intermediate candidate, not the final v0.2 release declaration.
 
 The final consolidation branch is `codex/v0.2-consolidation-20260913`, based on
 that candidate with `origin/main` (`691cf1b08f2722d304c19a46ffa5481ae694c872`)
@@ -55,7 +55,15 @@ The profile upload failure was reproduced through the actual production browser
 under Dipak's learner session: a valid PNG could be selected and previewed, but
 `POST /v1/profile/avatar` returned HTTP 503 `media_storage_unavailable` before
 upload intent issuance. The existing avatar remained unchanged. This is an open
-runtime storage defect, independent of the resolved Chrome file-access setting.
+runtime storage defect on the last verified live baseline. Its reviewed fix is
+integrated in the final candidate through `4a1636e` with 83 passing HTTP/media
+tests; deployment and live photo save/reload remain outstanding.
+
+The final candidate also includes reviewer persistence and migration 0034 at
+`7a6dce7`. Combined validation passed 788 tests, five actual PostgreSQL reviewer
+cases, and the populated 0033-to-0034 migration rehearsal. The final UI, independent
+review and deployed browser journeys remain required; local evidence is recorded
+in `docs/evidence/20260913_V02_REVIEWER_INTEGRATION.md`.
 
 ## Merge and cleanup evidence
 
