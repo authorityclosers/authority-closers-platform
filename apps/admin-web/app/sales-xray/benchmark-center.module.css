@@ -7,12 +7,37 @@
 .hero,
 .panel,
 .notice,
-.endpoint {
+.endpoint,
+.details {
   display: grid;
   gap: 9px;
   padding: 20px;
   border: 1px solid var(--line);
   background: var(--panel);
+}
+
+.details {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.details summary {
+  padding: 13px 16px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--signal);
+  cursor: pointer;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.details[open] summary {
+  border-bottom-color: transparent;
+}
+
+.details > .panel {
+  border-top: 0;
 }
 
 .hero {

@@ -84,7 +84,7 @@ const payload: ProviderControlsPayload = {
   },
   max_paid_paise: 0,
   execution_activated: false,
-  message: "Provider execution remains off.",
+  message: "Provider settings loaded.",
 };
 
 let host: HTMLDivElement;
@@ -110,19 +110,20 @@ async function render() {
 }
 
 describe("Sales Xray control center", () => {
-  it("shows server-authoritative status and supported entrypoints", async () => {
+  it("shows setup status and supported entrypoints", async () => {
     vi.mocked(loadProviderControls).mockResolvedValue(payload);
 
     await render();
 
     expect(host.textContent).toContain("#4");
-    expect(host.textContent).toContain("execution_activated false");
+    expect(host.textContent).toContain("settings only · no provider calls");
     expect(host.textContent).toContain(
       "calibration metadata, not model training",
     );
     expect(host.querySelector('a[href="/sales-xray/settings"]')).toBeTruthy();
     expect(host.querySelector('a[href="/sales-xray/review"]')).toBeTruthy();
     expect(host.querySelector('a[href="/sales-xray/benchmark"]')).toBeTruthy();
+    expect(host.textContent).not.toContain("execution_activated false");
     expect(host.textContent).not.toContain("Start benchmark");
   });
 

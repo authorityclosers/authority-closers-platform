@@ -122,14 +122,16 @@ export function ControlCenterPanel() {
       <SalesXrayNavigation active="overview" />
       <section className={styles.statusPanel} role="status">
         <div>
-          <h2>Control plane ready; execution remains off.</h2>
+          <h2>Your Sales Xray setup is ready to manage.</h2>
           <p>
-            This status comes from the existing provider registry adapter.
-            Saving settings creates an immutable revision; it does not contact a
-            provider, spend money, or publish an official result.
+            Review provider settings, map analysis revisions, and hand work to a
+            human reviewer. Saving settings creates a reviewable revision; this
+            workspace does not accept credentials or start provider calls.
           </p>
         </div>
-        <span className={styles.statusValue}>execution_activated false</span>
+        <span className={styles.statusValue}>
+          settings only · no provider calls
+        </span>
       </section>
 
       <div
@@ -144,7 +146,7 @@ export function ControlCenterPanel() {
         <div className={styles.summaryCard}>
           <span>Configured bindings</span>
           <strong>{configuredProviders}</strong>
-          <small>server-held references only</small>
+          <small>references only</small>
         </div>
         <div className={styles.summaryCard}>
           <span>Analysis routes</span>
@@ -153,18 +155,18 @@ export function ControlCenterPanel() {
         </div>
         <div className={styles.summaryCard}>
           <span>Provider catalog</span>
-          <strong>{implementedProviders} ready labels</strong>
-          <small>{plannedProviders} planned labels · ₹0 ceiling</small>
+          <strong>{implementedProviders} available entries</strong>
+          <small>{plannedProviders} planned entries · ₹0 spend ceiling</small>
         </div>
       </div>
 
       <div className={styles.capabilityGrid}>
         <article className={styles.capabilityCard}>
           <span className={styles.eyebrow}>Provider configuration</span>
-          <h2>Manage approved references and routes</h2>
+          <h2>Manage provider settings</h2>
           <p>
-            Select catalog providers, retain opaque approval references, and
-            save a revision guarded by the server and an idempotency key.
+            Choose catalog providers, add the references your review requires,
+            and save a current revision.
           </p>
           <Link href="/sales-xray/settings">Open provider settings →</Link>
         </article>
@@ -184,17 +186,17 @@ export function ControlCenterPanel() {
           <span className={styles.eyebrow}>Reviewer entrypoint</span>
           <h2>Assign and revoke human review</h2>
           <p>
-            The existing reviewer queue uses server-authorized assignment APIs
-            and keeps reviewer identity and evidence scoped to the handoff.
+            Use the reviewer queue to assign people, set the review scope, and
+            safely revoke a handoff when plans change.
           </p>
           <Link href="/sales-xray/review">Open reviewer queue →</Link>
         </article>
         <article className={styles.capabilityCard}>
           <span className={styles.eyebrow}>Benchmark / test runs</span>
-          <h2>Run status is intentionally unavailable</h2>
+          <h2>Prepare your first comparison</h2>
           <p>
-            No hosted admin benchmark or provider-test endpoint exists, so this
-            surface does not render a start-test button or invent run history.
+            Test runs are not available from Admin yet. Configure providers and
+            invite reviewers while run controls are connected.
           </p>
           <Link href="/sales-xray/benchmark">See benchmark readiness →</Link>
         </article>
@@ -204,21 +206,18 @@ export function ControlCenterPanel() {
         <span className={styles.eyebrow}>Safe operating boundary</span>
         <h2>What this workspace can and cannot do</h2>
         <ul>
-          <li>
-            Can load and save provider configuration revisions through the
-            existing admin adapter.
-          </li>
+          <li>Can load and save provider settings as reviewable revisions.</li>
           <li>
             Can select task routing and revision identifiers; it cannot change
             model weights or train a provider.
           </li>
           <li>
-            Cannot accept credentials, call an external provider, auto-purchase
-            credits, or activate execution.
+            Cannot accept credentials, call an external provider, or
+            auto-purchase credits.
           </li>
           <li>
-            Cannot start benchmark/test runs until a separately authorized
-            server-side API and evidence contract exist.
+            Test runs are not available from Admin yet; configure providers and
+            invite reviewers while run controls are connected.
           </li>
         </ul>
       </section>
@@ -233,7 +232,7 @@ export function SalesXrayControlCenter() {
       surface="operations"
       eyebrow="Conversation intelligence / control center"
       title="Sales Xray control center"
-      description="See the server-authorized operating state, manage dormant configuration, and enter human review."
+      description="Review setup, manage provider settings, and enter human review."
     >
       <ControlCenterPanel />
     </AdminShell>

@@ -109,105 +109,105 @@ export function BenchmarkCenterPanel() {
       <SalesXrayNavigation active="benchmark" />
       <section className={styles.hero}>
         <span className={styles.eyebrow}>Benchmark / test runs</span>
-        <h2>
-          Readiness is visible; starting a run is not yet a supported admin
-          action.
-        </h2>
+        <h2>Prepare your first comparison</h2>
         <p>
-          The current server adapter exposes provider catalog and immutable
-          configuration revisions. It does not expose a hosted benchmark-run,
-          provider-probe, or test-run endpoint. This page keeps that gap
-          explicit instead of presenting a button that cannot create an
-          authoritative run.
+          Test runs are not available from Admin yet. Configure providers and
+          invite reviewers here; run controls are being connected.
         </p>
+        <div className={styles.buttonRow}>
+          <Link className="button button-primary" href="/sales-xray/settings">
+            Configure providers
+          </Link>
+          <Link className="button button-secondary" href="/sales-xray/review">
+            Invite reviewers
+          </Link>
+        </div>
       </section>
 
       <section className={styles.notice} role="status">
-        <h2>Current server state</h2>
+        <h2>Current setup</h2>
         <p>
           Provider revision: {current ? `#${current.revision}` : "none saved"}.
-          Paid spend ceiling: ₹0. Execution activated: false. A saved revision
-          is configuration evidence only, not provider quality evidence.
+          Paid spend ceiling: ₹0. Saved settings are configuration evidence
+          only, not provider quality evidence.
         </p>
       </section>
 
-      <section className={styles.panel}>
-        <span className={styles.eyebrow}>Existing routes</span>
-        <h2>What the backend actually supports</h2>
-        <div className={styles.endpointList}>
-          <article className={styles.endpoint}>
-            <span className={styles.method}>GET / POST</span>
-            <div>
-              <h3>
-                <code>/v1/admin/conversation/providers</code>
-              </h3>
-              <p>
-                Read the safe catalog/current revision or save a new
-                zero-paid-spend provider configuration revision.
-              </p>
-            </div>
-          </article>
-          <article className={styles.endpoint}>
-            <span className={styles.method}>POST</span>
-            <div>
-              <h3>
-                <code>/v1/admin/conversation/review-assignments</code>
-              </h3>
-              <p>
-                Create a server-authorized human reviewer handoff. Use the
-                reviewer queue for this supported action.
-              </p>
-            </div>
-          </article>
-          <article className={styles.endpoint}>
-            <span className={styles.method}>POST</span>
-            <div>
-              <h3>
-                <code>/v1/conversation/recordings/:id/analysis</code>
-              </h3>
-              <p>
-                Start owner-consented recording analysis after a quote; this is
-                not an admin benchmark runner and does not bypass consent or
-                retention gates.
-              </p>
-            </div>
-          </article>
-        </div>
-      </section>
+      <details className={styles.details}>
+        <summary>Advanced API details</summary>
+        <section className={styles.panel}>
+          <span className={styles.eyebrow}>Available integrations</span>
+          <h2>What the current service supports</h2>
+          <div className={styles.endpointList}>
+            <article className={styles.endpoint}>
+              <span className={styles.method}>GET / POST</span>
+              <div>
+                <h3>
+                  <code>/v1/admin/conversation/providers</code>
+                </h3>
+                <p>
+                  Read the safe catalog/current revision or save a new
+                  zero-paid-spend provider configuration revision.
+                </p>
+              </div>
+            </article>
+            <article className={styles.endpoint}>
+              <span className={styles.method}>POST</span>
+              <div>
+                <h3>
+                  <code>/v1/admin/conversation/review-assignments</code>
+                </h3>
+                <p>
+                  Create a server-authorized human reviewer handoff. Use the
+                  reviewer queue for this supported action.
+                </p>
+              </div>
+            </article>
+            <article className={styles.endpoint}>
+              <span className={styles.method}>POST</span>
+              <div>
+                <h3>
+                  <code>/v1/conversation/recordings/:id/analysis</code>
+                </h3>
+                <p>
+                  Start owner-consented recording analysis after a quote; this
+                  is not an admin benchmark runner and does not bypass consent
+                  or retention gates.
+                </p>
+              </div>
+            </article>
+          </div>
+        </section>
+      </details>
 
-      <section className={styles.panel}>
-        <span className={styles.eyebrow}>
-          Deferred until separately authorized
-        </span>
-        <h2>Absent APIs and why no control is rendered</h2>
-        <ul>
-          <li>
-            <code>/v1/admin/conversation/benchmarks</code>,{" "}
-            <code>/test-runs</code>, and <code>/providers/:id/probe</code> do
-            not exist in the current HTTP composition.
-          </li>
-          <li>
-            There is no admin CRUD API for prompt/profile parameter objects;
-            route fields remain revision references in provider configuration.
-          </li>
-          <li>
-            The private <code>approved_call_test</code> module is a supervised
-            local proof runner, not a hosted worker or browser-safe endpoint.
-          </li>
-          <li>
-            Model training, automatic scoring, paid external calls, and
-            execution activation remain outside this workspace.
-          </li>
-        </ul>
-        <div className={styles.buttonRow}>
-          <Link className="button button-secondary" href="/sales-xray/settings">
-            Review configuration
-          </Link>
-          <Link className="button button-secondary" href="/sales-xray/review">
-            Open reviewer queue
-          </Link>
-        </div>
-      </section>
+      <details className={styles.details}>
+        <summary>Why run controls are not shown</summary>
+        <section className={styles.panel}>
+          <span className={styles.eyebrow}>
+            Deferred until separately authorized
+          </span>
+          <h2>Missing run capabilities</h2>
+          <ul>
+            <li>
+              <code>/v1/admin/conversation/benchmarks</code>,{" "}
+              <code>/test-runs</code>, and <code>/providers/:id/probe</code> do
+              not exist in the current HTTP composition.
+            </li>
+            <li>
+              There is no admin CRUD API for prompt/profile parameter objects;
+              route fields remain revision references in provider configuration.
+            </li>
+            <li>
+              The private <code>approved_call_test</code> module is a supervised
+              local proof runner, not a hosted worker or browser-safe endpoint.
+            </li>
+            <li>
+              Model training, automatic scoring, paid external calls, and
+              execution activation remain outside this workspace.
+            </li>
+          </ul>
+        </section>
+      </details>
     </div>
   );
 }
@@ -219,7 +219,7 @@ export function BenchmarkCenter() {
       surface="operations"
       eyebrow="Conversation intelligence / benchmark readiness"
       title="Benchmark readiness"
-      description="Inspect the exact available APIs and the boundary before any provider or test run is authorized."
+      description="Prepare a comparison by configuring providers and inviting reviewers."
     >
       <BenchmarkCenterPanel />
     </AdminShell>

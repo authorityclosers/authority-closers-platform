@@ -35,7 +35,7 @@ const payload = {
   current: null,
   max_paid_paise: 0,
   execution_activated: false,
-  message: "Provider execution remains off.",
+  message: "Provider settings loaded.",
 } satisfies ProviderControlsPayload;
 
 let host: HTMLDivElement;
@@ -62,12 +62,16 @@ it("documents missing benchmark APIs without rendering an unsafe run action", as
     await Promise.resolve();
   });
 
+  expect(host.textContent).toContain("Prepare your first comparison");
   expect(host.textContent).toContain(
-    "It does not expose a hosted benchmark-run",
+    "Test runs are not available from Admin yet",
   );
   expect(host.textContent).toContain("/v1/admin/conversation/benchmarks");
   expect(host.textContent).toContain("approved_call_test");
   expect(host.querySelector('a[href="/sales-xray/settings"]')).toBeTruthy();
+  expect(host.querySelectorAll("details[open]")).toHaveLength(0);
+  expect(host.textContent).not.toContain("execution_activated false");
+  expect(host.textContent).not.toContain("authoritative run");
   expect(host.querySelector("button")).toBeNull();
   expect(host.textContent).not.toContain("Start test run");
 });

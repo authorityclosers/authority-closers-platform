@@ -8,9 +8,9 @@ Scope: the Admin Sales Xray routes outside the reviewer implementation. The cont
 
 | Route                   | Purpose                     | Real capability                                                                                                                                                                         |
 | ----------------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/sales-xray`           | Control center              | Reads the existing provider registry adapter and shows revision, catalog, routing, execution, and spend state. Links to supported settings and reviewer entrypoints.                    |
+| `/sales-xray`           | Control center              | Shows provider setup, routing revisions, and the configured spend ceiling. Links to supported settings and reviewer entrypoints.                                                        |
 | `/sales-xray/settings`  | Provider and route settings | Reads and saves immutable provider configuration revisions through the existing admin endpoint. Stores provider/model bindings, opaque references, and task route revision identifiers. |
-| `/sales-xray/benchmark` | Benchmark readiness         | Reads the same server status, documents the available APIs and absent benchmark/test-run APIs, and intentionally renders no start-run control.                                          |
+| `/sales-xray/benchmark` | Benchmark readiness         | Shows the current setup, links to provider settings and reviewer invitations, and keeps advanced API gaps collapsed.                                                                    |
 | `/sales-xray/review`    | Reviewer entrypoint         | Existing reviewer assignment queue; this slice links to it without changing the review subtree.                                                                                         |
 
 ## Existing backend surface

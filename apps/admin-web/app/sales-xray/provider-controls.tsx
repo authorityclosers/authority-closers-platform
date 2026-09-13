@@ -847,7 +847,7 @@ export function ProviderControlsPanel() {
       setDraft(draftFromConfiguration(saved.configuration));
       setSaveState("saved");
       setMessage(
-        "Saved as a new immutable revision. Provider execution remains off.",
+        "Saved as a new immutable revision. This save does not start provider calls.",
       );
     } catch (error: unknown) {
       if (error instanceof Error && error.message === "http_409") {
@@ -934,11 +934,11 @@ export function ProviderControlsPanel() {
     <div className={styles.page}>
       <div className={styles.notice} role="note">
         <div>
-          <h2>Provider settings stay dormant until separately approved.</h2>
+          <h2>Provider settings are saved for review.</h2>
           <p>
-            {state.payload.message} This page records references and routing
-            metadata only; it never accepts credentials or starts a provider
-            call.
+            {state.payload.message} Choose providers and map analysis tasks
+            here; this page records settings only and never accepts credentials
+            or starts a provider call.
           </p>
         </div>
         <span className={styles.noticeCode}>NO PROVIDER CALLS</span>
@@ -946,14 +946,14 @@ export function ProviderControlsPanel() {
 
       <div className={styles.summaryGrid} aria-label="Provider control status">
         <div className={styles.summaryCard}>
-          <span>Paid spend ceiling</span>
+          <span>Spend limit</span>
           <strong>₹0</strong>
           <small>fixed in this workspace</small>
         </div>
         <div className={styles.summaryCard}>
-          <span>Execution</span>
-          <strong>Off</strong>
-          <small>activation is a separate server gate</small>
+          <span>Provider calls</span>
+          <strong>Not started here</strong>
+          <small>this page only saves settings</small>
         </div>
         <div className={styles.summaryCard}>
           <span>Current revision</span>
@@ -1124,14 +1124,14 @@ export function ProviderControlsPanel() {
       <section className={styles.section} aria-labelledby="catalog-title">
         <div className={styles.catalogHeader}>
           <div>
-            <span className={styles.eyebrow}>Server catalog</span>
-            <h2 id="catalog-title">Available provider labels and status.</h2>
+            <span className={styles.eyebrow}>Available providers</span>
+            <h2 id="catalog-title">Provider options and status.</h2>
             <p>
-              These labels come from the server catalog. Status describes
-              catalog metadata, not execution approval.
+              Status describes catalog metadata; it does not mean this page can
+              call a provider.
             </p>
           </div>
-          <span className={styles.dormant}>execution_activated false</span>
+          <span className={styles.dormant}>catalog metadata only</span>
         </div>
         <div className={styles.catalogList}>
           {catalog.map((provider) => (
@@ -1157,11 +1157,11 @@ export function ProviderControlsPanel() {
       <section className={styles.section} aria-labelledby="save-title">
         <div className={styles.sectionHeader}>
           <div>
-            <span className={styles.eyebrow}>Immutable revision</span>
-            <h2 id="save-title">Save dormant settings.</h2>
+            <span className={styles.eyebrow}>Saved revision</span>
+            <h2 id="save-title">Save provider settings.</h2>
             <p>
-              Saving creates the next server revision with an idempotency key.
-              It cannot spend money, test a provider, or activate execution.
+              Saving creates a new version of these settings. It cannot spend
+              money, test a provider, or start processing.
             </p>
           </div>
           <ShieldCheck size={24} aria-hidden="true" />
@@ -1197,9 +1197,9 @@ export function ProviderControls() {
     <AdminShell
       active="sales-xray"
       surface="operations"
-      eyebrow="Conversation intelligence / provider registry"
-      title="Provider controls"
-      description="Store approved provider references and task mappings while execution stays off."
+      eyebrow="Conversation intelligence / provider settings"
+      title="Provider settings"
+      description="Choose providers, map analysis tasks, and save reviewable settings."
     >
       <div className={styles.page}>
         <SalesXrayNavigation active="settings" />
