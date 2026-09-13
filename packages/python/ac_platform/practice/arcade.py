@@ -26,7 +26,7 @@ class InvalidPracticeResponse(ValueError):
 def _sets() -> dict[str, dict[str, Any]]:
     payload = json.loads(Path(__file__).with_name("exercise-library.draft.json").read_text("utf-8"))
     result = {item["id"]: item for item in payload["sets"]}
-    if len(result) != 8 or any(
+    if len(result) != 11 or any(
         item["review_status"] != "needs_Dipak_review"
         or item["competition_eligible"] is not False
         or item["assessment_eligible"] is not False

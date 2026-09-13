@@ -21,13 +21,32 @@ LIBRARY = json.loads(SOURCE.read_text("utf-8"))["sets"]
 ITEMS = [(group["id"], item) for group in LIBRARY for item in group["items"]]
 
 
-def test_catalog_is_eight_draft_sets_twenty_four_prompts_seven_renderers():
+def test_catalog_includes_eleven_draft_sets_thirty_three_prompts_seven_renderers():
     data = catalog()
-    assert len(data["items"]) == 8
-    assert sum(item["item_count"] for item in data["items"]) == 24
+    assert len(data["items"]) == 11
+    assert sum(item["item_count"] for item in data["items"]) == 33
     assert len({item["kind"] for item in data["items"]}) == 7
     assert data["course_progress_affected"] is False
     assert data["responses_stored"] is False
+
+
+def test_indian_daily_sets_keep_language_labels_and_draft_safety_flags():
+    expected = {
+        "india-daily-english": "India daily practice · English",
+        "india-daily-hinglish": "India daily practice · Hinglish",
+        "india-daily-marlish": "India daily practice · Marathi-English (Marlish)",
+    }
+    assert {
+        group["id"]: group["title"] for group in LIBRARY if group["id"] in expected
+    } == expected
+    for group in LIBRARY:
+        if group["id"] not in expected:
+            continue
+        assert group["review_status"] == "needs_Dipak_review"
+        assert group["competition_eligible"] is False
+        assert group["assessment_eligible"] is False
+        assert len(group["items"]) == 3
+        assert all(item["status"] == "editorial_draft" for item in group["items"])
 
 
 @pytest.mark.parametrize("set_id,item", ITEMS, ids=[item["id"] for _, item in ITEMS])
