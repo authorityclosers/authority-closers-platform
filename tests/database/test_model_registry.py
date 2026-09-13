@@ -102,6 +102,11 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "conversation_provider_configurations",
         "conversation_report_drafts",
         "conversation_inference_tasks",
+        "community_discovery_preferences",
+        "community_connections",
+        "community_connection_events",
+        "community_blocks",
+        "community_reports",
     }
 
     assert set(model_metadata().tables) == expected

@@ -1,14 +1,14 @@
 """Add explicit academy-scoped community discovery and connections.
 
-Revision ID: 20260913_0032
-Revises: 20260913_0031
+Revision ID: 20260913_0033
+Revises: 20260913_0032
 """
 
 import sqlalchemy as sa
 from alembic import op
 
-revision = "20260913_0032"
-down_revision = "20260913_0031"
+revision = "20260913_0033"
+down_revision = "20260913_0032"
 branch_labels = None
 depends_on = None
 
