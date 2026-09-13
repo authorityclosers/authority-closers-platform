@@ -357,10 +357,12 @@ class ConversationAuthority:
         )
         if (
             controller is None
+            or controller.status != "active"
             or (controller.email or "").casefold() != CONTROL_ACCOUNT
             or controller.email_verified_at is None
             or membership is None
             or membership.status != "active"
+            or membership.ended_at is not None
             or membership.role not in {"owner", "admin"}
             or control_tenant is None
             or control_tenant.status != "active"

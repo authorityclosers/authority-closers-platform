@@ -55,6 +55,7 @@ def postgres_harness() -> Any:
 class ControlScope:
     setup: AuthorityFixture
     operations_tenant_id: UUID
+    control_person_id: UUID
     operations_session_id: UUID
     public_actor: ActorContext
     authority: ConversationAuthority
@@ -65,10 +66,11 @@ class ControlScope:
 async def _control_scope(setup: AuthorityFixture) -> ControlScope:
     state = setup.prepared.state
     operations_tenant_id = uuid4()
+    control_person_id = uuid4()
     operations_session_id = uuid4()
     public_actor = ActorContext(state.person_id, state.session_id, state.tenant_id)
     operations_actor = ActorContext(
-        state.person_id,
+        control_person_id,
         operations_session_id,
         operations_tenant_id,
         frozenset({"admin_surface"}),
@@ -78,6 +80,9 @@ async def _control_scope(setup: AuthorityFixture) -> ControlScope:
         public_membership = await database.get(Membership, (state.tenant_id, state.person_id))
         assert public_membership is not None
         public_membership.role = "learner"
+        public_person = await database.get(Person, state.person_id)
+        assert public_person is not None
+        public_person.email = "learner@example.test"
         database.add(
             Tenant(
                 id=operations_tenant_id,
@@ -88,9 +93,17 @@ async def _control_scope(setup: AuthorityFixture) -> ControlScope:
         )
         await database.flush()
         database.add(
+            Person(
+                id=control_person_id,
+                email=CONTROL_ACCOUNT,
+                email_verified_at=state.now,
+                status="active",
+            )
+        )
+        database.add(
             Membership(
                 tenant_id=operations_tenant_id,
-                person_id=state.person_id,
+                person_id=control_person_id,
                 role="owner",
                 status="active",
             )
@@ -99,7 +112,7 @@ async def _control_scope(setup: AuthorityFixture) -> ControlScope:
         database.add(
             IdentitySession(
                 id=operations_session_id,
-                person_id=state.person_id,
+                person_id=control_person_id,
                 token_hash=operations_session_id.bytes * 2,
                 created_at=state.now,
                 expires_at=state.now + timedelta(days=1),
@@ -132,6 +145,7 @@ async def _control_scope(setup: AuthorityFixture) -> ControlScope:
     return ControlScope(
         setup,
         operations_tenant_id,
+        control_person_id,
         operations_session_id,
         public_actor,
         authority,
@@ -207,17 +221,21 @@ def test_ops_control_can_issue_and_settle_public_c2_without_public_admin_access(
                 )
                 ops_membership = await database.get(
                     Membership,
-                    (scope.operations_tenant_id, setup.prepared.state.person_id),
+                    (scope.operations_tenant_id, scope.control_person_id),
                 )
                 public_membership = await database.get(
                     Membership,
                     (setup.prepared.state.tenant_id, setup.prepared.state.person_id),
                 )
-                assert (
-                    ops_config is not None
-                    and ops_config.person_id == setup.prepared.state.person_id
-                )
+                assert ops_config is not None and ops_config.person_id == scope.control_person_id
                 assert public_config is not None
+                control_person = await database.get(Person, scope.control_person_id)
+                public_person = await database.get(Person, setup.prepared.state.person_id)
+                assert control_person is not None and public_person is not None
+                assert control_person.email == CONTROL_ACCOUNT
+                assert control_person.email_verified_at is not None
+                assert control_person.status == "active"
+                assert public_person.email == "learner@example.test"
                 assert ops_config.configuration_sha256 == scope.config_view["configuration_sha256"]
                 assert (
                     public_config.configuration_sha256 == setup.config_view["configuration_sha256"]
@@ -306,7 +324,7 @@ def test_control_scope_rechecks_revoked_membership_changed_email_and_suspended_t
                     update(Membership)
                     .where(
                         Membership.tenant_id == scope.operations_tenant_id,
-                        Membership.person_id == state.person_id,
+                        Membership.person_id == scope.control_person_id,
                     )
                     .values(role="learner")
                 )
@@ -317,7 +335,7 @@ def test_control_scope_rechecks_revoked_membership_changed_email_and_suspended_t
                     update(Membership)
                     .where(
                         Membership.tenant_id == scope.operations_tenant_id,
-                        Membership.person_id == state.person_id,
+                        Membership.person_id == scope.control_person_id,
                     )
                     .values(role="owner", status="inactive", ended_at=state.now)
                 )
@@ -328,20 +346,30 @@ def test_control_scope_rechecks_revoked_membership_changed_email_and_suspended_t
                     update(Membership)
                     .where(
                         Membership.tenant_id == scope.operations_tenant_id,
-                        Membership.person_id == state.person_id,
+                        Membership.person_id == scope.control_person_id,
                     )
                     .values(status="active", ended_at=None)
                 )
                 await database.execute(
                     update(Person)
-                    .where(Person.id == state.person_id)
-                    .values(email="changed-control@example.test")
+                    .where(Person.id == scope.control_person_id)
+                    .values(status="suspended")
+                )
+            await expect_denied(scope, "control-person-suspended")
+
+            async with setup.sessions() as database, database.begin():
+                await database.execute(
+                    update(Person)
+                    .where(Person.id == scope.control_person_id)
+                    .values(status="active", email="changed-control@example.test")
                 )
             await expect_denied(scope, "control-email-change")
 
             async with setup.sessions() as database, database.begin():
                 await database.execute(
-                    update(Person).where(Person.id == state.person_id).values(email=CONTROL_ACCOUNT)
+                    update(Person)
+                    .where(Person.id == scope.control_person_id)
+                    .values(email=CONTROL_ACCOUNT)
                 )
                 await database.execute(
                     update(Tenant)

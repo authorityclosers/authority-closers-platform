@@ -22,6 +22,7 @@ Evidence is under
 | --- | --- |
 | `0035-conversation-unit-03.xml` | 507 passed; one POSIX ownership test skipped on Windows |
 | `0035-cross-control-postgresql-02.xml` | 5 passed against disposable schemas on actual loopback PostgreSQL |
+| `0035-distinct-control-postgresql-03.xml` | The same five cases passed with a separate OPS controller person and PUBLIC learner person, including controller suspension and ended-membership checks |
 | `0035-control-scope-postgresql-01.xml` | 11 passed, one test failed on its hardcoded fixture balance |
 | `0035-meter-boundary-postgresql-02.xml` | Existing failed authority case passed after asserting before/after balance; new boundary test exposed an incorrect settled-invoice assertion |
 | `0035-meter-boundary-postgresql-03.xml` | New zero-balance full C2-to-C6 case passed, preserving the provider reconciliation hold |
