@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import re
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -28,10 +29,11 @@ from ac_platform.conversation_intelligence.activation_contract import (
     StageApproval,
 )
 from ac_platform.conversation_intelligence.entitlements import Reservation
+from ac_platform.conversation_intelligence.gemini_tasks import gemini_prompt_view
 from ac_platform.conversation_intelligence.inference_broker import InferenceBrokerError
 from ac_platform.conversation_intelligence.providers import ProviderResult
 
-_SUPPORTED_PROVIDERS = frozenset({"elevenlabs", "groq"})
+_SUPPORTED_PROVIDERS = frozenset({"elevenlabs", "groq", "gemini"})
 _REFERENCE = re.compile(r"^ref:[A-Za-z0-9][A-Za-z0-9_.:/-]{0,255}$")
 _SENSITIVE = re.compile(
     r"(?:api[_-]?key|bearer|basic|password|secret|token|sk[-_]|gsk_|aq\.)",
@@ -218,7 +220,14 @@ class FixedProviderRouter:
             raise ProviderRouterError("broker_router_payload_mismatch")
         if reservation.state != "in_flight" or not reservation.attempt_id:
             raise ProviderRouterError("broker_router_reservation_invalid")
-        if quote.max_cost_paise != 0:
+        if quote.max_cost_paise != approval.max_cost_paise or (
+            quote.max_cost_paise > 0
+            and (
+                approval.zero_cost_basis != "paid_pricing_evidence"
+                or not bundle.paid_approval_ref
+                or quote.max_cost_paise > bundle.budget_cap_paise
+            )
+        ):
             raise ProviderRouterError("broker_router_authorization_mismatch")
         if hashlib.sha256(payload).hexdigest() != quote.input_sha256:
             raise ProviderRouterError("broker_router_payload_mismatch")
@@ -229,6 +238,15 @@ class FixedProviderRouter:
             raise ProviderRouterError("broker_router_payload_mismatch")
         if len(payload) > approval.max_input_bytes:
             raise ProviderRouterError("broker_router_payload_mismatch")
+        if approval.provider_id == "gemini" and approval.stage in {"C4", "C5"}:
+            try:
+                body = json.loads(payload)
+                maximum = body["generationConfig"]["maxOutputTokens"]
+                if type(maximum) is not int or maximum > approval.max_completion_tokens:
+                    raise ValueError
+                gemini_prompt_view(body, model=approval.model_id, maximum=maximum)
+            except (KeyError, TypeError, ValueError):
+                raise ProviderRouterError("broker_router_payload_mismatch") from None
         if not (
             quote.created_at_epoch <= epoch < quote.expires_at_epoch
             and epoch < permission.expires_at_epoch
@@ -248,6 +266,8 @@ class FixedProviderRouter:
             raise ProviderRouterError("broker_router_authorization_mismatch")
         if permission.approved_by != quote.account_id:
             raise ProviderRouterError("broker_router_authorization_mismatch")
+        if permission.quote_fingerprint != quote.fingerprint:
+            raise ProviderRouterError("broker_router_authorization_mismatch")
         if quote.privacy_revision != approval.privacy_revision:
             raise ProviderRouterError("broker_router_authorization_mismatch")
         for quote_field, approval_field in (
@@ -266,7 +286,7 @@ class FixedProviderRouter:
             raise ProviderRouterError("broker_router_route_mismatch")
         if approval.stage == "C2" and approval.provider_id != "elevenlabs":
             raise ProviderRouterError("broker_router_route_mismatch")
-        if approval.stage in {"C4", "C5"} and approval.provider_id != "groq":
+        if approval.stage in {"C4", "C5"} and approval.provider_id not in {"groq", "gemini"}:
             raise ProviderRouterError("broker_router_route_mismatch")
         if route.credential_ref != approval.credential_ref:
             raise ProviderRouterError("broker_router_credential_mismatch")

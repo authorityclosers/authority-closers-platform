@@ -16,6 +16,12 @@ from dataclasses import dataclass, field
 from typing import Any, Literal, NoReturn, cast
 
 from ac_platform.conversation_intelligence.checkpoints import canonical
+from ac_platform.conversation_intelligence.gemini_tasks import (
+    GeminiTaskError,
+    decode_gemini_object,
+    gemini_prompt_view,
+    prepare_gemini_body,
+)
 from ac_platform.conversation_intelligence.providers import (
     MAX_JSON_BYTES,
     ProviderError,
@@ -38,7 +44,7 @@ from ac_platform.conversation_intelligence.reports import (
 
 TaskName = Literal["asr", "facts", "coaching"]
 Checkpoint = Literal["C2", "C4", "C5"]
-PayloadKind = Literal["source_reference", "groq_json"]
+PayloadKind = Literal["source_reference", "groq_json", "gemini_json"]
 
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _IDENTIFIER = re.compile(r"^[A-Za-z][A-Za-z0-9_.:/-]{0,127}$")
@@ -101,6 +107,39 @@ def _canonical_json(value: Mapping[str, Any], *, max_bytes: int) -> bytes:
     if len(encoded) > max_bytes:
         _fail("task_payload_too_large")
     return encoded
+
+
+def _text_prompt_view(
+    body: Mapping[str, Any], *, provider: str, model: str, maximum: int
+) -> Mapping[str, Any]:
+    if provider == "groq":
+        return body
+    if provider != "gemini":
+        _fail("text_input_invalid")
+    try:
+        return gemini_prompt_view(body, model=model, maximum=maximum)
+    except GeminiTaskError as exc:
+        raise InferenceTaskError(str(exc)) from None
+
+
+def _text_provider_body(prompt: Mapping[str, Any], provider: str) -> Mapping[str, Any]:
+    if provider == "groq":
+        return prompt
+    if provider != "gemini":
+        _fail("text_input_invalid")
+    try:
+        return prepare_gemini_body(prompt)
+    except GeminiTaskError as exc:
+        raise InferenceTaskError(str(exc)) from None
+
+
+def _text_response(result: ProviderResult) -> Mapping[str, Any]:
+    if result.provider == "groq":
+        return result.data
+    try:
+        return decode_gemini_object(result.data)
+    except GeminiTaskError as exc:
+        raise InferenceTaskError(str(exc)) from None
 
 
 def _validate_text_payload_metadata(
@@ -234,6 +273,7 @@ class PreparedTaskInput:
         if not isinstance(self.payload_kind, str) or self.payload_kind not in {
             "source_reference",
             "groq_json",
+            "gemini_json",
         }:
             _fail("invalid_payload_kind")
         payload_limit = (
@@ -278,7 +318,10 @@ class PreparedTaskInput:
             if payload_value.get("content_type") not in _ALLOWED_CONTENT_TYPES:
                 _fail("invalid_content_type")
         else:
-            if self.payload_kind != "groq_json" or self.provider != "groq":
+            if (self.provider, self.payload_kind) not in {
+                ("groq", "groq_json"),
+                ("gemini", "gemini_json"),
+            }:
                 _fail("text_input_invalid")
             if self.operation != _TEXT_OPERATION or not self.transcript_revision:
                 _fail("text_input_invalid")
@@ -294,7 +337,12 @@ class PreparedTaskInput:
             if self.task == "coaching" and self.profile_revision is None:
                 _fail("coaching_profile_revision_missing")
             _validate_text_payload_metadata(
-                payload_value,
+                _text_prompt_view(
+                    payload_value,
+                    provider=self.provider,
+                    model=self.model,
+                    maximum=self.max_completion_tokens,
+                ),
                 task=self.task,
                 model=self.model,
                 source_sha256=self.source_sha256,
@@ -342,9 +390,9 @@ class PreparedTaskInput:
             _fail("text_payload_digest_mismatch")
 
     def as_provider_body(self) -> dict[str, Any]:
-        """Return a fresh Groq body; the envelope retains only canonical bytes."""
+        """Return a fresh native provider body; retain the exact canonical bytes."""
 
-        if self.payload_kind != "groq_json":
+        if self.payload_kind not in {"groq_json", "gemini_json"}:
             _fail("provider_body_not_json")
         try:
             body = json.loads(self.payload)
@@ -670,7 +718,13 @@ def _validated_text_input(
         _fail("task_source_digest_mismatch")
     if task_input.transcript_revision != validated["transcript_revision"]:
         _fail("task_transcript_revision_mismatch")
-    body = task_input.as_provider_body()
+    assert task_input.max_completion_tokens is not None
+    body = _text_prompt_view(
+        task_input.as_provider_body(),
+        provider=task_input.provider,
+        model=task_input.model,
+        maximum=task_input.max_completion_tokens,
+    )
     if body.get("model") != task_input.model:
         _fail("task_model_mismatch")
     if body.get("max_completion_tokens") != task_input.max_completion_tokens:
@@ -722,6 +776,7 @@ def _validated_text_input(
 def prepare_fact_inputs(
     transcript: Mapping[str, Any],
     *,
+    provider: str = "groq",
     model: str = GROQ_MODEL,
     max_input_chars: int = 16_000,
     max_completion_tokens: int = 1_400,
@@ -740,7 +795,9 @@ def prepare_fact_inputs(
         raise InferenceTaskError(str(exc)) from None
     prepared: list[PreparedTaskInput] = []
     for prompt in prompts:
-        payload = _canonical_json(prompt, max_bytes=_MAX_TEXT_PAYLOAD_BYTES)
+        payload = _canonical_json(
+            _text_provider_body(prompt, provider), max_bytes=_MAX_TEXT_PAYLOAD_BYTES
+        )
         user_content = prompt["messages"][1]["content"]
         if not isinstance(user_content, str):
             _fail("fact_prompt_invalid")
@@ -768,14 +825,14 @@ def prepare_fact_inputs(
             PreparedTaskInput(
                 task="facts",
                 checkpoint="C4",
-                provider="groq",
+                provider=provider,
                 model=model,
                 operation=_TEXT_OPERATION,
                 source_sha256=str(validated["source_sha256"]),
                 transcript_revision=str(validated["transcript_revision"]),
                 profile_revision=None,
                 input_sha256=hashlib.sha256(payload).hexdigest(),
-                payload_kind="groq_json",
+                payload_kind="gemini_json" if provider == "gemini" else "groq_json",
                 payload=payload,
                 max_completion_tokens=max_completion_tokens,
                 chunk_index=index,
@@ -822,12 +879,12 @@ def validate_fact_result(
     _validate_result_metadata(
         result,
         task_input,
-        expected_provider="groq",
+        expected_provider=task_input.provider,
         expected_operation=_TEXT_OPERATION,
     )
     chunk = _chunk_for_input(task_input, transcript)
     try:
-        packet = parse_fact_packet(result.data, transcript, chunk=chunk)
+        packet = parse_fact_packet(_text_response(result), transcript, chunk=chunk)
     except ReportError as exc:
         raise InferenceTaskError(str(exc)) from None
     return _output(
@@ -844,6 +901,7 @@ def prepare_coaching_input(
     transcript: Mapping[str, Any],
     fact_packets: Sequence[FactPacket],
     *,
+    provider: str = "groq",
     profile: Mapping[str, Any] | None = None,
     model: str = GROQ_MODEL,
     max_completion_tokens: int = 1_800,
@@ -867,18 +925,20 @@ def prepare_coaching_input(
         )
     except ReportError as exc:
         raise InferenceTaskError(str(exc)) from None
-    payload = _canonical_json(prompt, max_bytes=_MAX_TEXT_PAYLOAD_BYTES)
+    payload = _canonical_json(
+        _text_provider_body(prompt, provider), max_bytes=_MAX_TEXT_PAYLOAD_BYTES
+    )
     return PreparedTaskInput(
         task="coaching",
         checkpoint="C5",
-        provider="groq",
+        provider=provider,
         model=model,
         operation=_TEXT_OPERATION,
         source_sha256=str(validated["source_sha256"]),
         transcript_revision=str(validated["transcript_revision"]),
         profile_revision=profile_revision,
         input_sha256=hashlib.sha256(payload).hexdigest(),
-        payload_kind="groq_json",
+        payload_kind="gemini_json" if provider == "gemini" else "groq_json",
         payload=payload,
         max_completion_tokens=max_completion_tokens,
     )
@@ -904,16 +964,22 @@ def validate_coaching_result(
     _validate_result_metadata(
         result,
         task_input,
-        expected_provider="groq",
+        expected_provider=task_input.provider,
         expected_operation=_TEXT_OPERATION,
     )
     try:
-        draft = parse_groq_response(result.data, transcript, profile=resolved_profile)
+        draft = parse_groq_response(_text_response(result), transcript, profile=resolved_profile)
     except ReportError as exc:
         raise InferenceTaskError(str(exc)) from None
     # Legacy saved tasks remain readable. Newly quoted format-specific inputs
     # cannot silently complete with a broad legacy report that omits the overview.
-    prompt = json.loads(task_input.payload)
+    assert task_input.max_completion_tokens is not None
+    prompt = _text_prompt_view(
+        task_input.as_provider_body(),
+        provider=task_input.provider,
+        model=task_input.model,
+        maximum=task_input.max_completion_tokens,
+    )
     if OVERVIEW_MARKER in prompt["messages"][0]["content"] and draft.overview is None:
         _fail("report_overview_missing")
     return _output(

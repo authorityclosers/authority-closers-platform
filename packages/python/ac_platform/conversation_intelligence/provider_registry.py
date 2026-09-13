@@ -422,19 +422,20 @@ DEFAULT_PROVIDER_CATALOG = ProviderCatalog(
                 _model(
                     "gemini-3.8-flash",
                     "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent",
-                    ("facts", "contract_only"),
-                    ("coaching", "contract_only"),
+                    ("facts", "implemented"),
+                    ("coaching", "implemented"),
                 ),
                 _model(
                     "gemini-3.1-pro-preview",
                     "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-pro-preview:generateContent",
-                    ("facts", "contract_only"),
-                    ("coaching", "contract_only"),
+                    ("facts", "implemented"),
+                    ("coaching", "implemented"),
                 ),
             ),
             (
-                "Bounded structured generation transport exists; task adapters remain "
-                "contract-only here."
+                "Gemini 3.8 Flash and 3.1 Pro have bounded native JSON facts/coaching adapters "
+                "with source validation. Implementation does not attest provider quality, "
+                "free allowance or hosted activation. Older 2.5 tasks remain contract-only."
             ),
         ),
         ProviderCatalogEntry(

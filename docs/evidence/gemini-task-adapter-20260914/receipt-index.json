@@ -1,0 +1,37 @@
+[
+  {
+    "file": "browser.junit.xml",
+    "sha256": "ee1f360dcb6c88820e2f8123977a6c360f3fc8eb0b0906bbd2be805b8debe5cb",
+    "bytes": 379
+  },
+  {
+    "file": "database.junit.xml",
+    "sha256": "787bb3b7f30950460aa1258a9edd89b6d5dedd18674325e57ef7aef211c3d010",
+    "bytes": 1479
+  },
+  {
+    "file": "database.log",
+    "sha256": "a21931673edf3a496eddd35eb523f00e0dca04cdf8fafcd64de881698fca5092",
+    "bytes": 113
+  },
+  {
+    "file": "http-browser.json",
+    "sha256": "9bee2d674b2e8a3ab073e85958c791b22a4dc5725e936d8fe1f48be00d29fb5a",
+    "bytes": 4769
+  },
+  {
+    "file": "static-build.log",
+    "sha256": "926d1785878c5c6c18c33bb3937cd3c5a188902658c7ab3bd51fa367f818373f",
+    "bytes": 705
+  },
+  {
+    "file": "ui.junit.xml",
+    "sha256": "773de8dd1d07e27cb558128676004a71f09b30d1aac9b2d747494cb9bfe3aab8",
+    "bytes": 18688
+  },
+  {
+    "file": "unit.junit.xml",
+    "sha256": "ef4129ad13338e20fae74f97ff2071ed7776633afa9342a410aa03f7293db497",
+    "bytes": 103790
+  }
+]

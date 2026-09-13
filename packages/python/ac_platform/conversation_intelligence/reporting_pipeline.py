@@ -62,6 +62,9 @@ class StageRequest(BaseModel):
     transcript_checkpoint_id: UUID
     fact_checkpoint_ids: tuple[UUID, ...] = Field(default=(), max_length=64)
     chunk_index: int = Field(default=1, strict=True, ge=1, le=64)
+    provider: Literal["groq", "gemini"] = Field(
+        default="groq", exclude_if=lambda value: value == "groq"
+    )
     model: str = Field(default=GROQ_MODEL, min_length=1, max_length=128)
     max_input_chars: int = Field(default=16_000, strict=True, ge=512, le=32_000)
     max_completion_tokens: int = Field(default=1_400, strict=True, ge=256, le=4_000)
@@ -288,6 +291,7 @@ class ReportingPipeline:
         if request.stage == "C4":
             inputs = prepare_fact_inputs(
                 transcript,
+                provider=request.provider,
                 model=request.model,
                 max_input_chars=request.max_input_chars,
                 max_completion_tokens=request.max_completion_tokens,
@@ -351,6 +355,7 @@ class ReportingPipeline:
         prepared = prepare_coaching_input(
             transcript,
             [packet for packet, _, _ in packets],
+            provider=request.provider,
             profile=profile,
             model=request.model,
             max_completion_tokens=request.max_completion_tokens,
