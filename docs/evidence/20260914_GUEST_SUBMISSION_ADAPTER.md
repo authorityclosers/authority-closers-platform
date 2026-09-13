@@ -28,6 +28,12 @@ policy, credential/widget provisioning and release.
 - Startup/credential reference unit tests: **8 passed**. Missing configuration
   leaves core routes available; only one valid narrow external challenge file
   is accepted, with redacted failures.
+- The exact user-selected 20:53 OGG timing receipt completed the pinned native
+  preflight in **24.9 seconds** with sampled peak memory of **125 MiB** inside
+  the reviewed 768 MiB / one-CPU envelope. The receipt is content-free and
+  records no provider call, database write, public HTTP admission or retained
+  temporary source. The guest adapter now caps upload plus native preflight at
+  90 seconds and returns 408 before reservation when the window expires.
 - Existing app composition, settings and streaming video regression tests:
   **233 passed**. This checks the shared startup/request-limiter change against
   the existing platform behavior.

@@ -87,9 +87,14 @@ The first adapter reuses full native inspection for admission and repeats local
 C1 under the durable worker. It does not repeat transcription. Removing that
 duplicate local computation needs a separately validated preflight-to-worker
 artifact handoff; it is not assumed here. The native helper's bounded runtime can
-exceed an ordinary proxy response timeout. Hosted activation must verify the
-effective upload/preflight timeout and capacity, or provide a durable admission
-queue; these local tests do not establish VPS capacity.
+exceed an ordinary proxy response timeout. The guest upload adapter therefore
+uses a fixed 90-second combined upload-and-preflight response budget. The body
+stream and the native socket receive only the time remaining in that window; a
+408 response is returned before usage reservation, source publication or job
+enqueue when the budget expires. The worker's independent 750-second native
+limit is unchanged. Hosted activation must still verify the effective edge
+timeout and capacity, or provide a durable admission queue for workloads that
+cannot fit this response window.
 
 ## Retained evidence and access
 

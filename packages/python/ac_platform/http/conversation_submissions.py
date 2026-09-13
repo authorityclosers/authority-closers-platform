@@ -30,7 +30,10 @@ from ac_platform.conversation_intelligence.acquisition_processing import (
 )
 from ac_platform.conversation_intelligence.acquisition_reports import AcquisitionReports
 from ac_platform.conversation_intelligence.acquisition_sessions import AcquisitionSessions
-from ac_platform.conversation_intelligence.acquisition_source import NativeUploadPreflight
+from ac_platform.conversation_intelligence.acquisition_source import (
+    NativePreflightTimeout,
+    NativeUploadPreflight,
+)
 from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
     ConversationError,
@@ -65,6 +68,8 @@ from ac_platform.kernel.errors import DomainError
 _PRIVATE = {"Cache-Control": "private, no-store", "Vary": "Cookie"}
 _TOKEN = re.compile(r"[A-Za-z0-9_-]{43}\Z")
 _SHA = re.compile(r"[0-9a-f]{64}\Z")
+_UPLOAD_RESPONSE_BUDGET_SECONDS = 90.0
+_MIN_NATIVE_TIMEOUT_SECONDS = 1.0
 Factory = Callable[[AsyncSession], AcquisitionSessions]
 
 
@@ -77,6 +82,35 @@ class _Owner:
     @property
     def arguments(self) -> dict[str, Any]:
         return {"token": self.token, "actor": self.actor}
+
+
+def _preflight_with_deadline(
+    preflight: NativeUploadPreflight,
+    *,
+    deadline: float,
+    now: Callable[[], float],
+) -> NativeUploadPreflight:
+    """Bind hosted native admission to the request window without changing worker limits."""
+
+    remaining = deadline - now()
+    if remaining < _MIN_NATIVE_TIMEOUT_SECONDS:
+        raise NativePreflightTimeout(
+            "The recording took too long to verify before the upload window expired."
+        )
+    runtime = preflight.runtime
+    if type(runtime) is not SocketNativeRuntime:
+        # Local/test adapters do not own a socket timeout; the request deadline is
+        # still checked before this call, while production always uses the helper.
+        return preflight
+    return NativeUploadPreflight(
+        SocketNativeRuntime(
+            runtime.socket_path,
+            workspace_root=runtime.workspace_root,
+            expected_image_ref=runtime.expected_image_ref,
+            timeout_seconds=min(runtime.timeout_seconds, remaining),
+            exchange=runtime._exchange,
+        )
+    )
 
 
 def install_submission_http(
@@ -155,6 +189,7 @@ def install_submission_http(
     @router.put("/submissions/{submission_id}/source", status_code=202)
     async def upload(submission_id: UUID, request: Request, response: Response) -> dict[str, Any]:
         guard(request, response, write=True)
+        request_deadline = asyncio.get_running_loop().time() + _UPLOAD_RESPONSE_BUDGET_SECONDS
         lengths = request.headers.getlist("content-length")
         hashes = request.headers.getlist("x-source-sha256")
         policies = request.headers.getlist("x-upload-policy")
@@ -196,14 +231,17 @@ def install_submission_http(
                 ) as folder:
                     path = Path(folder) / "source.media"
                     received = 0
-                    deadline = asyncio.get_running_loop().time() + 180
                     stream = request.stream()
                     with path.open("xb") as target:
                         try:
                             while True:
-                                remaining = deadline - asyncio.get_running_loop().time()
+                                remaining = request_deadline - asyncio.get_running_loop().time()
                                 if remaining <= 0:
-                                    raise fail(408, "The upload timed out. Try this file again.")
+                                    raise fail(
+                                        408,
+                                        "The upload took too long. Retry from a faster connection "
+                                        "or choose a smaller file.",
+                                    )
                                 async with asyncio.timeout(min(30, remaining)):
                                     chunk = await anext(stream, None)
                                 if chunk in (None, b""):
@@ -214,7 +252,17 @@ def install_submission_http(
                                 if received > int(lengths[0]):
                                     raise fail(413, "The file exceeds its selected size.")
                                 await fenced.run(target.write, chunk)
-                        except (TimeoutError, ClientDisconnect):
+                        except TimeoutError:
+                            if request_deadline - asyncio.get_running_loop().time() <= 0:
+                                raise fail(
+                                    408,
+                                    "The upload took too long. Retry from a faster connection "
+                                    "or choose a smaller file.",
+                                ) from None
+                            raise fail(
+                                408, "The upload was interrupted. Try this file again."
+                            ) from None
+                        except ClientDisconnect:
                             raise fail(
                                 408, "The upload was interrupted. Try this file again."
                             ) from None
@@ -222,7 +270,14 @@ def install_submission_http(
                             await stream.aclose()
                     if received != int(lengths[0]):
                         raise fail(422, "The complete recording was not received.")
-                    measured = await fenced.run(preflight.measure, path, submission_id, hashes[0])
+                    bounded_preflight = _preflight_with_deadline(
+                        preflight,
+                        deadline=request_deadline,
+                        now=asyncio.get_running_loop().time,
+                    )
+                    measured = await fenced.run(
+                        bounded_preflight.measure, path, submission_id, hashes[0]
+                    )
                     async with asynccontextmanager(current_owner)(request) as owner:
                         service = AcquisitionProcessing(owner.ownership, runtime)
                         actor, quote = await service.prepare(
@@ -376,7 +431,7 @@ def install_submission_http(
             close = getattr(iterator, "close", None)
             if close is not None:
                 await join_thread(close)
-            if isinstance(error, (StorageError, OSError)):
+            if isinstance(error, StorageError | OSError):
                 raise fail(409, "The retained recording is unavailable.") from None
             raise
         headers = {

@@ -38,7 +38,10 @@ from ac_platform.conversation_intelligence.broker_router import FixedProviderRou
 from ac_platform.conversation_intelligence.inference_worker import ConversationInferenceWorker
 from ac_platform.conversation_intelligence.intake import IntakePolicy
 from ac_platform.conversation_intelligence.models import ConversationRecording, ConversationRun
-from ac_platform.conversation_intelligence.native_runtime import SocketNativeRuntime
+from ac_platform.conversation_intelligence.native_runtime import (
+    NativeRuntimeError,
+    SocketNativeRuntime,
+)
 from ac_platform.conversation_intelligence.processing_plan import ProcessingPlanScheduler
 from ac_platform.conversation_intelligence.provider_admin import ConversationProviderAdmin
 from ac_platform.conversation_intelligence.storage import PrivateLocalRecordingStorage
@@ -301,6 +304,49 @@ def test_original_upload_worker_and_expired_lease_playback_are_owner_bound(
                         setup.state.tenant_id, UUID(result["recording_id"])
                     )
                     == ()
+                )
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_native_preflight_timeout_does_not_reserve_usage(
+    postgres_harness: Any,
+    tmp_path: Path,
+) -> None:
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            def timed_out(
+                _source: Path, _outdir: Path, *, job_id: UUID, rate: Any
+            ) -> dict[str, Any]:
+                assert type(job_id) is UUID and rate == 16000
+                raise NativeRuntimeError("native_runtime_timeout")
+
+            setup.native.inspect = timed_out  # type: ignore[method-assign]
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                client.cookies.set("ac_xray_guest", setup.guest.token)
+                data, submission = _wav_one_second_48k(), uuid4()
+                headers = await _headers(client, data)
+                uploaded = await client.put(
+                    f"{PREFIX}/submissions/{submission}/source",
+                    content=data,
+                    headers=headers,
+                )
+                assert uploaded.status_code == 408, uploaded.text
+                assert "too long to verify" in uploaded.json()["detail"]
+
+            async with setup.sessions() as db:
+                assert (
+                    await db.scalar(
+                        select(func.count())
+                        .select_from(ConversationAcquisitionUsage)
+                        .where(ConversationAcquisitionUsage.submission_id == submission)
+                    )
+                    == 0
                 )
         finally:
             await setup.engine.dispose()

@@ -29,6 +29,12 @@ from ac_platform.conversation_intelligence.signals import _HEADER, MAX_SECONDS, 
 AudioType = Literal["audio/mpeg", "audio/wav", "audio/ogg", "audio/flac", "audio/mp4"]
 
 
+class NativePreflightTimeout(ConversationError):
+    """The bounded upload admission window expired before native verification."""
+
+    status = 408
+
+
 def original_content_type(header: bytes) -> AudioType:
     # This allowlist selects a playback type. The isolated decoder must still
     # validate the complete source; a magic signature is never duration proof.
@@ -96,7 +102,15 @@ class NativeUploadPreflight:
                 or not 0 < duration <= MAX_SECONDS * 1000
             ):
                 raise ValueError("measurement_duration_differs")
-        except (NativeRuntimeError, ValueError, KeyError, TypeError, OSError):
+        except NativeRuntimeError as error:
+            if error.code == "native_runtime_timeout":
+                raise NativePreflightTimeout(
+                    "The recording took too long to verify before the upload window expired."
+                ) from None
+            raise ConversationError(
+                "The audio length could not be verified. Try another file."
+            ) from None
+        except (ValueError, KeyError, TypeError, OSError):
             raise ConversationError(
                 "The audio length could not be verified. Try another file."
             ) from None

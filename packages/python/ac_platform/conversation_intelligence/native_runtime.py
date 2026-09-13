@@ -371,7 +371,9 @@ class SocketNativeRuntime:
                 return _recv_exact(channel, length)
         except NativeRuntimeError:
             raise
-        except (OSError, TimeoutError):
+        except TimeoutError:
+            raise NativeRuntimeError("native_runtime_timeout") from None
+        except OSError:
             raise NativeRuntimeError("native_runtime_failed") from None
 
 
@@ -421,7 +423,7 @@ class DockerNativeRuntime:
             or not _CONTAINER_PREFIX.fullmatch(container_prefix)
             or type(timeout_seconds) not in {int, float}
             or not 1 <= timeout_seconds <= MAX_RUNTIME_SECONDS
-            or not isinstance(docker_executable, (str, Path))
+            or not isinstance(docker_executable, str | Path)
             or not str(docker_executable)
             or (runner is not None and not callable(runner))
         ):
