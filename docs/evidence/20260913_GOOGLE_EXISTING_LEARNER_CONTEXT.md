@@ -20,3 +20,8 @@ These exercise signed OAuth transactions, callbacks and issued cookies. Ruff
 and diff checks passed. The successful pre-fix Chrome login and membership
 diagnosis establish the original failure; post-deployment Chrome acceptance is
 still required before claiming this fix is live.
+
+CI additionally caught the optional configured tenant variable sharing the
+registration branch's non-optional variable name. Giving the authentication
+branch its own variable preserves behavior and passes mypy across all194Python
+source files. Required Python formatting checks also pass.

@@ -1806,18 +1806,18 @@ def install_identity_http(
                     # that case the generic identity service issues an
                     # unscoped session; the learner surface must select its
                     # existing learner context just as password login does.
-                    tenant_id = settings.public_learner_tenant_id
-                    if transaction.surface == "learner" and tenant_id is not None:
+                    existing_learner_tenant_id = settings.public_learner_tenant_id
+                    if transaction.surface == "learner" and existing_learner_tenant_id is not None:
                         membership = await database.scalar(
                             select(Membership).where(
-                                Membership.tenant_id == tenant_id,
+                                Membership.tenant_id == existing_learner_tenant_id,
                                 Membership.person_id == issued.metadata.person_id,
                                 Membership.role == MembershipRole.LEARNER.value,
                                 Membership.status == MembershipStatus.ACTIVE.value,
                             )
                         )
                         if membership is not None:
-                            await identity.select_tenant(session_token, tenant_id)
+                            await identity.select_tenant(session_token, existing_learner_tenant_id)
                 else:
                     if link_session_token is None:  # pragma: no cover - narrowed above
                         raise AuthenticationRequired(
