@@ -58,8 +58,10 @@ from tests.database.test_conversation_worker_postgresql import (
 )
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def postgres_harness() -> Any:
+    # Every report case needs its own schema because its independently seeded
+    # verified control person uses the same globally unique email address.
     yield from _postgres_harness.__wrapped__()  # type: ignore[attr-defined]
 
 
