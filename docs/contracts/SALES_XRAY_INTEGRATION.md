@@ -40,16 +40,23 @@ permission returns 403. Write routes require the approved AC Origin.
 | `GET /v1/conversation/recordings/{id}/transcript` | Validated transcript source hash/revision, source clock, duration and literal segments; no raw provider receipt |
 | `GET /v1/conversation/recordings/{id}/checkpoints` | Own source-bound checkpoint metadata |
 | `DELETE /v1/conversation/recordings/{id}` | Idempotent durable deletion request; blocks further use and erases private descendants through worker |
-| `POST /v1/conversation/intake/quote` | Local-only composition: checks explicit allowance and returns exact local-processing quote |
+| `POST /v1/conversation/intake/quote` | Configured private composition: checks explicit allowance/storage capacity and returns exact local-processing quote |
 | `POST /v1/conversation/quotes/{id}/approve` | Accepts that quote fingerprint/privacy revision; no implicit provider permission |
 | `PUT /v1/conversation/recordings/{id}/source` | Accepted quote required via `X-Analysis-Quote`; exact length/hash, bounded original octet stream |
 | `GET /v1/conversation/recordings/{id}/source` | Authorized private playback, one HTTP byte range, no path or external bearer URL |
 | `POST /v1/conversation/runs` | Reserves allowance/budget and enqueues exact supported recipe through existing PostgreSQL jobs/outbox |
+| `POST /v1/conversation/recordings/{id}/analysis/quote` | Approved composition only: issues an exact source-bound C2/C4/C5 quote with explicit limits; does not approve or execute it |
+| `POST /v1/conversation/recordings/{id}/analysis` | Records exact owner consent and reserves/enqueues the selected approved stage |
+| `GET /v1/conversation/recordings/{id}/analysis` | Current owned persisted stage state; no execution from reads |
 
 Registration, quote creation, run creation, deletion and admin saves take
 `Idempotency-Key`. The current intake recipe produces C0/C1 local measurements.
 `completed` with `report: null` must not be presented as a generated sales report.
 Transcript absence before report availability is normal; clients poll status first.
+The new analysis routes use the separate hash-pinned release approval described in
+`docs/evidence/SALES_XRAY_HOSTED_AUTHORITY.md`. They do not accept learner-selected
+providers, models, profiles or credential references. Automatic progression is
+explicitly false until a durable processing-plan controller is connected.
 
 ## Admin controls and local proof import
 
@@ -96,6 +103,8 @@ Shared edits: model registration in `db/models.py`, optional HTTP composition in
 and generated-output ignores. No existing LMS navigation, release manifests,
 identity implementation, apex routing, secrets or production DB data are changed.
 
-Container confinement, hosted recording storage, durable provider C2-C6 execution,
+The internal durable C2-C6 worker and source-owned hosted API composition now have
+separate implementation evidence. Dedicated confined Linux worker composition,
+approved actual storage/allowance/provider configuration, automatic progression,
 cross-subdomain session integration, retention scheduling, current KVM4 capacity,
 canary and rollback remain required before claiming the product is live.

@@ -13,6 +13,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from ac_platform import __version__
 from ac_platform.application.settings import Settings, get_settings
+from ac_platform.conversation_intelligence.hosted_runtime import compose_hosted_intake
 from ac_platform.db.session import engine, session_factory
 from ac_platform.http.admin_learning import install_admin_learning_http
 from ac_platform.http.app_updates import install_app_updates_http
@@ -137,11 +138,21 @@ def create_app(
         raise RuntimeError(
             "Hosted conversation intake requires its reviewed deployment composition."
         )
+    if conversation_intake_runtime is not None and settings.sales_xray_enabled:
+        raise RuntimeError("Use one explicit conversation runtime composition.")
+    try:
+        resolved_conversation = conversation_intake_runtime or compose_hosted_intake(settings)
+    except (ValueError, OSError):
+        # A stale Sales Xray approval disables this capability, not the LMS/API.
+        # No demo or less restricted provider runtime is used as a fallback.
+        resolved_conversation = None
+        logger.warning("sales_xray_composition_unavailable")
+    application.state.sales_xray_intake_configured = resolved_conversation is not None
     install_conversation_http(
         application,
         settings=settings,
         require_actor=require_actor,
-        intake_runtime=conversation_intake_runtime,
+        intake_runtime=resolved_conversation,
     )
     install_conversation_admin_http(
         application,
@@ -260,8 +271,8 @@ def create_app(
         local_avatar_upload_enabled=settings.environment == "local"
         and settings.media_local_avatar_enabled,
         studio_video_upload_max_bytes=studio_video_max_source_bytes,
-        conversation_upload_max_bytes=conversation_intake_runtime.storage.max_bytes
-        if conversation_intake_runtime
+        conversation_upload_max_bytes=resolved_conversation.storage.max_bytes
+        if resolved_conversation
         else None,
     )
     application.add_middleware(

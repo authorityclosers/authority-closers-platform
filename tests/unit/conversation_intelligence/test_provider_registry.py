@@ -268,13 +268,13 @@ def test_dispatch_requires_current_config_digest_permission_and_input_stage() ->
 
 def test_contract_only_generation_cannot_be_presented_as_implemented_task_adapter() -> None:
     provider = _provider(
-        provider_id="groq",
-        model_id="openai/gpt-oss-120b",
+        provider_id="gemini",
+        model_id="gemini-2.5-flash",
     )
     config = _config(
         task="facts",
         provider=provider,
-        route=_route("facts", provider_id="groq", model_id="openai/gpt-oss-120b"),
+        route=_route("facts", provider_id="gemini", model_id="gemini-2.5-flash"),
     )
     validate_registry_config(config)
     with pytest.raises(ProviderRegistryError, match="task_adapter_not_implemented"):

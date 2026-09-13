@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
@@ -42,6 +42,9 @@ from ac_platform.conversation_intelligence.models import (
 )
 from ac_platform.kernel.authz import ActorContext
 
+if TYPE_CHECKING:
+    from ac_platform.conversation_intelligence.authority import ConversationAuthority
+
 PRIVACY_REVISION = "local-private-audio-v1"
 CONSENT_PREFIX = "intake-consent-v1:"
 
@@ -69,14 +72,30 @@ class IntakePolicy:
 
 
 class ConversationIntake:
-    def __init__(self, application: ConversationApplication, policy: IntakePolicy) -> None:
+    def __init__(
+        self,
+        application: ConversationApplication,
+        policy: IntakePolicy,
+        *,
+        authority: ConversationAuthority | None = None,
+    ) -> None:
         self.application, self.policy = application, policy
         self.database = application.database
+        self.authority = authority
 
     async def admit(self, actor: ActorContext) -> None:
         await self.application.admit(actor)
         if actor.tenant_id not in self.policy.tenant_ids:
             raise ConversationDenied("Analysis has not been enabled for this workspace.")
+        if self.authority is not None:
+            bundle = await self.authority.admit(self.application, actor)
+            if (
+                bundle.budget_scope_id != self.policy.budget_scope_id
+                or bundle.intake_authorization_ref != self.policy.authorization_ref
+                or bundle.intake_retention_ref != self.policy.retention_ref
+                or bundle.retention_days != self.policy.retention_days
+            ):
+                raise ConversationDenied("The approved private intake configuration changed.")
 
     async def _quote(self, actor: ActorContext, identifier: UUID) -> ConversationQuote:
         await self.admit(actor)
@@ -125,10 +144,14 @@ class ConversationIntake:
     ) -> dict[str, Any]:
         await self.admit(actor)
         now = utc(self.application.clock())
+        if self.authority is not None:
+            await self.authority.claim_allowance(self.application, actor)
         payload = intent.model_dump(mode="json")
         replay = await self.application._replay(actor, key, "intake_quote", payload)
         if replay is not None and replay.result_id is not None:
             return self._view(await self._quote(actor, replay.result_id))
+        if self.authority is not None:
+            await self.authority.admit_upload(self.application, actor, intent)
 
         # An approved server allowance must exist before recording registration.
         # Preview reserve is pure; final reservation remains atomic with job enqueue.
