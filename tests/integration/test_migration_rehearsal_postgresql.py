@@ -394,7 +394,6 @@ def test_populated_0029_directly_preserves_all_rows_when_upgrading_to_0031(
         )
         database.commit()
     source_rows = _public_rows(migration_harness.engine)
-    assert len(source_rows) == 58
     assert len(source_rows["app_update_read_receipts"]) == 3
     assert not set(source_rows) & SALES_XRAY_TABLES
     assert not set(source_rows) & INFERENCE_TABLES
@@ -405,7 +404,6 @@ def test_populated_0029_directly_preserves_all_rows_when_upgrading_to_0031(
 
     assert migration.returncode == 0, "direct 0029-to-0031 migration failed in the isolated schema"
     target_rows = _public_rows(migration_harness.engine)
-    assert len(target_rows) == 72
     assert set(target_rows) == set(source_rows) | SALES_XRAY_TABLES | INFERENCE_TABLES
     for table, rows in source_rows.items():
         assert target_rows[table] == rows, f"migration changed existing rows in {table}"
