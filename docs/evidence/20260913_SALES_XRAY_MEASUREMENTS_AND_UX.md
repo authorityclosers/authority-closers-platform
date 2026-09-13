@@ -131,3 +131,26 @@ Git's merge-tree check against the then-current consolidated release commit
 combined CI, immutable images and installer. No shared release HEAD was changed
 by this lane. The already-requested exact real-call staging/production test
 approval remains pending; the old local-only approval is not reused for VPS runs.
+
+## Additional fresh upload proof
+
+The same frozen runtime `63d5a5e` now passes both cases in the existing
+`test_sales_xray_report_browser.py`: **2 tests in 79.68 seconds**, eight checks
+per case. The real browser/AC HTTP/disposable PostgreSQL flow uploads a new
+synthetic WAV through quote, approval, private storage and queued native worker
+completion. Saved synthetic reports play with actual authenticated byte ranges
+and reopen without another upload. The durable report case uses a synthetic
+ReportingBroker; the new upload itself proves local measurements, not new
+provider sales inference. Each case records 23 API responses and no external
+browser requests or browser errors. The harness records its unmounted further
+plan-quote route as 405; this is not proof of hosted provider activation.
+
+[Portable JUnit, network and source receipts](sales-xray-upload-browser-20260914/README.md)
+preserve exact file hashes. Test overlay `57a4743e` corrects the report-moment
+locator and retains the actual seek assertion. Runtime source remains unchanged.
+
+The consolidated source includes this runtime via merge `3ecaee5`. Its later
+candidate `a1a9936` failed CI run `34773977688` at routing-test lint. A separate
+test-only correction `c61dc1d` passes all Python Ruff checks and 16 routing tests;
+it was handed to the sole release owner. These facts do not establish a passing
+combined image or staging/production release.

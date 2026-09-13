@@ -1,0 +1,31 @@
+{
+  "schema": "ac.sales-xray.upload-acceptance-files/1",
+  "runtime_source": "63d5a5edd644bd250acdc8c51694712a3754c7f7",
+  "scope": "Local synthetic upload, native worker and report browser proof; no hosted or provider execution",
+  "files": [
+    {
+      "file": "sales-xray-report-browser.junit.xml",
+      "sha256": "a8bab106079bda22bebcfb48f0aa515a655919bb5036e474c83b5d0e1bf8316b",
+      "bytes": 522,
+      "original_receipt": "D:\\AC-authority-closers-release-audit\\sales-xray-report-browser-20260913-63d5a5e-retry2\\sales-xray-report-browser.junit.xml"
+    },
+    {
+      "file": "authenticated-browser.json",
+      "sha256": "52387bac73fa2a6f7bf10a0aa3b81e72768d8fc2b67dc612e818a80501353365",
+      "bytes": 4528,
+      "original_receipt": "D:\\AC-authority-closers-release-audit\\sales-xray-report-browser-20260913-63d5a5e-retry2\\authenticated-browser.json"
+    },
+    {
+      "file": "durable-authenticated-browser.json",
+      "sha256": "d0efa4fa69ed8a8a886bf2d17c6a4627a66ceb62969c48e81766436742276206",
+      "bytes": 4592,
+      "original_receipt": "D:\\AC-authority-closers-release-audit\\sales-xray-report-browser-20260913-63d5a5e-retry2\\durable-authenticated-browser.json"
+    },
+    {
+      "file": "source-runtime-receipt.json",
+      "sha256": "535392e42f861be4c83925838a6bda225ad13db71af27e6ce35b7077b3a0d709",
+      "bytes": 1259,
+      "original_receipt": "D:\\AC-authority-closers-release-audit\\sales-xray-report-browser-20260913-63d5a5e-retry2\\source-runtime-receipt.json"
+    }
+  ]
+}
