@@ -445,7 +445,7 @@ function Assert-LegacyLearnerTransition {
 function Assert-GoogleOAuthStart {
     # The endpoint persists one transaction, so no-op verification never calls it.
     $oauth = Get-HttpResult -Url (
-        "https://learner-staging.authorityclosers.com/v1/auth/google/start" +
+        "https://$learnerHost/v1/auth/google/start" +
         "?action=authenticate&surface=learner&return_path=%2Fhome"
     )
     if ($oauth.Status -ne 303 -or $null -eq $oauth.Location) {
@@ -494,7 +494,7 @@ function Assert-GoogleOAuthStart {
     if (
         $callback.Scheme -ne "https" -or
         -not $callback.IsDefaultPort -or
-        $callback.Host -ne "learner-staging.authorityclosers.com" -or
+        $callback.Host -ne $learnerHost -or
         $callback.AbsolutePath -ne "/v1/auth/google/callback" -or
         $callback.Query -or
         $callback.Fragment -or
