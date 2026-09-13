@@ -29,9 +29,12 @@ ROOT = Path("/srv/authority-closers/media-safety")
 DATABASE = Path("/srv/authority-closers/volumes/media-safety-signatures")
 SOCKET_ROOT = Path("/srv/authority-closers/volumes/media-safety-socket")
 TEMP_ROOT = Path("/srv/authority-closers/volumes/media-safety-tmp")
-TEMP_CAPACITY_BYTES = 8_000_000_000
+TEMP_IMAGE = ROOT / "scanner-temp-v1.ext4"
+TEMP_CAPACITY_BYTES = 8 * 1024**3
+TEMP_HOST_HEADROOM_BYTES = 2 * 1024**3
 TEMP_MAX_CONCURRENT_SCANS = 2
-TEMP_MAX_QUEUE = 2
+TEMP_MAX_QUEUE = 4  # ClamAV 1.5.4 raises lower values to twice MaxThreads on Linux.
+TEMP_POLICY_MARKER = "# ac-scanner-temp-filesystem-v1"
 CONTAINER = "ac-media-safety-scanner"
 DOCKER_HOST = "unix:///var/run/docker.sock"
 DIGEST = "sha256:5a7c486fc98339860373284f48a670b74b1f25f15812b327fbe5b684061cf42f"
@@ -312,10 +315,11 @@ def validate_container(
         )
     if temp_required:
         clamd = (installed / "clamd.conf").read_text(encoding="utf-8")
+        queue = TEMP_MAX_QUEUE if TEMP_POLICY_MARKER in compose_text else 2
         require(
             f"MaxThreads {TEMP_MAX_CONCURRENT_SCANS}" in clamd
-            and f"MaxQueue {TEMP_MAX_QUEUE}" in clamd
-            and f"MaxScanSize {TEMP_CAPACITY_BYTES // TEMP_MAX_CONCURRENT_SCANS}" in clamd
+            and f"MaxQueue {queue}" in clamd
+            and "MaxScanSize 4000000000" in clamd
             and "TemporaryDirectory /var/lib/ac-media-safety-tmp" in clamd,
             "Scanner temporary storage policy is not bounded",
         )
@@ -341,23 +345,150 @@ def ensure_socket_root() -> None:
     )
 
 
-def ensure_temp_root() -> None:
-    """Create the private disk workspace used by ClamAV stream scans."""
+def validate_temp_image(info: os.stat_result) -> None:
+    """A full allocation is required; sparse lengths do not reserve host disk."""
 
-    if not TEMP_ROOT.exists():
-        TEMP_ROOT.mkdir(mode=0o750)
-        os.chown(TEMP_ROOT, 100, 100)
+    require(
+        stat.S_ISREG(info.st_mode)
+        and info.st_uid == 0
+        and stat.S_IMODE(info.st_mode) == 0o600
+        and info.st_nlink == 1
+        and info.st_size == TEMP_CAPACITY_BYTES
+        and info.st_blocks * 512 >= TEMP_CAPACITY_BYTES,
+        "Scanner temporary backing file is untrusted, sparse, or incorrectly sized",
+    )
+
+
+def validate_temp_mount(mount: dict, loop: dict) -> None:
+    """Reject directory binds, other devices, offsets and unbounded backing files."""
+
+    require(
+        mount.get("target") == str(TEMP_ROOT)
+        and mount.get("fstype") == "ext4"
+        and re.fullmatch(r"/dev/loop[0-9]+", str(mount.get("source", ""))) is not None
+        and {"rw", "nodev", "nosuid", "noexec"} <= set(str(mount.get("options", "")).split(",")),
+        "Scanner temporary filesystem is not the fixed private ext4 mount",
+    )
+    require(
+        loop.get("name") == mount["source"]
+        and loop.get("back-file") == str(TEMP_IMAGE)
+        and loop.get("offset") == 0
+        and loop.get("sizelimit") == 0
+        and loop.get("ro") is False,
+        "Scanner temporary loop device differs from its exact backing file",
+    )
+
+
+def validate_temp_root(*, running: bool = False) -> None:
+    validate_temp_image(TEMP_IMAGE.lstat())
+    mounted = json.loads(
+        run(
+            "findmnt",
+            "--json",
+            "--mountpoint",
+            str(TEMP_ROOT),
+            "--output",
+            "TARGET,SOURCE,FSTYPE,OPTIONS",
+        )
+    )["filesystems"]
+    require(len(mounted) == 1, "Scanner temporary mount is ambiguous")
+    device = str(mounted[0].get("source", ""))
+    require(re.fullmatch(r"/dev/loop[0-9]+", device) is not None, "Unexpected temporary device")
+    loops = json.loads(
+        run("losetup", "--json", "--list", "--output", "NAME,BACK-FILE,OFFSET,SIZELIMIT,RO", device)
+    )["loopdevices"]
+    require(len(loops) == 1, "Scanner temporary loop device is ambiguous")
+    validate_temp_mount(mounted[0], loops[0])
+    require(
+        run("blockdev", "--getsize64", device) == str(TEMP_CAPACITY_BYTES),
+        "Scanner temporary device capacity drift",
+    )
     info = TEMP_ROOT.lstat()
     require(
-        stat.S_ISDIR(info.st_mode) and info.st_uid == 100 and not info.st_mode & 0o022,
-        "Untrusted scanner temporary directory",
+        stat.S_ISDIR(info.st_mode)
+        and info.st_uid == info.st_gid == 100
+        and stat.S_IMODE(info.st_mode) == 0o750,
+        "Untrusted scanner temporary filesystem root",
     )
-    filesystem = os.statvfs(TEMP_ROOT)
-    available = filesystem.f_bavail * filesystem.f_frsize
+    if running:
+        require(
+            run("docker", "exec", CONTAINER, "stat", "-c", "%d:%i", "/var/lib/ac-media-safety-tmp")
+            == f"{info.st_dev}:{info.st_ino}",
+            "Scanner container does not hold the validated temporary filesystem",
+        )
+
+
+def ensure_temp_root() -> None:
+    """Prepare one retained 8 GiB disk filesystem, never grow or erase scratch data.
+
+    The unmounted root is root-owned mode 000: a reboot or missing mount cannot
+    turn Docker's bind into a writable directory on the host filesystem. Run
+    the exact controller after reboot to remount and recreate the scanner.
+    """
+
+    trusted(TEMP_ROOT.parent)
+    if not TEMP_ROOT.exists():
+        TEMP_ROOT.mkdir(mode=0o000)
+    info = TEMP_ROOT.lstat()
+    require(stat.S_ISDIR(info.st_mode), "Untrusted scanner temporary directory")
+    if os.path.ismount(TEMP_ROOT):
+        validate_temp_root()
+        return
+    require(not tuple(TEMP_ROOT.iterdir()), "Unmounted scanner temporary directory is not empty")
     require(
-        available >= TEMP_CAPACITY_BYTES,
-        "Scanner temporary directory has less than the bounded capacity",
+        (info.st_uid == 0 and not info.st_mode & 0o022)
+        or (info.st_uid == info.st_gid == 100 and stat.S_IMODE(info.st_mode) == 0o750),
+        "Untrusted scanner temporary mountpoint",
     )
+    os.chown(TEMP_ROOT, 0, 0)
+    TEMP_ROOT.chmod(0o000)
+    preparing = TEMP_IMAGE.with_suffix(".preparing")
+    # An interrupted allocation is retained and blocks further allocation.
+    require(
+        not preparing.exists() and not preparing.is_symlink(),
+        "Incomplete scanner temporary allocation requires review",
+    )
+    if not TEMP_IMAGE.exists() and not TEMP_IMAGE.is_symlink():
+        filesystem = os.statvfs(ROOT)
+        require(
+            filesystem.f_bavail * filesystem.f_frsize
+            >= TEMP_CAPACITY_BYTES + TEMP_HOST_HEADROOM_BYTES,
+            "Insufficient host space for the fixed scanner allocation and headroom",
+        )
+        descriptor = os.open(preparing, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(descriptor, "wb") as stream:
+            os.posix_fallocate(stream.fileno(), 0, TEMP_CAPACITY_BYTES)
+            os.fsync(stream.fileno())
+        run(
+            "mkfs.ext4",
+            "-q",
+            "-F",
+            "-m",
+            "0",
+            "-E",
+            "nodiscard,lazy_itable_init=0,lazy_journal_init=0",
+            str(preparing),
+            timeout=300,
+        )
+        validate_temp_image(preparing.lstat())
+        # The installer lock and root-only managed parent exclude other writers.
+        preparing.rename(TEMP_IMAGE)
+        descriptor = os.open(ROOT, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+    validate_temp_image(TEMP_IMAGE.lstat())
+    run("mount", "-t", "ext4", "-o", "loop,nodev,nosuid,noexec", str(TEMP_IMAGE), str(TEMP_ROOT))
+    info = TEMP_ROOT.lstat()
+    if info.st_uid == 0:
+        require(
+            {entry.name for entry in TEMP_ROOT.iterdir()} <= {"lost+found"},
+            "Uninitialized scanner temporary filesystem contains unexpected data",
+        )
+        os.chown(TEMP_ROOT, 100, 100)
+        TEMP_ROOT.chmod(0o750)
+    validate_temp_root()
 
 
 def command(payload: bytes) -> bytes:
@@ -483,6 +614,9 @@ def prove(release: str, installed: Path) -> dict:
     )
     validate_container(value, release, installed)
     validate_policy(installed)
+    fixed_temp = TEMP_POLICY_MARKER in (installed / "compose.yaml").read_text(encoding="utf-8")
+    if fixed_temp:
+        validate_temp_root(running=True)
     _, evidence = live_probe()
     final = inspect()
     require(
@@ -493,6 +627,8 @@ def prove(release: str, installed: Path) -> dict:
         "Scanner identity or health changed during proof",
     )
     validate_container(final, release, installed)
+    if fixed_temp:
+        validate_temp_root(running=True)
     now = dt.datetime.now(dt.UTC)
     config_hash = sha(
         (installed / "clamd.conf").read_bytes() + (installed / "freshclam.conf").read_bytes()
@@ -546,6 +682,11 @@ def validate_installed_release(release: str, checksum: str) -> tuple[Path, dict[
 def compose_up(release: str, installed: Path) -> None:
     """Reconcile only the exact named scanner service for one release."""
 
+    disk_temp = "/var/lib/ac-media-safety-tmp:rw" in (installed / "compose.yaml").read_text(
+        encoding="utf-8"
+    )
+    if disk_temp:
+        ensure_temp_root()
     env = {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "AC_MEDIA_SAFETY_RELEASE": release}
     run(
         "docker",
@@ -557,6 +698,7 @@ def compose_up(release: str, installed: Path) -> None:
         "up",
         "--detach",
         "--no-build",
+        *(("--force-recreate",) if disk_temp else ()),
         "scanner",
         timeout=120,
         env=env,
@@ -712,7 +854,6 @@ def main() -> None:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         if args.action != "prove":
             ensure_socket_root()
-            ensure_temp_root()
         archives = ROOT / "archives"
         archives.mkdir(mode=0o755, exist_ok=True)
         trusted(archives)
@@ -769,7 +910,6 @@ def main() -> None:
                     "Untrusted signature directory",
                 )
                 ensure_socket_root()
-                ensure_temp_root()
                 run("docker", "pull", IMAGE, timeout=300)
             compose_up(args.release, installed)
             print(

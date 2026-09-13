@@ -19,19 +19,19 @@ profile is enabled. The profile keeps the canonical flow intact:
 
 The source limits are exact and intentionally expressed in their native units:
 
-| Bound | Value |
-| --- | ---: |
-| Uploaded source | 2,000,000,000 bytes |
-| ClamAV stream/file limit | 2,000,000,000 bytes |
-| ClamAV scan limit | 4,000,000,000 bytes |
-| Scanner total deadline | 1,800 seconds |
-| Scanner disk temp capacity | 8,000,000,000 bytes free before start |
-| Scanner active scans / queue | 2 / 2 |
-| Private store aggregate envelope | 8 GiB |
-| FFmpeg temporary workspace quota | 8 GiB |
-| Video processing concurrency | 2 active completions |
-| API memory limit | 768 MiB |
-| Worker memory limit | 512 MiB |
+| Bound                                  |                                Value |
+| -------------------------------------- | -----------------------------------: |
+| Uploaded source                        |                  2,000,000,000 bytes |
+| ClamAV stream/file limit               |                  2,000,000,000 bytes |
+| ClamAV scan limit                      |                  4,000,000,000 bytes |
+| Scanner total deadline                 |                        1,800 seconds |
+| Scanner disk temp capacity             | Fixed, preallocated 8 GiB ext4 image |
+| Scanner active scans / effective queue |                                2 / 4 |
+| Private store aggregate envelope       |                                8 GiB |
+| FFmpeg temporary workspace quota       |                                8 GiB |
+| Video processing concurrency           |                 2 active completions |
+| API memory limit                       |                              768 MiB |
+| Worker memory limit                    |                              512 MiB |
 
 The reviewed Python runtime image installs the Debian `ffmpeg` package, which
 provides both `ffmpeg` and `ffprobe` for the processing worker. The worker
@@ -47,15 +47,20 @@ Both mount at `/var/lib/ac-media`, with the application root at
 `/var/lib/ac-media/video-objects`. The scanner socket is a separate private,
 read-only safety endpoint at `/run/ac-media-safety/clamd.sock`; it contains no
 application media objects.
+
 - The worker's `TMPDIR` is `/var/lib/ac-media/tmp`, a precreated private
   directory on the media volume. This avoids the foundation `/tmp` tmpfs
   limit while retaining the processor's bounded source/output reservation.
 
 ClamAV uses the dedicated disk-backed
-`/srv/authority-closers/volumes/media-safety-tmp` workspace rather than its
-256 MiB process tmpfs. The controller requires at least 8,000,000,000 free
-bytes before start, and the reviewed scanner policy bounds active scans to two
-4,000,000,000-byte scan envelopes with a two-item queue.
+`/srv/authority-closers/volumes/media-safety-tmp` workspace. The controller
+preallocates one 8 GiB ext4 image, including filesystem metadata, and requires
+another 2 GiB of host free space before initial allocation. The image cannot
+grow. Capacity exhaustion rejects a scan; queued streams, extraction and crash
+debris share this ceiling. ClamAV 1.5.4 raises smaller queues to twice its thread
+count, so the explicit effective queue is four. A startup free-space check alone
+does not establish this bound. See the [disk-capacity evidence](20260913_SCANNER_DISK_CAPACITY.md)
+for remaining Linux acceptance and reboot recovery gates.
 
 The default application profiles remain disabled. Activation is a source-owned
 release change: the checked-in target profile sets
@@ -72,9 +77,6 @@ sudo install -d -o 10001 -g 10001 -m 0700 \
   /srv/authority-closers/volumes/media-video/<environment>/tmp
 sudo install -d -o 100 -g 100 -m 0755 \
   /srv/authority-closers/volumes/media-safety-socket
-sudo install -d -o 100 -g 100 -m 0750 \
-  /srv/authority-closers/volumes/media-safety-tmp
-
 sudo python3 /srv/authority-closers/media-safety/releases/<scanner-release>/manage.py \
   prove /srv/authority-closers/media-safety/archives/<scanner-release>.tar \
   <scanner-release> <scanner-archive-sha256>

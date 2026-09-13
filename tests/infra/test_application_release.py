@@ -152,6 +152,7 @@ def _run_compose_for_probe(
     rollback_practice_enabled: bool | None = None,
     filesystem_enabled: bool = False,
     rollback_filesystem_enabled: bool | None = None,
+    rollback_legacy_media_profile: bool = False,
 ) -> subprocess.CompletedProcess[str]:
     release = tmp_path / "release"
     (release / "environments").mkdir(parents=True)
@@ -183,7 +184,7 @@ services:
 """,
         encoding="utf-8",
     )
-    if filesystem_enabled:
+    if filesystem_enabled or rollback_filesystem_enabled:
         (release / "compose.filesystem-media.yaml").write_text(
             """services:
   probe:
@@ -199,11 +200,11 @@ services:
             encoding="utf-8",
         )
     rollback_compose = ""
-    if rollback_practice_enabled is not None:
+    if rollback_practice_enabled is not None or rollback_filesystem_enabled is not None:
         rollback = tmp_path / "rollback"
         (rollback / "environments").mkdir(parents=True)
         rollback_profile = (APPLICATION / "environments" / "staging.env").read_bytes()
-        if not rollback_practice_enabled:
+        if rollback_practice_enabled is False:
             rollback_profile = rollback_profile.replace(
                 b"AC_PRACTICE_PILOT_ENABLED=true\n",
                 b"AC_PRACTICE_PILOT_ENABLED=false\n",
@@ -212,6 +213,12 @@ services:
             rollback_profile = rollback_profile.replace(
                 b"AC_MEDIA_FILESYSTEM_ENABLED=false\n",
                 b"AC_MEDIA_FILESYSTEM_ENABLED=true\n",
+            )
+        if rollback_legacy_media_profile:
+            rollback_profile = b"\n".join(
+                line
+                for line in rollback_profile.split(b"\n")
+                if not line.startswith((b"AC_MEDIA_FILESYSTEM_", b"AC_MEDIA_SCANNER_HOST_ROOT="))
             )
         (rollback / "environments" / "staging.env").write_bytes(rollback_profile)
         (rollback / "release-images.env").write_text("", encoding="utf-8")
@@ -1123,9 +1130,13 @@ def test_installer_profile_parser_reports_effective_profile_policy(
 def test_installer_profile_parser_accepts_explicit_filesystem_activation(
     tmp_path: Path, target_environment: str
 ) -> None:
-    profile = (APPLICATION / "environments" / f"{target_environment}.env").read_bytes().replace(
-        b"AC_MEDIA_FILESYSTEM_ENABLED=false\n",
-        b"AC_MEDIA_FILESYSTEM_ENABLED=true\n",
+    profile = (
+        (APPLICATION / "environments" / f"{target_environment}.env")
+        .read_bytes()
+        .replace(
+            b"AC_MEDIA_FILESYSTEM_ENABLED=false\n",
+            b"AC_MEDIA_FILESYSTEM_ENABLED=true\n",
+        )
     )
 
     result = _run_profile_parser(tmp_path, profile, target_environment=target_environment)
@@ -1134,9 +1145,13 @@ def test_installer_profile_parser_accepts_explicit_filesystem_activation(
 
 
 def test_installer_profile_parser_rejects_noncanonical_filesystem_root(tmp_path: Path) -> None:
-    profile = (APPLICATION / "environments" / "staging.env").read_bytes().replace(
-        b"AC_MEDIA_FILESYSTEM_HOST_ROOT=/srv/authority-closers/volumes/media-video/staging\n",
-        b"AC_MEDIA_FILESYSTEM_HOST_ROOT=/srv/authority-closers/volumes/media-video/production\n",
+    profile = (
+        (APPLICATION / "environments" / "staging.env")
+        .read_bytes()
+        .replace(
+            b"AC_MEDIA_FILESYSTEM_HOST_ROOT=/srv/authority-closers/volumes/media-video/staging\n",
+            b"AC_MEDIA_FILESYSTEM_HOST_ROOT=/srv/authority-closers/volumes/media-video/production\n",
+        )
     )
 
     result = _run_profile_parser(tmp_path, profile)
@@ -1362,19 +1377,37 @@ def test_compose_for_uses_profile_policy_over_ambient_environment(tmp_path: Path
     assert FOREIGN_TENANT not in result.stdout
 
 
+@pytest.mark.parametrize("filesystem_enabled,rollback_enabled", [(True, False), (False, True)])
 def test_compose_for_selects_filesystem_companion_from_each_target_release_policy(
+    tmp_path: Path,
+    filesystem_enabled: bool,
+    rollback_enabled: bool,
+) -> None:
+    result = _run_compose_for_probe(
+        tmp_path,
+        filesystem_enabled=filesystem_enabled,
+        rollback_filesystem_enabled=rollback_enabled,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.count('filesystem: "true"') == 1
+    assert result.stdout.splitlines().count("name: ac-application-staging") == 2
+    assert "AC_MEDIA_FILESYSTEM_HOST_ROOT" not in result.stderr
+    assert "media-video/staging" in result.stdout
+
+
+def test_compose_for_old_rollback_profile_does_not_inherit_filesystem_activation(
     tmp_path: Path,
 ) -> None:
     result = _run_compose_for_probe(
         tmp_path,
         filesystem_enabled=True,
         rollback_filesystem_enabled=False,
+        rollback_legacy_media_profile=True,
     )
-
     assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines().count("name: ac-application-staging") == 2
     assert result.stdout.count('filesystem: "true"') == 1
-    assert "AC_MEDIA_FILESYSTEM_HOST_ROOT" not in result.stderr
-    assert "media-video/staging" in result.stdout
 
 
 def test_policy_off_rollback_target_preserves_practice_history(tmp_path: Path) -> None:

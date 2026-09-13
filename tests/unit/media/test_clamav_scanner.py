@@ -240,6 +240,7 @@ def test_rechecks_immutable_source_metadata_after_daemon_verdict(
         b"stream: OK\0stream: Evil FOUND\0",
         b"stream: OK\0stream: OK\0",
         b"stream: ERROR\0",
+        b"INSTREAM: Can't write to temporary file. ERROR\0",
         b"INSTREAM size limit exceeded. ERROR\0",
         b"stream: \xff FOUND\0",
         b"1: stream: OK\0",

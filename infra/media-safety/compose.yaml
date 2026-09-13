@@ -1,4 +1,5 @@
 name: ac-media-safety
+# ac-scanner-temp-filesystem-v1
 services:
   scanner:
     image: clamav/clamav@sha256:5a7c486fc98339860373284f48a670b74b1f25f15812b327fbe5b684061cf42f
