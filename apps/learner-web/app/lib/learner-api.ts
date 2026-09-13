@@ -825,7 +825,7 @@ export function createLearnerApi(
     path: string,
     body: JsonRecord,
     extraHeaders: Record<string, string> = {},
-    method: "POST" | "PUT" = "POST",
+    method: "POST" | "PUT" | "DELETE" = "POST",
     idempotencyKey = makeKey(),
     signal?: AbortSignal,
   ): Promise<T> {
@@ -860,7 +860,7 @@ export function createLearnerApi(
     path: string,
     body: JsonRecord,
     extraHeaders: Record<string, string> = {},
-    method: "POST" | "PUT" = "POST",
+    method: "POST" | "PUT" | "DELETE" = "POST",
     signal?: AbortSignal,
   ): Promise<T> {
     const fingerprint = stableFingerprint({ body, extraHeaders, method, path });

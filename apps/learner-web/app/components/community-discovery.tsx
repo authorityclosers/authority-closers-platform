@@ -16,16 +16,31 @@ type DiscoveryApi = Pick<
   | "setCommunityDiscovery"
   | "communitySearch"
   | "communityPublicProfile"
-  | "communityConnections"
   | "requestCommunityConnection"
   | "respondCommunityConnection"
   | "removeCommunityConnection"
   | "blockCommunityLearner"
   | "reportCommunityLearner"
->;
+> & Partial<Pick<LearnerApi, "communityConnections">>;
 
 export function CommunityDiscovery({ api }: { api: LearnerApi }) {
-  const discoveryApi = api as LearnerApi & Partial<DiscoveryApi>;
+  if (typeof api.communityDiscovery !== "function") return null;
+  return <CommunityDiscoveryPanel api={api as DiscoveryApi} />;
+}
+
+function CommunityDiscoveryPanel({ api }: { api: DiscoveryApi }) {
+  const {
+    communityDiscovery,
+    communityConnections,
+    setCommunityDiscovery,
+    communitySearch,
+    communityPublicProfile,
+    requestCommunityConnection,
+    respondCommunityConnection,
+    removeCommunityConnection,
+    blockCommunityLearner,
+    reportCommunityLearner,
+  } = api;
   const [discovery, setDiscovery] = useState<CommunityDiscoveryResponse | null>(null);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<CommunityPublicProfile[]>([]);
@@ -36,13 +51,8 @@ export function CommunityDiscovery({ api }: { api: LearnerApi }) {
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!discoveryApi.communityDiscovery) {
-      setLoading(false);
-      return;
-    }
     const controller = new AbortController();
-    void discoveryApi
-      .communityDiscovery({ signal: controller.signal })
+    void communityDiscovery({ signal: controller.signal })
       .then(setDiscovery)
       .catch((error: unknown) => {
         if (!controller.signal.aborted) {
@@ -53,31 +63,29 @@ export function CommunityDiscovery({ api }: { api: LearnerApi }) {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [discoveryApi.communityDiscovery]);
+  }, [communityDiscovery]);
 
   useEffect(() => {
-    if (!discoveryApi.communityConnections) return;
+    if (!communityConnections) return;
     const controller = new AbortController();
-    void discoveryApi
-      .communityConnections({ signal: controller.signal })
+    void communityConnections({ signal: controller.signal })
       .then((response) => setConnections(response.items))
       .catch(() => {
         // Search and the explicit discovery setting remain usable if this
         // optional list is unavailable.
       });
     return () => controller.abort();
-  }, [discoveryApi.communityConnections]);
+  }, [communityConnections]);
 
-  if (!discoveryApi.communityDiscovery) return null;
   if (loading) return <section className={styles.card} aria-busy="true">Loading learner discovery…</section>;
 
   async function saveDiscovery() {
-    if (!discovery || !discoveryApi.setCommunityDiscovery) return;
+    if (!discovery) return;
     setBusy(true);
     setMessage(null);
     try {
       setDiscovery(
-        await discoveryApi.setCommunityDiscovery(
+        await setCommunityDiscovery(
           !discovery.discoverable,
           discovery.public_display_name,
           discovery.avatar_asset_id,
@@ -94,11 +102,11 @@ export function CommunityDiscovery({ api }: { api: LearnerApi }) {
   }
 
   async function search() {
-    if (!discoveryApi.communitySearch || query.trim().length < 3) return;
+    if (query.trim().length < 3) return;
     setBusy(true);
     setMessage(null);
     try {
-      setResults((await discoveryApi.communitySearch(query.trim(), 10)).items);
+      setResults((await communitySearch(query.trim(), 10)).items);
     } catch (error) {
       setMessage(userFacingRequestError(error, "Learner search couldn’t load."));
     } finally {
@@ -107,11 +115,10 @@ export function CommunityDiscovery({ api }: { api: LearnerApi }) {
   }
 
   async function request(username: string) {
-    if (!discoveryApi.requestCommunityConnection) return;
     setBusy(true);
     setMessage(null);
     try {
-      const response = await discoveryApi.requestCommunityConnection(username);
+      const response = await requestCommunityConnection(username);
       setResults((current) =>
         current.map((item) =>
           item.username === username ? { ...item, connection_state: response.state } : item,
@@ -131,11 +138,10 @@ export function CommunityDiscovery({ api }: { api: LearnerApi }) {
   }
 
   async function viewProfile(username: string) {
-    if (!discoveryApi.communityPublicProfile) return;
     setBusy(true);
     setMessage(null);
     try {
-      setViewedProfile(await discoveryApi.communityPublicProfile(username));
+      setViewedProfile(await communityPublicProfile(username));
     } catch (error) {
       setMessage(userFacingRequestError(error, "That learner profile couldn’t load."));
     } finally {
@@ -144,11 +150,10 @@ export function CommunityDiscovery({ api }: { api: LearnerApi }) {
   }
 
   async function respond(username: string, action: "accept" | "decline") {
-    if (!discoveryApi.respondCommunityConnection) return;
     setBusy(true);
     setMessage(null);
     try {
-      const response = await discoveryApi.respondCommunityConnection(username, action);
+      const response = await respondCommunityConnection(username, action);
       setResults((current) =>
         current.map((item) =>
           item.username === username ? { ...item, connection_state: response.state, connection_incoming: true } : item,
@@ -164,11 +169,10 @@ export function CommunityDiscovery({ api }: { api: LearnerApi }) {
   }
 
   async function remove(username: string) {
-    if (!discoveryApi.removeCommunityConnection) return;
     setBusy(true);
     setMessage(null);
     try {
-      await discoveryApi.removeCommunityConnection(username);
+      await removeCommunityConnection(username);
       setResults((current) => current.map((item) => item.username === username ? { ...item, connection_state: "removed" } : item));
       setConnections((current) => current.filter((item) => item.username !== username));
       setViewedProfile((current) => current?.username === username ? { ...current, connection_state: "removed" } : current);
@@ -181,11 +185,10 @@ export function CommunityDiscovery({ api }: { api: LearnerApi }) {
   }
 
   async function block(username: string) {
-    if (!discoveryApi.blockCommunityLearner) return;
     setBusy(true);
     setMessage(null);
     try {
-      await discoveryApi.blockCommunityLearner(username);
+      await blockCommunityLearner(username);
       setResults((current) => current.filter((item) => item.username !== username));
       setConnections((current) => current.filter((item) => item.username !== username));
       setViewedProfile(null);
@@ -198,11 +201,10 @@ export function CommunityDiscovery({ api }: { api: LearnerApi }) {
   }
 
   async function report(username: string) {
-    if (!discoveryApi.reportCommunityLearner) return;
     setBusy(true);
     setMessage(null);
     try {
-      await discoveryApi.reportCommunityLearner(username, "other");
+      await reportCommunityLearner(username, "other");
       setMessage(`Thanks. Your report about @${username} was recorded.`);
     } catch (error) {
       setMessage(userFacingRequestError(error, "That report couldn’t be recorded."));

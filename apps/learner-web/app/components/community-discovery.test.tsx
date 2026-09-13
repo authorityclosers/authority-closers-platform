@@ -70,6 +70,15 @@ async function click(label: string) {
   await act(async () => button!.click());
 }
 
+function setInputValue(input: HTMLInputElement, value: string) {
+  const setter = Object.getOwnPropertyDescriptor(
+    Object.getPrototypeOf(input),
+    "value",
+  )?.set;
+  setter?.call(input, value);
+  input.dispatchEvent(new InputEvent("input", { bubbles: true, data: value }));
+}
+
 describe("community discovery", () => {
   it("keeps the profile private until explicit opt-in", async () => {
     await mount();
@@ -84,9 +93,7 @@ describe("community discovery", () => {
     await mount();
     await act(async () => {
       const input = container.querySelector("input") as HTMLInputElement;
-      input.value = "other_learner";
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-      input.dispatchEvent(new Event("change", { bubbles: true }));
+      setInputValue(input, "other_learner");
     });
     await click("Search");
     expect(api.communitySearch).toHaveBeenCalledWith("other_learner", 10);
@@ -106,9 +113,7 @@ describe("community discovery", () => {
     await mount();
     await act(async () => {
       const input = container.querySelector("input") as HTMLInputElement;
-      input.value = "other_learner";
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-      input.dispatchEvent(new Event("change", { bubbles: true }));
+      setInputValue(input, "other_learner");
     });
     await click("Search");
     await click("Accept");
