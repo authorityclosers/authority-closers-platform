@@ -48,6 +48,7 @@ REMOTE_COMPLETION_TIMEOUT_SECONDS = (
     REMOTE_VIDEO_TIMEOUT_SECONDS + REMOTE_COMPLETION_OVERHEAD_SECONDS
 )
 REMOTE_EXIT_GRACE_SECONDS = 30.0
+BROKEN_PIPE_DRAIN_SECONDS = 2.0
 MAX_POLL_SECONDS = 60.0
 MAX_POLL_TIMEOUT_SECONDS = 3600.0
 SESSION_COOKIE_ENV = "AC_STUDIO_SESSION_COOKIE"
@@ -301,6 +302,12 @@ def _remote_command(
     elif method == "POST":
         curl.append("--data-binary ''")
     if upload:
+        # curl cannot infer a length from stdin and otherwise adds
+        # Transfer-Encoding: chunked even when the admitted Content-Length is
+        # present.  The API/body limiter rejects that conflicting framing;
+        # explicitly remove the generated header so the signed length is the
+        # only request framing authority.
+        curl.extend(("--header", shlex.quote("Transfer-Encoding:")))
         curl.append("--upload-file -")
         curl.append("--output /dev/null")
     curl.append(shlex.quote(profile.loopback_base + path))
@@ -427,9 +434,24 @@ def _run_remote(
         process.stdin = None
     except (BrokenPipeError, OSError) as error:
         timed_out = deadline_expired.is_set()
+        # curl writes its bounded HTTP status after the response body.  A
+        # server-side rejection can close the upload pipe before the local
+        # stream finishes, while the SSH stdout reader already has the
+        # canonical status available.  Give that reader a short, bounded
+        # opportunity to finish before killing the process so callers can
+        # report the actual HTTP result (for example 413) and avoid a blind
+        # retry with a new intent.
+        with suppress(Exception):
+            reader.join(timeout=BROKEN_PIPE_DRAIN_SECONDS)
+        completed_response: tuple[int, bytes] | None = None
+        if not stdout_error and not stdout_overflow:
+            with suppress(UploadOperatorError):
+                completed_response = _status_from_output(bytes(stdout_buffer))
         stop_process()
         if timed_out:
             raise UploadOperatorError("The SSH/API command timed out.") from error
+        if completed_response is not None:
+            return completed_response
         raise UploadOperatorError(
             "The SSH/API stream closed before the upload completed."
         ) from error

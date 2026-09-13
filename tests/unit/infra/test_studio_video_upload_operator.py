@@ -107,6 +107,7 @@ def test_remote_command_pins_loopback_host_and_never_contains_cookie(uploader: M
     assert "curl --disable --noproxy '*'" in command
     assert "--header 'Content-Type: video/mp4'" in command
     assert "--header 'Idempotency-Key: synthetic-header-fix'" in command
+    assert "--header Transfer-Encoding:" in command
     assert "--header=Content-Type:" not in command
     assert "--header=Idempotency-Key:" not in command
     assert "AC_SESSION" in command
@@ -118,6 +119,7 @@ def test_remote_command_pins_loopback_host_and_never_contains_cookie(uploader: M
     ]
     assert "Content-Type: video/mp4" in headers
     assert "Idempotency-Key: synthetic-header-fix" in headers
+    assert "Transfer-Encoding:" in headers
 
     with pytest.raises(uploader.UploadOperatorError):
         uploader.edge_profile("https://api.authorityclosers.com")
@@ -179,9 +181,15 @@ class _FakeStdin:
 
 
 class _FakeProcess:
-    def __init__(self, *, fail_after: int | None = None, returncode: int = 0) -> None:
+    def __init__(
+        self,
+        *,
+        fail_after: int | None = None,
+        returncode: int = 0,
+        response: bytes = b"\n204",
+    ) -> None:
         self.stdin = _FakeStdin(fail_after=fail_after)
-        self.stdout = io.BytesIO(b"\n204")
+        self.stdout = io.BytesIO(response)
         self.stderr = io.BytesIO()
         self.returncode = returncode
         self.killed = False
@@ -248,7 +256,7 @@ def test_stream_failure_is_bounded_and_does_not_echo_cookie(
     uploader: ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     token = "B" * 43
-    process = _FakeProcess(fail_after=len(token) + 1)
+    process = _FakeProcess(fail_after=len(token) + 1, response=b"")
     monkeypatch.setattr(uploader.subprocess, "Popen", lambda *args, **kwargs: process)
 
     with pytest.raises(uploader.UploadOperatorError, match="stream closed") as error:
@@ -262,6 +270,63 @@ def test_stream_failure_is_bounded_and_does_not_echo_cookie(
 
     assert token not in str(error.value)
     assert process.killed
+
+
+def test_stream_broken_pipe_returns_completed_http_status(
+    uploader: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    process = _FakeProcess(
+        fail_after=len(b"C" * 43) + 1,
+        response=b'{"code":"upload_too_large"}\n413',
+    )
+    monkeypatch.setattr(uploader.subprocess, "Popen", lambda *args, **kwargs: process)
+
+    code, body = uploader._run_remote(
+        ssh_target="ac",
+        command="safe-command",
+        cookie="C" * 43,
+        stream=io.BytesIO(b"video-bytes"),
+        stream_bytes=len(b"video-bytes"),
+    )
+
+    assert code == 413
+    assert body == b'{"code":"upload_too_large"}'
+    assert process.killed
+
+
+@pytest.mark.skipif(
+    os.name != "nt" or os.environ.get("AC_RUN_OPERATOR_NETWORK_PROOF") != "1",
+    reason="opt-in Windows staging SSH proof",
+)
+def test_real_windows_staging_put_rejects_synthetic_cookie_without_admission(
+    uploader: ModuleType,
+) -> None:
+    program_id = "189cec59-e302-4fe3-8215-a34c68e394a9"
+    upload_id = "00000000-0000-4000-8000-000000000000"
+    profile = uploader.edge_profile("https://coach-staging.authorityclosers.com")
+    command = uploader._remote_command(
+        method="PUT",
+        profile=profile,
+        path=f"/v1/admin/studio/programs/{program_id}/video-uploads/{upload_id}/bytes",
+        headers={
+            "Content-Type": "video/mp4",
+            "Content-Length": "1",
+            "X-Content-SHA256": "0" * 64,
+        },
+        upload=True,
+    )
+
+    code, _response = uploader._run_remote(
+        ssh_target="ac",
+        command=command,
+        cookie="synthetic-no-secret-" + "P" * 43,
+        stream=io.BytesIO(b"x"),
+        stream_bytes=1,
+        ssh_binary=r"C:\Windows\System32\OpenSSH\ssh.exe",
+        wait_timeout_seconds=60,
+    )
+
+    assert code in {401, 403}
 
 
 def test_stream_rejects_bytes_beyond_admitted_length_and_kills_process(
