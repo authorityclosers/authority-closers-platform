@@ -27,3 +27,5 @@ Ownership: this root owns integration, guest/identity/quota boundary and single 
 Integration preflight: the last reviewer CI stopped at formatting. The combined release corrects that test formatting and the final Sales browser/style test formatting before dispatch. Functional receipts remain in their source evidence; combined CI is still required.
 
 CombinedCI34773977688 passed formatting/frontend lint but found two Python lint issues in the inherited routing test. Fixed only the synthetic credential marker annotation and overlong test name. All572 Python files format clean, full Ruff and mypy259 files pass, and16 routing behavior tests pass locally before restarting CI.
+
+CombinedCI34774600196 reached frontend tests. Three obsolete Admin SSR assertions expected old headings, no shell state attributes and all navigation buttons disabled. The updated assertions preserve the pending-session privacy boundary, forbid mutation forms/submit actions and explicitly admit only the three sidebar controls. Full Admin suite passes788tests across44files locally. No production behavior was weakened.
