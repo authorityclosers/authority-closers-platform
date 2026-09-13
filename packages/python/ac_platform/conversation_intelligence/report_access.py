@@ -1,8 +1,10 @@
-"""Explicit report projections. Locked sections never cross the API boundary.
+"""Explicit projections for the free, source-bound Dipak report overview.
 
 Ownership and claim authorization must be resolved before calling this pure
 projector. An access value from a request body/query is never accepted here.
-The preview is a useful section selection, not a percentage of report bytes.
+The founder-approved fourteen-point overview is free to its guest owner. Account
+access adds saved history and continuity, not withholding its useful conclusions.
+Internal provenance and future private fields never cross this explicit boundary.
 """
 
 from __future__ import annotations
@@ -61,7 +63,7 @@ def project_bound_report(
     ):
         raise ValueError("The report does not match the authorized recording and transcript.")
     return {
-        "schema": "ac.sales-xray.report-envelope/1",
+        "schema": "ac.sales-xray.report-envelope/2",
         "recording_id": str(source.recording_id),
         "run_id": str(source.run_id),
         "source_sha256": source.source_sha256,
@@ -88,16 +90,13 @@ def project_report(report: ReportDraft, *, access: ReportAccess) -> dict[str, An
         "next_action": (
             report.improvements[0].model_dump(mode="json") if report.improvements else None
         ),
+        "improvements": [item.model_dump(mode="json") for item in report.improvements],
+        "objection_analysis": [item.model_dump(mode="json") for item in report.objection_analysis],
+        "closing_analysis": [item.model_dump(mode="json") for item in report.closing_analysis],
+        "verdict": report.verdict,
     }
-    if account:
-        fields.update(
-            improvements=[item.model_dump(mode="json") for item in report.improvements],
-            objection_analysis=[item.model_dump(mode="json") for item in report.objection_analysis],
-            closing_analysis=[item.model_dump(mode="json") for item in report.closing_analysis],
-            verdict=report.verdict,
-        )
     return {
-        "schema": "ac.sales-xray.report-access/1",
+        "schema": "ac.sales-xray.report-access/2",
         "access": access.value,
         "review_status": report.review_status,
         "numeric_publication": False,
@@ -109,16 +108,19 @@ def project_report(report: ReportDraft, *, access: ReportAccess) -> dict[str, An
             {
                 "id": "coaching",
                 "label": "Your coaching plan",
+                "access": "available",
+            },
+            {
+                "id": "history",
+                "label": "Your saved calls",
                 "access": "available" if account else "sign_in",
             },
         ],
         "unlock": None
         if account
         else {
-            "title": "Keep going with your coaching plan",
-            "description": (
-                "Sign in free to explore your objections, closing approach and next steps."
-            ),
-            "action": "Sign in to unlock",
+            "title": "Keep your report with your AC account",
+            "description": ("Your call overview is free. Sign in to return to your saved calls."),
+            "action": "Save with a free account",
         },
     }
