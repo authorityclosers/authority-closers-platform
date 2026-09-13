@@ -61,6 +61,10 @@
   margin-block-start: 24px;
 }
 
+.panel > aside + section {
+  margin-block-start: 24px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .tabs button {
     transition: none;
