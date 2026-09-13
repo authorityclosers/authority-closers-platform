@@ -2,10 +2,17 @@
 
 import json
 from copy import deepcopy
+from dataclasses import replace
+from uuid import uuid4
 
 import pytest
 
-from ac_platform.conversation_intelligence.report_access import ReportAccess, project_report
+from ac_platform.conversation_intelligence.report_access import (
+    ReportAccess,
+    ReportSourceBinding,
+    project_bound_report,
+    project_report,
+)
 from ac_platform.conversation_intelligence.reports import parse_report_draft
 from tests.unit.conversation_intelligence.test_reports import _payload, _transcript
 
@@ -59,3 +66,30 @@ def test_projection_revalidates_bypassed_model_construction():
     invalid = _report().model_copy(update={"review_status": "official"})
     with pytest.raises(ValueError):
         project_report(invalid, access=ReportAccess.GUEST)
+
+
+def test_envelope_keeps_recording_and_transcript_binding_without_locked_details():
+    report = _report()
+    source = ReportSourceBinding(uuid4(), uuid4(), report.source_sha256, report.transcript_revision)
+    envelope = project_bound_report(report, access=ReportAccess.GUEST, source=source)
+    assert envelope["recording_id"] == str(source.recording_id)
+    assert envelope["run_id"] == str(source.run_id)
+    assert envelope["source_sha256"] == report.source_sha256
+    assert envelope["transcript_revision"] == report.transcript_revision
+    assert envelope["report"] == project_report(report, access=ReportAccess.GUEST)
+    assert "PRIVATE_" not in json.dumps(envelope)
+
+
+@pytest.mark.parametrize(
+    "change", [{"source_sha256": "f" * 64}, {"transcript_revision": "wrong-transcript"}]
+)
+def test_envelope_rejects_a_different_recording_source_or_transcript(change):
+    report = _report()
+    source = ReportSourceBinding(uuid4(), uuid4(), report.source_sha256, report.transcript_revision)
+    with pytest.raises(ValueError, match="does not match"):
+        project_bound_report(report, access=ReportAccess.GUEST, source=replace(source, **change))
+
+
+def test_envelope_rejects_request_shaped_binding():
+    with pytest.raises(ValueError, match="server-resolved"):
+        project_bound_report(_report(), access=ReportAccess.GUEST, source={"recording_id": "mine"})

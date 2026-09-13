@@ -69,6 +69,17 @@ because another feature works.
 
 ## Frozen frontend contract, version 1
 
+The response envelope is `ac.sales-xray.report-envelope/1`, created by
+`project_bound_report`. It contains `recording_id`, `run_id`, `source_sha256`,
+`transcript_revision`, `source_label` and the explicit access projection as
+`report`. The route must obtain `ReportSourceBinding` from the authorized run and
+recording rows before invoking it. The projector rejects a source hash or
+transcript revision that differs from the report. The frontend must bind this
+envelope to its owner-authorized playback/transcript responses, never infer the
+source from whichever recording happens to be selected. This resolves the Sales
+lane's source-association integration finding. Ownership endpoint proof remains
+separate. Four added envelope tests pass, bringing projection/challenge tests to28.
+
 The new server projector is `conversation_intelligence/report_access.py` and
 returns `schema: ac.sales-xray.report-access/1`. Ownership must be resolved by the
 future report endpoint; a body/query flag never selects access. Existing report

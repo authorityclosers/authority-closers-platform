@@ -7,8 +7,11 @@ The preview is a useful section selection, not a percentage of report bytes.
 
 from __future__ import annotations
 
+import re
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
+from uuid import UUID
 
 from ac_platform.conversation_intelligence.reports import ReportDraft
 
@@ -16,6 +19,56 @@ from ac_platform.conversation_intelligence.reports import ReportDraft
 class ReportAccess(StrEnum):
     GUEST = "guest_preview"
     ACCOUNT = "claimed_account"
+
+
+@dataclass(frozen=True)
+class ReportSourceBinding:
+    """Source identifiers selected from authorized server rows, never request fields."""
+
+    recording_id: UUID
+    run_id: UUID
+    source_sha256: str
+    transcript_revision: str
+
+    def validate(self) -> None:
+        if (
+            type(self.recording_id) is not UUID
+            or type(self.run_id) is not UUID
+            or not isinstance(self.source_sha256, str)
+            or re.fullmatch(r"[0-9a-f]{64}", self.source_sha256) is None
+            or not isinstance(self.transcript_revision, str)
+            or not 1 <= len(self.transcript_revision) <= 256
+        ):
+            raise ValueError("A server-resolved report source binding is required.")
+
+
+def project_bound_report(
+    report: ReportDraft, *, access: ReportAccess, source: ReportSourceBinding
+) -> dict[str, Any]:
+    """Preserve source/seek association around the explicit guest/account projection.
+
+    The caller must first authorize the recording, run and current ownership and
+    select this binding from those rows. This pure function cannot prove row
+    ownership and is not a substitute for that query boundary.
+    """
+    if type(source) is not ReportSourceBinding:
+        raise ValueError("A server-resolved report source binding is required.")
+    source.validate()
+    view = project_report(report, access=access)
+    if (
+        report.source_sha256 != source.source_sha256
+        or report.transcript_revision != source.transcript_revision
+    ):
+        raise ValueError("The report does not match the authorized recording and transcript.")
+    return {
+        "schema": "ac.sales-xray.report-envelope/1",
+        "recording_id": str(source.recording_id),
+        "run_id": str(source.run_id),
+        "source_sha256": source.source_sha256,
+        "transcript_revision": source.transcript_revision,
+        "source_label": report.source_label,
+        "report": view,
+    }
 
 
 def project_report(report: ReportDraft, *, access: ReportAccess) -> dict[str, Any]:
