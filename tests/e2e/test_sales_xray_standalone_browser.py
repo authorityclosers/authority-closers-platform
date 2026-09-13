@@ -259,6 +259,14 @@ def _evidence_dir(tmp_path: Path) -> Path:
     return evidence
 
 
+def _metric_value(page: Any, label: str, unit: str) -> float:
+    metric = page.get_by_text(label, exact=True).locator("..")
+    value = metric.locator("strong").inner_text()
+    match = re.fullmatch(rf"(-?\d+(?:\.\d+)?)\s+{re.escape(unit)}", value.strip())
+    assert match is not None, f"Unexpected {label} value: {value!r}"
+    return float(match.group(1))
+
+
 def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
     receipt_path = evidence / "standalone-auth-browser.json"
     assert not receipt_path.exists(), "Use a fresh standalone browser evidence directory."
@@ -356,7 +364,54 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
             expect(page.get_by_role("heading", name="Saved calls")).to_be_visible()
             expect(page.locator(".recording-history-item")).to_have_count(1)
             checks.append("Selecting the assigned workspace opens CallStudio and private history.")
+
+            saved_call = page.locator(".recording-history-item").first
+            expect(saved_call.get_by_text("Open report", exact=True)).to_be_visible()
+            saved_call.click()
+            expect(
+                page.get_by_role("heading", name="What to take into your next call.")
+            ).to_be_visible()
+            checks.append("Opening the saved call loads its source-bound report.")
+
+            measurement_summary = page.locator("details").filter(
+                has_text="Sound of the recording"
+            ).locator("summary")
+            expect(measurement_summary).to_be_visible()
+            measurement_url = re.compile(
+                re.escape(
+                    f"{backend.origin}/v1/conversation/recordings/"
+                    f"{backend.account.recording_id}/measurements"
+                )
+            )
+            with page.expect_response(measurement_url) as measurement_info:
+                measurement_summary.click()
+            measurement_response = measurement_info.value
+            assert measurement_response.status == 200
+            assert measurement_response.header_value("cache-control") == "private, no-store"
+            measurements = measurement_response.json()
+            assert measurements["availability"] == "available"
+            assert measurements["checkpoint"]["stage"] == "C1"
+            assert measurements["source"]["recording_id"] == str(backend.account.recording_id)
+            channel = measurements["audioatlas"]["channels"][0]
+            assert channel["level"]["status"] == "available"
+            assert channel["pitch"]["status"] == "available"
+            level = float(channel["level"]["value"])
+            pitch = float(channel["pitch"]["value"])
+            assert abs(_metric_value(page, "Typical recorded level", "dBFS") - level) < 0.051
+            assert abs(_metric_value(page, "Typical pitch estimate", "Hz") - pitch) < 0.051
+            checks.append(
+                "The report displays the saved C1 level and pitch numbers from the private measurement response."
+            )
+
+            pitch_button = page.get_by_role("button", name="Pitch estimate", exact=True)
+            pitch_button.click()
+            expect(pitch_button).to_have_attribute("aria-pressed", "true")
+            expect(
+                page.get_by_role("img", name=re.compile("Pitch estimate over the decoded recording"))
+            ).to_be_visible()
+            checks.append("The saved measurement chart switches from sound level to pitch estimate.")
             page.screenshot(path=str(evidence / "authenticated-call-studio.png"), full_page=True)
+            page.screenshot(path=str(evidence / "authenticated-report-measurements.png"), full_page=True)
 
             cookies = context.cookies(backend.origin)
             session_cookie = next(
@@ -403,6 +458,26 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
                 item["name"] == backend.session_cookie_name
                 for item in context.cookies(backend.origin)
             )
+            unauthorized_measurements = page.evaluate(
+                """
+                async (recordingId) => {
+                  const response = await fetch(
+                    `/v1/conversation/recordings/${recordingId}/measurements`,
+                    {credentials: 'same-origin', cache: 'no-store'},
+                  );
+                  return {
+                    status: response.status,
+                    cacheControl: response.headers.get('cache-control'),
+                  };
+                }
+                """,
+                str(backend.account.recording_id),
+            )
+            assert unauthorized_measurements == {
+                "status": 401,
+                "cacheControl": "private, no-store",
+            }
+            checks.append("After logout, saved measurements return 401 and remain private/no-store.")
             page.reload(wait_until="networkidle")
             expect(page.get_by_role("link", name="Sign in with AC")).to_be_visible()
             expect(page.locator(".recording-history-item")).to_have_count(0)
@@ -430,6 +505,18 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
                 item["method"] == "POST"
                 and item["path"] == "/v1/auth/logout"
                 and item["status"] == 204
+                for item in network
+            )
+            assert any(
+                item["method"] == "GET"
+                and item["path"].endswith("/measurements")
+                and item["status"] == 200
+                for item in network
+            )
+            assert any(
+                item["method"] == "GET"
+                and item["path"].endswith("/measurements")
+                and item["status"] == 401
                 for item in network
             )
             assert not external
