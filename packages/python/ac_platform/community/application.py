@@ -123,6 +123,13 @@ def encode_cursor(cursor: LeaderboardCursor) -> str:
     return base64.urlsafe_b64encode(payload).rstrip(b"=").decode()
 
 
+def _validate_cursor_username(value: str) -> str:
+    """Validate the persisted sort key without applying claim-only policy."""
+    if not 3 <= len(value) <= 30 or value != value.lower():
+        raise ValueError
+    return value
+
+
 def decode_cursor(value: str) -> LeaderboardCursor:
     try:
         padding = "=" * (-len(value) % 4)
@@ -135,7 +142,7 @@ def decode_cursor(value: str) -> LeaderboardCursor:
             raise ValueError
         if type(xp) is not int or not 0 <= xp <= 2**63 - 1 or not isinstance(raw_username, str):
             raise ValueError
-        return LeaderboardCursor(xp=xp, username=normalize_username(raw_username))
+        return LeaderboardCursor(xp=xp, username=_validate_cursor_username(raw_username))
     except (
         TypeError,
         ValueError,

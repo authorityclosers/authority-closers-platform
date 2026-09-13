@@ -71,6 +71,12 @@ def test_leaderboard_cursor_round_trips_only_stable_non_private_order_fields() -
     assert "@" not in encoded
 
 
+def test_leaderboard_cursor_accepts_legacy_reserved_display_names() -> None:
+    expected = LeaderboardCursor(xp=90, username="admin")
+
+    assert decode_cursor(encode_cursor(expected)) == expected
+
+
 @pytest.mark.parametrize(
     "cursor",
     [
