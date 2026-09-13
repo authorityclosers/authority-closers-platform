@@ -93,6 +93,41 @@ DEFAULT_RATE_LIMIT_RULES = (
         capacity=300,
         refill_seconds=60,
     ),
+    RateLimitRule(
+        name="community-profile-search",
+        method="GET",
+        path=re.compile(r"^/v1/community/(?:search|connections|public/[^/]+)$"),
+        capacity=60,
+        refill_seconds=60,
+    ),
+    RateLimitRule(
+        name="community-connection-actions",
+        method="POST",
+        path=re.compile(r"^/v1/community/(?:discovery|connections/[^/]+(?:/(?:accept|decline))?|blocks/[^/]+)$"),
+        capacity=30,
+        refill_seconds=60,
+    ),
+    RateLimitRule(
+        name="community-discovery-update",
+        method="PUT",
+        path=re.compile(r"^/v1/community/discovery$"),
+        capacity=20,
+        refill_seconds=300,
+    ),
+    RateLimitRule(
+        name="community-connection-remove",
+        method="DELETE",
+        path=re.compile(r"^/v1/community/connections/[^/]+$"),
+        capacity=30,
+        refill_seconds=60,
+    ),
+    RateLimitRule(
+        name="community-report",
+        method="POST",
+        path=re.compile(r"^/v1/community/reports/[^/]+$"),
+        capacity=10,
+        refill_seconds=900,
+    ),
     # Coarse per-process abuse shield only.  Telemetry writes still require
     # an explicit tenant-aware distributed/edge admission seam in the route.
     RateLimitRule(

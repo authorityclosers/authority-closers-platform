@@ -139,6 +139,37 @@ export interface CommunityLeaderboardResponse {
   next_cursor: string | null;
 }
 
+export interface CommunityDiscoveryResponse {
+  username: string | null;
+  discoverable: boolean;
+  public_display_name: string | null;
+  avatar_asset_id: string | null;
+  revision: number;
+}
+
+export interface CommunityPublicProfile {
+  username: string;
+  display_name: string | null;
+  avatar_asset_id: string | null;
+  practice_xp_total: number | null;
+  connection_state: "pending" | "accepted" | "declined" | "removed" | null;
+  connection_incoming: boolean | null;
+}
+
+export interface CommunitySearchResponse {
+  items: CommunityPublicProfile[];
+}
+
+export interface CommunityConnectionResponse {
+  username: string;
+  state: "pending" | "accepted" | "declined" | "removed";
+  incoming: boolean;
+}
+
+export interface CommunityConnectionsResponse {
+  items: CommunityConnectionResponse[];
+}
+
 export interface AvatarCropMetadata {
   x: number;
   y: number;
@@ -984,6 +1015,106 @@ export function createLearnerApi(
         { ...options, cache: "no-store" },
       );
     },
+    communityDiscovery: (options: LearnerReadOptions = {}) =>
+      request<CommunityDiscoveryResponse>("/v1/community/discovery", {
+        ...options,
+        cache: "no-store",
+      }),
+    setCommunityDiscovery: (
+      discoverable: boolean,
+      publicDisplayName: string | null,
+      avatarAssetId: string | null,
+      expectedRevision: number,
+      signal?: AbortSignal,
+    ) =>
+      logicalJsonMutation<CommunityDiscoveryResponse>(
+        `community-discovery:${expectedRevision}:${String(discoverable)}`,
+        "/v1/community/discovery",
+        {
+          discoverable,
+          public_display_name: publicDisplayName,
+          avatar_asset_id: avatarAssetId,
+          expected_revision: expectedRevision,
+        },
+        {},
+        "PUT",
+        signal,
+      ),
+    communitySearch: (
+      query: string,
+      limit = 10,
+      options: LearnerReadOptions = {},
+    ) =>
+      request<CommunitySearchResponse>(
+        `/v1/community/search?${new URLSearchParams({
+          query: query.trim().toLowerCase(),
+          limit: String(limit),
+        }).toString()}`,
+        { ...options, cache: "no-store" },
+      ),
+    communityPublicProfile: (username: string, options: LearnerReadOptions = {}) =>
+      request<CommunityPublicProfile>(
+        `/v1/community/public/${encodeURIComponent(username.trim().toLowerCase())}`,
+        { ...options, cache: "no-store" },
+      ),
+    communityConnections: (options: LearnerReadOptions = {}) =>
+      request<CommunityConnectionsResponse>("/v1/community/connections", {
+        ...options,
+        cache: "no-store",
+      }),
+    requestCommunityConnection: (username: string, signal?: AbortSignal) =>
+      logicalJsonMutation<CommunityConnectionResponse>(
+        `community-connection:request:${username.trim().toLowerCase()}`,
+        `/v1/community/connections/${encodeURIComponent(username.trim().toLowerCase())}`,
+        {},
+        {},
+        "POST",
+        signal,
+      ),
+    respondCommunityConnection: (
+      username: string,
+      action: "accept" | "decline",
+      signal?: AbortSignal,
+    ) =>
+      logicalJsonMutation<CommunityConnectionResponse>(
+        `community-connection:${action}:${username.trim().toLowerCase()}`,
+        `/v1/community/connections/${encodeURIComponent(username.trim().toLowerCase())}/${action}`,
+        {},
+        {},
+        "POST",
+        signal,
+      ),
+    removeCommunityConnection: (username: string, signal?: AbortSignal) =>
+      logicalJsonMutation<CommunityConnectionResponse>(
+        `community-connection:remove:${username.trim().toLowerCase()}`,
+        `/v1/community/connections/${encodeURIComponent(username.trim().toLowerCase())}`,
+        {},
+        {},
+        "DELETE",
+        signal,
+      ),
+    blockCommunityLearner: (username: string, signal?: AbortSignal) =>
+      logicalJsonMutation<{ username: string; blocked: true }>(
+        `community-block:${username.trim().toLowerCase()}`,
+        `/v1/community/blocks/${encodeURIComponent(username.trim().toLowerCase())}`,
+        {},
+        {},
+        "POST",
+        signal,
+      ),
+    reportCommunityLearner: (
+      username: string,
+      reason: "spam" | "harassment" | "impersonation" | "other",
+      signal?: AbortSignal,
+    ) =>
+      logicalJsonMutation<{ username: string; reported: true }>(
+        `community-report:${username.trim().toLowerCase()}:${reason}`,
+        `/v1/community/reports/${encodeURIComponent(username.trim().toLowerCase())}`,
+        { reason },
+        {},
+        "POST",
+        signal,
+      ),
     profileAvatar: (options: LearnerReadOptions = {}) =>
       request<ProfileAvatarResponse>("/v1/profile/avatar", {
         ...options,
