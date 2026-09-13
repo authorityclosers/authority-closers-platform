@@ -92,6 +92,10 @@ export function ReviewWorkspace({
     message: "The review bridge contract is pending its server-owned DTO.",
     retryable: false,
   });
+  const [selectedMode, setSelectedMode] = useState<ReviewMode>("sales");
+  const [selectedReviewer, setSelectedReviewer] = useState("dipak");
+  const [feedback, setFeedback] = useState("");
+  const [confidence, setConfidence] = useState("");
 
   if (assignment && onSubmit) {
     return (
@@ -106,11 +110,6 @@ export function ReviewWorkspace({
       </AdminShell>
     );
   }
-
-  const [selectedMode, setSelectedMode] = useState<ReviewMode>("sales");
-  const [selectedReviewer, setSelectedReviewer] = useState("dipak");
-  const [feedback, setFeedback] = useState("");
-  const [confidence, setConfidence] = useState("");
 
   return (
     <AdminShell
