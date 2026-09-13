@@ -310,9 +310,22 @@ class ConversationInference:
                 )
                 .execution_options(populate_existing=True)
             )
-            if (
-                accepted is None
-                or accepted.person_id != actor.person_id
+            if accepted is None:
+                from ac_platform.conversation_intelligence.processing_plan import (
+                    require_stage_authorization,
+                )
+
+                await require_stage_authorization(
+                    self.application,
+                    actor,
+                    recording,
+                    row,
+                    quote,
+                    plan,
+                    self.authority,
+                )
+            elif (
+                accepted.person_id != actor.person_id
                 or accepted.tenant_id != actor.tenant_id
                 or accepted.session_id != actor.session_id
                 or accepted.quote_fingerprint != quote.fingerprint

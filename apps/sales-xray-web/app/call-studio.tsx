@@ -41,12 +41,251 @@ type Quote = {
   privacy_revision: string;
   output_kind?: "measurements" | "report";
 };
+type ProcessingPlanStage = {
+  stage: "C2" | "C4" | "C5";
+  provider: string;
+  model: string;
+  max_requests: number;
+  privacy_revision: string;
+  privacy_notice: string;
+};
+type ProcessingPlan = {
+  id: string;
+  recording_id: string;
+  plan_fingerprint: string;
+  privacy_revision: "sales-xray-processing-plan-v1";
+  accepted: boolean;
+  state: "quoted" | "active" | "held" | "completed" | "cancelled";
+  cost_label: "₹0 · approved allowance";
+  max_cost_paise: 0;
+  max_entitlement_seconds: number;
+  expires_at_epoch: number;
+  stages: ProcessingPlanStage[];
+  current_stage: string | null;
+  report_ready: boolean;
+  report_run_id: string | null;
+  automatic_progression: true;
+  failure_code: string | null;
+};
 type Workspace = {
   intake_enabled: boolean;
   authenticated: boolean;
   sign_in_url: string | null;
   message: string;
 };
+
+const PLAN_STATES = new Set([
+  "quoted",
+  "active",
+  "held",
+  "completed",
+  "cancelled",
+]);
+const PLAN_STAGES = new Set(["C2", "C4", "C5"]);
+const PROCESSING_STAGES = new Set(["C1", "C2", "C3", "C4", "C5", "C6"]);
+
+function planObject(value: unknown, code: string): Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value))
+    throw new ReportContractError(`${code}_invalid`);
+  return value as Record<string, unknown>;
+}
+
+function planText(value: unknown, code: string, max = 2_000): string {
+  if (typeof value !== "string" || !value.trim() || value.length > max)
+    throw new ReportContractError(`${code}_invalid`);
+  return value;
+}
+
+function planInteger(
+  value: unknown,
+  code: string,
+  min: number,
+  max: number,
+): number {
+  if (
+    !Number.isInteger(value) ||
+    (value as number) < min ||
+    (value as number) > max
+  )
+    throw new ReportContractError(`${code}_invalid`);
+  return value as number;
+}
+
+function parseProcessingPlan(
+  value: unknown,
+  recordingId: string,
+): ProcessingPlan {
+  const plan = planObject(value, "plan");
+  const expectedKeys = [
+    "id",
+    "recording_id",
+    "plan_fingerprint",
+    "privacy_revision",
+    "accepted",
+    "state",
+    "cost_label",
+    "max_cost_paise",
+    "max_entitlement_seconds",
+    "expires_at_epoch",
+    "stages",
+    "current_stage",
+    "report_ready",
+    "report_run_id",
+    "automatic_progression",
+    "failure_code",
+  ];
+  if (Object.keys(plan).some((key) => !expectedKeys.includes(key)))
+    throw new ReportContractError("plan_unknown_field");
+  const id = planText(plan.id, "plan_id", 128);
+  encodeConversationId(id, "plan_id");
+  if (planText(plan.recording_id, "plan_recording_id", 128) !== recordingId)
+    throw new ReportContractError("plan_recording_id_mismatch");
+  const fingerprint = planText(plan.plan_fingerprint, "plan_fingerprint", 64);
+  if (!/^[a-f0-9]{64}$/.test(fingerprint))
+    throw new ReportContractError("plan_fingerprint_invalid");
+  if (plan.privacy_revision !== "sales-xray-processing-plan-v1")
+    throw new ReportContractError("plan_privacy_revision_invalid");
+  if (typeof plan.accepted !== "boolean")
+    throw new ReportContractError("plan_accepted_invalid");
+  const state = planText(
+    plan.state,
+    "plan_state",
+    32,
+  ) as ProcessingPlan["state"];
+  if (!PLAN_STATES.has(state))
+    throw new ReportContractError("plan_state_invalid");
+  if (plan.cost_label !== "₹0 · approved allowance")
+    throw new ReportContractError("plan_cost_invalid");
+  if (plan.max_cost_paise !== 0)
+    throw new ReportContractError("plan_cost_limit_invalid");
+  const maxEntitlement = planInteger(
+    plan.max_entitlement_seconds,
+    "plan_entitlement",
+    0,
+    86_400,
+  );
+  const expires = planInteger(
+    plan.expires_at_epoch,
+    "plan_expiry",
+    1,
+    4_102_444_800,
+  );
+  if (!Array.isArray(plan.stages) || plan.stages.length !== 3)
+    throw new ReportContractError("plan_stages_invalid");
+  const stages = plan.stages.map((value, index) => {
+    const stage = planObject(value, `plan_stage_${index}`);
+    const keys = [
+      "stage",
+      "provider",
+      "model",
+      "max_requests",
+      "privacy_revision",
+      "privacy_notice",
+    ];
+    if (Object.keys(stage).some((key) => !keys.includes(key)))
+      throw new ReportContractError(`plan_stage_${index}_unknown_field`);
+    const name = planText(
+      stage.stage,
+      `plan_stage_${index}_name`,
+      8,
+    ) as ProcessingPlanStage["stage"];
+    if (!PLAN_STAGES.has(name))
+      throw new ReportContractError(`plan_stage_${index}_name_invalid`);
+    return {
+      stage: name,
+      provider: planText(stage.provider, `plan_stage_${index}_provider`, 128),
+      model: planText(stage.model, `plan_stage_${index}_model`, 256),
+      max_requests: planInteger(
+        stage.max_requests,
+        `plan_stage_${index}_requests`,
+        1,
+        64,
+      ),
+      privacy_revision: planText(
+        stage.privacy_revision,
+        `plan_stage_${index}_privacy`,
+        128,
+      ),
+      privacy_notice: planText(
+        stage.privacy_notice,
+        `plan_stage_${index}_notice`,
+        2_000,
+      ),
+    };
+  });
+  if (new Set(stages.map((stage) => stage.stage)).size !== stages.length)
+    throw new ReportContractError("plan_stages_duplicate");
+  const current =
+    plan.current_stage === null
+      ? null
+      : planText(plan.current_stage, "plan_current_stage", 8);
+  if (current !== null && !PROCESSING_STAGES.has(current))
+    throw new ReportContractError("plan_current_stage_invalid");
+  const reportRunId =
+    plan.report_run_id === null
+      ? null
+      : planText(plan.report_run_id, "plan_report_run_id", 128);
+  if (reportRunId !== null)
+    encodeConversationId(reportRunId, "plan_report_run_id");
+  if (
+    typeof plan.report_ready !== "boolean" ||
+    plan.automatic_progression !== true
+  )
+    throw new ReportContractError("plan_progress_invalid");
+  const failure =
+    plan.failure_code === null
+      ? null
+      : planText(plan.failure_code, "plan_failure_code", 128);
+  return {
+    id,
+    recording_id: recordingId,
+    plan_fingerprint: fingerprint,
+    privacy_revision: "sales-xray-processing-plan-v1",
+    accepted: plan.accepted,
+    state,
+    cost_label: "₹0 · approved allowance",
+    max_cost_paise: 0,
+    max_entitlement_seconds: maxEntitlement,
+    expires_at_epoch: expires,
+    stages,
+    current_stage: current,
+    report_ready: plan.report_ready,
+    report_run_id: reportRunId,
+    automatic_progression: true,
+    failure_code: failure,
+  };
+}
+
+function processingStageLabel(stage: string | null): string {
+  switch (stage) {
+    case "C1":
+      return "Measuring the recording";
+    case "C2":
+      return "Transcribing the call";
+    case "C3":
+      return "Aligning transcript evidence";
+    case "C4":
+      return "Extracting conversation facts";
+    case "C5":
+      return "Preparing the coaching draft";
+    case "C6":
+      return "Saving the report";
+    default:
+      return "Preparing the approved analysis";
+  }
+}
+
+function processingPlanMessage(plan: ProcessingPlan): string {
+  if (plan.state === "held")
+    return "Processing is paused. Saved results remain available; review the approval before continuing.";
+  if (plan.state === "cancelled")
+    return "This analysis was cancelled. Your recording remains private.";
+  if (plan.state === "completed" && !plan.report_ready)
+    return "Analysis finished without a saved report. No report is shown.";
+  if (plan.report_ready)
+    return "The report is saved. We are loading its verified transcript.";
+  return `${processingStageLabel(plan.current_stage)}. The server will continue through the approved stages.`;
+}
 
 function recordingDate(value: string): string {
   const date = new Date(value);
@@ -114,6 +353,16 @@ async function readReportStatus(
   return { payload: response, job, hasReport };
 }
 
+class ApiError extends Error {
+  readonly status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`/v1/conversation${path}`, {
     credentials: "same-origin",
@@ -122,12 +371,29 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok)
-    throw new Error(
+    throw new ApiError(
+      response.status,
       typeof data.detail === "string"
         ? data.detail
         : "The request could not be completed. Please try again.",
     );
   return data as T;
+}
+
+async function readProcessingPlan(
+  recordingId: string,
+  signal?: AbortSignal,
+): Promise<ProcessingPlan | null> {
+  const safeRecordingId = encodeConversationId(recordingId, "recording_id");
+  try {
+    const response = await api<unknown>(`/recordings/${safeRecordingId}/plan`, {
+      signal,
+    });
+    return parseProcessingPlan(response, recordingId);
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) return null;
+    throw error;
+  }
 }
 
 export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
@@ -137,6 +403,7 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [duration, setDuration] = useState(0);
   const [quote, setQuote] = useState<Quote | null>(null);
+  const [plan, setPlan] = useState<ProcessingPlan | null>(null);
   const [job, setJob] = useState<Job | null>(null);
   const [sourceSha256, setSourceSha256] = useState<string | null>(null);
   const [activeRecording, setActiveRecording] = useState<SavedRecording | null>(
@@ -154,12 +421,14 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
   const [historyAttempt, setHistoryAttempt] = useState(0);
   const [reportBlocked, setReportBlocked] = useState(false);
   const [consent, setConsent] = useState(false);
+  const [planConsent, setPlanConsent] = useState(false);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const input = useRef<HTMLInputElement>(null);
   const audio = useRef<HTMLAudioElement>(null);
   const attempt = useRef(0);
   const requestKey = useRef("");
+  const planRequestKey = useRef("");
 
   useEffect(() => {
     const controller = new AbortController();
@@ -205,7 +474,8 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
     },
     [audioUrl],
   );
-  const activeRecordingId = activeRecording?.id ?? quote?.recording_id ?? null;
+  const activeRecordingId =
+    activeRecording?.id ?? plan?.recording_id ?? quote?.recording_id ?? null;
   const activeJobId = job?.id ?? null;
   const shouldPollJob = Boolean(
     job &&
@@ -258,6 +528,8 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
           setJob(status.job);
           if (status.job.state === "completed") {
             setError("");
+            if (activeRecordingId && !plan)
+              void requestProcessingPlan(activeRecordingId, current);
             return;
           }
           if (["failed", "cancelled"].includes(status.job.state)) {
@@ -294,7 +566,115 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
       controller.abort();
       if (timer !== undefined) window.clearTimeout(timer);
     };
-  }, [activeJobId, activeRecordingId, shouldPollJob, sourceSha256]);
+  }, [activeJobId, activeRecordingId, plan, shouldPollJob, sourceSha256]);
+
+  const shouldPollPlan = Boolean(
+    plan &&
+      plan.accepted &&
+      !reportBlocked &&
+      ((plan.state === "active" && !plan.report_ready) ||
+        (plan.report_ready && plan.report_run_id && !job?.report)),
+  );
+  const planId = plan?.id ?? null;
+  useEffect(() => {
+    if (!shouldPollPlan || !activeRecordingId || !planId) return;
+    const controller = new AbortController();
+    const current = attempt.current;
+    let timer: number | undefined;
+    const poll = () => {
+      timer = window.setTimeout(async () => {
+        if (controller.signal.aborted || current !== attempt.current) return;
+        try {
+          const next = await readProcessingPlan(
+            activeRecordingId,
+            controller.signal,
+          );
+          if (!next)
+            throw new Error("The approved processing plan is unavailable.");
+          if (controller.signal.aborted || current !== attempt.current) return;
+          if (next.report_ready && next.report_run_id) {
+            const status = await readReportStatus(
+              next.recording_id,
+              next.report_run_id,
+              controller.signal,
+            );
+            if (controller.signal.aborted || current !== attempt.current)
+              return;
+            if (status.hasReport) {
+              const transcript = await readTranscript(
+                next.recording_id,
+                sourceSha256 ?? "",
+                controller.signal,
+              );
+              if (controller.signal.aborted || current !== attempt.current)
+                return;
+              const verified = parseJobResponse(status.payload, {
+                sourceSha256: sourceSha256 ?? "",
+                durationMs: transcript.duration_ms,
+                transcript,
+              });
+              setActiveTranscript(transcript);
+              setRecordingDurations((previous) => ({
+                ...previous,
+                [next.recording_id]: transcript.duration_ms,
+              }));
+              setDuration(transcript.duration_ms);
+              setPlan(next);
+              setJob(verified);
+              setError("");
+              return;
+            }
+            setError("The report is ready but has not become readable yet.");
+            setPlan(next);
+            return;
+          }
+          if (next.state === "held" || next.state === "cancelled") {
+            setPlan(next);
+            setError(processingPlanMessage(next));
+            return;
+          }
+          if (next.state === "completed") {
+            setPlan(next);
+            setError(processingPlanMessage(next));
+            return;
+          }
+          setPlan(next);
+          setError("");
+          poll();
+        } catch (e) {
+          if (controller.signal.aborted || current !== attempt.current) return;
+          if (e instanceof ReportContractError) {
+            setReportBlocked(true);
+            setError(
+              "The approved processing plan could not be verified, so no report is shown.",
+            );
+            return;
+          }
+          setError(
+            e instanceof Error
+              ? e.message
+              : "Could not refresh the approved processing plan.",
+          );
+        }
+      }, 2_500);
+    };
+    poll();
+    return () => {
+      controller.abort();
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [
+    activeRecordingId,
+    job?.report,
+    planId,
+    plan?.accepted,
+    plan?.state,
+    plan?.report_ready,
+    plan?.report_run_id,
+    reportBlocked,
+    shouldPollPlan,
+    sourceSha256,
+  ]);
 
   function clearAudioPlayback() {
     try {
@@ -309,11 +689,11 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
     if (!next) return;
     if (
       next.size === 0 ||
-      next.size > 128 * 1024 * 1024 ||
+      next.size > 32 * 1024 * 1024 ||
       !/\.(mp3|mpeg|wav|m4a|ogg|flac)$/i.test(next.name)
     ) {
       setError(
-        "Choose an MP3, MPEG, WAV, M4A, OGG or FLAC recording up to 128 MB.",
+        "Choose an MP3, MPEG, WAV, M4A, OGG or FLAC recording up to 32 MB.",
       );
       return;
     }
@@ -326,14 +706,112 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
     setAudioUrl(URL.createObjectURL(next));
     setDuration(0);
     setQuote(null);
+    setPlan(null);
     setJob(null);
     setSourceSha256(null);
     setReportBlocked(false);
     setConsent(false);
+    setPlanConsent(false);
     setError("");
     requestKey.current = crypto.randomUUID();
+    planRequestKey.current = "";
     if (input.current) input.current.value = "";
   }
+
+  async function requestProcessingPlan(
+    recordingId: string,
+    current: number,
+    fresh = false,
+  ) {
+    if (current !== attempt.current) return;
+    const key = fresh
+      ? `${requestKey.current}:plan:${crypto.randomUUID()}`
+      : planRequestKey.current || `${requestKey.current}:plan`;
+    planRequestKey.current = key;
+    setBusy("Preparing your approved report plan…");
+    setError("");
+    try {
+      const safeRecordingId = encodeConversationId(recordingId, "recording_id");
+      const response = await api<unknown>(
+        `/recordings/${safeRecordingId}/plan/quote`,
+        {
+          method: "POST",
+          headers: { "Idempotency-Key": key },
+        },
+      );
+      const next = parseProcessingPlan(response, recordingId);
+      if (current !== attempt.current) return;
+      setPlan(next);
+      setPlanConsent(false);
+      setJob(null);
+    } catch (e) {
+      if (current === attempt.current)
+        setError(
+          e instanceof Error
+            ? e.message
+            : "We could not prepare the approved report plan.",
+        );
+    } finally {
+      if (current === attempt.current) setBusy("");
+    }
+  }
+
+  async function acceptProcessingPlan() {
+    if (!plan || !planConsent || busy) return;
+    const current = attempt.current;
+    setBusy("Starting your approved report…");
+    setError("");
+    try {
+      const safeRecordingId = encodeConversationId(
+        plan.recording_id,
+        "recording_id",
+      );
+      const planKey = planRequestKey.current || `${requestKey.current}:plan`;
+      planRequestKey.current = planKey;
+      const response = await api<unknown>(
+        `/recordings/${safeRecordingId}/plan`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Idempotency-Key": `${planKey}:accept`,
+          },
+          body: JSON.stringify({
+            plan_id: plan.id,
+            plan_fingerprint: plan.plan_fingerprint,
+            privacy_revision: plan.privacy_revision,
+            accepted: true,
+          }),
+        },
+      );
+      const next = parseProcessingPlan(response, plan.recording_id);
+      if (current !== attempt.current) return;
+      // Keep the server's state and current stage; acceptance is never inferred
+      // from the click alone.
+      setPlan(next);
+      setPlanConsent(false);
+      setHistoryAttempt((value) => value + 1);
+    } catch (e) {
+      if (current === attempt.current)
+        setError(
+          e instanceof Error
+            ? e.message
+            : "The approved report could not be started.",
+        );
+    } finally {
+      if (current === attempt.current) setBusy("");
+    }
+  }
+
+  async function requestFreshProcessingPlan() {
+    if (!plan || busy) return;
+    const current = ++attempt.current;
+    setPlan(null);
+    setJob(null);
+    setPlanConsent(false);
+    await requestProcessingPlan(plan.recording_id, current, true);
+  }
+
   async function openSavedRecording(recording: SavedRecording) {
     if (busy) return;
     const current = ++attempt.current;
@@ -343,12 +821,16 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
     setReportBlocked(false);
     setFile(null);
     setQuote(null);
+    setPlan(null);
     setJob(null);
     setConsent(false);
     setActiveRecording(recording);
     setActiveTranscript(null);
     setSourceSha256(recording.source_sha256);
     setDuration(0);
+    setPlanConsent(false);
+    requestKey.current = crypto.randomUUID();
+    planRequestKey.current = "";
     try {
       const safeRecordingId = encodeConversationId(
         recording.id,
@@ -361,6 +843,13 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
         setError("This saved call has no analysis run yet.");
         return;
       }
+      const savedPlan = await readProcessingPlan(recording.id);
+      if (current !== attempt.current) return;
+      if (savedPlan) {
+        setPlan(savedPlan);
+        setJob(null);
+        return;
+      }
       setJob({
         id: run.id,
         state: run.state,
@@ -369,6 +858,13 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
             ? "Opening the saved report…"
             : "This saved call has an analysis run, but its report is not ready yet.",
       });
+      if (
+        run.recipe_revision === "audioatlas-48000-v1" &&
+        run.state === "completed"
+      ) {
+        await requestProcessingPlan(recording.id, current);
+        return;
+      }
       if (!recording.has_report && !run.has_report) return;
       const status = await readReportStatus(recording.id, run.id);
       if (current !== attempt.current) return;
@@ -530,6 +1026,7 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
     setActiveRecording(null);
     setActiveTranscript(null);
     setQuote(null);
+    setPlan(null);
     setJob(null);
     setSourceSha256(null);
     setReportBlocked(false);
@@ -537,6 +1034,8 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
     setError("");
     setBusy("");
     setConsent(false);
+    setPlanConsent(false);
+    planRequestKey.current = "";
   }
   if (advanced)
     return (
@@ -614,7 +1113,7 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
                   <Upload size={18} /> Choose audio file
                 </label>
                 <p className="muted">
-                  MP3, MPEG, WAV, M4A, OGG or FLAC · up to 128 MB
+                  MP3, MPEG, WAV, M4A, OGG or FLAC · up to 32 MB
                 </p>
               </>
             ) : file ? (
@@ -722,11 +1221,11 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
                 {busy || "Continue to analysis"}
               </button>
             )}
-            {quote && !job && (
+            {quote && !job && !plan && (
               <div className="studio-consent">
-                <h3>Ready to analyze</h3>
+                <h3>Ready to upload privately</h3>
                 <div className="studio-cost">
-                  <span>Estimated cost</span>
+                  <span>Private intake</span>
                   <strong>{quote.cost_label}</strong>
                 </div>
                 <p>{quote.privacy_summary}</p>
@@ -736,8 +1235,8 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
                     checked={consent}
                     onChange={(e) => setConsent(e.target.checked)}
                   />
-                  I have permission to analyze this recording with{" "}
-                  {quote.providers.join(" and ")} under these conditions.
+                  I agree to store this recording in AC’s private workspace and
+                  run the local measurement step.
                 </label>
                 <button
                   className="primary-button studio-wide"
@@ -749,11 +1248,61 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
                   ) : (
                     <AudioLines size={17} />
                   )}
-                  {busy || "Analyze my call"}
+                  {busy || "Upload and measure privately"}
                 </button>
               </div>
             )}
-            {job && !job.report && (
+            {plan && !job?.report && !plan.accepted && (
+              <div className="studio-consent">
+                <h3>Your approved report plan</h3>
+                <div className="studio-cost">
+                  <span>Processing cost</span>
+                  <strong>{plan.cost_label}</strong>
+                </div>
+                <p>
+                  This one approval covers the bounded report run. AC will
+                  continue through the listed stages automatically after you
+                  accept this exact plan.
+                </p>
+                <p className="small-text">
+                  Up to {time(plan.max_entitlement_seconds * 1000)} of approved
+                  processing. Plan expires{" "}
+                  {new Date(plan.expires_at_epoch * 1000).toLocaleString()}.
+                </p>
+                <ul>
+                  {plan.stages.map((stage) => (
+                    <li key={stage.stage}>
+                      <strong>{stage.stage}</strong>: {stage.provider} ·{" "}
+                      {stage.model}
+                      <br />
+                      <span className="small-text">{stage.privacy_notice}</span>
+                    </li>
+                  ))}
+                </ul>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={planConsent}
+                    onChange={(e) => setPlanConsent(e.target.checked)}
+                  />
+                  I approve this exact zero-cost processing plan and its privacy
+                  terms.
+                </label>
+                <button
+                  className="primary-button studio-wide"
+                  disabled={!planConsent || !!busy}
+                  onClick={() => void acceptProcessingPlan()}
+                >
+                  {busy ? (
+                    <LoaderCircle className="spin" size={17} />
+                  ) : (
+                    <AudioLines size={17} />
+                  )}
+                  {busy || "Start approved report"}
+                </button>
+              </div>
+            )}
+            {job && !job.report && !plan && (
               <div className="studio-progress" role="status">
                 {reportBlocked ? (
                   <X size={24} />
@@ -787,6 +1336,46 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
                     ? "You can retry with a fresh analysis after checking the selected file."
                     : "We keep completed work so a retry does not need to transcribe your call again."}
                 </p>
+              </div>
+            )}
+            {plan && !job?.report && plan.accepted && (
+              <div className="studio-progress" role="status">
+                {reportBlocked ||
+                plan.state === "held" ||
+                plan.state === "cancelled" ? (
+                  <X size={24} />
+                ) : plan.report_ready ? (
+                  <Check size={24} />
+                ) : plan.state === "completed" ? (
+                  <X size={24} />
+                ) : (
+                  <LoaderCircle className="spin" size={24} />
+                )}
+                <h3>
+                  {reportBlocked
+                    ? "The approved plan could not be verified"
+                    : plan.state === "held" || plan.state === "cancelled"
+                      ? "The report needs a fresh plan"
+                      : plan.report_ready
+                        ? "Your report is being loaded"
+                        : plan.state === "completed"
+                          ? "The report was not saved"
+                          : processingStageLabel(plan.current_stage)}
+                </h3>
+                <p>
+                  {reportBlocked
+                    ? "No report is shown until it matches this recording."
+                    : processingPlanMessage(plan)}
+                </p>
+                {(plan.state === "held" || plan.state === "cancelled") && (
+                  <button
+                    className="secondary-button"
+                    disabled={!!busy}
+                    onClick={() => void requestFreshProcessingPlan()}
+                  >
+                    Request a fresh plan
+                  </button>
+                )}
               </div>
             )}
             {error && (

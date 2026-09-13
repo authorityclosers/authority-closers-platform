@@ -200,6 +200,8 @@ class ConversationAuthority:
         intent: IntakeIntent,
     ) -> None:
         bundle = await self.admit(app, actor)
+        if intent.source_bytes > MAX_AUDIO_BYTES:
+            raise ConversationDenied("Choose a recording up to 32 MB for this processing route.")
         approval = next(
             item
             for item in bundle.allowances
@@ -278,6 +280,31 @@ class ConversationAuthority:
             != approval.profile_sha256
         ):
             raise ConversationDenied("This input exceeds the approved free processing bounds.")
+        await self.validate_route(
+            app,
+            actor,
+            approval,
+            task=plan.prepared.task,
+            provider=plan.prepared.provider,
+            model=plan.prepared.model,
+            recipe=plan.recipe_revision,
+            profile_revision=plan.prepared.profile_revision,
+        )
+        return bundle, approval
+
+    async def validate_route(
+        self,
+        app: ConversationApplication,
+        actor: ActorContext,
+        approval: StageApproval,
+        *,
+        task: str,
+        provider: str,
+        model: str,
+        recipe: str,
+        profile_revision: str | None,
+    ) -> None:
+        """Resolve a pinned future stage without inventing its as-yet unknown input."""
         assert actor.tenant_id is not None
         await lock_provider_configuration(app.database, actor.tenant_id, shared=True)
         latest = await app.database.scalar(
@@ -294,7 +321,7 @@ class ConversationAuthority:
             config = parse_registry_config(latest.configuration)
             if config.digest != approval.configuration_sha256 or config.policy.allow_paid:
                 raise ValueError("configuration_changed")
-            route = next(item for item in config.routes if item.task == plan.prepared.task)
+            route = next(item for item in config.routes if item.task == task)
             dispatch = resolve_dispatch(
                 config,
                 DispatchRequest(
@@ -305,7 +332,7 @@ class ConversationAuthority:
                     route.required_input_stage,
                 ),
             )
-            provider = next(
+            provider_config = next(
                 item
                 for item in config.providers
                 if (item.provider_id, item.model_id) == (dispatch.provider_id, dispatch.model_id)
@@ -318,25 +345,21 @@ class ConversationAuthority:
                 "free_allowance_ref",
                 "credential_ref",
             ):
-                if getattr(provider, field) != getattr(approval, field):
+                if getattr(provider_config, field) != getattr(approval, field):
                     raise ValueError("approved_reference_changed")
             if (
                 (approval.provider_id, approval.model_id, approval.recipe_revision)
-                != (plan.prepared.provider, plan.prepared.model, plan.recipe_revision)
+                != (provider, model, recipe)
                 or (dispatch.provider_id, dispatch.model_id, dispatch.recipe_revision)
                 != (approval.provider_id, approval.model_id, approval.recipe_revision)
                 or dispatch.max_cost_paise != 0
-                or (
-                    plan.prepared.profile_revision is not None
-                    and route.profile_revision != plan.prepared.profile_revision
-                )
+                or (profile_revision is not None and route.profile_revision != profile_revision)
             ):
                 raise ValueError("approved_route_changed")
         except (ValueError, TypeError, StopIteration):
             raise ConversationDenied(
                 "The exact provider route and approval do not match."
             ) from None
-        return bundle, approval
 
     @staticmethod
     def authorization_ref(bundle: HostedApprovalBundle, approval: StageApproval) -> str:

@@ -17,7 +17,10 @@ from ac_platform.conversation_intelligence.application import (
 from ac_platform.conversation_intelligence.authority import ConversationAuthority
 from ac_platform.conversation_intelligence.contracts import QuoteAcceptance
 from ac_platform.conversation_intelligence.inference import ConversationInference
-from ac_platform.conversation_intelligence.models import ConversationInferenceTask
+from ac_platform.conversation_intelligence.models import (
+    ConversationInferenceTask,
+    ConversationProcessingPlan,
+)
 from ac_platform.conversation_intelligence.reporting_pipeline import StageRequest
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, require_safe_origin
 from ac_platform.kernel.authz import ActorContext
@@ -91,6 +94,9 @@ def install_analysis_routes(
     require_actor: RequireActor,
     authority: ConversationAuthority,
 ) -> None:
+    from ac_platform.http.conversation_plan import install_plan_routes
+
+    install_plan_routes(router, settings, require_actor, authority)
     dependency = Depends(require_actor, scope="function")
 
     def guard(request: Request, response: Response, *, write: bool = True) -> None:
@@ -181,9 +187,20 @@ def install_analysis_routes(
                     .limit(128)
                 )
             ).all()
+            active_plan = await auth.database.scalar(
+                select(ConversationProcessingPlan.id)
+                .where(
+                    ConversationProcessingPlan.recording_id == recording_id,
+                    ConversationProcessingPlan.tenant_id == auth.resolved.actor.tenant_id,
+                    ConversationProcessingPlan.person_id == auth.resolved.actor.person_id,
+                    ConversationProcessingPlan.state == "active",
+                    ConversationProcessingPlan.erased_at.is_(None),
+                )
+                .limit(1)
+            )
             return {
                 "recording_id": str(recording_id),
-                "automatic_progression": False,
+                "automatic_progression": active_plan is not None,
                 "stages": [
                     {
                         "run_id": str(item.run_id),
