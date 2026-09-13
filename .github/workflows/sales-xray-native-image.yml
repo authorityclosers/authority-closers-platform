@@ -1,0 +1,302 @@
+name: Sales Xray native image
+
+on:
+  workflow_dispatch:
+    inputs:
+      frozen_sha:
+        description: "Exact 40-character lowercase commit to build"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sales-xray-native-image-${{ inputs.frozen_sha }}
+  cancel-in-progress: false
+
+jobs:
+  build-native-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      FROZEN_SHA: ${{ inputs.frozen_sha }}
+      NATIVE_TAG: ac-sales-xray-native:${{ inputs.frozen_sha }}
+      MAX_IMAGE_BYTES: "440000000"
+      MAX_ARTIFACT_BYTES: "450000000"
+      MAX_HELPER_BYTES: "20000000"
+    steps:
+      - name: Validate the manually supplied source commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$FROZEN_SHA" =~ ^[0-9a-f]{40}$ ]] || {
+            printf 'frozen_sha must be exactly 40 lowercase hexadecimal characters.\n' >&2
+            exit 2
+          }
+
+      - name: Checkout the exact source commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ inputs.frozen_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Prove the checked out source identity and build context
+        shell: bash
+        run: |
+          set -euo pipefail
+          checked_out_sha="$(git rev-parse HEAD)"
+          [ "$checked_out_sha" = "$FROZEN_SHA" ] || {
+            printf 'Checkout SHA %s does not match requested SHA %s.\n' \
+              "$checked_out_sha" "$FROZEN_SHA" >&2
+            exit 1
+          }
+          test -f infra/conversation-worker/Dockerfile
+          test -f native/audioatlas/atlas_dsp.cpp
+          test -f native/audioatlas/source_provenance.json
+          test -f packages/python/ac_platform/conversation_intelligence/__main__.py
+          test -f packages/python/ac_platform/conversation_intelligence/signals.py
+
+      - name: Set up the pinned Buildx action
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+
+      - name: Build the exact native Dockerfile for Linux amd64
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        with:
+          context: .
+          file: infra/conversation-worker/Dockerfile
+          target: runtime
+          platforms: linux/amd64
+          pull: true
+          load: true
+          tags: ${{ env.NATIVE_TAG }}
+
+      - name: Verify the image locally without network or application credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          image_id="$(docker image inspect --format '{{.Id}}' "$NATIVE_TAG")"
+          [[ "$image_id" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+            printf 'Docker image ID is not an immutable sha256 ID.\n' >&2
+            exit 1
+          }
+          docker image inspect "$image_id" --format '{{.Id}}' | grep -Fx "$image_id"
+          docker image inspect "$NATIVE_TAG" --format '{{.Architecture}}' | grep -Fx amd64
+          docker run --rm --network=none --read-only \
+            --entrypoint=python "$image_id" \
+            -m ac_platform.conversation_intelligence doctor
+
+      - name: Create and reload the minimal offline transport artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifact_dir="$RUNNER_TEMP/ac-sales-xray-native-${FROZEN_SHA}"
+          transport_file="$artifact_dir/native-image.tar.gz"
+          helper_transport_file="$artifact_dir/native-helper.tar.gz"
+          mkdir -p "$artifact_dir"
+
+          image_id="$(docker image inspect --format '{{.Id}}' "$NATIVE_TAG")"
+          repo_digests_json="$(docker image inspect --format '{{json .RepoDigests}}' "$NATIVE_TAG")"
+          image_architecture="$(docker image inspect --format '{{.Architecture}}' "$NATIVE_TAG")"
+          image_os="$(docker image inspect --format '{{.Os}}' "$NATIVE_TAG")"
+          dockerfile_sha256="$(sha256sum infra/conversation-worker/Dockerfile | cut -d' ' -f1)"
+          context_tree_id="$(git rev-parse HEAD^{tree})"
+          native_source_sha256="$(sha256sum native/audioatlas/atlas_dsp.cpp | cut -d' ' -f1)"
+          provenance_source_sha256="$(python3 -c \
+            'import json; print(json.load(open("native/audioatlas/source_provenance.json"))["copied_sha256"])')"
+          [ "$native_source_sha256" = "$provenance_source_sha256" ] || {
+            printf 'Native source does not match source_provenance.json.\n' >&2
+            exit 1
+          }
+          doctor_json="$(docker run --rm --network=none --read-only \
+            --entrypoint=python "$image_id" \
+            -m ac_platform.conversation_intelligence doctor)"
+          printf '%s' "$doctor_json" | python3 -c \
+            'import json,sys; value=json.load(sys.stdin); assert value == {"ffmpeg": True, "ffprobe": True, "provider_calls": False}'
+
+          # docker save creates the self-contained image transport. The archive
+          # carries the tag for operator convenience; the config/image ID below
+          # remains the immutable runtime reference after docker load.
+          docker save --output "$RUNNER_TEMP/native-image.tar" "$NATIVE_TAG"
+          gzip -9 < "$RUNNER_TEMP/native-image.tar" > "$transport_file"
+          rm -f "$RUNNER_TEMP/native-image.tar"
+          gzip -t "$transport_file"
+          transport_bytes="$(stat --format='%s' "$transport_file")"
+          [[ "$transport_bytes" =~ ^[0-9]+$ && "$transport_bytes" -gt 0 ]] || {
+            printf 'Native image transport is empty or has an invalid size.\n' >&2
+            exit 1
+          }
+          [ "$transport_bytes" -le "$MAX_IMAGE_BYTES" ] || {
+            printf 'Native image transport is %s bytes; ceiling is %s.\n' \
+              "$transport_bytes" "$MAX_IMAGE_BYTES" >&2
+            exit 1
+          }
+
+          # Prove the offline load path on the same daemon. The image ID must be
+          # identical after the tag is removed and the compressed archive loaded.
+          docker image rm --force "$NATIVE_TAG" >/dev/null
+          docker load --input "$transport_file" >/dev/null
+          loaded_id="$(docker image inspect --format '{{.Id}}' "$NATIVE_TAG")"
+          [ "$loaded_id" = "$image_id" ] || {
+            printf 'docker load changed the immutable image ID (%s -> %s).\n' \
+              "$image_id" "$loaded_id" >&2
+            exit 1
+          }
+          docker image inspect "$image_id" --format '{{.Id}}' | grep -Fx "$image_id"
+
+          helper_files=(
+            "scripts/native_runtime_helper.py"
+            "scripts/test_hosted_native_linux.py"
+            "packages/python/ac_platform/__init__.py"
+            "packages/python/ac_platform/conversation_intelligence/__init__.py"
+            "packages/python/ac_platform/conversation_intelligence/native_runtime.py"
+            "packages/python/ac_platform/conversation_intelligence/signals.py"
+          )
+          for helper_file in "${helper_files[@]}"; do
+            test -f "$helper_file" || {
+              printf 'Required helper source file is missing: %s\n' "$helper_file" >&2
+              exit 1
+            }
+          done
+          PYTHONPYCACHEPREFIX="$RUNNER_TEMP/native-pycache" PYTHONPATH=packages/python \
+            python3 -m py_compile "${helper_files[@]}"
+          printf '%s\n' "${helper_files[@]}" | sort > "$RUNNER_TEMP/native-helper-files.txt"
+          sha256sum "${helper_files[@]}" > "$artifact_dir/native-helper-files.sha256"
+          sha256sum --check --strict "$artifact_dir/native-helper-files.sha256"
+          tar --create --file "$RUNNER_TEMP/native-helper.tar" \
+            --sort=name --mtime='UTC 1970-01-01' --owner=0 --group=0 --numeric-owner \
+            --files-from="$RUNNER_TEMP/native-helper-files.txt"
+          gzip -n -9 < "$RUNNER_TEMP/native-helper.tar" > "$helper_transport_file"
+          rm -f "$RUNNER_TEMP/native-helper.tar"
+          gzip -t "$helper_transport_file"
+          helper_bytes="$(stat --format='%s' "$helper_transport_file")"
+          [[ "$helper_bytes" =~ ^[0-9]+$ && "$helper_bytes" -gt 0 ]] || {
+            printf 'Native helper transport is empty or has an invalid size.\n' >&2
+            exit 1
+          }
+          [ "$helper_bytes" -le "$MAX_HELPER_BYTES" ] || {
+            printf 'Native helper transport is %s bytes; ceiling is %s.\n' \
+              "$helper_bytes" "$MAX_HELPER_BYTES" >&2
+            exit 1
+          }
+          tar --list --file "$helper_transport_file" | sort | \
+            diff -u <(sort "$RUNNER_TEMP/native-helper-files.txt") -
+          rm -f "$RUNNER_TEMP/native-helper-files.txt"
+
+          transport_sha256="$(sha256sum "$transport_file" | cut -d' ' -f1)"
+          helper_transport_sha256="$(sha256sum "$helper_transport_file" | cut -d' ' -f1)"
+          repo_digest_count="$(printf '%s' "$repo_digests_json" | jq 'length')"
+          image_identity_type="docker_local_image_id"
+          if [ "$repo_digest_count" -gt 0 ]; then
+            registry_digest="$(printf '%s' "$repo_digests_json" | jq -r '.[0]')"
+          else
+            registry_digest="none"
+          fi
+          export FROZEN_SHA NATIVE_TAG native_source_sha256 image_id image_architecture image_os
+          export repo_digests_json dockerfile_sha256 context_tree_id doctor_json
+          export transport_file transport_bytes transport_sha256 image_identity_type registry_digest
+          export helper_transport_file helper_bytes helper_transport_sha256
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          artifact_dir = Path(os.environ["transport_file"]).parent
+          repository_digests = json.loads(os.environ["repo_digests_json"])
+          doctor = json.loads(os.environ["doctor_json"])
+          metadata = {
+              "schema": "ac.sales-xray.native-image/1",
+              "source_commit": os.environ["FROZEN_SHA"],
+              "context": ".",
+              "context_tree_id": os.environ["context_tree_id"],
+              "dockerfile": "infra/conversation-worker/Dockerfile",
+              "dockerfile_sha256": os.environ["dockerfile_sha256"],
+              "native_source_sha256": os.environ["native_source_sha256"],
+              "target": "runtime",
+              "platform": {
+                  "os": os.environ["image_os"],
+                  "architecture": os.environ["image_architecture"],
+              },
+              "image": {
+                  "expected_runtime_ref": os.environ["image_id"],
+                  "image_id": os.environ["image_id"],
+                  "identity_type": os.environ["image_identity_type"],
+                  "repository_digests": repository_digests,
+              },
+              "doctor": doctor,
+              "transport": {
+                  "format": "docker-save-tar-gzip",
+                  "filename": "native-image.tar.gz",
+                  "bytes": int(os.environ["transport_bytes"]),
+                  "sha256": os.environ["transport_sha256"],
+                  "load_command": "docker load --input native-image.tar.gz",
+                  "inspect_command": "docker image inspect " + os.environ["image_id"],
+              },
+              "helper_source": {
+                  "format": "tar-gzip",
+                  "filename": "native-helper.tar.gz",
+                  "bytes": int(os.environ["helper_bytes"]),
+                  "sha256": os.environ["helper_transport_sha256"],
+                  "pythonpath": "packages/python",
+                  "entrypoint": "scripts/native_runtime_helper.py",
+                  "file_sha256_receipt": "native-helper-files.sha256",
+                  "files": [
+                      "packages/python/ac_platform/__init__.py",
+                      "packages/python/ac_platform/conversation_intelligence/__init__.py",
+                      "packages/python/ac_platform/conversation_intelligence/native_runtime.py",
+                      "packages/python/ac_platform/conversation_intelligence/signals.py",
+                      "scripts/native_runtime_helper.py",
+                      "scripts/test_hosted_native_linux.py",
+                  ],
+                  "offline_extract_command": "tar --extract --gzip --file native-helper.tar.gz",
+              },
+              "registry_publish": {
+                  "performed": False,
+                  "reason": "offline transport workflow does not push or require registry credentials",
+                  "repository_digest": os.environ["registry_digest"],
+              },
+          }
+          (artifact_dir / "native-image.json").write_text(
+              json.dumps(metadata, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          env_lines = [
+              f"AC_NATIVE_IMAGE={os.environ['image_id']}",
+              f"AC_NATIVE_IMAGE_ID={os.environ['image_id']}",
+              f"AC_NATIVE_IMAGE_TYPE={os.environ['image_identity_type']}",
+              f"AC_NATIVE_REGISTRY_DIGEST={os.environ['registry_digest']}",
+              "AC_NATIVE_TRANSPORT_FILE=native-image.tar.gz",
+              f"AC_NATIVE_TRANSPORT_SHA256={os.environ['transport_sha256']}",
+              "AC_NATIVE_HELPER_FILE=native-helper.tar.gz",
+              f"AC_NATIVE_HELPER_SHA256={os.environ['helper_transport_sha256']}",
+              "AC_NATIVE_HELPER_PYTHONPATH=packages/python",
+              f"AC_NATIVE_SOURCE_COMMIT={os.environ['FROZEN_SHA']}",
+          ]
+          (artifact_dir / "native-image.env").write_text("\n".join(env_lines) + "\n", encoding="utf-8")
+          PY
+          (
+            cd "$artifact_dir"
+            sha256sum native-image.tar.gz native-helper.tar.gz native-helper-files.sha256 native-image.json native-image.env > SHA256SUMS
+            sha256sum --check --strict SHA256SUMS
+          )
+          artifact_bytes="$(du --bytes --summarize "$artifact_dir" | cut -f1)"
+          [[ "$artifact_bytes" =~ ^[0-9]+$ ]] || {
+            printf 'Native artifact size could not be proven.\n' >&2
+            exit 1
+          }
+          [ "$artifact_bytes" -le "$MAX_ARTIFACT_BYTES" ] || {
+            printf 'Native artifact is %s bytes; ceiling is %s.\n' \
+              "$artifact_bytes" "$MAX_ARTIFACT_BYTES" >&2
+            exit 1
+          }
+          find "$artifact_dir" -maxdepth 1 -type f -printf '%f\n' | sort | \
+            diff -u <(printf '%s\n' SHA256SUMS native-helper-files.sha256 native-helper.tar.gz native-image.env native-image.json native-image.tar.gz | sort) -
+
+      - name: Upload the offline native image artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ac-sales-xray-native-${{ inputs.frozen_sha }}
+          path: ${{ runner.temp }}/ac-sales-xray-native-${{ inputs.frozen_sha }}
+          if-no-files-found: error
+          retention-days: 1
