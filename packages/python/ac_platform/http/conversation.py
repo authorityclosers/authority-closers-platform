@@ -23,6 +23,7 @@ from ac_platform.http.auth import (
 )
 from ac_platform.http.conversation_analysis import install_analysis_routes
 from ac_platform.http.conversation_intake import ConversationIntakeRuntime, install_intake_routes
+from ac_platform.http.conversation_measurements import install_measurement_routes
 from ac_platform.identity.services import IdentityResolutionError, SessionNotFoundError
 
 
@@ -93,6 +94,7 @@ def install_conversation_http(
         return example_report()
 
     if settings is not None and require_actor is not None:
+        install_measurement_routes(router, require_actor)
         if intake_runtime is not None:
             install_intake_routes(router, settings, require_actor, intake_runtime)
             if intake_runtime.authority is not None:

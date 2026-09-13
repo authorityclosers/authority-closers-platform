@@ -1,0 +1,177 @@
+.panel {
+  margin: 24px 0;
+  border: 1px solid var(--border, #d9e0e8);
+  border-radius: 12px;
+  background: var(--surface, white);
+  overflow: hidden;
+}
+.panel summary {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 18px 20px;
+  cursor: pointer;
+  font-weight: 650;
+}
+.panel summary::after {
+  content: "+";
+  margin-left: auto;
+  font-size: 22px;
+}
+.panel[open] summary::after {
+  content: "−";
+}
+.panel summary small {
+  display: block;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted, #617085);
+  margin-top: 4px;
+}
+.body {
+  padding: 0 20px 18px;
+}
+.metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin: 16px 0;
+}
+.metrics > div {
+  padding: 16px;
+  background: var(--bg, #f5f7fb);
+  border-radius: 8px;
+}
+.metrics span,
+.metrics small {
+  display: block;
+  color: var(--muted, #617085);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.metrics strong {
+  display: block;
+  font-size: clamp(22px, 3vw, 30px);
+  font-weight: 650;
+  letter-spacing: -0.04em;
+  margin: 6px 0;
+  font-variant-numeric: tabular-nums;
+}
+.select {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 13px;
+}
+.select select {
+  background: var(--surface, white);
+  color: inherit;
+  border: 1px solid var(--border, #d9e0e8);
+  padding: 8px;
+  border-radius: 6px;
+}
+.switcher {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 8px;
+  background: var(--bg, #f5f7fb);
+}
+.switcher button {
+  border: 0;
+  border-radius: 6px;
+  color: var(--muted, #617085);
+  background: transparent;
+  min-height: 36px;
+  padding: 8px 14px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.switcher button[aria-pressed="true"] {
+  background: var(--blue, #3150c8);
+  color: white;
+}
+.chart {
+  margin-top: 18px;
+}
+.chartCaption {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+.chartCaption output {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted, #617085);
+}
+.chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: 100px;
+  margin-top: 12px;
+  overflow: visible;
+}
+.chart text {
+  fill: var(--muted, #617085);
+  font-size: 12px;
+}
+.chart input {
+  display: block;
+  width: 100%;
+  margin: 8px 0 0;
+  accent-color: var(--blue, #3150c8);
+  cursor: ew-resize;
+}
+.grid {
+  fill: none;
+  stroke: var(--border, #d9e0e8);
+  stroke-width: 1;
+}
+.line {
+  fill: none;
+  stroke: var(--blue, #3150c8);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+.cursor {
+  fill: none;
+  stroke: var(--muted, #617085);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+.point {
+  fill: var(--blue, #3150c8);
+}
+.note {
+  color: var(--muted, #617085);
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 12px 0 0;
+}
+.panel :is(button, select, summary, input):focus-visible {
+  outline: 3px solid var(--blue, #3150c8);
+  outline-offset: 3px;
+}
+@media (max-width: 480px) {
+  .metrics {
+    grid-template-columns: 1fr;
+  }
+  .body {
+    padding: 0 14px 14px;
+  }
+  .panel summary {
+    padding: 16px 14px;
+  }
+}
+@media print {
+  .switcher,
+  .chart input {
+    display: none;
+  }
+  .panel {
+    break-inside: avoid;
+  }
+}
