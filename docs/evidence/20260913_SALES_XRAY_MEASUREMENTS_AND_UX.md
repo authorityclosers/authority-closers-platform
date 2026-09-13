@@ -80,6 +80,7 @@ execution receipts. External stages require their separately approved run.
 | Real measurement API in browser | Source `332b64a`, test overlay `9fba2a14`: actual Chromium → AC password session → HTTP → disposable PostgreSQL passed 11 checks. `D:/AC-authority-closers-release-audit/sales-xray-standalone-browser-20260913-9fba2a1/standalone-auth-browser.junit.xml`. Saved C1 values matched the screen; measurement reads were 200/private-no-store and became 401 after logout. The observed 401 response had no cache-control header. This run did not exercise source audio playback; the following test increment adds that separately. |
 | Final source and language corrections | Runtime source `63d5a5edd644bd250acdc8c51694712a3754c7f7`: **67 UI tests passed** (`measurement-final-63d5a5e-vitest.xml`); standalone and learner optimized builds and standalone ESLint passed. Build/lint logs with the same prefix are in `D:/AC-authority-closers-release-audit/`. The focused measurement test also verifies that changing all three non-English modes keeps the value and causes no new fetch. |
 | Final production-build browser and PDF | `D:/AC-authority-closers-release-audit/measurement-report-ui-63d5a5e-20260913/browser-receipt.json` binds source hashes, command results, four desktop/mobile label modes and 11 visual/PDF artifacts. Three-page PDF: all eight observations, draft label, selected physical channel and saved measurement present; playback status, channel selector and empty collapsed details absent. The transcript/report text stays literal after language changes. Synthetic API and media fixtures are explicitly identified in this receipt. |
+| Final real HTTP/identity/PostgreSQL/audio browser | Source `63d5a5e`, test overlay `d556691`: **1 test, 14 checks passed**. `D:/AC-authority-closers-release-audit/sales-xray-standalone-browser-20260913-63d5a5e-retry3/standalone-auth-browser.junit.xml` and adjacent proof/runtime receipts. The browser used the real AC password session, explicit workspace selection, source-bound imported synthetic report, actual saved native 48 kHz C1 values and real authenticated WAV delivery. Audio duration, play progression and seek passed without substituting `media.play`; source and measurements became 401 after logout. 18 API responses, zero external requests/browser errors/unexpected request failures. This opens a pre-existing synthetic recording; it is not a browser-upload or provider-inference proof. |
 | HTTP boundary | 7 passed using frozen project dependencies; `D:/AC-authority-closers-release-audit/measurement-http-boundary-pinned.xml`. Service is substituted in these tests; they are not a database authorization proof. |
 | Conversation HTTP regression | 10 passed; `D:/AC-authority-closers-release-audit/measurement-http-regression.xml`. |
 | Final measurement service proof | 5 unit tests and 1 disposable PostgreSQL test passed on `527493f8`; `D:/AC-authority-closers-release-audit/measurement-view-postgresql-final-202609132305.xml`. The database test includes native 48 kHz C1 values, exact C0 lineage, self-consistent wrong-parent rejection, tampered payload rejection, foreign-tenant denial before deletion, revocation and deletion. Its 16 kHz branch uses a synthetic persisted receipt to check DTO/profile consistency; it is not a new native 16 kHz benchmark. |
@@ -93,6 +94,14 @@ A packaged standalone-server start on Windows failed with `EPERM` at the
 generated pnpm React junction. The same optimized build then passed the browser
 proof using `next start`. This does not constitute a passing packaged Linux image
 test; the source-owned immutable image workflow remains required for release.
+
+The actual browser attempts before the final passing receipt are preserved:
+the first attempt could not find the new factor view, a retry rejected the
+disposable database URL at setup, and the next exposed an expected source-401
+request cancellation during logout/reload. The final test overlay allows that
+exact route/method cancellation only after its 401 and logout effects pass;
+all events remain in the receipt. None of those earlier attempts are counted
+as passing runs.
 
 ## Release status at this checkpoint
 
