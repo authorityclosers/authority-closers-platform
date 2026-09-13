@@ -2,8 +2,9 @@
 
 Date: 2026-09-13 (Asia/Kolkata). Source base: `6b130fb`. This bounded follow-up
 connects the existing Sales sign-in URL, `/login?next=/sales-xray`, to learner
-authentication. Implementation and automated validation are complete; canonical
-browser acceptance is pending. This document does not claim deployment.
+authentication. Implementation, automated validation and canonical local browser
+acceptance are complete at source/API
+`38e5e8d7e62509a74d9e775d739b13a000cea728`. This document does not claim deployment.
 
 ## Behavior and authority
 
@@ -72,6 +73,22 @@ navigation sentinel. A Next client transition first asserts the terminal URL,
 then reloads it for that sentinel. No authentication API response is mocked.
 This scope can prove auth/session/return continuity; the real Sales workspace
 still requires acceptance in the combined release.
+
+The accepted receipt is
+`canonical-sales-auth-20260913T003442Z/proof.json` in the recovery packet.
+Normal registration and verification resend emitted canonical v3 outbox events;
+the real resolver supplied the verification/reset links. Fresh browser contexts
+verified the email, saved canonical skipped onboarding, and returned to the exact
+Sales path. Existing password sign-in and new-device password reset returned the
+same person to Sales. Reset revoked the earlier session. Six learning/enrollment
+tables remained empty for this new Sales-only person throughout. No auth API
+response was mocked and no external provider received a request.
+
+Verification and reset passed at 320 and 1440 px; onboarding continuation passed
+at 390 px, with no horizontal overflow, page errors or unexpected requests. The
+three mobile screenshots were visually inspected. The terminal Sales navigation
+sentinel was reached four times; this proves the destination only, not the Sales
+workspace itself. The receipt binds the source files and probe by SHA-256.
 
 The release owner has extracted the password message resolver into a shared
 module-level function for the audited bootstrap command. Integration must apply
