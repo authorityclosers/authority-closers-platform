@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
-from typing import Any, Protocol, cast
+from typing import TYPE_CHECKING, Any, Protocol, cast
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
@@ -63,6 +63,9 @@ from ac_platform.kernel.authz import ActorContext
 from ac_platform.outbox.models import Job
 from ac_platform.outbox.repository import JobRepository, RecoveryStateRepository
 
+if TYPE_CHECKING:
+    from ac_platform.conversation_intelligence.authority import ConversationAuthority
+
 _LEASE = timedelta(minutes=15)
 _EFFECT_SECONDS = 240
 _VALIDATION_LABELS = {
@@ -105,8 +108,11 @@ class ConversationInferenceWorker:
         sessions: async_sessionmaker[AsyncSession],
         storage: PrivateLocalRecordingStorage,
         broker: InferenceBroker,
+        *,
+        authority: ConversationAuthority | None = None,
     ) -> None:
         self.sessions, self.storage, self.broker = sessions, storage, broker
+        self.authority = authority
 
     async def claim(self) -> Work | None:
         async with self.sessions() as db, db.begin():
@@ -198,7 +204,7 @@ class ConversationInferenceWorker:
             or run.generation != task.generation
         ):
             raise ConversationConflict("The recording or provider run changed.")
-        service = ConversationInference(application)
+        service = ConversationInference(application, authority=self.authority)
         plan = await service.plan_task(recording, task)
         if (
             task.intent is None

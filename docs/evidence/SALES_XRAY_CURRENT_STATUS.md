@@ -11,6 +11,12 @@ automatic upload-to-report UI pipeline.
 Migration 0031 extends immutable history and provider-response erasure; the
 frozen local integration and its browser receipts remain a separate slice.
 
+`SALES_XRAY_HOSTED_AUTHORITY.md` adds opt-in source-owned API composition, finite
+approved allowance/source-capacity admission and exact C2/C4/C5 quote/consent
+routes with current worker rechecks. This supplies no live approval values,
+provider free credits, worker deployment or automatic progression. Runtime,
+provider-tested, staged and published status remain separate below.
+
 ## User-visible result
 
 The supplied 20m53s recording has a private, source-checked AI sales draft outside

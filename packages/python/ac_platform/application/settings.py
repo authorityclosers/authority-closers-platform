@@ -148,6 +148,14 @@ class Settings(BaseSettings):
     practice_pilot_enabled: bool = False
     practice_pilot_tenant_id: UUID | None = None
 
+    # Independent opt-in; contains only paths and an approved artifact digest.
+    # Provider credentials belong exclusively to the separate inference broker.
+    sales_xray_enabled: bool = False
+    sales_xray_approval_path: str | None = None
+    sales_xray_approval_sha256: str | None = None
+    sales_xray_storage_root: str | None = None
+    sales_xray_scratch_root: str | None = None
+
     @field_validator(
         "public_learner_tenant_id",
         "operations_tenant_id",

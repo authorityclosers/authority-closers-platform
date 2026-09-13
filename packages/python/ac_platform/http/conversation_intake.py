@@ -19,6 +19,7 @@ from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
     ConversationError,
 )
+from ac_platform.conversation_intelligence.authority import ConversationAuthority
 from ac_platform.conversation_intelligence.contracts import IntakeIntent, QuoteAcceptance
 from ac_platform.conversation_intelligence.intake import ConversationIntake, IntakePolicy
 from ac_platform.conversation_intelligence.storage import (
@@ -36,10 +37,14 @@ class ConversationIntakeRuntime:
     policy: IntakePolicy
     storage: PrivateLocalRecordingStorage
     scratch: PrivateLocalRecordingStorage
+    authority: ConversationAuthority | None = None
 
     def __post_init__(self) -> None:
         if self.storage.root == self.scratch.root:
             raise ValueError("Upload storage and scratch must have separate private roots.")
+
+    def intake(self, app: ConversationApplication) -> ConversationIntake:
+        return ConversationIntake(app, self.policy, authority=self.authority)
 
 
 class ConversationByteTransport:
@@ -53,7 +58,7 @@ class ConversationByteTransport:
         self, request: Request, recording_id: UUID, quote_id: UUID
     ) -> dict[str, Any]:
         async with asynccontextmanager(self.require_actor)(request) as auth:
-            intake = ConversationIntake(ConversationApplication(auth.database), self.runtime.policy)
+            intake = self.runtime.intake(ConversationApplication(auth.database))
             recording = await intake.require_accepted(auth.resolved.actor, recording_id, quote_id)
             return {
                 **recording,
@@ -119,9 +124,7 @@ class ConversationByteTransport:
                         raise HTTPException(422, "The complete recording was not received.")
                     await fenced.run(scratch.seek, 0)
                     async with asynccontextmanager(self.require_actor)(request) as auth:
-                        intake = ConversationIntake(
-                            ConversationApplication(auth.database), self.runtime.policy
-                        )
+                        intake = self.runtime.intake(ConversationApplication(auth.database))
                         await intake.require_accepted(auth.resolved.actor, recording_id, quote_id)
                         if (
                             str(auth.resolved.actor.person_id) != admission["person_id"]
@@ -172,9 +175,11 @@ def install_intake_routes(
     ) -> Any:
         guard(request, response)
         try:
-            return await ConversationIntake(
-                ConversationApplication(auth.database), runtime.policy
-            ).prepare(auth.resolved.actor, payload, key=key)
+            return await runtime.intake(ConversationApplication(auth.database)).prepare(
+                auth.resolved.actor,
+                payload,
+                key=key,
+            )
         except ConversationError as error:
             raise HTTPException(error.status, str(error)) from None
 
@@ -188,9 +193,11 @@ def install_intake_routes(
     ) -> Any:
         guard(request, response)
         try:
-            return await ConversationIntake(
-                ConversationApplication(auth.database), runtime.policy
-            ).accept(auth.resolved.actor, quote_id, payload)
+            return await runtime.intake(ConversationApplication(auth.database)).accept(
+                auth.resolved.actor,
+                quote_id,
+                payload,
+            )
         except ConversationError as error:
             raise HTTPException(error.status, str(error)) from None
 

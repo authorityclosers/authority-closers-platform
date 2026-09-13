@@ -446,19 +446,19 @@ DEFAULT_PROVIDER_CATALOG = ProviderCatalog(
                 _model(
                     "openai/gpt-oss-120b",
                     "https://api.groq.com/openai/v1/chat/completions",
-                    ("facts", "contract_only"),
-                    ("coaching", "contract_only"),
+                    ("facts", "implemented"),
+                    ("coaching", "implemented"),
                 ),
                 _model(
                     "llama-3.3-70b-versatile",
                     "https://api.groq.com/openai/v1/chat/completions",
-                    ("facts", "contract_only"),
-                    ("coaching", "contract_only"),
+                    ("facts", "implemented"),
+                    ("coaching", "implemented"),
                 ),
             ),
             (
-                "Bounded structured generation transport exists; task adapters remain "
-                "contract-only here."
+                "Source-bound fact and qualitative coaching adapters are implemented. "
+                "Provider/model quality and hosted activation require separate evidence."
             ),
         ),
         ProviderCatalogEntry(

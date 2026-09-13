@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
@@ -56,6 +56,9 @@ from ac_platform.conversation_intelligence.reporting_pipeline import (
 )
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.outbox.repository import JobRepository
+
+if TYPE_CHECKING:
+    from ac_platform.conversation_intelligence.authority import ConversationAuthority
 
 INFERENCE_JOB = "conversation.infer_provider.v1"
 TRANSCRIPT_RECIPE = "scribe-v2-native-normalized-v1"
@@ -126,9 +129,15 @@ ServicePlan = TranscriptionPlan | StagePlan
 
 
 class ConversationInference:
-    def __init__(self, application: ConversationApplication) -> None:
+    def __init__(
+        self,
+        application: ConversationApplication,
+        *,
+        authority: ConversationAuthority | None = None,
+    ) -> None:
         self.application = application
         self.database = application.database
+        self.authority = authority
 
     async def plan_transcription(self, recording: ConversationRecording) -> TranscriptionPlan:
         """Internal only: caller must already lock and authorize this recording."""
@@ -280,6 +289,19 @@ class ConversationInference:
             < min(quote.expires_at_epoch, permission.expires_at_epoch)
         ):
             raise ConversationDenied("This quote does not authorize this exact provider request.")
+        if self.authority is not None:
+            await self.authority.validate_quote(
+                self.application,
+                actor,
+                recording,
+                plan,
+                row,
+                quote,
+                permission,
+                now,
+            )
+        elif permission.authorization_ref.startswith("hosted-stage-v1:"):
+            raise ConversationDenied("Hosted processing requires its current release authority.")
         if require_acceptance:
             accepted = await self.database.scalar(
                 select(ConversationQuoteAcceptance)

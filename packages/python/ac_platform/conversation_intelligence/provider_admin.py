@@ -8,9 +8,10 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
@@ -26,6 +27,18 @@ from ac_platform.kernel.authz import ActorContext
 from ac_platform.tenancy.models import Membership
 
 CONTROL_ACCOUNT = "admin@authorityclosers.com"
+
+
+async def lock_provider_configuration(
+    database: AsyncSession,
+    tenant_id: UUID,
+    *,
+    shared: bool = False,
+) -> None:
+    # Appending a new revision must serialize with a current approved dispatch.
+    # Locking only the latest row cannot prevent insertion of its successor.
+    function = func.pg_advisory_xact_lock_shared if shared else func.pg_advisory_xact_lock
+    await database.execute(select(function(725901, tenant_id.int % (2**31))))
 
 
 class ConversationProviderAdmin:
@@ -79,6 +92,8 @@ class ConversationProviderAdmin:
         await self.admit(actor)
         if type(expected_revision) is not int or expected_revision < 0:
             raise ConversationError("Use the current configuration revision.")
+        assert actor.tenant_id is not None
+        await lock_provider_configuration(self.database, actor.tenant_id)
         try:
             resolved = parse_registry_config(configuration)
         except (ValueError, TypeError, KeyError):

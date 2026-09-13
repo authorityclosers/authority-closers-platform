@@ -14,7 +14,6 @@ from ac_platform.conversation_intelligence.application import (
 )
 from ac_platform.conversation_intelligence.contracts import Capabilities, RecordingIntent, RunIntent
 from ac_platform.conversation_intelligence.example import example_report
-from ac_platform.conversation_intelligence.intake import ConversationIntake
 from ac_platform.conversation_intelligence.report_store import ConversationReports
 from ac_platform.http.auth import (
     AuthenticatedTransaction,
@@ -22,6 +21,7 @@ from ac_platform.http.auth import (
     RequireActor,
     require_safe_origin,
 )
+from ac_platform.http.conversation_analysis import install_analysis_routes
 from ac_platform.http.conversation_intake import ConversationIntakeRuntime, install_intake_routes
 from ac_platform.identity.services import IdentityResolutionError, SessionNotFoundError
 
@@ -57,9 +57,7 @@ def install_conversation_http(
                     await application.admit(auth.resolved.actor)
                     answer.update(authenticated=True, sign_in_url=None)
                     if intake_runtime is not None:
-                        await ConversationIntake(application, intake_runtime.policy).admit(
-                            auth.resolved.actor
-                        )
+                        await intake_runtime.intake(application).admit(auth.resolved.actor)
                         answer.update(
                             intake_enabled=True,
                             message=(
@@ -90,6 +88,8 @@ def install_conversation_http(
     if settings is not None and require_actor is not None:
         if intake_runtime is not None:
             install_intake_routes(router, settings, require_actor, intake_runtime)
+            if intake_runtime.authority is not None:
+                install_analysis_routes(router, settings, require_actor, intake_runtime.authority)
         dependency = Depends(require_actor, scope="function")
 
         def admitted(request: Request, response: Response) -> None:
@@ -159,6 +159,13 @@ def install_conversation_http(
         ) -> Any:
             admitted(request, response)
             require_safe_origin(request, settings)
+            if intake_runtime is not None and intake_runtime.authority is not None:
+                await result(
+                    intake_runtime.authority.admit(
+                        ConversationApplication(auth.database),
+                        auth.resolved.actor,
+                    )
+                )
             return await result(
                 ConversationApplication(auth.database).request_run(
                     auth.resolved.actor,
