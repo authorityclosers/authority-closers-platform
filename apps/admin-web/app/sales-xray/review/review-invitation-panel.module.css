@@ -1,6 +1,4 @@
 .panel {
-  min-width: 0;
-  overflow-wrap: anywhere;
   display: grid;
   gap: 1.2rem;
   padding: clamp(1.2rem, 3vw, 2rem);
@@ -33,7 +31,6 @@
 }
 .form label,
 .known label {
-  min-width: 0;
   display: grid;
   gap: 0.35rem;
   color: #26364d;
@@ -55,8 +52,6 @@
 }
 .form input,
 .known input {
-  min-width: 0;
-  max-width: 100%;
   min-height: 2.55rem;
   padding: 0.6rem 0.7rem;
   border: 1px solid #b9c6d6;
@@ -65,7 +60,6 @@
   background: #fff;
 }
 .form fieldset {
-  min-width: 0;
   grid-column: 1 / -1;
   padding: 0.8rem;
   border: 1px solid #d8e0ea;
@@ -101,7 +95,6 @@
   line-height: 1.45;
 }
 .success {
-  flex-wrap: wrap;
   color: #14532d;
   background: #ecfdf3;
 }
@@ -118,12 +111,22 @@
   cursor: pointer;
 }
 .known {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  align-items: end;
   padding-top: 0.9rem;
   border-top: 1px solid #e5eaf0;
+}
+.known summary {
+  cursor: pointer;
+  padding-bottom: 0.75rem;
+  font-weight: 600;
+}
+.known label {
+  display: grid;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+.panel :is(summary, button, input):focus-visible {
+  outline: 3px solid #3156d3;
+  outline-offset: 3px;
 }
 .known label {
   flex: 1 1 20rem;

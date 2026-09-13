@@ -302,6 +302,11 @@ export function StudioCourseEditor({
   const selectedModule = version?.modules.find(
     (item) => item.id === selection.moduleId,
   );
+  const lessonCount =
+    version?.modules.reduce(
+      (count, module) => count + module.activities.length,
+      0,
+    ) ?? 0;
   const saveHint =
     message ||
     (isNew(selection) && !fields.title.trim()
@@ -634,9 +639,13 @@ export function StudioCourseEditor({
           <div>
             <span className={styles.eyebrow}>Course workspace</span>
             <h2>{program.title}</h2>
+            <p className={styles.headerIntro}>
+              Build the learner experience one section at a time. Your edits
+              stay in this draft until you publish.
+            </p>
           </div>
           <label className={styles.versionControl}>
-            <span>Version</span>
+            <span>Working version</span>
             <select
               aria-label="Course version"
               value={versionId}
@@ -659,6 +668,32 @@ export function StudioCourseEditor({
               ))}
             </select>
           </label>
+        </div>
+        <div className={styles.courseSummary} aria-label="Course summary">
+          <div>
+            <strong>{version?.modules.length ?? 0}</strong>{" "}
+            <span>{version?.modules.length === 1 ? "module" : "modules"}</span>
+          </div>
+          <div>
+            <strong>{lessonCount}</strong>{" "}
+            <span>{lessonCount === 1 ? "lesson" : "lessons"}</span>
+          </div>
+          <div>
+            <strong>
+              {!version
+                ? "No version"
+                : version.status === "draft"
+                  ? "Draft"
+                  : "Published"}
+            </strong>
+            <span>
+              {!version
+                ? "create a draft to begin"
+                : version.status === "draft"
+                  ? "private while you edit"
+                  : "read only"}
+            </span>
+          </div>
         </div>
         <div className={styles.toolbar}>
           <span className={styles.badge}>
@@ -800,7 +835,12 @@ export function StudioCourseEditor({
             aria-label="Course outline"
           >
             <div className={styles.outlineHeading}>
-              <h3>Course outline</h3>
+              <div>
+                <h3>Course outline</h3>
+                <p>
+                  Choose a section to edit. Lessons appear in learner order.
+                </p>
+              </div>
               <span>{version.modules.length} modules</span>
             </div>
             {version.modules.map((module) => (
@@ -826,7 +866,11 @@ export function StudioCourseEditor({
                   </span>
                   <span>{module.title}</span>
                 </button>
-                <ol>
+                <span className={styles.moduleCount}>
+                  {module.activities.length} lesson
+                  {module.activities.length === 1 ? "" : "s"}
+                </span>
+                <ol aria-label={`${module.title} lessons`}>
                   {module.activities.map((activity) => (
                     <li key={activity.id}>
                       <button
@@ -905,10 +949,10 @@ export function StudioCourseEditor({
             {tab === "publication" ? (
               <div className={styles.review}>
                 <span className={styles.eyebrow}>Review & release</span>
-                <h3>Ready when the content is.</h3>
+                <h3>Review before learners see it.</h3>
                 <p>
-                  Saving and publishing are separate. A content review must
-                  match this exact version before it can go live.
+                  Saving keeps your work in this draft. Publish only after the
+                  lesson order, instructions, and media are ready for learners.
                 </p>
                 {dirty ||
                 saveState === "saving" ||
@@ -963,14 +1007,12 @@ export function StudioCourseEditor({
                   </p>
                 )}
                 <details className={styles.provenance}>
-                  <summary>Source & review details</summary>
+                  <summary>Review record</summary>
                   <dl>
                     {[
-                      ["Source", version.content_source_ref],
-                      ["Reviewer", version.content_reviewed_by],
-                      ["Reviewed at", version.content_reviewed_at],
-                      ["Release", version.release_id],
-                      ["Content digest", version.content_digest],
+                      ["Content source", version.content_source_ref],
+                      ["Reviewed by", version.content_reviewed_by],
+                      ["Review date", version.content_reviewed_at],
                     ].map(([label, value]) => (
                       <div key={label}>
                         <dt>{label}</dt>
@@ -978,6 +1020,10 @@ export function StudioCourseEditor({
                       </div>
                     ))}
                   </dl>
+                  <p className={styles.provenanceNote}>
+                    Publication records and technical identifiers stay with the
+                    audit history.
+                  </p>
                 </details>
               </div>
             ) : tab === "preview" ? (

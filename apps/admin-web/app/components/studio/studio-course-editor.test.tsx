@@ -465,6 +465,24 @@ it("does not write on mount, StrictMode, preview, or publication inspection", as
   expect(api.loadStudioProgram).not.toHaveBeenCalled();
 });
 
+it("surfaces a learner-facing authoring hierarchy without exposing audit fields", async () => {
+  await mount();
+  expect(
+    container.querySelector('[aria-label="Course summary"]'),
+  ).toBeDefined();
+  expect(container.textContent).toContain("Build the learner experience");
+  expect(container.textContent).toContain(
+    "Choose a section to edit. Lessons appear in learner order.",
+  );
+  expect(container.textContent).toContain("1 module");
+  expect(container.textContent).toContain("1 lesson");
+  await click(button("Publication"));
+  expect(container.textContent).toContain("Review before learners see it.");
+  expect(container.textContent).toContain("Review record");
+  expect(container.textContent).not.toContain("Content digest");
+  expect(container.textContent).not.toContain("release_id");
+});
+
 it("saves an explicit snapshot and preserves newer text typed while it is in flight", async () => {
   const request = deferred<api.StudioDraftMutationResponse>();
   vi.mocked(api.updateStudioActivity).mockReturnValue(request.promise);

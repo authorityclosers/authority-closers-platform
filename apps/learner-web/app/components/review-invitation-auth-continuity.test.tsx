@@ -182,6 +182,14 @@ describe("review invitation authentication continuity", () => {
     expect(
       container.querySelector(`a[href="/login${fragment}"]`),
     ).not.toBeNull();
+    expect(container.textContent).toContain(
+      "Keep this tab open while you verify your email",
+    );
+    expect(
+      container.querySelector(
+        'a[href^="/sales-xray/review/invite#review_invitation="]',
+      ),
+    ).not.toBeNull();
   });
 
   it("preserves the invitation on recovery links and excludes it from recovery requests", async () => {

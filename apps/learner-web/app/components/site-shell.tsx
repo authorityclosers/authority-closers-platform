@@ -15,7 +15,6 @@ import {
   HelpCircle,
   Gamepad2,
   LayoutDashboard,
-  MessagesSquare,
   Search,
   Settings,
   User,
@@ -696,16 +695,6 @@ function LearnerShellContent({
           icon: <Compass size={20} strokeWidth={1.85} aria-hidden="true" />,
           title: "Discover",
         },
-        {
-          id: "sales-xray",
-          label: "Sales Xray",
-          href: ROUTES.salesXray,
-          current: current === "sales-xray",
-          icon: (
-            <MessagesSquare size={20} strokeWidth={1.85} aria-hidden="true" />
-          ),
-          title: "Sales Xray",
-        },
         ...(practiceAvailable
           ? [
               {
@@ -723,7 +712,7 @@ function LearnerShellContent({
         {
           id: "sales-xray",
           label: "Sales Xray",
-          href: "/sales-xray",
+          href: ROUTES.salesXray,
           current: isSalesXray,
           icon: <AudioLines size={20} strokeWidth={1.85} aria-hidden="true" />,
           title: "Sales Xray",

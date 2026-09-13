@@ -7,6 +7,7 @@
     ".": "./src/assigned-review-form.tsx"
   },
   "scripts": {
+    "test": "vitest run",
     "typecheck": "tsc --noEmit --jsx react-jsx --module preserve --moduleResolution bundler --target es2022 --strict --skipLibCheck src/assigned-review-form.tsx"
   },
   "peerDependencies": {

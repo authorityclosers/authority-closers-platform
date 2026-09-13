@@ -47,7 +47,9 @@ from tests.database.test_conversation_reviews_postgresql import (
     _create_assignment,
 )
 
-ORIGIN = "http://127.0.0.1:3187"
+ORIGIN = os.environ.get("REVIEW_UI_ORIGIN", "http://127.0.0.1:3187")
+if urlsplit(ORIGIN).hostname != "127.0.0.1":
+    raise ValueError("Browser proof requires loopback origin")
 UPSTREAM = os.environ.get("REVIEW_UI_UPSTREAM", "http://127.0.0.1:3100")
 EVIDENCE = Path(os.environ["REVIEW_UI_EVIDENCE_DIR"])
 ADMIN_UI = os.environ.get("REVIEW_UI_ADMIN") == "true"
@@ -186,7 +188,11 @@ def test_real_review_browser(postgres_harness: Any, tmp_path: Path) -> None:  # 
             )
 
         config = uvicorn.Config(
-            application, host="127.0.0.1", port=3187, log_level="error", access_log=False
+            application,
+            host="127.0.0.1",
+            port=urlsplit(ORIGIN).port,
+            log_level="error",
+            access_log=False,
         )
         server = uvicorn.Server(config)
         task = asyncio.create_task(server.serve())
@@ -337,7 +343,12 @@ def browser_proof(assignment_id: str, invitation_token: str | None = None) -> di
                 timeout=15000
             )
             assert page.get_by_role("button", name="Save feedback", exact=True).is_disabled()
-            page.get_by_text("Read the full report", exact=True).click()
+            assert (
+                page.get_by_text("Report reference and technical details", exact=True)
+                .locator("..")
+                .get_attribute("open")
+                is None
+            )
             page.screenshot(path=str(EVIDENCE / "review-ready-desktop.png"), full_page=True)
             page.get_by_label("Feedback", exact=True).fill(
                 "Browser proof: the cited moment supports this observation."
@@ -361,7 +372,7 @@ def browser_proof(assignment_id: str, invitation_token: str | None = None) -> di
             )
             page.remove_listener("dialog", cancel_navigation)
             page.get_by_label("Confidence", exact=True).select_option("high")
-            page.get_by_role("button", name="Technical", exact=False).click()
+            page.get_by_role("button", name="Developer", exact=False).click()
             page.get_by_label("Suggest a specific correction", exact=True).check()
             page.get_by_label("Correction area", exact=True).select_option("transcript")
             page.get_by_label("Current observation", exact=True).fill("Current transcript wording.")
@@ -498,10 +509,17 @@ def admin_browser_proof(run_id: str, reviewer_id: str, expiry: str) -> dict[str,
         try:
             page.goto(f"{UPSTREAM}/sales-xray/review", wait_until="networkidle")
             page.bring_to_front()
+            page.get_by_text("Advanced: assign an existing reviewer by ID", exact=True).click()
             page.get_by_role("heading", name="Create a reviewer assignment", exact=True).wait_for()
             page.locator("#review-run-id").fill(run_id)
             page.get_by_label("Reviewer person ID", exact=False).fill(reviewer_id)
-            page.locator("#review-expiry").fill(expiry)
+            calendar_expiry = page.evaluate(
+                "epoch => {const d = new Date(Number(epoch)*1000); "
+                "return new Date(d.getTime()-d.getTimezoneOffset()*60000)"
+                ".toISOString().slice(0,16);}",
+                expiry,
+            )
+            page.locator("#review-expiry").fill(calendar_expiry)
             with page.expect_response(
                 lambda response: (
                     response.request.method == "POST"
@@ -517,29 +535,30 @@ def admin_browser_proof(run_id: str, reviewer_id: str, expiry: str) -> dict[str,
             page.get_by_text("Assignment created and confirmed.", exact=True).wait_for()
             invitation_proof = None
             if INVITATIONS:
-                panel = page.get_by_role("region", name="Invite a verified reviewer")
-                panel.get_by_label("Exact run ID", exact=False).fill(run_id)
+                panel = page.get_by_role("region", name="Invite a reviewer")
+                panel.locator("#invitation-run-id").fill(run_id)
                 panel.get_by_label("Invited email", exact=True).fill(
                     "Browser.Reviewer@example.test"
                 )
-                panel.get_by_label("Expiry", exact=False).fill(expiry)
+                panel.locator("#invitation-expiry").fill(calendar_expiry)
                 with page.expect_response(
                     lambda response: (
                         response.request.method == "POST"
                         and response.url.endswith("/review-invitations")
                     )
                 ) as invited:
-                    panel.get_by_role("button", name="Queue invitation", exact=True).click()
+                    panel.get_by_role("button", name="Send invitation", exact=True).click()
                 assert invited.value.status == 201
                 invitation = invited.value.json()
-                panel.get_by_text("Invitation queued for email delivery.", exact=True).wait_for()
+                panel.get_by_text("Invitation queued for delivery.", exact=True).wait_for()
                 page.screenshot(
                     path=str(EVIDENCE / "admin-invitation-queued-desktop.png"), full_page=True
                 )
                 page.reload(wait_until="networkidle")
                 panel.get_by_text(
-                    "No invitations created during this visit.", exact=False
+                    "Invitations you send during this visit will appear here.", exact=False
                 ).wait_for()
+                panel.get_by_text("Revoke an earlier invitation by ID", exact=True).click()
                 panel.get_by_label("Revoke a known invitation", exact=False).fill(invitation["id"])
                 with page.expect_response(
                     lambda response: (

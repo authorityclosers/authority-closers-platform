@@ -581,6 +581,20 @@ export function VerifyEmailFlow({
               : "Link unavailable."}
       </h2>
       <p>{message}</p>
+      {invitationToken && state === "pending" ? (
+        <div className="form-message" role="note">
+          <p>
+            Keep this tab open while you verify your email in another tab. Then
+            return here to open your review.
+          </p>
+          <Link
+            className="button button--outline button--full"
+            href={reviewInvitationHref(invitationToken)}
+          >
+            I&apos;ve verified my email — open review
+          </Link>
+        </div>
+      ) : null}
       {state === "success" ? (
         <Link
           className="button button--ink button--full"

@@ -217,6 +217,7 @@ function parseAssignment(
           })),
           {
             title: "Report dimensions",
+            kind: "reference",
             findings: report.dimensions.map((item) => ({
               title: `${item.label} · ${item.status.replaceAll("_", " ")}`,
               explanation: item.observation,
@@ -225,6 +226,7 @@ function parseAssignment(
           },
           {
             title: "Report framework",
+            kind: "reference",
             findings: report.report_sections.map((item) => ({
               title: `${item.number}. ${item.title}`,
               explanation: item.required,

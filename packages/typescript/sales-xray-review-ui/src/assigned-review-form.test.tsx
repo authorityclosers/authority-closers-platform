@@ -71,6 +71,111 @@ afterEach(async () => {
 });
 
 describe("AssignedReviewForm", () => {
+  it("protects selected review settings before feedback text is entered", async () => {
+    const guard = vi.fn(() => () => undefined);
+    await act(async () =>
+      root.render(
+        <AssignedReviewForm
+          assignment={assignment}
+          onSubmit={vi.fn()}
+          registerNavigationGuard={guard}
+        />,
+      ),
+    );
+    expect(guard).toHaveBeenLastCalledWith(false);
+    await act(async () => setValue(container.querySelector("select")!, "high"));
+    expect(guard).toHaveBeenLastCalledWith(true);
+  });
+  it("counts observations separately from reference material and keeps technical details collapsed", async () => {
+    const finding = {
+      title: "Clarify the next step",
+      explanation: "Ask for a follow-up date.",
+      evidence: [],
+    };
+    await act(async () =>
+      root.render(
+        <AssignedReviewForm
+          assignment={{
+            ...assignment,
+            report: {
+              ...assignment.report,
+              groups: [
+                { title: "Improvements", findings: [finding] },
+                {
+                  title: "Report framework",
+                  kind: "reference",
+                  findings: [finding, finding],
+                },
+                { title: "Strengths", findings: [] },
+              ],
+            },
+          }}
+          onSubmit={vi.fn()}
+        />,
+      ),
+    );
+    expect(container.textContent).toContain("1 observation");
+    expect(container.textContent).not.toContain("No findings supplied");
+    const reference = [...container.querySelectorAll("details")].find(
+      (el) =>
+        el.querySelector("summary")?.textContent ===
+        "Report reference and technical details",
+    )!;
+    expect(reference.open).toBe(false);
+    expect(reference.textContent).toContain("Report framework");
+    const audio = container.querySelector("audio")!;
+    expect(
+      audio.compareDocumentPosition(reference) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("keeps feedback when switching perspective and searching moments", async () => {
+    const clips = Array.from({ length: 7 }, (_, index) => ({
+      ...assignment.clips[0]!,
+      segment_id: `segment-${index}`,
+      quote: `Moment topic ${index}`,
+    }));
+    const submit = vi.fn().mockResolvedValue({ submission_id: "new-review" });
+    await act(async () =>
+      root.render(
+        <AssignedReviewForm
+          assignment={{ ...assignment, clips }}
+          onSubmit={submit}
+        />,
+      ),
+    );
+    await act(async () => {
+      setValue(
+        container.querySelector("textarea")!,
+        "Preserve my observation.",
+      );
+      setValue(container.querySelector("select")!, "high");
+      [...container.querySelectorAll("button")]
+        .find((button) => button.textContent?.includes("Developer"))!
+        .click();
+      setValue(
+        container.querySelector<HTMLInputElement>('input[type="search"]')!,
+        "topic 5",
+      );
+    });
+    expect(container.querySelector("textarea")!.value).toBe(
+      "Preserve my observation.",
+    );
+    expect(
+      container.querySelectorAll('[aria-label="Timestamped clips"] button'),
+    ).toHaveLength(1);
+    await act(async () =>
+      [...container.querySelectorAll("button")]
+        .find((button) => button.textContent === "Save feedback")!
+        .click(),
+    );
+    expect(submit.mock.calls[0]?.[0]).toMatchObject({
+      lens: "technical",
+      clip: { segment_id: "segment-0" },
+      feedback: "Preserve my observation.",
+    });
+  });
   it("uses a new request identity after editing a failed draft", async () => {
     const onSubmit = vi
       .fn()

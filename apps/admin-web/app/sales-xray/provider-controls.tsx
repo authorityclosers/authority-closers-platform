@@ -7,6 +7,7 @@ import { z } from "zod";
 import { newIdempotencyKey } from "@ac/operations-web/api";
 
 import { AdminShell } from "../components/admin-shell";
+import { SalesXrayNavigation } from "./sales-xray-navigation";
 import styles from "./provider-controls.module.css";
 
 const TASK_NAMES = [
@@ -61,6 +62,7 @@ const catalogEntrySchema = z
     protocol: z.string().min(1),
     status: z.enum(["implemented", "planned"]),
     readiness: z.string().min(1),
+    deployment: z.enum(["hosted", "gateway", "local", "deterministic_tool"]),
     models: z.array(modelSchema),
     note: z.string(),
   })
@@ -331,6 +333,14 @@ async function requestJson(path: string, init: RequestInit = {}) {
   if (response.status === 403) throw new Error("forbidden");
   if (!response.ok) throw new Error(`http_${response.status}`);
   return response.json() as Promise<unknown>;
+}
+
+export async function loadProviderControls(
+  signal?: AbortSignal,
+): Promise<ProviderControlsPayload> {
+  return parseProviderControlsPayload(
+    await requestJson("/v1/admin/conversation/providers", { signal }),
+  );
 }
 
 function ExternalReferenceField({
@@ -681,11 +691,8 @@ export function ProviderControlsPanel() {
   useEffect(() => {
     const controller = new AbortController();
     requestRef.current = controller;
-    void requestJson("/v1/admin/conversation/providers", {
-      signal: controller.signal,
-    })
-      .then((value) => {
-        const payload = parseProviderControlsPayload(value);
+    void loadProviderControls(controller.signal)
+      .then((payload) => {
         setState((previous) => ({
           status: "ready",
           payload,
@@ -841,7 +848,7 @@ export function ProviderControlsPanel() {
       setDraft(draftFromConfiguration(saved.configuration));
       setSaveState("saved");
       setMessage(
-        "Saved as a new immutable revision. Provider execution remains off.",
+        "Saved as a new immutable revision. This save does not start provider calls.",
       );
     } catch (error: unknown) {
       if (error instanceof Error && error.message === "http_409") {
@@ -928,11 +935,11 @@ export function ProviderControlsPanel() {
     <div className={styles.page}>
       <div className={styles.notice} role="note">
         <div>
-          <h2>Provider settings stay dormant until separately approved.</h2>
+          <h2>Provider settings are saved for review.</h2>
           <p>
-            {state.payload.message} This page records references and routing
-            metadata only; it never accepts credentials or starts a provider
-            call.
+            {state.payload.message} Choose providers and map analysis tasks
+            here; this page records settings only and never accepts credentials
+            or starts a provider call.
           </p>
         </div>
         <span className={styles.noticeCode}>NO PROVIDER CALLS</span>
@@ -940,14 +947,14 @@ export function ProviderControlsPanel() {
 
       <div className={styles.summaryGrid} aria-label="Provider control status">
         <div className={styles.summaryCard}>
-          <span>Paid spend ceiling</span>
+          <span>Spend limit</span>
           <strong>₹0</strong>
           <small>fixed in this workspace</small>
         </div>
         <div className={styles.summaryCard}>
-          <span>Execution</span>
-          <strong>Off</strong>
-          <small>activation is a separate server gate</small>
+          <span>Provider calls</span>
+          <strong>Not started here</strong>
+          <small>this page only saves settings</small>
         </div>
         <div className={styles.summaryCard}>
           <span>Current revision</span>
@@ -1055,13 +1062,16 @@ export function ProviderControlsPanel() {
       <section className={styles.section} aria-labelledby="task-routes-title">
         <div className={styles.sectionHeader}>
           <div>
-            <span className={styles.eyebrow}>Task routing</span>
+            <span className={styles.eyebrow}>
+              Task routing / analysis revisions
+            </span>
             <h2 id="task-routes-title">
-              Assign tasks without activating them.
+              Choose analysis parameters by revision.
             </h2>
             <p>
-              Each route retains its task contract and checkpoint lineage.
-              Multiple models and tasks can be stored as separate mappings.
+              Recipe, profile, and prompt values are revision identifiers for a
+              future approved run. They select configuration; they do not train
+              a model or start analysis.
             </p>
           </div>
           <button
@@ -1115,14 +1125,14 @@ export function ProviderControlsPanel() {
       <section className={styles.section} aria-labelledby="catalog-title">
         <div className={styles.catalogHeader}>
           <div>
-            <span className={styles.eyebrow}>Server catalog</span>
-            <h2 id="catalog-title">Available provider labels and status.</h2>
+            <span className={styles.eyebrow}>Available providers</span>
+            <h2 id="catalog-title">Provider options and status.</h2>
             <p>
-              These labels come from the server catalog. Status describes
-              catalog metadata, not execution approval.
+              Status describes catalog metadata; it does not mean this page can
+              call a provider.
             </p>
           </div>
-          <span className={styles.dormant}>execution_activated false</span>
+          <span className={styles.dormant}>catalog metadata only</span>
         </div>
         <div className={styles.catalogList}>
           {catalog.map((provider) => (
@@ -1148,11 +1158,11 @@ export function ProviderControlsPanel() {
       <section className={styles.section} aria-labelledby="save-title">
         <div className={styles.sectionHeader}>
           <div>
-            <span className={styles.eyebrow}>Immutable revision</span>
-            <h2 id="save-title">Save dormant settings.</h2>
+            <span className={styles.eyebrow}>Saved revision</span>
+            <h2 id="save-title">Save provider settings.</h2>
             <p>
-              Saving creates the next server revision with an idempotency key.
-              It cannot spend money, test a provider, or activate execution.
+              Saving creates a new version of these settings. It cannot spend
+              money, test a provider, or start processing.
             </p>
           </div>
           <ShieldCheck size={24} aria-hidden="true" />
@@ -1188,11 +1198,14 @@ export function ProviderControls() {
     <AdminShell
       active="sales-xray"
       surface="operations"
-      eyebrow="Conversation intelligence / provider registry"
-      title="Provider controls"
-      description="Store approved provider references and task mappings while execution stays off."
+      eyebrow="Conversation intelligence / provider settings"
+      title="Provider settings"
+      description="Choose providers, map analysis tasks, and save reviewable settings."
     >
-      <ProviderControlsPanel />
+      <div className={styles.page}>
+        <SalesXrayNavigation active="settings" />
+        <ProviderControlsPanel />
+      </div>
     </AdminShell>
   );
 }
