@@ -381,7 +381,7 @@ validate_release_profile() {
         "AC_EDGE_COACH_ALIAS=ac-production-coach"
         "AC_EXTERNAL_SIDE_EFFECTS_HOLD=false"
         "AC_EMAIL_PROVIDER=resend"
-        "AC_PRACTICE_PILOT_ENABLED=false"
+        "AC_PRACTICE_PILOT_ENABLED=true"
         "AC_MEDIA_FILESYSTEM_HOST_ROOT=/srv/authority-closers/volumes/media-video/production"
         "AC_MEDIA_SCANNER_HOST_ROOT=/srv/authority-closers/volumes/media-safety-socket"
       )

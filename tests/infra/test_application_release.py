@@ -1061,7 +1061,7 @@ def test_environment_profiles_isolate_state_hosts_and_edge_aliases() -> None:
     assert "AC_EXTERNAL_SIDE_EFFECTS_HOLD=false" in production
     assert "AC_EMAIL_PROVIDER=resend" in production
     assert "AC_PRACTICE_PILOT_ENABLED=true" in staging
-    assert "AC_PRACTICE_PILOT_ENABLED=false" in production
+    assert "AC_PRACTICE_PILOT_ENABLED=true" in production
     assert "AC_MEDIA_FILESYSTEM_ENABLED=true" in staging
     assert (
         "AC_MEDIA_FILESYSTEM_HOST_ROOT=/srv/authority-closers/volumes/media-video/staging"
@@ -1330,22 +1330,20 @@ def test_installer_rejects_stale_production_activation_policy(
     assert "unexpected value for AC_" in result.stderr
 
 
-def test_installer_rejects_production_practice_pilot_enablement(tmp_path: Path) -> None:
-    profile = (
-        (APPLICATION / "environments" / "production.env")
-        .read_bytes()
-        .replace(b"AC_PRACTICE_PILOT_ENABLED=false\n", b"AC_PRACTICE_PILOT_ENABLED=true\n")
-    )
+def test_installer_accepts_production_practice_pilot_enablement(tmp_path: Path) -> None:
+    profile = (APPLICATION / "environments" / "production.env").read_bytes()
 
     result = _run_profile_parser(tmp_path, profile, target_environment="production")
 
-    assert result.returncode != 0
-    assert "unexpected value for AC_PRACTICE_PILOT_ENABLED" in result.stderr
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "released,resend\n"
 
 
 PUBLIC_TENANT = "10000000-0000-4000-8000-000000000001"
 OPERATIONS_TENANT = "20000000-0000-4000-8000-000000000002"
 FOREIGN_TENANT = "30000000-0000-4000-8000-000000000003"
+PRODUCTION_PUBLIC_TENANT = "c1d51741-6e0f-4ddc-8cc4-58856d0e778f"
+PRODUCTION_OPERATIONS_TENANT = "fb594dea-fdb6-444c-a36f-1d94fbc65bbf"
 
 
 @pytest.mark.parametrize(
@@ -1397,6 +1395,18 @@ def test_practice_pilot_preflight_does_not_accept_ambient_tenant_scope() -> None
         public_tenant=PUBLIC_TENANT,
         operations_tenant=OPERATIONS_TENANT,
         ambient_pilot_tenant=FOREIGN_TENANT,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == ""
+
+
+def test_production_pilot_preflight_accepts_the_reviewed_public_learner_tenant() -> None:
+    result = _run_practice_pilot_preflight(
+        enabled=True,
+        pilot_tenant=PRODUCTION_PUBLIC_TENANT,
+        public_tenant=PRODUCTION_PUBLIC_TENANT,
+        operations_tenant=PRODUCTION_OPERATIONS_TENANT,
     )
 
     assert result.returncode == 0, result.stderr
