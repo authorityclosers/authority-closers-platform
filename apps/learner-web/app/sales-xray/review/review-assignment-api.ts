@@ -55,6 +55,15 @@ const assignmentSchema = z.object({
     .refine((items) => new Set(items).size === items.length),
   state: z.enum(["assigned", "in_progress", "submitted"]),
 });
+export const reviewAssignmentTransportSchema = assignmentSchema.refine(
+  (bound) =>
+    bound.tenant_id === bound.source.tenant_id &&
+    bound.checkpoint.tenant_id === bound.tenant_id &&
+    bound.source.recording_id === bound.checkpoint.recording_id &&
+    bound.source.source_revision === bound.checkpoint.source_revision &&
+    bound.source.source_sha256 === bound.checkpoint.source_sha256,
+  "The accepted assignment differs from its source.",
+);
 const spanSchema = z
   .object({
     checkpoint_id: uuid,

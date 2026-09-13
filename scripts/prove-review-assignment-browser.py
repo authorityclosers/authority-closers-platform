@@ -17,6 +17,7 @@ import os
 from pathlib import Path
 from typing import Any, cast
 from urllib.parse import urlsplit
+from uuid import UUID
 
 import httpx
 import uvicorn
@@ -24,24 +25,33 @@ from fastapi import FastAPI, Request, Response
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
 from playwright.sync_api import sync_playwright
 from sqlalchemy import func, select
+
+from ac_platform.application.settings import Settings
+from ac_platform.conversation_intelligence.application import ConversationApplication
+from ac_platform.conversation_intelligence.models import (
+    ConversationReviewFeedback,
+    ConversationReviewInvitation,
+)
+from ac_platform.conversation_intelligence.review_contracts import ReviewInvitationCreateRequest
+from ac_platform.conversation_intelligence.review_invitations import decrypt_invitation_token
+from ac_platform.conversation_intelligence.review_service import ConversationReviewService
+from ac_platform.http.auth import AuthenticatedTransaction
+from ac_platform.http.conversation_reviews import install_conversation_review_http
+from ac_platform.http.problem import register_problem_handlers
+from ac_platform.identity.application import ResolvedActorContext
+from ac_platform.identity.models import Person
+from tests.database.test_conversation_postgresql import postgres_harness as postgres_harness
+from tests.database.test_conversation_postgresql import run
 from tests.database.test_conversation_reviews_postgresql import (
     _build_report_case,
     _create_assignment,
 )
 
-from ac_platform.application.settings import Settings
-from ac_platform.conversation_intelligence.models import ConversationReviewFeedback
-from ac_platform.http.auth import AuthenticatedTransaction
-from ac_platform.http.conversation_reviews import install_conversation_review_http
-from ac_platform.http.problem import register_problem_handlers
-from ac_platform.identity.application import ResolvedActorContext
-from tests.database.test_conversation_postgresql import postgres_harness as postgres_harness
-from tests.database.test_conversation_postgresql import run
-
 ORIGIN = "http://127.0.0.1:3187"
 UPSTREAM = os.environ.get("REVIEW_UI_UPSTREAM", "http://127.0.0.1:3100")
 EVIDENCE = Path(os.environ["REVIEW_UI_EVIDENCE_DIR"])
 ADMIN_UI = os.environ.get("REVIEW_UI_ADMIN") == "true"
+INVITATIONS = os.environ.get("REVIEW_UI_INVITATIONS") == "true"
 
 
 def test_real_review_browser(postgres_harness: Any, tmp_path: Path) -> None:  # noqa: F811
@@ -80,7 +90,35 @@ def test_real_review_browser(postgres_harness: Any, tmp_path: Path) -> None:  # 
             coach_app_url="http://coach.test",
             api_url=ORIGIN,
             operations_tenant_id=case.operations_tenant_id,
+            email_challenge_secret="review-browser-fixture-secret-012345678901234567890",  # noqa: S106
         )
+        invitation_token = None
+        if INVITATIONS and not ADMIN_UI:
+            async with case.sessions() as database, database.begin():
+                reviewer = await database.get(Person, case.reviewer_actor.person_id)
+                assert reviewer is not None and reviewer.email is not None
+                service = ConversationReviewService(
+                    ConversationApplication(database),
+                    operations_tenant_id=case.operations_tenant_id,
+                    token_secret=settings.email_challenge_secret.get_secret_value(),
+                )
+                invitation = await service.invite(
+                    case.admin_actor,
+                    ReviewInvitationCreateRequest(
+                        schema="ac.sales-xray.review-invitation-create/1",
+                        run_id=case.report_run_id,
+                        invited_email=reviewer.email,
+                        allowed_lenses=("sales", "technical", "ux"),
+                        expires_at_epoch=assignment["expires_at_epoch"],
+                    ),
+                    "browser-invitation",
+                )
+                row = await database.get(ConversationReviewInvitation, UUID(invitation["id"]))
+                assert row is not None
+                # Local synthetic token stays in memory; never put it in evidence.
+                invitation_token = decrypt_invitation_token(
+                    settings.email_challenge_secret.get_secret_value(), row.encrypted_token, row.id
+                )
         install_conversation_review_http(
             application,
             settings=settings,
@@ -169,17 +207,21 @@ def test_real_review_browser(postgres_harness: Any, tmp_path: Path) -> None:  # 
                     str(assignment["expires_at_epoch"]),
                 )
                 if ADMIN_UI
-                else await asyncio.to_thread(browser_proof, assignment_id)
+                else await asyncio.to_thread(browser_proof, assignment_id, invitation_token)
             )
             async with case.sessions() as database:
                 count = await database.scalar(
                     select(func.count())
                     .select_from(ConversationReviewFeedback)
-                    .where(ConversationReviewFeedback.assignment_id == assignment_id)
+                    .where(
+                        ConversationReviewFeedback.assignment_id
+                        == result.get("assignment_id", assignment_id)
+                    )
                 )
                 assert count == (0 if ADMIN_UI else 1)
             result["database_submission_count"] = count
-            result["backend_commit"] = "44dde80b4ea8423d514342b933cbafed128ad232"
+            result["backend_commit"] = os.environ.get("REVIEW_UI_BACKEND_COMMIT")
+            result["invitation_mode"] = INVITATIONS
             result["authentication"] = (
                 "synthetic canonical actor fixture; session resolver not under test"
             )
@@ -231,7 +273,7 @@ def write_receipt(result: dict[str, Any]) -> None:
     ).write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
 
 
-def browser_proof(assignment_id: str) -> dict[str, Any]:
+def browser_proof(assignment_id: str, invitation_token: str | None = None) -> dict[str, Any]:
     EVIDENCE.mkdir(parents=True, exist_ok=True)
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
@@ -258,6 +300,27 @@ def browser_proof(assignment_id: str) -> dict[str, Any]:
             ),
         )
         try:
+            if invitation_token:
+                # Script runs before hydration; navigation itself has no bearer in its URL.
+                page.add_init_script(
+                    "if (location.pathname === '/sales-xray/review/invite') {"
+                    "history.replaceState(history.state, '', location.pathname + '#token=' + "
+                    + json.dumps(invitation_token)
+                    + ");}"
+                )
+                with page.expect_response(
+                    lambda response: response.url.endswith("/review-invitations/accept")
+                ) as accepted:
+                    page.goto(f"{ORIGIN}/sales-xray/review/invite", wait_until="domcontentloaded")
+                assert accepted.value.status == 201
+                assignment_id = accepted.value.json()["id"]
+                page.wait_for_url(f"{ORIGIN}/sales-xray/review/{assignment_id}")
+                assert "#" not in page.url
+                assert not page.evaluate(
+                    "token => [localStorage, sessionStorage].some(storage => "
+                    "Object.values(storage).some(value => String(value).includes(token)))",
+                    invitation_token,
+                )
             page.goto(
                 f"{ORIGIN}/sales-xray/review/{assignment_id}",
                 wait_until="domcontentloaded",
@@ -374,6 +437,9 @@ def browser_proof(assignment_id: str) -> dict[str, Any]:
             assert not errors, errors
             return {
                 "status": "passed",
+                "assignment_id": assignment_id,
+                "invitation_accept_status": 201 if invitation_token else None,
+                "invitation_token_persisted": False if invitation_token else None,
                 "origin": ORIGIN,
                 "source": "synthetic local WAV",
                 "save_status": saved.value.status,
@@ -433,7 +499,7 @@ def admin_browser_proof(run_id: str, reviewer_id: str, expiry: str) -> dict[str,
             page.goto(f"{UPSTREAM}/sales-xray/review", wait_until="networkidle")
             page.bring_to_front()
             page.get_by_role("heading", name="Create a reviewer assignment", exact=True).wait_for()
-            page.get_by_label("Run ID", exact=False).fill(run_id)
+            page.locator("#review-run-id").fill(run_id)
             page.get_by_label("Reviewer person ID", exact=False).fill(reviewer_id)
             page.locator("#review-expiry").fill(expiry)
             with page.expect_response(
@@ -449,6 +515,51 @@ def admin_browser_proof(run_id: str, reviewer_id: str, expiry: str) -> dict[str,
                 assignment["reviewer_person_id"] == reviewer_id and assignment["run_id"] == run_id
             )
             page.get_by_text("Assignment created and confirmed.", exact=True).wait_for()
+            invitation_proof = None
+            if INVITATIONS:
+                panel = page.get_by_role("region", name="Invite a verified reviewer")
+                panel.get_by_label("Exact run ID", exact=False).fill(run_id)
+                panel.get_by_label("Invited email", exact=True).fill(
+                    "Browser.Reviewer@example.test"
+                )
+                panel.get_by_label("Expiry", exact=False).fill(expiry)
+                with page.expect_response(
+                    lambda response: (
+                        response.request.method == "POST"
+                        and response.url.endswith("/review-invitations")
+                    )
+                ) as invited:
+                    panel.get_by_role("button", name="Queue invitation", exact=True).click()
+                assert invited.value.status == 201
+                invitation = invited.value.json()
+                panel.get_by_text("Invitation queued for email delivery.", exact=True).wait_for()
+                page.screenshot(
+                    path=str(EVIDENCE / "admin-invitation-queued-desktop.png"), full_page=True
+                )
+                page.reload(wait_until="networkidle")
+                panel.get_by_text(
+                    "No invitations created during this visit.", exact=False
+                ).wait_for()
+                panel.get_by_label("Revoke a known invitation", exact=False).fill(invitation["id"])
+                with page.expect_response(
+                    lambda response: (
+                        response.request.method == "POST"
+                        and response.url.endswith(f"/review-invitations/{invitation['id']}/revoke")
+                    )
+                ) as invitation_revoked:
+                    panel.get_by_role("button", name="Revoke known invitation", exact=True).click()
+                assert invitation_revoked.value.status == 200
+                panel.get_by_text("Invitation revoked.", exact=False).wait_for()
+                invitation_proof = {"create_status": 201, "revoke_after_reload_status": 200}
+                for width in [390, 320]:
+                    page.set_viewport_size({"width": width, "height": 1000})
+                    page.screenshot(
+                        path=str(EVIDENCE / f"admin-invitation-revoked-{width}.png"), full_page=True
+                    )
+                    assert not page.evaluate(
+                        "document.documentElement.scrollWidth > window.innerWidth"
+                    )
+                page.set_viewport_size({"width": 1440, "height": 1100})
             page.screenshot(path=str(EVIDENCE / "admin-review-created-desktop.png"), full_page=True)
             page.reload(wait_until="networkidle")
             assignment_link = page.locator(f'a[href="/sales-xray/review/{assignment["id"]}"]')
@@ -490,6 +601,7 @@ def admin_browser_proof(run_id: str, reviewer_id: str, expiry: str) -> dict[str,
                 "frontend": "Next development server with local preview enabled",
                 "transport": "Browser route forwards API requests to actual loopback HTTP server",
                 "create_status": 201,
+                "invitation": invitation_proof,
                 "revoke_status": 200,
                 "reloaded_state": "revoked",
                 "viewports": dimensions,

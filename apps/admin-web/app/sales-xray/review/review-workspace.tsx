@@ -32,6 +32,7 @@ import {
   type ReviewQueueState,
 } from "./review-api";
 import styles from "./review-workspace.module.css";
+import { ReviewInvitationPanel } from "./review-invitation-panel";
 
 const lensLabels: Record<ReviewMode, { label: string; detail: string }> = {
   sales: { label: "Sales", detail: "Context and adjudication" },
@@ -832,6 +833,8 @@ export function ReviewWorkspace({
             ) : null}
           </section>
         </div>
+
+        <ReviewInvitationPanel />
 
         {revokeTarget ? (
           <section

@@ -1,0 +1,178 @@
+.panel {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  display: grid;
+  gap: 1.2rem;
+  padding: clamp(1.2rem, 3vw, 2rem);
+  border: 1px solid #d8e0ea;
+  border-radius: 18px;
+  background: #fff;
+}
+.heading h2 {
+  margin: 0.25rem 0 0.5rem;
+  color: #14243a;
+}
+.heading p,
+.empty,
+.errorText {
+  max-width: 72ch;
+  color: #65748a;
+  line-height: 1.55;
+}
+.eyebrow {
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.form {
+  display: grid;
+  gap: 0.9rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.form label,
+.known label {
+  min-width: 0;
+  display: grid;
+  gap: 0.35rem;
+  color: #26364d;
+  font-size: 0.88rem;
+  font-weight: 650;
+}
+.form label span,
+.known label span {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: baseline;
+}
+.form small,
+.known small {
+  color: #7a8798;
+  font-size: 0.72rem;
+  font-weight: 500;
+}
+.form input,
+.known input {
+  min-width: 0;
+  max-width: 100%;
+  min-height: 2.55rem;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid #b9c6d6;
+  border-radius: 8px;
+  color: #14243a;
+  background: #fff;
+}
+.form fieldset {
+  min-width: 0;
+  grid-column: 1 / -1;
+  padding: 0.8rem;
+  border: 1px solid #d8e0ea;
+  border-radius: 10px;
+}
+.form legend {
+  padding: 0 0.3rem;
+  color: #26364d;
+  font-size: 0.88rem;
+  font-weight: 650;
+}
+.lenses {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem 1.2rem;
+}
+.lenses label {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  font-weight: 500;
+}
+.form > button {
+  justify-self: start;
+}
+.success,
+.error {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  padding: 0.8rem;
+  border-radius: 10px;
+  line-height: 1.45;
+}
+.success {
+  flex-wrap: wrap;
+  color: #14532d;
+  background: #ecfdf3;
+}
+.error {
+  color: #991b1b;
+  background: #fef2f2;
+}
+.error button {
+  margin-left: auto;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.known {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: end;
+  padding-top: 0.9rem;
+  border-top: 1px solid #e5eaf0;
+}
+.known label {
+  flex: 1 1 20rem;
+}
+.receipts {
+  display: grid;
+  gap: 0.65rem;
+}
+.receipts h3 {
+  margin: 0;
+  color: #26364d;
+  font-size: 0.95rem;
+}
+.receipts article {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.75rem;
+  border: 1px solid #e5eaf0;
+  border-radius: 10px;
+}
+.receipts article div {
+  display: grid;
+  gap: 0.2rem;
+}
+.receipts article span {
+  color: #65748a;
+  font-size: 0.8rem;
+}
+.receipts article code {
+  color: #65748a;
+  font-size: 0.72rem;
+}
+.receipts article button {
+  border: 0;
+  color: #991b1b;
+  background: transparent;
+  text-decoration: underline;
+  cursor: pointer;
+}
+@media (max-width: 700px) {
+  .form {
+    grid-template-columns: 1fr;
+  }
+  .form fieldset {
+    grid-column: auto;
+  }
+  .receipts article {
+    grid-template-columns: 1fr;
+  }
+}
