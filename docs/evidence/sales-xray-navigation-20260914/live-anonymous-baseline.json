@@ -1,0 +1,38 @@
+{
+  "observed_at_utc": "2026-09-13T18:51:42.600830+00:00",
+  "scope": "anonymous availability and privacy boundary only; no authenticated analysis",
+  "rows": [
+    {
+      "url": "https://learner-staging.authorityclosers.com/sales-xray",
+      "status": 200,
+      "cache_control": "s-maxage=31536000",
+      "release": null
+    },
+    {
+      "url": "https://learner.authorityclosers.com/sales-xray",
+      "status": 200,
+      "cache_control": "s-maxage=31536000",
+      "release": null
+    },
+    {
+      "url": "https://api-staging.authorityclosers.com/v1/conversation/recordings",
+      "status": 401,
+      "cache_control": "no-store",
+      "release": null
+    },
+    {
+      "url": "https://api.authorityclosers.com/v1/conversation/recordings",
+      "status": 401,
+      "cache_control": "no-store",
+      "release": null
+    },
+    {
+      "url": "https://salesxray-staging.authorityclosers.com/health",
+      "error_type": "ConnectError"
+    },
+    {
+      "url": "https://salesxray.authorityclosers.com/health",
+      "error_type": "ConnectError"
+    }
+  ]
+}

@@ -29,3 +29,43 @@ keyboard navigation, retained sound channel/cursor and complete print output.
 This is a separate candidate, not a deployed version. It does not change guest
 contracts, identity, minute accounting, worker/provider activation or review
 policy. No new provider or private recording execution is claimed.
+
+## Final acceptance on cb886ef
+
+Runtime source: `cb886effe8f6d21c5fbe1e645d625adeca4d3107`.
+The last change adds space between the practice callout and first overview
+finding, after inspecting the Marathi mobile screenshot.
+
+- **70 UI tests pass** across 10 files; the last CSS-only spacing change does
+  not change those tested components or test code.
+- Optimized standalone and learner builds pass on the final source.
+- The optimized standalone served through `next start` on loopback3204 passes
+  all six report sections, four language modes,320px layout, keyboard navigation,
+  persistent audio/search/sound state and playback error recovery. This browser
+  uses synthetic API/media fixtures and substitutes `media.play` for recovery
+  coverage; it is not live provider proof or Linux packaged-image acceptance.
+- Its three-page PDF includes all eight factor observations, draft status,
+  sound value and next-step guidance. Inactive panels print; tab controls do not.
+- **3 actual HTTP/AC identity/disposable PostgreSQL browser tests pass in
+  103.33 seconds** using the same source's static export. The identity case has
+  14 checks/18 API responses; each upload case has8 checks/23 API responses.
+  They cover password login, explicit workspace selection, actual WAV playback
+  and seek, saved native48kHz measurements, logout401, fresh private WAV upload,
+  actual local native completion and saved report reopening. Zero external
+  browser requests or browser errors were recorded. Durable report inference
+  uses a synthetic ReportingBroker; it is not a paid/free provider run.
+
+[Portable receipts and synthetic report](sales-xray-navigation-20260914/README.md)
+include exact-byte manifests. Earlier failed setup receipts remain outside Git:
+`sales-xray-navigation-cb886ef-auth-20260914` rejected the default repository
+test storage path; `...-auth-retry2-20260914` lacked the prebuilt native artifact.
+The final retry uses a new external fixture directory and the existing binary
+whose native source and binary checksums were verified before reuse. No storage
+or native-runtime guard was changed to make the test pass.
+
+Read-only live checks at2026-09-13T18:51:42Z still find both learner Sales pages
+200 and anonymous recording APIs401/no-store. Both standalone hosts fail to
+connect. This update is not staged or production-published. Combined candidate
+975653e is being validated by the sole release owner; no competing image or
+installer was dispatched from this lane. Hosted real-call approval remains
+pending in this thread, and no new provider spend occurred.
