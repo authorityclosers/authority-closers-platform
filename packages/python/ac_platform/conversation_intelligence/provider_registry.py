@@ -1022,7 +1022,6 @@ def resolve_dispatch(
         (provider_config.provider_terms_ref, "provider_terms_ref"),
         (provider_config.privacy_ref, "privacy_ref"),
         (provider_config.pricing_ref, "pricing_ref"),
-        (provider_config.free_allowance_ref, "free_allowance_ref"),
         (provider_config.permission_ref, "permission_ref"),
         (provider_config.endpoint_approval_ref, "endpoint_approval_ref"),
     )
@@ -1053,8 +1052,13 @@ def resolve_dispatch(
         _fail("credential_reference_missing")
     max_cost = _nonnegative(provider_config.max_cost_paise, "max_cost_paise")
     assert max_cost is not None
-    if max_cost > 0 and not config.policy.allow_paid:
-        _fail("paid_dispatch_disabled")
+    if max_cost > 0:
+        if not config.policy.allow_paid:
+            _fail("paid_dispatch_disabled")
+    elif provider_config.free_allowance_ref is None:
+        _fail("invalid_free_allowance_ref")
+    else:
+        _ref(provider_config.free_allowance_ref, "free_allowance_ref", required=True)
     return DispatchPlan(
         task=route.task,
         provider_id=route.provider_id,

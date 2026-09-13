@@ -347,6 +347,7 @@ class ConversationProcessingPlans:
                 self.app,
                 actor,
                 item,
+                bundle=bundle,
                 task=task,
                 provider="groq",
                 model=item.model_id,

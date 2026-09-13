@@ -89,7 +89,7 @@ class PinnedApprovalLoader:
             if bundle.provider_control_tenant_id != self.operations_tenant_id:
                 raise ValueError
             if self.environment != "test" and any(
-                item.zero_cost_basis != "verified_free_allowance" for item in bundle.stages
+                item.zero_cost_basis == "synthetic" for item in bundle.stages
             ):
                 raise ValueError
             return bundle
