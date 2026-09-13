@@ -90,15 +90,31 @@ jobs:
         run: python -m pip install --disable-pip-version-check uv==0.12.7
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile && uv sync --frozen
-      - name: Require codec tools for media regressions
+      - name: Require codec and filesystem tools for media regressions
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends ffmpeg
+          sudo apt-get install --yes --no-install-recommends ffmpeg e2fsprogs util-linux
           command -v ffmpeg
           command -v ffprobe
           ffmpeg -version
           ffprobe -version
+      - name: Prove the scanner filesystem capacity boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          receipt="${RUNNER_TEMP}/scanner-loopback.xml"
+          sudo env AC_SCANNER_LOOPBACK_TEST=1 "${GITHUB_WORKSPACE}/.venv/bin/python" \
+            -m pytest tests/infra/test_media_safety_temp_filesystem.py -q -r s \
+            -p no:cacheprovider --basetemp="${RUNNER_TEMP}/scanner-loopback-tests" \
+            --junitxml="${receipt}"
+          python - "${receipt}" <<'PY'
+          import sys
+          import xml.etree.ElementTree as ET
+          root = ET.parse(sys.argv[1]).getroot()
+          assert len(list(root.iter("testcase"))) == 1, "scanner proof did not run"
+          assert not list(root.iter("skipped")), "scanner proof was skipped"
+          PY
       - name: Create the dedicated migration regression database
         env:
           PGPASSWORD: local-owner-only
