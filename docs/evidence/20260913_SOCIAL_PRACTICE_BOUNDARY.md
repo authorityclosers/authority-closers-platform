@@ -3,6 +3,11 @@
 Date: 2026-09-13 (Asia/Kolkata). Source and test evidence only; no environment
 activation, database migration or external write was performed.
 
+Historical note: this records the initial boundary decision made before the
+bounded community contract was authored. The implemented follow-on is recorded
+in `20260913_COMMUNITY_DISCOVERY_CONNECTIONS.md`; its migration is now reserved
+as `20260913_0033` after the Sales Xray `20260913_0032` parent.
+
 ## Source authority and base
 
 This worktree is based exactly on release-candidate commit
@@ -41,7 +46,7 @@ prompts are marked `editorial_draft`; all three sets retain
 `needs_Dipak_review`, `competition_eligible: false` and
 `assessment_eligible: false`. No new reward or scoring path was added.
 
-## Social capability decision
+## Initial social capability decision
 
 No safe friend/student search, profile viewer or friend-connection backend
 contract exists in the current candidate. The current community API exposes

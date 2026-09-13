@@ -2,7 +2,7 @@
 
 ## Authority and base
 
-This slice is based on release candidate `41d3c5726a1b5d217259c034bf058d9107135b1f` (`codex/release-followon-20260913`) and follows the controlled community identity contract in `docs/evidence/20260910_ACADEMY_COMMUNITY_IDENTITY_CANDIDATE.md`, the onboarding profile boundary, and the community release sequence in `docs/workflows/v0.1-alpha-experience/00-start-here/alpha-to-arcade-release-sequence-2026-09-07.md`.
+This slice is based on release candidate `41d3c5726a1b5d217259c034bf058d9107135b1f` (`codex/release-followon-20260913`) and follows the controlled community identity contract in `docs/evidence/20260910_ACADEMY_COMMUNITY_IDENTITY_CANDIDATE.md`, the onboarding profile boundary, and the community release sequence in `docs/workflows/v0.1-alpha-experience/00-start-here/alpha-to-arcade-release-sequence-2026-09-07.md`. The migration is `20260913_0033_community_connections`, chained after the Sales Xray `20260913_0032` parent.
 
 ## Contract implemented
 
@@ -16,7 +16,7 @@ This slice is based on release candidate `41d3c5726a1b5d217259c034bf058d9107135b
 
 ## Routes
 
-`GET/PUT /v1/community/discovery`, `GET /v1/community/search`, `GET /v1/community/public/{username}`, `POST /v1/community/connections/{username}`, `POST /accept|decline`, `DELETE /v1/community/connections/{username}`, `POST /v1/community/blocks/{username}`, and `POST /v1/community/reports/{username}`.
+`GET/PUT /v1/community/discovery`, `GET /v1/community/search`, `GET /v1/community/public/{username}`, `GET /v1/community/connections`, `POST /v1/community/connections/{username}`, `POST /accept|decline`, `DELETE /v1/community/connections/{username}`, `POST /v1/community/blocks/{username}`, and `POST /v1/community/reports/{username}`.
 
 ## Deferred gaps
 
@@ -25,6 +25,8 @@ The current media delivery contract mints avatar URLs only for the authenticated
 ## Validation evidence
 
 - `uv run pytest tests/unit/community/test_discovery_connections.py -q` — 4 passed.
+- `uv run pytest tests/integration/test_community_identity_postgresql.py tests/database/test_model_registry.py -q` — 17 passed against disposable loopback PostgreSQL; the Sales `0032` parent was supplied in the local proof workspace and is not duplicated by this slice.
 - `uv run ruff check` passed for all changed Python community, HTTP, limiter, migration, and focused test files.
 - `python -m compileall -q packages/python/ac_platform/community` passed.
-- Frontend component/API tests were added under `apps/learner-web/app/components/community-discovery.test.tsx`; this isolated worktree has no installed Node workspace dependencies, so Vitest/typecheck require the normal workspace install/CI environment.
+- `pnpm --filter @ac/learner-web test -- community-discovery.test.tsx learner-api.test.ts profile-runtime.test.tsx academy-leaderboard.test.tsx community-identity-card.test.tsx` — 74 passed.
+- `pnpm --filter @ac/learner-web typecheck` and focused ESLint passed.

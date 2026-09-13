@@ -929,14 +929,14 @@
       "estimated_minutes": 4,
       "items": [
         {
-          "prompt": "Pune madhli team mhante, “Plant manager la pan ya decision madhye include karaycha aahe.” Pudhil useful move konta?",
+          "prompt": "Punechi team mhante, “Plant manager la pan ya decision madhye include karaycha aahe.” Pudhe konta step ghyal?",
           "options": [
-            "Plant manager la evaluate karayla kay pahije te vichara.",
+            "Plant manager la kay evaluate karaycha aahe te vichara.",
             "Tyanchya shivay decision ghyayla discount offer kara.",
             "Decision ata delay honarach asa assume kara."
           ],
           "answer": 0,
-          "feedback": "Stakeholder involve asne ha normal decision process asu shakto. Aadhee tyanna kay evaluate karayche aahe te samjun ghya.",
+          "feedback": "Stakeholder la involve karne ha normal decision process asu shakto. Aadhee tyanna nemka kay evaluate karaycha aahe te samjun ghya.",
           "id": "india-marlish-01",
           "kind": "choice",
           "status": "editorial_draft",
@@ -944,17 +944,17 @@
             "document": "v0.2-alpha-coach-practice-update-intake-2026-09-10",
             "authority": "controlled practice outcome; lines 53-60"
           },
-          "hint": "Samorcha vyakti sangto to decision process aadhee explore kara."
+          "hint": "Samorcha vyaktine sangitlela decision process aadhi samjun ghya."
         },
         {
-          "prompt": "Mumbai madhla buyer mhanto, “Current process sobat compare karayla amhala thoda time pahije.” Tumhi aadhee kay clarify karal?",
+          "prompt": "Mumbai madhla buyer mhanto, “Current process sobat compare karayla amhala thoda time pahije.” Tumhi aadhi kay clear karal?",
           "options": [
-            "Tyanna current process madhle konte parts compare karayche aahet.",
+            "Tyanna current process madhle konte parts compare karayche aahet te.",
             "Tyanni aaj decision ka ghetla nahi.",
             "Motha discount deun comparison thambel ka."
           ],
           "answer": 0,
-          "feedback": "Comparison che criteria ajun clear nahi aahet. Buyer la kay compare karayche aahe te vichara.",
+          "feedback": "Comparison che criteria ajun clear nahi aahet. Buyer la nemka kay compare karaycha aahe te vichara.",
           "id": "india-marlish-02",
           "kind": "choice",
           "status": "editorial_draft",
@@ -962,17 +962,17 @@
             "document": "v0.2-alpha-coach-practice-update-intake-2026-09-10",
             "authority": "controlled practice outcome; lines 53-60"
           },
-          "hint": "Ajun mahit naslelya criteria baddal open question vichara."
+          "hint": "Ajun mahit naslelya criteria baddal ek open question vichara."
         },
         {
-          "prompt": "Nagpur madhli team mhante, “Budget review next quarter aahe.” Ya statement madhun kay established aahe?",
+          "prompt": "Nagpurchi team mhante, “Budget review next quarter aahe.” Ya statement madhun kay mahit padta?",
           "options": [
             "Budget review cha timing.",
             "Tyanna price cut pahije.",
             "Te next quarter nakki buy kartil."
           ],
           "answer": 0,
-          "feedback": "Timing samajla aahe; interest, budget ani future purchase established nahi. Te assume karu naka.",
+          "feedback": "Timing samajla aahe; interest, budget ani future purchase ajun confirm nahi. Te assume karu naka.",
           "id": "india-marlish-03",
           "kind": "choice",
           "status": "editorial_draft",
