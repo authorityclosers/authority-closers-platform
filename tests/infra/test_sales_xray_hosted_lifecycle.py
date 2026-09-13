@@ -213,17 +213,14 @@ def test_source_overlay_and_per_environment_capabilities_are_archive_inputs() ->
     overlay = APPLICATION / "compose.sales-xray-hosted.yaml"
     assert overlay.read_bytes() == WORKER_OVERLAY.read_bytes()
     for environment in ("staging", "production"):
-        capability_path = (
-            APPLICATION / "capabilities" / f"sales-xray-hosted-{environment}.json"
-        )
+        capability_path = APPLICATION / "capabilities" / f"sales-xray-hosted-{environment}.json"
         capability = json.loads(capability_path.read_text(encoding="utf-8"))
         assert capability == {
             "schema_version": "ac.sales_xray.hosted_policy/1",
             "environment": environment,
             "enabled": True,
             "activation_file_template": (
-                "/etc/authority-closers/sales-xray/{environment}/"
-                "activation-{release_id}.json"
+                "/etc/authority-closers/sales-xray/{environment}/activation-{release_id}.json"
             ),
             "activation_sha256_file_template": (
                 "/etc/authority-closers/sales-xray/{environment}/"
@@ -382,16 +379,15 @@ def test_installer_compose_for_uses_target_release_overlay_and_clears_ambient_in
     fake_docker = fake_bin / "docker"
     fake_docker.write_text(
         "#!/usr/bin/env bash\n"
-        "printf '%s\\n' \"$@\" > \"$AC_CAPTURE\"\n"
-        "printf 'ambient=%s\\n' \"${AC_XRAY_SERVICE_CONFIG-unset}\" >> \"$AC_CAPTURE\"\n",
+        'printf \'%s\\n\' "$@" > "$AC_CAPTURE"\n'
+        'printf \'ambient=%s\\n\' "${AC_XRAY_SERVICE_CONFIG-unset}" >> "$AC_CAPTURE"\n',
         encoding="utf-8",
         newline="\n",
     )
     fake_docker.chmod(0o755)
     fake_python = fake_bin / "python3"
     fake_python.write_text(
-        "#!/usr/bin/env bash\n"
-        f"exec {shlex.quote(_bash_path(Path(sys.executable)))} \"$@\"\n",
+        f'#!/usr/bin/env bash\nexec {shlex.quote(_bash_path(Path(sys.executable)))} "$@"\n',
         encoding="utf-8",
         newline="\n",
     )
@@ -400,15 +396,21 @@ def test_installer_compose_for_uses_target_release_overlay_and_clears_ambient_in
     start = installer.index("sales_xray_hosted_inputs=()")
     end = installer.index('\n\ncompose_for "$release_dir" config --quiet', start)
     functions = installer[start:end]
+    filesystem_start = installer.index("filesystem_media_compose_file_for() {")
+    filesystem_end = installer.index(
+        "\n\nvalidate_filesystem_media_activation() {", filesystem_start
+    )
+    filesystem_selector = installer[filesystem_start:filesystem_end]
     script = f"""#!/usr/bin/env bash
 set -euo pipefail
 target_environment=staging
-release_dir={shlex.quote(str(release).replace('\\\\', '/'))}
+release_dir={shlex.quote(str(release).replace("\\\\", "/"))}
 compose_project=ac-application-staging
 with_practice_pilot_scope() {{ "$@"; }}
 with_release_secrets() {{ env AC_OPERATIONS_TENANT_ID="$TEST_OPERATIONS_TENANT" "$@"; }}
 export PATH={shlex.quote(_bash_path(fake_bin))}:$PATH
 export AC_XRAY_SERVICE_CONFIG=https://ambient.invalid
+{filesystem_selector}
 {functions}
 compose_for "$release_dir" config
 """
@@ -426,9 +428,7 @@ compose_for "$release_dir" config
     assert result.returncode == 0, result.stderr
     args = capture.read_text(encoding="utf-8").splitlines()
     file_values = [args[index + 1] for index, value in enumerate(args[:-1]) if value == "--file"]
-    env_values = [
-        args[index + 1] for index, value in enumerate(args[:-1]) if value == "--env-file"
-    ]
+    env_values = [args[index + 1] for index, value in enumerate(args[:-1]) if value == "--env-file"]
     assert str(release / "compose.sales-xray-hosted.yaml") in file_values
     assert str(paths["env"]) in env_values
     assert args[args.index("--profile") + 1] == "sales-xray-hosted"
@@ -460,7 +460,7 @@ docker() {{
   printf '%s\\n' "$@" >> "$AC_CAPTURE"
   printf 'exited %s\\n' "$TEST_EXIT"
 }}
-stop_hosted_sales_xray_worker {shlex.quote(str(release).replace('\\\\', '/'))}
+stop_hosted_sales_xray_worker {shlex.quote(str(release).replace("\\\\", "/"))}
 """
     environment = os.environ.copy()
     environment["AC_CAPTURE"] = _bash_path(capture)
@@ -522,7 +522,7 @@ compose_for() {{
   fi
 }}
 docker() {{ printf 'exited 137\\n'; }}
-stop_hosted_sales_xray_worker {shlex.quote(str(release).replace('\\\\', '/'))}
+stop_hosted_sales_xray_worker {shlex.quote(str(release).replace("\\\\", "/"))}
 """
     result = subprocess.run(  # noqa: S603 - fixed Bash function and test-controlled paths
         [_bash_executable(), "-s"],
@@ -550,8 +550,8 @@ def test_installer_stops_core_then_drains_hosted_then_stops_web(tmp_path: Path) 
         + functions
         + "\nsales_xray_hosted_enabled() { return 0; }\n"
         + "compose_for() {\n"
-        + "  printf '%s\\n' \"$@\" >> \"$AC_CAPTURE\"\n"
-        + "  if [[ \"$2\" == ps && \"$3\" == --all ]]; then\n"
+        + '  printf \'%s\\n\' "$@" >> "$AC_CAPTURE"\n'
+        + '  if [[ "$2" == ps && "$3" == --all ]]; then\n'
         + "    printf 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\\n'\n"
         + "  fi\n}\n"
         + "docker() { printf 'exited 0\\n'; }\n"
@@ -577,6 +577,7 @@ def test_installer_stops_core_then_drains_hosted_then_stops_web(tmp_path: Path) 
     assert calls[web_index - 2 : web_index] == ["--timeout", "30"]
     assert core_index < hosted_index < web_index
 
+
 def test_installer_does_not_fence_after_failed_hosted_drain(tmp_path: Path) -> None:
     installer = INSTALLER.read_text(encoding="utf-8")
     rollback_start = installer.index("rollback_release()")
@@ -594,7 +595,7 @@ def test_installer_does_not_fence_after_failed_hosted_drain(tmp_path: Path) -> N
         "backup_ready=1\n"
         "set_database_writer_access() { printf 'fence\\n' >> \"$AC_CAPTURE\"; }\n"
         + rollback_fence_block
-        + "printf '%s %s\\n' \"$rollback_failed\" \"$rollback_fenced\" > \"$AC_STATE\"\n"
+        + 'printf \'%s %s\\n\' "$rollback_failed" "$rollback_fenced" > "$AC_STATE"\n'
     )
     environment = os.environ.copy()
     environment["AC_CAPTURE"] = _bash_path(capture)
@@ -611,10 +612,11 @@ def test_installer_does_not_fence_after_failed_hosted_drain(tmp_path: Path) -> N
     assert state.read_text(encoding="utf-8").strip() == "1 0"
     assert not capture.exists()
 
+
 def test_installer_lifecycle_names_hosted_worker_for_drain_and_restart() -> None:
     installer = INSTALLER.read_text(encoding="utf-8")
     assert "stop_hosted_sales_xray_worker" in installer
-    assert 'stop --timeout 960 sales-xray-worker' in installer
+    assert "stop --timeout 960 sales-xray-worker" in installer
     assert 'compose_for "$target_release" stop --timeout 30 api worker' in installer
     assert 'stop_application_services_with_hosted_drain "$writer_release" false' in installer
     assert "runtime_workers+=(sales-xray-worker)" in installer

@@ -164,6 +164,9 @@ def test_compose_profile_cannot_be_overridden_by_ambient_sales_xray_url(tmp_path
     filesystem_selector = _installer_function(
         "filesystem_media_compose_file_for", "\n\nvalidate_filesystem_media_activation() {"
     )
+    hosted_selector = _installer_function(
+        "load_sales_xray_hosted_inputs", "\n\nsales_xray_hosted_enabled() {"
+    )
     script = f"""#!/usr/bin/env bash
 set -euo pipefail
 target_environment=staging
@@ -173,6 +176,8 @@ with_practice_pilot_scope() {{ "$@"; }}
     export PATH={shlex.quote(_bash_path(fake_bin))}:$PATH
 export AC_SALES_XRAY_APP_URL=https://ambient-attacker.example
 {filesystem_selector}
+sales_xray_hosted_inputs=()
+{hosted_selector}
 {compose_for}
 compose_for "$release_dir" config
     """
