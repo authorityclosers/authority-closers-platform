@@ -93,3 +93,18 @@ email-continuity and Sales-continuity files. This adds two tests to the earlier
 56-test learner selection. Scoped ESLint passed; the updated production learner
 build passed again. These auth-link changes do not alter the already verified
 review assignment or invitation browser screens.
+
+## Full-suite CI regression correction
+
+The bd51eec application run 34767467799 passed formatting, lint and type checking,
+then found one learner regression: normal login had lost the existing guidance
+that first-time Google users should register. The invitation adaptation now keeps
+"First time here—including with Google?" for normal sign-in while preserving
+invitation-specific text in the invitation flow. The existing assertion remains.
+
+After that correction, the complete learner suite passed: 109 files and 1,775
+tests in 45.56 seconds. The failed CI log is retained outside Git as
+reviewer-bd51eec-ci-failed.log. No check was removed or relaxed.
+
+The complete Admin suite also passed: 37 files and 751 tests in 41.05 seconds.
+The normal-login correction passed scoped ESLint, Prettier and diff checks.

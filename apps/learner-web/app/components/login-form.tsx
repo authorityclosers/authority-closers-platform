@@ -318,7 +318,11 @@ export function LoginForm({
         </>
       )}
       <div className="auth-card__footer">
-        <span>First time here?</span>
+        <span>
+          {invitationToken
+            ? "First time here?"
+            : "First time here—including with Google?"}
+        </span>
         {stagingBridge ? (
           <a href={stagingHref(registrationHref)}>Create on deployed staging</a>
         ) : (
