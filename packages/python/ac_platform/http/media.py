@@ -197,7 +197,7 @@ def install_media_http(
         require_safe_origin(request, settings)
         actor = auth.resolved.actor
         result = await auth.database.run_sync(
-            lambda database: avatar_service.create_upload_intent(
+            lambda database: _service(runtime).create_upload_intent(
                 database, actor, body, idempotency_key=idempotency_key or ""
             )
         )
@@ -234,7 +234,7 @@ def install_media_http(
             raise MediaBadRequest("The profile avatar route only accepts avatar media.")
         actor = auth.resolved.actor
         result = await auth.database.run_sync(
-            lambda database: _service(runtime).create_upload_intent(
+            lambda database: avatar_service.create_upload_intent(
                 database, actor, body, idempotency_key=idempotency_key or ""
             )
         )
