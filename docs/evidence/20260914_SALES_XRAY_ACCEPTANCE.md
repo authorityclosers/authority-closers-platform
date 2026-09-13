@@ -136,6 +136,47 @@ The two auth route suites pass117 tests in11.26s, including exact-host/cookie
 boundaries, consent-aware entry, missing/stale consent and callback revalidation.
 Changed Python lint, formatting and strict auth types pass.
 
+## Combined release verification, 14 September
+
+Combined candidate `8396728` integrates the accepted Sales navigation packet
+`39dcb36` and acquisition foundation `e1060c7`. It has not been deployed. The
+preceding CI run `34775463451` failed four browser/routing assertions and skipped
+image packaging. The Sales packet corrects the three browser assertions. The
+routing failure was a platform-dependent PowerShell line wrap; its failure now
+uses the stable `AC_TUNNEL_READBACK_MISMATCH` marker, retaining the same refusal
+before any DNS write.
+
+Verification on the combined source plus that marker correction passed:
+
+- Full Ruff, formatting (580 files), mypy (264 source files) and Prettier.
+- 161 focused routing, identity, challenge and report-access unit tests.
+- 12 actual PostgreSQL acquisition/claim/identity cases; disposable database
+  removed after the run.
+- Optimized Sales static build and three actual HTTP/password identity,
+  PostgreSQL, native-audio and browser tests in 132.49 seconds. Source playback,
+  upload processing and logout are exercised; report inference remains synthetic
+  and no external provider is contacted. Receipts are in
+  `D:/AC-authority-closers-release-audit/combined-sales-20260914-r1/`.
+
+SSH access was confirmed restored. Both core environment pointers still select
+`69db2257b2671baa3aefc7902e69078f381a649d`; the standalone staging companion is
+healthy at the older `99cdee5e19e298173e4bb8e8619087ef70cf9ccf`. The local edge
+returns its health marker and rejects anonymous recording access. This proves
+the existing runtime only, not the new acquisition funnel.
+
+Cloudflare readback found tunnel configuration version 15, fourteen existing
+entries and neither standalone hostname. The source-owned staging dry run
+preserved all existing entries and proposed only the staging hostname plus its
+proxied tunnel CNAME. The connected API credential's write failed with Cloudflare
+`1001: Not authorized`; a subsequent readback confirmed no change. The authorized
+signed-in dashboard is being used for the same prepared change. Production
+activation and real hosted onboarding remain pending.
+
+The original Sales root is preparing the latest user correction: simple English
+app controls with original mixed-script report/transcript content. That packet
+must accompany the next combined CI run; the previous global language switch is
+not the selected release behavior.
+
 ## Focused product research
 
 Gong's [scorecard documentation](https://help.gong.io/docs/all-about-scorecards)
