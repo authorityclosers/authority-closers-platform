@@ -226,6 +226,9 @@ async def test_child_reads_only_the_exact_provider_credential_and_returns_raw_fr
         def __init__(self, *, credentials, authorize):
             observed["credentials"] = credentials
             observed["authorize"] = authorize
+            # Capture the adapter boundary itself: the provider adapter must
+            # never observe Infisical identity or launcher metadata.
+            observed["environment"] = dict(os.environ)
 
         def generate(self, current, request_body):
             observed["body"] = request_body
@@ -253,6 +256,11 @@ async def test_child_reads_only_the_exact_provider_credential_and_returns_raw_fr
                 "GROQ_API_KEY": "must-not-be-read",
                 "ELEVENLABS_API_KEY": "must-not-be-read",
                 "AC_PARENT_SETTING_FIXTURE": "must-not-reach-adapter",
+                "INFISICAL_TOKEN": "synthetic-service-token",
+                CHILD_TOKEN_FILE_ENV: "synthetic-token-file-reference",
+                "INFISICAL_API_URL": "https://app.infisical.com",
+                "INFISICAL_DISABLE_UPDATE_CHECK": "true",
+                "AC_INFISICAL_PROJECT_ID": "synthetic-launcher-project",
             },
         )
         child_scope.setattr(
@@ -276,6 +284,7 @@ async def test_child_reads_only_the_exact_provider_credential_and_returns_raw_fr
     assert result.raw_json == raw
     assert observed["credentials"] == {"gemini": "synthetic-child-key"}
     assert observed["body"] == {"input": "synthetic"}
+    assert observed["environment"] == {}
     assert "must-not-be-read" not in repr(output)
 
 
