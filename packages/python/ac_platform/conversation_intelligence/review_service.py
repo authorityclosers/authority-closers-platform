@@ -482,9 +482,10 @@ class ConversationReviewService:
         )
         if row is None:
             raise ConversationNotFound("Review invitation not found.")
-        if replay is None and await self.database.get(
-            ConversationReviewInvitationRevocation, row.id
-        ) is None:
+        if (
+            replay is None
+            and await self.database.get(ConversationReviewInvitationRevocation, row.id) is None
+        ):
             self.database.add(
                 ConversationReviewInvitationRevocation(
                     invitation_id=row.id, person_id=actor.person_id, created_at=now
@@ -508,7 +509,12 @@ class ConversationReviewService:
         now = await self.application.admit(actor)
         if self.token_secret is None:
             raise ConversationError("Review invitation email is not configured.")
-        token_hash = hash_invitation_token(self.token_secret, intent.token)
+        try:
+            token_hash = hash_invitation_token(self.token_secret, intent.token)
+        except (UnicodeError, TypeError, ValueError):
+            # Keep malformed bearer material indistinguishable from an unknown,
+            # expired, revoked, or already-consumed invitation.
+            raise ConversationNotFound("Review invitation not found.") from None
         row = await self.database.scalar(
             select(ConversationReviewInvitation)
             .where(ConversationReviewInvitation.token_hash == token_hash)

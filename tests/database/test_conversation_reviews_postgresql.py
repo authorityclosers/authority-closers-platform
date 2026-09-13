@@ -197,6 +197,10 @@ async def _build_report_case(postgres_harness: Any, scratch_root: Path) -> Revie
         foreign = await seed(engine, role="learner")
         operations = await seed(engine, role="owner")
         async with sessions() as database, database.begin():
+            for identity in (reviewer, other_reviewer, foreign):
+                learner_person = await database.get(Person, identity.person_id)
+                assert learner_person is not None
+                learner_person.email = f"reviewer-{identity.person_id.hex}@example.test"
             admin_person = await database.get(Person, operations.person_id)
             assert admin_person is not None
             admin_person.email = CONTROL_ACCOUNT
