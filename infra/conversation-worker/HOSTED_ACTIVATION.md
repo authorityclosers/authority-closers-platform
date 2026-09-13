@@ -48,9 +48,12 @@ approved stages. Initial external identity directories are:
 
 - `/etc/authority-closers/secrets/sales-xray/identities/elevenlabs`
 - `/etc/authority-closers/secrets/sales-xray/identities/groq`
+- `/etc/authority-closers/secrets/sales-xray/identities/gemini`
 
-Each directory contains only its own token, UID10001, mode0400. Their initial
-24-hour expiry requires external refresh before sustained operation. The worker
+Each directory contains only its own token, UID10001, mode0400. The original
+ElevenLabs/Groq tokens expire after 24 hours; the Gemini testing token expires
+on 2026-09-20 at 22:53 UTC. Verify and renew each scoped identity before sustained
+operation. The worker
 does not refresh them. Do not mount the parent secret directory. The Infisical
 binary is `/usr/local/bin/infisical`, mounted at `/opt/infisical`. The DB-only
 credential file is separately provisioned through the existing secret mechanism;
@@ -72,12 +75,21 @@ AC_XRAY_SCRATCH_ROOT=/srv/authority-closers/sales-xray/staging/scratch
 AC_XRAY_NATIVE_SOCKET_DIR=/run/ac-sales-xray/staging
 AC_XRAY_ELEVENLABS_IDENTITY_DIR=/etc/authority-closers/secrets/sales-xray/identities/elevenlabs
 AC_XRAY_GROQ_IDENTITY_DIR=/etc/authority-closers/secrets/sales-xray/identities/groq
+AC_XRAY_GEMINI_IDENTITY_DIR=/etc/authority-closers/secrets/sales-xray/identities/gemini
 AC_XRAY_INFISICAL_BINARY=/usr/local/bin/infisical
+AC_XRAY_NATIVE_IMAGE_REF=<verified immutable native transport image reference>
+AC_XRAY_CHALLENGE_SECRET_FILE=<external file containing only the upload challenge secret>
+AC_XRAY_CHALLENGE_SITE_KEY=<public site key for the exact Sales Xray host>
+AC_XRAY_ACQUISITION_POLICY_REVISION=<approved acquisition policy revision>
 ```
 
 The release-owned `infra/application/compose.sales-xray-hosted.yaml` merges the
-five AC_SALES_XRAY_* nonsecret settings and
-approval/storage mounts into **api only**. The dedicated worker receives its
+AC_SALES_XRAY_* nonsecret settings and approval/storage mounts into **api only**.
+Public source preflight uses the same pinned native image and helper socket as
+the worker. The validator rejects a different API preflight image even when the
+external descriptor is correctly rehashed. The API receives only the narrow
+challenge secret file; it receives no provider identity or Docker socket.
+The dedicated worker receives its
 service JSON and narrowly scoped credential references. Ordinary worker,
 migrator and frontend environment anchors are unchanged.
 

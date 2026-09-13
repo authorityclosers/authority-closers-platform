@@ -10,7 +10,25 @@ services:
       AC_SALES_XRAY_APPROVAL_SHA256: ${AC_XRAY_APPROVAL_SHA256:?exact hosted approval digest required}
       AC_SALES_XRAY_STORAGE_ROOT: ${AC_XRAY_STORAGE_ROOT:?environment-specific private store required}
       AC_SALES_XRAY_SCRATCH_ROOT: ${AC_XRAY_SCRATCH_ROOT:?separate environment-specific scratch required}
+      AC_SALES_XRAY_ACQUISITION_ENABLED: "true"
+      AC_SALES_XRAY_NATIVE_SOCKET_PATH: ${AC_XRAY_NATIVE_SOCKET_DIR:?private native-helper socket directory required}/native.sock
+      AC_SALES_XRAY_NATIVE_IMAGE_REF: ${AC_XRAY_NATIVE_IMAGE_REF:?verified native image required}
+      AC_SALES_XRAY_CHALLENGE_SECRET_FILE: /run/ac-sales-xray/challenge-secret
+      AC_SALES_XRAY_CHALLENGE_SITE_KEY: ${AC_XRAY_CHALLENGE_SITE_KEY:?public upload challenge site key required}
+      AC_SALES_XRAY_ACQUISITION_POLICY_REVISION: ${AC_XRAY_ACQUISITION_POLICY_REVISION:?approved acquisition policy revision required}
     volumes:
+      - type: bind
+        source: ${AC_XRAY_CHALLENGE_SECRET_FILE:?upload challenge-only credential file required}
+        target: /run/ac-sales-xray/challenge-secret
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${AC_XRAY_NATIVE_SOCKET_DIR:?private native-helper socket directory required}
+        target: ${AC_XRAY_NATIVE_SOCKET_DIR:?private native-helper socket directory required}
+        read_only: true
+        bind:
+          create_host_path: false
       - type: bind
         source: ${AC_XRAY_APPROVAL_FILE:?exact hosted approval artifact required}
         target: /run/ac-sales-xray/approval.json
@@ -78,6 +96,12 @@ services:
       - type: bind
         source: ${AC_XRAY_GROQ_IDENTITY_DIR:?directory containing only Groq identity required}
         target: /run/ac-sales-xray/identities/groq
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${AC_XRAY_GEMINI_IDENTITY_DIR:?directory containing only Gemini identity required}
+        target: /run/ac-sales-xray/identities/gemini
         read_only: true
         bind:
           create_host_path: false

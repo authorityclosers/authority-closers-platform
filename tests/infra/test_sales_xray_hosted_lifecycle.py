@@ -111,6 +111,8 @@ def _make_release(
         "socket": tmp_path / "socket",
         "elevenlabs": tmp_path / "elevenlabs",
         "groq": tmp_path / "groq",
+        "gemini": tmp_path / "gemini",
+        "challenge": tmp_path / "challenge-secret",
         "infisical": tmp_path / "infisical",
         "env": env_file,
     }
@@ -158,6 +160,11 @@ def _make_release(
         "AC_XRAY_DATABASE_URL_FILE": _portable(paths["database"]),
         "AC_XRAY_ELEVENLABS_IDENTITY_DIR": _portable(paths["elevenlabs"]),
         "AC_XRAY_GROQ_IDENTITY_DIR": _portable(paths["groq"]),
+        "AC_XRAY_GEMINI_IDENTITY_DIR": _portable(paths["gemini"]),
+        "AC_XRAY_CHALLENGE_SECRET_FILE": _portable(paths["challenge"]),
+        "AC_XRAY_CHALLENGE_SITE_KEY": "synthetic-public-site-key",
+        "AC_XRAY_ACQUISITION_POLICY_REVISION": "test-policy-v1",
+        "AC_XRAY_NATIVE_IMAGE_REF": "sha256:" + "b" * 64,
         "AC_XRAY_INFISICAL_BINARY": _portable(paths["infisical"]),
         "AC_XRAY_NATIVE_SOCKET_DIR": _portable(paths["socket"]),
         "AC_XRAY_SCRATCH_ROOT": _portable(paths["scratch"]),
@@ -350,6 +357,32 @@ def test_hosted_validator_requires_managed_runtime_operations_scope(activation_r
     assert mismatched.returncode != 0
     assert OPERATIONS_TENANT not in missing.stderr
     assert OPERATIONS_TENANT not in mismatched.stderr
+
+
+@pytest.mark.parametrize(
+    ("key", "replacement"),
+    (
+        ("AC_XRAY_NATIVE_IMAGE_REF", "sha256:" + "f" * 64),
+        ("AC_XRAY_NATIVE_IMAGE_REF", "latest"),
+        ("AC_XRAY_CHALLENGE_SITE_KEY", "https://untrusted.example"),
+        ("AC_XRAY_ACQUISITION_POLICY_REVISION", "../foreign-policy"),
+    ),
+)
+def test_preflight_rejects_unbound_native_or_acquisition_inputs(
+    activation_root: Path, key: str, replacement: str
+) -> None:
+    release, paths = _make_release(activation_root)
+    env = dict(line.split("=", 1) for line in paths["env"].read_text().splitlines())
+    env[key] = replacement
+    paths["env"].write_text("".join(f"{k}={v}\n" for k, v in env.items()))
+    descriptor = json.loads(paths["descriptor"].read_bytes())
+    descriptor["compose_env_sha256"] = hashlib.sha256(paths["env"].read_bytes()).hexdigest()
+    paths["descriptor"].write_bytes(_json_bytes(descriptor))
+    paths["digest"].write_bytes(
+        (hashlib.sha256(paths["descriptor"].read_bytes()).hexdigest() + "\n").encode("ascii")
+    )
+
+    assert _validator_result(release).returncode != 0
 
 
 def test_hosted_validator_uses_explicit_managed_scope_over_ambient_value(

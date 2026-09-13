@@ -46,11 +46,16 @@ ABSOLUTE_ENV_KEYS = {
     "AC_XRAY_NATIVE_SOCKET_DIR",
     "AC_XRAY_ELEVENLABS_IDENTITY_DIR",
     "AC_XRAY_GROQ_IDENTITY_DIR",
+    "AC_XRAY_GEMINI_IDENTITY_DIR",
+    "AC_XRAY_CHALLENGE_SECRET_FILE",
     "AC_XRAY_INFISICAL_BINARY",
 }
 ENV_KEYS = ABSOLUTE_ENV_KEYS | {
     "AC_XRAY_SERVICE_SHA256",
     "AC_XRAY_APPROVAL_SHA256",
+    "AC_XRAY_NATIVE_IMAGE_REF",
+    "AC_XRAY_CHALLENGE_SITE_KEY",
+    "AC_XRAY_ACQUISITION_POLICY_REVISION",
 }
 
 
@@ -250,6 +255,13 @@ def _parse_env(raw: bytes) -> dict[str, str]:
             raise _fail(f"{key} is traversal-prone")
     for key in ("AC_XRAY_SERVICE_SHA256", "AC_XRAY_APPROVAL_SHA256"):
         _checked_sha(result[key], key)
+    if IMAGE_REF.fullmatch(result["AC_XRAY_NATIVE_IMAGE_REF"]) is None:
+        raise _fail("native image environment reference is not immutable")
+    if re.fullmatch(r"[A-Za-z0-9_-]{3,256}", result["AC_XRAY_CHALLENGE_SITE_KEY"]) is None:
+        raise _fail("upload challenge site key is invalid")
+    revision = result["AC_XRAY_ACQUISITION_POLICY_REVISION"]
+    if re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", revision) is None:
+        raise _fail("acquisition policy revision is invalid")
     return result
 
 
@@ -310,6 +322,8 @@ def _load_activation(
     if _sha256(env_raw) != _checked_sha(value["compose_env_sha256"], "compose_env_sha256"):
         raise _fail("compose environment digest differs from the descriptor")
     env = _parse_env(env_raw)
+    if env["AC_XRAY_NATIVE_IMAGE_REF"] != value["native_image_ref"]:
+        raise _fail("API preflight image differs from the worker native image")
     for path_field, env_key in (
         ("service_config_file", "AC_XRAY_SERVICE_CONFIG"),
         ("approval_file", "AC_XRAY_APPROVAL_FILE"),
