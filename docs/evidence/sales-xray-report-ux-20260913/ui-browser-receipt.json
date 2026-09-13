@@ -1,0 +1,100 @@
+{
+  "captured_at": "2026-09-13T18:00:24.451588+00:00",
+  "product_commit": "63d5a5edd644bd250acdc8c51694712a3754c7f7",
+  "source_sha256": {
+    "apps/sales-xray-web/app/call-studio.test.tsx": "fa627cc437230ce0b229d957ec159996d11f15c2ba336174bbd7e84849ddb445",
+    "apps/sales-xray-web/app/call-studio.tsx": "c42e0c7c1ab58006064cedc18f9c06875dafa1ea3166755566f61d5b84f5f022",
+    "apps/sales-xray-web/app/health/route.ts": "1793c33730a898d08f57bd815fa80daf07d1b14ecc829f98641e4e4940b634d5",
+    "apps/sales-xray-web/app/layout.tsx": "f7c4b05027da8c0ed31f1d534406b8987c0ed3f2cc7d8a331dc2ab7fdcbc894f",
+    "apps/sales-xray-web/app/login/login-form.test.tsx": "7b46c270dbd6476e0d8745f4c5f8ac019fafc3a6de9ff87cc8d8a1aec61cf74e",
+    "apps/sales-xray-web/app/login/login-form.tsx": "55ef431230924ab35e8a23c54c0a5f0b41674b4674e170eca2ec1194d27f942b",
+    "apps/sales-xray-web/app/login/page.tsx": "e1699a71d586f03e680ef7125d027bae6a7a7d56dd511309359ca708292e654d",
+    "apps/sales-xray-web/app/measurement-contract.test.ts": "c8b75f0dae560362880045ee70324e8d28c2f8b76b6eb4f0a9c95e71b80d5862",
+    "apps/sales-xray-web/app/measurement-contract.ts": "f4427ff678c7625e937cecb1402e4a732c7db67d40b17ff2b35fb75618f326c3",
+    "apps/sales-xray-web/app/measurement-copy.ts": "24d20ea4f84c6931040717d1eef7c6ff806d5106bd6300f7ec2d8829e993096f",
+    "apps/sales-xray-web/app/page.tsx": "7c4748faa7543ecb6dae44dd131bcc0dbf47c871017b11dd304aee26632495a8",
+    "apps/sales-xray-web/app/recording-measurements.module.css": "84f5aa9362206f87a98598d17f6ede79e383bfb4d3f21e237066575b55238a83",
+    "apps/sales-xray-web/app/recording-measurements.test.tsx": "a9ced0ae2bb23d0e712c5088c3237f0d436530119521ccd83a2b3a63ae309250",
+    "apps/sales-xray-web/app/recording-measurements.tsx": "30950140a1f3eb0562e8ed39ff9728a05c5043c874705d45ceccc061dfc38bdd",
+    "apps/sales-xray-web/app/report-contract.test.ts": "25ab1878a13d0e1d9f27d0660035f1650ea0eaab5b7f6685d92244acc457a474",
+    "apps/sales-xray-web/app/report-contract.ts": "3cd9189c6860f638be5c87b3f7737cbb4aca8608c1869854507083b98d92ecd0",
+    "apps/sales-xray-web/app/report-factors.module.css": "826b8a60e65c40f18fa28a282c697a29d651078c6c52e0e52b70401cae8d653b",
+    "apps/sales-xray-web/app/report-factors.tsx": "a9632d9b6674b281de1f1f8aacbd1a0e6a12606fc016233be402e3162e98cbf3",
+    "apps/sales-xray-web/app/report-section-copy.ts": "170bd7f758dcea94848fd48779c4872b77604d365ffcfda73f3fe309f52dd06f",
+    "apps/sales-xray-web/app/report-transcript.module.css": "c5c7b82b489ac44143d5477d0623c35ad77fff5a2faf84b6eabea9c277737274",
+    "apps/sales-xray-web/app/report-transcript.test.tsx": "7d0aac8ae7b4dacf8d33228a6a6afc30cc55f94dbb22d0d3d7e5425a8b9d3196",
+    "apps/sales-xray-web/app/report-transcript.tsx": "83884f612c0b049f3f6f5d118b6eab0a7aa606ff8d30fa9ba87a5974e372fee5",
+    "apps/sales-xray-web/app/report-ui-copy.ts": "29a8c5233e1c451a2997acebc4bca1268ed230265f33fdff89d2f57f931ca77e",
+    "apps/sales-xray-web/app/standalone-studio.test.tsx": "2a9d95bcfb17e2eca2ae3e772aeefc88bcc87b831ad03ad53ddca9b5980547f7",
+    "apps/sales-xray-web/app/standalone-studio.tsx": "af3b75cd94ed0185f0d3af558c9a7567329df9b0293197a641f84a73fdd07b36",
+    "apps/sales-xray-web/app/styles.css": "74a8f608770a595a5432224b9f5a94b7629b40dbd13ed432bde352cfc9a7fdc5",
+    "apps/sales-xray-web/app/styles.integration.test.ts": "7c75b9d58a8a0fe7cca2f4efcc0564880db77a01678fd21ee41cac3d2627648c",
+    "apps/sales-xray-web/app/workbench.test.tsx": "f640e42276c5d7f1fa01d03eb50a5f470d2c467c41a1c60c9f3e73bd0123672c",
+    "apps/sales-xray-web/app/workbench.tsx": "074789fb126fe7a1e3211deb828ee32cf3f07570c585be05555fb55562e06d06",
+    "apps/sales-xray-web/tests/browser_call_studio_ux.py": "0b37764ea1af608537c9327146242b010ee3362b380ed2f7486a9a32eae158b2",
+    "apps/learner-web/app/sales-xray/page.tsx": "7459698e6907e0e20bc75ae831f20c66f068bd8f425f353ffc6d236291a50857"
+  },
+  "runtime": {
+    "node": "24.19.0",
+    "next": "16.3.3",
+    "origin": "http://127.0.0.1:3203",
+    "mode": "optimized next build, then next start; Linux immutable image untested in this receipt"
+  },
+  "observed_checks": {
+    "vitest": {
+      "passed": 67,
+      "failed": 0
+    },
+    "standalone_build_exit": 0,
+    "learner_build_exit": 0,
+    "lint_exit": 0,
+    "browser_script_exit": 0
+  },
+  "pdf": {
+    "pages": 3,
+    "all_factor_labels": true,
+    "all_factor_observations": true,
+    "draft_label": true,
+    "saved_measurement": true,
+    "selected_physical_channel": true,
+    "playback_status_absent": true,
+    "empty_details_absent": true
+  },
+  "browser_coverage": [
+    "mounted report/evidence/exact timestamp seeks",
+    "eight sales-factor details",
+    "full transcript search/clear/literal text",
+    "playback rejection/unavailable element recovery",
+    "saved sound/pitch selection, missing values, physical-channel selection",
+    "English/Hindi/Marathi/mixed controls with original report/transcript preservation",
+    "320px no horizontal overflow",
+    "all eight factor observations included by actual PDF beforeprint lifecycle",
+    "print hides channel selector but retains selected physical channel label"
+  ],
+  "limitations": [
+    "All API responses and media responses are synthetic fixtures. Measurements are fixture values, not computed from the silent fixture WAV.",
+    "media.play is substituted in this deterministic recovery script; separate actual HTTP browser test must prove playback",
+    "No real call upload, provider execution, spending, staging or production test in this receipt",
+    "Windows standalone-server startup failed with EPERM at a traced pnpm React junction. No packaged-runtime pass is claimed; next start served the optimized build successfully.",
+    "Interface controls are translated. Stored report/transcript/observations are preserved, not translated."
+  ],
+  "logs": {
+    "D:\\AC-authority-closers-release-audit\\measurement-final-63d5a5e-build.log": "58db92f5951d670f70d4b266c3f76c2a95aa304eca690d68cc6dc39c6a7d5504",
+    "D:\\AC-authority-closers-release-audit\\measurement-final-63d5a5e-learner-build.log": "4541954d634c1398a89eca294e1ad87301558ed2fff358daad0285d788e496d5",
+    "D:\\AC-authority-closers-release-audit\\measurement-final-63d5a5e-lint.log": "9f55fa4f442193f038d9ed374e8109193ef8f404f0e87c8a57c77a8f64a3aa40",
+    "D:\\AC-authority-closers-release-audit\\measurement-final-63d5a5e-vitest.xml": "f44a40220b29b547343a66966ac7a67c0733ee539d5e30a58f0556113d4489d9"
+  },
+  "artifacts": {
+    "report-en-desktop.png": "cfe2f9934b36afa327b1c6697ba7f804352bc5a7ea84c2d5368b5e427a6b4739",
+    "report-en-hi-mixed-desktop.png": "25fc453101717bc7f49aec1ee237329dced22b6b5611c036ac140ea05648bed1",
+    "report-en-hi-mixed-mobile.png": "07262b72cb80e74eab0f85cf9ca634af9f73d531e04de21f5d30eefb7ad40be9",
+    "report-en-mobile.png": "5592fd59f9f31eb11a9d18e70d92d1887044a1d3303cea88957a23f5d2e02c59",
+    "report-hi-desktop.png": "2bbbeb3de8c9c11aec60efe26bf0d0fb8700298831114fd086f3e671bf1ba5c2",
+    "report-hi-mobile.png": "b60b454d38def2416e2fc99e3967fbe51293a7ef37dc40ab94afa9d22441638b",
+    "report-mr-desktop.png": "9c528efbfcd3fae39e270e988599db53fa3b8ea7f62f2846fe5c1a12c92d005b",
+    "report-mr-mobile.png": "e28a79f68e3c7d7bf814446b7bf2a224b7dd6d939c25d3158dd6ad5b210d14f1",
+    "report-playback-recovery.png": "7060fbd07678986957261f7a5667a3fedc2b3ce33f9d72b1c1d15361d3fdb027",
+    "report-print-layout.png": "6819be971956bd70db66e2098486d0940a3bee981b1441de88c2aca99e2b6a35",
+    "synthetic-report.pdf": "05740686f29d707344225ce4830600205dc51fda29e24ec3258681db8d7c2fd7"
+  }
+}

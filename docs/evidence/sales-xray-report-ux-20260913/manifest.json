@@ -1,0 +1,127 @@
+{
+  "schema": "ac.sales-xray.ui-acceptance-files/1",
+  "runtime_source": "63d5a5edd644bd250acdc8c51694712a3754c7f7",
+  "scope": "Local synthetic report/UI/audio proof plus anonymous live baseline; no provider or real-call publication proof",
+  "files": [
+    {
+      "file": "ui-vitest.xml",
+      "sha256": "f44a40220b29b547343a66966ac7a67c0733ee539d5e30a58f0556113d4489d9",
+      "bytes": 14189,
+      "original_receipt": "D:\\AC-authority-closers-release-audit\\measurement-final-63d5a5e-vitest.xml"
+    },
+    {
+      "file": "standalone-build.log",
+      "sha256": "58db92f5951d670f70d4b266c3f76c2a95aa304eca690d68cc6dc39c6a7d5504",
+      "bytes": 705,
+      "original_receipt": "D:\\AC-authority-closers-release-audit\\measurement-final-63d5a5e-build.log"
+    },
+    {
+      "file": "learner-build.log",
+      "sha256": "4541954d634c1398a89eca294e1ad87301558ed2fff358daad0285d788e496d5",
+      "bytes": 1581,
+      "original_receipt": "D:\\AC-authority-closers-release-audit\\measurement-final-63d5a5e-learner-build.log"
+    },
+    {
+      "file": "ui-lint.log",
+      "sha256": "9f55fa4f442193f038d9ed374e8109193ef8f404f0e87c8a57c77a8f64a3aa40",
+      "bytes": 29,
+      "original_receipt": "D:\\AC-authority-closers-release-audit\\measurement-final-63d5a5e-lint.log"
+    },
+    {
+      "file": "identity-audio-browser.junit.xml",
+      "sha256": "5d96568b832f6908c8c5d847bd4dcac15b7f37b45046dcededf2889ef12e2eba",
+      "bytes": 405,
+      "original_receipt": "D:\\AC-authority-closers-release-audit\\sales-xray-standalone-browser-20260913-63d5a5e-retry3\\standalone-auth-browser.junit.xml"
+    },
+    {
+      "file": "identity-audio-browser.json",
+      "sha256": "6b6f197f21b06a831c7ab65ba765b9d7011e6ccf2f3fe750f707ce7ea5191328",
+      "bytes": 6134,
+      "original_receipt": "D:\\AC-authority-closers-release-audit\\sales-xray-standalone-browser-20260913-63d5a5e-retry3\\standalone-auth-browser.json"
+    },
+    {
+      "file": "identity-audio-runtime.json",
+      "sha256": "1e6f33393db5a1e1fd6d5c30c92454017e49dacb2ff971d1c296b9a00f32ae11",
+      "bytes": 1161,
+      "original_receipt": "D:\\AC-authority-closers-release-audit\\sales-xray-standalone-browser-20260913-63d5a5e-retry3\\source-runtime-receipt.json"
+    },
+    {
+      "file": "ui-browser-receipt.json",
+      "sha256": "6eed36cb66a8e40d22cfd01425b92cbaa17d127541a5d9e3623191969c448f0b",
+      "bytes": 7663,
+      "original_receipt": "D:\\AC-authority-closers-release-audit\\measurement-report-ui-63d5a5e-20260913\\browser-receipt.json"
+    },
+    {
+      "file": "live-anonymous-baseline.json",
+      "sha256": "595795385862e0ff2150a3a3369b7703c38b2643e4b80bda9cd951f8b1574288",
+      "bytes": 2060,
+      "original_receipt": "D:\\AC-authority-closers-release-audit\\sales-xray-live-baseline-20260913-2332.json"
+    },
+    {
+      "file": "synthetic-report-en-desktop.png",
+      "sha256": "cfe2f9934b36afa327b1c6697ba7f804352bc5a7ea84c2d5368b5e427a6b4739",
+      "bytes": 233615,
+      "original_receipt": "D:\\AC-authority-closers-release-audit\\measurement-report-ui-63d5a5e-20260913\\report-en-desktop.png"
+    },
+    {
+      "file": "synthetic-report-en-hi-mixed-desktop.png",
+      "sha256": "25fc453101717bc7f49aec1ee237329dced22b6b5611c036ac140ea05648bed1",
+      "bytes": 288334,
+      "original_receipt": "D:\\AC-authority-closers-release-audit\\measurement-report-ui-63d5a5e-20260913\\report-en-hi-mixed-desktop.png"
+    },
+    {
+      "file": "synthetic-report-en-hi-mixed-mobile.png",
+      "sha256": "07262b72cb80e74eab0f85cf9ca634af9f73d531e04de21f5d30eefb7ad40be9",
+      "bytes": 275055,
+      "original_receipt": "D:\\AC-authority-closers-release-audit\\measurement-report-ui-63d5a5e-20260913\\report-en-hi-mixed-mobile.png"
+    },
+    {
+      "file": "synthetic-report-en-mobile.png",
+      "sha256": "5592fd59f9f31eb11a9d18e70d92d1887044a1d3303cea88957a23f5d2e02c59",
+      "bytes": 222099,
+      "original_receipt": "D:\\AC-authority-closers-release-audit\\measurement-report-ui-63d5a5e-20260913\\report-en-mobile.png"
+    },
+    {
+      "file": "synthetic-report-hi-desktop.png",
+      "sha256": "2bbbeb3de8c9c11aec60efe26bf0d0fb8700298831114fd086f3e671bf1ba5c2",
+      "bytes": 240893,
+      "original_receipt": "D:\\AC-authority-closers-release-audit\\measurement-report-ui-63d5a5e-20260913\\report-hi-desktop.png"
+    },
+    {
+      "file": "synthetic-report-hi-mobile.png",
+      "sha256": "b60b454d38def2416e2fc99e3967fbe51293a7ef37dc40ab94afa9d22441638b",
+      "bytes": 223587,
+      "original_receipt": "D:\\AC-authority-closers-release-audit\\measurement-report-ui-63d5a5e-20260913\\report-hi-mobile.png"
+    },
+    {
+      "file": "synthetic-report-mr-desktop.png",
+      "sha256": "9c528efbfcd3fae39e270e988599db53fa3b8ea7f62f2846fe5c1a12c92d005b",
+      "bytes": 243915,
+      "original_receipt": "D:\\AC-authority-closers-release-audit\\measurement-report-ui-63d5a5e-20260913\\report-mr-desktop.png"
+    },
+    {
+      "file": "synthetic-report-mr-mobile.png",
+      "sha256": "e28a79f68e3c7d7bf814446b7bf2a224b7dd6d939c25d3158dd6ad5b210d14f1",
+      "bytes": 227643,
+      "original_receipt": "D:\\AC-authority-closers-release-audit\\measurement-report-ui-63d5a5e-20260913\\report-mr-mobile.png"
+    },
+    {
+      "file": "synthetic-report-playback-recovery.png",
+      "sha256": "7060fbd07678986957261f7a5667a3fedc2b3ce33f9d72b1c1d15361d3fdb027",
+      "bytes": 182171,
+      "original_receipt": "D:\\AC-authority-closers-release-audit\\measurement-report-ui-63d5a5e-20260913\\report-playback-recovery.png"
+    },
+    {
+      "file": "synthetic-report-print-layout.png",
+      "sha256": "6819be971956bd70db66e2098486d0940a3bee981b1441de88c2aca99e2b6a35",
+      "bytes": 157537,
+      "original_receipt": "D:\\AC-authority-closers-release-audit\\measurement-report-ui-63d5a5e-20260913\\report-print-layout.png"
+    },
+    {
+      "file": "synthetic-synthetic-report.pdf",
+      "sha256": "05740686f29d707344225ce4830600205dc51fda29e24ec3258681db8d7c2fd7",
+      "bytes": 121317,
+      "original_receipt": "D:\\AC-authority-closers-release-audit\\measurement-report-ui-63d5a5e-20260913\\synthetic-report.pdf"
+    }
+  ]
+}

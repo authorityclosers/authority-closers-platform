@@ -70,6 +70,10 @@ execution receipts. External stages require their separately approved run.
 
 ## Receipts obtained during development
 
+The final source's portable [receipt index](sales-xray-report-ux-20260913/README.md)
+includes the actual JUnit, build logs, browser/network records, screenshots, PDF
+and a checksum manifest. The external paths below preserve the earlier attempts.
+
 | Check | Result and evidence |
 |---|---|
 | Initial frozen UX browser | Production `next start`, fresh loopback port 3188. Source hashes in `20260913_SALES_XRAY_LIVE_UX_BROWSER_RECEIPT.json`. Synthetic report/source fixtures. |
