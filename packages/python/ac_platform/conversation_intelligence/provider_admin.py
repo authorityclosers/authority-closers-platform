@@ -105,10 +105,13 @@ class ConversationProviderAdmin:
             raise ConversationError(
                 "Use valid provider settings and external secret references."
             ) from None
-        if resolved.policy.allow_paid or any(
-            (item.max_cost_paise or 0) > 0 for item in resolved.providers
-        ):
-            raise ConversationDenied("This test workspace permits zero paid spend only.")
+        paid_providers = tuple(
+            item for item in resolved.providers if (item.max_cost_paise or 0) > 0
+        )
+        if resolved.policy.allow_paid and not paid_providers:
+            raise ConversationDenied("Paid policy requires an explicitly priced provider.")
+        if paid_providers and not resolved.policy.allow_paid:
+            raise ConversationDenied("Paid provider settings require an explicit paid policy.")
         payload = {
             "configuration": resolved.as_dict(),
             "expected_revision": expected_revision,

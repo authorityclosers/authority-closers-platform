@@ -6,6 +6,7 @@ conversation proof. It never contacts a provider, reads secrets, or enables paid
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Coroutine, Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -168,6 +169,44 @@ def paid_config() -> dict[str, Any]:
     return config
 
 
+def funded_config() -> dict[str, Any]:
+    endpoint = "https://api.elevenlabs.io/v1/speech-to-text"
+    provider = ProviderConfig(
+        provider_id="elevenlabs",
+        model_id="scribe_v2",
+        endpoint=endpoint,
+        endpoint_sha256=hashlib.sha256(endpoint.encode()).hexdigest(),
+        credential_ref="ref:credential:elevenlabs-funded",
+        provider_terms_ref="ref:terms:elevenlabs-funded",
+        privacy_ref="ref:privacy:elevenlabs-funded",
+        pricing_ref="ref:pricing:elevenlabs-funded",
+        free_allowance_ref=None,
+        permission_ref="ref:permission:elevenlabs-funded",
+        endpoint_approval_ref="ref:approval:endpoint-elevenlabs-funded",
+        local_endpoint_approval_ref=None,
+        max_cost_paise=50_000,
+    )
+    route = RouteConfig(
+        task="asr",
+        provider_id="elevenlabs",
+        model_id="scribe_v2",
+        recipe_revision="funded-asr-v1",
+        profile_revision="profile-none-v1",
+        prompt_revision="prompt-funded-asr-v1",
+        required_input_stage="C0",
+        reuses_checkpoint_stage=None,
+    )
+    return RegistryConfig(
+        revision="funded-config-v1",
+        policy=RegistryPolicy(
+            allow_paid=True,
+            paid_approval_ref="ref:approval:funded-provider",
+        ),
+        providers=(provider,),
+        routes=(route,),
+    ).as_dict()
+
+
 @pytest.mark.parametrize(
     "email",
     ["admin@authorityclosers.com", "dipak@authorityclosers.com", "suyash@authorityclosers.com"],
@@ -296,7 +335,7 @@ def test_non_control_or_non_admin_actor_cannot_save(
     run_async(exercise())
 
 
-def test_admin_role_is_allowed_but_paid_configuration_is_rejected(
+def test_admin_role_rejects_unbound_paid_policy_and_costed_zero_policy(
     postgres_harness: Any,
 ) -> None:
     async def exercise() -> None:
@@ -305,14 +344,14 @@ def test_admin_role_is_allowed_but_paid_configuration_is_rejected(
             fixture = await seed_actor(engine, role="admin")
             async with AsyncSession(engine) as database, database.begin():
                 service = app(database, fixture)
-                with pytest.raises(ConversationDenied, match="zero paid spend"):
+                with pytest.raises(ConversationDenied, match="Paid policy requires"):
                     await service.save(
                         fixture.actor,
                         paid_config(),
                         expected_revision=0,
                         key="paid-provider-config",
                     )
-                with pytest.raises(ConversationDenied, match="zero paid spend"):
+                with pytest.raises(ConversationDenied, match="explicit paid policy"):
                     await service.save(
                         fixture.actor,
                         dormant_config(max_cost_paise=1),
@@ -327,6 +366,29 @@ def test_admin_role_is_allowed_but_paid_configuration_is_rejected(
                     )
                     == 0
                 )
+        finally:
+            await engine.dispose()
+
+    run_async(exercise())
+
+
+def test_verified_control_account_can_save_explicitly_priced_provider(
+    postgres_harness: Any,
+) -> None:
+    async def exercise() -> None:
+        engine = create_async_engine(postgres_harness.url)
+        try:
+            fixture = await seed_actor(engine, role="admin")
+            async with AsyncSession(engine) as database, database.begin():
+                saved = await app(database, fixture).save(
+                    fixture.actor,
+                    funded_config(),
+                    expected_revision=0,
+                    key="funded-provider-config",
+                )
+                assert saved["execution_activated"] is False
+                assert saved["configuration"]["policy"]["allow_paid"] is True
+                assert saved["configuration"]["providers"][0]["max_cost_paise"] == 50_000
         finally:
             await engine.dispose()
 

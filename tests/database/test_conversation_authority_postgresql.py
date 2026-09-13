@@ -104,39 +104,45 @@ class AuthorityFixture:
     worker: ConversationInferenceWorker
 
 
-def _refs(provider: str) -> dict[str, str]:
+def _refs(provider: str, *, paid: bool = False) -> dict[str, str | None]:
     return {
         "credential_ref": f"ref:credential:{provider}",
         "provider_terms_ref": f"ref:terms:{provider}",
         "privacy_ref": f"ref:privacy:{provider}",
         "pricing_ref": "ref:pricing:synthetic-zero",
-        "free_allowance_ref": f"ref:allowance:{provider}",
+        "free_allowance_ref": None if paid else f"ref:allowance:{provider}",
         "permission_ref": f"ref:permission:{provider}",
         "endpoint_approval_ref": f"ref:endpoint:{provider}",
     }
 
 
-def _provider(provider: str, model: str, endpoint: str) -> ProviderConfig:
+def _provider(
+    provider: str, model: str, endpoint: str, *, max_cost_paise: int = 0
+) -> ProviderConfig:
     return ProviderConfig(
         provider_id=provider,
         model_id=model,
         endpoint=endpoint,
         endpoint_sha256=hashlib.sha256(endpoint.encode()).hexdigest(),
-        **_refs(provider),
+        **_refs(provider, paid=max_cost_paise > 0),
         local_endpoint_approval_ref=None,
-        max_cost_paise=0,
+        max_cost_paise=max_cost_paise,
     )
 
 
-def _registry_config(revision: str) -> RegistryConfig:
+def _registry_config(revision: str, *, funded: bool = False) -> RegistryConfig:
     return RegistryConfig(
         revision=revision,
-        policy=RegistryPolicy(),
+        policy=RegistryPolicy(
+            allow_paid=funded,
+            paid_approval_ref="ref:approval:hosted-paid" if funded else None,
+        ),
         providers=(
             _provider(
                 "elevenlabs",
                 "scribe_v2",
                 "https://api.elevenlabs.io/v1/speech-to-text",
+                max_cost_paise=50_000 if funded else 0,
             ),
             _provider(
                 "groq",
@@ -193,8 +199,10 @@ def _stage(
     max_completion_tokens: int,
     profile_sha256: str | None,
     max_requests: int = 1,
+    paid: bool = False,
+    max_cost_paise: int = 0,
 ) -> StageApproval:
-    refs = _refs(provider)
+    refs = _refs(provider, paid=paid)
     refs.pop("endpoint_approval_ref")
     return StageApproval(
         id=uuid4(),
@@ -215,8 +223,9 @@ def _stage(
         expires_at_epoch=expires_at_epoch,
         max_requests=max_requests,
         entitlement_seconds=entitlement_seconds,
-        zero_cost_basis="synthetic",
+        zero_cost_basis="paid_pricing_evidence" if paid else "synthetic",
         price_evidence_sha256="a" * 64,
+        max_cost_paise=max_cost_paise,
         max_source_duration_ms=1_000,
         max_input_bytes=134_217_728,
         max_completion_tokens=max_completion_tokens,
@@ -231,6 +240,7 @@ def _bundle(
     *,
     now_epoch: int,
     expires_at_epoch: int | None = None,
+    funded: bool = False,
 ) -> HostedApprovalBundle:
     bundle_expires = expires_at_epoch or now_epoch + 3_600
     stage_expires = min(bundle_expires, now_epoch + 1_800)
@@ -245,6 +255,8 @@ def _bundle(
         budget_scope_id=uuid4(),
         budget_authorization_ref="ref:budget:synthetic-zero",
         budget_owner_id=state.person_id,
+        budget_cap_paise=100_000 if funded else 0,
+        paid_approval_ref="ref:approval:hosted-paid" if funded else None,
         intake_authorization_ref="ref:intake:synthetic",
         intake_retention_ref="ref:retention:intake-synthetic",
         retention_days=7,
@@ -276,6 +288,8 @@ def _bundle(
                 entitlement_seconds=None,
                 max_completion_tokens=0,
                 profile_sha256=None,
+                paid=funded,
+                max_cost_paise=50_000 if funded else 0,
             ),
             _stage(
                 state=state,
@@ -330,14 +344,16 @@ async def _promote_admin(engine: Any, state: Any) -> ActorContext:
     )
 
 
-async def _setup(postgres_harness: Any, tmp_path: Path) -> AuthorityFixture:
+async def _setup(
+    postgres_harness: Any, tmp_path: Path, *, funded: bool = False
+) -> AuthorityFixture:
     prepared = await prepare_local(postgres_harness, tmp_path)
     assert await prepared.worker.run_once(), "The synthetic C1 fixture did not complete."
     engine = create_async_engine(postgres_harness.url)
     sessions = async_sessionmaker(engine, expire_on_commit=False)
     try:
         actor = await _promote_admin(engine, prepared.state)
-        config = _registry_config("hosted-test-config-v1")
+        config = _registry_config("hosted-test-config-v1", funded=funded)
         async with sessions() as database, database.begin():
             config_view = await ConversationProviderAdmin(
                 ConversationApplication(database, clock=lambda: prepared.state.now)
@@ -349,6 +365,7 @@ async def _setup(postgres_harness: Any, tmp_path: Path) -> AuthorityFixture:
             source_sha256,
             config_view["configuration_sha256"],
             now_epoch=int(prepared.state.now.timestamp()),
+            funded=funded,
         )
         bundle_box = {"bundle": bundle}
         authority = ConversationAuthority(
@@ -516,6 +533,37 @@ def test_authority_claim_is_idempotent_and_quote_waits_for_consent(
             assert await setup.worker.run_once()
             assert await completed_checkpoint(setup.sessions, run_view)
             assert setup.broker.calls == 1
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_paid_hosted_quote_uses_project_cap_and_preserves_uncertain_hold(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path, funded=True)
+        try:
+            quote = await _issue(setup, key="funded-hosted-c2-quote")
+            assert quote["max_cost_paise"] == 50_000
+            assert quote["budget_cap_paise"] == 100_000
+            assert quote["cost_label"] == "up to ₹500.00 · approved project cap"
+
+            run_view = await _start(setup, quote, key="funded-hosted-c2-run")
+            assert await setup.worker.run_once()
+            assert await completed_checkpoint(setup.sessions, run_view)
+
+            async with setup.sessions() as database:
+                budget_row = await database.get(
+                    ConversationBudgetAccount, setup.bundle.budget_scope_id
+                )
+                assert budget_row is not None
+                budget = BudgetAccount.from_dict(budget_row.snapshot)
+                reservation = budget.reservations[0]
+                assert reservation.state == "uncertain"
+                assert reservation.committed_paise == 50_000
+                assert budget.available_paise == 50_000
         finally:
             await setup.engine.dispose()
 
