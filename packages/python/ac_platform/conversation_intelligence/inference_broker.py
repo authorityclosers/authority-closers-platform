@@ -40,6 +40,9 @@ from ac_platform.conversation_intelligence.providers import (
 
 BROKER_SCHEMA = "ac.sales_xray.inference_broker/1"
 BROKER_MODULE = "ac_platform.conversation_intelligence.inference_broker_cli"
+CHILD_IDENTITY_MODULE = "ac_platform.conversation_intelligence.child_identity"
+CHILD_TOKEN_FILE_ENV = "AC_SALES_XRAY_INFISICAL_TOKEN_FILE"  # noqa: S105 - name only
+INFISICAL_API_URL = "https://app.infisical.com"
 MAX_HEADER_BYTES = 64 * 1024
 MAX_TIMEOUT_SECONDS = 180.0
 MAX_FRAME_BYTES = 4 + MAX_HEADER_BYTES + MAX_AUDIO_BYTES
@@ -79,6 +82,9 @@ _STABLE_ERROR_CODES = frozenset(
         "broker_response_too_large",
         "broker_timeout",
         "broker_usage_invalid",
+        "broker_service_identity_file_invalid",
+        "broker_service_identity_required",
+        "broker_service_identity_unavailable",
         "provider_audio_or_model_invalid",
         "provider_dispatch_failed",
         "provider_dispatch_not_authorized",
@@ -178,6 +184,47 @@ def _reference(value: object, field: str) -> str:
     return value
 
 
+def _secret_file_reference(value: object) -> str:
+    """Validate a non-secret absolute file reference without opening it."""
+
+    if not isinstance(value, (str, Path)):
+        raise ValueError("invalid token file reference")
+    reference = str(value)
+    try:
+        path = Path(reference)
+    except (TypeError, ValueError):
+        raise ValueError("invalid token file reference") from None
+    if (
+        not reference
+        or len(reference) > 512
+        or "\x00" in reference
+        or not path.is_absolute()
+        or any(part == ".." for part in path.parts)
+    ):
+        raise ValueError("invalid token file reference")
+    # Resolve only link metadata in the coordinator; never read the file here.
+    # The identity child repeats this check with O_NOFOLLOW where supported.
+    try:
+        if path.is_symlink():
+            raise ValueError("invalid token file reference")
+    except OSError:
+        raise ValueError("invalid token file reference") from None
+    return reference
+
+
+def _python_executable(value: object) -> str:
+    if not isinstance(value, (str, Path)):
+        raise ValueError("python executable must be an absolute path")
+    executable = str(value)
+    try:
+        path = Path(executable)
+    except (TypeError, ValueError):
+        raise ValueError("python executable must be an absolute path") from None
+    if not executable or "\x00" in executable or not path.is_absolute():
+        raise ValueError("python executable must be an absolute path")
+    return executable
+
+
 def _is_stable_error_code(code: object) -> bool:
     return isinstance(code, str) and (
         code in _STABLE_ERROR_CODES or _PROVIDER_HTTP_ERROR.fullmatch(code) is not None
@@ -186,13 +233,21 @@ def _is_stable_error_code(code: object) -> bool:
 
 @dataclass(frozen=True, slots=True)
 class InfisicalLauncher:
-    """Approved, non-secret Infisical references for one fixed child command."""
+    """Approved, non-secret references for one fixed provider child.
+
+    ``token_file_ref`` is a reference to an externally managed, child-readable
+    file containing the short-lived Infisical service token.  The parent never
+    opens that file or receives its contents.  The reference is supplied to a
+    fixed child identity module through ``CHILD_TOKEN_FILE_ENV``; it is not a
+    command argument, request field or provider credential.
+    """
 
     executable: str | Path
     provider_id: str
     project_ref: str
     environment_ref: str
     secret_path_ref: str
+    token_file_ref: str | Path | None = None
 
     def __post_init__(self) -> None:
         executable = str(self.executable)
@@ -210,10 +265,40 @@ class InfisicalLauncher:
         _reference(self.secret_path_ref, "secret path reference")
         if self.secret_path_ref.rstrip("/").split("/")[-1] != self.provider_id:
             raise ValueError("provider-specific secret path required")
+        if self.token_file_ref is not None:
+            _secret_file_reference(self.token_file_ref)
 
     def argv(self, python_executable: str) -> tuple[str, ...]:
-        """Build the only permitted wrapper argv; values are references, not secrets."""
+        """Build the only permitted child identity argv.
 
+        The token file reference is intentionally absent from argv.  The
+        parent adds it as a non-secret child environment reference instead.
+        The identity module accepts only these fixed routing fields and always
+        invokes the fixed Infisical command below.
+        """
+
+        if self.token_file_ref is None:
+            raise ValueError("service token file reference required")
+        _python_executable(python_executable)
+        return (
+            str(python_executable),
+            "-m",
+            CHILD_IDENTITY_MODULE,
+            "--child",
+            "--infisical-executable",
+            str(self.executable),
+            "--project-id",
+            self.project_ref,
+            "--environment",
+            self.environment_ref,
+            "--path",
+            self.secret_path_ref,
+        )
+
+    def provider_argv(self, python_executable: str) -> tuple[str, ...]:
+        """Build the fixed Infisical command used only after child auth loads."""
+
+        _python_executable(python_executable)
         return (
             str(self.executable),
             "run",
@@ -234,6 +319,13 @@ class InfisicalLauncher:
             BROKER_MODULE,
             "--child",
         )
+
+    def child_environment(self) -> dict[str, str]:
+        """Return only the external token-file reference for the identity child."""
+
+        if self.token_file_ref is None:
+            raise ValueError("service token file reference required")
+        return {CHILD_TOKEN_FILE_ENV: str(self.token_file_ref)}
 
 
 class ProcessRunner(Protocol):
@@ -864,9 +956,7 @@ class ProcessInferenceBroker:
         limits: BrokerLimits | None = None,
         runner: ProcessRunner | Callable[..., Awaitable[bytes]] | None = None,
     ) -> None:
-        executable = str(python_executable)
-        if not executable or not Path(executable).is_absolute():
-            raise ValueError("python executable must be an absolute path")
+        executable = _python_executable(python_executable)
         self._python_executable = executable
         self._infisical = infisical
         self._limits = limits or BrokerLimits()
@@ -874,10 +964,20 @@ class ProcessInferenceBroker:
 
     def _argv(self, provider_id: str | None = None) -> tuple[str, ...]:
         if self._infisical is not None:
+            if self._infisical.token_file_ref is None:
+                raise InferenceBrokerError("broker_service_identity_required")
             if provider_id is not None and self._infisical.provider_id != provider_id:
                 raise InferenceBrokerError("broker_launcher_provider_mismatch")
             return self._infisical.argv(self._python_executable)
         return (self._python_executable, "-m", BROKER_MODULE, "--child")
+
+    def _environment(self) -> dict[str, str]:
+        environment = _safe_child_environment()
+        if self._infisical is not None:
+            if self._infisical.token_file_ref is None:
+                raise InferenceBrokerError("broker_service_identity_required")
+            environment.update(self._infisical.child_environment())
+        return environment
 
     async def execute(self, reservation: Reservation, payload: bytes) -> ProviderResult:
         """Execute one exact request; callers settle/reconcile separately."""
@@ -895,7 +995,7 @@ class ProcessInferenceBroker:
                 output = await _run_subprocess(
                     self._argv(provider_id),
                     request,
-                    environment=_safe_child_environment(),
+                    environment=self._environment(),
                     timeout_seconds=self._limits.timeout_seconds,
                     max_output_bytes=min(
                         MAX_OUTPUT_FRAME_BYTES,
@@ -907,7 +1007,7 @@ class ProcessInferenceBroker:
                 output = await run(
                     self._argv(provider_id),
                     request,
-                    environment=_safe_child_environment(),
+                    environment=self._environment(),
                     timeout_seconds=self._limits.timeout_seconds,
                     max_output_bytes=4 + MAX_HEADER_BYTES + self._limits.max_raw_response_bytes,
                 )
@@ -916,7 +1016,7 @@ class ProcessInferenceBroker:
                 output = await run(
                     self._argv(provider_id),
                     request,
-                    environment=_safe_child_environment(),
+                    environment=self._environment(),
                     timeout_seconds=self._limits.timeout_seconds,
                     max_output_bytes=4 + MAX_HEADER_BYTES + self._limits.max_raw_response_bytes,
                 )
@@ -1078,6 +1178,9 @@ __all__ = [
     "BROKER_MODULE",
     "BROKER_SCHEMA",
     "BrokerLimits",
+    "CHILD_IDENTITY_MODULE",
+    "CHILD_TOKEN_FILE_ENV",
+    "INFISICAL_API_URL",
     "InferenceBrokerError",
     "InfisicalLauncher",
     "ProcessInferenceBroker",

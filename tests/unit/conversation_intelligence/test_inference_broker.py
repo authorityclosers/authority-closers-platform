@@ -7,6 +7,7 @@ import hashlib
 import os
 import sys
 from dataclasses import replace
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -20,6 +21,8 @@ from ac_platform.conversation_intelligence.entitlements import (
 from ac_platform.conversation_intelligence.inference_broker import (
     BROKER_MODULE,
     BROKER_SCHEMA,
+    CHILD_IDENTITY_MODULE,
+    CHILD_TOKEN_FILE_ENV,
     BrokerLimits,
     InferenceBrokerError,
     InfisicalLauncher,
@@ -135,6 +138,40 @@ async def test_execute_rejects_changed_input_before_child_launch() -> None:
             reservation, canonical({"input": "changed"})
         )
     assert runner.calls == []
+
+
+@pytest.mark.asyncio
+async def test_launcher_passes_only_token_file_reference_to_sterile_child_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    body = canonical({"input": "synthetic"})
+    reservation = _reservation(body, provider="groq")
+    token_file = (Path.cwd() / "synthetic" / "groq-token").resolve()
+    launcher = InfisicalLauncher(
+        executable="infisical",
+        provider_id="groq",
+        project_ref="sales-xray-test",
+        environment_ref="dev",
+        secret_path_ref="/sales-xray-test/groq",  # noqa: S106 - synthetic path reference
+        token_file_ref=token_file,
+    )
+    runner = FakeRunner(lambda _header, payload: _response(reservation, payload, b"{}"))
+    monkeypatch.setenv("INFISICAL_TOKEN", "coordinator-token-must-not-reach-child")
+    monkeypatch.setenv("GROQ_API_KEY", "provider-key-must-not-reach-parent-child")
+    monkeypatch.setenv("AC_DATABASE_URL", "database-must-not-reach-parent-child")
+
+    await ProcessInferenceBroker(
+        python_executable=sys.executable,
+        infisical=launcher,
+        runner=runner,
+    ).execute(reservation, body)
+
+    argv, _, environment = runner.calls[0]
+    assert argv[:4] == (sys.executable, "-m", CHILD_IDENTITY_MODULE, "--child")
+    assert environment[CHILD_TOKEN_FILE_ENV] == str(token_file)
+    assert "INFISICAL_TOKEN" not in environment
+    assert "GROQ_API_KEY" not in environment
+    assert "AC_DATABASE_URL" not in environment
 
 
 @pytest.mark.asyncio
@@ -378,36 +415,52 @@ async def test_input_write_is_inside_whole_execution_deadline() -> None:
 
 
 def test_infisical_launcher_is_fixed_and_rejects_secret_like_references() -> None:
+    token_file = (Path.cwd() / "synthetic" / "infisical-token").resolve()
     launcher = InfisicalLauncher(
         executable="infisical",
         provider_id="gemini",
         project_ref="sales-xray",
         environment_ref="test",
         secret_path_ref="/provider-runtime/gemini",  # noqa: S106 - synthetic reference, never a value
+        token_file_ref=token_file,
     )
     argv = launcher.argv(sys.executable)
-    assert argv[:13] == (
+    assert argv[:4] == (sys.executable, "-m", CHILD_IDENTITY_MODULE, "--child")
+    assert argv[4:] == (
+        "--infisical-executable",
         "infisical",
-        "run",
-        "--include-imports=false",
-        "--expand=false",
-        "--silent",
-        "--telemetry=false",
-        "--log-level=error",
-        "--projectId",
+        "--project-id",
         "sales-xray",
-        "--env",
+        "--environment",
         "test",
         "--path",
         "/provider-runtime/gemini",
     )
-    assert argv[-4:] == (sys.executable, "-m", BROKER_MODULE, "--child")
+    assert str(token_file) not in argv
+    assert launcher.child_environment() == {CHILD_TOKEN_FILE_ENV: str(token_file)}
+    assert launcher.provider_argv(sys.executable)[-4:] == (
+        sys.executable,
+        "-m",
+        BROKER_MODULE,
+        "--child",
+    )
     with pytest.raises(ValueError):
         InfisicalLauncher(
-            "infisical", "gemini", "project?token=secret", "test", "/provider-runtime/gemini"
+            "infisical",
+            "gemini",
+            "project?token=secret",
+            "test",
+            "/provider-runtime/gemini",
+            token_file,
         )
     with pytest.raises(ValueError):
-        InfisicalLauncher("infisical", "gemini", "project", "test", "sk-live-secret")
+        InfisicalLauncher(
+            "infisical", "gemini", "project", "test", "/provider-runtime/gemini", "sk-live-secret"
+        )
+    with pytest.raises(ValueError, match="service token file reference required"):
+        InfisicalLauncher(
+            "infisical", "gemini", "project", "test", "/provider-runtime/gemini"
+        ).argv(sys.executable)
 
 
 def test_frame_rejects_truncated_or_oversized_payload() -> None:
