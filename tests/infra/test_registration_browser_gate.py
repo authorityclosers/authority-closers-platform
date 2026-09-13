@@ -361,14 +361,14 @@ def test_browser_transport_never_dispatches_provider_or_mutation(url, method, ex
     assert bool(blocked) == (expected == "block")
 
 
-def test_workflow_requires_browser_gate_after_the_production_build() -> None:
+def test_workflow_installs_browser_before_validation_and_runs_gate_after() -> None:
     workflow = yaml.safe_load((ROOT / ".github/workflows/application.yml").read_text("utf-8"))
     job = workflow["jobs"]["validate"]
     names = [step.get("name") for step in job["steps"]]
     install_name = "Install locked registration browser"
     gate_name = "Prove registration consent and server-rendered readiness"
     assert names.count(install_name) == names.count(gate_name) == 1
-    assert names.index("Validate application") < names.index(install_name) < names.index(gate_name)
+    assert names.index(install_name) < names.index("Validate application") < names.index(gate_name)
     install = job["steps"][names.index(install_name)]
     required = job["steps"][names.index(gate_name)]
     for step in (install, required):

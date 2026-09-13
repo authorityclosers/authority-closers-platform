@@ -254,13 +254,13 @@ jobs:
           AC_MIGRATION_REHEARSAL_POSTGRES_TEST_URL: postgresql+psycopg://ac_owner:local-owner-only@127.0.0.1:55432/ac_migration_rehearsal_ci
           AC_REQUIRE_MIGRATION_REHEARSAL_POSTGRES_TEST: "1"
         run: uv run pytest tests/integration/test_migration_rehearsal_postgresql.py
+      - name: Install locked registration browser
+        timeout-minutes: 5
+        run: uv run --frozen python -m playwright install --with-deps chromium
       - name: Validate application
         env:
           AC_REQUIRE_RESTORE_INPUT_DOCKER_TEST: "1"
         run: pnpm validate
-      - name: Install locked registration browser
-        timeout-minutes: 5
-        run: uv run --frozen python -m playwright install --with-deps chromium
       - name: Prove registration consent and server-rendered readiness
         timeout-minutes: 5
         env:
