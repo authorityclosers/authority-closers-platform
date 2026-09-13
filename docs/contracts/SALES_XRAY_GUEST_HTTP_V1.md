@@ -51,6 +51,17 @@ are private/no-store and vary by Cookie.
 | GET `/submissions/{uuid}/source` | Replay the owned original recording with single byte-range support. |
 | DELETE `/submissions/{uuid}` | Queue canonical erasure, including after execution/permission expiry. |
 
+The session boundary is `POST /session` with only a bounded
+`challenge_token` JSON field, `GET /session`, and canonical-identity
+`POST /claim`. `GET /session` accepts an optional account session cookie. A
+guest cookie alone returns `state: "guest"`; an account without a guest cookie
+returns `state: "account"` from the canonical account allowance and never
+issues a visitor. An account alongside an unclaimed guest cookie returns
+`state: "claim_required"` with that guest allowance and performs no claim.
+After the explicit `POST /claim`, the same account may read the claimed cookie
+and receives `state: "account"`. Malformed, expired, revoked or unknown
+account cookies fail closed and never fall back to a guest read.
+
 ## Original audio and minutes
 
 1. The user accepts the displayed local-upload policy for their selected file.

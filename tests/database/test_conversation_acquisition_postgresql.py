@@ -544,6 +544,17 @@ def test_http_cookie_claim_and_boundary_use_real_identity_and_postgres(
                 read = await client.get(route + "/session")
                 assert read.status_code == 200
                 assert read.json()["allowance"]["available_seconds"] == 5939
+                # A malformed-but-shaped account token cannot fall back to
+                # the otherwise valid guest bearer.
+                client.cookies.set(
+                    settings.session_cookie_name,
+                    secrets.token_urlsafe(32),
+                    domain="salesxray.example.test",
+                    path="/",
+                )
+                invalid_account = await client.get(route + "/session")
+                assert invalid_account.status_code == 401
+                client.cookies.delete(settings.session_cookie_name)
                 denial = await client.post(
                     route + "/session",
                     json={"challenge_token": "synthetic-challenge"},
@@ -578,13 +589,48 @@ def test_http_cookie_claim_and_boundary_use_real_identity_and_postgres(
                     domain="salesxray.example.test",
                     path="/",
                 )
+                pending_claim = await client.get(route + "/session")
+                assert pending_claim.status_code == 200, pending_claim.text
+                assert pending_claim.json()["state"] == "claim_required"
+                assert pending_claim.json()["allowance"]["available_seconds"] == 5939
                 claimed = await client.post(route + "/claim", headers={"Origin": origin})
                 assert claimed.status_code == 200, claimed.text
                 assert claimed.json()["allowance"]["available_seconds"] == 5939
                 assert "__Host-ac_xray_guest" not in client.cookies
-                old_cookie = await client.get(
-                    route + "/session", headers={"Cookie": f"__Host-ac_xray_guest={visitor_token}"}
+                account_only = await client.get(route + "/session")
+                assert account_only.status_code == 200
+                assert account_only.json()["state"] == "account"
+                assert account_only.json()["allowance"]["available_seconds"] == 5939
+                async with sessions() as db:
+                    visitor_count_before = await db.scalar(
+                        select(func.count()).select_from(ConversationVisitor)
+                    )
+                # A signed-in browser without a guest cookie reads the
+                # account ledger; GET never issues an unclaimed visitor.
+                assert visitor_count_before is not None
+                client.cookies.set(
+                    "__Host-ac_xray_guest",
+                    visitor_token,
+                    domain="salesxray.example.test",
+                    path="/",
                 )
+                claimed_cookie = await client.get(route + "/session")
+                assert claimed_cookie.status_code == 200, claimed_cookie.text
+                assert claimed_cookie.json()["state"] == "account"
+                assert claimed_cookie.json()["allowance"]["available_seconds"] == 5939
+                async with sessions() as db:
+                    visitor_count_after = await db.scalar(
+                        select(func.count()).select_from(ConversationVisitor)
+                    )
+                assert visitor_count_after == visitor_count_before
+                client.cookies.clear()
+                client.cookies.set(
+                    "__Host-ac_xray_guest",
+                    visitor_token,
+                    domain="salesxray.example.test",
+                    path="/",
+                )
+                old_cookie = await client.get(route + "/session")
                 assert old_cookie.status_code == 403
         finally:
             await engine.dispose()
