@@ -15,6 +15,9 @@ param(
     [ValidatePattern("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")]
     [string]$GitHubRepository = "authorityclosers/authority-closers-platform",
 
+    [ValidatePattern("^(|[0-9a-f]{40})$")]
+    [string]$RecoveryWorkflowSha = "",
+
     [switch]$ReapplyConfiguration
 )
 
@@ -781,6 +784,28 @@ Assert-NativeSuccess "Git commit lookup"
 if ($resolvedCommit -ne $ReleaseSha) {
     throw "ReleaseSha does not resolve to the exact requested commit."
 }
+$recoveryWorkflowRequested = -not [string]::IsNullOrWhiteSpace($RecoveryWorkflowSha)
+if ($recoveryWorkflowRequested) {
+    $resolvedRecoveryWorkflowCommit = (& git -C $repositoryRoot rev-parse "$RecoveryWorkflowSha`^{commit}").Trim()
+    Assert-NativeSuccess "Recovery workflow commit lookup"
+    if ($resolvedRecoveryWorkflowCommit -ne $RecoveryWorkflowSha) {
+        throw "RecoveryWorkflowSha does not resolve to the exact requested commit."
+    }
+    $recoveryWorkflowText = (& git -C $repositoryRoot show "$RecoveryWorkflowSha`:.github/workflows/application-recovery.yml" | Out-String)
+    Assert-NativeSuccess "Recovery workflow source lookup"
+    foreach ($requiredRecoveryMarker in @(
+            "release_sha",
+            "validation_run_id",
+            "published_registry_digests",
+            "Validate published-image recovery proof",
+            "Pull and verify published release images",
+            "REUSE_VALIDATION_RUN_ID"
+        )) {
+        if (-not $recoveryWorkflowText.Contains($requiredRecoveryMarker)) {
+            throw "Recovery workflow commit is missing the reviewed package-recovery contract."
+        }
+    }
+}
 
 $expectedReleasePath = "/srv/authority-closers/application/releases/$ReleaseSha"
 $currentReleaseCommand = "readlink -f /srv/authority-closers/application/current-$TargetEnvironment 2>/dev/null || true"
@@ -807,17 +832,34 @@ Assert-NativeSuccess "GitHub artifact lookup"
 $artifacts = @(($artifactResponse | ConvertFrom-Json).artifacts | Where-Object {
         -not $_.expired -and
         $_.name -eq $artifactName -and
-        $_.workflow_run.head_sha -eq $ReleaseSha -and
         $_.digest -match "^sha256:[0-9a-f]{64}$"
     } | Sort-Object created_at -Descending)
-if ($artifacts.Count -ne 1) {
-    throw "Expected exactly one unexpired digest-bound exact-SHA artifact; found $($artifacts.Count)."
+$boundArtifacts = @($artifacts | Where-Object {
+        $_.workflow_run.head_sha -eq $ReleaseSha -or
+        ($recoveryWorkflowRequested -and $_.workflow_run.head_sha -eq $RecoveryWorkflowSha)
+    })
+if ($boundArtifacts.Count -ne 1) {
+    throw "Expected exactly one unexpired digest-bound release artifact bound to the exact release or reviewed recovery SHA; found $($boundArtifacts.Count)."
 }
-$artifact = $artifacts[0]
-$run = (& gh run view $artifact.workflow_run.id --repo $GitHubRepository --json status,conclusion,headSha | ConvertFrom-Json)
+$artifact = $boundArtifacts[0]
+$run = (& gh api "repos/$GitHubRepository/actions/runs/$($artifact.workflow_run.id)" | ConvertFrom-Json)
 Assert-NativeSuccess "GitHub release run lookup"
-if ($run.status -ne "completed" -or $run.conclusion -ne "success" -or $run.headSha -ne $ReleaseSha) {
+if ($run.status -ne "completed" -or $run.conclusion -ne "success") {
     throw "The exact-SHA packaging run is not successful."
+}
+$runHeadSha = [string]$run.head_sha
+$standardReleaseRun = $runHeadSha -eq $ReleaseSha
+$recoveryReleaseRun = (
+    $recoveryWorkflowRequested -and
+    $runHeadSha -eq $RecoveryWorkflowSha -and
+    [string]$run.event -eq "workflow_dispatch" -and
+    [string]$run.path -eq ".github/workflows/application-recovery.yml"
+)
+if (-not $standardReleaseRun -and -not $recoveryReleaseRun) {
+    throw "The artifact is not bound to the exact release SHA or a reviewed recovery workflow run."
+}
+if ($recoveryReleaseRun) {
+    Write-Output "PASS  Accepted reviewed package-recovery run $runHeadSha for release $ReleaseSha."
 }
 
 $localApplicationDataItem = Get-Item -LiteralPath $localApplicationData -Force

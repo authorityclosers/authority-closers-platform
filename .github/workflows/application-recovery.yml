@@ -1,0 +1,418 @@
+name: Application release package recovery
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: Exact full-SHA release whose already-published images will be packaged.
+        required: true
+        type: string
+      validation_run_id:
+        description: Completed application validation run with successful exact-SHA prerequisite jobs.
+        required: true
+        type: string
+      published_registry_digests:
+        description: api=sha256:...,learner=sha256:...,admin=sha256:...,coach=sha256:...
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  package-release-images:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    concurrency:
+      group: application-release-packaging
+      cancel-in-progress: false
+    permissions:
+      actions: write
+      contents: read
+      packages: read
+    env:
+      RELEASE_SHA: ${{ inputs.release_sha }}
+      REUSE_VALIDATION_RUN_ID: ${{ inputs.validation_run_id }}
+      REUSE_PUBLISHED_REGISTRY_DIGESTS: ${{ inputs.published_registry_digests }}
+      API_IMAGE: ghcr.io/authorityclosers/authority-closers-api:${{ inputs.release_sha }}
+      LEARNER_IMAGE: ghcr.io/authorityclosers/authority-closers-learner-web:${{ inputs.release_sha }}
+      ADMIN_IMAGE: ghcr.io/authorityclosers/authority-closers-admin-web:${{ inputs.release_sha }}
+      COACH_IMAGE: ghcr.io/authorityclosers/authority-closers-coach-web:${{ inputs.release_sha }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.release_sha }}
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Validate published-image recovery proof
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || {
+            printf 'Recovery release SHA must be a full lowercase commit SHA.\n' >&2
+            exit 1
+          }
+          [[ "$REUSE_VALIDATION_RUN_ID" =~ ^[0-9]+$ ]] || {
+            printf 'Recovery validation run ID must be numeric.\n' >&2
+            exit 1
+          }
+          [[ -n "$REUSE_PUBLISHED_REGISTRY_DIGESTS" ]] || {
+            printf 'Recovery requires all four recorded registry digests.\n' >&2
+            exit 1
+          }
+          declare -A expected=()
+          IFS=',' read -r -a digest_entries <<< "$REUSE_PUBLISHED_REGISTRY_DIGESTS"
+          [ "${#digest_entries[@]}" -eq 4 ] || {
+            printf 'Recovery requires exactly four registry digest entries.\n' >&2
+            exit 1
+          }
+          for entry in "${digest_entries[@]}"; do
+            key="${entry%%=*}"
+            digest="${entry#*=}"
+            [[ "$key" =~ ^(api|learner|admin|coach)$ ]] || {
+              printf 'Recovery digest key is invalid.\n' >&2
+              exit 1
+            }
+            [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+              printf 'Recovery registry digest is malformed.\n' >&2
+              exit 1
+            }
+            [ -z "${expected[$key]+set}" ] || {
+              printf 'Recovery registry digest keys must be unique.\n' >&2
+              exit 1
+            }
+            expected[$key]="$digest"
+          done
+          for key in api learner admin coach; do
+            [ -n "${expected[$key]+set}" ] || {
+              printf 'Recovery is missing a registry digest.\n' >&2
+              exit 1
+            }
+            printf 'EXPECTED_%s_REGISTRY_DIGEST=%s\n' "${key^^}" "${expected[$key]}" >> "$GITHUB_ENV"
+          done
+          run_json="$RUNNER_TEMP/reuse-validation-run.json"
+          jobs_json="$RUNNER_TEMP/reuse-validation-jobs.json"
+          gh api \
+            --header 'Accept: application/vnd.github+json' \
+            --header 'X-GitHub-Api-Version: 2026-03-10' \
+            "/repos/${GITHUB_REPOSITORY}/actions/runs/${REUSE_VALIDATION_RUN_ID}" > "$run_json"
+          jq -e \
+            --arg sha "$RELEASE_SHA" \
+            '.status == "completed"
+             and .head_sha == $sha
+             and .event == "workflow_dispatch"
+             and .path == ".github/workflows/application.yml"' \
+            "$run_json" > /dev/null || {
+              printf 'Recovery validation run is not the trusted workflow for the exact release SHA.\n' >&2
+              exit 1
+            }
+          gh api --paginate \
+            --header 'Accept: application/vnd.github+json' \
+            --header 'X-GitHub-Api-Version: 2026-03-10' \
+            "/repos/${GITHUB_REPOSITORY}/actions/runs/${REUSE_VALIDATION_RUN_ID}/jobs?per_page=100" \
+            | jq -s '{jobs: [.[].jobs[]]}' > "$jobs_json"
+          jq -e \
+            --arg sha "$RELEASE_SHA" \
+            '([.jobs[] | select(.name == "validate" and .head_sha == $sha and .conclusion == "success")] | length == 1)
+             and ([.jobs[] | select(.name == "academy-capacity-simulation" and .head_sha == $sha and .conclusion == "success")] | length == 1)' \
+            "$jobs_json" > /dev/null || {
+              printf 'Recovery validation run lacks both successful exact-SHA prerequisite jobs.\n' >&2
+              exit 1
+            }
+      - name: Pull and verify published release images
+        run: |
+          set -euo pipefail
+          verify_published_image() {
+            image="$1"
+            expected_digest="$2"
+            docker manifest inspect "$image" > /dev/null
+            docker pull "$image" > /dev/null
+            mapfile -t repo_digests < <(
+              docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$image"
+            )
+            matches=()
+            for repo_digest in "${repo_digests[@]}"; do
+              [ "${repo_digest##*@}" = "$expected_digest" ] && matches+=("$repo_digest")
+            done
+            [ "${#matches[@]}" -eq 1 ] || {
+              printf 'Published image digest does not match the recorded immutable digest: %s\n' "$image" >&2
+              exit 1
+            }
+          }
+          verify_published_image "$API_IMAGE" "$EXPECTED_API_REGISTRY_DIGEST"
+          verify_published_image "$LEARNER_IMAGE" "$EXPECTED_LEARNER_REGISTRY_DIGEST"
+          verify_published_image "$ADMIN_IMAGE" "$EXPECTED_ADMIN_REGISTRY_DIGEST"
+          verify_published_image "$COACH_IMAGE" "$EXPECTED_COACH_REGISTRY_DIGEST"
+          api_id="$(docker image inspect --format '{{.Id}}' "$API_IMAGE")"
+          api_release_id="$(docker run --rm --network none --entrypoint /bin/sh "$api_id" -c 'cat /app/.ac-release-id')"
+          [ "$api_release_id" = "$RELEASE_SHA" ] || {
+            printf 'Published API image release marker does not match the requested release SHA.\n' >&2
+            exit 1
+          }
+      - name: Create transport archives and reviewed manifest
+        run: |
+          set -euo pipefail
+          artifact_dir="$RUNNER_TEMP/ac-application-${RELEASE_SHA}"
+          transport_tar="$RUNNER_TEMP/ac-application-${RELEASE_SHA}.tar"
+          transport_index="$RUNNER_TEMP/ac-application-${RELEASE_SHA}-index.json"
+          mkdir -p "$artifact_dir"
+          # One archive deduplicates the shared Node image layers used by the
+          # learner, admin and coach runtimes. This keeps the one-day transport
+          # artifact inside the GitHub Free storage allowance.
+          docker save --output "$transport_tar" \
+            "$API_IMAGE" "$LEARNER_IMAGE" "$ADMIN_IMAGE" "$COACH_IMAGE"
+          tar --extract --to-stdout --file "$transport_tar" index.json > "$transport_index"
+
+          transport_digest_for() {
+            image="$1"
+            mapfile -t matches < <(
+              jq --raw-output --arg image "$image" \
+                '.manifests[] | select(.annotations["io.containerd.image.name"] == $image) | .digest' \
+                "$transport_index"
+            )
+            if [ "${#matches[@]}" -ne 1 ] || ! [[ "${matches[0]}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              printf 'OCI transport index does not contain exactly one manifest for %s\n' "$image" >&2
+              exit 1
+            fi
+            printf '%s\n' "${matches[0]}"
+          }
+
+          verify_transport_config() {
+            transport_digest="$1"
+            expected_config_digest="$2"
+            manifest_path="blobs/sha256/${transport_digest#sha256:}"
+            actual_transport_digest="sha256:$(
+              tar --extract --to-stdout --file "$transport_tar" "$manifest_path" | sha256sum | cut -d' ' -f1
+            )"
+            [ "$actual_transport_digest" = "$transport_digest" ] || {
+              printf 'OCI transport manifest digest verification failed: %s\n' "$transport_digest" >&2
+              exit 1
+            }
+            transported_config_digest="$(
+              tar --extract --to-stdout --file "$transport_tar" "$manifest_path" | jq --raw-output '.config.digest'
+            )"
+            [ "$transported_config_digest" = "$expected_config_digest" ] || {
+              printf 'OCI transport manifest does not reference the reviewed image config.\n' >&2
+              exit 1
+            }
+          }
+
+          api_id="$(docker image inspect --format '{{.Id}}' "$API_IMAGE")"
+          learner_id="$(docker image inspect --format '{{.Id}}' "$LEARNER_IMAGE")"
+          admin_id="$(docker image inspect --format '{{.Id}}' "$ADMIN_IMAGE")"
+          coach_id="$(docker image inspect --format '{{.Id}}' "$COACH_IMAGE")"
+          api_digest="$(docker image inspect --format '{{index .RepoDigests 0}}' "$API_IMAGE")"
+          learner_digest="$(docker image inspect --format '{{index .RepoDigests 0}}' "$LEARNER_IMAGE")"
+          admin_digest="$(docker image inspect --format '{{index .RepoDigests 0}}' "$ADMIN_IMAGE")"
+          coach_digest="$(docker image inspect --format '{{index .RepoDigests 0}}' "$COACH_IMAGE")"
+          [ "$api_digest" = "${API_IMAGE%:*}@$EXPECTED_API_REGISTRY_DIGEST" ] || {
+            printf 'API registry digest changed after recovery verification.\n' >&2
+            exit 1
+          }
+          [ "$learner_digest" = "${LEARNER_IMAGE%:*}@$EXPECTED_LEARNER_REGISTRY_DIGEST" ] || {
+            printf 'Learner registry digest changed after recovery verification.\n' >&2
+            exit 1
+          }
+          [ "$admin_digest" = "${ADMIN_IMAGE%:*}@$EXPECTED_ADMIN_REGISTRY_DIGEST" ] || {
+            printf 'Admin registry digest changed after recovery verification.\n' >&2
+            exit 1
+          }
+          [ "$coach_digest" = "${COACH_IMAGE%:*}@$EXPECTED_COACH_REGISTRY_DIGEST" ] || {
+            printf 'Coach registry digest changed after recovery verification.\n' >&2
+            exit 1
+          }
+          api_release_id="$(
+            docker run --rm --network none --entrypoint /bin/sh "$api_id" \
+              -c 'cat /app/.ac-release-id'
+          )"
+          [ "$api_release_id" = "$RELEASE_SHA" ] || {
+            printf 'API image release marker does not match the requested release SHA.\n' >&2
+            exit 1
+          }
+          mapfile -t migration_heads < <(
+            docker run --rm --network none --entrypoint alembic "$api_id" heads \
+              | awk '$2 == "(head)" { print $1 }'
+          )
+          if [ "${#migration_heads[@]}" -ne 1 ] \
+            || ! [[ "${migration_heads[0]}" =~ ^[0-9]{8}_[0-9]{4}$ ]]; then
+            printf 'API image must contain exactly one valid Alembic head.\n' >&2
+            exit 1
+          fi
+          migration_head="${migration_heads[0]}"
+          api_transport_digest="$(transport_digest_for "$API_IMAGE")"
+          learner_transport_digest="$(transport_digest_for "$LEARNER_IMAGE")"
+          admin_transport_digest="$(transport_digest_for "$ADMIN_IMAGE")"
+          coach_transport_digest="$(transport_digest_for "$COACH_IMAGE")"
+          verify_transport_config "$api_transport_digest" "$api_id"
+          verify_transport_config "$learner_transport_digest" "$learner_id"
+          verify_transport_config "$admin_transport_digest" "$admin_id"
+          verify_transport_config "$coach_transport_digest" "$coach_id"
+          gzip -9 < "$transport_tar" > "$artifact_dir/application-images.tar.gz"
+          {
+            printf 'AC_RELEASE_ID=%s\n' "$RELEASE_SHA"
+            # The foundation uses Docker's containerd image store, where an
+            # imported OCI image is addressed by its manifest digest. The
+            # config ID remains independently bound by verify_transport_config.
+            printf 'AC_API_IMAGE=%s\n' "$api_transport_digest"
+            printf 'AC_API_REGISTRY_DIGEST=%s\n' "$api_digest"
+            printf 'AC_API_TRANSPORT_DIGEST=%s\n' "$api_transport_digest"
+            printf 'AC_LEARNER_IMAGE=%s\n' "$learner_transport_digest"
+            printf 'AC_LEARNER_REGISTRY_DIGEST=%s\n' "$learner_digest"
+            printf 'AC_LEARNER_TRANSPORT_DIGEST=%s\n' "$learner_transport_digest"
+            printf 'AC_MIGRATION_HEAD=%s\n' "$migration_head"
+            printf 'AC_ADMIN_IMAGE=%s\n' "$admin_transport_digest"
+            printf 'AC_ADMIN_REGISTRY_DIGEST=%s\n' "$admin_digest"
+            printf 'AC_ADMIN_TRANSPORT_DIGEST=%s\n' "$admin_transport_digest"
+            printf 'AC_COACH_IMAGE=%s\n' "$coach_transport_digest"
+            printf 'AC_COACH_REGISTRY_DIGEST=%s\n' "$coach_digest"
+            printf 'AC_COACH_TRANSPORT_DIGEST=%s\n' "$coach_transport_digest"
+          } > "$artifact_dir/release-images.env"
+          (
+            cd "$artifact_dir"
+            sha256sum application-images.tar.gz release-images.env > SHA256SUMS
+          )
+          python infra/application/scripts/prepare-release-inputs.py \
+            verify-bundle "$artifact_dir" "$RELEASE_SHA" > /dev/null
+      - name: Admit release artifact under the pooled ceiling
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          artifact_dir="$RUNNER_TEMP/ac-application-${RELEASE_SHA}"
+          candidate_bytes="$(du --bytes --summarize "$artifact_dir" | cut -f1)"
+          max_artifact_bytes=450000000
+          max_artifact_pool_bytes=450000000
+          if [ "$candidate_bytes" -gt "$max_artifact_bytes" ]; then
+            printf 'Release artifact is %s bytes; refusing upload above %s bytes.\n' \
+              "$candidate_bytes" "$max_artifact_bytes" >&2
+            exit 1
+          fi
+
+          list_repository_artifacts() {
+            gh api --paginate \
+              --header 'Accept: application/vnd.github+json' \
+              --header 'X-GitHub-Api-Version: 2026-03-10' \
+              "/repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" \
+              | jq --slurp '[.[].artifacts[]]'
+          }
+
+          artifacts_before="$RUNNER_TEMP/repository-artifacts-before.json"
+          list_repository_artifacts > "$artifacts_before"
+          retained_bytes="$(jq '[.[].size_in_bytes] | add // 0' "$artifacts_before")"
+          [[ "$retained_bytes" =~ ^[0-9]+$ ]] || {
+            printf 'Repository artifact usage could not be proven.\n' >&2
+            exit 1
+          }
+          projected_artifact_pool_bytes=$((retained_bytes + candidate_bytes))
+          if [ "$projected_artifact_pool_bytes" -gt "$max_artifact_pool_bytes" ]; then
+            printf 'Projected repository artifact pool is %s bytes; refusing upload above %s bytes.\n' \
+              "$projected_artifact_pool_bytes" "$max_artifact_pool_bytes" >&2
+            exit 1
+          fi
+          printf 'Release artifact is %s bytes; projected repository pool is %s bytes (ceiling %s).\n' \
+            "$candidate_bytes" "$projected_artifact_pool_bytes" "$max_artifact_pool_bytes"
+      - name: Upload reviewed release bundle
+        id: upload_release
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ac-application-${{ inputs.release_sha }}
+          path: ${{ runner.temp }}/ac-application-${{ inputs.release_sha }}
+          if-no-files-found: error
+          # The transport bundle is copied into the immutable VPS artifact
+          # store. Keep GitHub Actions storage below the Free-plan allowance.
+          retention-days: 1
+      - name: Reclaim superseded release artifacts after verified upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+          UPLOADED_ARTIFACT_ID: ${{ steps.upload_release.outputs.artifact-id }}
+        run: |
+          set -euo pipefail
+          max_artifact_pool_bytes=450000000
+          current_name="ac-application-${RELEASE_SHA}"
+          current_artifact_id="$UPLOADED_ARTIFACT_ID"
+          [[ "$current_artifact_id" =~ ^[0-9]+$ ]] || {
+            printf 'Uploaded release artifact identity is malformed.\n' >&2
+            exit 1
+          }
+
+          list_repository_artifacts() {
+            gh api --paginate \
+              --header 'Accept: application/vnd.github+json' \
+              --header 'X-GitHub-Api-Version: 2026-03-10' \
+              "/repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" \
+              | jq --slurp '[.[].artifacts[]]'
+          }
+
+          uploaded_artifact="$RUNNER_TEMP/uploaded-release-artifact.json"
+          uploaded_artifact_proven=0
+          for _attempt in 1 2 3 4 5; do
+            if gh api \
+              --header 'Accept: application/vnd.github+json' \
+              --header 'X-GitHub-Api-Version: 2026-03-10' \
+              "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${current_artifact_id}" \
+              > "$uploaded_artifact" \
+              && jq --exit-status \
+                --arg current "$current_name" \
+                --argjson artifact_id "$current_artifact_id" \
+                --argjson run_id "$GITHUB_RUN_ID" \
+                '.id == $artifact_id
+                 and .name == $current
+                 and .workflow_run.id == $run_id
+                 and .expired == false
+                 and .size_in_bytes > 0' \
+                "$uploaded_artifact" > /dev/null; then
+              uploaded_artifact_proven=1
+              break
+            fi
+            sleep 2
+          done
+          [[ "$uploaded_artifact_proven" == 1 ]] || {
+            printf 'Uploaded release artifact could not be proven for this workflow run.\n' >&2
+            exit 1
+          }
+
+          artifacts_after_upload="$RUNNER_TEMP/repository-artifacts-after-upload.json"
+          list_repository_artifacts > "$artifacts_after_upload"
+          mapfile -t superseded_artifact_ids < <(
+            jq --raw-output --argjson current_id "$current_artifact_id" \
+              '.[]
+               | select((.name // "") | test("^ac-application-[0-9a-f]{40}$"))
+               | select(.id != $current_id)
+               | .id' \
+              "$artifacts_after_upload"
+          )
+          for artifact_id in "${superseded_artifact_ids[@]}"; do
+            [[ "$artifact_id" =~ ^[0-9]+$ ]] || {
+              printf 'Refusing malformed superseded release artifact identity.\n' >&2
+              exit 1
+            }
+            gh api --method DELETE \
+              --header 'Accept: application/vnd.github+json' \
+              --header 'X-GitHub-Api-Version: 2026-03-10' \
+              "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}"
+          done
+
+          artifacts_final="$RUNNER_TEMP/repository-artifacts-final.json"
+          list_repository_artifacts > "$artifacts_final"
+          final_bytes="$(jq '[.[].size_in_bytes] | add // 0' "$artifacts_final")"
+          final_current_count="$(
+            jq --argjson current_id "$current_artifact_id" \
+              '[.[] | select(.id == $current_id)] | length' "$artifacts_final"
+          )"
+          [[ "$final_bytes" =~ ^[0-9]+$ && "$final_current_count" == 1 ]] || {
+            printf 'Final release artifact pool could not be proven.\n' >&2
+            exit 1
+          }
+          if [ "$final_bytes" -gt "$max_artifact_pool_bytes" ]; then
+            printf 'Final repository artifact pool is %s bytes; ceiling is %s bytes.\n' \
+              "$final_bytes" "$max_artifact_pool_bytes" >&2
+            exit 1
+          fi
+          printf 'Verified artifact %s; final repository pool is %s bytes.\n' \
+            "$current_artifact_id" "$final_bytes"

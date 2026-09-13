@@ -23,7 +23,9 @@ def test_staging_controller_is_exact_sha_and_idempotent() -> None:
     )
     assert "running read-only proof only" in CONTROLLER
     assert "Re-running the exact release to load reviewed secret references" in CONTROLLER
-    assert "workflow_run.head_sha -eq $ReleaseSha" in CONTROLLER
+    assert "RecoveryWorkflowSha" in CONTROLLER
+    assert "reviewed recovery workflow run" in CONTROLLER
+    assert '".github/workflows/application-recovery.yml"' in CONTROLLER
     assert '"sha256:$artifactDigest" -ne $artifact.digest' in CONTROLLER
     assert '$run.conclusion -ne "success"' in CONTROLLER
     assert "verify-release-archive.py" in CONTROLLER
