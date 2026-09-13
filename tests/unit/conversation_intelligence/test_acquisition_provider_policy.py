@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID, uuid4
 
 import pytest
@@ -18,6 +20,10 @@ from ac_platform.conversation_intelligence.entitlements import (
     ExecutionPermission,
     Quote,
     Reservation,
+)
+from ac_platform.conversation_intelligence.models import (
+    ConversationBudgetAccount,
+    ConversationMinuteAccount,
 )
 from ac_platform.conversation_intelligence.processing_actor import ProcessingActor
 from ac_platform.kernel.authz import ActorContext
@@ -145,6 +151,35 @@ def test_only_matching_processing_actor_can_select_policy() -> None:
         ConversationAuthority(
             lambda: bundle, environment="test", operations_tenant_id=TENANT_ID
         ).recipient(bundle, ProcessingActor(uuid4(), TENANT_ID, uuid4()))
+
+
+@pytest.mark.asyncio
+async def test_processing_actor_initializes_shared_budget_without_minute_grant() -> None:
+    class _Application:
+        def __init__(self) -> None:
+            self.database = MagicMock()
+            self.database.execute = AsyncMock(return_value=None)
+            self.database.scalar = AsyncMock(return_value=None)
+            self.database.add = MagicMock()
+            self.database.flush = AsyncMock(return_value=None)
+
+        async def admit(self, _: ProcessingActor) -> datetime:
+            return datetime.fromtimestamp(1_100, UTC)
+
+    bundle = _bundle(_policy())
+    app = _Application()
+    authority = ConversationAuthority(
+        lambda: bundle, environment="test", operations_tenant_id=TENANT_ID
+    )
+
+    await authority.claim_allowance(
+        app,
+        ProcessingActor(PROCESSING_PERSON_ID, TENANT_ID, uuid4()),
+    )
+
+    added = [call.args[0] for call in app.database.add.call_args_list]
+    assert [item for item in added if isinstance(item, ConversationBudgetAccount)]
+    assert not any(isinstance(item, ConversationMinuteAccount) for item in added)
 
 
 def test_policy_expiry_and_stage_configuration_are_bound() -> None:
