@@ -105,6 +105,7 @@ def test_remote_command_pins_loopback_host_and_never_contains_cookie(uploader: M
     assert "Host: coach.authorityclosers.com" in command
     assert "Origin: https://coach.authorityclosers.com" in command
     assert "curl --disable --noproxy '*'" in command
+    assert "--write-out '\\nAC_HTTP_STATUS:%{http_code}'" in command
     assert "--header 'Content-Type: video/mp4'" in command
     assert "--header 'Idempotency-Key: synthetic-header-fix'" in command
     assert "--header Transfer-Encoding:" in command
@@ -186,7 +187,7 @@ class _FakeProcess:
         *,
         fail_after: int | None = None,
         returncode: int = 0,
-        response: bytes = b"\n204",
+        response: bytes = b"\nAC_HTTP_STATUS:204",
     ) -> None:
         self.stdin = _FakeStdin(fail_after=fail_after)
         self.stdout = io.BytesIO(response)
@@ -195,7 +196,7 @@ class _FakeProcess:
         self.killed = False
 
     def communicate(self, timeout: int | None = None) -> tuple[bytes, bytes]:
-        return b"\n204", b""
+        return b"\nAC_HTTP_STATUS:204", b""
 
     def kill(self) -> None:
         self.killed = True
@@ -277,7 +278,7 @@ def test_stream_broken_pipe_returns_completed_http_status(
 ) -> None:
     process = _FakeProcess(
         fail_after=len(b"C" * 43) + 1,
-        response=b'{"code":"upload_too_large"}\n413',
+        response=b'{"code":"upload_too_large"}\nAC_HTTP_STATUS:413',
     )
     monkeypatch.setattr(uploader.subprocess, "Popen", lambda *args, **kwargs: process)
 
@@ -370,7 +371,10 @@ def test_real_subprocess_accepts_detached_closed_stdin(
             [
                 sys.executable,
                 "-c",
-                "import sys; sys.stdin.buffer.read(); sys.stdout.buffer.write(b'\\n204')",
+                (
+                    "import sys; sys.stdin.buffer.read(); "
+                    "sys.stdout.buffer.write(b'\\nAC_HTTP_STATUS:204')"
+                ),
             ],
             **kwargs,
         )
@@ -388,6 +392,39 @@ def test_real_subprocess_accepts_detached_closed_stdin(
     assert body == b""
 
 
+def test_real_subprocess_rejection_stops_a_blocked_stream_and_returns_status(
+    uploader: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real_popen = uploader.subprocess.Popen
+
+    def local_process(_args, **kwargs):
+        return real_popen(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "import sys, time; "
+                    "sys.stdout.buffer.write(b'\\nAC_HTTP_STATUS:400'); "
+                    "sys.stdout.flush(); time.sleep(5)"
+                ),
+            ],
+            **kwargs,
+        )
+
+    monkeypatch.setattr(uploader.subprocess, "Popen", local_process)
+    code, body = uploader._run_remote(
+        ssh_target="ac",
+        command="safe-command",
+        cookie="R" * 43,
+        stream=io.BytesIO(b"x" * (2 * 1024 * 1024)),
+        stream_bytes=2 * 1024 * 1024,
+        wait_timeout_seconds=10,
+    )
+
+    assert code == 400
+    assert body == b""
+
+
 def test_real_subprocess_timeout_is_injected_and_bounded(
     uploader: ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -398,7 +435,7 @@ def test_real_subprocess_timeout_is_injected_and_bounded(
             [
                 sys.executable,
                 "-c",
-                "import time; time.sleep(0.2); print('\\n204', end='')",
+                "import time; time.sleep(0.2); print('\\nAC_HTTP_STATUS:204', end='')",
             ],
             **kwargs,
         )

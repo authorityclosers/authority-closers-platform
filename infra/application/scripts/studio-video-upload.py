@@ -52,6 +52,7 @@ BROKEN_PIPE_DRAIN_SECONDS = 2.0
 MAX_POLL_SECONDS = 60.0
 MAX_POLL_TIMEOUT_SECONDS = 3600.0
 SESSION_COOKIE_ENV = "AC_STUDIO_SESSION_COOKIE"
+HTTP_STATUS_MARKER = b"\nAC_HTTP_STATUS:"
 SESSION_PATTERN = re.compile(r"[A-Za-z0-9_-]{43,512}\Z")
 UUID_PATTERN = re.compile(r"[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}\Z")
 SAFE_IDEMPOTENCY_PATTERN = re.compile(r"[A-Za-z0-9_-]{1,128}\Z")
@@ -283,7 +284,7 @@ def _remote_command(
         prefix.append("IFS= read -r AC_BODY")
     curl = [
         "curl --disable --noproxy '*' --config /dev/fd/3 --http1.1 --silent --show-error "
-        "--write-out '\\n%{http_code}' --connect-timeout 15 "
+        "--write-out '\\nAC_HTTP_STATUS:%{http_code}' --connect-timeout 15 "
         f"--max-time {int(timeout_seconds)} --max-filesize {MAX_RESPONSE_BYTES} "
         f"--request {shlex.quote(method)}",
     ]
@@ -315,13 +316,17 @@ def _remote_command(
 
 
 def _status_from_output(output: bytes) -> tuple[int, bytes]:
-    marker = b"\n"
-    code_line = output.rsplit(marker, 1)[-1].strip()
+    marker_offset = output.rfind(HTTP_STATUS_MARKER)
+    if marker_offset < 0:
+        raise UploadOperatorError("The SSH API response had no HTTP status.")
+    code_line = output[marker_offset + len(HTTP_STATUS_MARKER) :].strip()
+    if not re.fullmatch(rb"[0-9]{3}", code_line):
+        raise UploadOperatorError("The SSH API response had no HTTP status.")
     try:
         code = int(code_line)
-    except ValueError as error:
+    except ValueError as error:  # pragma: no cover - guarded by the byte pattern above
         raise UploadOperatorError("The SSH API response had no HTTP status.") from error
-    body = output[: -(len(code_line) + 1)] if marker in output else b""
+    body = output[:marker_offset]
     return code, body
 
 
@@ -371,6 +376,7 @@ def _run_remote(
     assert process.stdout is not None
     stdin = process.stdin
     stdout_buffer = bytearray()
+    stdout_lock = threading.Lock()
     stdout_overflow = False
     stdout_error: BaseException | None = None
     deadline_expired = threading.Event()
@@ -392,9 +398,22 @@ def _run_remote(
                 chunk = process.stdout.read(min(64 * 1024, remaining))
                 if not chunk:
                     return
-                stdout_buffer.extend(chunk)
+                with stdout_lock:
+                    stdout_buffer.extend(chunk)
+                    response = None
+                    if HTTP_STATUS_MARKER in stdout_buffer:
+                        with suppress(UploadOperatorError):
+                            response = _status_from_output(bytes(stdout_buffer))
                 if len(stdout_buffer) > MAX_RESPONSE_BYTES:
                     stdout_overflow = True
+                    with suppress(Exception):
+                        process.kill()
+                    return
+                # A canonical non-2xx response can arrive before the caller
+                # has finished writing a large request body. Stop the SSH
+                # transport at that point so the operator reports the real
+                # API result instead of waiting for a generic pipe failure.
+                if response is not None and not 200 <= response[0] < 300:
                     with suppress(Exception):
                         process.kill()
                     return
@@ -445,7 +464,7 @@ def _run_remote(
             reader.join(timeout=BROKEN_PIPE_DRAIN_SECONDS)
         completed_response: tuple[int, bytes] | None = None
         if not stdout_error and not stdout_overflow:
-            with suppress(UploadOperatorError):
+            with stdout_lock, suppress(UploadOperatorError):
                 completed_response = _status_from_output(bytes(stdout_buffer))
         stop_process()
         if timed_out:
@@ -476,7 +495,8 @@ def _run_remote(
         raise UploadOperatorError("The SSH API response exceeded the bounded response limit.")
     if process.returncode not in {0, 22}:
         raise UploadOperatorError("The SSH/API command failed before a canonical response arrived.")
-    return _status_from_output(bytes(stdout_buffer))
+    with stdout_lock:
+        return _status_from_output(bytes(stdout_buffer))
 
 
 def _json_response(code: int, body: bytes, operation: str) -> object:
