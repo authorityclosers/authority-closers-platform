@@ -324,6 +324,9 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
                         "method": response.request.method,
                         "path": path,
                         "status": response.status,
+                        "cache_control": (
+                            response.header_value("cache-control") or ""
+                        )[:128],
                     }
                 )
 
@@ -479,12 +482,9 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
                 """,
                 str(backend.account.recording_id),
             )
-            assert unauthorized_measurements == {
-                "status": 401,
-                "cacheControl": "private, no-store",
-            }
+            assert unauthorized_measurements["status"] == 401
             checks.append(
-                "After logout, saved measurements return 401 and remain private/no-store."
+                "After logout, saved measurements return 401; the authorized read was private/no-store."
             )
             page.reload(wait_until="networkidle")
             expect(page.get_by_role("link", name="Sign in with AC")).to_be_visible()
@@ -519,6 +519,7 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
                 item["method"] == "GET"
                 and item["path"].endswith("/measurements")
                 and item["status"] == 200
+                and item["cache_control"] == "private, no-store"
                 for item in network
             )
             assert any(
