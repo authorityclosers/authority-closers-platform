@@ -115,6 +115,14 @@ They are not evidence of the completed workflow.
 
 ## Release boundary
 
+Integration proof: the UI was applied to consolidation baseline
+`ef6f9514f682048ab210a01400ac434dd00346ca` as `d04d067`, preserving the
+consolidation shell navigation and People footer. The Admin review selects its
+Sales Xray navigation item. Combined Admin review/shell tests passed (36);
+combined learner review/shell tests passed (21). Both combined production Next
+builds passed. Browser source hashes above describe the original UI packet;
+the combined shell retains additional release functionality.
+
 The final UI commit must be integrated into the consolidated release. Its exact
 Linux CI/image validation and staging/production deployment smoke are separate
 steps. This local evidence does not claim the UI is deployed.

@@ -497,7 +497,7 @@ export function ReviewWorkspace({
 
   return (
     <AdminShell
-      active="overview"
+      active="sales-xray"
       surface="operations"
       eyebrow="Sales Xray / assignment management"
       title={

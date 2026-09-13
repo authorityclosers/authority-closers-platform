@@ -216,6 +216,9 @@ describe("Admin review assignment workspace", () => {
     expect(container.textContent).toContain("Open in Academy");
     expect(container.textContent).not.toContain("Dipak");
     expect(container.textContent).not.toContain("PREVIEW DATA");
+    expect(
+      container.querySelector('a[href="/sales-xray"][aria-current="page"]'),
+    ).not.toBeNull();
     expect(container.textContent).toContain(
       "Saved changes confirmed by the service",
     );
