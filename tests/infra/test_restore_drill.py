@@ -564,6 +564,55 @@ def test_sales_xray_rehearsal_config_accepts_only_populated_0029_to_0030(
     assert config.source_migration_head == restore_drill.SALES_XRAY_REHEARSAL_SOURCE_HEAD
 
 
+def test_direct_sales_xray_rehearsal_config_accepts_0029_to_0031(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        restore_drill,
+        "_workspace_release_contract",
+        lambda _root: (
+            "source",
+            CURRENT_RELEASE_ID,
+            restore_drill.DIRECT_SALES_XRAY_REHEARSAL_TARGET_HEAD,
+        ),
+    )
+    backup, metadata, _captured_at = _write_backup_pair(
+        tmp_path,
+        environment="production",
+        release_id="d" * 40,
+        migration_head=restore_drill.DIRECT_SALES_XRAY_REHEARSAL_SOURCE_HEAD,
+    )
+    args = restore_drill.build_parser().parse_args(
+        [
+            "--environment",
+            "production",
+            "--backup",
+            str(backup),
+            "--backup-metadata",
+            str(metadata),
+            "--evidence-dir",
+            str(tmp_path / "evidence"),
+            "--application-image",
+            APPLICATION_IMAGE,
+            "--source-application-image",
+            "sha256:" + "d" * 64,
+            "--source-migration-head",
+            restore_drill.DIRECT_SALES_XRAY_REHEARSAL_SOURCE_HEAD,
+        ]
+    )
+
+    config = restore_drill._config_from_args(args)
+
+    assert config.backup_release_id == "d" * 40
+    assert config.expected_migration_head == (
+        restore_drill.DIRECT_SALES_XRAY_REHEARSAL_TARGET_HEAD
+    )
+    assert config.source_migration_head == (
+        restore_drill.DIRECT_SALES_XRAY_REHEARSAL_SOURCE_HEAD
+    )
+
+
 def test_migration_rehearsal_transition_requires_exact_preservation_and_derivations() -> None:
     source_counts = {
         table: 0
@@ -646,6 +695,36 @@ def test_inference_transition_preserves_populated_0030_and_requires_empty_new_ta
     ) == {table: 0 for table in restore_drill.INFERENCE_PARITY_NEW_TABLES}
 
     target_counts[restore_drill.INFERENCE_PARITY_NEW_TABLES[0]] = 1
+    with pytest.raises(restore_drill.DrillError, match="new-table row counts"):
+        restore_drill._assert_migration_rehearsal_transition(
+            source_counts,
+            target_counts,
+            {},
+            source_head=source_head,
+            target_head=target_head,
+        )
+
+
+def test_direct_sales_xray_transition_preserves_0029_and_requires_all_new_tables_empty() -> None:
+    source_head = restore_drill.DIRECT_SALES_XRAY_REHEARSAL_SOURCE_HEAD
+    target_head = restore_drill.DIRECT_SALES_XRAY_REHEARSAL_TARGET_HEAD
+    source_counts = {table: 3 for table in restore_drill.parity_tables_for_head(source_head)}
+    target_counts = dict(source_counts)
+    target_counts.update(
+        {table: 0 for table in restore_drill.DIRECT_SALES_XRAY_REHEARSAL_NEW_TABLES}
+    )
+
+    assert len(source_counts) == 58
+    assert len(target_counts) == 72
+    assert restore_drill._assert_migration_rehearsal_transition(
+        source_counts,
+        target_counts,
+        {},
+        source_head=source_head,
+        target_head=target_head,
+    ) == {table: 0 for table in restore_drill.DIRECT_SALES_XRAY_REHEARSAL_NEW_TABLES}
+
+    target_counts[restore_drill.DIRECT_SALES_XRAY_REHEARSAL_NEW_TABLES[-1]] = 1
     with pytest.raises(restore_drill.DrillError, match="new-table row counts"):
         restore_drill._assert_migration_rehearsal_transition(
             source_counts,

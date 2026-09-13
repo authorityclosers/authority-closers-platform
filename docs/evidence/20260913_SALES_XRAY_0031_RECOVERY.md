@@ -1,6 +1,6 @@
 # Sales Xray 0031 recovery compatibility
 
-This bounded recovery follow-up starts from integrated source `01ef58a` and
+This bounded recovery follow-up starts from integrated source `2358e3c` and
 extends the three independently packaged PostgreSQL parity controllers to the
 frozen `20260913_0031` migration. The `ac-postgres-parity-v11` contract retains
 the 71-table `20260913_0030` inventory and adds exactly one table:
@@ -10,9 +10,12 @@ conversation_inference_tasks
 ```
 
 The historical `20260910_0027` to `20260910_0029` and `20260910_0029` to
-`20260913_0030` rehearsal contracts remain explicit and unchanged. A third
-explicit pair now covers `20260913_0030` to `20260913_0031`; it preserves every
-populated source row and requires the new table to start empty. The controller
+`20260913_0030` rehearsal contracts remain explicit and unchanged. The
+`20260913_0030` to `20260913_0031` pair preserves every populated source row
+and requires the new table to start empty. Because live application databases
+remain at `20260910_0029`, a separate direct `20260910_0029` to
+`20260913_0031` pair is also explicit: it preserves all 58 source tables and
+requires all 14 Sales Xray/inference tables to start empty. The controller
 rejects unreviewed migration pairs and does not infer compatibility from
 revision ordering.
 
@@ -21,10 +24,13 @@ revision ordering.
 The controller parity suite covers the synchronized v11 table catalogue,
 71-to-72 table-count transition, exact metadata identity, and rejection of
 incomplete or unknown heads. The restore-drill suite covers the populated
-0030-to-0031 transition, preserved source counts, and the empty new-table
-contract. The combined controller suite passed **576 tests**, with two
-expected Docker/opt-in integration skips. Ruff check and format validation
-passed.
+0030-to-0031 and direct 0029-to-0031 transitions, preserved source counts,
+and empty new-table contracts. The PostgreSQL regression includes the direct
+0029-to-0031 chain; it applies both reviewed migrations in one disposable
+schema and compares all 58 baseline rows before and after. The focused local
+run passed **66 restore-drill tests** and **512 parity/integration tests**; six
+expected Docker or PostgreSQL opt-in cases were skipped. Ruff remains a CI
+gate for this follow-up.
 
 The opt-in PostgreSQL regression uses the dedicated local test runtime at
 `127.0.0.1:55432`, a fresh `ac_migration_rehearsal_` database and an isolated

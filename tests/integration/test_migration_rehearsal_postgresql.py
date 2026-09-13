@@ -374,3 +374,41 @@ def test_populated_0030_preserves_all_existing_rows_when_upgrading_to_0031(
     assert target_rows["conversation_inference_tasks"] == ()
     with migration_harness.engine.connect() as connection:
         assert connection.scalar(text("SELECT version_num FROM alembic_version")) == INFERENCE_HEAD
+
+
+def test_populated_0029_directly_preserves_all_rows_when_upgrading_to_0031(
+    migration_harness: _MigrationHarness,
+) -> None:
+    _seed_populated_0027(migration_harness.engine)
+    migration = _run_migration(migration_harness.environment, TARGET_HEAD)
+    assert migration.returncode == 0, "prior-head migration failed in the isolated schema"
+    with Session(migration_harness.engine) as database:
+        memberships = database.scalars(select(Membership)).all()
+        database.add_all(
+            AppUpdateReadReceipt(
+                tenant_id=membership.tenant_id,
+                person_id=membership.person_id,
+                release_id="migration-rehearsal-direct-0029",
+            )
+            for membership in memberships
+        )
+        database.commit()
+    source_rows = _public_rows(migration_harness.engine)
+    assert len(source_rows) == 58
+    assert len(source_rows["app_update_read_receipts"]) == 3
+    assert not set(source_rows) & SALES_XRAY_TABLES
+    assert not set(source_rows) & INFERENCE_TABLES
+    with migration_harness.engine.connect() as connection:
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == TARGET_HEAD
+
+    migration = _run_migration(migration_harness.environment, INFERENCE_HEAD)
+
+    assert migration.returncode == 0, "direct 0029-to-0031 migration failed in the isolated schema"
+    target_rows = _public_rows(migration_harness.engine)
+    assert len(target_rows) == 72
+    assert set(target_rows) == set(source_rows) | SALES_XRAY_TABLES | INFERENCE_TABLES
+    for table, rows in source_rows.items():
+        assert target_rows[table] == rows, f"migration changed existing rows in {table}"
+    assert all(target_rows[table] == () for table in SALES_XRAY_TABLES | INFERENCE_TABLES)
+    with migration_harness.engine.connect() as connection:
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == INFERENCE_HEAD
