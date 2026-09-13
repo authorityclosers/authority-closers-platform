@@ -4,6 +4,7 @@ import {
   useEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type CSSProperties,
   type ReactNode,
 } from "react";
@@ -49,6 +50,22 @@ const coachThemeBridge = {
 } as CSSProperties;
 
 const SIDEBAR_PREFERENCE_KEY = "ac:coach-sidebar-collapsed";
+const SIDEBAR_PREFERENCE_EVENT = "ac:coach-sidebar-preference";
+function subscribeSidebar(callback: () => void) {
+  window.addEventListener("storage", callback);
+  window.addEventListener(SIDEBAR_PREFERENCE_EVENT, callback);
+  return () => {
+    window.removeEventListener("storage", callback);
+    window.removeEventListener(SIDEBAR_PREFERENCE_EVENT, callback);
+  };
+}
+function readSidebar() {
+  try {
+    return window.localStorage.getItem(SIDEBAR_PREFERENCE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
 
 export function isCoachRouteActive(pathname: string, href: string) {
   return (
@@ -68,14 +85,15 @@ function Workspace({
   const contextState = useAdminSession();
   const state = sessionState ?? contextState;
   const pathname = usePathname();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
-    if (typeof window === "undefined") return false;
-    try {
-      return window.localStorage.getItem(SIDEBAR_PREFERENCE_KEY) === "true";
-    } catch {
-      return false;
-    }
-  });
+  const storedCollapsed = useSyncExternalStore(
+    subscribeSidebar,
+    readSidebar,
+    () => false,
+  );
+  const [temporaryCollapsed, setTemporaryCollapsed] = useState<boolean | null>(
+    null,
+  );
+  const sidebarCollapsed = temporaryCollapsed ?? storedCollapsed;
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
@@ -84,6 +102,8 @@ function Workspace({
   const mobileCloseRef = useRef<HTMLButtonElement>(null);
   const firstNavRef = useRef<HTMLAnchorElement>(null);
   const accountTriggerRef = useRef<HTMLButtonElement>(null);
+  const sidebarRef = useRef<HTMLElement>(null);
+  const accountMenuRef = useRef<HTMLDivElement>(null);
   const active = coachNavigation.find((item) =>
     isCoachRouteActive(pathname, item.href),
   );
@@ -103,16 +123,16 @@ function Workspace({
           .toUpperCase()
       : "";
 
-  useEffect(() => {
+  function toggleSidebar() {
+    const next = !sidebarCollapsed;
     try {
-      window.localStorage.setItem(
-        SIDEBAR_PREFERENCE_KEY,
-        String(sidebarCollapsed),
-      );
+      window.localStorage.setItem(SIDEBAR_PREFERENCE_KEY, String(next));
+      window.dispatchEvent(new Event(SIDEBAR_PREFERENCE_EVENT));
+      setTemporaryCollapsed(null);
     } catch {
-      // A blocked browser store should not make the workspace unusable.
+      setTemporaryCollapsed(next);
     }
-  }, [sidebarCollapsed]);
+  }
 
   useEffect(() => {
     if (!mobileNavOpen) return;
@@ -125,6 +145,23 @@ function Workspace({
         setMobileNavOpen(false);
         window.setTimeout(() => mobileToggleRef.current?.focus(), 0);
       }
+      if (event.key === "Tab") {
+        const controls = Array.from(
+          sidebarRef.current?.querySelectorAll<HTMLElement>(
+            "a[href], button:not(:disabled)",
+          ) ?? [],
+        ).filter((node) => node.getClientRects().length > 0);
+        const first = controls[0];
+        const last = controls.at(-1);
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last?.focus();
+        }
+        if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first?.focus();
+        }
+      }
     };
     document.addEventListener("keydown", onKeyDown);
     return () => {
@@ -136,11 +173,32 @@ function Workspace({
 
   useEffect(() => {
     if (!accountOpen) return;
+    accountMenuRef.current
+      ?.querySelector<HTMLElement>('[role="menuitem"]')
+      ?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
         setAccountOpen(false);
         window.setTimeout(() => accountTriggerRef.current?.focus(), 0);
+      }
+      if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+        const items = Array.from(
+          accountMenuRef.current?.querySelectorAll<HTMLElement>(
+            '[role="menuitem"]:not(:disabled)',
+          ) ?? [],
+        );
+        if (!items.length) return;
+        event.preventDefault();
+        const index = items.indexOf(document.activeElement as HTMLElement);
+        const next =
+          event.key === "Home"
+            ? 0
+            : event.key === "End"
+              ? items.length - 1
+              : (index + (event.key === "ArrowDown" ? 1 : -1) + items.length) %
+                items.length;
+        items[next]?.focus();
       }
     };
     document.addEventListener("keydown", onKeyDown);
@@ -150,6 +208,16 @@ function Workspace({
   function closeMobileNav() {
     setMobileNavOpen(false);
     window.setTimeout(() => mobileToggleRef.current?.focus(), 0);
+  }
+
+  function requestSignOut() {
+    const proceed = () => void signOut();
+    const request = new CustomEvent("ac:studio-before-leave", {
+      cancelable: true,
+      detail: { proceed },
+    });
+    // Ask the current editor before invalidating its session, not afterwards.
+    if (document.dispatchEvent(request)) proceed();
   }
 
   async function signOut() {
@@ -162,8 +230,7 @@ function Workspace({
         credentials: "same-origin",
       });
       if (!response.ok) throw new Error();
-      // Full navigation keeps the existing course beforeunload guard in place
-      // while discarding the privileged document and route cache.
+      // The editor guard has already settled. Discard private route state.
       // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- Confirmed sign-out must discard the privileged document and route cache.
       window.location.assign("/login");
     } catch {
@@ -226,6 +293,7 @@ function Workspace({
   return (
     <div className={workspaceClassName} style={coachThemeBridge}>
       <aside
+        ref={sidebarRef}
         className="coach-sidebar"
         id="coach-sidebar"
         aria-label="Studio workspace navigation"
@@ -263,7 +331,7 @@ function Workspace({
             title={
               sidebarCollapsed ? "Expand navigation" : "Collapse navigation"
             }
-            onClick={() => setSidebarCollapsed((current) => !current)}
+            onClick={toggleSidebar}
           >
             {sidebarCollapsed ? (
               <PanelLeftOpen size={19} aria-hidden="true" />
@@ -330,6 +398,7 @@ function Workspace({
               </button>
               {accountOpen && (
                 <div
+                  ref={accountMenuRef}
                   className="coach-account-menu"
                   id="coach-account-menu"
                   role="menu"
@@ -350,7 +419,7 @@ function Workspace({
                   <button
                     type="button"
                     role="menuitem"
-                    onClick={() => void signOut()}
+                    onClick={requestSignOut}
                     disabled={signingOut}
                   >
                     <LogOut size={16} aria-hidden="true" />
@@ -391,7 +460,7 @@ function Workspace({
         aria-label="Close Studio navigation"
         onClick={closeMobileNav}
       />
-      <div className="coach-stage">
+      <div className="coach-stage" inert={mobileNavOpen}>
         <header className="coach-topbar">
           <button
             ref={mobileToggleRef}
@@ -452,7 +521,11 @@ function Workspace({
           {state.status === "ready" ? children : sessionMessage()}
         </main>
       </div>
-      <nav className="coach-mobile-nav" aria-label="Coach mobile navigation">
+      <nav
+        className="coach-mobile-nav"
+        aria-label="Coach mobile navigation"
+        inert={mobileNavOpen}
+      >
         {coachNavigation.map(({ href, label, icon: Icon }) => (
           <Link
             key={href}

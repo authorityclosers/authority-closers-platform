@@ -1,0 +1,210 @@
+.shell:global(.clarity-shell) {
+  grid-template-columns: 260px minmax(0, 1fr);
+}
+.shell:global(.clarity-shell) :global(.ops-sidebar) {
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100dvh;
+  overflow-y: auto;
+  padding: 20px 14px 16px;
+  border-right: 1px solid var(--line);
+  border-bottom: 0;
+}
+.shell:global(.clarity-shell) :global(.sidebar-nav) {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.shell:global(.clarity-shell) :global(.sidebar-nav) a {
+  min-height: 46px;
+  transition:
+    background-color 140ms,
+    color 140ms;
+}
+.shell:global(.clarity-shell) :global(.sidebar-label),
+.shell:global(.clarity-shell) :global(.sidebar-subnav) {
+  display: block;
+}
+.shell:global(.clarity-shell) :global(.admin-content) {
+  min-width: 0;
+  padding: 0 clamp(16px, 3vw, 44px) 24px;
+}
+.shell:global(.clarity-shell) :global(.page-header) {
+  min-height: 0;
+  padding: 26px 0;
+  gap: 20px;
+}
+.shell:global(.clarity-shell) :global(.page-heading) h1 {
+  font-size: clamp(1.8rem, 2.5vw, 2.65rem);
+  letter-spacing: -0.035em;
+}
+.topbar {
+  min-height: 68px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.reviewShortcut {
+  margin-left: auto;
+  color: var(--signal);
+  font-weight: 700;
+  padding: 12px 0 12px 12px;
+  text-align: right;
+}
+.iconButton {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+}
+.iconButton:hover {
+  color: var(--signal);
+  background: var(--accent-soft);
+}
+.iconButton:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+.iconButton:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+.account {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: auto;
+  padding-top: 22px;
+  border-top: 1px solid var(--line);
+}
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--signal);
+  font-weight: 700;
+}
+.accountCopy {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 4px;
+}
+.accountCopy strong,
+.accountCopy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.accountCopy strong {
+  font-size: 0.8rem;
+}
+.accountCopy small {
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+.signOutError {
+  flex-basis: 100%;
+  color: var(--danger);
+  font-size: 0.8rem;
+}
+.mobileToggle,
+.mobileClose {
+  display: none;
+}
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 29;
+  border: 0;
+  background: rgb(8 17 33 / 50%);
+}
+@media (min-width: 961px) {
+  .shell[data-collapsed="true"] {
+    grid-template-columns: 80px minmax(0, 1fr);
+  }
+  .shell[data-collapsed="true"] :global(.brand-copy),
+  .shell[data-collapsed="true"] :global(.tenant-switcher),
+  .shell[data-collapsed="true"] :global(.sidebar-label),
+  .shell[data-collapsed="true"] :global(.sidebar-subnav),
+  .shell[data-collapsed="true"] :global(.sidebar-nav) a > span,
+  .shell[data-collapsed="true"] .accountCopy,
+  .shell[data-collapsed="true"] .avatar {
+    display: none;
+  }
+  .shell[data-collapsed="true"] :global(.sidebar-topline) {
+    flex-direction: column;
+    padding: 0;
+    gap: 8px;
+    margin-bottom: 28px;
+  }
+  .shell[data-collapsed="true"] :global(.sidebar-nav) a {
+    justify-content: center;
+    padding: 12px;
+  }
+  .shell[data-collapsed="true"] .account {
+    justify-content: center;
+  }
+}
+@media (max-width: 960px) {
+  .shell:global(.clarity-shell) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .shell:global(.clarity-shell) :global(.ops-sidebar) {
+    display: none;
+    position: fixed;
+    left: 0;
+    width: min(300px, 88vw);
+    z-index: 30;
+    box-shadow: var(--shadow);
+  }
+  .shell[data-mobile-open="true"] :global(.ops-sidebar) {
+    display: flex;
+  }
+  .mobileToggle,
+  .mobileClose {
+    display: inline-flex;
+  }
+  .desktopToggle {
+    display: none;
+  }
+  .topbar {
+    min-height: 60px;
+  }
+  .reviewShortcut {
+    font-size: 0.75rem;
+  }
+  .shell:global(.clarity-shell) :global(.sidebar-topline) {
+    gap: 8px;
+  }
+}
+@media (max-width: 480px) {
+  .topbar > span {
+    display: none;
+  }
+  .shell:global(.clarity-shell) :global(.page-header-actions) {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .shell:global(.clarity-shell) :global(.sidebar-nav) a {
+    transition: none;
+  }
+}

@@ -168,13 +168,18 @@ def paid_config() -> dict[str, Any]:
     return config
 
 
+@pytest.mark.parametrize(
+    "email",
+    ["admin@authorityclosers.com", "dipak@authorityclosers.com", "suyash@authorityclosers.com"],
+)
 def test_verified_control_account_can_save_replay_and_append_revisions(
     postgres_harness: Any,
+    email: str,
 ) -> None:
     async def exercise() -> None:
         engine = create_async_engine(postgres_harness.url)
         try:
-            fixture = await seed_actor(engine, role="owner")
+            fixture = await seed_actor(engine, role="owner", email=email)
             configuration = empty_config()
             async with AsyncSession(engine) as database, database.begin():
                 service = app(database, fixture)
@@ -245,6 +250,8 @@ def test_verified_control_account_can_save_replay_and_append_revisions(
     ("email", "role", "verified", "permissions"),
     [
         ("wrong@authorityclosers.com", "owner", True, frozenset({"admin_surface"})),
+        ("dipak@authorityclosers.com", "owner", False, frozenset({"admin_surface"})),
+        ("suyash@authorityclosers.com", "learner", True, frozenset({"admin_surface"})),
         ("admin@authorityclosers.com", "learner", True, frozenset({"admin_surface"})),
         ("admin@authorityclosers.com", "owner", False, frozenset({"admin_surface"})),
         ("admin@authorityclosers.com", "owner", True, frozenset()),

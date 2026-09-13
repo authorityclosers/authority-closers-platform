@@ -89,3 +89,18 @@ it("does not expose provider navigation before session verification", async () =
   await render();
   expect(host.querySelector('a[href="/sales-xray"]')).toBeNull();
 });
+
+it.each(["dipak@authorityclosers.com", "suyash@authorityclosers.com"])(
+  "shows Sales controls to the explicitly authorized verified owner %s",
+  async (email) => {
+    vi.mocked(api.loadAdminSession).mockResolvedValue({
+      ...account,
+      email,
+      membershipRole: "owner",
+    });
+    await render();
+    expect(
+      host.querySelector('nav[aria-label="Operations"] a[href="/sales-xray"]'),
+    ).not.toBeNull();
+  },
+);

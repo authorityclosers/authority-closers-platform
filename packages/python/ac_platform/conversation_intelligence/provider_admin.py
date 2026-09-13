@@ -27,6 +27,11 @@ from ac_platform.kernel.authz import ActorContext
 from ac_platform.tenancy.models import Membership
 
 CONTROL_ACCOUNT = "admin@authorityclosers.com"
+# Explicitly named by the AC owner for staging and production administration.
+# An email match never substitutes for verified identity or scoped admin access.
+CONTROL_ACCOUNTS = frozenset(
+    {CONTROL_ACCOUNT, "dipak@authorityclosers.com", "suyash@authorityclosers.com"}
+)
 
 
 async def lock_provider_configuration(
@@ -52,7 +57,7 @@ class ConversationProviderAdmin:
         membership = await self.database.get(Membership, (actor.tenant_id, actor.person_id))
         if (
             person is None
-            or (person.email or "").casefold() != CONTROL_ACCOUNT
+            or (person.email or "").casefold() not in CONTROL_ACCOUNTS
             or person.email_verified_at is None
             or membership is None
             or membership.role not in {"owner", "admin"}

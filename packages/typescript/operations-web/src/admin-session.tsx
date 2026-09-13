@@ -39,6 +39,21 @@ export const ADMIN_SESSION_REFRESH_TIMEOUT_MS = 10_000;
 
 const AdminSessionContext = createContext<AdminSessionState>(initialState);
 
+/** Navigation hint only. The API checks current identity, role and permissions. */
+export function canManageSalesXray(state: AdminSessionState): boolean {
+  return (
+    state.status === "ready" &&
+    [
+      "admin@authorityclosers.com",
+      "dipak@authorityclosers.com",
+      "suyash@authorityclosers.com",
+    ].includes(state.session.email.trim().toLowerCase()) &&
+    Boolean(state.session.emailVerifiedAt) &&
+    ["owner", "admin"].includes(state.session.membershipRole) &&
+    state.session.permissions.includes("admin_surface")
+  );
+}
+
 export type AdminSessionInvalidator = (session: AdminSession) => void;
 
 const noOpSessionInvalidator: AdminSessionInvalidator = () => undefined;

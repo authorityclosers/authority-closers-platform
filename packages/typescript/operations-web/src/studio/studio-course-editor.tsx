@@ -397,9 +397,20 @@ export function StudioCourseEditor({
       event.stopPropagation();
       setLeave(() => () => window.location.assign(target.href));
     };
+    const requestedLeave = (event: Event) => {
+      if (
+        !(event instanceof CustomEvent) ||
+        typeof event.detail?.proceed !== "function"
+      )
+        return;
+      event.preventDefault();
+      setLeave(() => event.detail.proceed);
+    };
+    document.addEventListener("ac:studio-before-leave", requestedLeave);
     window.addEventListener("beforeunload", unload);
     document.addEventListener("click", anchor, true);
     return () => {
+      document.removeEventListener("ac:studio-before-leave", requestedLeave);
       window.removeEventListener("beforeunload", unload);
       document.removeEventListener("click", anchor, true);
     };
@@ -718,7 +729,12 @@ export function StudioCourseEditor({
                 key={id}
                 type="button"
                 aria-pressed={tab === id}
-                disabled={publicationPending || revisionPending || videoPending}
+                disabled={
+                  publicationPending ||
+                  revisionPending ||
+                  videoPending ||
+                  uploadPending
+                }
                 onClick={() => setTab(id)}
               >
                 <Icon size={16} aria-hidden="true" />
@@ -728,14 +744,6 @@ export function StudioCourseEditor({
           </div>
         </div>
       </header>
-      <StudioVideoUpload
-        programId={program.id}
-        recoveryContext={videoRecoveryContext}
-        canWrite={canWrite && program.access === "selected_tenant"}
-        disabled={publicationPending || revisionPending || videoPending}
-        onPendingChange={setUploadPending}
-        onReady={() => setVideoLibraryRevision((value) => value + 1)}
-      />
       <StudioRevisionAction
         key={`${recoveryContext}:${program.id}:${versionId}`}
         program={program}
@@ -1072,19 +1080,6 @@ export function StudioCourseEditor({
               </div>
             ) : (
               <>
-                {selection.type === "activity" &&
-                selection.activityId &&
-                fields.kind === "VIDEO" ? (
-                  <StudioVideoPanel
-                    programId={program.id}
-                    activityId={selection.activityId}
-                    versionStatus={version.status}
-                    canWrite={canWrite && program.access === "selected_tenant"}
-                    recoveryContext={videoRecoveryContext}
-                    libraryRevision={videoLibraryRevision}
-                    onPendingChange={setVideoPending}
-                  />
-                ) : null}
                 <form className={styles.editor} onSubmit={save}>
                   <div className={styles.editorHeading}>
                     <div>
@@ -1230,7 +1225,7 @@ export function StudioCourseEditor({
                         </span>
                         <textarea
                           value={fields.prompt}
-                          rows={9}
+                          rows={5}
                           maxLength={2000}
                           readOnly={!writable}
                           onChange={(e) =>
@@ -1340,6 +1335,39 @@ export function StudioCourseEditor({
                     )}
                   </footer>
                 </form>
+                {selection.type === "activity" && fields.kind === "VIDEO" ? (
+                  <div className={styles.lessonMedia}>
+                    <StudioVideoUpload
+                      programId={program.id}
+                      recoveryContext={videoRecoveryContext}
+                      canWrite={
+                        canWrite && program.access === "selected_tenant"
+                      }
+                      disabled={
+                        publicationPending || revisionPending || videoPending
+                      }
+                      onPendingChange={setUploadPending}
+                      onReady={() =>
+                        setVideoLibraryRevision((value) => value + 1)
+                      }
+                    />
+                    {selection.type === "activity" &&
+                    selection.activityId &&
+                    fields.kind === "VIDEO" ? (
+                      <StudioVideoPanel
+                        programId={program.id}
+                        activityId={selection.activityId}
+                        versionStatus={version.status}
+                        canWrite={
+                          canWrite && program.access === "selected_tenant"
+                        }
+                        recoveryContext={videoRecoveryContext}
+                        libraryRevision={videoLibraryRevision}
+                        onPendingChange={setVideoPending}
+                      />
+                    ) : null}
+                  </div>
+                ) : null}
               </>
             )}
           </section>

@@ -457,3 +457,36 @@ it("does not claim success when sign-out fails", async () => {
   expect(host.textContent).toContain("couldn’t confirm sign-out");
   expect(button("Sign out").disabled).toBe(false);
 });
+
+it("consults the editor before invalidating a session with unfinished work", async () => {
+  await render(
+    <CoachShell>
+      <h1>Course editor</h1>
+    </CoachShell>,
+  );
+  await act(async () =>
+    (
+      host.querySelector(
+        'button[aria-controls="coach-account-menu"]',
+      ) as HTMLButtonElement
+    ).click(),
+  );
+  const fetcher = vi
+    .spyOn(globalThis, "fetch")
+    .mockResolvedValue(new Response("", { status: 503 }));
+  let proceed: (() => void) | undefined;
+  const guard = (event: Event) => {
+    event.preventDefault();
+    proceed = (event as CustomEvent).detail.proceed;
+  };
+  document.addEventListener("ac:studio-before-leave", guard);
+  try {
+    await act(async () => button("Sign out").click());
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(proceed).toBeTypeOf("function");
+    await act(async () => proceed!());
+    expect(fetcher).toHaveBeenCalledOnce();
+  } finally {
+    document.removeEventListener("ac:studio-before-leave", guard);
+  }
+});

@@ -606,6 +606,9 @@ html[data-reduce-motion="true"] .coach-workspace *::after {
   }
 }
 @media (max-width: 680px) {
+  .coach-workspace {
+    --workspace-bottom-inset: calc(4.4rem + env(safe-area-inset-bottom));
+  }
   .coach-sidebar {
     display: none;
   }

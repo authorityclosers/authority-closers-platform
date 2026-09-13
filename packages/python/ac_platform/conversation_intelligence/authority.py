@@ -50,7 +50,7 @@ from ac_platform.conversation_intelligence.models import (
     ConversationRecording,
 )
 from ac_platform.conversation_intelligence.provider_admin import (
-    CONTROL_ACCOUNT,
+    CONTROL_ACCOUNTS,
     lock_provider_configuration,
 )
 from ac_platform.conversation_intelligence.provider_registry import (
@@ -358,7 +358,7 @@ class ConversationAuthority:
         if (
             controller is None
             or controller.status != "active"
-            or (controller.email or "").casefold() != CONTROL_ACCOUNT
+            or (controller.email or "").casefold() not in CONTROL_ACCOUNTS
             or controller.email_verified_at is None
             or membership is None
             or membership.status != "active"

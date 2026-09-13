@@ -182,17 +182,16 @@ export async function loadAdminSession(
   let context: AdminContext;
   let studioAccess: unknown;
   try {
-    me = meSchema.parse(
-      await requestSessionJson<unknown>("/v1/me", fetcher, signal),
-    );
-    context = contextSchema.parse(
-      await requestSessionJson<unknown>("/v1/context", fetcher, signal),
-    );
-    studioAccess = await requestSessionJson<unknown>(
-      "/v1/me/studio-access",
-      fetcher,
-      signal,
-    );
+    // Read-only projections are independent. Reconcile their person, session,
+    // tenant and authority together before exposing any private workspace.
+    const [meValue, contextValue, studioValue] = await Promise.all([
+      requestSessionJson<unknown>("/v1/me", fetcher, signal),
+      requestSessionJson<unknown>("/v1/context", fetcher, signal),
+      requestSessionJson<unknown>("/v1/me/studio-access", fetcher, signal),
+    ]);
+    me = meSchema.parse(meValue);
+    context = contextSchema.parse(contextValue);
+    studioAccess = studioValue;
   } catch (error) {
     if (error instanceof AdminApiProblem && [401, 403].includes(error.status)) {
       throw new AdminSessionDenied(
