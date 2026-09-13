@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import importlib.util
 import io
+import json
+import os
 import shlex
 import sys
 from datetime import UTC, datetime, timedelta
@@ -96,17 +98,68 @@ def test_remote_command_pins_loopback_host_and_never_contains_cookie(uploader: M
             "X-Content-SHA256": "a" * 64,
         },
         upload=True,
+        idempotency_key="synthetic-header-fix",
     )
 
     assert "http://127.0.0.1:8080" in command
     assert "Host: coach.authorityclosers.com" in command
     assert "Origin: https://coach.authorityclosers.com" in command
     assert "curl --disable --noproxy '*'" in command
+    assert "--header 'Content-Type: video/mp4'" in command
+    assert "--header 'Idempotency-Key: synthetic-header-fix'" in command
+    assert "--header=Content-Type:" not in command
+    assert "--header=Idempotency-Key:" not in command
     assert "AC_SESSION" in command
     assert "secret" not in command
 
+    tokens = shlex.split(command)
+    headers = [
+        tokens[index + 1] for index, argument in enumerate(tokens[:-1]) if argument == "--header"
+    ]
+    assert "Content-Type: video/mp4" in headers
+    assert "Idempotency-Key: synthetic-header-fix" in headers
+
     with pytest.raises(uploader.UploadOperatorError):
         uploader.edge_profile("https://api.authorityclosers.com")
+
+
+@pytest.mark.skipif(
+    os.name != "nt" or os.environ.get("AC_RUN_OPERATOR_NETWORK_PROOF") != "1",
+    reason="opt-in Windows staging SSH proof",
+)
+def test_real_windows_staging_post_rejects_synthetic_cookie_without_admission(
+    uploader: ModuleType,
+) -> None:
+    program_id = "189cec59-e302-4fe3-8215-a34c68e394a9"
+    profile = uploader.edge_profile("https://coach-staging.authorityclosers.com")
+    command = uploader._remote_command(
+        method="POST",
+        profile=profile,
+        path=f"/v1/admin/studio/programs/{program_id}/video-uploads",
+        headers={"Content-Type": "application/json"},
+        idempotency_key="synthetic-header-fix-proof",
+        read_body_line=True,
+    )
+    body = json.dumps(
+        {
+            "filename": "synthetic-header-fix.mp4",
+            "content_type": "video/mp4",
+            "content_length": 1,
+            "checksum_sha256": "0" * 64,
+        },
+        separators=(",", ":"),
+    ).encode("ascii")
+
+    code, _response = uploader._run_remote(
+        ssh_target="ac",
+        command=command,
+        cookie="synthetic-no-secret-" + "S" * 43,
+        body=body,
+        ssh_binary=r"C:\Windows\System32\OpenSSH\ssh.exe",
+        wait_timeout_seconds=60,
+    )
+
+    assert code in {401, 403}
 
 
 class _FakeStdin:

@@ -285,14 +285,17 @@ def _remote_command(
         "--write-out '\\n%{http_code}' --connect-timeout 15 "
         f"--max-time {int(timeout_seconds)} --max-filesize {MAX_RESPONSE_BYTES} "
         f"--request {shlex.quote(method)}",
-        f"--header {shlex.quote(f'Host: {profile.host}')} "
-        f"--header {shlex.quote(f'Origin: {profile.origin}')} "
-        "--header 'Expect:'",
     ]
+    for name, value in (
+        ("Host", profile.host),
+        ("Origin", profile.origin),
+        ("Expect", ""),
+    ):
+        curl.extend(("--header", shlex.quote(f"{name}: {value}")))
     for name, value in headers.items():
-        curl.append(shlex.quote(f"--header={name}: {value}"))
+        curl.extend(("--header", shlex.quote(f"{name}: {value}")))
     if idempotency_key is not None:
-        curl.append(shlex.quote(f"--header=Idempotency-Key: {idempotency_key}"))
+        curl.extend(("--header", shlex.quote(f"Idempotency-Key: {idempotency_key}")))
     if read_body_line:
         curl.append('--data-binary "$AC_BODY"')
     elif method == "POST":
