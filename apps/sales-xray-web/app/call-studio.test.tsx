@@ -378,10 +378,8 @@ describe("CallStudio", () => {
     expect(container.textContent).not.toContain("Workbench");
     expect(container.textContent).not.toContain("Advanced:");
     expect(
-      container.querySelector(
-        '.studio-embedded-tools select[aria-label="Display language"]',
-      ),
-    ).not.toBeNull();
+      container.querySelector('select[aria-label="Display language"]'),
+    ).toBeNull();
   });
 
   it("keeps developer testing labels out of the standalone learner surface", async () => {
@@ -542,7 +540,7 @@ describe("CallStudio", () => {
     expect(audio?.currentTime).toBe(1.5);
   });
 
-  it("shows source-derived report measurements and keeps display language scoped to UI labels", async () => {
+  it("shows source-derived report measurements in an English shell", async () => {
     vi.useFakeTimers();
     await render();
     const file = await selectAudio("language-mode.wav");
@@ -581,6 +579,22 @@ describe("CallStudio", () => {
     expect(container.textContent).toContain("Moments from your call");
     expect(container.querySelectorAll(".studio-moment")).toHaveLength(2);
 
+    const evidencePanels = [
+      ...container.querySelectorAll<HTMLDetailsElement>(
+        ".studio-finding-evidence",
+      ),
+    ];
+    expect(evidencePanels.length).toBeGreaterThan(0);
+    expect(evidencePanels.every((panel) => !panel.open)).toBe(true);
+    evidencePanels[0].open = true;
+    await act(async () => window.dispatchEvent(new Event("beforeprint")));
+    await act(async () => window.dispatchEvent(new Event("beforeprint")));
+    expect(evidencePanels.every((panel) => panel.open)).toBe(true);
+    await act(async () => window.dispatchEvent(new Event("afterprint")));
+    expect(evidencePanels.filter((panel) => panel.open)).toEqual([
+      evidencePanels[0],
+    ]);
+
     const print = vi.fn();
     Object.defineProperty(window, "print", {
       configurable: true,
@@ -604,29 +618,90 @@ describe("CallStudio", () => {
     expect(audio?.currentTime).toBe(1.5);
     expect(firstMoment?.getAttribute("aria-pressed")).toBe("true");
 
-    const language = container.querySelector<HTMLSelectElement>(
-      'select[aria-label="Display language"]',
+    expect(
+      container.querySelector('select[aria-label="Display language"]'),
+    ).toBeNull();
+    expect(container.textContent).toContain("Upload your call");
+    expect(container.textContent).toContain(report.summary);
+  });
+
+  it("preserves mixed-script source text and report findings without translating the shell", async () => {
+    vi.useFakeTimers();
+    const originalHandler = handleApi;
+    const words =
+      "कल follow-up करूया. बजट ₹15,000 आहे — <script>alert(1)</script>";
+    const mixedSummary =
+      "ग्राहकाने next step मान्य केला; exact time अभी तय नहीं है।";
+    const mixedTranscript = {
+      ...transcript,
+      segments: transcript.segments.map((segment) => ({
+        ...segment,
+        text: words,
+      })),
+    };
+    handleApi = async (path, init) => {
+      const result = await originalHandler(path, init);
+      if (path.endsWith("/transcript")) return response(mixedTranscript);
+      if (
+        path.endsWith("/runs/run-1/report") &&
+        (result.body as { report?: unknown }).report
+      ) {
+        const finding = {
+          title: "अगला follow-up",
+          explanation: mixedSummary,
+          evidence: [
+            { segment_id: "s1", start_ms: 1500, end_ms: 2200, quote: words },
+          ],
+        };
+        return response({
+          ...(result.body as object),
+          report: {
+            ...report,
+            summary: mixedSummary,
+            strengths: [finding],
+            improvements: [finding],
+            missed_opportunities: [],
+            objection_analysis: [],
+            closing_analysis: [],
+          },
+        });
+      }
+      return result;
+    };
+    await render();
+    const file = await selectAudio("mixed-script.wav");
+    await prepareAndAuthorize(file);
+    await act(async () => getButton("Upload and measure privately").click());
+    await act(async () => vi.advanceTimersByTimeAsync(2500));
+    await acceptProcessingPlan();
+    await act(async () => vi.advanceTimersByTimeAsync(2500));
+    await flush();
+    expect(container.querySelector(".studio-report-summary")?.textContent).toBe(
+      mixedSummary,
     );
-    expect(language).not.toBeNull();
-    if (language) {
-      expect([...language.options].map((option) => option.value)).toEqual([
-        "en",
-        "hi",
-        "mr",
-        "en-hi-mixed",
-      ]);
-      language.value = "hi";
-      await act(async () =>
-        language.dispatchEvent(new Event("change", { bubbles: true })),
-      );
-    }
-    expect(container.textContent).toContain("आपकी कॉल के क्षण");
-    expect(container.textContent).toContain(
-      "कॉल के शब्द और विश्लेषण जिस भाषा में बने थे, उसी में रहते हैं",
+    expect(container.querySelector(".studio-moment")?.textContent).toContain(
+      words,
     );
-    expect(container.textContent).toContain(
-      "The prospect asked for a clear next step.",
+    expect(container.querySelector("script")).toBeNull();
+    expect(container.querySelector(".studio-steps")?.textContent).toContain(
+      "Upload your call",
     );
+    expect(
+      [...container.querySelectorAll('[role="tab"]')].map(
+        (tab) => tab.textContent,
+      ),
+    ).toEqual([
+      "Overview",
+      "Sales factors",
+      "Call moments",
+      "Transcript",
+      "Sound",
+      "Next steps",
+    ]);
+    expect(
+      container.querySelector('select[aria-label="Display language"]'),
+    ).toBeNull();
+    expect(container.textContent).not.toContain("UI labels only");
   });
 
   it("polls report status before transcript and continues when the report arrives later", async () => {
