@@ -464,6 +464,26 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
             checks.append(
                 "The saved measurement chart switches from sound level to pitch estimate."
             )
+
+            factors = page.get_by_role("region", name="Sales factors")
+            expect(
+                factors.get_by_role("heading", name="Explore the sales factors")
+            ).to_be_visible()
+            factor_details = factors.locator("details")
+            expect(factor_details).to_have_count(8)
+            factor_details.first.locator("summary").click()
+            expect(factor_details.first.locator("p")).to_be_visible()
+            checks.append(
+                "The report exposes all eight saved sales factors with bounded observations."
+            )
+
+            transcript = page.locator("details").filter(has_text="Read full transcript")
+            expect(transcript.locator("summary")).to_be_visible()
+            transcript.locator("summary").click()
+            expect(transcript.get_by_role("search")).to_be_visible()
+            expect(transcript.locator("button[data-segment-id]")).to_have_count(1)
+            expect(transcript.get_by_text("Hello buyer", exact=True)).to_be_visible()
+            checks.append("The report exposes the one source-bound synthetic transcript segment.")
             page.screenshot(path=str(evidence / "authenticated-call-studio.png"), full_page=True)
             page.screenshot(
                 path=str(evidence / "authenticated-report-measurements.png"), full_page=True
