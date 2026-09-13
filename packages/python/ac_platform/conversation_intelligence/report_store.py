@@ -34,6 +34,7 @@ from ac_platform.conversation_intelligence.provider_admin import ConversationPro
 from ac_platform.conversation_intelligence.providers import ProviderResult, scribe_transcript
 from ac_platform.conversation_intelligence.reports import (
     ReportDraft,
+    extract_style_independent_facts,
     load_report_profile,
     parse_report_draft,
 )
@@ -93,6 +94,21 @@ class PrivateDraftIntent(BaseModel):
         return value
 
 
+class DurableDraftProof(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    schema_id: Literal["ac.sales-xray.durable-draft-proof/1"]
+    transcript_checkpoint_id: UUID
+    transcription_task_id: UUID
+    transcription_response_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    coaching_checkpoint_id: UUID
+    presentation_checkpoint_id: UUID
+    coaching_response_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    accepted_quote_id: UUID
+    profile_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    human_approved: Literal[False]
+    numeric_publication: Literal[False]
+
+
 class ConversationReports:
     def __init__(self, application: ConversationApplication) -> None:
         self.application = application
@@ -118,28 +134,111 @@ class ConversationReports:
         ):
             raise ConversationConflict("The stored report evidence is unavailable.")
         try:
-            receipt = PrivateProofReference.model_validate(draft.evidence_receipt)
-            native = draft.transcript["native_json"]
             transcript = draft.transcript["normalized"]
+            if draft.evidence_receipt.get("schema_id") == "ac.sales-xray.durable-draft-proof/1":
+                durable = DurableDraftProof.model_validate(draft.evidence_receipt)
+                native_ref = draft.transcript["native_response_ref"]
+                profile = draft.transcript["profile"]
+                native_sha256 = durable.transcription_response_sha256
+                if (
+                    not isinstance(profile, dict)
+                    or native_ref
+                    != {
+                        "task_id": str(durable.transcription_task_id),
+                        "response_sha256": native_sha256,
+                    }
+                    or durable.profile_sha256 != draft.profile_sha256
+                ):
+                    raise ValueError("unbound durable draft")
+            else:
+                profile = load_report_profile()
+                receipt = PrivateProofReference.model_validate(draft.evidence_receipt)
+                native = draft.transcript["native_json"]
+                native_sha256 = receipt.transcription_response_sha256
+                if (
+                    not isinstance(native, str)
+                    or hashlib.sha256(native.encode()).hexdigest() != native_sha256
+                ):
+                    raise ValueError("unbound native response")
             if (
-                not isinstance(native, str)
-                or not isinstance(transcript, dict)
-                or hashlib.sha256(native.encode("utf-8")).hexdigest()
-                != receipt.transcription_response_sha256
-                or transcript.get("revision") != receipt.transcription_response_sha256
+                not isinstance(transcript, dict)
+                or transcript.get("revision") != native_sha256
                 or transcript.get("source_sha256") != recording.source_sha256
-                or draft.profile_sha256 != content_hash(load_report_profile())
+                or draft.profile_sha256 != content_hash(profile)
             ):
                 raise ValueError("unbound draft")
             report = ReportDraft.model_validate(draft.payload)
             checked = parse_report_draft(
-                draft.payload, transcript, source_label=report.source_label
+                draft.payload, transcript, source_label=report.source_label, profile=profile
             )
             if content_hash(checked.model_dump(mode="json")) != draft.report_sha256:
                 raise ValueError("unbound report")
         except (ValueError, TypeError, KeyError):
             raise ConversationConflict("The stored report needs review.") from None
         return report, transcript
+
+    async def _canonical_draft(
+        self, draft: ConversationReportDraft, recording: ConversationRecording
+    ) -> None:
+        """A durable proof must resolve to actual immutable task/checkpoint receipts."""
+        if (
+            draft.evidence_receipt is None
+            or draft.evidence_receipt.get("schema_id") != "ac.sales-xray.durable-draft-proof/1"
+        ):
+            return
+        from ac_platform.conversation_intelligence.inference import ConversationInference
+        from ac_platform.conversation_intelligence.reporting_pipeline import ReportingPipeline
+
+        proof = DurableDraftProof.model_validate(draft.evidence_receipt)
+        pipeline = ReportingPipeline(ConversationInference(self.application))
+        c2_row, _ = await pipeline.checkpoint(recording, proof.transcript_checkpoint_id, "C2")
+        c5_row, c5 = await pipeline.checkpoint(recording, proof.coaching_checkpoint_id, "C5")
+        c6_row, c6 = await pipeline.checkpoint(recording, proof.presentation_checkpoint_id, "C6")
+        transcription, c2_receipt = await pipeline.provider_task(recording, c2_row)
+        coaching, c5_receipt = await pipeline.provider_task(recording, c5_row)
+        aggregate_row, aggregate = await pipeline.parent(recording, c5, "C4")
+        _, alignment = await pipeline.parent(recording, aggregate, "C3")
+        selected_c2, _ = await pipeline.parent(recording, aggregate, "C2")
+        aligned_c2, _ = await pipeline.parent(recording, alignment, "C2")
+        config = json.loads(c5.config_json)
+        request = (coaching.intent or {}).get("request", {})
+        if (
+            draft.transcript is None
+            or c2_row.payload != draft.transcript["normalized"]
+            or c5_row.payload != draft.payload
+            or transcription.run_id != proof.transcription_task_id
+            or coaching.run_id != draft.run_id
+            or coaching.quote_id != proof.accepted_quote_id
+            or c2_receipt.get("response_sha256") != proof.transcription_response_sha256
+            or c5_receipt.get("response_sha256") != proof.coaching_response_sha256
+            or selected_c2.id != c2_row.id
+            or aligned_c2.id != c2_row.id
+            or config.get("profile_sha256") != draft.profile_sha256
+            or config.get("input_sha256") != coaching.input_sha256
+            or content_hash(request.get("profile")) != draft.profile_sha256
+            or aggregate_row.payload is None
+            or aggregate_row.payload.get("schema") != "ac.sales-xray.complete-facts/1"
+            or [chunk.get("id") for chunk in aggregate_row.payload.get("chunks", [])]
+            != request.get("fact_checkpoint_ids")
+            or c6.parents != (("C5", c5.manifest_sha256),)
+            or c6_row.payload
+            != {
+                "schema": "ac.sales-xray.draft-presentation/1",
+                "report": draft.payload,
+                "transcript_checkpoint_id": str(c2_row.id),
+                "profile_sha256": draft.profile_sha256,
+                "human_approved": False,
+                "numeric_publication": False,
+            }
+        ):
+            raise ConversationConflict("The stored report's canonical evidence differs.")
+        for chunk in aggregate_row.payload["chunks"]:
+            chunk_row, chunk_checkpoint = await pipeline.checkpoint(
+                recording, UUID(chunk["id"]), "C4"
+            )
+            if chunk_checkpoint.manifest_sha256 != chunk.get("manifest_sha256"):
+                raise ConversationConflict("The stored fact checkpoint differs.")
+            await pipeline.provider_task(recording, chunk_row)
 
     async def history(self, actor: ActorContext) -> dict[str, Any]:
         now = await self.application.admit(actor)
@@ -188,19 +287,23 @@ class ConversationReports:
                     "recipe_revision": latest.recipe_revision,
                     "provider_calls": current["provider_calls"],
                 }
-                has_report = (
-                    await self.database.scalar(
-                        select(ConversationReportDraft.id)
-                        .where(
-                            ConversationReportDraft.run_id == latest.id,
-                            ConversationReportDraft.tenant_id == actor.tenant_id,
-                            ConversationReportDraft.person_id == actor.person_id,
-                            ConversationReportDraft.erased_at.is_(None),
-                        )
-                        .limit(1)
+                draft = await self.database.scalar(
+                    select(ConversationReportDraft)
+                    .where(
+                        ConversationReportDraft.run_id == latest.id,
+                        ConversationReportDraft.tenant_id == actor.tenant_id,
+                        ConversationReportDraft.person_id == actor.person_id,
+                        ConversationReportDraft.erased_at.is_(None),
                     )
-                    is not None
+                    .limit(1)
                 )
+                if draft is not None:
+                    try:
+                        self._validated(draft, recording)
+                        await self._canonical_draft(draft, recording)
+                        has_report = True
+                    except (ConversationConflict, ValueError, TypeError, KeyError):
+                        has_report = False
                 run_view["has_report"] = has_report
             result.append(
                 {
@@ -226,8 +329,40 @@ class ConversationReports:
             .limit(1)
         )
         if draft is None:
-            raise ConversationNotFound("A saved transcript is not available yet.")
-        _, transcript = self._validated(draft, recording)
+            from ac_platform.conversation_intelligence.inference import ConversationInference
+            from ac_platform.conversation_intelligence.reporting_pipeline import ReportingPipeline
+
+            latest = await self.database.scalar(
+                select(ConversationCheckpoint)
+                .where(
+                    ConversationCheckpoint.recording_id == recording.id,
+                    ConversationCheckpoint.tenant_id == recording.tenant_id,
+                    ConversationCheckpoint.person_id == recording.person_id,
+                    ConversationCheckpoint.stage == "C2",
+                    ConversationCheckpoint.erased_at.is_(None),
+                )
+                .order_by(ConversationCheckpoint.created_at.desc())
+                .limit(1)
+            )
+            if latest is None:
+                raise ConversationNotFound("A saved transcript is not available yet.")
+            pipeline = ReportingPipeline(ConversationInference(self.application))
+            latest, _ = await pipeline.checkpoint(recording, latest.id, "C2")
+            _, receipt = await pipeline.provider_task(recording, latest)
+            transcript = latest.payload
+            if transcript is None or transcript.get("revision") != receipt.get("response_sha256"):
+                raise ConversationConflict("The saved transcript's receipt differs.")
+            source = await pipeline.service.plan_transcription(recording)
+            if (
+                latest.cache_key != source.checkpoint.cache_key
+                or transcript.get("source_sha256") != recording.source_sha256
+                or transcript.get("duration_ms") != source.duration_ms
+            ):
+                raise ConversationConflict("The transcript's source measurement differs.")
+            extract_style_independent_facts(transcript)
+        else:
+            _, transcript = self._validated(draft, recording)
+            await self._canonical_draft(draft, recording)
         return {
             name: transcript[name]
             for name in ("source_sha256", "revision", "timebase_id", "duration_ms", "segments")
@@ -240,6 +375,7 @@ class ConversationReports:
         if draft.run_id != UUID(run["id"]):
             raise ConversationConflict("The report belongs to another analysis.")
         report, _ = self._validated(draft, recording)
+        await self._canonical_draft(draft, recording)
         return {
             **run,
             "report": report.model_dump(mode="json"),

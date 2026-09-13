@@ -923,22 +923,29 @@ def merge_fact_packets(
             raise ReportError("fact_packet_invalid")
         if packet.source_sha256 != source_hash or packet.transcript_revision != revision:
             raise ReportError("fact_packet_source_mismatch")
+        if packet.timebase_id != validated_transcript["timebase_id"]:
+            raise ReportError("fact_packet_timebase_mismatch")
         if packet.chunk_index in seen_chunks or (total is not None and packet.chunk_count != total):
             raise ReportError("fact_packet_chunk_mismatch")
         total = packet.chunk_count
+        if len(packet.covered_segment_ids) != len(set(packet.covered_segment_ids)):
+            raise ReportError("fact_packet_coverage_duplicate")
         if seen_covered.intersection(packet.covered_segment_ids):
             raise ReportError("fact_packet_coverage_overlap")
         if not set(packet.covered_segment_ids).issubset(expected_ids):
             raise ReportError("fact_packet_segment_invalid")
         seen_chunks.add(packet.chunk_index)
         seen_covered.update(packet.covered_segment_ids)
-        observations.extend(
-            {
-                "statement": fact.statement,
-                "evidence": [span.model_dump(mode="json") for span in fact.evidence],
-            }
-            for fact in packet.observations
-        )
+        for fact in packet.observations:
+            # Rebind evidence while merging. Packets can arrive from durable
+            # storage or be reconstructed from untrusted serialized data, so
+            # validation performed when each packet was first parsed is not a
+            # sufficient guarantee for the aggregate.
+            evidence = [
+                _normalise_evidence(span.model_dump(mode="json"), validated_transcript)
+                for span in fact.evidence
+            ]
+            observations.append({"statement": fact.statement, "evidence": evidence})
         uncertainties.extend(packet.uncertainties)
         overviews.append(packet.overview)
     if (

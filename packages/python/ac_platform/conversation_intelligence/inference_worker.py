@@ -1,4 +1,4 @@
-"""Durable C2 worker with a separate broker, recovery fencing and no automatic retry.
+"""Durable provider-stage worker with a separate broker and recovery fencing.
 
 No provider credentials are read here. The injected broker owns its process and
 must terminate and join it before returning from a cancelled/expired execution.
@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
@@ -33,11 +33,14 @@ from ac_platform.conversation_intelligence.entitlements import (
 )
 from ac_platform.conversation_intelligence.inference import (
     INFERENCE_JOB,
-    TRANSCRIPT_RECIPE,
     ConversationInference,
-    TranscriptionPlan,
+    ServicePlan,
 )
-from ac_platform.conversation_intelligence.inference_tasks import validate_scribe_result
+from ac_platform.conversation_intelligence.inference_tasks import (
+    validate_coaching_result,
+    validate_fact_result,
+    validate_scribe_result,
+)
 from ac_platform.conversation_intelligence.models import (
     ConversationBudgetAccount,
     ConversationCheckpoint,
@@ -48,6 +51,7 @@ from ac_platform.conversation_intelligence.models import (
     ConversationRun,
 )
 from ac_platform.conversation_intelligence.providers import MAX_AUDIO_BYTES, ProviderResult
+from ac_platform.conversation_intelligence.reporting_pipeline import StagePlan
 from ac_platform.conversation_intelligence.storage import (
     ObjectKey,
     ObjectKind,
@@ -61,6 +65,11 @@ from ac_platform.outbox.repository import JobRepository, RecoveryStateRepository
 
 _LEASE = timedelta(minutes=15)
 _EFFECT_SECONDS = 240
+_VALIDATION_LABELS = {
+    "C2": "transcript_schema_and_source_binding",
+    "C4": "facts_schema_and_source_binding",
+    "C5": "coaching_schema_and_source_binding",
+}
 
 
 class InferenceBroker(Protocol):
@@ -73,7 +82,7 @@ class Scope:
     recording: ConversationRecording
     run: ConversationRun
     quoted: ConversationQuote
-    plan: TranscriptionPlan
+    plan: ServicePlan
 
 
 def save_accounts(
@@ -183,21 +192,22 @@ class ConversationInferenceWorker:
         if (
             recording.state != "ready"
             or recording.generation != task.generation
-            or task.stage != "C2"
+            or task.stage not in {"C2", "C4", "C5"}
             or run is None
             or run.state not in {"queued", "running"}
-            or run.recipe_revision != TRANSCRIPT_RECIPE
             or run.generation != task.generation
         ):
             raise ConversationConflict("The recording or provider run changed.")
         service = ConversationInference(application)
-        plan = await service.plan_transcription(recording)
+        plan = await service.plan_task(recording, task)
         if (
             task.intent is None
             or content_hash(task.intent) != task.intent_sha256
             or task.intent_sha256 != content_hash(plan.intent())
             or task.cache_key != plan.checkpoint.cache_key
             or task.input_sha256 != plan.prepared.input_sha256
+            or run.recipe_revision != plan.recipe_revision
+            or task.stage != plan.checkpoint.stage
         ):
             raise ConversationConflict("The immutable provider input changed.")
         quoted, _, _ = await service._quote(
@@ -209,6 +219,52 @@ class ConversationInferenceWorker:
             require_acceptance=True,
         )
         return Scope(task, recording, run, quoted, plan)
+
+    def _payload(self, scope: Scope) -> bytes:
+        """Load C2 media or use the already prepared immutable text request.
+
+        C4 and C5 must never reread source audio or retranscribe it.  Their
+        prepared request bytes are reconstructed from the source-bound plan and
+        persisted task intent instead.
+        """
+
+        if scope.task.stage == "C2":
+            return self._audio(scope.recording)
+        if scope.task.stage in {"C4", "C5"}:
+            payload = scope.plan.prepared.payload
+            if type(payload) is not bytes or not payload:
+                raise StorageError("provider_text_payload_invalid")
+            return payload
+        raise ConversationConflict("The provider task stage is invalid.")
+
+    @staticmethod
+    def _validate(
+        scope: Scope,
+        result: ProviderResult,
+    ) -> Any:
+        """Validate a provider response against this exact stage plan."""
+
+        if scope.task.stage == "C2":
+            return validate_scribe_result(
+                result,
+                scope.plan.prepared,
+                duration_ms=scope.plan.duration_ms,
+            )
+        stage_plan = cast(StagePlan, scope.plan)
+        if scope.task.stage == "C4":
+            return validate_fact_result(
+                result,
+                stage_plan.prepared,
+                stage_plan.transcript,
+            )
+        if scope.task.stage == "C5":
+            return validate_coaching_result(
+                result,
+                stage_plan.prepared,
+                stage_plan.transcript,
+                profile=stage_plan.profile,
+            )
+        raise ConversationConflict("The provider task stage is invalid.")
 
     def _audio(self, recording: ConversationRecording) -> bytes:
         if recording.source_bytes > MAX_AUDIO_BYTES:
@@ -248,7 +304,7 @@ class ConversationInferenceWorker:
                 if job.dispatch_started_at is not None:
                     raise ConversationConflict("A previous provider dispatch needs reconciliation.")
                 scope = await self._scope(db, job)
-                audio = await fenced.run(self._audio, scope.recording)
+                payload = await fenced.run(self._payload, scope)
                 service = ConversationInference(ConversationApplication(db))
                 minutes, budget = await service.accounts(scope.recording, scope.quoted)
                 before = MinuteAccount.from_dict(minutes.snapshot)
@@ -287,11 +343,9 @@ class ConversationInferenceWorker:
                 # Restore, revocation and deletion wait on these canonical locks
                 # across the one bounded child-process effect.
                 async with asyncio.timeout(_EFFECT_SECONDS):
-                    result = await self.broker.execute(reservation, audio)
+                    result = await self.broker.execute(reservation, payload)
                 await fenced.run(self._save_raw, scope, result)
-                output = validate_scribe_result(
-                    result, scope.plan.prepared, duration_ms=scope.plan.duration_ms
-                )
+                output = self._validate(scope, result)
                 normalized = output.data()
                 checkpoint = replace(scope.plan.checkpoint, payload_sha256=content_hash(normalized))
                 row = ConversationCheckpoint(
@@ -302,7 +356,7 @@ class ConversationInferenceWorker:
                     cache_key=checkpoint.cache_key,
                     manifest_sha256=checkpoint.manifest_sha256,
                     payload_sha256=checkpoint.payload_sha256,
-                    stage="C2",
+                    stage=scope.task.stage,
                     feature_blob_id=None,
                     manifest=checkpoint.as_dict(),
                     payload=normalized,
@@ -313,6 +367,16 @@ class ConversationInferenceWorker:
                 scope.task.checkpoint_id = row.id
                 scope.task.state = scope.run.state = "completed"
                 scope.run.completed_at = datetime.now(UTC)
+                service = ConversationInference(ConversationApplication(db))
+                await service.finish_stage(
+                    scope.recording,
+                    scope.task,
+                    scope.run,
+                    scope.plan,
+                    row,
+                    normalized,
+                    result,
+                )
                 receipt: dict[str, Any] = {
                     "schema": "ac.sales-xray.provider-receipt/1",
                     "idempotency_key": key,
@@ -327,11 +391,10 @@ class ConversationInferenceWorker:
                     "usage": dict(output.usage),
                     "cost_state": "reconciliation_required",
                     "actual_cost_paise": None,
-                    "validation": "transcript_schema_and_source_binding",
+                    "validation": _VALIDATION_LABELS[scope.task.stage],
                     "human_approved": False,
                 }
                 await JobRepository(db).record_receipt(job, work.lease_token, receipt)
-                service = ConversationInference(ConversationApplication(db))
                 minutes, budget = await service.accounts(scope.recording, scope.quoted)
                 transition = mark_uncertain(
                     MinuteAccount.from_dict(minutes.snapshot),
