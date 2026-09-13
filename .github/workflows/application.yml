@@ -95,6 +95,7 @@ jobs:
           sudo env AC_REQUIRE_HOSTED_ACTIVATION_ROOT_TEST=1
           "$PWD/.venv/bin/python" -m pytest
           tests/infra/test_sales_xray_hosted_lifecycle.py
+          tests/infra/test_sales_xray_database_provision.py
           -o cache_dir=/run/ac-hosted-activation-pytest-cache
           --junitxml="${{ runner.temp }}/hosted-activation-root.xml"
       - name: Retain hosted activation test receipt
