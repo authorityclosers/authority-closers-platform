@@ -36,11 +36,13 @@ from ac_platform.conversation_intelligence.application import ConversationApplic
 from ac_platform.conversation_intelligence.report_store import ConversationReports
 from ac_platform.http.auth import install_identity_http
 from ac_platform.http.conversation import install_conversation_http
+from ac_platform.http.conversation_intake import ConversationIntakeRuntime
 from ac_platform.http.problem import register_problem_handlers
 from ac_platform.identity.models import PasswordCredential, Person
 from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.identity.password_auth import hash_password
 from ac_platform.tenancy.models import Membership, Tenant
+from tests.database.test_conversation_intake_postgresql import policy
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
 from tests.database.test_conversation_postgresql import run
 from tests.database.test_conversation_reports_postgresql import _build_fixture
@@ -168,6 +170,11 @@ def _make_backend(
 
     fixture = run(_build_fixture(postgres_harness, tmp_path_factory.mktemp("standalone-browser")))
     account = run(_prepare_account(postgres_harness, fixture))
+    intake_runtime = ConversationIntakeRuntime(
+        policy(fixture.prepared.scope_id, fixture.prepared.state.tenant_id),
+        fixture.prepared.storage,
+        fixture.prepared.scratch,
+    )
     listener = socket.socket()
     request.addfinalizer(listener.close)
     listener.bind(("127.0.0.1", 0))
@@ -199,6 +206,7 @@ def _make_backend(
                 application,
                 settings=settings,
                 require_actor=require_actor,
+                intake_runtime=intake_runtime,
             )
             application.mount("/", StaticFiles(directory=exported, html=True))
             server = uvicorn.Server(
@@ -325,6 +333,7 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
                         "path": path,
                         "status": response.status,
                         "cache_control": (response.header_value("cache-control") or "")[:128],
+                        "content_type": (response.header_value("content-type") or "")[:128],
                     }
                 )
 
@@ -373,6 +382,46 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
                 page.get_by_role("heading", name="What to take into your next call.")
             ).to_be_visible()
             checks.append("Opening the saved call loads its source-bound report.")
+
+            audio = page.locator("audio").first
+            expect(audio).to_be_visible()
+            page.wait_for_function("document.querySelector('audio')?.readyState >= 1")
+            assert audio.get_attribute("src") == (
+                f"/v1/conversation/recordings/{backend.account.recording_id}/source"
+            )
+            duration = audio.evaluate("audio => audio.duration")
+            assert duration == pytest.approx(1, abs=0.02)
+            source_events = [
+                item
+                for item in network
+                if item["method"] == "GET" and item["path"].endswith("/source")
+            ]
+            assert source_events
+            assert any(
+                item["status"] in (200, 206)
+                and item["content_type"].startswith("audio/wav")
+                and item["cache_control"] == "private, no-store"
+                for item in source_events
+            )
+            playback = audio.evaluate(
+                """
+                async audio => {
+                  await audio.play();
+                  return {paused: audio.paused, readyState: audio.readyState};
+                }
+                """
+            )
+            assert playback["paused"] is False
+            page.wait_for_function("document.querySelector('audio')?.currentTime > 0.05")
+            audio.evaluate("audio => { audio.pause(); audio.currentTime = 0.5; }")
+            page.wait_for_function(
+                "Math.abs((document.querySelector('audio')?.currentTime ?? 0) - 0.5) < 0.05"
+            )
+            assert audio.evaluate("audio => audio.currentTime") == pytest.approx(0.5, abs=0.05)
+            checks.append(
+                "The saved report plays synthetic source audio over authenticated HTTP "
+                "and seeks it."
+            )
 
             measurement_summary = (
                 page.locator("details").filter(has_text="Sound of the recording").locator("summary")
@@ -481,8 +530,22 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
                 str(backend.account.recording_id),
             )
             assert unauthorized_measurements["status"] == 401
+            unauthorized_source = page.evaluate(
+                """
+                async (recordingId) => {
+                  const response = await fetch(
+                    `/v1/conversation/recordings/${recordingId}/source`,
+                    {credentials: 'same-origin', cache: 'no-store'},
+                  );
+                  return {status: response.status};
+                }
+                """,
+                str(backend.account.recording_id),
+            )
+            assert unauthorized_source["status"] == 401
             checks.append(
-                "After logout, measurements return 401; the authorized read was private/no-store."
+                "After logout, saved measurements and source playback return 401; "
+                "the authorized read was private/no-store."
             )
             page.reload(wait_until="networkidle")
             expect(page.get_by_role("link", name="Sign in with AC")).to_be_visible()
@@ -523,6 +586,20 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
             assert any(
                 item["method"] == "GET"
                 and item["path"].endswith("/measurements")
+                and item["status"] == 401
+                for item in network
+            )
+            assert any(
+                item["method"] == "GET"
+                and item["path"].endswith("/source")
+                and item["status"] in (200, 206)
+                and item["content_type"].startswith("audio/wav")
+                and item["cache_control"] == "private, no-store"
+                for item in network
+            )
+            assert any(
+                item["method"] == "GET"
+                and item["path"].endswith("/source")
                 and item["status"] == 401
                 for item in network
             )
