@@ -377,6 +377,7 @@ def test_compose_dispatch_uses_target_release_not_latest_flag_and_scrubs_ambient
     practice_scope = _installer_function(
         "with_practice_pilot_scope", "\n\nvalidate_practice_pilot_references() {"
     )
+    filesystem_selector = "filesystem_media_compose_file_for() {\n  return 0\n}\n"
     script = f"""set -euo pipefail
 export PATH={shlex.quote(binary_path)}:"$PATH"
 export AC_MEDIA_STAGING_PUBLIC_FILMS_DELIVERY_ENABLED=true
@@ -386,6 +387,7 @@ target_environment={shlex.quote(target_environment)}
 compose_project=ac-application-{target_environment}
 with_release_secrets() {{ "$@"; }}
 {practice_scope}
+{filesystem_selector}
 python3() {{
   [[ "$1" == "$release_dir/scripts/staging-public-films.py" && "$2" == compose-file ]]
   [[ "$4" == staging ]]

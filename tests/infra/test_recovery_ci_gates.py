@@ -134,11 +134,20 @@ def test_historical_and_codec_proofs_cannot_silently_lose_prerequisites() -> Non
         root_runner
     )
     assert root_runner.count('AC_REQUIRE_HISTORICAL_BACKUP_CONTROLLER_TEST="$require_history"') == 2
-    codec = _required_step(application, "Require codec tools for media regressions")
+    codec = _required_step(application, "Require codec and filesystem tools for media regressions")
     assert [shlex.split(line) for line in codec["run"].splitlines()] == [
         ["set", "-euo", "pipefail"],
         ["sudo", "apt-get", "update"],
-        ["sudo", "apt-get", "install", "--yes", "--no-install-recommends", "ffmpeg"],
+        [
+            "sudo",
+            "apt-get",
+            "install",
+            "--yes",
+            "--no-install-recommends",
+            "ffmpeg",
+            "e2fsprogs",
+            "util-linux",
+        ],
         ["command", "-v", "ffmpeg"],
         ["command", "-v", "ffprobe"],
         ["ffmpeg", "-version"],

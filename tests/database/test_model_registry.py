@@ -88,6 +88,20 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "practice_commands",
         "practice_focus_runs",
         "practice_focus_events",
+        "conversation_permissions",
+        "conversation_recordings",
+        "conversation_runs",
+        "conversation_checkpoints",
+        "conversation_minute_accounts",
+        "conversation_budget_accounts",
+        "conversation_quotes",
+        "conversation_commands",
+        "conversation_quote_acceptances",
+        "conversation_reviews",
+        "conversation_review_cursors",
+        "conversation_provider_configurations",
+        "conversation_report_drafts",
+        "conversation_inference_tasks",
     }
 
     assert set(model_metadata().tables) == expected
