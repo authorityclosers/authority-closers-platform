@@ -673,10 +673,18 @@ def require_safe_origin(request: Request, settings: Settings) -> None:
     if normalized_origin not in settings.allowed_origins:
         raise RequestOriginDenied("Cookie-authenticated state changes require an allowed Origin.")
     coach_origin = str(settings.coach_app_url).rstrip("/")
+    sales_origin = (
+        str(settings.sales_xray_app_url).rstrip("/")
+        if settings.sales_xray_app_url is not None
+        else None
+    )
+    sales_host = settings.sales_xray_app_url.host if settings.sales_xray_app_url else None
     if (
         settings.environment not in {"staging", "production"}
         and request.url.hostname != settings.coach_app_url.host
         and normalized_origin != coach_origin
+        and request.url.hostname != sales_host
+        and normalized_origin != sales_origin
     ):
         return
 
@@ -687,6 +695,8 @@ def require_safe_origin(request: Request, settings: Settings) -> None:
         expected_origin = str(settings.admin_app_url).rstrip("/")
     elif request.url.hostname == settings.coach_app_url.host:
         expected_origin = coach_origin
+    elif sales_host is not None and request.url.hostname == sales_host:
+        expected_origin = sales_origin
     if normalized_origin != expected_origin:
         raise RequestOriginDenied(
             "Cookie-authenticated state changes require a same-surface Origin."
@@ -1073,6 +1083,8 @@ def _surface_origin(settings: Settings, surface: str) -> str:
         "admin": settings.admin_app_url,
         "coach": settings.coach_app_url,
     }
+    if settings.sales_xray_app_url is not None:
+        values["sales_xray"] = settings.sales_xray_app_url
     if surface not in values:
         raise InvalidAuthTransaction("The requested application surface is not allowed.")
     value = values[surface]
@@ -1117,8 +1129,10 @@ def _learner_oauth_recovery_response(
 def _require_surface_host(request: Request, settings: Settings, surface: str) -> None:
     if (
         settings.environment not in {"staging", "production"}
-        and surface != "coach"
+        and surface not in {"coach", "sales_xray"}
         and request.url.hostname != settings.coach_app_url.host
+        and request.url.hostname
+        != (settings.sales_xray_app_url.host if settings.sales_xray_app_url else None)
     ):
         return
     expected_host = urlsplit(_surface_origin(settings, surface)).hostname
@@ -1535,12 +1549,20 @@ def install_identity_http(
     async def google_auth_start(
         request: Request,
         authorization_type: Annotated[ProviderAuthorizationType, Query(alias="action")],
-        surface: Literal["learner", "admin", "coach"] = "learner",
+        surface: Literal["learner", "admin", "coach", "sales_xray"] = "learner",
         return_path: str = "/home",
         consent: bool = False,
     ) -> Response:
         _require_surface_host(request, settings, surface)
         safe_return_path = normalize_return_path(return_path)
+        if (
+            surface == "sales_xray"
+            and authorization_type is not ProviderAuthorizationType.AUTHENTICATE
+        ):
+            raise InvalidAuthTransaction(
+                "Sales Xray signs in existing AC accounts. Manage account registration "
+                "and linked identities through the learner application."
+            )
         if (
             surface in {"admin", "coach"}
             and authorization_type is ProviderAuthorizationType.REGISTER
@@ -1624,6 +1646,11 @@ def install_identity_http(
             )
             transaction = codec.decode(encoded_transaction)
             _require_surface_host(request, settings, transaction.surface)
+            if (
+                transaction.surface == "sales_xray"
+                and transaction.authorization_type is not ProviderAuthorizationType.AUTHENTICATE
+            ):
+                raise InvalidAuthTransaction("Sales Xray accepts existing-account sign-in only.")
             if not hmac.compare_digest(transaction.state, state_value):
                 raise InvalidAuthTransaction("The callback state does not match the transaction.")
         except InvalidAuthTransaction as error:

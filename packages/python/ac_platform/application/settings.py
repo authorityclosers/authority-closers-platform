@@ -32,6 +32,10 @@ _DEPLOYMENT_LEARNER_ORIGINS = {
     "staging": "https://learner-staging.authorityclosers.com",
     "production": "https://learner.authorityclosers.com",
 }
+_SALES_XRAY_ORIGINS = {
+    "staging": "https://salesxray-staging.authorityclosers.com",
+    "production": "https://salesxray.authorityclosers.com",
+}
 _DEPLOYMENT_URL_ENV_FIELDS = {
     "public_app_url": "AC_PUBLIC_APP_URL",
     "admin_app_url": "AC_ADMIN_APP_URL",
@@ -69,6 +73,8 @@ class Settings(BaseSettings):
     public_app_url: AnyHttpUrl = AnyHttpUrl("http://localhost:3000")
     admin_app_url: AnyHttpUrl = AnyHttpUrl("http://localhost:3001")
     coach_app_url: AnyHttpUrl = AnyHttpUrl("http://coach.localhost:3102")
+    # Optional standalone client. Enabling its host does not enable processing.
+    sales_xray_app_url: AnyHttpUrl | None = None
     api_url: AnyHttpUrl = AnyHttpUrl("http://localhost:8000")
     internal_api_host: str = "localhost"
     session_token_pepper: SecretStr = SecretStr(
@@ -167,6 +173,16 @@ class Settings(BaseSettings):
         if not isinstance(environment, str) or environment not in _DEPLOYMENT_ORIGINS:
             return values
         expected_origins = _DEPLOYMENT_ORIGINS[environment]
+        sales_origin = values.get("sales_xray_app_url")
+        if sales_origin not in (None, "") and (
+            not isinstance(sales_origin, str)
+            or sales_origin
+            not in {
+                _SALES_XRAY_ORIGINS[environment],
+                _SALES_XRAY_ORIGINS[environment] + "/",
+            }
+        ):
+            raise ValueError("AC_SALES_XRAY_APP_URL must be the canonical HTTPS origin")
         # Older deployment profiles need not name the not-yet-installed third
         # web service. Its default is still one exact environment-owned origin.
         values.setdefault("coach_app_url", expected_origins["coach_app_url"])
@@ -183,6 +199,26 @@ class Settings(BaseSettings):
             }:
                 raise ValueError(f"{environment_field} must be the canonical HTTPS origin")
         return values
+
+    @field_validator("sales_xray_app_url", mode="before")
+    @classmethod
+    def require_sales_xray_origin(cls, value: Any) -> Any:
+        if value is None or value == "":
+            return None
+        raw = str(value)
+        parsed = AnyHttpUrl(raw)
+        if (
+            raw != raw.strip()
+            or parsed.host is None
+            or "*" in parsed.host
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.path not in {None, "/"}
+            or "?" in raw
+            or "#" in raw
+        ):
+            raise ValueError("AC_SALES_XRAY_APP_URL must be an exact origin")
+        return value
 
     @field_validator("coach_app_url", mode="before")
     @classmethod
@@ -204,6 +240,14 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def require_deployment_identity_secrets(self) -> Settings:
+        if self.sales_xray_app_url is not None and self.sales_xray_app_url.host in {
+            self.public_app_url.host,
+            self.admin_app_url.host,
+            self.coach_app_url.host,
+            self.api_url.host,
+            self.internal_api_host,
+        }:
+            raise ValueError("AC_SALES_XRAY_APP_URL must use a distinct application hostname")
         if self.coach_app_url.host in {
             self.public_app_url.host,
             self.admin_app_url.host,
@@ -277,6 +321,12 @@ class Settings(BaseSettings):
             field="AC_API_URL",
             expected_origin=expected_origins["api_url"],
         )
+        if self.sales_xray_app_url is not None:
+            self._validate_deployment_url(
+                self.sales_xray_app_url,
+                field="AC_SALES_XRAY_APP_URL",
+                expected_origin=_SALES_XRAY_ORIGINS[self.environment],
+            )
         expected_internal_api_host = _DEPLOYMENT_INTERNAL_API_HOSTS[self.environment]
         if self.internal_api_host != expected_internal_api_host:
             raise ValueError(
@@ -566,6 +616,8 @@ class Settings(BaseSettings):
             for value in (self.public_app_url, self.admin_app_url, self.coach_app_url, self.api_url)
             if value.host is not None
         }
+        if self.sales_xray_app_url is not None and self.sales_xray_app_url.host is not None:
+            hosts.add(self.sales_xray_app_url.host)
         hosts.add(self.internal_api_host)
         if self.environment in {"local", "test"}:
             hosts.update({"localhost", "127.0.0.1", "test"})
@@ -573,10 +625,13 @@ class Settings(BaseSettings):
 
     @property
     def allowed_origins(self) -> list[str]:
-        return [
+        origins = [
             str(value).rstrip("/")
             for value in (self.public_app_url, self.admin_app_url, self.coach_app_url)
         ]
+        if self.sales_xray_app_url is not None:
+            origins.append(str(self.sales_xray_app_url).rstrip("/"))
+        return origins
 
     @property
     def secure_cookies(self) -> bool:

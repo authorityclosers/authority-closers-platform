@@ -1,0 +1,42 @@
+# Separate companion project; never adds a fifth image to the core manifest.
+name: ${AC_XRAY_WEB_PROJECT:?Use the source-owned environment profile}
+services:
+  sales-xray-web:
+    image: ${AC_WEB_IMAGE:?Use the verified companion OCI transport reference}
+    pull_policy: never
+    init: true
+    restart: unless-stopped
+    read_only: true
+    user: "1000:1000"
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m,uid=1000,gid=1000,mode=0700
+    expose: ["3016"]
+    networks:
+      edge:
+        aliases:
+          - ${AC_XRAY_WEB_EDGE_ALIAS:?Use the source-owned environment profile}
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3016/health').then(async r => {const b=await r.json(); if(!r.ok || b.status!=='ok' || b.service!=='sales-xray-web' || b.release_id!==process.env.AC_RELEASE_ID) process.exit(1)}).catch(()=>process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    pids_limit: 128
+    cpus: 0.5
+    mem_limit: 384m
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"
+        compress: "true"
+networks:
+  edge:
+    name: ac_edge
+    external: true
