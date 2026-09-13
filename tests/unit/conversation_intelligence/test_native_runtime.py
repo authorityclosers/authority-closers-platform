@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import os
 import struct
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
@@ -11,7 +13,16 @@ from uuid import uuid4
 import pytest
 
 from ac_platform.conversation_intelligence import native_runtime, signals
-from scripts import native_runtime_helper
+
+_HELPER_SPEC = importlib.util.spec_from_file_location(
+    "ac_test_native_runtime_helper",
+    Path(__file__).resolve().parents[3] / "scripts" / "native_runtime_helper.py",
+)
+if _HELPER_SPEC is None or _HELPER_SPEC.loader is None:
+    raise ImportError("reviewed native runtime helper source is unavailable")
+native_runtime_helper = importlib.util.module_from_spec(_HELPER_SPEC)
+sys.modules[_HELPER_SPEC.name] = native_runtime_helper
+_HELPER_SPEC.loader.exec_module(native_runtime_helper)
 
 IMAGE = "sha256:" + "a" * 64
 
