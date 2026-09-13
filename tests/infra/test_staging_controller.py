@@ -57,6 +57,7 @@ def test_staging_controller_has_compact_security_smoke() -> None:
     required_urls = (
         "https://$learnerHost/",
         "https://$learnerHost/$asset",
+        "https://$learnerHost/sales-xray",
         "https://$coachHost/",
         "https://$coachHost/login",
         "https://$apiHost/health/live",

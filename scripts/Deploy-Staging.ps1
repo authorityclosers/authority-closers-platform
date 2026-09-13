@@ -553,6 +553,7 @@ printf 'PASS  $environmentLabel release files and running images match exact rel
     Invoke-SshScript -Script $remoteProof
     Assert-HttpRoute -Url "https://$learnerHost/" -Status 200 -Route "learner-$TargetEnvironment"
     Assert-HttpRoute -Url "https://$learnerHost/healthz" -Status 200
+    Assert-HttpRoute -Url "https://$learnerHost/sales-xray" -Status 200 -Route "learner-$TargetEnvironment"
     foreach ($asset in @(
             "apple-touch-icon.png",
             "auth-workspace-lake-v1.png",
