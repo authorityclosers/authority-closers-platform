@@ -767,15 +767,17 @@ def test_caddy_routes_only_named_application_hosts() -> None:
     assert "Strict-Transport-Security" in CADDYFILE
     assert "X-Content-Type-Options" in CADDYFILE
     assert application_routes.count("path /v1/*") == 6
-    assert application_routes.count("reverse_proxy ac-production-api:8000") == 4
-    assert application_routes.count("reverse_proxy ac-staging-api:8000") == 4
+    # Each environment's Sales Xray host has its own same-origin /v1 proxy in
+    # addition to the four learner/admin/coach/API application routes.
+    assert application_routes.count("reverse_proxy ac-production-api:8000") == 5
+    assert application_routes.count("reverse_proxy ac-staging-api:8000") == 5
     assert PRODUCTION_EDGE_ROUTE.index("\thandle @learner_api {") < PRODUCTION_EDGE_ROUTE.index(
         "\thandle @learner {"
     )
     assert PRODUCTION_EDGE_ROUTE.index("\thandle @admin_api {") < PRODUCTION_EDGE_ROUTE.index(
         "\thandle @admin {"
     )
-    assert application_routes.count("connect-src 'self';") == 6
+    assert application_routes.count("connect-src 'self';") == 8
     assert "connect-src 'self' https://api.authorityclosers.com" not in application_routes
     for route in (
         "learner-production",
