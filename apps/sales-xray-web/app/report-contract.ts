@@ -1,3 +1,8 @@
+import {
+  parseDetailedOverview,
+  type DetailedOverview,
+} from "./overview-contract";
+
 export const REPORT_REVIEW_STATUS = "draft_not_dipak_adjudicated" as const;
 
 const SHA256 = /^[0-9a-f]{64}$/;
@@ -49,6 +54,7 @@ export type ReportSection = {
 };
 
 export type SalesReport = {
+  overview?: DetailedOverview;
   summary: string;
   strengths: Finding[];
   missed_opportunities: Finding[];
@@ -342,6 +348,7 @@ function parseReport(
       "transcript_revision",
       "dimensions",
       "report_sections",
+      "overview",
     ],
     "report",
   );
@@ -362,7 +369,7 @@ function parseReport(
   );
   if (binding.transcript && transcriptRevision !== binding.transcript.revision)
     throw new ReportContractError("report_transcript_revision_mismatch");
-  return {
+  const parsed: SalesReport = {
     summary: text(report.summary, "report_summary", 4_000),
     strengths: array(report.strengths, "report_strengths", 0, 3).map(
       (entry, index) =>
@@ -429,6 +436,38 @@ function parseReport(
     dimensions: parseDimensions(report.dimensions),
     report_sections: parseSections(report.report_sections),
   };
+  if (report.overview !== undefined && report.overview !== null) {
+    try {
+      parsed.overview = parseDetailedOverview(
+        report.overview,
+        parsed,
+        (value) => {
+          const evidence = parseEvidence(
+            value,
+            "report_overview_evidence",
+            binding.durationMs,
+            binding.transcript,
+          );
+          const segment = binding.transcript?.segments.find(
+            (item) => item.id === evidence.segment_id,
+          );
+          if (
+            segment &&
+            (evidence.start_ms !== segment.start_ms ||
+              evidence.end_ms !== segment.end_ms)
+          )
+            throw new ReportContractError(
+              "report_overview_evidence_segment_timing_mismatch",
+            );
+          return evidence;
+        },
+      );
+    } catch (error) {
+      if (error instanceof ReportContractError) throw error;
+      throw new ReportContractError("report_overview_invalid");
+    }
+  }
+  return parsed;
 }
 
 export function parseJobResponse(

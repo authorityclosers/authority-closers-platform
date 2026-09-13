@@ -21,6 +21,7 @@ from ac_platform.conversation_intelligence.models import (
     ConversationInferenceTask,
     ConversationProcessingPlan,
 )
+from ac_platform.conversation_intelligence.report_overview import stage_completion_limit
 from ac_platform.conversation_intelligence.reporting_pipeline import StageRequest
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, require_safe_origin
 from ac_platform.kernel.authz import ActorContext
@@ -79,7 +80,9 @@ class AnalysisSelection(BaseModel):
             fact_checkpoint_ids=self.fact_checkpoint_ids,
             chunk_index=self.chunk_index,
             model=approval.model_id,
-            max_completion_tokens=min(1400, approval.max_completion_tokens),
+            max_completion_tokens=stage_completion_limit(
+                self.stage, approval.max_completion_tokens
+            ),
         )
 
 

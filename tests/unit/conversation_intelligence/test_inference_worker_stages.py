@@ -181,6 +181,9 @@ def test_c5_validation_passes_plan_transcript_and_profile() -> None:
         "verdict": "Human review is required.",
         "review_status": "draft_not_dipak_adjudicated",
     }
+    from tests.conversation_overview_fixtures import overview_for
+
+    report["overview"] = overview_for(report)
     scope = _scope("C5", prepared, transcript=transcript, profile=profile)
 
     output = ConversationInferenceWorker._validate(

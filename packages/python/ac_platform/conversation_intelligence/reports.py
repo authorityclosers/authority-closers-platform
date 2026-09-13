@@ -18,6 +18,14 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from ac_platform.conversation_intelligence.report_overview import (
+    OVERVIEW_FORMAT,
+    OVERVIEW_INSTRUCTION,
+    OVERVIEW_MARKER,
+    DetailedOverview,
+    normalize_overview,
+)
+
 REPORT_PROFILE_PATH = Path(__file__).with_name("profiles") / "dipak_report_v1.json"
 GROQ_MODEL = "openai/gpt-oss-120b"
 MAX_TPM_TOKENS = 8_000
@@ -143,6 +151,7 @@ class ReportDraft(_StrictModel):
     transcript_revision: str = Field(min_length=1, max_length=256)
     dimensions: list[ReportDimension] = Field(min_length=8, max_length=8)
     report_sections: list[ReportSection] = Field(min_length=9, max_length=9)
+    overview: DetailedOverview | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
 @dataclass(frozen=True)
@@ -967,6 +976,7 @@ def build_report_groq_prompt(
     profile: Mapping[str, Any] | None = None,
     max_completion_tokens: int = MAX_COMPLETION_TOKENS,
     model: str = GROQ_MODEL,
+    detailed_overview: bool = True,
 ) -> dict[str, Any]:
     """Build the one profile-aware judge request from complete fact coverage."""
 
@@ -978,12 +988,18 @@ def build_report_groq_prompt(
     merged = merge_fact_packets(fact_packets, validated)
     resolved_profile = load_report_profile() if profile is None else dict(profile)
     prompt_profile = _prompt_profile(resolved_profile)
+    output_fields = (
+        "dimension_assessments and overview. "
+        if detailed_overview
+        else "source_label, dimensions and report_sections. "
+    )
     system = (
         "You are the profile-aware qualitative Sales Xray judge. Return one JSON object only. "
         "Use the supplied style-independent facts and their exact evidence to produce the "
         "requested draft fields: summary, strengths, missed_opportunities, improvements, "
-        "objection_analysis, closing_analysis, verdict, review_status, source_label, "
-        "dimensions and report_sections. Every finding requires title, explanation and an "
+        "objection_analysis, closing_analysis, verdict, review_status, "
+        + output_fields
+        + "Every finding requires title, explanation and an "
         "evidence array with exact quote, segment_id, start_ms and end_ms. Do not score, grade, "
         "rank or publish an official result. Set review_status to "
         f"{REVIEW_STATUS!r}. Source label and transcript provenance are server-derived. "
@@ -996,6 +1012,19 @@ def build_report_groq_prompt(
         "such as tomorrow versus today. Profile:\n"
         + json.dumps(prompt_profile, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     )
+    if type(detailed_overview) is not bool:
+        raise ReportError("report_format_invalid")
+    if detailed_overview:
+        overview_prompt = (
+            "\n"
+            + OVERVIEW_MARKER
+            + OVERVIEW_INSTRUCTION
+            + "\nRequired overview shape (all keys required; evidence uses exact source spans):\n"
+            + json.dumps(OVERVIEW_FORMAT, ensure_ascii=False, separators=(",", ":"))
+        )
+        # The broker validates the trailing Profile JSON against the approved
+        # revision. Keep it as the final object rather than relaxing that parser.
+        system = system.replace("Profile:\n", overview_prompt + "\nProfile:\n", 1)
     facts = json.dumps(
         {
             "source_sha256": validated["source_sha256"],
@@ -1062,6 +1091,17 @@ def parse_report_draft(
         "closing_analysis",
     ):
         normalized[field] = _normalise_findings(payload[field], transcript=validated_transcript)
+    if payload.get("overview") is not None:
+        try:
+            normalized["overview"] = normalize_overview(
+                payload["overview"],
+                findings=normalized,
+                normalize_evidence=lambda item: _normalise_evidence(item, validated_transcript),
+            ).model_dump(mode="json")
+        except ValueError as exc:
+            if isinstance(exc, ReportError):
+                raise
+            raise ReportError("report_overview_invalid") from None
     if "dimensions" in payload and "dimension_assessments" in payload:
         raise ReportError("report_dimensions_ambiguous")
     dimensions = payload.get("dimensions")

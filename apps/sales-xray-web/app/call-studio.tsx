@@ -9,7 +9,6 @@ import {
   ChevronDown,
   FileText,
   LoaderCircle,
-  ListChecks,
   Play,
   Printer,
   Upload,
@@ -19,6 +18,7 @@ import { BrandMark } from "@ac/ui";
 import { RecordingMeasurements } from "./recording-measurements";
 import { ReportExplorer } from "./report-explorer";
 import { REPORT_NAVIGATION_COPY } from "./report-navigation-copy";
+import { DipakOverview } from "./dipak-overview";
 import { FindingEvidence } from "./finding-evidence";
 import { ReportFactors } from "./report-factors";
 import { ReportTranscript } from "./report-transcript";
@@ -1827,33 +1827,16 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
                   id: "overview",
                   label: navigation.overview,
                   content: (
-                    <>
-                      {job.report.improvements[0] && (
-                        <aside className="studio-practice-callout" lang="en">
-                          <span
-                            className="studio-practice-icon"
-                            aria-hidden="true"
-                          >
-                            <ListChecks size={20} />
-                          </span>
-                          <div>
-                            <p className="eyebrow">{copy.practiceFocus}</p>
-                            <h2>{job.report.improvements[0].title}</h2>
-                            <p>{copy.practiceFocusIntro}</p>
-                            <p>{job.report.improvements[0].explanation}</p>
-                          </div>
-                        </aside>
-                      )}
-                      {renderFindings(sections.strengths, job.report.strengths)}
-                      {renderFindings(
-                        sections.missed,
-                        job.report.missed_opportunities,
-                      )}
-                      <section>
-                        <h2 lang="en">{sections.verdict}</h2>
-                        <p>{job.report.verdict}</p>
-                      </section>
-                    </>
+                    <DipakOverview
+                      report={job.report}
+                      onSelectEvidence={(item, title) =>
+                        seekToMoment({
+                          ...item,
+                          findingTitle: title,
+                          key: `${item.segment_id}:${item.start_ms}:${item.end_ms}`,
+                        })
+                      }
+                    />
                   ),
                 },
                 {

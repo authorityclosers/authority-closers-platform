@@ -194,6 +194,8 @@ async def require_plan_consent(
 
 
 def require_derived_input(value: PlanManifest, plan: ServicePlan) -> None:
+    from ac_platform.conversation_intelligence.report_overview import stage_completion_limit
+
     if plan.checkpoint.stage == "C2":
         if plan.checkpoint.cache_key != value.transcription_cache_key:
             raise ConversationDenied("Transcription differs from the approved processing plan.")
@@ -204,7 +206,8 @@ def require_derived_input(value: PlanManifest, plan: ServicePlan) -> None:
     if (
         plan.request.model != approval.model_id
         or plan.request.max_input_chars != value.max_input_chars
-        or plan.request.max_completion_tokens != min(1400, approval.max_completion_tokens)
+        or plan.request.max_completion_tokens
+        != stage_completion_limit(plan.checkpoint.stage, approval.max_completion_tokens)
         or (plan.checkpoint.stage == "C4" and plan.request.chunk_index > approval.max_requests)
         or (
             plan.checkpoint.stage == "C5"
@@ -518,6 +521,8 @@ class ConversationProcessingPlans:
         return task
 
     async def advance(self, actor: ActorContext, row: ConversationProcessingPlan) -> None:
+        from ac_platform.conversation_intelligence.report_overview import stage_completion_limit
+
         value = await require_plan_consent(self.app, actor, row, self.authority)
         if row.state != "active":
             return
@@ -533,7 +538,7 @@ class ConversationProcessingPlans:
                 transcript_checkpoint_id=c2.checkpoint_id,
                 model=c4.model_id,
                 max_input_chars=value.max_input_chars,
-                max_completion_tokens=min(1400, c4.max_completion_tokens),
+                max_completion_tokens=stage_completion_limit("C4", c4.max_completion_tokens),
             )
             recording = await self.app._recording(actor, row.recording_id)
             first_plan = await ReportingPipeline(self.inference).plan(recording, first_request)
@@ -565,7 +570,9 @@ class ConversationProcessingPlans:
                         fact_checkpoint_ids=tuple(facts),
                         model=c5.model_id,
                         max_input_chars=value.max_input_chars,
-                        max_completion_tokens=min(1400, c5.max_completion_tokens),
+                        max_completion_tokens=stage_completion_limit(
+                            "C5", c5.max_completion_tokens
+                        ),
                         profile=value.profile,
                     ),
                 )

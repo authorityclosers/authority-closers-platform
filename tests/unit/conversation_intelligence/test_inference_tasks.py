@@ -226,6 +226,18 @@ def test_coaching_envelope_uses_profile_revision_and_withholds_numeric_output() 
         "review_status": "draft_not_dipak_adjudicated",
         "source_label": "provider text cannot set this",
     }
+    from tests.conversation_overview_fixtures import overview_for
+
+    with pytest.raises(InferenceTaskError, match="report_overview_missing"):
+        validate_coaching_result(
+            _result(
+                payload, provider="groq", model=coaching.model, input_sha256=coaching.input_sha256
+            ),
+            coaching,
+            transcript,
+            profile=profile,
+        )
+    payload["overview"] = overview_for(payload)
     normalized = validate_coaching_result(
         _result(
             payload,

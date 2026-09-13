@@ -335,6 +335,21 @@ def main() -> None:
         page.get_by_role("button", name="Print / save PDF", exact=True).click()
         assert page.evaluate("window.__printCalls") == 1
 
+        overview = page.locator('[aria-label="Dipak’s call review"]')
+        assert overview.is_visible()
+        assert overview.locator('[data-review-point="01"]').is_visible()
+        assert overview.locator('[data-review-point="02"]').is_visible()
+        assert overview.locator('[data-review-point="13"]').count() == 0
+        fold = overview.locator('[data-review-point="05"]')
+        assert not fold.evaluate("el => el.open")
+        fold.locator("summary").first.focus()
+        page.keyboard.press("Enter")
+        assert fold.evaluate("el => el.open")
+        fold.locator("summary").first.click()
+        rewatch = overview.locator('[data-review-point="08"] button').first
+        rewatch.click()
+        assert page.evaluate("window.__seekTimes.includes(2.5)")
+
         disclosures = page.locator(".studio-finding-evidence")
         assert disclosures.count() > 0
         assert not disclosures.first.evaluate("el => el.open")
@@ -470,6 +485,8 @@ def main() -> None:
                     root / "apps/sales-xray-web/app/call-studio.tsx",
                     root / "apps/sales-xray-web/app/report-explorer.tsx",
                     root / "apps/sales-xray-web/app/finding-evidence.tsx",
+                    root / "apps/sales-xray-web/app/dipak-overview.tsx",
+                    root / "apps/sales-xray-web/app/dipak-overview.module.css",
                     root / "apps/sales-xray-web/app/report-explorer.module.css",
                 ]
             },
@@ -479,6 +496,7 @@ def main() -> None:
             "provider_calls": 0,
             "checks": [
                 "six usable sections",
+                "Dipak template overview mounted with keyboard detail and exact rewatch seek",
                 "collapsed source evidence expands by keyboard and remains complete for print",
                 "same media element across navigation",
                 "source moment seek and blocked/missing recovery",

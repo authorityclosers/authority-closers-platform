@@ -1,0 +1,67 @@
+[
+  {
+    "file": "database-plan.junit.xml",
+    "sha256": "34373bae0a9364f826e9d89bd1d41de484442f0698e74b47e1ae54b678b31245",
+    "bytes": 1484
+  },
+  {
+    "file": "database-report.junit.xml",
+    "sha256": "8da0d2fdf19ece89baaab2a5931a2614f62c8f9631d013f8ee0d74b21b2913cd",
+    "bytes": 1659
+  },
+  {
+    "file": "http-durable-report-browser.json",
+    "sha256": "b74fd029ff9991f1a5348962e61f77fbbb855e8ce83807435a46665fd6cb58f9",
+    "bytes": 4673
+  },
+  {
+    "file": "http-durable.junit.xml",
+    "sha256": "538252aa8bc5753586914ac4ba401cc59ecd61d2e80b71fbf620a0c2289a6c49",
+    "bytes": 379
+  },
+  {
+    "file": "http-identity-browser.json",
+    "sha256": "c4ca772e3f4dec48f1a4e2aa9d702f1949a7d87e32e8db791b3f520f4f43bd38",
+    "bytes": 6134
+  },
+  {
+    "file": "http-saved-report-browser.json",
+    "sha256": "c30e6560208353193d8b4782b9247da5c1e3c285d5cf799aa224c33c777ba1a3",
+    "bytes": 4528
+  },
+  {
+    "file": "learner-build.log",
+    "sha256": "54974655c40b8f4e0b86dadeaa793beb3435f89301101817329838e5cf2d0110",
+    "bytes": 1581
+  },
+  {
+    "file": "legacy-browser.json",
+    "sha256": "e423e584e3125787199234bb84c05930c0074ca79ff4dccba4471acc3e618030",
+    "bytes": 4221
+  },
+  {
+    "file": "python.junit.xml",
+    "sha256": "5914dff965b5282a08e2c826e09f2eeb61a1d0eb7e6acb7b4cbf1727b134ff5e",
+    "bytes": 91633
+  },
+  {
+    "file": "standalone-build.log",
+    "sha256": "8a448b9d4152900dac01cd3164dc3a8f8002cbc313d13269dc1fe1e87b5e5cd3",
+    "bytes": 705
+  },
+  {
+    "file": "static-export-build.log",
+    "sha256": "ab09b52a867a80c90aefaafade7598c81460b00d5103defb28dba2b467a2fbd9",
+    "bytes": 705
+  },
+  {
+    "file": "structured-browser.json",
+    "sha256": "247176d9cbcce95d7a3563754325eaa4a1b61ab2f1525cd81ec40bb0c696787d",
+    "bytes": 2806
+  },
+  {
+    "file": "ui.junit.xml",
+    "sha256": "6d432560f414412961869a1358c1e21096f510507d984960cb7891b05e1bd6d2",
+    "bytes": 18517
+  }
+]

@@ -22,6 +22,7 @@ from ac_platform.conversation_intelligence.providers import (
     ProviderResult,
     scribe_transcript,
 )
+from ac_platform.conversation_intelligence.report_overview import OVERVIEW_MARKER
 from ac_platform.conversation_intelligence.reports import (
     GROQ_MODEL,
     FactPacket,
@@ -910,6 +911,11 @@ def validate_coaching_result(
         draft = parse_groq_response(result.data, transcript, profile=resolved_profile)
     except ReportError as exc:
         raise InferenceTaskError(str(exc)) from None
+    # Legacy saved tasks remain readable. Newly quoted format-specific inputs
+    # cannot silently complete with a broad legacy report that omits the overview.
+    prompt = json.loads(task_input.payload)
+    if OVERVIEW_MARKER in prompt["messages"][0]["content"] and draft.overview is None:
+        _fail("report_overview_missing")
     return _output(
         "coaching",
         result,
