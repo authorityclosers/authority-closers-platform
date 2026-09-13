@@ -253,6 +253,16 @@ ACQUISITION_PARITY_NEW_TABLES = (
     "conversation_acquisition_settlements",
 )
 ACQUISITION_PARITY_TABLES = REVIEW_INVITATIONS_PARITY_TABLES + ACQUISITION_PARITY_NEW_TABLES
+PROCESSING_OWNERSHIP_PARITY_MIGRATION_HEAD = "20260914_0037"
+PROCESSING_OWNERSHIP_PARITY_CONTRACT = "ac-postgres-parity-v17"
+PROCESSING_OWNERSHIP_PARITY_NEW_TABLES = (
+    "conversation_processing_principals",
+    "conversation_processing_leases",
+    "conversation_guest_submissions",
+)
+PROCESSING_OWNERSHIP_PARITY_TABLES = (
+    ACQUISITION_PARITY_TABLES + PROCESSING_OWNERSHIP_PARITY_NEW_TABLES
+)
 # The first migration rehearsal is deliberately an exact reviewed transition.
 # Do not infer a source/target pair from lexical revision ordering.
 MIGRATION_REHEARSAL_SOURCE_HEAD = COMMUNITY_PARITY_MIGRATION_HEAD
@@ -271,6 +281,8 @@ REVIEW_INVITATIONS_REHEARSAL_SOURCE_HEAD = REVIEWS_PARITY_MIGRATION_HEAD
 REVIEW_INVITATIONS_REHEARSAL_TARGET_HEAD = REVIEW_INVITATIONS_PARITY_MIGRATION_HEAD
 ACQUISITION_REHEARSAL_SOURCE_HEAD = REVIEW_INVITATIONS_PARITY_MIGRATION_HEAD
 ACQUISITION_REHEARSAL_TARGET_HEAD = ACQUISITION_PARITY_MIGRATION_HEAD
+PROCESSING_OWNERSHIP_REHEARSAL_SOURCE_HEAD = ACQUISITION_PARITY_MIGRATION_HEAD
+PROCESSING_OWNERSHIP_REHEARSAL_TARGET_HEAD = PROCESSING_OWNERSHIP_PARITY_MIGRATION_HEAD
 # Production is currently at 0029. Keep a direct rehearsal contract for the
 # candidate image that upgrades through both reviewed Sales Xray migrations in
 # one isolated target; do not require an intermediate application deployment.
@@ -293,6 +305,10 @@ MIGRATION_REHEARSAL_PAIRS = frozenset(
             REVIEW_INVITATIONS_REHEARSAL_TARGET_HEAD,
         ),
         (ACQUISITION_REHEARSAL_SOURCE_HEAD, ACQUISITION_REHEARSAL_TARGET_HEAD),
+        (
+            PROCESSING_OWNERSHIP_REHEARSAL_SOURCE_HEAD,
+            PROCESSING_OWNERSHIP_REHEARSAL_TARGET_HEAD,
+        ),
         (
             DIRECT_SALES_XRAY_REHEARSAL_SOURCE_HEAD,
             DIRECT_SALES_XRAY_REHEARSAL_TARGET_HEAD,
@@ -350,6 +366,10 @@ VERSIONED_PARITY_CONTRACTS = {
     ACQUISITION_PARITY_MIGRATION_HEAD: (
         ACQUISITION_PARITY_CONTRACT,
         ACQUISITION_PARITY_TABLES,
+    ),
+    PROCESSING_OWNERSHIP_PARITY_MIGRATION_HEAD: (
+        PROCESSING_OWNERSHIP_PARITY_CONTRACT,
+        PROCESSING_OWNERSHIP_PARITY_TABLES,
     ),
 }
 
@@ -2055,6 +2075,19 @@ def _assert_migration_rehearsal_transition(
         if expected_new_tables != set(expected_new_counts):
             raise DrillError("migration rehearsal does not match the reviewed new tables")
     elif (source_head, target_head) == (
+        PROCESSING_OWNERSHIP_REHEARSAL_SOURCE_HEAD,
+        PROCESSING_OWNERSHIP_REHEARSAL_TARGET_HEAD,
+    ):
+        if source_derivations:
+            raise DrillError("processing ownership rehearsal does not accept derivations")
+        expected_new_counts = {
+            table: 0 for table in PROCESSING_OWNERSHIP_PARITY_NEW_TABLES
+        }
+        if expected_new_tables != set(expected_new_counts):
+            raise DrillError(
+                "migration rehearsal does not match the reviewed processing ownership tables"
+            )
+    elif (source_head, target_head) == (
         DIRECT_SALES_XRAY_REHEARSAL_SOURCE_HEAD,
         DIRECT_SALES_XRAY_REHEARSAL_TARGET_HEAD,
     ):
@@ -2565,6 +2598,11 @@ def build_parser() -> argparse.ArgumentParser:
             SALES_XRAY_REHEARSAL_SOURCE_HEAD,
             INFERENCE_REHEARSAL_SOURCE_HEAD,
             PLANS_REHEARSAL_SOURCE_HEAD,
+            COMMUNITY_CONNECTIONS_REHEARSAL_SOURCE_HEAD,
+            REVIEWS_REHEARSAL_SOURCE_HEAD,
+            REVIEW_INVITATIONS_REHEARSAL_SOURCE_HEAD,
+            ACQUISITION_REHEARSAL_SOURCE_HEAD,
+            PROCESSING_OWNERSHIP_REHEARSAL_SOURCE_HEAD,
         ),
         help="exact prior migration head for an explicitly reviewed isolated rehearsal",
     )

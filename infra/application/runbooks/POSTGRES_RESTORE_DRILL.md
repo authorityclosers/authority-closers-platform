@@ -98,6 +98,31 @@ arguments are rejected in this mode. Cleanup is still mandatory and the
 generated evidence must show completion; no live application or provider is
 started.
 
+## Guest processing ownership rehearsal (0036 to 0037)
+
+The 0037 candidate adds the non-login processing principal, processing lease,
+and guest-submission ownership tables. Use a backup whose exact metadata head
+is `20260914_0036` and a source application image that attests that same head;
+the candidate workspace and image must attest `20260914_0037`.
+
+```bash
+python3 infra/application/scripts/restore-drill.py \
+  --environment staging \
+  --backup /absolute/path/to/staging-postgres-0036.dump \
+  --backup-metadata /absolute/path/to/staging-postgres-0036.json \
+  --evidence-dir /absolute/path/to/new/guest-processing-rehearsal-evidence \
+  --application-image sha256:<0037-candidate-image-id> \
+  --source-application-image sha256:<0036-image-id> \
+  --source-migration-head 20260914_0036
+```
+
+After reviewing the dry-run, add `--execute --acknowledge-isolated-target`.
+The gate preserves every 0036 row count and requires zero rows in
+`conversation_processing_principals`, `conversation_processing_leases`, and
+`conversation_guest_submissions` immediately after the forward migration.
+The migration is forward-only; processing identity, lease, and submission
+history are never reconstructed by a rollback or direct database edit.
+
 ## Execute the drill
 
 Executed runs copy the already validated dump and metadata into a generated,

@@ -653,6 +653,87 @@ def test_processing_plan_rehearsal_config_accepts_populated_0031_to_0032(
     assert config.source_migration_head == restore_drill.PLANS_REHEARSAL_SOURCE_HEAD
 
 
+def test_processing_ownership_rehearsal_config_accepts_0036_to_0037(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        restore_drill,
+        "_workspace_release_contract",
+        lambda _root: (
+            "source",
+            CURRENT_RELEASE_ID,
+            restore_drill.PROCESSING_OWNERSHIP_REHEARSAL_TARGET_HEAD,
+        ),
+    )
+    backup, metadata, _captured_at = _write_backup_pair(
+        tmp_path,
+        release_id="f" * 40,
+        migration_head=restore_drill.PROCESSING_OWNERSHIP_REHEARSAL_SOURCE_HEAD,
+    )
+    args = restore_drill.build_parser().parse_args(
+        [
+            "--environment",
+            "staging",
+            "--backup",
+            str(backup),
+            "--backup-metadata",
+            str(metadata),
+            "--evidence-dir",
+            str(tmp_path / "evidence"),
+            "--application-image",
+            APPLICATION_IMAGE,
+            "--source-application-image",
+            "sha256:" + "f" * 64,
+            "--source-migration-head",
+            restore_drill.PROCESSING_OWNERSHIP_REHEARSAL_SOURCE_HEAD,
+        ]
+    )
+
+    config = restore_drill._config_from_args(args)
+
+    assert config.backup_release_id == "f" * 40
+    assert config.expected_migration_head == (
+        restore_drill.PROCESSING_OWNERSHIP_REHEARSAL_TARGET_HEAD
+    )
+    assert config.source_application_image == "sha256:" + "f" * 64
+    assert config.source_migration_head == (
+        restore_drill.PROCESSING_OWNERSHIP_REHEARSAL_SOURCE_HEAD
+    )
+
+
+def test_processing_ownership_parity_contract_tracks_0037_tables() -> None:
+    assert restore_drill.parity_contract_for_head("20260914_0037") == (
+        "ac-postgres-parity-v17"
+    )
+    assert restore_drill.parity_tables_for_head("20260914_0037") == (
+        restore_drill.ACQUISITION_PARITY_TABLES
+        + restore_drill.PROCESSING_OWNERSHIP_PARITY_NEW_TABLES
+    )
+    assert (
+        restore_drill.PROCESSING_OWNERSHIP_REHEARSAL_SOURCE_HEAD,
+        restore_drill.PROCESSING_OWNERSHIP_REHEARSAL_TARGET_HEAD,
+    ) in restore_drill.MIGRATION_REHEARSAL_PAIRS
+
+
+def test_processing_ownership_migration_command_targets_only_0037() -> None:
+    target = restore_drill._target_for("0123456789ab")
+    command = restore_drill._migration_command(
+        target,
+        APPLICATION_IMAGE,
+        target_head=restore_drill.PROCESSING_OWNERSHIP_REHEARSAL_TARGET_HEAD,
+    )
+
+    assert command[-3:] == (
+        APPLICATION_IMAGE,
+        "upgrade",
+        restore_drill.PROCESSING_OWNERSHIP_REHEARSAL_TARGET_HEAD,
+    )
+    assert "--publish" not in command
+    assert "--privileged" not in command
+    assert target.password not in command
+
+
 def test_migration_rehearsal_transition_requires_exact_preservation_and_derivations() -> None:
     source_counts = {
         table: 0
@@ -845,6 +926,15 @@ def test_review_assignment_transition_preserves_0033_and_requires_empty_tables()
                 "conversation_visitor_claims",
                 "conversation_acquisition_usage",
                 "conversation_acquisition_settlements",
+            ),
+        ),
+        (
+            "20260914_0036",
+            "20260914_0037",
+            (
+                "conversation_processing_principals",
+                "conversation_processing_leases",
+                "conversation_guest_submissions",
             ),
         ),
     ),
