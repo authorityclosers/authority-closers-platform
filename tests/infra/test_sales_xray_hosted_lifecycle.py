@@ -5,6 +5,7 @@ import json
 import os
 import shlex
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -36,7 +37,10 @@ def activation_root(tmp_path: Path) -> Iterator[Path]:
     # /tmp and runner homes are intentionally untrusted by the production validator.
     # Use a disposable tree below /run; never relax the validator for a test host.
     with tempfile.TemporaryDirectory(prefix="ac-hosted-activation-", dir="/run") as folder:
-        yield Path(folder)
+        root = Path(folder)
+        os.chown(root, 0, 10001)
+        root.chmod(0o750)
+        yield root
 
 
 def _bash_executable() -> str:
@@ -154,6 +158,10 @@ def _make_release(
             }
         )
     )
+    paths["challenge"].write_bytes(b"synthetic-turnstile-secret\n")
+    if os.name == "posix":
+        os.chown(paths["challenge"], 10001, 0)
+        paths["challenge"].chmod(0o400)
     env_values = {
         "AC_XRAY_APPROVAL_FILE": _portable(approval),
         "AC_XRAY_APPROVAL_SHA256": hashlib.sha256(approval.read_bytes()).hexdigest(),
@@ -382,6 +390,49 @@ def test_preflight_rejects_unbound_native_or_acquisition_inputs(
         (hashlib.sha256(paths["descriptor"].read_bytes()).hexdigest() + "\n").encode("ascii")
     )
 
+    assert _validator_result(release).returncode != 0
+
+
+def test_hosted_validator_accepts_api_readable_challenge_file(activation_root: Path) -> None:
+    release, paths = _make_release(activation_root)
+
+    result = _validator_result(release)
+
+    assert result.returncode == 0, result.stderr
+    assert paths["challenge"].name == "challenge-secret"
+    assert paths["challenge"].is_file()
+    if os.name == "posix":
+        info = paths["challenge"].stat()
+        assert info.st_uid == 10001
+        assert info.st_gid == 0
+        assert stat.S_IMODE(info.st_mode) == 0o400
+
+
+def test_hosted_validator_rejects_missing_or_directory_challenge_file(
+    activation_root: Path,
+) -> None:
+    release, paths = _make_release(activation_root)
+    paths["challenge"].unlink()
+    paths["challenge"].mkdir()
+
+    result = _validator_result(release)
+
+    assert result.returncode != 0
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX challenge ownership boundary")
+def test_hosted_validator_rejects_unreadable_or_symlinked_challenge_file(
+    activation_root: Path,
+) -> None:
+    release, paths = _make_release(activation_root)
+    os.chown(paths["challenge"], 0, 0)
+    paths["challenge"].chmod(0o400)
+    assert _validator_result(release).returncode != 0
+
+    paths["challenge"].unlink()
+    referent = paths["challenge"].with_name("foreign-secret")
+    referent.write_bytes(b"foreign\n")
+    paths["challenge"].symlink_to(referent)
     assert _validator_result(release).returncode != 0
 
 

@@ -31,6 +31,11 @@ MAX_CAPABILITY_BYTES = 8192
 MAX_ACTIVATION_BYTES = 64 * 1024
 MAX_ENV_BYTES = 64 * 1024
 MAX_REFERENCE_BYTES = 4 * 1024 * 1024
+MAX_CHALLENGE_SECRET_BYTES = 4 * 1024
+API_UID = 10001
+API_GID = 0
+CHALLENGE_SECRET_MODE = 0o400
+CHALLENGE_SECRET_NAME = "challenge-secret"  # noqa: S105 - basename only
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 RELEASE_ID = re.compile(r"[0-9a-f]{40}\Z")
 IMAGE_REF = re.compile(r"^(?:[A-Za-z0-9._/-]+@)?sha256:[0-9a-f]{64}\Z")
@@ -140,6 +145,52 @@ def _checked_absolute(value: object, field: str) -> Path:
     if not path.is_absolute() or ".." in path.parts:
         raise _fail(f"{field} must be absolute and traversal-free")
     return path
+
+
+def _validate_challenge_secret_reference(value: object) -> None:
+    """Validate the host file bind-mounted into the API without reading it."""
+
+    path = _checked_absolute(value, "AC_XRAY_CHALLENGE_SECRET_FILE")
+    if path.name != CHALLENGE_SECRET_NAME:
+        raise _fail("upload challenge file must use the fixed challenge-secret name")
+    for ancestor in (*reversed(path.parents), path):
+        try:
+            info = ancestor.lstat()
+        except FileNotFoundError as exc:
+            raise _fail("upload challenge file is missing") from exc
+        except OSError as exc:
+            raise _fail("upload challenge file metadata is unavailable") from exc
+        if stat.S_ISLNK(info.st_mode):
+            raise _fail("upload challenge file paths must not contain symbolic links")
+        if ancestor != path:
+            if not stat.S_ISDIR(info.st_mode):
+                raise _fail("upload challenge file ancestor is not a directory")
+            if os.name == "posix":
+                _trusted_metadata(info, file=False)
+                mode = stat.S_IMODE(info.st_mode)
+                if (
+                    (info.st_uid == API_UID and not mode & 0o100)
+                    or (info.st_uid != API_UID and info.st_gid == API_GID and not mode & 0o010)
+                    or (
+                        info.st_uid != API_UID
+                        and info.st_gid != API_GID
+                        and not mode & 0o001
+                    )
+                ):
+                    raise _fail("upload challenge file ancestor is not API-traversable")
+            continue
+        if (
+            not stat.S_ISREG(info.st_mode)
+            or info.st_nlink != 1
+            or not 0 < info.st_size <= MAX_CHALLENGE_SECRET_BYTES
+        ):
+            raise _fail("upload challenge input must be a bounded regular file")
+        if os.name == "posix" and (
+            info.st_uid != API_UID
+            or info.st_gid != API_GID
+            or stat.S_IMODE(info.st_mode) != CHALLENGE_SECRET_MODE
+        ):
+            raise _fail("upload challenge file ownership or mode is not API-readable")
 
 
 def _release_identity(release: Path) -> str:
@@ -253,6 +304,7 @@ def _parse_env(raw: bytes) -> dict[str, str]:
         path = _checked_absolute(result[key], key)
         if ".." in path.parts:
             raise _fail(f"{key} is traversal-prone")
+    _validate_challenge_secret_reference(result["AC_XRAY_CHALLENGE_SECRET_FILE"])
     for key in ("AC_XRAY_SERVICE_SHA256", "AC_XRAY_APPROVAL_SHA256"):
         _checked_sha(result[key], key)
     if IMAGE_REF.fullmatch(result["AC_XRAY_NATIVE_IMAGE_REF"]) is None:

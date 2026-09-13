@@ -59,13 +59,15 @@ runtime UID. Only the fixed child identity module reads them. The reviewed
 Infisical executable is mounted read-only; it imports neither parent folders nor
 expanded secrets. No provider key is part of this manifest, image, command or log.
 
-Container references are `/run/ac-sales-xray/identities/elevenlabs/token` and
-`/run/ac-sales-xray/identities/groq/token`. Each child opens the current file when
-it starts; it does not reuse a token cached by the worker. An external identity
-provisioner can atomically replace the token inside the corresponding directory
-without changing the container mount. The broker deadline is180seconds; provision
-at least240seconds of remaining validity at dispatch and refresh ahead of that
-margin. The worker does not renew identities or buy/extend provider allowances.
+Container references are `/run/ac-sales-xray/identities/elevenlabs/token`,
+`/run/ac-sales-xray/identities/groq/token` and
+`/run/ac-sales-xray/identities/gemini/token`. Each child opens the current file
+when it starts; it does not reuse a token cached by the worker. An external
+identity provisioner can atomically replace the token inside the corresponding
+directory without changing the container mount. The broker deadline is
+180seconds; provision at least240seconds of remaining validity at dispatch and
+refresh ahead of that margin. The worker does not renew identities or
+buy/extend provider allowances.
 The DB-only file is `/run/ac-sales-xray/database-url`; rotate it with a worker
 restart because the SQLAlchemy pool is created once at startup.
 

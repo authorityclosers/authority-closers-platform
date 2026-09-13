@@ -78,10 +78,23 @@ AC_XRAY_GROQ_IDENTITY_DIR=/etc/authority-closers/secrets/sales-xray/identities/g
 AC_XRAY_GEMINI_IDENTITY_DIR=/etc/authority-closers/secrets/sales-xray/identities/gemini
 AC_XRAY_INFISICAL_BINARY=/usr/local/bin/infisical
 AC_XRAY_NATIVE_IMAGE_REF=<verified immutable native transport image reference>
-AC_XRAY_CHALLENGE_SECRET_FILE=<external file containing only the upload challenge secret>
+AC_XRAY_CHALLENGE_SECRET_FILE=/etc/authority-closers/secrets/sales-xray/staging/challenge-secret
 AC_XRAY_CHALLENGE_SITE_KEY=<public site key for the exact Sales Xray host>
 AC_XRAY_ACQUISITION_POLICY_REVISION=<approved acquisition policy revision>
 ```
+
+For production, use the corresponding `production/challenge-secret` path. The
+challenge file is provisioned out-of-band by the approved Cloudflare secret
+delivery operator; it is never placed in a Compose environment file, command
+argument, image or log. Its fixed basename and metadata are part of activation:
+it must be a singly-linked regular file no larger than 4 KiB, owned by UID
+`10001`, GID `0`, mode `0400`. Every existing parent must be a root-owned,
+non-writable directory with execute access for UID/GID10001. The operator
+creates or rotates it atomically and verifies those facts without printing its
+contents. `sales-xray-hosted.py compose-inputs` repeats the no-symlink, regular
+file, size, ownership and mode checks before Compose receives the path. See
+`infra/application/SALES_XRAY_CHALLENGE_CREDENTIAL.md` for the bounded
+provisioning contract.
 
 The release-owned `infra/application/compose.sales-xray-hosted.yaml` merges the
 AC_SALES_XRAY_* nonsecret settings and approval/storage mounts into **api only**.
