@@ -3,10 +3,11 @@
 This supersedes earlier activation summaries in the individual slice evidence
 files. Those files describe their earlier test scope, not the current release.
 
-The additive provider follow-on is described in
-`SALES_XRAY_INFERENCE_WORKER.md`: durable internal C2 admission/execution, a
-separate bounded subprocess broker, and pure C4/C5 task adapters. It does not
-activate hosted intake or a complete automatic upload-to-report pipeline.
+The additive provider follow-on is described in `SALES_XRAY_INFERENCE_WORKER.md`
+and `SALES_XRAY_DURABLE_REPORTING.md`: internal C2 transcription, source-clock
+support, durable C4 fact chunks, C5 coaching and C6 private drafts through a
+separate bounded subprocess broker. It does not activate hosted intake or the
+automatic upload-to-report UI pipeline.
 Migration 0031 extends immutable history and provider-response erasure; the
 frozen local integration and its browser receipts remain a separate slice.
 
@@ -23,7 +24,7 @@ by Suyash. Numeric scoring remains withheld: actual weights 95, declared 100.
 
 ## Implemented
 
-- Deterministic AudioAtlas/SignalLab adapters with distinct window/clock profiles,
+- Deterministic AudioAtlas execution and explicit SignalLab compatibility profiles,
   preserved native provenance, source-bound checkpoints and replay rules.
 - Private storage and deletion, bounded local worker, AC tenancy/owner/session
   checks, immutable recording/quote/checkpoint lineage, PostgreSQL jobs/outbox,
@@ -43,6 +44,9 @@ by Suyash. Numeric scoring remains withheld: actual weights 95, declared 100.
   history and authorized private audio range playback. A report is checked against
   retained original source bytes, native transcript hash, literal spans and profile.
   Draft deletion erases all three private JSON payloads while retaining audit hashes.
+- Canonical provider-generated drafts, fact/checkpoint/profile reuse, transcript
+  access before coaching, and proof-linked report reads. The internal durable
+  path has synthetic PostgreSQL receipts; self-service activation remains pending.
 
 The private proof CLI is not the production durable inference broker. The current
 API run/report endpoint can return an imported private draft, or local analysis

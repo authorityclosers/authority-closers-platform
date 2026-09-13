@@ -219,6 +219,72 @@ def test_fact_packet_accepts_compact_observations_and_requires_full_coverage() -
     assert merged.observations[0].evidence[0].start_ms == 0
 
 
+def test_merge_fact_packets_rejects_duplicate_coverage_and_timebase_drift() -> None:
+    transcript = _transcript(count=2)
+    chunks = plan_transcript_chunks(transcript, max_input_chars=220)
+    packets = [
+        parse_fact_packet(
+            {
+                "overview": "Literal facts.",
+                "observations": [
+                    {
+                        "fact": "The line mentions price.",
+                        "segment_id": chunk.segments[0]["id"],
+                        "quote": "price and timing",
+                    }
+                ],
+                "uncertainties": [],
+            },
+            transcript,
+            chunk=chunk,
+        )
+        for chunk in chunks
+    ]
+
+    duplicate_coverage = packets[0].model_copy(
+        update={"covered_segment_ids": ["s1", "s1"]}
+    )
+    with pytest.raises(ReportError, match="fact_packet_coverage_duplicate"):
+        merge_fact_packets([duplicate_coverage, packets[1]], transcript)
+
+    wrong_timebase = packets[0].model_copy(update={"timebase_id": "other-clock"})
+    with pytest.raises(ReportError, match="fact_packet_timebase_mismatch"):
+        merge_fact_packets([wrong_timebase, packets[1]], transcript)
+
+
+def test_merge_fact_packets_revalidates_evidence_against_transcript() -> None:
+    transcript = _transcript(count=2)
+    chunks = plan_transcript_chunks(transcript, max_input_chars=220)
+    packets = [
+        parse_fact_packet(
+            {
+                "overview": "Literal facts.",
+                "observations": [
+                    {
+                        "fact": "The line mentions price.",
+                        "segment_id": chunk.segments[0]["id"],
+                        "quote": "price and timing",
+                    }
+                ],
+                "uncertainties": [],
+            },
+            transcript,
+            chunk=chunk,
+        )
+        for chunk in chunks
+    ]
+    forged_evidence = packets[0].observations[0].evidence[0].model_copy(
+        update={"quote": "text that is not in the native segment"}
+    )
+    forged_fact = packets[0].observations[0].model_copy(
+        update={"evidence": [forged_evidence]}
+    )
+    forged_packet = packets[0].model_copy(update={"observations": [forged_fact]})
+
+    with pytest.raises(ReportError, match="report_evidence_quote_mismatch"):
+        merge_fact_packets([forged_packet, packets[1]], transcript)
+
+
 def test_fact_prompt_has_no_profile_and_report_prompt_is_single_judge_call() -> None:
     transcript = _transcript(count=2)
     fact_prompts = build_fact_groq_prompts(transcript, max_input_chars=900)

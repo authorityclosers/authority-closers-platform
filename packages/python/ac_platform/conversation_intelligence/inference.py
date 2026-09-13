@@ -2,7 +2,7 @@
 
 Only server-issued exact quotes enter this service. It cannot issue provider
 terms, pricing, professional approvals, grants, or credentials for itself.
-The first executable stage is C2; C4/C5 adapters remain separately composed.
+Each stage is bound to an exact canonical input and a separately accepted quote.
 """
 
 from __future__ import annotations
@@ -48,6 +48,12 @@ from ac_platform.conversation_intelligence.models import (
     ConversationRecording,
     ConversationRun,
 )
+from ac_platform.conversation_intelligence.providers import ProviderResult
+from ac_platform.conversation_intelligence.reporting_pipeline import (
+    ReportingPipeline,
+    StagePlan,
+    StageRequest,
+)
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.outbox.repository import JobRepository
 
@@ -81,6 +87,7 @@ def verified_checkpoint(row: ConversationCheckpoint, binding: SourceBinding) -> 
         )
         if (
             checkpoint.binding != binding
+            or checkpoint.stage != row.stage
             or checkpoint.as_dict()
             != {**manifest, "parents": tuple(tuple(p) for p in manifest["parents"])}
             or checkpoint.cache_key != row.cache_key
@@ -100,6 +107,11 @@ class TranscriptionPlan:
     prepared: PreparedTaskInput
     checkpoint: Checkpoint
     duration_ms: int
+    signal_id: UUID | None = None
+
+    @property
+    def recipe_revision(self) -> str:
+        return TRANSCRIPT_RECIPE
 
     def intent(self) -> dict[str, Any]:
         return {
@@ -108,6 +120,9 @@ class TranscriptionPlan:
             "duration_ms": self.duration_ms,
             "checkpoint": self.checkpoint.as_dict(),
         }
+
+
+ServicePlan = TranscriptionPlan | StagePlan
 
 
 class ConversationInference:
@@ -187,14 +202,42 @@ class ConversationInference:
             (c0,),
             "0" * 64,
         )
-        return TranscriptionPlan(prepared, template, duration)
+        return TranscriptionPlan(prepared, template, duration, by_stage["C1"].id)
+
+    async def plan_task(
+        self, recording: ConversationRecording, task: ConversationInferenceTask
+    ) -> ServicePlan:
+        if task.stage == "C2":
+            return await self.plan_transcription(recording)
+        if task.intent is None:
+            raise ConversationConflict("The saved provider intent is unavailable.")
+        try:
+            request = StageRequest.model_validate(task.intent["request"])
+        except (ValueError, TypeError, KeyError):
+            raise ConversationConflict("The saved provider intent is invalid.") from None
+        return await ReportingPipeline(self).plan(recording, request)
+
+    async def finish_stage(
+        self,
+        recording: ConversationRecording,
+        task: ConversationInferenceTask,
+        run: ConversationRun,
+        plan: ServicePlan,
+        checkpoint: ConversationCheckpoint,
+        normalized: dict[str, Any],
+        result: ProviderResult,
+    ) -> None:
+        if isinstance(plan, StagePlan) and plan.checkpoint.stage == "C5":
+            await ReportingPipeline(self).finish(
+                recording, task, run, plan, checkpoint, normalized, result
+            )
 
     async def _quote(
         self,
         actor: ActorContext,
         recording: ConversationRecording,
         quote_id: UUID,
-        plan: TranscriptionPlan,
+        plan: ServicePlan,
         now: datetime,
         *,
         require_acceptance: bool,
@@ -221,12 +264,15 @@ class ConversationInference:
             or quote.source != binding_for(recording)
             or quote.account_id != str(actor.person_id)
             or quote.budget_scope_id != str(row.budget_scope_id)
-            or quote.recipe_revision != TRANSCRIPT_RECIPE
+            or quote.recipe_revision != plan.recipe_revision
             or quote.provider_id != plan.prepared.provider
             or quote.provider_model != plan.prepared.model
             or quote.operation != plan.prepared.operation
             or quote.input_sha256 != plan.prepared.input_sha256
-            or quote.entitlement_seconds != (plan.duration_ms + 999) // 1000
+            or (
+                plan.checkpoint.stage == "C2"
+                and quote.entitlement_seconds != (plan.duration_ms + 999) // 1000
+            )
             or permission.quote_fingerprint != quote.fingerprint
             or permission.approved_by != str(actor.person_id)
             or not quote.created_at_epoch
@@ -261,11 +307,17 @@ class ConversationInference:
         recording_id: UUID,
         quote_id: UUID,
         acceptance: QuoteAcceptance,
+        *,
+        request: StageRequest | None = None,
     ) -> dict[str, str]:
         now = await self.application.admit(actor)
         await self.application.get(actor, recording_id)
         recording = await self.application._recording(actor, recording_id)
-        plan = await self.plan_transcription(recording)
+        plan: ServicePlan = (
+            await self.plan_transcription(recording)
+            if request is None
+            else await ReportingPipeline(self).plan(recording, request)
+        )
         _, quote, _ = await self._quote(
             actor, recording, quote_id, plan, now, require_acceptance=False
         )
@@ -334,12 +386,27 @@ class ConversationInference:
         *,
         key: str,
     ) -> dict[str, Any]:
+        return await self.request_stage(actor, recording_id, quote_id, key=key)
+
+    async def request_stage(
+        self,
+        actor: ActorContext,
+        recording_id: UUID,
+        quote_id: UUID,
+        *,
+        key: str,
+        request: StageRequest | None = None,
+    ) -> dict[str, Any]:
         now = await self.application.admit(actor)
         await self.application.get(actor, recording_id)
         recording = await self.application._recording(actor, recording_id)
         if recording.state != "ready":
             raise ConversationConflict("The recording is not ready.")
-        plan = await self.plan_transcription(recording)
+        plan: ServicePlan = (
+            await self.plan_transcription(recording)
+            if request is None
+            else await ReportingPipeline(self).plan(recording, request)
+        )
         row, quote, permission = await self._quote(
             actor, recording, quote_id, plan, now, require_acceptance=True
         )
@@ -348,7 +415,8 @@ class ConversationInference:
             "quote_id": str(quote_id),
             "cache_key": plan.checkpoint.cache_key,
         }
-        replay = await self.application._replay(actor, key, "provider_transcription", command)
+        action = "provider_transcription" if request is None else "provider_analysis"
+        replay = await self.application._replay(actor, key, action, command)
         if replay is not None and replay.result_id is not None:
             return await self.application._run_view(actor, replay.result_id)
         existing = await self.database.scalar(
@@ -363,9 +431,7 @@ class ConversationInference:
             if existing.erased_at is not None or existing.generation != recording.generation:
                 raise ConversationConflict("The previous request is no longer reusable.")
             # Another click, quote, or coaching profile cannot create a second ASR effect.
-            await self.application._receipt(
-                actor, key, "provider_transcription", command, existing.run_id, now
-            )
+            await self.application._receipt(actor, key, action, command, existing.run_id, now)
             return await self.application._run_view(actor, existing.run_id)
         identifier = uuid4()
         minutes, budget = await self.accounts(recording, row)
@@ -406,7 +472,7 @@ class ConversationInference:
                 recording_id=recording.id,
                 request_key=key,
                 intent_sha256=content_hash(command),
-                recipe_revision=TRANSCRIPT_RECIPE,
+                recipe_revision=plan.recipe_revision,
                 generation=recording.generation,
                 state="queued",
                 job_id=job.id,
@@ -424,7 +490,7 @@ class ConversationInference:
                 job_id=job.id,
                 quote_id=quote_id,
                 generation=recording.generation,
-                stage="C2",
+                stage=plan.checkpoint.stage,
                 cache_key=plan.checkpoint.cache_key,
                 input_sha256=plan.prepared.input_sha256,
                 intent_sha256=content_hash(plan.intent()),
@@ -434,7 +500,5 @@ class ConversationInference:
             )
         )
         await self.database.flush()
-        await self.application._receipt(
-            actor, key, "provider_transcription", command, identifier, now
-        )
+        await self.application._receipt(actor, key, action, command, identifier, now)
         return await self.application._run_view(actor, identifier)
