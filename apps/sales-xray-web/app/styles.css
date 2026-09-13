@@ -13,7 +13,8 @@
     display: block;
   }
   .studio-header {
-    height: 92px;
+    min-height: 92px;
+    height: auto;
     padding: 0 max(24px, calc((100vw - 1140px) / 2));
     display: flex;
     align-items: center;
@@ -27,6 +28,7 @@
     gap: 15px;
     text-decoration: none;
     font-size: 18px;
+    min-width: 0;
   }
   .studio-header strong {
     font-weight: 650;
@@ -37,6 +39,10 @@
     font-size: 8px;
     color: var(--muted);
     margin-top: 4px;
+  }
+  .studio-header a > span:last-child {
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
   .studio-mark {
     display: inline-flex;
@@ -121,6 +127,50 @@
   .recording-history {
     margin-bottom: 34px;
     padding: 22px 25px;
+  }
+  .recording-history > summary {
+    cursor: pointer;
+    list-style: none;
+    padding: 0 0 16px;
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 650;
+  }
+  .recording-history > summary::-webkit-details-marker {
+    display: none;
+  }
+  .recording-history > summary::before {
+    content: "▸";
+    display: inline-block;
+    margin-right: 8px;
+    color: var(--action);
+  }
+  .recording-history[open] > summary::before {
+    content: "▾";
+  }
+  .studio-body.report-active {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+  .studio-body.report-active .studio-upload {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(260px, 0.8fr);
+    gap: 4px 24px;
+    align-items: center;
+    padding: 18px 24px;
+    text-align: left;
+  }
+  .studio-body.report-active .studio-file {
+    grid-column: 1;
+  }
+  .studio-body.report-active .studio-upload audio {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    margin: 0;
+  }
+  .studio-body.report-active .studio-upload > .small-text {
+    grid-column: 1;
+    margin: 0;
   }
   .history-heading {
     display: flex;
@@ -405,9 +455,12 @@
   .studio-progress p {
     color: var(--muted);
   }
+  .studio-recovery-button {
+    margin-top: 10px;
+  }
   .studio-stage-rail {
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 7px;
     margin: 22px 0 5px;
   }
@@ -464,6 +517,12 @@
   .studio-stage.current > span {
     color: var(--action);
     border-color: var(--action);
+  }
+  .studio-stage-note {
+    color: var(--muted);
+    font-size: 10px;
+    line-height: 1.5;
+    margin: 10px 0 0;
   }
   .spin {
     animation: studio-spin 1.2s linear infinite;
@@ -644,6 +703,16 @@
   .studio-moment-copy span {
     overflow-wrap: anywhere;
   }
+  .studio-playback-status {
+    margin: 14px 0 0;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--canvas);
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.55;
+  }
   .studio-moment-copy strong {
     font-size: 12px;
   }
@@ -717,11 +786,23 @@
   }
   @media (max-width: 740px) {
     .studio-header {
-      height: 76px;
+      min-height: 76px;
+      height: auto;
       padding: 0 20px;
+      padding-top: 13px;
+      padding-bottom: 13px;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      row-gap: 10px;
+    }
+    .studio-header > a {
+      flex: 1 1 190px;
+      align-self: center;
     }
     .studio-header-tools {
+      flex: 1 1 100%;
       gap: 7px;
+      justify-content: space-between;
     }
     .studio-language-control > span {
       position: absolute;
@@ -757,6 +838,19 @@
     }
     .studio-upload {
       padding: 26px 22px;
+    }
+    .studio-body.report-active .studio-upload {
+      grid-template-columns: 1fr;
+      gap: 4px;
+      padding: 18px;
+    }
+    .studio-body.report-active .studio-upload audio {
+      grid-column: auto;
+      grid-row: auto;
+      margin: 9px 0;
+    }
+    .studio-body.report-active .studio-upload > .small-text {
+      grid-column: auto;
     }
     .recording-history {
       padding: 19px 18px;

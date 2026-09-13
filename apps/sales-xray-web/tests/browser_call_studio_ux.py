@@ -1,71 +1,290 @@
-"""Mounted-route smoke proof for the bounded Sales Xray UX slice.
+"""Mounted-route and complete-report browser proof for the Sales Xray UX slice.
 
-This exercises the actual Next route with the analysis API unavailable. It
-checks that the language control is usable, interface labels change without
-claiming translated report content, and the 320px layout remains mounted.
+The API responses are bounded synthetic fixtures. No provider is called and no
+private audio is used; the WAV is generated as four seconds of silence.
 """
 
+from io import BytesIO
+import os
 from pathlib import Path
+from urllib.parse import urlparse
+import wave
 
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import Page, sync_playwright
 
 
-BASE_URL = "http://127.0.0.1:3016"
-SCREENSHOT = Path(r"D:\AC-authority-closers-release-audit\sales-xray-live-ux-20260913.png")
+BASE_URL = os.environ.get("SALES_XRAY_BASE_URL", "http://127.0.0.1:3016")
+AUDIT_DIR = Path(r"D:\AC-authority-closers-release-audit\sales-xray-live-ux-20260913")
+SOURCE_SHA = "00" * 32
+CITATION = {"doc": "Doc-1", "sections": ["source section"]}
+TRANSCRIPT = {
+    "source_sha256": SOURCE_SHA,
+    "revision": "scribe-browser-r1",
+    "timebase_id": "1ms",
+    "duration_ms": 4000,
+    "segments": [
+        {
+            "id": "s1",
+            "speaker_id": "speaker-1",
+            "start_ms": 1000,
+            "end_ms": 2200,
+            "text": "Let us agree on the next step.",
+        },
+        {
+            "id": "s2",
+            "speaker_id": "speaker-2",
+            "start_ms": 2500,
+            "end_ms": 3200,
+            "text": "What would make this useful?",
+        },
+    ],
+}
+REPORT = {
+    "summary": "The prospect asked for a clear next step.",
+    "strengths": [
+        {
+            "title": "You clarified the decision",
+            "explanation": "The call ended with a concrete next step.",
+            "evidence": [
+                {
+                    "segment_id": "s1",
+                    "start_ms": 1500,
+                    "end_ms": 2200,
+                    "quote": "Let us agree on the next step.",
+                }
+            ],
+        }
+    ],
+    "missed_opportunities": [],
+    "improvements": [
+        {
+            "title": "Name the objection earlier",
+            "explanation": "Surface the concern before presenting another feature.",
+            "evidence": [
+                {
+                    "segment_id": "s2",
+                    "start_ms": 2500,
+                    "end_ms": 3200,
+                    "quote": "What would make this useful?",
+                }
+            ],
+        }
+    ],
+    "objection_analysis": [],
+    "closing_analysis": [],
+    "verdict": "Keep the direct close and ask one earlier diagnostic question.",
+    "review_status": "draft_not_dipak_adjudicated",
+    "source_label": "Server-derived source-bound draft",
+    "source_sha256": SOURCE_SHA,
+    "transcript_revision": "scribe-browser-r1",
+    "dimensions": [
+        {
+            "dimension_id": f"dimension-{index}",
+            "label": f"Dimension {index}",
+            "status": "unknown",
+            "observation": "There is not enough evidence for a client-side conclusion.",
+            "citations": [CITATION],
+        }
+        for index in range(1, 9)
+    ],
+    "report_sections": [
+        {
+            "number": index,
+            "title": f"Report section {index}",
+            "required": "Keep this section grounded in the call.",
+            "citations": [CITATION],
+        }
+        for index in range(1, 10)
+    ],
+}
+RECORDING = {
+    "id": "recording-1",
+    "state": "completed",
+    "source_revision": "source-1",
+    "source_sha256": SOURCE_SHA,
+    "source_bytes": 128,
+    "content_type": "audio/wav",
+    "created_at": "2026-09-13T00:00:00Z",
+    "latest_run": {
+        "id": "run-1",
+        "state": "completed",
+        "recipe_revision": "audioatlas-48000-v1",
+        "provider_calls": 0,
+        "has_report": True,
+    },
+    "has_report": True,
+}
+
+
+def silence_wav() -> bytes:
+    buffer = BytesIO()
+    with wave.open(buffer, "wb") as output:
+        output.setnchannels(1)
+        output.setsampwidth(2)
+        output.setframerate(8000)
+        output.writeframes(b"\x00\x00" * 8000 * 4)
+    return buffer.getvalue()
+
+
+def json_response(route, body, status=200):
+    import json
+
+    route.fulfill(
+        status=status,
+        content_type="application/json",
+        body=json.dumps(body),
+    )
+
+
+def route_api(route) -> None:
+    path = urlparse(route.request.url).path
+    if path.endswith("/workspace"):
+        json_response(
+            route,
+            {
+                "intake_enabled": True,
+                "authenticated": True,
+                "sign_in_url": None,
+                "message": "Synthetic QA workspace ready.",
+            },
+        )
+    elif path.endswith("/recordings"):
+        json_response(route, {"recordings": [RECORDING]})
+    elif path.endswith("/runs/run-1/report"):
+        json_response(
+            route,
+            {
+                "id": "run-1",
+                "recording_id": "recording-1",
+                "recipe_revision": "audioatlas-48000-v1",
+                "state": "completed",
+                "message": "Saved report ready.",
+                "provider_calls": 0,
+                "report": REPORT,
+            },
+        )
+    elif path.endswith("/recordings/recording-1/transcript"):
+        json_response(route, TRANSCRIPT)
+    elif path.endswith("/recordings/recording-1/source"):
+        route.fulfill(status=200, content_type="audio/wav", body=silence_wav())
+    elif path.endswith("/recordings/recording-1/plan"):
+        json_response(route, {"detail": "No processing plan."}, status=404)
+    else:
+        route.continue_()
+
+
+def workspace_route(route) -> None:
+    json_response(
+        route,
+        {
+            "person_id": "person-1",
+            "session_id": "session-1",
+            "selected_tenant_id": "tenant-1",
+            "workspaces": [{"tenant_id": "tenant-1", "name": "Synthetic QA workspace"}],
+        },
+    )
+
+
+def install_routes(page: Page) -> None:
+    page.route("**/v1/me/workspaces", workspace_route)
+    page.route("**/v1/conversation/**", route_api)
+    page.add_init_script(
+        """
+        window.__playMode = 'resolve';
+        Object.defineProperty(HTMLMediaElement.prototype, 'play', {
+          configurable: true,
+          value: function () {
+            return window.__playMode === 'reject'
+              ? Promise.reject(new DOMException('Synthetic blocked playback', 'NotAllowedError'))
+              : Promise.resolve();
+          }
+        });
+        window.__seekTimes = [];
+        const currentTimeDescriptor = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'currentTime');
+        Object.defineProperty(HTMLMediaElement.prototype, 'currentTime', {
+          configurable: true,
+          get: function () { return currentTimeDescriptor.get.call(this); },
+          set: function (value) {
+            window.__seekTimes.push(value);
+            return currentTimeDescriptor.set.call(this, value);
+          }
+        });
+        """
+    )
+
+
+def open_report(page: Page) -> None:
+    page.goto(BASE_URL, wait_until="networkidle")
+    page.wait_for_timeout(350)
+    page.locator(".recording-history-item").click()
+    page.locator('[aria-label="Sales call report"]').wait_for()
+    page.wait_for_timeout(250)
+
+
+def assert_mobile_header_contained(page: Page) -> None:
+    header = page.locator(".studio-header").bounding_box()
+    brand = page.locator(".studio-header > a").bounding_box()
+    tools = page.locator(".studio-header-tools").bounding_box()
+    assert header and brand and tools
+    assert brand["y"] >= header["y"]
+    assert brand["y"] + brand["height"] <= header["y"] + header["height"] + 1
+    assert tools["y"] >= header["y"]
+    assert tools["y"] + tools["height"] <= header["y"] + header["height"] + 1
+    assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
 
 
 def main() -> None:
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         page = browser.new_page(viewport={"width": 1280, "height": 900})
-        page.route(
-            "**/v1/me/workspaces",
-            lambda route: route.fulfill(
-                status=200,
-                content_type="application/json",
-                body='{"person_id":"person-1","session_id":"session-1","selected_tenant_id":"tenant-1","workspaces":[{"tenant_id":"tenant-1","name":"Synthetic QA workspace"}]}',
-            ),
-        )
-        page.route(
-            "**/v1/conversation/workspace",
-            lambda route: route.fulfill(
-                status=200,
-                content_type="application/json",
-                body='{"intake_enabled":true,"authenticated":true,"sign_in_url":null,"message":"Synthetic QA workspace ready."}',
-            ),
-        )
-        page.route(
-            "**/v1/conversation/recordings",
-            lambda route: route.fulfill(
-                status=200,
-                content_type="application/json",
-                body='{"recordings":[]}',
-            ),
-        )
-        page.goto(BASE_URL, wait_until="networkidle")
-        page.wait_for_timeout(350)
+        install_routes(page)
+        open_report(page)
 
+        report = page.locator('[aria-label="Sales call report"]')
+        assert report.is_visible()
+        page.locator("audio").evaluate("el => el.load()")
+        page.wait_for_timeout(500)
+        assert "Source moments" in report.inner_text()
+        assert "No approved score · source 95 / declared 100" in report.inner_text()
+        assert page.locator(".studio-moment").count() == 2
+
+        first_moment = page.locator(".studio-moment").first
+        first_moment.click()
+        assert first_moment.get_attribute("aria-pressed") == "true"
+        page.wait_for_timeout(50)
+        assert page.evaluate("window.__seekTimes.includes(1.5)")
+
+        page.evaluate("window.__playMode = 'reject'")
+        page.locator(".studio-moment").nth(1).click()
+        page.wait_for_timeout(50)
+        assert "Playback was blocked" in page.locator(".studio-playback-status").inner_text()
+
+        page.evaluate("document.querySelector('audio')?.remove()")
+        first_moment.click()
+        assert "playback is unavailable" in page.locator(".studio-playback-status").inner_text()
+        AUDIT_DIR.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(AUDIT_DIR / "report-playback-recovery.png"), full_page=True)
+
+        # Reload to restore the authorized source element before the visual matrix.
+        page.set_viewport_size({"width": 1280, "height": 900})
+        page.evaluate("window.__playMode = 'resolve'")
+        open_report(page)
         language = page.locator(".studio-language-control select")
         assert language.count() == 1
-        assert "Upload your call" in page.locator(".studio-steps").inner_text()
-        assert page.get_by_text("Start with your sales call", exact=True).count() == 1
-
-        for mode, expected_step in (
+        modes = (
             ("en", "Upload your call"),
             ("hi", "कॉल अपलोड करें"),
             ("mr", "कॉल अपलोड करा"),
             ("en-hi-mixed", "Upload कॉल करें"),
-        ):
+        )
+        for mode, expected_step in modes:
             language.select_option(mode)
             assert expected_step in page.locator(".studio-steps").inner_text()
-        language.select_option("hi")
-        assert page.get_by_text("हिन्दी · देवनागरी", exact=True).count() >= 1
-
-        page.set_viewport_size({"width": 320, "height": 780})
-        page.wait_for_timeout(100)
-        assert page.locator("main#main").is_visible()
-        SCREENSHOT.parent.mkdir(parents=True, exist_ok=True)
-        page.screenshot(path=str(SCREENSHOT), full_page=True)
+            page.set_viewport_size({"width": 1280, "height": 900})
+            page.screenshot(path=str(AUDIT_DIR / f"report-{mode}-desktop.png"), full_page=True)
+            page.set_viewport_size({"width": 320, "height": 780})
+            assert_mobile_header_contained(page)
+            page.screenshot(path=str(AUDIT_DIR / f"report-{mode}-mobile.png"), full_page=True)
 
         browser.close()
 

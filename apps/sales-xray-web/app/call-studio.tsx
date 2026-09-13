@@ -86,7 +86,6 @@ const PLAN_STATES = new Set([
 ]);
 const PLAN_STAGES = new Set(["C2", "C4", "C5"]);
 const PROCESSING_STAGES = new Set(["C1", "C2", "C3", "C4", "C5", "C6"]);
-const PROCESSING_STAGE_ORDER = ["C1", "C2", "C3", "C4", "C5", "C6"] as const;
 const LOCAL_MEASUREMENT_RECIPES = new Set([
   "audioatlas-48000-v1",
   "audioatlas-16000-v1",
@@ -118,6 +117,9 @@ const DISPLAY_COPY: Record<
     practiceFocus: string;
     practiceFocusIntro: string;
     reportLanguageNotice: string;
+    playbackUnavailable: string;
+    playbackBlocked: string;
+    playingMoment: string;
   }
 > = {
   en: {
@@ -129,9 +131,9 @@ const DISPLAY_COPY: Record<
     languageLabel: "Display language",
     sourceMoments: "Source moments",
     evidenceFindings: "Evidence-backed findings",
-    dimensionsChecked: "Dimensions checked",
+    dimensionsChecked: "Dimensions observed",
     scoreHold: "Score publication",
-    scoreHoldDetail: "Held · 95 / 100 weights declared",
+    scoreHoldDetail: "No approved score · source 95 / declared 100",
     sourceMomentsHeading: "Moments from your call",
     sourceMomentsIntro:
       "Jump to the exact source-bound moments behind this draft.",
@@ -141,6 +143,11 @@ const DISPLAY_COPY: Record<
       "Use the clearest improvement as a small rehearsal before your next call.",
     reportLanguageNotice:
       "The report text stays in its server-provided language. Display modes translate interface labels only until reviewed report translations exist.",
+    playbackUnavailable:
+      "This moment is linked, but source playback is unavailable. Verify the authorized recording to listen.",
+    playbackBlocked:
+      "Playback was blocked. Press play in the audio controls to continue from this moment.",
+    playingMoment: "Playing source moment",
   },
   hi: {
     label: "हिन्दी · देवनागरी",
@@ -151,18 +158,22 @@ const DISPLAY_COPY: Record<
     languageLabel: "दिखाने की भाषा",
     sourceMoments: "स्रोत क्षण",
     evidenceFindings: "सबूत से जुड़े निष्कर्ष",
-    dimensionsChecked: "जाँचे गए आयाम",
+    dimensionsChecked: "देखे गए आयाम",
     scoreHold: "स्कोर प्रकाशन",
-    scoreHoldDetail: "रुका हुआ · 95 / 100 weights declared",
+    scoreHoldDetail: "कोई approved score नहीं · source 95 / declared 100",
     sourceMomentsHeading: "आपकी कॉल के क्षण",
-    sourceMomentsIntro:
-      "इस ड्राफ्ट के स्रोत से जुड़े सटीक क्षण पर जाएँ।",
+    sourceMomentsIntro: "इस ड्राफ्ट के स्रोत से जुड़े सटीक क्षण पर जाएँ।",
     playMoment: "स्रोत क्षण चलाएँ",
     practiceFocus: "अगली बार अभ्यास करने की एक बात",
     practiceFocusIntro:
       "अगली कॉल से पहले सबसे स्पष्ट सुधार का छोटा अभ्यास करें।",
     reportLanguageNotice:
       "रिपोर्ट का पाठ server-provided भाषा में ही रहता है। reviewed report translations उपलब्ध होने तक केवल interface labels बदलते हैं।",
+    playbackUnavailable:
+      "यह moment source से जुड़ा है, लेकिन playback उपलब्ध नहीं है। सुनने के लिए authorized recording जाँचें।",
+    playbackBlocked:
+      "Playback block हो गया। इस moment से सुनने के लिए audio controls में play दबाएँ।",
+    playingMoment: "Source moment चल रहा है",
   },
   mr: {
     label: "मराठी · देवनागरी",
@@ -173,18 +184,21 @@ const DISPLAY_COPY: Record<
     languageLabel: "दाखवण्याची भाषा",
     sourceMoments: "स्रोत क्षण",
     evidenceFindings: "पुराव्याशी जोडलेले निष्कर्ष",
-    dimensionsChecked: "तपासलेले आयाम",
+    dimensionsChecked: "निरीक्षित आयाम",
     scoreHold: "स्कोअर प्रकाशन",
-    scoreHoldDetail: "थांबवले · 95 / 100 weights declared",
+    scoreHoldDetail: "Approved score नाही · source 95 / declared 100",
     sourceMomentsHeading: "तुमच्या कॉलमधले क्षण",
-    sourceMomentsIntro:
-      "या ड्राफ्टमागचे अचूक source-bound moments उघडा.",
+    sourceMomentsIntro: "या ड्राफ्टमागचे अचूक source-bound moments उघडा.",
     playMoment: "स्रोत क्षण चालवा",
     practiceFocus: "पुढच्या कॉलसाठी एक सराव",
-    practiceFocusIntro:
-      "पुढच्या कॉलआधी स्पष्ट सुधारण्याचा छोटा सराव करा.",
+    practiceFocusIntro: "पुढच्या कॉलआधी स्पष्ट सुधारण्याचा छोटा सराव करा.",
     reportLanguageNotice:
       "रिपोर्टचा मजकूर server-provided भाषेतच राहतो. Reviewed report translations येईपर्यंत display modes फक्त interface labels बदलतात.",
+    playbackUnavailable:
+      "हा moment source शी जोडलेला आहे, पण playback उपलब्ध नाही. ऐकण्यासाठी authorized recording तपासा.",
+    playbackBlocked:
+      "Playback block झाला. या moment पासून ऐकण्यासाठी audio controls मध्ये play करा.",
+    playingMoment: "Source moment चालू आहे",
   },
   "en-hi-mixed": {
     label: "English + हिन्दी mixed",
@@ -195,9 +209,9 @@ const DISPLAY_COPY: Record<
     languageLabel: "Display language · भाषा",
     sourceMoments: "Source moments · स्रोत क्षण",
     evidenceFindings: "Evidence-backed findings · सबूत",
-    dimensionsChecked: "Dimensions checked · जाँच",
+    dimensionsChecked: "Dimensions observed · देखे गए आयाम",
     scoreHold: "Score publication · स्कोर",
-    scoreHoldDetail: "Held · 95 / 100 weights declared",
+    scoreHoldDetail: "No approved score · source 95 / declared 100",
     sourceMomentsHeading: "Moments from your call · आपकी कॉल के क्षण",
     sourceMomentsIntro:
       "Jump to exact source-bound moments · सटीक क्षण पर जाएँ।",
@@ -207,6 +221,10 @@ const DISPLAY_COPY: Record<
       "Use this improvement before your next call · अगली कॉल से पहले अभ्यास करें।",
     reportLanguageNotice:
       "Report text stays in its server-provided language · रिपोर्ट का पाठ server-provided भाषा में रहता है। Display modes translate interface labels only until reviewed report translations exist.",
+    playbackUnavailable:
+      "This moment is linked but playback is unavailable · यह moment जुड़ा है पर playback उपलब्ध नहीं है।",
+    playbackBlocked: "Playback was blocked · audio controls में play दबाएँ।",
+    playingMoment: "Playing source moment · moment चल रहा है",
   },
 };
 
@@ -548,8 +566,7 @@ async function readProcessingPlan(
 
 export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
   const [advanced, setAdvanced] = useState(false);
-  const [displayLanguage, setDisplayLanguage] =
-    useState<DisplayLanguage>("en");
+  const [displayLanguage, setDisplayLanguage] = useState<DisplayLanguage>("en");
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -579,12 +596,15 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
   const [selectedMomentKey, setSelectedMomentKey] = useState<string | null>(
     null,
   );
+  const [momentStatus, setMomentStatus] = useState("");
   const input = useRef<HTMLInputElement>(null);
   const audio = useRef<HTMLAudioElement>(null);
   const attempt = useRef(0);
   const requestKey = useRef("");
   const planRequestKey = useRef("");
   const copy = DISPLAY_COPY[displayLanguage];
+  const interfaceLanguage =
+    displayLanguage === "hi" ? "hi" : displayLanguage === "mr" ? "mr" : "en";
 
   useEffect(() => {
     const controller = new AbortController();
@@ -868,6 +888,8 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
     setReportBlocked(false);
     setConsent(false);
     setPlanConsent(false);
+    setSelectedMomentKey(null);
+    setMomentStatus("");
     setError("");
     requestKey.current = crypto.randomUUID();
     planRequestKey.current = "";
@@ -985,6 +1007,8 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
     setSourceSha256(recording.source_sha256);
     setDuration(0);
     setPlanConsent(false);
+    setSelectedMomentKey(null);
+    setMomentStatus("");
     requestKey.current = crypto.randomUUID();
     planRequestKey.current = "";
     try {
@@ -1198,9 +1222,26 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
       : "Not available";
   function seekToMoment(moment: EvidenceMoment) {
     setSelectedMomentKey(moment.key);
-    if (!audio.current) return;
-    audio.current.currentTime = moment.start_ms / 1000;
-    void audio.current.play().catch(() => undefined);
+    const player = audio.current;
+    if (!player || !player.isConnected) {
+      setMomentStatus(copy.playbackUnavailable);
+      return;
+    }
+    try {
+      player.currentTime = moment.start_ms / 1000;
+      const playback = player.play();
+      if (!playback || typeof playback.then !== "function") {
+        setMomentStatus(copy.playbackBlocked);
+        return;
+      }
+      void playback
+        .then(() =>
+          setMomentStatus(`${copy.playingMoment} · ${time(moment.start_ms)}.`),
+        )
+        .catch(() => setMomentStatus(copy.playbackBlocked));
+    } catch {
+      setMomentStatus(copy.playbackUnavailable);
+    }
   }
   function restart() {
     ++attempt.current;
@@ -1219,6 +1260,7 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
     setConsent(false);
     setPlanConsent(false);
     setSelectedMomentKey(null);
+    setMomentStatus("");
     planRequestKey.current = "";
   }
   if (advanced)
@@ -1272,7 +1314,11 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
         </div>
       </header>
       <main id="main" className="studio-main">
-        <nav className="studio-steps" aria-label="Analysis steps">
+        <nav
+          className="studio-steps"
+          aria-label="Analysis steps"
+          lang={interfaceLanguage}
+        >
           {[copy.uploadStep, copy.analyzeStep, copy.reportStep].map(
             (label, i) => (
               <span
@@ -1304,7 +1350,7 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
             </p>
           </div>
         )}
-        <div className="studio-body">
+        <div className={`studio-body${job?.report ? " report-active" : ""}`}>
           <section className="panel studio-upload" aria-label="Your call">
             {!file && !activeRecording ? (
               <>
@@ -1358,6 +1404,7 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
                     if (value && Number.isFinite(value))
                       setDuration(value * 1000);
                   }}
+                  onError={() => setMomentStatus(copy.playbackUnavailable)}
                 />
                 <p className="small-text">
                   Listen here to check you chose the right recording. Selecting
@@ -1399,6 +1446,7 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
                     if (value && Number.isFinite(value))
                       setDuration(value * 1000);
                   }}
+                  onError={() => setMomentStatus(copy.playbackUnavailable)}
                 />
                 <p className="small-text">
                   Playback uses the authorized recording in this workspace. No
@@ -1547,6 +1595,17 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
                     ? "You can retry with a fresh analysis after checking the selected file."
                     : "We keep completed work so a retry does not need to transcribe your call again."}
                 </p>
+                {(reportBlocked ||
+                  ["failed", "cancelled", "completed"].includes(job.state)) && (
+                  <button
+                    className="secondary-button studio-recovery-button"
+                    type="button"
+                    onClick={restart}
+                  >
+                    Choose a call to retry
+                    <ArrowRight size={16} />
+                  </button>
+                )}
               </div>
             )}
             {plan && !job?.report && plan.accepted && (
@@ -1578,41 +1637,57 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
                     ? "No report is shown until it matches this recording."
                     : processingPlanMessage(plan)}
                 </p>
+                {(reportBlocked || plan.state === "completed") && (
+                  <button
+                    className="secondary-button studio-recovery-button"
+                    type="button"
+                    onClick={restart}
+                  >
+                    Choose a call to retry
+                    <ArrowRight size={16} />
+                  </button>
+                )}
                 <div
                   className="studio-stage-rail"
-                  aria-label="Verified analysis progress"
+                  aria-label="Approved analysis stages"
                 >
-                  {PROCESSING_STAGE_ORDER.map((stage, index) => {
-                    const currentIndex = plan.current_stage
-                      ? PROCESSING_STAGE_ORDER.indexOf(
-                          plan.current_stage as (typeof PROCESSING_STAGE_ORDER)[number],
-                        )
-                      : -1;
-                    const complete =
-                      plan.report_ready ||
-                      plan.state === "completed" ||
-                      (currentIndex >= 0 && index < currentIndex);
+                  {plan.stages.map((stage, index) => {
+                    const complete = plan.report_ready;
                     const current =
                       !complete &&
-                      currentIndex >= 0 &&
-                      index === currentIndex &&
-                      plan.state === "active";
+                      plan.state === "active" &&
+                      plan.current_stage === stage.stage;
                     return (
                       <div
                         className={`studio-stage${complete ? " complete" : current ? " current" : ""}`}
-                        key={stage}
+                        key={stage.stage}
                       >
                         <span aria-hidden="true">
                           {complete ? <Check size={13} /> : index + 1}
                         </span>
-                        <strong>{processingStageLabel(stage)}</strong>
+                        <strong>
+                          {stage.stage} · {processingStageLabel(stage.stage)}
+                        </strong>
                         <small>
-                          {complete ? "Complete" : current ? "In progress" : "Waiting"}
+                          {complete
+                            ? "Complete"
+                            : current
+                              ? "In progress"
+                              : plan.state === "held" ||
+                                  plan.state === "cancelled" ||
+                                  plan.state === "completed"
+                                ? "Not confirmed"
+                                : "Queued"}
                         </small>
                       </div>
                     );
                   })}
                 </div>
+                <p className="studio-stage-note">
+                  The plan reports its current stage and approved stages.
+                  Per-stage completion receipts are not included in this
+                  response.
+                </p>
                 {(plan.state === "held" || plan.state === "cancelled") && (
                   <button
                     className="secondary-button"
@@ -1687,10 +1762,10 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
             </aside>
           )}
         </div>
-        <section
-          className="recording-history panel"
-          aria-labelledby="saved-calls-title"
-        >
+        <details className="recording-history panel" open={!job?.report}>
+          <summary className={job?.report ? "" : "visually-hidden"}>
+            Saved calls{recordings.length ? ` (${recordings.length})` : ""}
+          </summary>
           <div className="history-heading">
             <div>
               <p className="eyebrow">YOUR WORKSPACE</p>
@@ -1764,7 +1839,7 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
               No saved calls are available in this workspace yet.
             </p>
           )}
-        </section>
+        </details>
         {job?.report && (
           <section
             className="studio-report panel"
@@ -1774,7 +1849,11 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
             <h1>What to take into your next call.</h1>
             <p className="studio-report-summary">{job.report.summary}</p>
             <span className="pill">AI draft · Dipak has not reviewed this</span>
-            <div className="studio-report-language-note" role="status">
+            <div
+              className="studio-report-language-note"
+              role="status"
+              lang={interfaceLanguage}
+            >
               <Languages size={16} aria-hidden="true" />
               <span>{copy.reportLanguageNotice}</span>
             </div>
@@ -1782,10 +1861,13 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
               className="studio-report-metrics"
               aria-label="Report measurements"
               role="list"
+              lang={interfaceLanguage}
             >
               <div className="studio-report-metric" role="listitem">
                 <span>{copy.sourceMoments}</span>
-                <strong>{report ? reportMoments.length : "Not available"}</strong>
+                <strong>
+                  {report ? reportMoments.length : "Not available"}
+                </strong>
                 <small>Unique timestamped spans</small>
               </div>
               <div className="studio-report-metric" role="listitem">
@@ -1802,7 +1884,10 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
                     ? `${observedDimensions}/${job.report.dimensions.length}`
                     : "Not available"}
                 </strong>
-                <small>Observed dimensions only</small>
+                <small>
+                  Observed: {observedDimensions} of{" "}
+                  {job.report.dimensions.length}
+                </small>
               </div>
               <div className="studio-report-metric hold" role="listitem">
                 <span>{copy.scoreHold}</span>
@@ -1813,6 +1898,7 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
             <section
               className="studio-moment-browser"
               aria-labelledby="source-moments-title"
+              lang={interfaceLanguage}
             >
               <div className="studio-moment-browser-heading">
                 <div>
@@ -1821,7 +1907,8 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
                   <p>{copy.sourceMomentsIntro}</p>
                 </div>
                 <span className="pill subtle">
-                  {durationLabel} · {activeTranscript?.segments.length ?? 0} transcript segments
+                  {durationLabel} · {activeTranscript?.segments.length ?? 0}{" "}
+                  transcript segments
                 </span>
               </div>
               {reportMoments.length ? (
@@ -1851,9 +1938,17 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
                   No source-linked moments were produced for this draft.
                 </p>
               )}
+              {momentStatus && (
+                <p className="studio-playback-status" role="status">
+                  {momentStatus}
+                </p>
+              )}
             </section>
             {job.report.improvements[0] && (
-              <aside className="studio-practice-callout">
+              <aside
+                className="studio-practice-callout"
+                lang={interfaceLanguage}
+              >
                 <span className="studio-practice-icon" aria-hidden="true">
                   <ListChecks size={20} />
                 </span>

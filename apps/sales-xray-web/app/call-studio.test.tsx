@@ -522,7 +522,11 @@ describe("CallStudio", () => {
     expect(container.textContent).toContain("Source moments");
     expect(container.textContent).toContain("Evidence-backed findings");
     expect(container.textContent).toContain("Held");
-    expect(container.textContent).toContain("95 / 100 weights declared");
+    expect(container.textContent).toContain(
+      "No approved score · source 95 / declared 100",
+    );
+    expect(container.textContent).toContain("Dimensions observed");
+    expect(container.textContent).toContain("Observed: 0 of 8");
     expect(container.textContent).toContain("Moments from your call");
     expect(container.querySelectorAll(".studio-moment")).toHaveLength(2);
 
@@ -534,9 +538,8 @@ describe("CallStudio", () => {
         writable: true,
         value: 0,
       });
-    const firstMoment = container.querySelector<HTMLButtonElement>(
-      ".studio-moment",
-    );
+    const firstMoment =
+      container.querySelector<HTMLButtonElement>(".studio-moment");
     expect(firstMoment?.getAttribute("aria-pressed")).toBe("false");
     await act(async () => firstMoment?.click());
     expect(audio?.currentTime).toBe(1.5);
@@ -562,7 +565,9 @@ describe("CallStudio", () => {
     expect(container.textContent).toContain(
       "रिपोर्ट का पाठ server-provided भाषा में ही रहता है",
     );
-    expect(container.textContent).toContain("The prospect asked for a clear next step.");
+    expect(container.textContent).toContain(
+      "The prospect asked for a clear next step.",
+    );
   });
 
   it("polls report status before transcript and continues when the report arrives later", async () => {
@@ -676,6 +681,11 @@ describe("CallStudio", () => {
     expect(container.textContent).toContain(
       "Analysis finished without a saved report",
     );
+    expect(
+      [...container.querySelectorAll(".studio-stage small")].map(
+        (stage) => stage.textContent,
+      ),
+    ).toEqual(["Not confirmed", "Not confirmed", "Not confirmed"]);
 
     await act(async () => vi.advanceTimersByTimeAsync(60_000));
     await flush();
@@ -723,6 +733,12 @@ describe("CallStudio", () => {
     expect(container.querySelector('[role="alert"]')?.textContent).toContain(
       "could not be verified",
     );
+    expect(getButton("Choose a call to retry")).toBeTruthy();
+    await act(async () => getButton("Choose a call to retry").click());
+    await flush();
+    expect(
+      container.querySelector("label.upload-label")?.textContent,
+    ).toContain("Choose audio file");
   });
 
   it("rejects a report status bound to a different run or recording", async () => {
