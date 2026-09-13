@@ -34,6 +34,7 @@ from ac_platform.conversation_intelligence.acquisition_source import NativeUploa
 from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
     ConversationError,
+    ConversationNotFound,
 )
 from ac_platform.conversation_intelligence.async_io import join_thread
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
@@ -176,7 +177,14 @@ def install_submission_http(
         async with asynccontextmanager(current_owner)(request) as owner:
             allowance = await owner.ownership.sessions.allowance(**owner.arguments)
             if allowance["available_seconds"] <= 0:
-                raise fail(409, "Your current free call allowance has been used.")
+                try:
+                    existing = await owner.ownership.require_submission_owner(
+                        submission_id, **owner.arguments
+                    )
+                except ConversationNotFound:
+                    raise fail(409, "Your current free call allowance has been used.") from None
+                if existing.source_sha256 != hashes[0]:
+                    raise fail(409, "Your current free call allowance has been used.")
         try:
             capacity.acquire_nowait()
         except anyio.WouldBlock:

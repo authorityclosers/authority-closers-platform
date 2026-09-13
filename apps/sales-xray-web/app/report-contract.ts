@@ -330,6 +330,7 @@ function parseSections(value: unknown): ReportSection[] {
 function parseReport(
   value: unknown,
   binding: ReportSourceBinding,
+  projected = false,
 ): SalesReport {
   const report = object(value, "report_invalid");
   keys(
@@ -434,7 +435,7 @@ function parseReport(
     source_sha256: sourceSha256,
     transcript_revision: transcriptRevision,
     dimensions: parseDimensions(report.dimensions),
-    report_sections: parseSections(report.report_sections),
+    report_sections: projected ? [] : parseSections(report.report_sections),
   };
   if (report.overview !== undefined && report.overview !== null) {
     try {
@@ -468,6 +469,95 @@ function parseReport(
     }
   }
   return parsed;
+}
+
+/** The acquisition projection retains the same literal-evidence validators. */
+export function parseAcquisitionReport(
+  value: unknown,
+  expected: { submissionId: string; recordingId: string },
+  transcript: Transcript,
+): { report: SalesReport; claimed: boolean } {
+  const envelope = object(value, "report_envelope");
+  keys(
+    envelope,
+    [
+      "schema",
+      "submission_id",
+      "recording_id",
+      "run_id",
+      "source_sha256",
+      "transcript_revision",
+      "source_label",
+      "report",
+    ],
+    "report_envelope",
+  );
+  if (
+    envelope.schema !== "ac.sales-xray.report-envelope/2" ||
+    envelope.submission_id !== expected.submissionId ||
+    envelope.recording_id !== expected.recordingId ||
+    envelope.source_sha256 !== transcript.source_sha256 ||
+    envelope.transcript_revision !== transcript.revision
+  )
+    throw new ReportContractError("report_envelope_binding");
+  identifier(envelope.run_id, "report_run");
+  const projection = object(envelope.report, "report_projection");
+  keys(
+    projection,
+    [
+      "schema",
+      "access",
+      "review_status",
+      "numeric_publication",
+      "content",
+      "sections",
+      "unlock",
+    ],
+    "report_projection",
+  );
+  if (
+    projection.schema !== "ac.sales-xray.report-access/2" ||
+    !["guest_preview", "claimed_account"].includes(String(projection.access)) ||
+    projection.numeric_publication !== false
+  )
+    throw new ReportContractError("report_projection_invalid");
+  const content = object(projection.content, "report_content");
+  keys(
+    content,
+    [
+      "summary",
+      "strengths",
+      "missed_opportunities",
+      "dimensions",
+      "next_action",
+      "improvements",
+      "objection_analysis",
+      "closing_analysis",
+      "verdict",
+      "overview",
+    ],
+    "report_content",
+  );
+  const { next_action: _nextAction, ...findings } = content;
+  void _nextAction;
+  return {
+    claimed: projection.access === "claimed_account",
+    report: parseReport(
+      {
+        ...findings,
+        review_status: projection.review_status,
+        source_label: envelope.source_label,
+        source_sha256: envelope.source_sha256,
+        transcript_revision: envelope.transcript_revision,
+      },
+      {
+        sourceSha256: transcript.source_sha256,
+        durationMs: transcript.duration_ms,
+        transcript,
+      },
+      true,
+    ),
+  };
 }
 
 export function parseJobResponse(

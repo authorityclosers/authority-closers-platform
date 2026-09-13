@@ -1,0 +1,219 @@
+.app {
+  min-height: 100vh;
+}
+.header {
+  justify-content: space-between;
+  gap: 18px;
+}
+.header > :last-child {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+}
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  align-items: start;
+  gap: 24px;
+}
+.upload {
+  min-width: 0;
+}
+.upload h2 {
+  overflow-wrap: anywhere;
+}
+.upload audio {
+  width: 100%;
+}
+.expect {
+  padding: 36px;
+  background: var(--surface);
+}
+.expect h2 {
+  font-size: clamp(22px, 2.2vw, 29px);
+  line-height: 1.35;
+  letter-spacing: -0.6px;
+}
+.expect ol {
+  list-style: none;
+  padding: 10px 0;
+  margin: 0;
+}
+.expect li {
+  display: flex;
+  gap: 16px;
+  padding: 22px 0;
+  border-bottom: 1px solid var(--border);
+}
+.expect li > b {
+  color: var(--mint);
+  font-size: 13px;
+  padding-top: 4px;
+}
+.expect h3 {
+  margin: 0 0 7px;
+  font-size: 16px;
+}
+.expect li p,
+.draftNote {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+  margin: 0;
+}
+.draftNote {
+  padding-top: 18px;
+}
+.allowance {
+  display: flex;
+  justify-content: center;
+  gap: 9px;
+  align-items: center;
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  color: var(--mint);
+  font-size: 12px;
+}
+.disabled {
+  pointer-events: none;
+  opacity: 0.5;
+}
+.providers {
+  list-style: none;
+  padding: 0 !important;
+  display: grid;
+  gap: 14px;
+}
+.providers li {
+  border-left: 2px solid var(--border);
+  padding-left: 12px;
+  font-size: 12px;
+}
+.providers strong,
+.providers span {
+  display: block;
+  margin-bottom: 5px;
+}
+.providers p {
+  margin: 0;
+}
+.progressRail {
+  display: grid;
+  gap: 14px;
+  text-align: left;
+  margin-top: 24px;
+}
+.progressRail > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.progressRail > div > span {
+  background: var(--canvas);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+}
+.progressRail > div[data-complete="true"] > span {
+  background: var(--mint);
+  color: white;
+}
+.progressRail p {
+  margin: 0;
+  font-size: 12px;
+}
+.progressRail small {
+  display: block;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.claim {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 24px;
+  border-top: 1px solid var(--border);
+  margin: 24px 0;
+  background: var(--canvas);
+  border-radius: 10px;
+}
+.claim div {
+  flex: 1;
+}
+.claim h2 {
+  font-size: 18px;
+  margin: 0 0 6px;
+}
+.claim p {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0;
+}
+.callActions {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.callActions p {
+  font-size: 12px;
+}
+.callActions button {
+  margin-right: 10px;
+}
+.withReport {
+  grid-template-columns: 1fr;
+}
+.report {
+  margin-top: 24px;
+}
+.loading {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.error {
+  margin: 24px 0;
+}
+.errorActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+}
+@media (max-width: 760px) {
+  .layout {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .expect {
+    padding: 24px;
+  }
+  .header {
+    flex-wrap: wrap;
+  }
+  .claim {
+    flex-wrap: wrap;
+    gap: 14px;
+    padding: 20px;
+  }
+  .claim > :last-child {
+    width: 100%;
+    justify-content: center;
+  }
+}
+@media print {
+  .header,
+  .layout,
+  .claim,
+  .error,
+  .callActions {
+    display: none !important;
+  }
+  .report {
+    margin: 0;
+  }
+}

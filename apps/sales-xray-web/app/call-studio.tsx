@@ -64,7 +64,7 @@ type ProcessingPlanStage = {
   privacy_revision: string;
   privacy_notice: string;
 };
-type ProcessingPlan = {
+export type ProcessingPlan = {
   id: string;
   recording_id: string;
   plan_fingerprint: string;
@@ -182,7 +182,7 @@ function planInteger(
   return value as number;
 }
 
-function parseProcessingPlan(
+export function parseProcessingPlan(
   value: unknown,
   recordingId: string,
 ): ProcessingPlan {
