@@ -11,7 +11,10 @@ import pytest
 from fastapi import FastAPI, Request
 
 from ac_platform.application.settings import Settings
-from ac_platform.conversation_intelligence.application import ConversationDenied
+from ac_platform.conversation_intelligence.application import (
+    ConversationDenied,
+    ConversationNotFound,
+)
 from ac_platform.conversation_intelligence.review_contracts import (
     ReviewAssignmentCreateRequest,
     ReviewFeedbackRequest,
@@ -67,6 +70,8 @@ class _ReviewService:
     async def accept_invitation(
         self, actor: Any, intent: ReviewInvitationAcceptRequest
     ) -> dict[str, Any]:
+        if any(ord(character) > 127 for character in intent.token):
+            raise ConversationNotFound("Review invitation not found.")
         self.calls.calls.append(("accept_invitation", actor.person_id, intent))
         return {"id": str(ASSIGNMENT_ID), "state": "assigned"}
 
@@ -266,6 +271,15 @@ async def test_admin_assignment_routes_require_admin_host_and_bind_current_actor
     )
     assert accepted.status_code == 201
     assert calls.calls[-1][0] == "accept_invitation"
+
+    malformed = await _request(
+        application,
+        "POST",
+        "/v1/conversation/review-invitations/accept",
+        headers={"Origin": "https://learner.test"},
+        json={"token": "é" * 40},
+    )
+    assert malformed.status_code == 404
 
 
 @pytest.mark.asyncio

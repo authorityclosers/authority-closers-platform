@@ -13,7 +13,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import Engine, MetaData, Table, create_engine, func, inspect, select, text
+from sqlalchemy import Engine, MetaData, Table, create_engine, func, insert, inspect, select, text
 from sqlalchemy.engine import URL, make_url
 from sqlalchemy.exc import ArgumentError
 from sqlalchemy.orm import Session
@@ -275,6 +275,119 @@ def _seed_populated_0027(engine: Engine) -> None:
             ]
         )
         database.commit()
+
+
+def _seed_populated_0034(engine: Engine) -> None:
+    """Populate review assignment history before the invitation migration."""
+
+    metadata = MetaData()
+    jobs = Table("jobs", metadata, autoload_with=engine)
+    recordings = Table("conversation_recordings", metadata, autoload_with=engine)
+    runs = Table("conversation_runs", metadata, autoload_with=engine)
+    drafts = Table("conversation_report_drafts", metadata, autoload_with=engine)
+    assignments = Table("conversation_review_assignments", metadata, autoload_with=engine)
+    revocations = Table("conversation_review_revocations", metadata, autoload_with=engine)
+    feedback = Table("conversation_review_feedback", metadata, autoload_with=engine)
+    now = datetime.now(UTC)
+    with engine.begin() as connection:
+        recording = connection.execute(select(recordings).limit(1)).mappings().one()
+        tenant_id = recording["tenant_id"]
+        person_id = recording["person_id"]
+        recording_id = recording["id"]
+        job_id = uuid4()
+        run_id = uuid4()
+        report_id = uuid4()
+        assignment_id = uuid4()
+        connection.execute(
+            insert(jobs).values(
+                id=job_id,
+                tenant_id=tenant_id,
+                kind="migration.rehearsal.review.v1",
+                dedupe_key=f"migration-rehearsal-review-{job_id}",
+                payload={"source": "migration-rehearsal"},
+                external_side_effect=False,
+                recovery_generation=0,
+                status="queued",
+                attempt_count=0,
+                max_attempts=5,
+                available_at=now,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        connection.execute(
+            insert(runs).values(
+                id=run_id,
+                tenant_id=tenant_id,
+                person_id=person_id,
+                recording_id=recording_id,
+                request_key=f"migration-rehearsal-review-{run_id}",
+                intent_sha256="1" * 64,
+                recipe_revision="migration-rehearsal-v1",
+                generation=1,
+                state="completed",
+                job_id=job_id,
+                created_at=now,
+                completed_at=now,
+            )
+        )
+        connection.execute(
+            insert(drafts).values(
+                id=report_id,
+                tenant_id=tenant_id,
+                person_id=person_id,
+                recording_id=recording_id,
+                run_id=run_id,
+                source_revision=recording["source_revision"],
+                source_sha256=recording["source_sha256"],
+                report_sha256="2" * 64,
+                transcript_sha256="3" * 64,
+                profile_sha256="4" * 64,
+                evidence_receipt_sha256="5" * 64,
+                payload={"review_status": "draft"},
+                transcript={"segments": []},
+                evidence_receipt={"source": "migration-rehearsal"},
+                created_at=now,
+            )
+        )
+        connection.execute(
+            insert(assignments).values(
+                id=assignment_id,
+                tenant_id=tenant_id,
+                person_id=person_id,
+                recording_id=recording_id,
+                run_id=run_id,
+                reviewer_id=person_id,
+                creator_id=person_id,
+                report_id=report_id,
+                assignment={"schema": "migration-rehearsal-review-assignment"},
+                assignment_sha256="6" * 64,
+                created_at=now,
+                expires_at=now + timedelta(days=1),
+            )
+        )
+        connection.execute(
+            insert(revocations).values(
+                assignment_id=assignment_id,
+                person_id=person_id,
+                created_at=now,
+            )
+        )
+        connection.execute(
+            insert(feedback).values(
+                id=uuid4(),
+                assignment_id=assignment_id,
+                tenant_id=tenant_id,
+                person_id=person_id,
+                reviewer_id=person_id,
+                recording_id=recording_id,
+                request_key="migration-rehearsal-feedback-1",
+                request_sha256="7" * 64,
+                payload_sha256="8" * 64,
+                payload={"feedback": "preserve this history"},
+                created_at=now,
+            )
+        )
 
 
 def _public_row_counts(engine: Engine) -> dict[str, int]:
@@ -663,10 +776,15 @@ def test_populated_0033_preserves_all_existing_rows_when_upgrading_to_0034(
     with migration_harness.engine.connect() as connection:
         assert connection.scalar(text("SELECT version_num FROM alembic_version")) == REVIEWS_HEAD
 
+    _seed_populated_0034(migration_harness.engine)
+    source_rows = _public_rows(migration_harness.engine)
+    review_history = {table: source_rows[table] for table in REVIEWS_TABLES}
+    assert all(review_history.values())
+
     migration = _run_migration(migration_harness.environment, REVIEW_INVITATIONS_HEAD)
     assert migration.returncode == 0, "review invitation migration failed in the isolated schema"
     target_rows = _public_rows(migration_harness.engine)
-    assert set(target_rows) == set(source_rows) | REVIEWS_TABLES | REVIEW_INVITATIONS_TABLES
+    assert set(target_rows) == set(source_rows) | REVIEW_INVITATIONS_TABLES
     for table, rows in source_rows.items():
         assert target_rows[table] == rows, f"migration changed existing rows in {table}"
     assert all(target_rows[table] == () for table in REVIEW_INVITATIONS_TABLES)
