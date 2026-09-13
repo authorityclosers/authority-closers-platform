@@ -23,6 +23,8 @@ it("keeps the LMS route inside the Academy shell with an internal return path", 
   const markup = renderToStaticMarkup(<SalesXrayPage />);
 
   expect(markup).toContain('data-current="sales-xray"');
+  expect(markup).toContain('id="main-content"');
+  expect(markup).toContain('class="learner-main"');
   expect(markup).toContain('data-home-href="/home"');
   expect(markup).toContain("Call Studio");
   expect(markup).not.toContain("http://");
