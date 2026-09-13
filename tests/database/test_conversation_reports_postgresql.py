@@ -159,7 +159,7 @@ async def _build_fixture(postgres_harness: Any, scratch_root: Path) -> ReportFix
         await engine.dispose()
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def report_fixture(
     postgres_harness: Any, tmp_path_factory: pytest.TempPathFactory
 ) -> ReportFixture:
