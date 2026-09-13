@@ -401,6 +401,8 @@ def test_installer_requires_canonical_prepared_filesystem_roots() -> None:
     assert "stat -c '%u:%g:%a' -- \"$media_filesystem_host_root\"" in INSTALLER
     assert "10001:10001:700" in INSTALLER
     assert '"$media_filesystem_host_root/avatar-objects"' in INSTALLER
+    assert 'install -d -o 10001 -g 10001 -m 700 -- "$avatar_objects_root"' in INSTALLER
+    assert '[[ ! -L "$avatar_objects_root" ]]' in INSTALLER
     assert "stat -c '%u:%g:%a' -- \"$media_scanner_host_root\"" in INSTALLER
     assert "100:100:755" in INSTALLER
     assert "stat -c '%u:%g' -- \"$media_scanner_host_root\"" in INSTALLER

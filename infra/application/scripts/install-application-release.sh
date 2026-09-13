@@ -552,11 +552,22 @@ validate_filesystem_media_activation() {
     printf 'Filesystem media temporary directory ownership or mode is not canonical.\n' >&2
     return 1
   }
-  [[ -d "$media_filesystem_host_root/avatar-objects" && ! -L "$media_filesystem_host_root/avatar-objects" ]] || {
+  local avatar_objects_root="$media_filesystem_host_root/avatar-objects"
+  [[ ! -L "$avatar_objects_root" ]] || {
+    printf 'Filesystem avatar host root cannot be a symlink.\n' >&2
+    return 1
+  }
+  if [[ ! -e "$avatar_objects_root" ]]; then
+    install -d -o 10001 -g 10001 -m 700 -- "$avatar_objects_root" || {
+      printf 'Filesystem avatar host root could not be created with canonical ownership.\n' >&2
+      return 1
+    }
+  fi
+  [[ -d "$avatar_objects_root" ]] || {
     printf 'Filesystem avatar host root is not a prepared private directory.\n' >&2
     return 1
   }
-  [[ "$(stat -c '%u:%g:%a' -- "$media_filesystem_host_root/avatar-objects")" == 10001:10001:700 ]] || {
+  [[ "$(stat -c '%u:%g:%a' -- "$avatar_objects_root")" == 10001:10001:700 ]] || {
     printf 'Filesystem avatar host root ownership or mode is not canonical.\n' >&2
     return 1
   }
