@@ -107,12 +107,9 @@ def _owns_key(database: Session, actor: ActorContext, key: str) -> bool:
         tenant, asset, version = (UUID(parts[index]) for index in (1, 4, 5))
     except (ValueError, TypeError):
         return False
-    if (
-        tenant != actor.tenant_id
-        or any(
-            str(value) != parts[index]
-            for value, index in zip((tenant, asset, version), (1, 4, 5), strict=True)
-        )
+    if tenant != actor.tenant_id or any(
+        str(value) != parts[index]
+        for value, index in zip((tenant, asset, version), (1, 4, 5), strict=True)
     ):
         return False
     if parts[6] == "original" and _upload_program(database, tenant, asset, version) is not None:

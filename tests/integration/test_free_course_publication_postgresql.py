@@ -407,6 +407,7 @@ async def _exercise(schema_url) -> None:
                 f"tenants/{public_id}/media/video/{promoted.asset_id}/{promoted.version_id}/"
                 "renditions/progressive.mp4"
             )
+
             def serve(sync):
                 handler = PrivateMediaDeliveryHandler(
                     storage=storage,
@@ -577,9 +578,7 @@ async def _exercise_cli_actor(schema_url) -> None:
                         tenant_id=None,
                         position=1,
                         kind="VIDEO" if position == 1 else "REFLECTION",
-                        title="Legacy video"
-                        if position == 1
-                        else f"Legacy reflection {position}",
+                        title="Legacy video" if position == 1 else f"Legacy reflection {position}",
                         prompt=(
                             "Existing approved test film"
                             if position == 1

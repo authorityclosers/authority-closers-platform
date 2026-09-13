@@ -65,6 +65,4 @@ def test_main_does_not_echo_secret_from_value_error(monkeypatch, capsys) -> None
     assert result == 2
     captured = capsys.readouterr()
     assert canary not in captured.err
-    assert captured.err == (
-        "free-course command refused: invalid or unavailable command input\n"
-    )
+    assert captured.err == ("free-course command refused: invalid or unavailable command input\n")
