@@ -188,6 +188,32 @@ and KVM4 headroom have **not been tested by this recipe authoring**. Static cont
 tests only detect unsafe recipe changes; they are not container security proof.
 Provider processing, public storage, staging and production remain separate gates.
 
+## Hosted worker bridge
+
+The database/credential worker connects to a separately supervised helper through
+`SocketNativeRuntime` and never receives Docker access. Start
+`scripts/native_runtime_helper.py` under the dedicated host supervisor with the
+exact approved image digest, private scratch root, pre-provisioned 64 MiB
+mode-0700 output tmpfs and worker peer UID/GID. The helper accepts one bounded
+canonical request at a time, checks the Unix peer credential, source hash and
+workspace scope, then invokes this candidate image through the fixed command
+above. It returns only a content-free acknowledgement/error code.
+
+The host supervisor identity is separate from the database worker identity and
+must have an explicit permission receipt for the worker's mode-0600 source
+snapshot and mode-0700 job directory. The container process remains
+UID/GID10001; rootless host execution is activation-blocked until its UID/GID
+mapping proves those bind permissions. The helper does not chmod, chown or make
+the source public.
+
+The worker calls `inspect(source_path, output_path, job_id=canonical_job_uuid,
+rate=16000)`. Source and output are separate host paths. The adapter validates the
+checkpoint JSON, feature digest/rows and 16 kHz decoded-track timebase before the
+worker publishes anything. The local worker remains a 48 kHz `local`/`test`
+adapter; hosted execution must use a `staging`/`production` worker and this
+socket boundary. Docker socket mounts, `--env-file`, provider keys and arbitrary
+commands are outside the contract.
+
 ## Static validation performed here
 
 2026-09-13:31 static policy and mocked preflight checks passed, together with28

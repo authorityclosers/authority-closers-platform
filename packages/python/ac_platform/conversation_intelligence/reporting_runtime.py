@@ -16,10 +16,12 @@ from pathlib import Path
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from ac_platform.application.settings import Settings
 from ac_platform.conversation_intelligence.authority import ConversationAuthority
 from ac_platform.conversation_intelligence.broker_router import FixedProviderRouter, ProviderRoute
-from ac_platform.conversation_intelligence.hosted_runtime import compose_hosted_intake
+from ac_platform.conversation_intelligence.hosted_runtime import (
+    HostedConversationSettings,
+    compose_hosted_intake,
+)
 from ac_platform.conversation_intelligence.inference_broker import (
     InfisicalLauncher,
     ProcessInferenceBroker,
@@ -40,7 +42,7 @@ class HostedReportingRuntime:
 
 
 def compose_hosted_reporting(
-    settings: Settings,
+    settings: HostedConversationSettings,
     sessions: async_sessionmaker[AsyncSession],
     *,
     launchers: Mapping[str, InfisicalLauncher],

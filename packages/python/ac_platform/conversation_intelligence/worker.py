@@ -57,6 +57,10 @@ from ac_platform.conversation_intelligence.models import (
     ConversationRecording,
     ConversationRun,
 )
+from ac_platform.conversation_intelligence.native_runtime import (
+    HOSTED_C1_RATE,
+    NativeRuntime,
+)
 from ac_platform.conversation_intelligence.signals import inspect_media
 from ac_platform.conversation_intelligence.storage import (
     CHUNK_BYTES,
@@ -268,13 +272,51 @@ class OfflineConversationWorker:
         lease_for: timedelta = _WORK_LEASE,
         heartbeat_every: timedelta = _WORK_HEARTBEAT,
     ) -> None:
-        if environment not in {"local", "test"} or storage.root == scratch.root:
-            raise ValueError("Local worker requires separate private storage and scratch roots.")
+        self._initialize(
+            sessions,
+            storage=storage,
+            scratch=scratch,
+            environment=environment,
+            native_runtime=None,
+            c1_rate=48000,
+            lease_for=lease_for,
+            heartbeat_every=heartbeat_every,
+        )
+
+    def _initialize(
+        self,
+        sessions: async_sessionmaker[AsyncSession],
+        *,
+        storage: PrivateLocalRecordingStorage,
+        scratch: PrivateLocalRecordingStorage,
+        environment: Literal["local", "test", "staging", "production"],
+        native_runtime: NativeRuntime | None,
+        c1_rate: int,
+        lease_for: timedelta,
+        heartbeat_every: timedelta,
+    ) -> None:
+        if environment not in {"local", "test", "staging", "production"}:
+            raise ValueError("Conversation worker environment is unsupported.")
+        if storage.root == scratch.root:
+            raise ValueError(
+                "Conversation worker requires separate private storage and scratch roots."
+            )
+        if environment in {"local", "test"} and native_runtime is not None:
+            raise ValueError("Offline conversation worker cannot use a hosted native adapter.")
+        if environment in {"staging", "production"} and not callable(
+            getattr(native_runtime, "inspect", None)
+        ):
+            raise ValueError("Hosted conversation worker requires a native adapter.")
+        if type(c1_rate) is not int or c1_rate not in {16000, 48000}:
+            raise ValueError("Conversation worker C1 rate is unsupported.")
         if not timedelta(seconds=1) <= lease_for <= timedelta(minutes=15):
             raise ValueError("lease_for must be between one second and fifteen minutes")
         if heartbeat_every <= timedelta(0) or heartbeat_every * 2 >= lease_for:
             raise ValueError("heartbeat_every must be positive and less than half the lease")
         self.sessions, self.storage, self.scratch = sessions, storage, scratch
+        self.environment = environment
+        self.native_runtime = native_runtime
+        self.c1_rate = c1_rate
         self.lease_for, self.heartbeat_every = lease_for, heartbeat_every
 
     async def claim(self) -> Work | None:
@@ -576,6 +618,9 @@ class OfflineConversationWorker:
             or not isinstance(acoustics, dict)
             or acoustics.get("source_sha256") != source_sha
             or acoustics.get("feature_sha256") != feature_sha
+            or acoustics.get("rate") != self.c1_rate
+            or not isinstance(payload.get("timebase"), dict)
+            or payload["timebase"].get("rate") != self.c1_rate
         ):
             raise StorageError("conversation_c1_cache_identity_mismatch")
         self._verify_object(source, source_sha, source_bytes)
@@ -604,11 +649,47 @@ class OfflineConversationWorker:
                 stream.write(block)
         if media.stat().st_size != expected_bytes:
             raise StorageError("storage_size_mismatch")
-        result = inspect_media(media, root / "result", rate=48000)
+        result = inspect_media(media, root / "result", rate=self.c1_rate)
         if (
             result.get("source_sha256") != sha
             or result.get("source_bytes") != expected_bytes
             or not isinstance(result.get("feature_sha256"), str)
+        ):
+            raise StorageError("conversation_c1_result_identity_mismatch")
+        return result
+
+    def _inspect_hosted(
+        self,
+        source: ObjectKey,
+        sha: str,
+        expected_bytes: int,
+        root: Path,
+        job_id: UUID,
+    ) -> dict[str, Any]:
+        """Materialize one verified source, then delegate C1 to the socket helper."""
+
+        media = root / "source.media"
+        with media.open("xb") as stream:
+            for block in self.storage.iter_bytes(source, expected_sha256=sha):
+                stream.write(block)
+        if media.stat().st_size != expected_bytes:
+            raise StorageError("storage_size_mismatch")
+        if self.native_runtime is None:
+            raise StorageError("conversation_native_runtime_missing")
+        result = self.native_runtime.inspect(
+            media,
+            root / "result",
+            job_id=job_id,
+            rate=HOSTED_C1_RATE,
+        )
+        if (
+            result.get("source_sha256") != sha
+            or result.get("source_bytes") != expected_bytes
+            or not isinstance(result.get("feature_sha256"), str)
+            or not isinstance(result.get("acoustics"), dict)
+            or result["acoustics"].get("rate") != HOSTED_C1_RATE
+            or not isinstance(result.get("timebase"), dict)
+            or result["timebase"].get("rate") != HOSTED_C1_RATE
         ):
             raise StorageError("conversation_c1_result_identity_mismatch")
         return result
@@ -659,7 +740,10 @@ class OfflineConversationWorker:
                     checkpoint=c0,
                     payload=c0_payload,
                 )
-                c1_config = {"decode_rate": 48000, "window_profile": "audioatlas-40ms-10ms"}
+                c1_config = {
+                    "decode_rate": self.c1_rate,
+                    "window_profile": "audioatlas-40ms-10ms",
+                }
                 c1_key = build_checkpoint(
                     binding,
                     "C1",
@@ -716,11 +800,19 @@ class OfflineConversationWorker:
             # source/PCM scratch only after the native call has actually returned.
             with TemporaryDirectory(prefix="work-", dir=self.scratch.root) as directory:
                 root = Path(directory)
-                result = (
-                    cached
-                    if cached is not None
-                    else await fenced.run(self._inspect, source, source_sha, source_bytes, root)
-                )
+                if cached is not None:
+                    result = cached
+                elif self.native_runtime is not None:
+                    result = await fenced.run(
+                        self._inspect_hosted,
+                        source,
+                        source_sha,
+                        source_bytes,
+                        root,
+                        work.job_id,
+                    )
+                else:
+                    result = await fenced.run(self._inspect, source, source_sha, source_bytes, root)
                 feature_path = root / "result" / "features.aaf"
                 if cached is None and feature_path.stat().st_size != self._feature_bytes(result):
                     raise StorageError("conversation_c1_result_size_mismatch")
@@ -889,3 +981,38 @@ class OfflineConversationWorker:
                 "The local conversation job failed; see its durable state."
             ) from None
         return True
+
+
+class HostedConversationWorker(OfflineConversationWorker):
+    """Hosted C1 worker using a separately supervised native runtime helper.
+
+    Authorization, reservation, generation fencing, private storage and
+    publication remain the same as the local worker. The only hosted-specific
+    operation is the injected 16 kHz native adapter call; this class never has a
+    Docker client, provider credential or database connection in the helper.
+    """
+
+    def __init__(
+        self,
+        sessions: async_sessionmaker[AsyncSession],
+        *,
+        storage: PrivateLocalRecordingStorage,
+        scratch: PrivateLocalRecordingStorage,
+        environment: Literal["staging", "production"],
+        native_runtime: NativeRuntime,
+        lease_for: timedelta = _WORK_LEASE,
+        heartbeat_every: timedelta = _WORK_HEARTBEAT,
+    ) -> None:
+        self._initialize(
+            sessions,
+            storage=storage,
+            scratch=scratch,
+            environment=environment,
+            native_runtime=native_runtime,
+            c1_rate=HOSTED_C1_RATE,
+            lease_for=lease_for,
+            heartbeat_every=heartbeat_every,
+        )
+
+
+__all__ = ["HostedConversationWorker", "OfflineConversationWorker", "Work"]

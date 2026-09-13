@@ -12,9 +12,8 @@ import stat
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
-from ac_platform.application.settings import Settings
 from ac_platform.conversation_intelligence.activation_contract import (
     MAX_APPROVAL_BUNDLE_BYTES,
     HostedApprovalBundle,
@@ -26,6 +25,28 @@ from ac_platform.conversation_intelligence.storage import PrivateLocalRecordingS
 
 if TYPE_CHECKING:
     from ac_platform.http.conversation_intake import ConversationIntakeRuntime
+
+
+class HostedConversationSettings(Protocol):
+    """Only the non-secret settings shared by API and dedicated workers."""
+
+    @property
+    def environment(self) -> str: ...
+
+    @property
+    def sales_xray_enabled(self) -> bool: ...
+
+    @property
+    def sales_xray_approval_path(self) -> str | None: ...
+
+    @property
+    def sales_xray_approval_sha256(self) -> str | None: ...
+
+    @property
+    def sales_xray_storage_root(self) -> str | None: ...
+
+    @property
+    def sales_xray_scratch_root(self) -> str | None: ...
 
 
 @dataclass(frozen=True)
@@ -68,7 +89,7 @@ class PinnedApprovalLoader:
             raise ValueError("hosted_approval_unavailable") from None
 
 
-def compose_hosted_intake(settings: Settings) -> ConversationIntakeRuntime | None:
+def compose_hosted_intake(settings: HostedConversationSettings) -> ConversationIntakeRuntime | None:
     # Late import keeps the pure authority layer independent of the HTTP graph.
     from ac_platform.http.conversation_intake import ConversationIntakeRuntime
 

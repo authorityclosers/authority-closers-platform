@@ -1,0 +1,99 @@
+# Explicit overlay on infra/application/compose.yaml. No ordinary API env anchor.
+# The release manifest supplies digest-pinned images and individual file mounts.
+services:
+  sales-xray-worker:
+    image: ${AC_API_IMAGE:?reviewed immutable API image required}
+    pull_policy: never
+    init: true
+    user: "10001:10001"
+    read_only: true
+    restart: unless-stopped
+    stop_grace_period: 16m
+    command:
+      - python
+      - -m
+      - ac_platform.conversation_intelligence.service
+      - --config
+      - /run/ac-sales-xray/service.json
+      - --sha256
+      - ${AC_XRAY_SERVICE_SHA256:?pinned worker manifest required}
+    environment:
+      HOME: /tmp
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 64
+    cpus: 1.0
+    mem_limit: 768m
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001,mode=0700
+    volumes:
+      - type: bind
+        source: ${AC_XRAY_SERVICE_CONFIG:?non-secret worker manifest required}
+        target: /run/ac-sales-xray/service.json
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${AC_XRAY_DATABASE_URL_FILE:?DB-only external credential file required}
+        target: /run/ac-sales-xray/database-url
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${AC_XRAY_ELEVENLABS_IDENTITY_DIR:?directory containing only ElevenLabs identity required}
+        target: /run/ac-sales-xray/identities/elevenlabs
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${AC_XRAY_GROQ_IDENTITY_DIR:?directory containing only Groq identity required}
+        target: /run/ac-sales-xray/identities/groq
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${AC_XRAY_INFISICAL_BINARY:?reviewed fixed Infisical executable required}
+        target: /opt/infisical
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${AC_XRAY_APPROVAL_FILE:?exact hosted approval artifact required}
+        target: /run/ac-sales-xray/approval.json
+        read_only: true
+        bind:
+          create_host_path: false
+      # Canonical private paths must match those used by the API and native helper.
+      - type: bind
+        source: ${AC_XRAY_STORAGE_ROOT:?environment-specific private store required}
+        target: ${AC_XRAY_STORAGE_ROOT:?environment-specific private store required}
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${AC_XRAY_SCRATCH_ROOT:?separate environment-specific scratch required}
+        target: ${AC_XRAY_SCRATCH_ROOT:?separate environment-specific scratch required}
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${AC_XRAY_NATIVE_SOCKET_DIR:?private native-helper socket directory required}
+        target: ${AC_XRAY_NATIVE_SOCKET_DIR:?private native-helper socket directory required}
+        read_only: true
+        bind:
+          create_host_path: false
+    networks:
+      - data
+      - egress
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging:
+      driver: local
+      options:
+        max-size: "2m"
+        max-file: "2"
+    profiles:
+      - sales-xray-hosted
