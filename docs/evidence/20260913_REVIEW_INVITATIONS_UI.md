@@ -74,3 +74,22 @@ Backend migration0035 populated-history proof remains documented in
 20260913_REVIEW_INVITATION_INTEGRATION.md. Final runtime deployment remains owned
 by the active consolidation controller. The old3309ac0 workflow is superseded
 for full invitation acceptance, although its complete PR validation passed.
+
+## Password-reset and verified-email completion
+
+The password reset form now retains the invitation on both its fresh-reset link
+and its post-reset sign-in link. The generic reset or verification token is
+removed independently; the invitation remains in the local fragment. A completed
+email-verification page also points back to the invitation when that local
+handoff is present.
+
+Five invitation/auth tests cover password sign-in, registration consent,
+verification help, recovery requests, successful reset, and successful email
+verification. Reset receives only its own token and the new password; verification
+receives only its own token. Neither request contains the review invitation.
+
+The follow-up run passed 29 tests across four invitation/auth, password reset,
+email-continuity and Sales-continuity files. This adds two tests to the earlier
+56-test learner selection. Scoped ESLint passed; the updated production learner
+build passed again. These auth-link changes do not alter the already verified
+review assignment or invitation browser screens.

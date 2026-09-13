@@ -655,17 +655,19 @@ export function PasswordResetForm({
   const [error, setError] = useState<string | null>(null);
   const [passwordVisible, setPasswordVisible] = useState(false);
   const errorRef = useRef<HTMLDivElement>(null);
-  const forgotPasswordHref = authIntentHref(
-    ROUTES.forgotPassword,
-    activityIntent,
-    courseIntent,
-    salesNext,
+  const invitationToken = useReviewInvitationToken();
+  const forgotPasswordHref = withReviewInvitationToken(
+    authIntentHref(
+      ROUTES.forgotPassword,
+      activityIntent,
+      courseIntent,
+      salesNext,
+    ),
+    invitationToken,
   );
-  const loginHref = authIntentHref(
-    ROUTES.login,
-    activityIntent,
-    courseIntent,
-    salesNext,
+  const loginHref = withReviewInvitationToken(
+    authIntentHref(ROUTES.login, activityIntent, courseIntent, salesNext),
+    invitationToken,
   );
 
   useEffect(() => {
