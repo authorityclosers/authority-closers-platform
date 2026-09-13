@@ -58,12 +58,20 @@ The verifier binds source, metadata, archive checksum, OCI manifest and image
 configuration. Its output contains only `verified_source`, `runtime_ref`,
 `config_id` and `archive_sha`. Record these with the successful CI run ID.
 
-After loading, inspect the exact immutable image reference. Some Docker stores
-resolve the OCI transport manifest directly; classic Docker resolves the bound
-image configuration ID instead. Either choice must resolve to the verifier's
-exact `config_id`. Record the selected reference and inspected ID; fail if they
-differ. Never use a mutable tag or invent a registry digest. Inspect/run the
-selected immutable reference with networking disabled to prove the baked
+After loading, inspect the exact immutable image reference. Docker 29's containerd
+store on the current VPS returns the verified OCI manifest as its `.Id`; classic
+Docker returns the bound image configuration ID. Record the actual store behavior:
+
+- With the manifest reference, accept `.Id` only if it is that exact verified
+  manifest or its independently verified configuration ID.
+- With a configuration reference, require `.Id` to equal that exact configuration
+  ID. This is the fallback when the store cannot address the manifest directly.
+
+The archive descriptor and hashed configuration blob must still prove the exact
+manifest-to-configuration binding in both cases. The VPS native-image smoke run
+established the first behavior; it does not substitute for inspecting the web image.
+Never accept an unrelated ID, mutable tag or invented registry digest. Inspect/run
+the selected immutable reference with networking disabled to prove the baked
 `/app/.ac-release-id` equals the reviewed source before activation.
 
 Generate a separate one-line operator env file containing only
