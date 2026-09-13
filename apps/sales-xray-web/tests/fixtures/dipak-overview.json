@@ -1,0 +1,588 @@
+{
+  "synthetic": true,
+  "transcript": {
+    "source_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "revision": "synthetic-overview-r1",
+    "timebase_id": "1ms",
+    "duration_ms": 5000,
+    "segments": [
+      {
+        "id": "s1",
+        "speaker_id": "buyer",
+        "start_ms": 1000,
+        "end_ms": 2200,
+        "text": "कल timing discuss करूया."
+      },
+      {
+        "id": "s2",
+        "speaker_id": "closer",
+        "start_ms": 2500,
+        "end_ms": 3300,
+        "text": "Sure, which time works for you?"
+      },
+      {
+        "id": "s3",
+        "speaker_id": "buyer",
+        "start_ms": 3500,
+        "end_ms": 4300,
+        "text": "तीन बजे ठीक है, please send details."
+      }
+    ]
+  },
+  "report": {
+    "summary": "A synthetic call about agreeing a time.",
+    "strengths": [
+      {
+        "title": "Confirm the follow-up time",
+        "explanation": "A synthetic observation for rendering checks.",
+        "evidence": [
+          {
+            "segment_id": "s2",
+            "quote": "Sure, which time works for you?",
+            "start_ms": 2500,
+            "end_ms": 3300
+          }
+        ]
+      }
+    ],
+    "missed_opportunities": [
+      {
+        "title": "Ask what needs to happen first",
+        "explanation": "A synthetic observation for rendering checks.",
+        "evidence": [
+          {
+            "segment_id": "s1",
+            "quote": "कल timing discuss करूया.",
+            "start_ms": 1000,
+            "end_ms": 2200
+          }
+        ]
+      }
+    ],
+    "improvements": [
+      {
+        "title": "Explore the stated timing concern",
+        "explanation": "A synthetic observation for rendering checks.",
+        "evidence": [
+          {
+            "segment_id": "s1",
+            "quote": "कल timing discuss करूया.",
+            "start_ms": 1000,
+            "end_ms": 2200
+          }
+        ]
+      }
+    ],
+    "objection_analysis": [],
+    "closing_analysis": [],
+    "verdict": "Synthetic assessment for browser verification.",
+    "review_status": "draft_not_dipak_adjudicated",
+    "source_label": "Scribe transcript revision synthetic-overview-r1 · source-bound",
+    "source_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "transcript_revision": "synthetic-overview-r1",
+    "dimensions": [
+      {
+        "dimension_id": "human_connection_trust",
+        "label": "Human Connection & Trust",
+        "status": "unknown",
+        "observation": "No qualitative assessment was returned for this dimension.",
+        "citations": [
+          {
+            "doc": "Doc-1",
+            "sections": [
+              "§8–§10",
+              "§52",
+              "§54–§56"
+            ]
+          },
+          {
+            "doc": "Doc-5",
+            "sections": [
+              "§6"
+            ]
+          }
+        ]
+      },
+      {
+        "dimension_id": "discovery_deep_understanding",
+        "label": "Discovery & Deep Understanding",
+        "status": "unknown",
+        "observation": "No qualitative assessment was returned for this dimension.",
+        "citations": [
+          {
+            "doc": "Doc-1",
+            "sections": [
+              "§4–§7",
+              "§11–§16"
+            ]
+          },
+          {
+            "doc": "Doc-3",
+            "sections": [
+              "§5–§11",
+              "§16",
+              "§45–§52"
+            ]
+          },
+          {
+            "doc": "Doc-5",
+            "sections": [
+              "§7–§10"
+            ]
+          }
+        ]
+      },
+      {
+        "dimension_id": "qualification",
+        "label": "Qualification",
+        "status": "unknown",
+        "observation": "No qualitative assessment was returned for this dimension.",
+        "citations": [
+          {
+            "doc": "Doc-3",
+            "sections": [
+              "§17–§18",
+              "§44"
+            ]
+          },
+          {
+            "doc": "Doc-5",
+            "sections": [
+              "§11–§13"
+            ]
+          }
+        ]
+      },
+      {
+        "dimension_id": "problem_impact_desire",
+        "label": "Problem, Impact & Desire Clarity",
+        "status": "unknown",
+        "observation": "No qualitative assessment was returned for this dimension.",
+        "citations": [
+          {
+            "doc": "Doc-3",
+            "sections": [
+              "§7–§15",
+              "§19"
+            ]
+          },
+          {
+            "doc": "Doc-5",
+            "sections": [
+              "§14–§17"
+            ]
+          }
+        ]
+      },
+      {
+        "dimension_id": "solution_relevance_presentation",
+        "label": "Solution Relevance & Presentation",
+        "status": "unknown",
+        "observation": "No qualitative assessment was returned for this dimension.",
+        "citations": [
+          {
+            "doc": "Doc-3",
+            "sections": [
+              "§20–§26"
+            ]
+          },
+          {
+            "doc": "Doc-5",
+            "sections": [
+              "§18–§21"
+            ]
+          }
+        ]
+      },
+      {
+        "dimension_id": "certainty_objection_intelligence",
+        "label": "Certainty & Objection Intelligence",
+        "status": "unknown",
+        "observation": "No qualitative assessment was returned for this dimension.",
+        "citations": [
+          {
+            "doc": "Doc-4",
+            "sections": [
+              "§3–§6",
+              "§8–§18",
+              "§40–§70"
+            ]
+          },
+          {
+            "doc": "Doc-5",
+            "sections": [
+              "§22–§28"
+            ]
+          }
+        ]
+      },
+      {
+        "dimension_id": "closing_decision_management",
+        "label": "Closing & Decision Management",
+        "status": "unknown",
+        "observation": "No qualitative assessment was returned for this dimension.",
+        "citations": [
+          {
+            "doc": "Doc-3",
+            "sections": [
+              "§34–§42",
+              "§48–§52"
+            ]
+          },
+          {
+            "doc": "Doc-5",
+            "sections": [
+              "§29–§32",
+              "§39–§42"
+            ]
+          }
+        ]
+      },
+      {
+        "dimension_id": "communication_tonality",
+        "label": "Communication & Tonality",
+        "status": "unknown",
+        "observation": "No qualitative assessment was returned for this dimension.",
+        "citations": [
+          {
+            "doc": "Doc-2",
+            "sections": [
+              "§1–§5",
+              "§9–§16",
+              "§31–§55"
+            ]
+          },
+          {
+            "doc": "Doc-5",
+            "sections": [
+              "§33–§37",
+              "§63–§66"
+            ]
+          }
+        ]
+      }
+    ],
+    "report_sections": [
+      {
+        "number": 1,
+        "title": "EXECUTIVE SUMMARY",
+        "required": "Evidence-bound summary; no score.",
+        "citations": [
+          {
+            "doc": "Doc-5",
+            "sections": [
+              "§53"
+            ]
+          }
+        ]
+      },
+      {
+        "number": 2,
+        "title": "SCORECARD",
+        "required": "Eight withheld dimensions; Ethics PASS/CONCERN/FAIL hard constraint.",
+        "citations": [
+          {
+            "doc": "Doc-5",
+            "sections": [
+              "§53"
+            ]
+          }
+        ]
+      },
+      {
+        "number": 3,
+        "title": "WHAT YOU DID WELL",
+        "required": "Up to three evidence-backed strengths.",
+        "citations": [
+          {
+            "doc": "Doc-5",
+            "sections": [
+              "§53"
+            ]
+          }
+        ]
+      },
+      {
+        "number": 4,
+        "title": "BIGGEST MISSED OPPORTUNITIES",
+        "required": "Specific moments with missingness.",
+        "citations": [
+          {
+            "doc": "Doc-5",
+            "sections": [
+              "§53"
+            ]
+          }
+        ]
+      },
+      {
+        "number": 5,
+        "title": "TOP 3 IMPROVEMENTS",
+        "required": "At most three behavioral changes with evidence.",
+        "citations": [
+          {
+            "doc": "Doc-5",
+            "sections": [
+              "§53"
+            ]
+          }
+        ]
+      },
+      {
+        "number": 6,
+        "title": "OBJECTION ANALYSIS",
+        "required": "Stated/likely objection, uncertainty, evidence, handling and next move.",
+        "citations": [
+          {
+            "doc": "Doc-5",
+            "sections": [
+              "§53"
+            ]
+          }
+        ]
+      },
+      {
+        "number": 7,
+        "title": "CLOSING ANALYSIS",
+        "required": "Readiness, ask, confidence and next step; future date/no when relevant.",
+        "citations": [
+          {
+            "doc": "Doc-5",
+            "sections": [
+              "§53"
+            ]
+          }
+        ]
+      },
+      {
+        "number": 8,
+        "title": "COACHING INSTRUCTION",
+        "required": "Short evidence-linked practice plan.",
+        "citations": [
+          {
+            "doc": "Doc-5",
+            "sections": [
+              "§53"
+            ]
+          }
+        ]
+      },
+      {
+        "number": 9,
+        "title": "FINAL VERDICT",
+        "required": "Nonnumeric conclusion with evidence gaps and ethics state.",
+        "citations": [
+          {
+            "doc": "Doc-5",
+            "sections": [
+              "§53"
+            ]
+          }
+        ]
+      }
+    ],
+    "overview": {
+      "version": "dipak-14-point-v1",
+      "diagnosis": {
+        "text": "The closer clarified a follow-up time.",
+        "evidence": [
+          {
+            "segment_id": "s2",
+            "quote": "Sure, which time works for you?",
+            "start_ms": 2500,
+            "end_ms": 3300
+          }
+        ]
+      },
+      "outcome": {
+        "text": "The buyer suggested a time; completion is not proven.",
+        "evidence": [
+          {
+            "segment_id": "s3",
+            "quote": "तीन बजे ठीक है, please send details.",
+            "start_ms": 3500,
+            "end_ms": 4300
+          }
+        ],
+        "kind": "follow_up"
+      },
+      "strength_details": [
+        {
+          "finding_index": 0,
+          "why_it_matters": "A synthetic reason to repeat this."
+        }
+      ],
+      "improvement_details": [
+        {
+          "finding_index": 0,
+          "what_happened": {
+            "text": "A synthetic observation for rendering checks.",
+            "evidence": [
+              {
+                "segment_id": "s1",
+                "quote": "कल timing discuss करूया.",
+                "start_ms": 1000,
+                "end_ms": 2200
+              }
+            ]
+          },
+          "why_it_matters": "The stated barrier needs clarification.",
+          "replacement_behavior": "Ask one question about the stated barrier.",
+          "business_impact": {
+            "status": "insufficient_data",
+            "missing_inputs": [
+              "Comparable conversion history",
+              "Lead volume"
+            ]
+          }
+        }
+      ],
+      "golden_moments": [
+        {
+          "strength_index": 0,
+          "evidence_index": 0,
+          "why_effective": "A specific question gave the buyer a clear next step."
+        }
+      ],
+      "missed_details": [
+        {
+          "finding_index": 0,
+          "prospect_signal": {
+            "text": "The buyer asked to discuss timing.",
+            "evidence": [
+              {
+                "segment_id": "s1",
+                "quote": "कल timing discuss करूया.",
+                "start_ms": 1000,
+                "end_ms": 2200
+              }
+            ]
+          },
+          "closer_response": {
+            "text": "The closer asked which time works.",
+            "evidence": [
+              {
+                "segment_id": "s2",
+                "quote": "Sure, which time works for you?",
+                "start_ms": 2500,
+                "end_ms": 3300
+              }
+            ]
+          },
+          "follow_up": "Ask what they need to review beforehand.",
+          "potential_impact": "This may help prepare the next conversation."
+        }
+      ],
+      "prospect_interpretations": [
+        {
+          "source": {
+            "text": "The buyer deferred the timing discussion.",
+            "evidence": [
+              {
+                "segment_id": "s1",
+                "quote": "कल timing discuss करूया.",
+                "start_ms": 1000,
+                "end_ms": 2200
+              }
+            ]
+          },
+          "possible_concern": "They may need time to review; ask rather than assume.",
+          "interpretation_kind": "inference"
+        }
+      ],
+      "rewatch": [
+        {
+          "text": "Explore the timing concern",
+          "evidence": [
+            {
+              "segment_id": "s1",
+              "quote": "कल timing discuss करूया.",
+              "start_ms": 1000,
+              "end_ms": 2200
+            }
+          ],
+          "purpose": "must_watch"
+        },
+        {
+          "text": "Repeat the specific follow-up question",
+          "evidence": [
+            {
+              "segment_id": "s2",
+              "quote": "Sure, which time works for you?",
+              "start_ms": 2500,
+              "end_ms": 3300
+            }
+          ],
+          "purpose": "repeat"
+        }
+      ],
+      "conversation_change": {
+        "before": {
+          "text": "A timing concern was stated.",
+          "evidence": [
+            {
+              "segment_id": "s1",
+              "quote": "कल timing discuss करूया.",
+              "start_ms": 1000,
+              "end_ms": 2200
+            }
+          ]
+        },
+        "change": {
+          "text": "The closer asked for a specific time.",
+          "evidence": [
+            {
+              "segment_id": "s2",
+              "quote": "Sure, which time works for you?",
+              "start_ms": 2500,
+              "end_ms": 3300
+            }
+          ]
+        },
+        "after": {
+          "text": "The buyer proposed a time.",
+          "evidence": [
+            {
+              "segment_id": "s3",
+              "quote": "तीन बजे ठीक है, please send details.",
+              "start_ms": 3500,
+              "end_ms": 4300
+            }
+          ]
+        },
+        "possible_effect": "The question may have made the next step more concrete.",
+        "interpretation_kind": "inference"
+      },
+      "ethics_notes": [
+        {
+          "text": "This quoted question leaves the choice of time to the buyer.",
+          "evidence": [
+            {
+              "segment_id": "s2",
+              "quote": "Sure, which time works for you?",
+              "start_ms": 2500,
+              "end_ms": 3300
+            }
+          ]
+        }
+      ],
+      "next_call_focus": {
+        "improvement_index": 0,
+        "behavior": "Ask before presenting.",
+        "target": "Ask one follow-up question before giving an answer."
+      },
+      "practice": {
+        "improvement_index": 0,
+        "instructions": "Rehearse asking the follow-up question out loud.",
+        "success_condition": "You ask one open question before explaining the offer."
+      },
+      "progress": null,
+      "final_assessment": {
+        "repeat": "Keep the supported strength.",
+        "fix_first": "Clarify the stated barrier.",
+        "next_focus": "Ask one follow-up question.",
+        "assessment": "Synthetic qualitative draft for human review."
+      }
+    }
+  }
+}

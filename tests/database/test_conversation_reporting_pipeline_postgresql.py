@@ -35,6 +35,7 @@ from ac_platform.conversation_intelligence.report_store import ConversationRepor
 from ac_platform.conversation_intelligence.reporting_pipeline import ReportingPipeline, StageRequest
 from ac_platform.conversation_intelligence.reports import load_report_profile
 from ac_platform.outbox.models import Job
+from tests.conversation_overview_fixtures import overview_for
 from tests.database.test_conversation_inference_postgresql import (
     FakeBroker,
     _provider_quote,
@@ -94,6 +95,7 @@ class ReportingBroker(FakeBroker):
                 "verdict": "Further context requires human review.",
                 "review_status": "draft_not_dipak_adjudicated",
             }
+            data["overview"] = overview_for(data)
         envelope = {"choices": [{"message": {"content": json.dumps(data)}}]}
         raw = canonical(envelope)
         return ProviderResult(

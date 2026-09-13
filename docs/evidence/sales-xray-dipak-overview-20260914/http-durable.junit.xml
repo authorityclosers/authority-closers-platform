@@ -1,0 +1,1 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="0" skipped="0" tests="1" time="41.922" timestamp="2026-09-14T02:57:01.622165+05:30" hostname="RSuyash"><testcase classname="tests.e2e.test_sales_xray_report_browser" name="test_real_browser_durable_worker_report_playback" time="38.646" /></testsuite></testsuites>

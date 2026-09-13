@@ -1,0 +1,163 @@
+"""Source, version and missingness boundaries for Dipak's supplied template."""
+
+import json
+from copy import deepcopy
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+from ac_platform.conversation_intelligence.checkpoints import canonical
+from ac_platform.conversation_intelligence.inference_tasks import (
+    prepare_fact_inputs,
+    prepare_scribe_input,
+)
+from ac_platform.conversation_intelligence.report_overview import stage_completion_limit
+from ac_platform.conversation_intelligence.reports import (
+    ReportError,
+    build_report_groq_prompt,
+    parse_fact_packet,
+    parse_report_draft,
+)
+from tests.conversation_overview_fixtures import overview_for
+from tests.unit.conversation_intelligence.test_reports import _evidence, _payload, _transcript
+
+
+def test_new_overview_preserves_source_and_old_reports_keep_their_serialized_shape() -> None:
+    transcript = _transcript()
+    payload = _payload(transcript)
+    legacy = parse_report_draft(payload, transcript).model_dump(mode="json")
+    assert "overview" not in legacy
+    payload["overview"] = overview_for(payload)
+    result = parse_report_draft(payload, transcript)
+    assert result.overview is not None
+    assert (
+        result.overview.improvement_details[0].what_happened.evidence[0].quote
+        == (_evidence(transcript)["quote"])
+    )
+    assert result.model_dump(mode="json", exclude={"overview"}) == legacy
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("progress", {"trend": "improving"}),
+        ("version", "future-auto-approved"),
+        ("strength_details", []),
+        ("next_call_focus", None),
+        ("practice", None),
+        ("diagnosis", {"text": "Unsupported", "evidence": []}),
+        ("golden_moments", [{"strength_index": 2, "evidence_index": 0, "why_effective": "x"}]),
+        ("improvement_details", []),
+    ],
+)
+def test_missing_or_invented_template_data_fails(field: str, value: Any) -> None:
+    transcript = _transcript()
+    payload = _payload(transcript)
+    payload["overview"] = overview_for(payload)
+    payload["overview"][field] = value
+    with pytest.raises(ReportError, match="report_overview_invalid"):
+        parse_report_draft(payload, transcript)
+
+
+@pytest.mark.parametrize("field", ["quote", "start_ms", "segment_id"])
+def test_new_nested_evidence_cannot_change_the_source(field: str) -> None:
+    transcript = _transcript()
+    payload = _payload(transcript)
+    payload["overview"] = overview_for(deepcopy(payload))
+    span = payload["overview"]["improvement_details"][0]["what_happened"]["evidence"][0]
+    span[field] = 1 if field == "start_ms" else "invented"
+    with pytest.raises(ReportError, match="report_evidence_"):
+        parse_report_draft(payload, transcript)
+
+
+def test_financial_estimates_traits_and_boolean_focus_indices_are_rejected() -> None:
+    transcript = _transcript()
+    for mutate in (
+        lambda o: o["improvement_details"][0]["business_impact"].update(estimate=5000),
+        lambda o: o["improvement_details"][0]["business_impact"].update(missing_inputs=[""]),
+        lambda o: o["next_call_focus"].update(improvement_index=False),
+        lambda o: o.update(closer_level="elite"),
+        lambda o: o.update(overall_score=95),
+    ):
+        payload = _payload(transcript)
+        payload["overview"] = overview_for(payload)
+        mutate(payload["overview"])
+        with pytest.raises(ReportError):
+            parse_report_draft(payload, transcript)
+
+
+def test_interpretation_and_change_require_source_and_chronological_context() -> None:
+    transcript = _transcript()
+    payload = _payload(transcript)
+    payload["overview"] = overview_for(payload)
+    overview = payload["overview"]
+    overview["conversation_change"] = {
+        "before": {"text": "Before", "evidence": [_evidence(transcript, 0)]},
+        "change": {"text": "Change", "evidence": [_evidence(transcript, 1)]},
+        "after": {"text": "After", "evidence": [_evidence(transcript, 2)]},
+        "possible_effect": "This may have narrowed the conversation.",
+        "interpretation_kind": "inference",
+    }
+    assert parse_report_draft(payload, transcript).overview.conversation_change  # type: ignore[union-attr]
+    overview["conversation_change"]["after"] = overview["conversation_change"]["before"]
+    with pytest.raises(ReportError, match="report_overview_invalid"):
+        parse_report_draft(payload, transcript)
+
+
+def test_duplicate_references_and_duplicate_rewatch_clips_are_rejected() -> None:
+    transcript = _transcript()
+    for field, duplicate in (
+        ("strength_details", {"finding_index": 0, "why_it_matters": "Reason"}),
+        ("golden_moments", {"strength_index": 0, "evidence_index": 0, "why_effective": "Reason"}),
+        ("rewatch", {"text": "Watch", "purpose": "watch", "evidence": [_evidence(transcript)]}),
+    ):
+        payload = _payload(transcript)
+        payload["overview"] = overview_for(payload)
+        payload["overview"][field] = [duplicate, duplicate]
+        with pytest.raises(ReportError, match="report_overview_invalid"):
+            parse_report_draft(payload, transcript)
+
+
+def test_new_template_changes_only_coaching_input_and_preserves_token_ceiling() -> None:
+    transcript = _transcript()
+    c2 = prepare_scribe_input(transcript["source_sha256"], 1000)
+    c4 = prepare_fact_inputs(transcript)
+    packet = parse_fact_packet(
+        {
+            "overview": "Synthetic fact.",
+            "observations": [
+                {"fact": "The buyer asks about price.", "segment_id": "s1", "quote": "price"}
+            ],
+            "uncertainties": [],
+        },
+        transcript,
+    )
+    old = build_report_groq_prompt(transcript, [packet], detailed_overview=False)
+    new = build_report_groq_prompt(transcript, [packet])
+    assert canonical(old) != canonical(new)
+    assert "REPORT_FORMAT: dipak-14-point-v1" in new["messages"][0]["content"]
+    assert new["max_completion_tokens"] == old["max_completion_tokens"]
+    assert prepare_scribe_input(transcript["source_sha256"], 1000) == c2
+    assert prepare_fact_inputs(transcript) == c4
+
+
+def test_shared_browser_fixture_passes_the_authoritative_backend_parser() -> None:
+    root = Path(__file__).resolve().parents[3]
+    fixture = json.loads(
+        (root / "apps/sales-xray-web/tests/fixtures/dipak-overview.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    result = parse_report_draft(fixture["report"], fixture["transcript"])
+    assert result.overview is not None
+    assert result.overview.model_dump(mode="json") == fixture["report"]["overview"]
+
+
+def test_detailed_response_allocation_cannot_raise_the_owner_approved_cap() -> None:
+    assert stage_completion_limit("C5", 4000) == 3200
+    assert stage_completion_limit("C5", 1400) == 1400
+    assert stage_completion_limit("C4", 4000) == 1400
+    for maximum in [True, 0, 255, 4001]:
+        with pytest.raises(ValueError, match="report_stage_limit_invalid"):
+            stage_completion_limit("C5", maximum)
