@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   AudioLines,
-  ArrowLeft,
   ArrowRight,
   Check,
   ChevronDown,
@@ -13,11 +12,11 @@ import {
   LoaderCircle,
   ListChecks,
   Play,
+  Printer,
   Upload,
   X,
 } from "lucide-react";
 import { BrandMark } from "@ac/ui";
-import { Workbench, time } from "./workbench";
 import {
   parseJobResponse,
   parseJobStatus,
@@ -44,6 +43,13 @@ type Quote = {
   privacy_revision: string;
   output_kind?: "measurements" | "report";
 };
+
+const time = (ms: number) =>
+  `${Math.floor(ms / 60000)
+    .toString()
+    .padStart(2, "0")}:${Math.floor((ms / 1000) % 60)
+    .toString()
+    .padStart(2, "0")}`;
 type ProcessingPlanStage = {
   stage: "C2" | "C4" | "C5";
   provider: string;
@@ -109,14 +115,15 @@ const DISPLAY_COPY: Record<
     sourceMoments: string;
     evidenceFindings: string;
     dimensionsObserved: string;
-    scoreHold: string;
-    scoreHoldDetail: string;
+    recommendedNextSteps: string;
+    recommendedNextStepsDetail: string;
     sourceMomentsHeading: string;
     sourceMomentsIntro: string;
     playMoment: string;
     practiceFocus: string;
     practiceFocusIntro: string;
     reportLanguageNotice: string;
+    printReport: string;
     playbackUnavailable: string;
     playbackBlocked: string;
     playingMoment: string;
@@ -132,8 +139,8 @@ const DISPLAY_COPY: Record<
     sourceMoments: "Source moments",
     evidenceFindings: "Evidence-backed findings",
     dimensionsObserved: "Dimensions observed",
-    scoreHold: "Score publication",
-    scoreHoldDetail: "No approved score · source 95 / declared 100",
+    recommendedNextSteps: "Recommended next steps",
+    recommendedNextStepsDetail: "Improvements grounded in this call",
     sourceMomentsHeading: "Moments from your call",
     sourceMomentsIntro:
       "Jump to the exact source-bound moments behind this draft.",
@@ -143,6 +150,7 @@ const DISPLAY_COPY: Record<
       "Use the clearest improvement as a small rehearsal before your next call.",
     reportLanguageNotice:
       "The report text stays in its server-provided language. Display modes translate interface labels only until reviewed report translations exist.",
+    printReport: "Print / save PDF",
     playbackUnavailable:
       "This moment is linked, but source playback is unavailable. Verify the authorized recording to listen.",
     playbackBlocked:
@@ -159,8 +167,8 @@ const DISPLAY_COPY: Record<
     sourceMoments: "स्रोत क्षण",
     evidenceFindings: "सबूत से जुड़े निष्कर्ष",
     dimensionsObserved: "देखे गए आयाम",
-    scoreHold: "स्कोर प्रकाशन",
-    scoreHoldDetail: "कोई approved score नहीं · source 95 / declared 100",
+    recommendedNextSteps: "अगले सुझाए गए कदम",
+    recommendedNextStepsDetail: "इस कॉल से जुड़े सुधार",
     sourceMomentsHeading: "आपकी कॉल के क्षण",
     sourceMomentsIntro: "इस ड्राफ्ट के स्रोत से जुड़े सटीक क्षण पर जाएँ।",
     playMoment: "स्रोत क्षण चलाएँ",
@@ -169,6 +177,7 @@ const DISPLAY_COPY: Record<
       "अगली कॉल से पहले सबसे स्पष्ट सुधार का छोटा अभ्यास करें।",
     reportLanguageNotice:
       "रिपोर्ट का पाठ server-provided भाषा में ही रहता है। reviewed report translations उपलब्ध होने तक केवल interface labels बदलते हैं।",
+    printReport: "प्रिंट / PDF सहेजें",
     playbackUnavailable:
       "यह moment source से जुड़ा है, लेकिन playback उपलब्ध नहीं है। सुनने के लिए authorized recording जाँचें।",
     playbackBlocked:
@@ -185,8 +194,8 @@ const DISPLAY_COPY: Record<
     sourceMoments: "स्रोत क्षण",
     evidenceFindings: "पुराव्याशी जोडलेले निष्कर्ष",
     dimensionsObserved: "निरीक्षित आयाम",
-    scoreHold: "स्कोअर प्रकाशन",
-    scoreHoldDetail: "Approved score नाही · source 95 / declared 100",
+    recommendedNextSteps: "सुचवलेले पुढचे टप्पे",
+    recommendedNextStepsDetail: "या कॉलवर आधारित सुधारणा",
     sourceMomentsHeading: "तुमच्या कॉलमधले क्षण",
     sourceMomentsIntro: "या ड्राफ्टमागचे अचूक source-bound moments उघडा.",
     playMoment: "स्रोत क्षण चालवा",
@@ -194,6 +203,7 @@ const DISPLAY_COPY: Record<
     practiceFocusIntro: "पुढच्या कॉलआधी स्पष्ट सुधारण्याचा छोटा सराव करा.",
     reportLanguageNotice:
       "रिपोर्टचा मजकूर server-provided भाषेतच राहतो. Reviewed report translations येईपर्यंत display modes फक्त interface labels बदलतात.",
+    printReport: "प्रिंट / PDF जतन करा",
     playbackUnavailable:
       "हा moment source शी जोडलेला आहे, पण playback उपलब्ध नाही. ऐकण्यासाठी authorized recording तपासा.",
     playbackBlocked:
@@ -210,8 +220,8 @@ const DISPLAY_COPY: Record<
     sourceMoments: "Source moments · स्रोत क्षण",
     evidenceFindings: "Evidence-backed findings · सबूत",
     dimensionsObserved: "Dimensions observed · देखे गए आयाम",
-    scoreHold: "Score publication · स्कोर",
-    scoreHoldDetail: "No approved score · source 95 / declared 100",
+    recommendedNextSteps: "Recommended next steps · अगले कदम",
+    recommendedNextStepsDetail: "Improvements from this call · इस कॉल के सुधार",
     sourceMomentsHeading: "Moments from your call · आपकी कॉल के क्षण",
     sourceMomentsIntro:
       "Jump to exact source-bound moments · सटीक क्षण पर जाएँ।",
@@ -221,6 +231,7 @@ const DISPLAY_COPY: Record<
       "Use this improvement before your next call · अगली कॉल से पहले अभ्यास करें।",
     reportLanguageNotice:
       "Report text stays in its server-provided language · रिपोर्ट का पाठ server-provided भाषा में रहता है। Display modes translate interface labels only until reviewed report translations exist.",
+    printReport: "Print / PDF सेव करें",
     playbackUnavailable:
       "This moment is linked but playback is unavailable · यह moment जुड़ा है पर playback उपलब्ध नहीं है।",
     playbackBlocked: "Playback was blocked · audio controls में play दबाएँ।",
@@ -564,8 +575,18 @@ async function readProcessingPlan(
   }
 }
 
-export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
-  const [advanced, setAdvanced] = useState(false);
+export type CallStudioVariant = "standalone" | "embedded";
+
+export type CallStudioProps = {
+  homeHref?: string;
+  /** Existing LMS callers identify their embedded mount with the /home return path. */
+  variant?: CallStudioVariant;
+};
+
+export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
+  const resolvedVariant =
+    variant ?? (homeHref === "/" ? "standalone" : "embedded");
+  const embedded = resolvedVariant === "embedded";
   const [displayLanguage, setDisplayLanguage] = useState<DisplayLanguage>("en");
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -605,6 +626,7 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
   const copy = DISPLAY_COPY[displayLanguage];
   const interfaceLanguage =
     displayLanguage === "hi" ? "hi" : displayLanguage === "mr" ? "mr" : "en";
+  const Main: "div" | "main" = embedded ? "div" : "main";
 
   useEffect(() => {
     const controller = new AbortController();
@@ -1263,57 +1285,78 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
     setMomentStatus("");
     planRequestKey.current = "";
   }
-  if (advanced)
-    return (
-      <>
-        <div className="advanced-return">
-          <button onClick={() => setAdvanced(false)}>
-            <ArrowLeft size={17} /> Back to upload & reports
-          </button>
-        </div>
-        <Workbench />
-      </>
-    );
   return (
-    <div className="xray-app simple-app" data-theme="light">
-      <header className="studio-header">
-        <Link href={homeHref} aria-label="Sales Xray home">
-          <span className="studio-mark">
-            <BrandMark />
-          </span>
-          <span>
-            Dipak’s <strong>Sales Xray</strong>
-            <small>AUTHORITY CLOSERS</small>
-          </span>
-        </Link>
-        <div className="studio-header-tools">
-          <label className="studio-language-control">
-            <Languages size={15} aria-hidden="true" />
-            <span>{copy.languageLabel}</span>
-            <select
-              aria-label={copy.languageLabel}
-              title={copy.modeNote}
-              value={displayLanguage}
-              onChange={(event) =>
-                setDisplayLanguage(event.target.value as DisplayLanguage)
-              }
-            >
-              {(
-                Object.entries(DISPLAY_COPY) as [
-                  DisplayLanguage,
-                  (typeof DISPLAY_COPY)[DisplayLanguage],
-                ][]
-              ).map(([value, language]) => (
-                <option key={value} value={value}>
-                  {language.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <span className="studio-preview">Internal testing</span>
-        </div>
-      </header>
-      <main id="main" className="studio-main">
+    <div
+      className={`xray-app simple-app${embedded ? " embedded-studio" : ""}`}
+      data-theme="light"
+      data-variant={resolvedVariant}
+    >
+      {!embedded && (
+        <header className="studio-header">
+          <Link href={homeHref} aria-label="Sales Xray home">
+            <span className="studio-mark">
+              <BrandMark />
+            </span>
+            <span>
+              Dipak’s <strong>Sales Xray</strong>
+              <small>AUTHORITY CLOSERS</small>
+            </span>
+          </Link>
+          <div className="studio-header-tools">
+            <label className="studio-language-control">
+              <Languages size={15} aria-hidden="true" />
+              <span>{copy.languageLabel}</span>
+              <select
+                aria-label={copy.languageLabel}
+                title={copy.modeNote}
+                value={displayLanguage}
+                onChange={(event) =>
+                  setDisplayLanguage(event.target.value as DisplayLanguage)
+                }
+              >
+                {(
+                  Object.entries(DISPLAY_COPY) as [
+                    DisplayLanguage,
+                    (typeof DISPLAY_COPY)[DisplayLanguage],
+                  ][]
+                ).map(([value, language]) => (
+                  <option key={value} value={value}>
+                    {language.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </header>
+      )}
+      <Main id="main" className="studio-main">
+        {embedded && (
+          <div className="studio-embedded-tools">
+            <label className="studio-language-control">
+              <Languages size={15} aria-hidden="true" />
+              <span>{copy.languageLabel}</span>
+              <select
+                aria-label={copy.languageLabel}
+                title={copy.modeNote}
+                value={displayLanguage}
+                onChange={(event) =>
+                  setDisplayLanguage(event.target.value as DisplayLanguage)
+                }
+              >
+                {(
+                  Object.entries(DISPLAY_COPY) as [
+                    DisplayLanguage,
+                    (typeof DISPLAY_COPY)[DisplayLanguage],
+                  ][]
+                ).map(([value, language]) => (
+                  <option key={value} value={value}>
+                    {language.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        )}
         <nav
           className="studio-steps"
           aria-label="Analysis steps"
@@ -1849,6 +1892,16 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
             <h1>What to take into your next call.</h1>
             <p className="studio-report-summary">{job.report.summary}</p>
             <span className="pill">AI draft · Dipak has not reviewed this</span>
+            <div className="studio-report-actions">
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => window.print()}
+              >
+                <Printer size={16} aria-hidden="true" />
+                {copy.printReport}
+              </button>
+            </div>
             <div
               className="studio-report-language-note"
               role="status"
@@ -1889,10 +1942,10 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
                   {job.report.dimensions.length}
                 </small>
               </div>
-              <div className="studio-report-metric hold" role="listitem">
-                <span>{copy.scoreHold}</span>
-                <strong>Held</strong>
-                <small>{copy.scoreHoldDetail}</small>
+              <div className="studio-report-metric" role="listitem">
+                <span>{copy.recommendedNextSteps}</span>
+                <strong>{job.report.improvements.length}</strong>
+                <small>{copy.recommendedNextStepsDetail}</small>
               </div>
             </div>
             <section
@@ -2009,15 +2062,9 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
             </section>
             <details>
               <summary>Report details</summary>
-              <p>Source SHA-256: {job.report.source_sha256}</p>
-              <p>Transcript revision: {job.report.transcript_revision}</p>
               <p>
-                Numeric scoring is awaiting approval: the supplied category
-                weights total 95 while the source declares 100.
-              </p>
-              <p>
-                Speaker labels remain unverified; transcript revision was
-                checked against the selected recording.
+                This draft uses evidence from the authorized recording. Speaker
+                labels remain unverified.
                 {activeTranscript
                   ? ` Duration: ${time(activeTranscript.duration_ms)}.`
                   : ""}
@@ -2035,17 +2082,13 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
             runs. The report uses transcript moments from this call to explain
             what worked and what to try next.
           </p>
-          <button className="text-button" onClick={() => setAdvanced(true)}>
-            Open technical results viewer <ArrowRight size={16} />
-          </button>
         </details>
-        <footer className="studio-footer">
-          <span>Dipak’s Sales Xray · Authority Closers</span>
-          <button className="text-button" onClick={() => setAdvanced(true)}>
-            Advanced: checkpoints & review tools
-          </button>
-        </footer>
-      </main>
+        {!embedded && (
+          <footer className="studio-footer">
+            <span>Dipak’s Sales Xray · Authority Closers</span>
+          </footer>
+        )}
+      </Main>
     </div>
   );
 }

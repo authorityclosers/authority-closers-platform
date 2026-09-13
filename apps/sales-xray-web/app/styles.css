@@ -12,6 +12,27 @@
   :scope.simple-app {
     display: block;
   }
+  :scope[data-variant="embedded"] {
+    min-height: auto;
+    background: transparent;
+    font-family: var(--font-sans, "Segoe UI"), sans-serif;
+    font-size: 14px;
+    line-height: 1.55;
+  }
+  :scope[data-variant="embedded"] h1,
+  :scope[data-variant="embedded"] h2,
+  :scope[data-variant="embedded"] h3 {
+    font-family: inherit;
+    letter-spacing: -0.035em;
+  }
+  :scope[data-variant="embedded"] .studio-main {
+    max-width: none;
+    margin: 0;
+    padding: 4px 0 28px;
+  }
+  :scope[data-variant="embedded"] .studio-intro {
+    margin-bottom: 28px;
+  }
   .studio-header {
     min-height: 92px;
     height: auto;
@@ -54,13 +75,6 @@
     width: 100%;
     height: 100%;
   }
-  .studio-preview {
-    border: 1px solid var(--border);
-    border-radius: 20px;
-    padding: 6px 13px;
-    color: var(--muted);
-    font-size: 11px;
-  }
   .studio-header-tools {
     display: flex;
     align-items: center;
@@ -88,6 +102,11 @@
     max-width: 1140px;
     margin: 0 auto;
     padding: 38px 24px 20px;
+  }
+  .studio-embedded-tools {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 18px;
   }
   .studio-steps {
     display: flex;
@@ -558,22 +577,14 @@
     color: var(--muted);
     font-size: 11px;
   }
-  .advanced-return {
-    background: #152638;
-    padding: 10px 24px;
-  }
-  .advanced-return button {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: transparent;
-    color: white;
-    padding: 10px 0;
-    font-size: 13px;
-  }
   .studio-report {
     margin-top: 28px;
     padding: 40px;
+  }
+  .studio-report-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 16px;
   }
   .studio-report-summary {
     font-size: 17px;
@@ -628,13 +639,6 @@
     color: var(--muted);
     font-size: 9px;
     line-height: 1.35;
-  }
-  .studio-report-metric.hold {
-    border-color: var(--warning);
-    background: var(--warning-bg);
-  }
-  .studio-report-metric.hold strong {
-    color: var(--warning);
   }
   .studio-moment-browser {
     border-top: 1px solid var(--border);
@@ -2472,5 +2476,67 @@
       transition: none !important;
       scroll-behavior: auto !important;
     }
+  }
+}
+
+@media print {
+  body:has(.xray-app .studio-report) .xray-app {
+    display: block !important;
+    min-height: auto !important;
+    background: #fff !important;
+    color: #111 !important;
+  }
+  body:has(.xray-app .studio-report) .xray-app .studio-header,
+  body:has(.xray-app .studio-report) .xray-app .studio-steps,
+  body:has(.xray-app .studio-report) .xray-app .studio-body,
+  body:has(.xray-app .studio-report) .xray-app .recording-history,
+  body:has(.xray-app .studio-report) .xray-app .studio-help,
+  body:has(.xray-app .studio-report) .xray-app .studio-footer,
+  body:has(.xray-app .studio-report) .xray-app .studio-embedded-tools,
+  body:has(.xray-app .studio-report) .xray-app .studio-report-actions,
+  body:has(.xray-app .studio-report) .xray-app .studio-report > .primary-button,
+  body:has(.xray-app .studio-report) .site-frame--learner > .skip-link,
+  body:has(.xray-app .studio-report) .site-frame--learner > .learner-sidebar,
+  body:has(.xray-app .studio-report) .site-frame--learner > .learner-header,
+  body:has(.xray-app .studio-report) .site-frame--learner > .learner-bottom-nav,
+  body:has(.xray-app .studio-report)
+    .site-frame--learner
+    > .mobile-drawer-overlay,
+  body:has(.xray-app .studio-report)
+    .site-frame--learner
+    > .command-palette-overlay {
+    display: none !important;
+  }
+  body:has(.xray-app .studio-report) .site-frame--learner {
+    display: block !important;
+    min-height: auto !important;
+    background: #fff !important;
+  }
+  body:has(.xray-app .studio-report) .site-frame--learner > .learner-main,
+  body:has(.xray-app .studio-report) .xray-app .studio-main {
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  body:has(.xray-app .studio-report) .xray-app .studio-report {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    background: #fff !important;
+  }
+  body:has(.xray-app .studio-report) .xray-app .studio-report > section {
+    break-inside: avoid;
+  }
+  body:has(.xray-app .studio-report) .xray-app .studio-moment {
+    color: #111 !important;
+    border-color: #9aa1aa !important;
+    background: #fff !important;
+  }
+  body:has(.xray-app .studio-report) .xray-app .pill {
+    color: #111 !important;
+    border: 1px solid #9aa1aa !important;
+    background: #f4f5f6 !important;
   }
 }

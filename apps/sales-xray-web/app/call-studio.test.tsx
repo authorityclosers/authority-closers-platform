@@ -1,7 +1,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CallStudio } from "./call-studio";
+import { CallStudio, type CallStudioProps } from "./call-studio";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -201,8 +201,8 @@ async function flush() {
   });
 }
 
-async function render() {
-  await act(async () => root.render(<CallStudio />));
+async function render(props: CallStudioProps = {}) {
+  await act(async () => root.render(<CallStudio {...props} />));
   await flush();
 }
 
@@ -359,6 +359,40 @@ afterEach(async () => {
 });
 
 describe("CallStudio", () => {
+  it("uses the embedded variant for the LMS mount without its standalone header", async () => {
+    await render({ homeHref: "/home", variant: "embedded" });
+
+    const app = container.querySelector<HTMLElement>(
+      '[data-variant="embedded"]',
+    );
+    expect(app).not.toBeNull();
+    expect(app?.classList.contains("embedded-studio")).toBe(true);
+    expect(container.querySelector(".studio-header")).toBeNull();
+    expect(container.querySelector(".studio-preview")).toBeNull();
+    expect(
+      container.querySelector('[data-variant="embedded"] main'),
+    ).toBeNull();
+    expect(
+      container.querySelector('[data-variant="embedded"] #main')?.tagName,
+    ).toBe("DIV");
+    expect(container.textContent).not.toContain("Workbench");
+    expect(container.textContent).not.toContain("Advanced:");
+    expect(
+      container.querySelector(
+        '.studio-embedded-tools select[aria-label="Display language"]',
+      ),
+    ).not.toBeNull();
+  });
+
+  it("keeps developer testing labels out of the standalone learner surface", async () => {
+    await render();
+
+    expect(
+      container.querySelector('[data-variant="standalone"] > main#main'),
+    ).not.toBeNull();
+    expect(container.textContent).not.toContain("Internal testing");
+  });
+
   it("keeps source selection local and clears a quote when the source changes", async () => {
     await render();
     const first = await selectAudio("first.wav", "first source");
@@ -493,6 +527,8 @@ describe("CallStudio", () => {
       "AI draft · Dipak has not reviewed this",
     );
     expect(container.textContent).not.toContain("draft_not_dipak_adjudicated");
+    expect(container.textContent).not.toContain("Source SHA-256");
+    expect(container.textContent).not.toContain("weights total 95");
     expect(container.textContent).not.toContain("Practise:");
     const audio = container.querySelector<HTMLAudioElement>("audio");
     expect(audio).not.toBeNull();
@@ -521,14 +557,24 @@ describe("CallStudio", () => {
 
     expect(container.textContent).toContain("Source moments");
     expect(container.textContent).toContain("Evidence-backed findings");
-    expect(container.textContent).toContain("Held");
-    expect(container.textContent).toContain(
-      "No approved score · source 95 / declared 100",
-    );
+    expect(container.textContent).toContain("Recommended next steps");
+    const reportMetrics = container.querySelectorAll(".studio-report-metric");
+    expect(reportMetrics).toHaveLength(4);
+    expect(reportMetrics[3]?.querySelector("strong")?.textContent).toBe("1");
+    expect(container.textContent).not.toContain("No approved score");
+    expect(container.textContent).not.toContain("source 95 / declared 100");
     expect(container.textContent).toContain("Dimensions observed");
     expect(container.textContent).toContain("Observed: 0 of 8");
     expect(container.textContent).toContain("Moments from your call");
     expect(container.querySelectorAll(".studio-moment")).toHaveLength(2);
+
+    const print = vi.fn();
+    Object.defineProperty(window, "print", {
+      configurable: true,
+      value: print,
+    });
+    await act(async () => getButton("Print / save PDF").click());
+    expect(print).toHaveBeenCalledOnce();
 
     const audio = container.querySelector<HTMLAudioElement>("audio");
     expect(audio).not.toBeNull();
