@@ -675,7 +675,7 @@ def _patch_proof_dependencies(module: ModuleType, monkeypatch: pytest.MonkeyPatc
             "State": {"Running": True, "Health": {"Status": "healthy"}},
         },
     )
-    monkeypatch.setattr(module, "validate_container", lambda *_: None)
+    monkeypatch.setattr(module, "validate_container", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(module, "validate_temp_root", lambda **_: None)
     version = b"ClamAV 1.5.4/123/fixture\0"
 
@@ -1340,4 +1340,112 @@ def test_disk_full_scanner_error_cannot_mint_readiness(
         safety_module, "scan", lambda _body: b"INSTREAM: Can't write to temporary file. ERROR\0"
     )
     with pytest.raises(ValueError, match="Clean scanner probe failed"):
+        safety_module.prove(RELEASE, installed)
+
+
+def _set_historical_policy(installed: Path) -> None:
+    clamd = installed / "clamd.conf"
+    clamd.write_text(
+        clamd.read_text(encoding="utf-8")
+        .replace("StreamMaxLength 2000000000", "StreamMaxLength 100M")
+        .replace("MaxFileSize 2000000000", "MaxFileSize 100M")
+        .replace("MaxScanSize 4000000000", "MaxScanSize 200M")
+        .replace("TemporaryDirectory /var/lib/ac-media-safety-tmp\n", "")
+        .replace("LocalSocket /run/ac-media-safety/clamd.sock", "LocalSocket /tmp/clamd.sock")
+        .replace("LocalSocketMode 666", "LocalSocketMode 600")
+        .replace("MaxScanTime 900000", "MaxScanTime 60000"),
+        encoding="utf-8",
+    )
+    compose = installed / "compose.yaml"
+    compose.write_text(
+        "\n".join(
+            line
+            for line in compose.read_text(encoding="utf-8").splitlines()
+            if not any(
+                marker in line
+                for marker in (
+                    "# ac-scanner-temp-filesystem-v1",
+                    "media-safety-tmp",
+                    "media-safety-socket",
+                )
+            )
+        ),
+        encoding="utf-8",
+    )
+
+
+@pytest.mark.parametrize("mode", ["upgrade", "rollback"])
+def test_historical_policy_transition_reports_only_target_capacity(
+    safety_module: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+) -> None:
+    validator = safety_module.validate_policy
+    prover = safety_module.prove
+    source, target, composed = _patch_transition_dependencies(safety_module, tmp_path, monkeypatch)
+    _set_historical_policy(source if mode == "upgrade" else target)
+    _patch_proof_dependencies(safety_module, monkeypatch)
+    monkeypatch.setattr(safety_module, "validate_policy", validator)
+    monkeypatch.setattr(safety_module, "prove", prover)
+    result = safety_module.transition_release(
+        mode=mode,
+        source_release=RELEASE,
+        source_checksum="c" * 64,
+        target_release="b" * 40,
+        target_installed=target,
+    )
+    assert composed == [("b" * 40, target)]
+    expected_source = 2_000_000_000 if mode == "upgrade" else 100 * safety_module.MIB
+    expected_scan = 4_000_000_000 if mode == "upgrade" else 200 * safety_module.MIB
+    assert result["readiness"]["max_source_bytes"] == expected_source
+    assert result["readiness"]["stream_max_length"] == expected_source
+    assert result["readiness"]["max_file_size"] == expected_source
+    assert result["readiness"]["max_scan_size"] == expected_scan
+    assert result["scanner_readiness"] == "verified"
+
+
+@pytest.mark.parametrize("changed_limit", ["StreamMaxLength", "MaxFileSize", "MaxScanSize"])
+def test_historical_policy_rejects_mixed_or_invented_limits_before_transition(
+    safety_module: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    changed_limit: str,
+) -> None:
+    validator = safety_module.validate_policy
+    source, target, composed = _patch_transition_dependencies(safety_module, tmp_path, monkeypatch)
+    _set_historical_policy(source)
+    clamd = source / "clamd.conf"
+    clamd.write_text(
+        "\n".join(
+            f"{changed_limit} 2000000000" if line.startswith(changed_limit + " ") else line
+            for line in clamd.read_text(encoding="utf-8").splitlines()
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(safety_module, "validate_policy", validator)
+    with pytest.raises(ValueError, match="limits"):
+        safety_module.transition_release(
+            mode="upgrade",
+            source_release=RELEASE,
+            source_checksum="c" * 64,
+            target_release="b" * 40,
+            target_installed=target,
+        )
+    assert composed == []
+
+
+def test_intermediate_large_scanner_without_fixed_disk_cannot_mint_large_readiness(
+    safety_module: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    installed = _installed(tmp_path)
+    compose = installed / "compose.yaml"
+    compose.write_text(
+        compose.read_text(encoding="utf-8").replace(safety_module.TEMP_POLICY_MARKER, ""),
+        encoding="utf-8",
+    )
+    _patch_proof_dependencies(safety_module, monkeypatch)
+    with pytest.raises(ValueError, match="Large scanner readiness"):
         safety_module.prove(RELEASE, installed)

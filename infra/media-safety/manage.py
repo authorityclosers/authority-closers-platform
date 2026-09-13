@@ -530,8 +530,8 @@ def definitions() -> dict:
     return result
 
 
-def validate_policy(installed: Path) -> None:
-    """Validate the immutable scanning/updater policy for one release."""
+def validate_policy(installed: Path) -> tuple[int, int]:
+    """Validate one exact historical/current policy and return its byte limits."""
 
     policy = {}
     for line in (installed / "clamd.conf").read_text().splitlines():
@@ -539,13 +539,15 @@ def validate_policy(installed: Path) -> None:
             key, setting = line.split(maxsplit=1)
             require(key not in policy, "Duplicate scanner setting")
             policy[key] = setting
+    limits = {
+        ("100M", "100M", "200M"): (100 * MIB, 200 * MIB),
+        ("2000000000", "2000000000", "4000000000"): (2_000_000_000, 4_000_000_000),
+    }.get(tuple(policy.get(key) for key in ("StreamMaxLength", "MaxFileSize", "MaxScanSize")))
+    require(limits is not None, "Scanner limits differ from admitted policy")
     require(
         all(
             policy.get(key) == setting
             for key, setting in {
-                "StreamMaxLength": "2000000000",
-                "MaxFileSize": "2000000000",
-                "MaxScanSize": "4000000000",
                 "AlertExceedsMax": "yes",
                 "BytecodeSecurity": "TrustSigned",
             }.items()
@@ -574,6 +576,8 @@ def validate_policy(installed: Path) -> None:
         ),
         "Signature updater differs from managed policy",
     )
+    assert limits is not None
+    return limits
 
 
 def live_probe() -> tuple[bytes, dict]:
@@ -613,8 +617,12 @@ def prove(release: str, installed: Path) -> dict:
         "Scanner health is not accepted",
     )
     validate_container(value, release, installed)
-    validate_policy(installed)
+    source_bytes, scan_bytes = validate_policy(installed)
     fixed_temp = TEMP_POLICY_MARKER in (installed / "compose.yaml").read_text(encoding="utf-8")
+    require(
+        source_bytes <= 100 * MIB or fixed_temp,
+        "Large scanner readiness requires the fixed temporary filesystem policy",
+    )
     if fixed_temp:
         validate_temp_root(running=True)
     _, evidence = live_probe()
@@ -647,10 +655,10 @@ def prove(release: str, installed: Path) -> dict:
         "environment": "local",
         "host": "127.0.0.1",
         "port": 13310,
-        "max_source_bytes": 2_000_000_000,
-        "stream_max_length": 2_000_000_000,
-        "max_file_size": 2_000_000_000,
-        "max_scan_size": 4_000_000_000,
+        "max_source_bytes": source_bytes,
+        "stream_max_length": source_bytes,
+        "max_file_size": source_bytes,
+        "max_scan_size": scan_bytes,
         "alert_exceeds_max": True,
         "verified_at": now.isoformat(),
         "expires_at": (now + dt.timedelta(hours=12)).isoformat(),
