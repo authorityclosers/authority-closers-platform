@@ -7,6 +7,7 @@ import { z } from "zod";
 import { newIdempotencyKey } from "@ac/operations-web/api";
 
 import { AdminShell } from "../components/admin-shell";
+import { SalesXrayNavigation } from "./sales-xray-navigation";
 import styles from "./provider-controls.module.css";
 
 const TASK_NAMES = [
@@ -331,6 +332,14 @@ async function requestJson(path: string, init: RequestInit = {}) {
   if (response.status === 403) throw new Error("forbidden");
   if (!response.ok) throw new Error(`http_${response.status}`);
   return response.json() as Promise<unknown>;
+}
+
+export async function loadProviderControls(
+  signal?: AbortSignal,
+): Promise<ProviderControlsPayload> {
+  return parseProviderControlsPayload(
+    await requestJson("/v1/admin/conversation/providers", { signal }),
+  );
 }
 
 function ExternalReferenceField({
@@ -681,11 +690,8 @@ export function ProviderControlsPanel() {
   useEffect(() => {
     const controller = new AbortController();
     requestRef.current = controller;
-    void requestJson("/v1/admin/conversation/providers", {
-      signal: controller.signal,
-    })
-      .then((value) => {
-        const payload = parseProviderControlsPayload(value);
+    void loadProviderControls(controller.signal)
+      .then((payload) => {
         setState((previous) => ({
           status: "ready",
           payload,
@@ -1055,13 +1061,16 @@ export function ProviderControlsPanel() {
       <section className={styles.section} aria-labelledby="task-routes-title">
         <div className={styles.sectionHeader}>
           <div>
-            <span className={styles.eyebrow}>Task routing</span>
+            <span className={styles.eyebrow}>
+              Task routing / analysis revisions
+            </span>
             <h2 id="task-routes-title">
-              Assign tasks without activating them.
+              Choose analysis parameters by revision.
             </h2>
             <p>
-              Each route retains its task contract and checkpoint lineage.
-              Multiple models and tasks can be stored as separate mappings.
+              Recipe, profile, and prompt values are revision identifiers for a
+              future approved run. They select configuration; they do not train
+              a model or start analysis.
             </p>
           </div>
           <button
@@ -1192,7 +1201,10 @@ export function ProviderControls() {
       title="Provider controls"
       description="Store approved provider references and task mappings while execution stays off."
     >
-      <ProviderControlsPanel />
+      <div className={styles.page}>
+        <SalesXrayNavigation active="settings" />
+        <ProviderControlsPanel />
+      </div>
     </AdminShell>
   );
 }
