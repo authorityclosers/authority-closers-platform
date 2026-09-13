@@ -162,9 +162,50 @@ READY source `asset_id` and `version_id`; keep those receipt values private to
 the operator handoff.
 
 Then run `adopt-existing` with the exact global IDs in the manifest. The
-adoption receipt is the publication receipt required by `promote-media` and
-does not change any existing global catalog, enrollment, binding, or progress
-row. Promotion must use the authenticated source operator as media owner. In
+staging command ID is frozen so a lost response can be replayed safely:
+
+```text
+AC_ENVIRONMENT=staging AC_OPERATIONS_TENANT_ID=f5386fc3-033d-4e75-a333-7774381cb4d5 \
+python3 -m ac_platform.catalog.cli adopt-existing \
+  --environment staging \
+  --source-program-id 189cec59-e302-4fe3-8215-a34c68e394a9 \
+  --program-id a6382ab5-63f5-562c-bfa8-1bdd944194c2 \
+  --program-version-id 67e08626-9b3d-50d2-b9c1-5a44645d5114 \
+  --video-activity-id 73dfbbf7-5f2c-5e88-ad27-e5c84c65690f \
+  --public-tenant-id 206ccee8-a246-433b-b6d3-78eb21592a5c \
+  --command-id 6c0295c6-9976-5d74-933e-e420f6a40d99 \
+  --reason "Adopt reviewed staging global Free Course for canonical media promotion"
+```
+
+The adoption receipt is the publication receipt required by `promote-media`
+and does not change any existing global catalog, enrollment, binding, or
+progress row. For staging, use this frozen promotion command ID and the
+`asset_id`/`version_id` returned by the READY upload:
+
+```text
+AC_ENVIRONMENT=staging AC_OPERATIONS_TENANT_ID=f5386fc3-033d-4e75-a333-7774381cb4d5 \
+python3 -m ac_platform.catalog.cli promote-media \
+  --environment staging \
+  --publication-command-id 6c0295c6-9976-5d74-933e-e420f6a40d99 \
+  --command-id d5c94ca1-f75d-5fd5-9515-4f1692dbe121 \
+  --activity-id 73dfbbf7-5f2c-5e88-ad27-e5c84c65690f \
+  --source-asset-id <ready_asset_id> \
+  --source-version-id <ready_version_id> \
+  --media-owner-person-id 311f4bd2-7b8b-4f45-99f0-a2aed83bc95a \
+  --public-tenant-id 206ccee8-a246-433b-b6d3-78eb21592a5c \
+  --approval-reference AC-STAGING-FREE-COURSE-20260913
+```
+
+The production equivalents use source program
+`a1993f11-f43d-446a-821f-550bc40b950c`, operations tenant
+`fb594dea-fdb6-444c-a36f-1d94fbc65bbf`, public tenant
+`c1d51741-6e0f-4ddc-8cc4-58856d0e778f`, and the verified production media
+owner `033b7038-154a-4e5a-8a23-8d5ffeec2b4b`. Use adoption command
+`13f83b37-5934-5151-9abd-7348802cce96` and promotion command
+`3aa3729f-65c4-53b5-83a3-fbf1a9234d32` after the production draft has its
+three missing modules and the source upload is READY.
+
+Promotion must use the authenticated source operator as media owner. In
 staging that is person `311f4bd2-7b8b-4f45-99f0-a2aed83bc95a`; the personal
 email person `1379f28f-88c1-49d2-ab89-31f7ed65223e` is a separate public learner
 identity and must not be relabeled or merged.
