@@ -203,14 +203,35 @@ async def test_child_reads_only_the_exact_provider_credential_and_returns_raw_fr
                 hashlib.sha256(body).hexdigest(),
             )
 
-    monkeypatch.setenv("GEMINI_API_KEY", "synthetic-child-key")
-    monkeypatch.setenv("GROQ_API_KEY", "must-not-be-read")
-    monkeypatch.setenv("ELEVENLABS_API_KEY", "must-not-be-read")
-    monkeypatch.setattr(
-        "ac_platform.conversation_intelligence.inference_broker.BoundedProviders", FakeProviders
-    )
+    parent_environment_id = id(os.environ)
+    parent_environment_names = frozenset(os.environ)
+    # This entry point scrubs its disposable child environment. Invoking it in
+    # pytest must never unset variables in the actual test-runner process.
+    with monkeypatch.context() as child_scope:
+        child_scope.setattr(
+            os,
+            "environ",
+            {
+                "GEMINI_API_KEY": "synthetic-child-key",
+                "GROQ_API_KEY": "must-not-be-read",
+                "ELEVENLABS_API_KEY": "must-not-be-read",
+                "AC_PARENT_SETTING_FIXTURE": "must-not-reach-adapter",
+            },
+        )
+        child_scope.setattr(
+            "ac_platform.conversation_intelligence.inference_broker.BoundedProviders", FakeProviders
+        )
+        output = _child_execute(frame)
+        assert "GEMINI_API_KEY" not in os.environ
+        assert "GROQ_API_KEY" not in os.environ
+        assert "ELEVENLABS_API_KEY" not in os.environ
+        assert "AC_PARENT_SETTING_FIXTURE" not in os.environ
 
-    output = _child_execute(frame)
+    environment_restored = (
+        id(os.environ) == parent_environment_id
+        and frozenset(os.environ) == parent_environment_names
+    )
+    assert environment_restored, "Child fixture must preserve the test-runner environment."
     result = await ProcessInferenceBroker(
         python_executable=sys.executable,
         runner=FakeRunner(lambda _header, _payload: output),
@@ -219,8 +240,6 @@ async def test_child_reads_only_the_exact_provider_credential_and_returns_raw_fr
     assert observed["credentials"] == {"gemini": "synthetic-child-key"}
     assert observed["body"] == {"input": "synthetic"}
     assert "must-not-be-read" not in repr(output)
-    assert "GROQ_API_KEY" not in os.environ
-    assert "ELEVENLABS_API_KEY" not in os.environ
 
 
 @pytest.mark.asyncio
