@@ -1,4 +1,4 @@
-"""Standalone Sales Xray host admission and existing-account authentication."""
+"""Standalone Sales Xray host admission and canonical Academy authentication."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from pydantic import ValidationError
 import ac_platform.http.auth as auth_module
 from ac_platform.application.settings import Settings
 from ac_platform.http.auth import RequestOriginDenied
-from ac_platform.http.auth_transactions import AuthTransactionCodec
+from ac_platform.http.auth_transactions import AuthTransaction, AuthTransactionCodec
 from ac_platform.http.conversation import install_conversation_http
 from ac_platform.http.problem import register_problem_handlers
 from ac_platform.identity.services import ProviderAuthorizationType
@@ -207,9 +207,7 @@ class _TrackingIdentityApplication(_IdentityApplication):
         return await super().begin_provider_authorization(*args, **kwargs)
 
 
-@pytest.mark.parametrize("action", ["register", "link"])
-def test_sales_xray_google_start_rejects_registration_and_link_before_state_creation(
-    action: str,
+def test_sales_xray_google_start_rejects_link_before_state_creation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _TrackingIdentityApplication.begin_calls = 0
@@ -218,7 +216,7 @@ def test_sales_xray_google_start_rejects_registration_and_link_before_state_crea
 
     response = client.get(
         "/v1/auth/google/start",
-        params={"action": action, "surface": "sales_xray"},
+        params={"action": "link", "surface": "sales_xray"},
         headers={"host": SALES_STAGING_HOST},
         follow_redirects=False,
     )
@@ -228,6 +226,117 @@ def test_sales_xray_google_start_rejects_registration_and_link_before_state_crea
     assert "location" not in response.headers
     assert not response.headers.get_list("set-cookie")
     assert _TrackingIdentityApplication.begin_calls == 0
+
+
+@pytest.mark.parametrize("action", ["register", "authenticate"])
+def test_sales_google_consent_aware_entry_registers_in_the_same_academy(
+    action: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    provider = _SuccessfulProvider()
+    settings = _sales_staging_settings()
+    _IdentityApplication.reset_registered_provider_calls()
+    selected = []
+
+    async def select_tenant(_identity, token, tenant_id):
+        selected.append((token, tenant_id))
+
+    monkeypatch.setattr(_IdentityApplication, "select_tenant", select_tenant)
+    client = _client(settings=settings, provider=provider)
+    started = client.get(
+        "/v1/auth/google/start",
+        params={
+            "action": action,
+            "surface": "sales_xray",
+            "consent": "true",
+            "consent_version": settings.learner_consent_version,
+            "return_path": "/?report=owned-report&continue=claim",
+        },
+        headers={"host": SALES_STAGING_HOST},
+        follow_redirects=False,
+    )
+    assert started.status_code == 303
+    encoded = started.cookies[DEPLOYMENT_OAUTH_COOKIE]
+    transaction = AuthTransactionCodec(settings.oauth_transaction_secret.get_secret_value()).decode(
+        encoded
+    )
+    assert transaction.authorization_type is ProviderAuthorizationType.REGISTER
+    assert transaction.consent_version == settings.learner_consent_version
+    callback = client.get(
+        "/v1/auth/google/callback",
+        params={"state": transaction.state, "code": "google-authorization-code"},
+        headers={"host": SALES_STAGING_HOST, "cookie": f"{DEPLOYMENT_OAUTH_COOKIE}={encoded}"},
+        follow_redirects=False,
+    )
+    assert callback.status_code == 303
+    assert (
+        callback.headers["location"]
+        == SALES_STAGING_ORIGIN + "/?report=owned-report&continue=claim"
+    )
+    assert selected == [(VALID_SESSION_TOKEN, settings.public_learner_tenant_id)]
+    assert len(_IdentityApplication.registered_provider_calls) == 1
+    assert callback.cookies[DEPLOYMENT_SESSION_COOKIE] == VALID_SESSION_TOKEN
+    assert provider.redirect_uris == [SALES_STAGING_ORIGIN + "/v1/auth/google/callback"]
+
+
+@pytest.mark.parametrize("consent", [None, "false"])
+def test_sales_google_registration_requires_current_consent(consent) -> None:
+    client = _client(settings=_sales_staging_settings(), provider=_RecordingProvider())
+    response = client.get(
+        "/v1/auth/google/start",
+        params={
+            "action": "register",
+            "surface": "sales_xray",
+            **({"consent": consent} if consent else {}),
+        },
+        headers={"host": SALES_STAGING_HOST},
+        follow_redirects=False,
+    )
+    assert response.status_code == 400
+    assert response.json()["code"] == "learner_consent_required"
+    assert not response.headers.get_list("set-cookie")
+
+
+@pytest.mark.parametrize("version", [None, "superseded-version"])
+def test_sales_google_registration_rejects_missing_or_superseded_version(version) -> None:
+    client = _client(settings=_sales_staging_settings(), provider=_RecordingProvider())
+    response = client.get(
+        "/v1/auth/google/start",
+        params={
+            "action": "register",
+            "surface": "sales_xray",
+            "consent": "true",
+            **({"consent_version": version} if version else {}),
+        },
+        headers={"host": SALES_STAGING_HOST},
+        follow_redirects=False,
+    )
+    assert response.status_code == 400
+    assert not response.headers.get_list("set-cookie")
+
+
+@pytest.mark.parametrize("consent_version", [None, "superseded-version"])
+def test_sales_google_callback_rechecks_registration_consent_before_exchange(consent_version):
+    settings = _sales_staging_settings()
+    provider = _SuccessfulProvider()
+    transaction = AuthTransaction.issue(
+        ProviderAuthorizationType.REGISTER,
+        surface="sales_xray",
+        return_path="/?report=owned-report",
+        consent_version=consent_version,
+    )
+    encoded = AuthTransactionCodec(settings.oauth_transaction_secret.get_secret_value()).encode(
+        transaction
+    )
+    client = _client(settings=settings, provider=provider)
+    callback = client.get(
+        "/v1/auth/google/callback",
+        params={"state": transaction.state, "code": "must-not-exchange"},
+        headers={"host": SALES_STAGING_HOST, "cookie": f"{DEPLOYMENT_OAUTH_COOKIE}={encoded}"},
+        follow_redirects=False,
+    )
+    assert callback.status_code == 503
+    assert provider.redirect_uris == []
+    assert DEPLOYMENT_SESSION_COOKIE not in callback.cookies
 
 
 @pytest.mark.parametrize(

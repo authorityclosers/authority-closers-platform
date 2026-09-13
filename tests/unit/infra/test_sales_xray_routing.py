@@ -19,7 +19,7 @@ ACCOUNT_ID = "account-fixture"
 ZONE_ID = "zone-fixture"
 TUNNEL_ID = "7b517753-17f5-464e-b459-b63f43773790"
 TARGET = f"{TUNNEL_ID}.cfargotunnel.com"
-TEST_TOKEN_SENTINEL = "AC_TEST_CLOUDFLARE_API_TOKEN_SENTINEL"
+TEST_TOKEN_SENTINEL = "AC_TEST_CLOUDFLARE_API_TOKEN_SENTINEL"  # noqa: S105 - non-secret test marker
 HOSTS = (
     "salesxray-staging.authorityclosers.com",
     "salesxray.authorityclosers.com",
@@ -553,7 +553,7 @@ def test_receipt_path_writes_only_redacted_plan(tmp_path: Path) -> None:
 
 
 @pytest.mark.skipif(PWSH is None, reason="PowerShell 7 is required")
-def test_apply_staging_preserves_config_accepts_reordered_readback_and_never_mutates_production() -> None:
+def test_staging_apply_preserves_production_and_accepts_reordered_readback() -> None:
     production_record = _matching_records()[HOSTS[1]]
     with _CloudflareMock(
         config=_live_config(),
@@ -627,7 +627,9 @@ def test_apply_refuses_incomplete_config_readback_before_dns_post() -> None:
         result = _run_live_script(mock=mock, target_environment="staging")
 
     assert result.returncode != 0
-    assert "complete planned configuration" in result.stderr
+    # PowerShell's concise error renderer wraps prose differently on Linux and
+    # Windows. The stable error identifier survives both rendering modes.
+    assert "AC_TUNNEL_READBACK_MISMATCH" in result.stderr
     assert len(mock.put_bodies) == 1
     assert mock.post_bodies == []
     call_labels = [f"{call['method']} {call['path']}" for call in mock.calls]

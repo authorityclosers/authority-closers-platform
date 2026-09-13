@@ -301,6 +301,40 @@ def test_paid_policy_is_explicit_and_auto_purchase_is_always_forbidden() -> None
         resolve_dispatch(config, _dispatch_request(config))
 
 
+def test_paid_dispatch_requires_policy_and_explicit_pricing_but_not_free_allowance() -> None:
+    provider = _provider(max_cost_paise=50_000, free_allowance_ref=None)
+    config = _config(
+        provider=provider,
+        policy=RegistryPolicy(
+            allow_paid=True,
+            paid_approval_ref="ref:approval:paid-provider",
+        ),
+    )
+    plan = resolve_dispatch(config, _dispatch_request(config))
+    assert plan.max_cost_paise == 50_000
+
+    missing_pricing = _provider(max_cost_paise=50_000, free_allowance_ref=None, pricing_ref=None)
+    with pytest.raises(ProviderRegistryError, match="invalid_pricing_ref"):
+        resolve_dispatch(
+            _config(
+                provider=missing_pricing,
+                policy=RegistryPolicy(
+                    allow_paid=True,
+                    paid_approval_ref="ref:approval:paid-provider",
+                ),
+            ),
+            _dispatch_request(
+                _config(
+                    provider=missing_pricing,
+                    policy=RegistryPolicy(
+                        allow_paid=True,
+                        paid_approval_ref="ref:approval:paid-provider",
+                    ),
+                )
+            ),
+        )
+
+
 @pytest.mark.parametrize(
     ("endpoint", "error"),
     [

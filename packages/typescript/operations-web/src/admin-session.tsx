@@ -39,6 +39,21 @@ export const ADMIN_SESSION_REFRESH_TIMEOUT_MS = 10_000;
 
 const AdminSessionContext = createContext<AdminSessionState>(initialState);
 
+/** Navigation hint only. The API checks current identity, role and permissions. */
+export function canManageSalesXray(state: AdminSessionState): boolean {
+  return (
+    state.status === "ready" &&
+    [
+      "admin@authorityclosers.com",
+      "dipak@authorityclosers.com",
+      "suyash@authorityclosers.com",
+    ].includes(state.session.email.trim().toLowerCase()) &&
+    Boolean(state.session.emailVerifiedAt) &&
+    ["owner", "admin"].includes(state.session.membershipRole) &&
+    state.session.permissions.includes("admin_surface")
+  );
+}
+
 export type AdminSessionInvalidator = (session: AdminSession) => void;
 
 const noOpSessionInvalidator: AdminSessionInvalidator = () => undefined;
@@ -127,10 +142,13 @@ export function AdminSessionProvider({
   children,
   refreshKey,
   revalidateOnFocus = false,
+  renderBoundary,
 }: {
   children: ReactNode;
   refreshKey?: string;
   revalidateOnFocus?: boolean;
+  /** Optional public chrome around the session boundary while access is checked. */
+  renderBoundary?: (boundary: ReactNode, state: AdminSessionState) => ReactNode;
 }) {
   const [view, setView] = useState<{
     key: string | undefined;
@@ -388,34 +406,38 @@ export function AdminSessionProvider({
   return (
     <AdminSessionInvalidationContext.Provider value={invalidateSession}>
       <>
-        {hidden && (
-          <section
-            className="studio-boundary panel"
-            role={state.status === "error" ? "alert" : "status"}
-          >
-            <div>
-              <h2>
-                {state.status === "error"
-                  ? "We couldn’t check your account"
-                  : "Checking your account…"}
-              </h2>
-              <p>
-                {state.status === "error"
-                  ? "Your open work is kept privately in this tab. Reconnect to continue."
-                  : "Your workspace will return after your session is verified."}
-              </p>
-              {state.status === "error" && (
-                <button
-                  type="button"
-                  className="button button-secondary"
-                  onClick={() => refresh()}
-                >
-                  Reconnect
-                </button>
-              )}
-            </div>
-          </section>
-        )}
+        {hidden &&
+          (() => {
+            const boundary = (
+              <section
+                className="studio-boundary panel"
+                role={state.status === "error" ? "alert" : "status"}
+              >
+                <div>
+                  <h2>
+                    {state.status === "error"
+                      ? "We couldn’t check your account"
+                      : "Checking your account…"}
+                  </h2>
+                  <p>
+                    {state.status === "error"
+                      ? "Your open work is kept privately in this tab. Reconnect to continue."
+                      : "Your workspace will return after your session is verified."}
+                  </p>
+                  {state.status === "error" && (
+                    <button
+                      type="button"
+                      className="button button-secondary"
+                      onClick={() => refresh()}
+                    >
+                      Reconnect
+                    </button>
+                  )}
+                </div>
+              </section>
+            );
+            return renderBoundary ? renderBoundary(boundary, state) : boundary;
+          })()}
         <div
           ref={attachPrivateRoot}
           hidden={hidden}

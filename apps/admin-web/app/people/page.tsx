@@ -1,16 +1,16 @@
 import { AdminShell } from "../components/admin-shell";
-import { PeopleRuntime } from "../components/people-runtime";
+import { PeopleDirectory } from "../components/people-directory";
 
 export default function PeoplePage() {
   return (
     <AdminShell
       active="people"
       surface="people"
-      eyebrow="People / learner support"
+      eyebrow="Academy / People"
       title="People"
-      description="Find an active learner and inspect course access, progress and saved-work status in this academy."
+      description="Your learners and team, with course activity and support in one place."
     >
-      <PeopleRuntime />
+      <PeopleDirectory />
     </AdminShell>
   );
 }

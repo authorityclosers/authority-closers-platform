@@ -27,6 +27,11 @@ from ac_platform.kernel.authz import ActorContext
 from ac_platform.tenancy.models import Membership
 
 CONTROL_ACCOUNT = "admin@authorityclosers.com"
+# Explicitly named by the AC owner for staging and production administration.
+# An email match never substitutes for verified identity or scoped admin access.
+CONTROL_ACCOUNTS = frozenset(
+    {CONTROL_ACCOUNT, "dipak@authorityclosers.com", "suyash@authorityclosers.com"}
+)
 
 
 async def lock_provider_configuration(
@@ -52,7 +57,7 @@ class ConversationProviderAdmin:
         membership = await self.database.get(Membership, (actor.tenant_id, actor.person_id))
         if (
             person is None
-            or (person.email or "").casefold() != CONTROL_ACCOUNT
+            or (person.email or "").casefold() not in CONTROL_ACCOUNTS
             or person.email_verified_at is None
             or membership is None
             or membership.role not in {"owner", "admin"}
@@ -100,10 +105,13 @@ class ConversationProviderAdmin:
             raise ConversationError(
                 "Use valid provider settings and external secret references."
             ) from None
-        if resolved.policy.allow_paid or any(
-            (item.max_cost_paise or 0) > 0 for item in resolved.providers
-        ):
-            raise ConversationDenied("This test workspace permits zero paid spend only.")
+        paid_providers = tuple(
+            item for item in resolved.providers if (item.max_cost_paise or 0) > 0
+        )
+        if resolved.policy.allow_paid and not paid_providers:
+            raise ConversationDenied("Paid policy requires an explicitly priced provider.")
+        if paid_providers and not resolved.policy.allow_paid:
+            raise ConversationDenied("Paid provider settings require an explicit paid policy.")
         payload = {
             "configuration": resolved.as_dict(),
             "expected_revision": expected_revision,

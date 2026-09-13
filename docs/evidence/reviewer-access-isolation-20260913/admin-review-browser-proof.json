@@ -1,0 +1,292 @@
+{
+  "assignment_id": "8c24c272-122f-4f42-afa0-a51327486828",
+  "feedback_after_reload": true,
+  "revoked_history_read": true,
+  "new_invites_disabled": true,
+  "viewports": [
+    1440,
+    390,
+    320
+  ],
+  "page_errors": [],
+  "responses": [
+    {
+      "path": "/sales-xray/review/8c24c272-122f-4f42-afa0-a51327486828",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/media/23b7a97ae3b5c134-s.p.226pwps5o-gq_.woff2",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/media/99e609270109b47d-s.p.40sczeszzbjw1.woff2",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/_07ktpta._.css",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/%5Broot-of-the-server%5D__188_68d._.css",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_0964-e9._.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/media/83afe278b6a6bb3c-s.p.2bn3s6zvc0dyp.woff2",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/media/effe91970fc4db64-s.p.0oace-s_gkfks.woff2",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/203f_next_dist_compiled_react-server-dom-turbopack_0m0_wzi._.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/203f_next_dist_compiled_0xej69y._.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/203f_next_dist_0332hu_._.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/apps_admin-web_1anvha4._.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/0zix_%40swc_helpers_cjs_0hi-e47._.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/turbopack-apps_admin-web_01riv7-._.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/apps_admin-web_1lmzbrc._.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/203f_next_dist_1ha5x-0._.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/_1rgy9b-._.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/203f_next_dist_11yn48t._.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/203f_next_dist_compiled_next-devtools_index_0o808l0.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/203f_next_dist_client_0t0gqis._.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/203f_next_dist_compiled_react-dom_0p274vw._.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/09ge_zod_v4_classic_1pv--5j._.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/node_modules__pnpm_0cmiwcy._.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/_1n9-ugl._.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/09ge_zod_v4_locales_0h8gkg1._.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/09ge_zod_v4_core_0570rwe._.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_1mojsay._.js",
+      "status": 200
+    },
+    {
+      "path": "/v1/me",
+      "status": 200
+    },
+    {
+      "path": "/v1/context",
+      "status": 200
+    },
+    {
+      "path": "/v1/me/studio-access",
+      "status": 200
+    },
+    {
+      "path": "/v1/admin/conversation/review-assignments",
+      "status": 200
+    },
+    {
+      "path": "/v1/admin/conversation/review-assignments/8c24c272-122f-4f42-afa0-a51327486828",
+      "status": 200
+    },
+    {
+      "path": "/sales-xray/review/8c24c272-122f-4f42-afa0-a51327486828",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/media/23b7a97ae3b5c134-s.p.226pwps5o-gq_.woff2",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/_07ktpta._.css",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/media/83afe278b6a6bb3c-s.p.2bn3s6zvc0dyp.woff2",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/media/99e609270109b47d-s.p.40sczeszzbjw1.woff2",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/%5Broot-of-the-server%5D__188_68d._.css",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/media/effe91970fc4db64-s.p.0oace-s_gkfks.woff2",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_0964-e9._.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/203f_next_dist_compiled_0xej69y._.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/203f_next_dist_compiled_react-server-dom-turbopack_0m0_wzi._.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/203f_next_dist_0332hu_._.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/apps_admin-web_1anvha4._.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/0zix_%40swc_helpers_cjs_0hi-e47._.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/apps_admin-web_1lmzbrc._.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/turbopack-apps_admin-web_01riv7-._.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/203f_next_dist_1ha5x-0._.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/_1rgy9b-._.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/203f_next_dist_11yn48t._.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/203f_next_dist_compiled_next-devtools_index_0o808l0.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/203f_next_dist_compiled_react-dom_0p274vw._.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/203f_next_dist_client_0t0gqis._.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/09ge_zod_v4_classic_1pv--5j._.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/node_modules__pnpm_0cmiwcy._.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/_1n9-ugl._.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/09ge_zod_v4_core_0570rwe._.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/09ge_zod_v4_locales_0h8gkg1._.js",
+      "status": 200
+    },
+    {
+      "path": "/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_1mojsay._.js",
+      "status": 200
+    },
+    {
+      "path": "/v1/me",
+      "status": 200
+    },
+    {
+      "path": "/v1/context",
+      "status": 200
+    },
+    {
+      "path": "/v1/admin/conversation/review-assignments",
+      "status": 200
+    },
+    {
+      "path": "/v1/me/studio-access",
+      "status": 200
+    },
+    {
+      "path": "/v1/admin/conversation/review-assignments/8c24c272-122f-4f42-afa0-a51327486828",
+      "status": 200
+    }
+  ],
+  "database_submission_count": 1,
+  "backend_commit": null,
+  "invitation_mode": false,
+  "admin_details_mode": true,
+  "authentication": "synthetic canonical actor fixture; session resolver not under test",
+  "api": "real installed review HTTP router and PostgreSQL service",
+  "frontend_source_sha256": {
+    "apps/admin-web/app/components/admin-shell.tsx": "91dbef87b9c1a8e390b253166c493b7f3df4bd73f5998d1c0d7d5d4ada0a1e42",
+    "apps/admin-web/app/sales-xray/review/[assignmentId]/page.tsx": "3bb514e2f7b924ba11572c0f2018dbc57f2b0c0f0f737bf72b866dad08c3ca10",
+    "apps/admin-web/app/sales-xray/review/admin-review-details-api.ts": "510d699a1ca2b7b43a77058f073afc3e5c0e09a72976e1acc59abfa53cc2519e",
+    "apps/admin-web/app/sales-xray/review/admin-review-details.module.css": "c2d78210097af16ac5f2ced75f2c16b7a7a892e02d70322debe5d8b7a3dfe834",
+    "apps/admin-web/app/sales-xray/review/admin-review-details.tsx": "31a7e43ba02ca91c0d71ebd7046a03ff10ce33140296511fd425e37d3618f64e",
+    "apps/admin-web/app/sales-xray/review/page.tsx": "14f5e7e725f1e2e785cecc20cc779dc29c405cf448f7d5779568c77a12937121",
+    "apps/admin-web/app/sales-xray/review/review-api.ts": "806384087a035a83250b02b2ab7a76a6d321a6822dcd53938aede162d1ed2034",
+    "apps/admin-web/app/sales-xray/review/review-date.ts": "fbc24ef049f64052822a4931943925da66f080d174ab3b37e0dd112d40e7058f",
+    "apps/admin-web/app/sales-xray/review/review-invitation-api.ts": "6a3cdcec27f02ee1c6d60c8f83aae411214d007d67fee5109983cffc04501ba4",
+    "apps/admin-web/app/sales-xray/review/review-invitation-panel.module.css": "478f7c8054b833b38b70fa260d4a7df06fd31a4b65940ce55813cb7c88a892b2",
+    "apps/admin-web/app/sales-xray/review/review-invitation-panel.tsx": "28214ed575ed1e61b70fe0a6b12311ca3a9fd705c8f862f7bede86a629f9a164",
+    "apps/admin-web/app/sales-xray/review/review-workspace.module.css": "a6c7f1dd2f5d6aa5225debfbbd62873b4431a61b1dbac73fcbe873273b11bb4c",
+    "apps/admin-web/app/sales-xray/review/review-workspace.tsx": "a8a5b0532a1edba394b10b19863246feb855cbbe516f8ab381775095bd84c59c"
+  },
+  "frontend_source_hash_encoding": "UTF-8 with LF line endings"
+}

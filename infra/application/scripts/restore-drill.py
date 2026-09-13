@@ -244,6 +244,15 @@ REVIEW_INVITATIONS_PARITY_NEW_TABLES = (
     "conversation_review_invitation_acceptances",
 )
 REVIEW_INVITATIONS_PARITY_TABLES = REVIEWS_PARITY_TABLES + REVIEW_INVITATIONS_PARITY_NEW_TABLES
+ACQUISITION_PARITY_MIGRATION_HEAD = "20260914_0036"
+ACQUISITION_PARITY_CONTRACT = "ac-postgres-parity-v16"
+ACQUISITION_PARITY_NEW_TABLES = (
+    "conversation_visitors",
+    "conversation_visitor_claims",
+    "conversation_acquisition_usage",
+    "conversation_acquisition_settlements",
+)
+ACQUISITION_PARITY_TABLES = REVIEW_INVITATIONS_PARITY_TABLES + ACQUISITION_PARITY_NEW_TABLES
 # The first migration rehearsal is deliberately an exact reviewed transition.
 # Do not infer a source/target pair from lexical revision ordering.
 MIGRATION_REHEARSAL_SOURCE_HEAD = COMMUNITY_PARITY_MIGRATION_HEAD
@@ -260,6 +269,8 @@ REVIEWS_REHEARSAL_SOURCE_HEAD = COMMUNITY_CONNECTIONS_PARITY_MIGRATION_HEAD
 REVIEWS_REHEARSAL_TARGET_HEAD = REVIEWS_PARITY_MIGRATION_HEAD
 REVIEW_INVITATIONS_REHEARSAL_SOURCE_HEAD = REVIEWS_PARITY_MIGRATION_HEAD
 REVIEW_INVITATIONS_REHEARSAL_TARGET_HEAD = REVIEW_INVITATIONS_PARITY_MIGRATION_HEAD
+ACQUISITION_REHEARSAL_SOURCE_HEAD = REVIEW_INVITATIONS_PARITY_MIGRATION_HEAD
+ACQUISITION_REHEARSAL_TARGET_HEAD = ACQUISITION_PARITY_MIGRATION_HEAD
 # Production is currently at 0029. Keep a direct rehearsal contract for the
 # candidate image that upgrades through both reviewed Sales Xray migrations in
 # one isolated target; do not require an intermediate application deployment.
@@ -281,6 +292,7 @@ MIGRATION_REHEARSAL_PAIRS = frozenset(
             REVIEW_INVITATIONS_REHEARSAL_SOURCE_HEAD,
             REVIEW_INVITATIONS_REHEARSAL_TARGET_HEAD,
         ),
+        (ACQUISITION_REHEARSAL_SOURCE_HEAD, ACQUISITION_REHEARSAL_TARGET_HEAD),
         (
             DIRECT_SALES_XRAY_REHEARSAL_SOURCE_HEAD,
             DIRECT_SALES_XRAY_REHEARSAL_TARGET_HEAD,
@@ -334,6 +346,10 @@ VERSIONED_PARITY_CONTRACTS = {
     REVIEW_INVITATIONS_PARITY_MIGRATION_HEAD: (
         REVIEW_INVITATIONS_PARITY_CONTRACT,
         REVIEW_INVITATIONS_PARITY_TABLES,
+    ),
+    ACQUISITION_PARITY_MIGRATION_HEAD: (
+        ACQUISITION_PARITY_CONTRACT,
+        ACQUISITION_PARITY_TABLES,
     ),
 }
 
@@ -2009,9 +2025,7 @@ def _assert_migration_rehearsal_transition(
     ):
         if source_derivations:
             raise DrillError("Community connections rehearsal does not accept source derivations")
-        expected_new_counts = {
-            table: 0 for table in COMMUNITY_CONNECTIONS_PARITY_NEW_TABLES
-        }
+        expected_new_counts = {table: 0 for table in COMMUNITY_CONNECTIONS_PARITY_NEW_TABLES}
         if expected_new_tables != set(expected_new_counts):
             raise DrillError(
                 "migration rehearsal new-table contract is not the reviewed 0032/0033 pair"
@@ -2027,6 +2041,19 @@ def _assert_migration_rehearsal_transition(
             raise DrillError(
                 "migration rehearsal new-table contract is not the reviewed 0033/0034 pair"
             )
+    elif (source_head, target_head) in {
+        (REVIEW_INVITATIONS_REHEARSAL_SOURCE_HEAD, REVIEW_INVITATIONS_REHEARSAL_TARGET_HEAD),
+        (ACQUISITION_REHEARSAL_SOURCE_HEAD, ACQUISITION_REHEARSAL_TARGET_HEAD),
+    }:
+        if source_derivations:
+            raise DrillError("guest and review invitation rehearsals do not accept derivations")
+        reviewed_tables = {
+            REVIEW_INVITATIONS_REHEARSAL_TARGET_HEAD: REVIEW_INVITATIONS_PARITY_NEW_TABLES,
+            ACQUISITION_REHEARSAL_TARGET_HEAD: ACQUISITION_PARITY_NEW_TABLES,
+        }[target_head]
+        expected_new_counts = {table: 0 for table in reviewed_tables}
+        if expected_new_tables != set(expected_new_counts):
+            raise DrillError("migration rehearsal does not match the reviewed new tables")
     elif (source_head, target_head) == (
         DIRECT_SALES_XRAY_REHEARSAL_SOURCE_HEAD,
         DIRECT_SALES_XRAY_REHEARSAL_TARGET_HEAD,

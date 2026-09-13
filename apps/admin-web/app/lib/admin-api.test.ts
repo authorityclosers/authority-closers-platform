@@ -809,6 +809,35 @@ describe("version-pinned Studio authoring", () => {
 });
 
 describe("same-origin admin API composition", () => {
+  it("starts independent identity reads together and waits for all matching projections", async () => {
+    const waiting = new Map<string, (response: Response) => void>();
+    const fetcher = vi.fn<typeof fetch>(
+      (path) =>
+        new Promise<Response>((resolve) => {
+          waiting.set(String(path), resolve);
+        }),
+    );
+    let admitted = false;
+    const result = loadAdminSession(fetcher).then((session) => {
+      admitted = true;
+      return session;
+    });
+    expect([...waiting.keys()]).toEqual([
+      "/v1/me",
+      "/v1/context",
+      "/v1/me/studio-access",
+    ]);
+    waiting.get("/v1/context")!(Response.json(context));
+    waiting.get("/v1/me/studio-access")!(Response.json(studioAccess));
+    await Promise.resolve();
+    expect(admitted).toBe(false);
+    waiting.get("/v1/me")!(Response.json(me));
+    await expect(result).resolves.toMatchObject({
+      personId,
+      tenantId,
+      sessionId,
+    });
+  });
   it.each([401, 403])(
     "marks definitive HTTP %s session rejection as denied",
     async (status) => {

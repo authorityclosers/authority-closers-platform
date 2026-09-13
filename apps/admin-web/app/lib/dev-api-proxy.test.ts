@@ -16,6 +16,36 @@ const ADMIN_TENANT = "22222222-2222-4222-8222-222222222222";
 const ADMIN_SESSION = "33333333-3333-4333-8333-333333333333";
 const TARGET_ID = "44444444-4444-4444-8444-444444444444";
 
+it("admits only the bounded Admin directory POST without client scope", () => {
+  expect(
+    isStagingAdminRequest(
+      new URL("https://admin.example.test/v1/admin/people/directory"),
+      "POST",
+    ),
+  ).toBe(true);
+  expect(
+    isStagingAdminRequest(
+      new URL("https://admin.example.test/v1/admin/people/directory"),
+      "GET",
+    ),
+  ).toBe(false);
+  expect(
+    isStagingAdminRequest(
+      new URL(
+        "https://admin.example.test/v1/admin/people/directory?tenant_id=" +
+          ADMIN_TENANT,
+      ),
+      "POST",
+    ),
+  ).toBe(false);
+  expect(
+    isCoachApiRequest(
+      new URL("https://coach.example.test/v1/admin/people/directory"),
+      "POST",
+    ),
+  ).toBe(false);
+});
+
 describe("course-scoped video upload admission proxy", () => {
   const prefix = `/v1/admin/studio/programs/${TARGET_ID}/video-uploads`;
   it("admits only exact create and status methods on Admin and Coach", () => {

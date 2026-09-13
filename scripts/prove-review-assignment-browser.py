@@ -32,7 +32,10 @@ from ac_platform.conversation_intelligence.models import (
     ConversationReviewFeedback,
     ConversationReviewInvitation,
 )
-from ac_platform.conversation_intelligence.review_contracts import ReviewInvitationCreateRequest
+from ac_platform.conversation_intelligence.review_contracts import (
+    ReviewAssignment,
+    ReviewInvitationCreateRequest,
+)
 from ac_platform.conversation_intelligence.review_invitations import decrypt_invitation_token
 from ac_platform.conversation_intelligence.review_service import ConversationReviewService
 from ac_platform.http.auth import AuthenticatedTransaction
@@ -45,6 +48,8 @@ from tests.database.test_conversation_postgresql import run
 from tests.database.test_conversation_reviews_postgresql import (
     _build_report_case,
     _create_assignment,
+    _feedback_request,
+    _service,
 )
 
 ORIGIN = os.environ.get("REVIEW_UI_ORIGIN", "http://127.0.0.1:3187")
@@ -54,6 +59,7 @@ UPSTREAM = os.environ.get("REVIEW_UI_UPSTREAM", "http://127.0.0.1:3100")
 EVIDENCE = Path(os.environ["REVIEW_UI_EVIDENCE_DIR"])
 ADMIN_UI = os.environ.get("REVIEW_UI_ADMIN") == "true"
 INVITATIONS = os.environ.get("REVIEW_UI_INVITATIONS") == "true"
+ADMIN_DETAILS = os.environ.get("REVIEW_UI_ADMIN_DETAILS") == "true"
 
 
 def test_real_review_browser(postgres_harness: Any, tmp_path: Path) -> None:  # noqa: F811
@@ -63,6 +69,22 @@ def test_real_review_browser(postgres_harness: Any, tmp_path: Path) -> None:  # 
             case, key="browser-assignment", lenses=("sales", "technical", "ux")
         )
         assignment_id = assignment["id"]
+        if ADMIN_DETAILS:
+            assert ADMIN_UI and not INVITATIONS
+            async with case.sessions() as database, database.begin():
+                service = _service(database, case)
+                await service.submit(
+                    case.reviewer_actor,
+                    UUID(assignment_id),
+                    _feedback_request(
+                        case,
+                        ReviewAssignment.model_validate(assignment),
+                        key="admin-detail-browser-feedback",
+                    ),
+                )
+                await service.revoke(
+                    case.admin_actor, UUID(assignment_id), "admin-detail-browser-revoke"
+                )
         actor = case.admin_actor if ADMIN_UI else case.reviewer_actor
         role = "owner" if ADMIN_UI else "learner"
         application = FastAPI()
@@ -206,7 +228,9 @@ def test_real_review_browser(postgres_harness: Any, tmp_path: Path) -> None:  # 
                 await asyncio.sleep(0.05)
             assert server.started
             result = (
-                await asyncio.to_thread(
+                await asyncio.to_thread(admin_details_browser_proof, assignment_id)
+                if ADMIN_DETAILS
+                else await asyncio.to_thread(
                     admin_browser_proof,
                     str(case.report_run_id),
                     str(case.reviewer_actor.person_id),
@@ -224,10 +248,11 @@ def test_real_review_browser(postgres_harness: Any, tmp_path: Path) -> None:  # 
                         == result.get("assignment_id", assignment_id)
                     )
                 )
-                assert count == (0 if ADMIN_UI else 1)
+                assert count == (0 if ADMIN_UI and not ADMIN_DETAILS else 1)
             result["database_submission_count"] = count
             result["backend_commit"] = os.environ.get("REVIEW_UI_BACKEND_COMMIT")
             result["invitation_mode"] = INVITATIONS
+            result["admin_details_mode"] = ADMIN_DETAILS
             result["authentication"] = (
                 "synthetic canonical actor fixture; session resolver not under test"
             )
@@ -477,6 +502,72 @@ def browser_proof(assignment_id: str, invitation_token: str | None = None) -> di
                 encoding="utf-8",
             )
             raise
+        finally:
+            browser.close()
+
+
+def admin_details_browser_proof(assignment_id: str) -> dict[str, Any]:
+    """Read historical feedback through the separate Admin HTTP endpoint."""
+    EVIDENCE.mkdir(parents=True, exist_ok=True)
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page(viewport={"width": 1440, "height": 1040})
+
+        def forward_api(route):
+            url = urlsplit(route.request.url)
+            response = route.fetch(
+                url=ORIGIN + url.path + ("?" + url.query if url.query else ""), max_redirects=0
+            )
+            route.fulfill(response=response)
+
+        page.route("**/v1/**", forward_api)
+        responses: list[dict[str, Any]] = []
+        errors: list[str] = []
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.on(
+            "response",
+            lambda response: responses.append(
+                {"path": urlsplit(response.url).path, "status": response.status}
+            ),
+        )
+        path = f"/sales-xray/review/{assignment_id}"
+        try:
+            page.goto(UPSTREAM + path, wait_until="networkidle")
+            feedback = page.get_by_text(
+                "The cited span supports this reviewer observation.", exact=True
+            )
+            feedback.wait_for(state="visible", timeout=20000)
+            assert page.get_by_role("link", name="Open in Academy", exact=True).count() == 0
+            pending = page.get_by_role(
+                "button", name="Reviewer sign-in setup pending", exact=True, include_hidden=True
+            )
+            assert pending.count() == 2
+            assert all(pending.nth(index).is_disabled() for index in range(pending.count()))
+            feedback.scroll_into_view_if_needed()
+            page.screenshot(path=str(EVIDENCE / "admin-saved-feedback-desktop.png"))
+            for width in (390, 320):
+                page.set_viewport_size({"width": width, "height": 900})
+                feedback.scroll_into_view_if_needed()
+                assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+                page.screenshot(path=str(EVIDENCE / f"admin-saved-feedback-{width}.png"))
+            page.reload(wait_until="networkidle")
+            feedback.wait_for(state="visible", timeout=20000)
+            assert any(
+                item["path"] == f"/v1/admin/conversation/review-assignments/{assignment_id}"
+                and item["status"] == 200
+                for item in responses
+            )
+            assert not any(item["path"].startswith("/v1/conversation/review") for item in responses)
+            assert errors == []
+            return {
+                "assignment_id": assignment_id,
+                "feedback_after_reload": True,
+                "revoked_history_read": True,
+                "new_invites_disabled": True,
+                "viewports": [1440, 390, 320],
+                "page_errors": errors,
+                "responses": responses,
+            }
         finally:
             browser.close()
 

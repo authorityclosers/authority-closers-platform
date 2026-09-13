@@ -69,6 +69,12 @@ def _validate_reference(value: str) -> str:
     return value
 
 
+def _validate_optional_reference(value: str | None) -> str | None:
+    if value is None:
+        return None
+    return _validate_reference(value)
+
+
 def _validate_identifier(value: str) -> str:
     if _IDENTIFIER.fullmatch(value) is None or _SENSITIVE.search(value) is not None:
         raise ValueError("identifier_invalid")
@@ -123,15 +129,18 @@ class StageApproval(_StrictFrozenModel):
     provider_terms_ref: str = Field(min_length=6, max_length=256)
     privacy_ref: str = Field(min_length=6, max_length=256)
     credential_ref: str = Field(min_length=6, max_length=256)
-    free_allowance_ref: str = Field(min_length=6, max_length=256)
+    free_allowance_ref: str | None = Field(default=None, min_length=6, max_length=256)
     no_paid_overage_ref: str = Field(min_length=6, max_length=256)
     privacy_revision: str = Field(min_length=1, max_length=128)
     privacy_notice: str = Field(min_length=1, max_length=1_500)
     expires_at_epoch: StrictInt = Field(gt=0)
     max_requests: StrictInt = Field(ge=1, le=64)
     entitlement_seconds: StrictInt | None = Field(default=None, ge=0, le=86_400)
-    zero_cost_basis: Literal["verified_free_allowance", "synthetic"]
+    zero_cost_basis: Literal[
+        "verified_free_allowance", "synthetic", "paid_pricing_evidence"
+    ]
     price_evidence_sha256: str = Field(pattern=_DIGEST)
+    max_cost_paise: StrictInt = Field(default=0, ge=0, le=2_147_483_647)
     max_source_duration_ms: StrictInt = Field(ge=1, le=14_400_000)
     max_input_bytes: StrictInt = Field(ge=1, le=134_217_728)
     max_completion_tokens: StrictInt = Field(ge=0, le=4_000)
@@ -145,9 +154,9 @@ class StageApproval(_StrictFrozenModel):
         "provider_terms_ref",
         "privacy_ref",
         "credential_ref",
-        "free_allowance_ref",
         "no_paid_overage_ref",
     )(_validate_reference)
+    _free_allowance_ref = field_validator("free_allowance_ref")(_validate_optional_reference)
     _provider_id = field_validator("provider_id")(_validate_identifier)
     _model_id = field_validator("model_id")(_validate_identifier)
     _recipe_revision = field_validator("recipe_revision")(_validate_identifier)
@@ -156,6 +165,16 @@ class StageApproval(_StrictFrozenModel):
 
     @model_validator(mode="after")
     def validate_stage_bounds(self) -> Self:
+        if self.zero_cost_basis == "paid_pricing_evidence":
+            if self.max_cost_paise <= 0:
+                raise ValueError("paid_stage_cost_required")
+            if self.free_allowance_ref is not None:
+                raise ValueError("paid_stage_free_allowance_forbidden")
+        else:
+            if self.max_cost_paise != 0:
+                raise ValueError("free_stage_cost_must_be_zero")
+            if self.free_allowance_ref is None:
+                raise ValueError("free_allowance_required")
         if self.stage == "C2":
             if self.entitlement_seconds is not None:
                 raise ValueError("c2_entitlement_must_be_none")
@@ -187,6 +206,8 @@ class HostedApprovalBundle(_StrictFrozenModel):
     budget_scope_id: UUID
     budget_authorization_ref: str = Field(min_length=6, max_length=256)
     budget_owner_id: UUID
+    budget_cap_paise: StrictInt = Field(default=0, ge=0, le=2_147_483_647)
+    paid_approval_ref: str | None = Field(default=None, min_length=6, max_length=256)
     intake_authorization_ref: str = Field(min_length=6, max_length=256)
     intake_retention_ref: str = Field(min_length=6, max_length=256)
     retention_days: StrictInt = Field(ge=1, le=7)
@@ -196,6 +217,7 @@ class HostedApprovalBundle(_StrictFrozenModel):
 
     _deployment_ref = field_validator("deployment_ref")(_validate_reference)
     _budget_authorization_ref = field_validator("budget_authorization_ref")(_validate_reference)
+    _paid_approval_ref = field_validator("paid_approval_ref")(_validate_optional_reference)
     _intake_authorization_ref = field_validator("intake_authorization_ref")(_validate_reference)
     _intake_retention_ref = field_validator("intake_retention_ref")(_validate_reference)
 
@@ -223,6 +245,21 @@ class HostedApprovalBundle(_StrictFrozenModel):
         ):
             raise ValueError("allowance_stored_bytes_exceed_bundle_cap")
 
+        paid_stages = [
+            approval
+            for approval in self.stages
+            if approval.zero_cost_basis == "paid_pricing_evidence"
+        ]
+        if paid_stages:
+            if self.budget_cap_paise <= 0:
+                raise ValueError("paid_project_cap_required")
+            if self.paid_approval_ref is None:
+                raise ValueError("paid_approval_reference_required")
+            if any(approval.max_cost_paise > self.budget_cap_paise for approval in paid_stages):
+                raise ValueError("paid_stage_cost_exceeds_project_cap")
+        elif self.budget_cap_paise != 0 or self.paid_approval_ref is not None:
+            raise ValueError("free_bundle_cannot_bind_paid_budget")
+
         stage_keys = [
             (approval.tenant_id, approval.person_id, approval.source_sha256, approval.stage)
             for approval in self.stages
@@ -245,7 +282,17 @@ class HostedApprovalBundle(_StrictFrozenModel):
         return hashlib.sha256(self.to_json()).hexdigest()
 
     def as_dict(self) -> dict[str, Any]:
-        return self.model_dump(mode="json", by_alias=True)
+        value = self.model_dump(mode="json", by_alias=True)
+        # Keep the canonical bytes (and therefore the digest) of existing /1
+        # free approvals unchanged. Paid extensions serialize only when used.
+        if self.budget_cap_paise == 0:
+            value.pop("budget_cap_paise", None)
+        if self.paid_approval_ref is None:
+            value.pop("paid_approval_ref", None)
+        for stage in value["stages"]:
+            if stage.get("max_cost_paise") == 0:
+                stage.pop("max_cost_paise", None)
+        return value
 
     def to_json(self) -> bytes:
         return canonical(self.as_dict())

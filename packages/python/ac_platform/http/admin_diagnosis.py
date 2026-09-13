@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict
 from datetime import datetime
 from typing import Annotated, Any, Literal
 from uuid import UUID
@@ -26,6 +27,51 @@ from ac_platform.learning.admin_diagnosis import (
     diagnose_learner,
     lookup_learners,
 )
+from ac_platform.learning.admin_directory import DirectoryRole, DirectoryStatus, list_members
+
+
+class MemberDirectoryRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    query: str = Field(default="", max_length=320)
+    role: DirectoryRole = "all"
+    status: DirectoryStatus = "all"
+    page: int = Field(default=1, ge=1, le=10000)
+    page_size: int = Field(default=25, ge=1, le=50)
+
+
+class DirectoryMemberResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    person_id: UUID
+    display_name: str
+    username: str | None
+    masked_email: str
+    membership_role: Literal["learner", "support", "admin", "owner"]
+    membership_status: Literal["active", "inactive"]
+    account_status: Literal["active", "suspended"]
+    email_verified: bool
+    joined_at: datetime
+    active_enrollments: int = Field(ge=0)
+
+
+class DirectorySummaryResponse(BaseModel):
+    total: int = Field(ge=0)
+    active_learners: int = Field(ge=0)
+    team: int = Field(ge=0)
+    unverified: int = Field(ge=0)
+
+
+class MemberDirectoryResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tenant_id: UUID
+    tenant_name: str
+    members: list[DirectoryMemberResponse] = Field(max_length=50)
+    summary: DirectorySummaryResponse
+    matching_count: int = Field(ge=0)
+    page: int = Field(ge=1)
+    page_size: int = Field(ge=1, le=50)
 
 
 class LearnerLookupRequest(BaseModel):
@@ -285,6 +331,34 @@ def install_admin_diagnosis_http(
         dependencies=[Depends(require_admin_route_surface)],
     )
     actor_dependency = _function_scoped_actor_dependency(require_actor)
+
+    @router.post("/admin/people/directory", response_model=MemberDirectoryResponse)
+    async def directory(
+        request: Request,
+        response: Response,
+        body: MemberDirectoryRequest,
+        auth: AuthenticatedTransaction = actor_dependency,
+    ) -> MemberDirectoryResponse:
+        _reject_extra_query_parameters(request, allowed=set())
+        require_safe_origin(request, settings)
+        actor, tenant_id = await _require_named_admin(
+            auth, permission="learner_diagnose", lock=False
+        )
+        result = await auth.database.run_sync(
+            lambda database: list_members(database, tenant_id=tenant_id, **body.model_dump())
+        )
+        await _append_read_audit(
+            auth,
+            actor=actor,
+            action="audit.admin.people.directory.v1",
+            resource_type="tenant",
+            resource_id=tenant_id,
+            purpose=DiagnosisPurpose.LEARNER_SUPPORT,
+            count=len(result.members),
+            request=request,
+        )
+        _no_store(response)
+        return MemberDirectoryResponse.model_validate(asdict(result))
 
     @router.post(
         "/admin/learners/lookup",

@@ -422,7 +422,7 @@ function Assert-FinalConfiguration {
     $actualFingerprint = Get-ConfigurationFingerprint -Configuration $Configuration
     $expectedFingerprint = Get-ConfigurationFingerprint -Configuration $ExpectedConfiguration
     if ($actualFingerprint -ne $expectedFingerprint) {
-        throw "Tunnel configuration readback did not preserve the complete planned configuration."
+        throw "AC_TUNNEL_READBACK_MISMATCH: Tunnel readback did not preserve the complete planned configuration."
     }
     $plan = New-IngressPlan -Ingress (Get-ConfigIngress -Configuration $Configuration) -Hostnames $Hostnames
     if (@($plan.missing_hosts).Count -ne 0) {

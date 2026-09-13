@@ -50,7 +50,7 @@ from ac_platform.conversation_intelligence.models import (
     ConversationRecording,
 )
 from ac_platform.conversation_intelligence.provider_admin import (
-    CONTROL_ACCOUNT,
+    CONTROL_ACCOUNTS,
     lock_provider_configuration,
 )
 from ac_platform.conversation_intelligence.provider_registry import (
@@ -126,18 +126,26 @@ class ConversationAuthority:
             .execution_options(populate_existing=True)
         )
         if budget is None:
-            snapshot = BudgetAccount(
-                str(bundle.budget_scope_id),
-                0,
-                BudgetCapApproval(
+            try:
+                cap_paise = bundle.budget_cap_paise
+                snapshot = BudgetAccount(
                     str(bundle.budget_scope_id),
-                    bundle.budget_authorization_ref,
-                    str(bundle.budget_owner_id),
-                    0,
-                    "0" * 64,
-                    "Approved zero-cost internal testing budget",
-                ),
-            )
+                    cap_paise,
+                    BudgetCapApproval(
+                        str(bundle.budget_scope_id),
+                        bundle.budget_authorization_ref,
+                        str(bundle.budget_owner_id),
+                        cap_paise,
+                        "0" * 64,
+                        (
+                            "Approved hosted provider project budget"
+                            if cap_paise > 0
+                            else "Approved zero-cost internal testing budget"
+                        ),
+                    ),
+                )
+            except ValueError:
+                raise ConversationDenied("The approved project budget is invalid.") from None
             budget = ConversationBudgetAccount(
                 scope_id=bundle.budget_scope_id,
                 snapshot=snapshot.as_dict(),
@@ -148,7 +156,7 @@ class ConversationAuthority:
             previous = BudgetAccount.from_dict(budget.snapshot)
             if (
                 previous.scope_id != str(bundle.budget_scope_id)
-                or previous.cap_paise != 0
+                or previous.cap_paise != bundle.budget_cap_paise
                 or previous.cap_approval.approval_ref != bundle.budget_authorization_ref
                 or previous.cap_approval.owner_actor_id != str(bundle.budget_owner_id)
             ):
@@ -291,11 +299,12 @@ class ConversationAuthority:
             )
             != approval.profile_sha256
         ):
-            raise ConversationDenied("This input exceeds the approved free processing bounds.")
+            raise ConversationDenied("This input exceeds the approved processing bounds.")
         await self.validate_route(
             app,
             actor,
             approval,
+            bundle=bundle,
             task=plan.prepared.task,
             provider=plan.prepared.provider,
             model=plan.prepared.model,
@@ -310,6 +319,7 @@ class ConversationAuthority:
         actor: ActorContext,
         approval: StageApproval,
         *,
+        bundle: HostedApprovalBundle | None = None,
         task: str,
         provider: str,
         model: str,
@@ -358,7 +368,7 @@ class ConversationAuthority:
         if (
             controller is None
             or controller.status != "active"
-            or (controller.email or "").casefold() != CONTROL_ACCOUNT
+            or (controller.email or "").casefold() not in CONTROL_ACCOUNTS
             or controller.email_verified_at is None
             or membership is None
             or membership.status != "active"
@@ -370,7 +380,7 @@ class ConversationAuthority:
             raise ConversationDenied("The provider control authorization is no longer active.")
         try:
             config = parse_registry_config(latest.configuration)
-            if config.digest != approval.configuration_sha256 or config.policy.allow_paid:
+            if config.digest != approval.configuration_sha256:
                 raise ValueError("configuration_changed")
             route = next(item for item in config.routes if item.task == task)
             dispatch = resolve_dispatch(
@@ -398,12 +408,25 @@ class ConversationAuthority:
             ):
                 if getattr(provider_config, field) != getattr(approval, field):
                     raise ValueError("approved_reference_changed")
+            paid_dispatch = dispatch.max_cost_paise > 0
+            if paid_dispatch:
+                if (
+                    bundle is None
+                    or bundle.paid_approval_ref != config.policy.paid_approval_ref
+                    or approval.zero_cost_basis != "paid_pricing_evidence"
+                    or approval.max_cost_paise != dispatch.max_cost_paise
+                ):
+                    raise ValueError("paid_approval_changed")
+            elif (
+                approval.max_cost_paise != 0
+                or approval.zero_cost_basis == "paid_pricing_evidence"
+            ):
+                raise ValueError("free_approval_changed")
             if (
                 (approval.provider_id, approval.model_id, approval.recipe_revision)
                 != (provider, model, recipe)
                 or (dispatch.provider_id, dispatch.model_id, dispatch.recipe_revision)
                 != (approval.provider_id, approval.model_id, approval.recipe_revision)
-                or dispatch.max_cost_paise != 0
                 or (profile_revision is not None and route.profile_revision != profile_revision)
             ):
                 raise ValueError("approved_route_changed")
@@ -434,7 +457,7 @@ class ConversationAuthority:
         seconds = 0
         if (
             row.budget_scope_id != bundle.budget_scope_id
-            or quote.max_cost_paise != 0
+            or quote.max_cost_paise != approval.max_cost_paise
             or quote.entitlement_seconds != seconds
             or permission.authorization_ref != self.authorization_ref(bundle, approval)
             or quote.expires_at_epoch > min(bundle.expires_at_epoch, approval.expires_at_epoch)
@@ -527,7 +550,7 @@ class ConversationAuthority:
                 approval.professional_gate_ref,
                 approval.pricing_ref,
                 0,
-                0,
+                approval.max_cost_paise,
                 int(now.timestamp()),
                 min(int(now.timestamp()) + 900, bundle.expires_at_epoch, approval.expires_at_epoch),
             )
@@ -579,6 +602,13 @@ class ConversationAuthority:
             await app.database.flush()
             await app._receipt(actor, key, "hosted_provider_quote", intent, row.id, now)
         accepted = await app.database.get(ConversationQuoteAcceptance, row.id)
+        if quote.max_cost_paise == 0:
+            cost_label = "₹0 · approved allowance"
+        else:
+            cost_label = (
+                f"up to ₹{quote.max_cost_paise // 100}."
+                f"{quote.max_cost_paise % 100:02d} · approved project cap"
+            )
         return {
             "id": str(row.id),
             "recording_id": str(recording.id),
@@ -588,8 +618,9 @@ class ConversationAuthority:
             "quote_fingerprint": quote.fingerprint,
             "privacy_revision": quote.privacy_revision,
             "privacy_notice": approval.privacy_notice,
-            "cost_label": "₹0 · approved allowance",
-            "max_cost_paise": 0,
+            "cost_label": cost_label,
+            "max_cost_paise": quote.max_cost_paise,
+            "budget_cap_paise": bundle.budget_cap_paise,
             "entitlement_seconds": quote.entitlement_seconds,
             "input_sha256": quote.input_sha256,
             "expires_at_epoch": quote.expires_at_epoch,

@@ -204,3 +204,52 @@ it("hides filename and releases the selected File when verified course authority
     true,
   );
 });
+
+it("drops one file through the same admitted upload and rejects multiple selections", async () => {
+  await mount();
+  const dropzone = container.querySelector("[data-dragging]")!;
+  const multiple = new Event("drop", { bubbles: true, cancelable: true });
+  Object.defineProperty(multiple, "dataTransfer", {
+    value: { files: [file(), file()] },
+  });
+  await act(async () => {
+    dropzone.dispatchEvent(multiple);
+  });
+  expect(container.textContent).toContain("Drop one video at a time.");
+  expect(fetcher.mock.calls.some(([, init]) => init?.method === "POST")).toBe(
+    false,
+  );
+  const drop = new Event("drop", { bubbles: true, cancelable: true });
+  Object.defineProperty(drop, "dataTransfer", { value: { files: [file()] } });
+  await act(async () => {
+    dropzone.dispatchEvent(drop);
+  });
+  expect(drop.defaultPrevented).toBe(true);
+  expect(container.textContent).toContain("Your upload is saved");
+  expect(container.textContent).not.toContain("Drop one video at a time.");
+  expect(
+    fetcher.mock.calls.filter(([path]) =>
+      String(path).endsWith("/video-uploads"),
+    ),
+  ).toHaveLength(1);
+  expect(
+    fetcher.mock.calls.filter(([, init]) => init?.method === "PUT"),
+  ).toHaveLength(1);
+});
+
+it("checks availability once when its memory session attaches outside StrictMode", async () => {
+  await act(async () =>
+    root.render(
+      <StudioVideoUpload
+        programId={program}
+        recoveryContext={scope}
+        canWrite
+      />,
+    ),
+  );
+  expect(
+    fetcher.mock.calls.filter(([path]) =>
+      String(path).endsWith("/video-upload-capability"),
+    ),
+  ).toHaveLength(1);
+});

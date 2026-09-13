@@ -52,6 +52,9 @@ def _stage(
     entitlement_seconds: int | None = None,
     max_completion_tokens: int = 0,
     profile_sha256: str | None = None,
+    zero_cost_basis: str = "synthetic",
+    max_cost_paise: int = 0,
+    free_allowance_ref: str | None = "ref:allowance/1",
 ) -> StageApproval:
     return StageApproval(
         id=approval_id,
@@ -70,15 +73,16 @@ def _stage(
         provider_terms_ref="ref:provider-terms/1",
         privacy_ref="ref:privacy/1",
         credential_ref="ref:credential/elevenlabs/1",
-        free_allowance_ref="ref:allowance/1",
+        free_allowance_ref=free_allowance_ref,
         no_paid_overage_ref="ref:billing/overage-disabled",
         privacy_revision="privacy-20260913-v1",
         privacy_notice="Approved internal testing only; retain the source for the stated window.",
         expires_at_epoch=expires_at_epoch,
         max_requests=3,
         entitlement_seconds=entitlement_seconds,
-        zero_cost_basis="synthetic",
+        zero_cost_basis=zero_cost_basis,  # type: ignore[arg-type]
         price_evidence_sha256="c" * 64,
+        max_cost_paise=max_cost_paise,
         max_source_duration_ms=14_400_000,
         max_input_bytes=134_217_728,
         max_completion_tokens=max_completion_tokens,
@@ -93,6 +97,8 @@ def _bundle(
     environment: str = "test",
     issued_at_epoch: int = 1_000,
     expires_at_epoch: int = 2_000,
+    budget_cap_paise: int = 0,
+    paid_approval_ref: str | None = None,
 ) -> HostedApprovalBundle:
     return HostedApprovalBundle(
         schema_id=HOSTED_APPROVAL_SCHEMA,
@@ -104,6 +110,8 @@ def _bundle(
         budget_scope_id=BUDGET_SCOPE_ID,
         budget_authorization_ref="ref:budget/test-1",
         budget_owner_id=APPROVER_ID,
+        budget_cap_paise=budget_cap_paise,
+        paid_approval_ref=paid_approval_ref,
         intake_authorization_ref="ref:intake/test-1",
         intake_retention_ref="ref:intake-retention/test-1",
         retention_days=7,
@@ -218,6 +226,41 @@ def test_loader_rejects_stage_expiry_outside_bundle_and_unknown_paid_fields() ->
     payload["paid_paise"] = 1
     with pytest.raises(ActivationContractError, match="hosted_approval_invalid"):
         load_hosted_approval_bundle(payload)
+
+
+def test_paid_stage_requires_explicit_pricing_and_project_cap() -> None:
+    paid_stage = _stage(
+        zero_cost_basis="paid_pricing_evidence",
+        max_cost_paise=50_000,
+        free_allowance_ref=None,
+    )
+    with pytest.raises(ValueError, match="paid_project_cap_required"):
+        _bundle(stages=(paid_stage,))
+
+    with pytest.raises(ValueError, match="paid_approval_reference_required"):
+        _bundle(stages=(paid_stage,), budget_cap_paise=100_000)
+
+    bundle = _bundle(
+        stages=(paid_stage,),
+        budget_cap_paise=100_000,
+        paid_approval_ref="ref:approval/paid-provider",
+    )
+    loaded = load_hosted_approval_bundle(bundle.to_json())
+    assert loaded.budget_cap_paise == 100_000
+    assert loaded.stages[0].max_cost_paise == 50_000
+
+    invalid = json.loads(bundle.to_json())
+    invalid["stages"][0]["price_evidence_sha256"] = "not-a-digest"
+    with pytest.raises(ActivationContractError):
+        load_hosted_approval_bundle(invalid)
+
+
+def test_free_v1_bundle_canonical_bytes_omit_paid_extension_defaults() -> None:
+    bundle = _bundle()
+    payload = json.loads(bundle.to_json())
+    assert "budget_cap_paise" not in payload
+    assert "paid_approval_ref" not in payload
+    assert "max_cost_paise" not in payload["stages"][0]
 
 
 def test_loader_enforces_explicit_source_and_stored_capacity_bounds() -> None:
