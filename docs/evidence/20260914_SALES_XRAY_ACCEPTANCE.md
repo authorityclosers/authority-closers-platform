@@ -172,6 +172,16 @@ proxied tunnel CNAME. The connected API credential's write failed with Cloudflar
 signed-in dashboard is being used for the same prepared change. Production
 activation and real hosted onboarding remain pending.
 
+Subsequent dashboard execution succeeded: tunnel version 16 adds only
+`salesxray-staging.authorityclosers.com` to `http://localhost:8080`; canonical
+comparison proves all fourteen previous entries and the complete non-ingress
+configuration unchanged. The dashboard created the matching proxied tunnel
+CNAME. Public HTTPS `/health` returns 200 with the existing `99cdee5e` release;
+anonymous `/v1/conversation/recordings` returns 401. The actual Chrome page loads.
+This is standalone staging connectivity, not new-build or guest-funnel acceptance.
+Full before/after receipt:
+`D:/AC-authority-closers-release-audit/sales-routing-20260914-staging-applied.json`.
+
 The original Sales root is preparing the latest user correction: simple English
 app controls with original mixed-script report/transcript content. That packet
 must accompany the next combined CI run; the previous global language switch is
