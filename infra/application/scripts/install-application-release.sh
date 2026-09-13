@@ -689,13 +689,56 @@ python3 "$release_dir/scripts/staging-public-films.py" \
 python3 "$release_dir/scripts/public-films.py" \
   preflight "$release_dir" "$target_environment"
 
+sales_xray_hosted_inputs=()
+
+load_sales_xray_hosted_inputs() {
+  local target_release="$1"
+  local policy="$target_release/capabilities/sales-xray-hosted-$target_environment.json"
+  sales_xray_hosted_inputs=()
+  if [[ ! -e "$policy" && ! -L "$policy" ]]; then
+    return 1
+  fi
+  local validator="$target_release/scripts/sales-xray-hosted.py"
+  [[ -f "$validator" && ! -L "$validator" && -r "$validator" ]] || {
+    printf 'Hosted Sales Xray release validator is unavailable.\n' >&2
+    return 2
+  }
+  local hosted_output=''
+  if ! hosted_output="$(
+    python3 "$validator" compose-inputs "$target_release" "$target_environment"
+  )"; then
+    printf 'Hosted Sales Xray activation policy is invalid or disabled.\n' >&2
+    return 2
+  fi
+  [[ -n "$hosted_output" ]] || return 1
+  mapfile -t sales_xray_hosted_inputs <<< "$hosted_output"
+  [[ "${#sales_xray_hosted_inputs[@]}" -eq 3 ]] || {
+    printf 'Hosted Sales Xray activation policy returned an invalid input contract.\n' >&2
+    return 2
+  }
+  return 0
+}
+
+sales_xray_hosted_enabled() {
+  load_sales_xray_hosted_inputs "$1"
+}
+
 compose_for() {
   local target_release="$1"
   shift
   local fixture_override=''
   local public_film_override=''
   local filesystem_override=''
-  local -a fixture_compose_files=()
+  local hosted_status=0
+  local -a fixture_compose_files=() hosted_compose_files=() hosted_env_files=() hosted_profiles=()
+  if load_sales_xray_hosted_inputs "$target_release"; then
+    hosted_compose_files=(--file "${sales_xray_hosted_inputs[0]}")
+    hosted_env_files=(--env-file "${sales_xray_hosted_inputs[1]}")
+    hosted_profiles=(--profile "${sales_xray_hosted_inputs[2]}")
+  else
+    hosted_status=$?
+    [[ "$hosted_status" -eq 1 ]] || return 1
+  fi
   # Resolve the target release's policy on every call, including rollback.
   # Old releases without a policy remain off; production never merges it.
   filesystem_override="$(filesystem_media_compose_file_for "$target_release")" || return 1
@@ -764,6 +807,17 @@ compose_for() {
         -u AC_LEARNER_IMAGE \
         -u AC_ADMIN_IMAGE \
         -u AC_COACH_IMAGE \
+        -u AC_XRAY_SERVICE_CONFIG \
+        -u AC_XRAY_SERVICE_SHA256 \
+        -u AC_XRAY_APPROVAL_FILE \
+        -u AC_XRAY_APPROVAL_SHA256 \
+        -u AC_XRAY_DATABASE_URL_FILE \
+        -u AC_XRAY_STORAGE_ROOT \
+        -u AC_XRAY_SCRATCH_ROOT \
+        -u AC_XRAY_NATIVE_SOCKET_DIR \
+        -u AC_XRAY_ELEVENLABS_IDENTITY_DIR \
+        -u AC_XRAY_GROQ_IDENTITY_DIR \
+        -u AC_XRAY_INFISICAL_BINARY \
         -u AC_MEDIA_PROVIDER_ENABLED \
         -u AC_MEDIA_STRESS_FIXTURES_ENABLED \
         -u AC_MEDIA_STRESS_FIXTURES_CACHE_ROOT \
@@ -781,8 +835,11 @@ compose_for() {
       --project-name "$compose_project" \
       --env-file "$target_release/environments/$target_environment.env" \
       --env-file "$target_release/release-images.env" \
+      "${hosted_env_files[@]}" \
       --file "$target_release/compose.yaml" \
       "${fixture_compose_files[@]}" \
+      "${hosted_compose_files[@]}" \
+      "${hosted_profiles[@]}" \
       "$@"
 }
 
@@ -1200,7 +1257,8 @@ restore_current_link() {
 }
 
 rollback_release() {
-  local rollback_failed=0 rollback_fenced=0
+  local rollback_failed=0 rollback_fenced=0 hosted_status=0
+  local -a rollback_services=(api worker learner-web admin-web coach-web)
   [[ "$write_exposure_started" == 0 ]] || {
     printf 'FAIL  Destructive rollback is forbidden after write exposure.\n' >&2
     return 1
@@ -1220,8 +1278,16 @@ rollback_release() {
     # behind with a valid-looking immutable backup name.
     rm -- "$backup_file" || rollback_failed=1
   fi
-  compose_for "$release_dir" stop --timeout 30 api worker learner-web admin-web coach-web \
-    >/dev/null 2>&1 || rollback_failed=1
+  if sales_xray_hosted_enabled "$release_dir"; then
+    rollback_services+=(sales-xray-worker)
+  else
+    hosted_status=$?
+    [[ "$hosted_status" -eq 1 ]] || rollback_failed=1
+  fi
+  if [[ "$rollback_failed" == 0 ]]; then
+    compose_for "$release_dir" stop --timeout 30 "${rollback_services[@]}" \
+      >/dev/null 2>&1 || rollback_failed=1
+  fi
   if [[ "$database_mutation_started" == 1 ]]; then
     if set_database_writer_access fence; then
       rollback_fenced=1
@@ -1270,7 +1336,8 @@ rollback_release() {
 }
 
 contain_forward_recovery() {
-  local containment_failed=0
+  local containment_failed=0 hosted_status=0
+  local -a containment_services=(api worker learner-web admin-web coach-web)
   # Exposure has already happened, so containment is forward-only: restore the
   # candidate's reviewed maintenance route and stop every application writer,
   # but never restore the pre-migration database or an older application.
@@ -1282,8 +1349,14 @@ contain_forward_recovery() {
   else
     containment_failed=1
   fi
-  if compose_for "$release_dir" stop --timeout 30 \
-    api worker learner-web admin-web coach-web; then
+  if sales_xray_hosted_enabled "$release_dir"; then
+    containment_services+=(sales-xray-worker)
+  else
+    hosted_status=$?
+    [[ "$hosted_status" -eq 1 ]] || containment_failed=1
+  fi
+  if [[ "$containment_failed" == 0 ]] && compose_for "$release_dir" stop --timeout 30 \
+    "${containment_services[@]}"; then
     forward_recovery_services_stopped=true
   else
     containment_failed=1
@@ -1353,7 +1426,17 @@ writer_release="$release_dir"
 if [[ -n "$previous_release" ]]; then
   writer_release="$previous_release"
 fi
-compose_for "$writer_release" stop --timeout 30 api worker
+writer_services=(api worker)
+if sales_xray_hosted_enabled "$writer_release"; then
+  writer_services+=(sales-xray-worker)
+else
+  hosted_status=$?
+  [[ "$hosted_status" -eq 1 ]] || {
+    printf 'Previous release hosted Sales Xray activation policy is invalid.\n' >&2
+    exit 1
+  }
+fi
+compose_for "$writer_release" stop --timeout 30 "${writer_services[@]}"
 database_mutation_started=1
 compose_for "$release_dir" up --detach --wait --wait-timeout 180 postgres
 set_database_writer_access fence
@@ -1416,7 +1499,17 @@ check_route "$admin_host" /login 200 "admin-$target_environment"
 check_route "$coach_host" / 307 "coach-$target_environment" /login
 check_route "$coach_host" /login 200 "coach-$target_environment"
 check_route "$api_host" /health/ready 200 "api-$target_environment"
-compose_for "$release_dir" up --detach --no-deps --wait --wait-timeout 180 worker
+runtime_workers=(worker)
+if sales_xray_hosted_enabled "$release_dir"; then
+  runtime_workers+=(sales-xray-worker)
+else
+  hosted_status=$?
+  [[ "$hosted_status" -eq 1 ]] || {
+    printf 'Candidate release hosted Sales Xray activation policy is invalid.\n' >&2
+    exit 1
+  }
+fi
+compose_for "$release_dir" up --detach --no-deps --wait --wait-timeout 180 "${runtime_workers[@]}"
 
 evidence_tmp="$(mktemp "$evidence_root/.deployment-${release_id}.XXXXXX")"
 evidence_file="$evidence_root/$(date -u +%Y%m%dT%H%M%SZ)-${release_id}-${evidence_tmp##*.}.env"
