@@ -21,6 +21,7 @@ from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 from urllib.parse import urlsplit
 from uuid import UUID
 
@@ -135,7 +136,7 @@ async def _generate_durable_report(postgres_harness: Any, fixture: Any) -> None:
         await engine.dispose()
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def postgres_harness() -> Any:
     yield from _postgres_harness.__wrapped__()
 
@@ -193,15 +194,24 @@ def _make_live_backend(
                     )
                 )
                 if mode == "imported":
-                    await ConversationReports(
-                        ConversationApplication(database)
-                    ).import_internal_draft(
-                        fixture.actor,
-                        prepared.run_id,
-                        fixture.intent,
-                        storage=prepared.storage,
-                        key="synthetic-browser-prepared-draft",
-                    )
+                    # c8499b8 deliberately gives each shared-PG browser
+                    # actor a unique synthetic email. Keep that identity
+                    # while exercising the provider-admin checks; the
+                    # production control-account address is not a fixture
+                    # prerequisite for this disposable proof.
+                    with patch(
+                        "ac_platform.conversation_intelligence.provider_admin.CONTROL_ACCOUNT",
+                        f"sales-xray-browser-{prepared.state.person_id}@example.test",
+                    ):
+                        await ConversationReports(
+                            ConversationApplication(database)
+                        ).import_internal_draft(
+                            fixture.actor,
+                            prepared.run_id,
+                            fixture.intent,
+                            storage=prepared.storage,
+                            key="synthetic-browser-prepared-draft",
+                        )
             app = FastAPI(docs_url=None, redoc_url=None)
             register_problem_handlers(app)
             require_actor = install_identity_http(app, settings=settings, sessions=sessions)
@@ -284,7 +294,7 @@ def _make_live_backend(
         assert "error_type" not in control, control.get("error_type")
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def live_backend(
     postgres_harness: Any,
     tmp_path_factory: pytest.TempPathFactory,
@@ -293,7 +303,7 @@ def live_backend(
     yield from _make_live_backend(postgres_harness, tmp_path_factory, request, mode="imported")
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def durable_live_backend(
     postgres_harness: Any,
     tmp_path_factory: pytest.TempPathFactory,
