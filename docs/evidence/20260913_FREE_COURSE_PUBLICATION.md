@@ -116,13 +116,17 @@ printf '%s\n' "$COACH_SESSION_TOKEN" | uv run python -m ac_platform.catalog.cli 
   --reviewed-at <timezone-aware-review-timestamp>
 ```
 
-For staging that already has the matching deterministic global course, record
-adoption instead of attempting a second publication:
+For staging that already has a matching global course with pre-existing IDs,
+record adoption instead of attempting a second publication. Supply the exact
+IDs returned by the reviewed read-only inspection:
 
 ```text
 printf '%s\n' "$COACH_SESSION_TOKEN" | uv run python -m ac_platform.catalog.cli adopt-existing \
   --environment staging \
   --source-program-id a1993f11-f43d-446a-821f-550bc40b950c \
+  --program-id <existing-global-program-uuid> \
+  --program-version-id <existing-global-version-uuid> \
+  --video-activity-id <existing-global-video-activity-uuid> \
   --public-tenant-id c1d51741-6e0f-4ddc-8cc4-58856d0e778f \
   --command-id <new-adoption-command-uuid> \
   --reason "Adopt the reviewed staging Free Course without changing progress"

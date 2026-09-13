@@ -19,8 +19,10 @@ from ac_platform.application.settings import Settings
 from ac_platform.authorization.cli import _read_session_token
 from ac_platform.catalog.free_course_media import FreeCourseMediaPromotionApplication
 from ac_platform.catalog.free_course_publication import FreeCoursePublicationApplication
+from ac_platform.http.auth import _with_role_permissions
 from ac_platform.identity.application import AsyncIdentityApplication
 from ac_platform.media.runtime import create_default_media_runtime
+from ac_platform.media.service import MediaService
 
 
 class FreeCourseCliError(Exception):
@@ -44,6 +46,9 @@ def _parser() -> argparse.ArgumentParser:
     adopt = commands.add_parser("adopt-existing", allow_abbrev=False)
     _common(adopt)
     adopt.add_argument("--source-program-id", type=UUID, required=True)
+    adopt.add_argument("--program-id", type=UUID, required=True)
+    adopt.add_argument("--program-version-id", type=UUID, required=True)
+    adopt.add_argument("--video-activity-id", type=UUID, required=True)
     adopt.add_argument("--public-tenant-id", type=UUID, required=True)
     adopt.add_argument("--command-id", type=UUID, required=True)
     adopt.add_argument("--reason", required=True)
@@ -95,6 +100,17 @@ def _reviewed_at(raw: str | None) -> datetime | None:
         raise FreeCourseCliError("--reviewed-at must be an ISO-8601 timestamp") from error
 
 
+def _configured_studio_service(settings: Settings) -> MediaService:
+    """Return the service from the validated deployment Studio graph."""
+
+    runtime = create_default_media_runtime(settings)
+    studio_runtime = runtime.studio_video_runtime
+    if studio_runtime is None:
+        raise FreeCourseCliError("the configured Studio filesystem runtime is unavailable")
+    studio_runtime.validate()
+    return studio_runtime.service
+
+
 async def _execute(args: argparse.Namespace) -> dict[str, Any]:
     settings = _settings(args)
     assert settings.operations_tenant_id is not None
@@ -103,12 +119,15 @@ async def _execute(args: argparse.Namespace) -> dict[str, Any]:
     try:
         sessions = async_sessionmaker(engine, expire_on_commit=False)
         async with sessions() as database, database.begin():
-            actor = (
-                await AsyncIdentityApplication(
-                    database,
-                    token_pepper=settings.session_token_pepper.get_secret_value(),
-                ).resolve_actor(token)
-            ).actor
+            resolved = await AsyncIdentityApplication(
+                database,
+                token_pepper=settings.session_token_pepper.get_secret_value(),
+            ).resolve_actor(token, require_tenant=True)
+            # Keep the role-derived permission projection server-owned.  A
+            # bare identity actor carries no client-authoritative permissions;
+            # StudioAuthorization intersects this projection with current
+            # membership and capability grants for every command.
+            actor = _with_role_permissions(resolved).actor
             result: Any
             if args.action in {"publish", "adopt-existing"}:
                 publication = FreeCoursePublicationApplication(
@@ -120,6 +139,9 @@ async def _execute(args: argparse.Namespace) -> dict[str, Any]:
                     result = await publication.adopt_existing(
                         actor=actor,
                         source_program_id=args.source_program_id,
+                        program_id=args.program_id,
+                        program_version_id=args.program_version_id,
+                        video_activity_id=args.video_activity_id,
                         command_id=args.command_id,
                         reason=args.reason,
                     )
@@ -134,10 +156,9 @@ async def _execute(args: argparse.Namespace) -> dict[str, Any]:
                         reviewed_at=_reviewed_at(args.reviewed_at),
                     )
             else:
-                runtime = create_default_media_runtime(settings)
                 result = await FreeCourseMediaPromotionApplication(
                     database,
-                    service=runtime.service,
+                    service=_configured_studio_service(settings),
                     operations_tenant_id=settings.operations_tenant_id,
                     public_tenant_id=args.public_tenant_id,
                 ).apply(
@@ -159,8 +180,14 @@ async def _execute(args: argparse.Namespace) -> dict[str, Any]:
 def main(argv: list[str] | None = None) -> int:
     try:
         result = run_async(_execute(_parser().parse_args(argv)))
-    except (FreeCourseCliError, OSError, ValueError) as error:
-        print(f"free-course command refused: {error}", file=sys.stderr)
+    except (FreeCourseCliError, OSError, ValueError):
+        # Settings/Pydantic and transport exceptions may contain raw input,
+        # including a credential accidentally embedded in a URL.  Keep the
+        # operator receipt bounded and independent of exception text.
+        print(
+            "free-course command refused: invalid or unavailable command input",
+            file=sys.stderr,
+        )
         return 2
     except Exception:
         print(

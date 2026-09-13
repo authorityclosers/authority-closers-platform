@@ -10,15 +10,22 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import hmac
+import os
 import sys
 from datetime import UTC, datetime, timedelta
+from unittest.mock import patch
 from urllib.parse import parse_qs, unquote, urlsplit
 from uuid import UUID, uuid4
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from ac_platform.audit.models import AuditEvent
 from ac_platform.authorization.application import CapabilityApplication
+from ac_platform.authorization.models import CapabilityGrant
 from ac_platform.authorization.policy import CapabilityScope
+from ac_platform.catalog import cli as catalog_cli
 from ac_platform.catalog.free_course_media import FreeCourseMediaPromotionApplication
 from ac_platform.catalog.free_course_publication import FreeCoursePublicationApplication
 from ac_platform.catalog.models import CatalogScope, ProgramVersion
@@ -50,6 +57,7 @@ from tests.integration.test_media_delivery_renewal_postgresql import (
 )
 
 NOW = datetime(2026, 9, 13, 12, tzinfo=UTC)
+TEST_SESSION_PEPPER = b"local-session-token-pepper-change-before-production"
 
 
 def _run(coroutine):
@@ -83,9 +91,19 @@ async def _exercise(schema_url) -> None:
                         email=f"learner-{learner_id.hex}@example.test",
                         email_verified_at=NOW,
                     ),
+                ]
+            )
+            await database.flush()
+            database.add_all(
+                [
                     Membership(tenant_id=operations_id, person_id=manager_id, role="owner"),
                     Membership(tenant_id=public_id, person_id=manager_id, role="learner"),
                     Membership(tenant_id=public_id, person_id=learner_id, role="learner"),
+                ]
+            )
+            await database.flush()
+            database.add_all(
+                [
                     IdentitySession(
                         id=manager_session_id,
                         person_id=manager_id,
@@ -368,3 +386,206 @@ async def _exercise(schema_url) -> None:
 
 def test_postgresql_free_course_publish_promote_and_http_delivery(postgres_harness) -> None:  # noqa: F811
     _run(_exercise(postgres_harness.schema_url))
+
+
+async def _exercise_cli_actor(schema_url) -> None:
+    """Exercise the actual operator entry point with a server-resolved session."""
+
+    engine = create_async_engine(schema_url, hide_parameters=True)
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    token = "A" * 43
+    try:
+        public_id, manager_session_id = uuid4(), uuid4()
+        async with sessions() as database, database.begin():
+            existing_owner = await database.scalar(
+                select(Membership)
+                .where(Membership.role == "owner")
+                .order_by(Membership.tenant_id)
+            )
+            if existing_owner is None:
+                operations_id, manager_id = uuid4(), uuid4()
+                database.add_all(
+                    [
+                        Tenant(
+                            id=operations_id,
+                            slug=f"ops-cli-{operations_id.hex}",
+                            name="Operations",
+                        ),
+                        Person(
+                            id=manager_id,
+                            email=f"manager-cli-{manager_id.hex}@example.test",
+                            email_verified_at=NOW,
+                        ),
+                        Membership(
+                            tenant_id=operations_id,
+                            person_id=manager_id,
+                            role="owner",
+                        ),
+                    ]
+                )
+            else:
+                operations_id = existing_owner.tenant_id
+                manager_id = existing_owner.person_id
+            database.add(
+                Tenant(
+                    id=public_id,
+                    slug=f"public-cli-{public_id.hex}",
+                    name="Public learners",
+                )
+            )
+            await database.flush()
+            database.add(
+                IdentitySession(
+                    id=manager_session_id,
+                    person_id=manager_id,
+                    selected_tenant_id=operations_id,
+                    token_hash=hmac.new(
+                        TEST_SESSION_PEPPER, token.encode("ascii"), hashlib.sha256
+                    ).digest(),
+                    created_at=NOW - timedelta(minutes=1),
+                    expires_at=NOW + timedelta(hours=1),
+                )
+            )
+            await database.flush()
+
+            prior_publication = await database.scalar(
+                select(AuditEvent)
+                .where(AuditEvent.action == "catalog.free_course_published.v1")
+                .order_by(AuditEvent.occurred_at)
+                .limit(1)
+            )
+            adopt_existing = prior_publication is not None
+            source_slug = f"postgres-cli-free-course-{uuid4().hex}"
+
+            def create_source(sync):
+                catalog = CatalogService(SqlAlchemyCatalogStore(sync), clock=lambda: NOW)
+                source = catalog.create_program(
+                    tenant_id=operations_id,
+                    scope=CatalogScope.TENANT,
+                    slug=source_slug,
+                    title="PostgreSQL CLI reviewed Free Course",
+                    program_id=uuid4(),
+                    now=NOW,
+                )
+                version = catalog.create_version(
+                    source.id,
+                    tenant_id=operations_id,
+                    version_number=1,
+                    now=NOW,
+                )
+                module = catalog.add_module(
+                    version.id,
+                    tenant_id=operations_id,
+                    position=1,
+                    title="Module 1",
+                )
+                catalog.add_activity(
+                    module.id,
+                    tenant_id=operations_id,
+                    position=1,
+                    kind="VIDEO",
+                    title="Reviewed CLI test video",
+                    prompt="Watch the licensed test lesson.",
+                    is_required=True,
+                )
+                snapshot = catalog.get_version(version.id, tenant_id=operations_id)
+                assert snapshot is not None
+                row = sync.get(ProgramVersion, version.id)
+                assert row is not None
+                row.content_digest = catalog._canonical_content_digest(snapshot)  # noqa: SLF001
+                row.content_source_ref = "controlled:postgres-cli-free-course-test"
+                row.content_reviewed_by = f"person:{manager_id}"
+                row.content_reviewed_at = NOW
+                row.release_id = "c" * 40
+                row.content_seed_kind = "reviewed"
+                sync.flush()
+                catalog.publish_version(version.id, tenant_id=operations_id, now=NOW)
+                return source.id
+
+            if adopt_existing:
+                assert prior_publication is not None and isinstance(prior_publication.payload, dict)
+                source_program_id = UUID(str(prior_publication.payload["source_program_id"]))
+                target_program_id = UUID(str(prior_publication.payload["program_id"]))
+                target_version_id = UUID(str(prior_publication.payload["program_version_id"]))
+                target_video_id = UUID(str(prior_publication.payload["video_activity_id"]))
+            else:
+                source_program_id = await database.run_sync(create_source)
+            actor = ActorContext(
+                manager_id,
+                manager_session_id,
+                operations_id,
+                permissions=frozenset({"catalog_read", "catalog_write", "catalog_publish"}),
+            )
+            capability = CapabilityApplication(database, operations_tenant_id=operations_id)
+            existing_permissions = frozenset(
+                await database.scalars(
+                    select(CapabilityGrant.permission).where(
+                        CapabilityGrant.subject_person_id == manager_id,
+                        CapabilityGrant.scope_kind == "platform",
+                        CapabilityGrant.tenant_id.is_(None),
+                        CapabilityGrant.program_id.is_(None),
+                    )
+                )
+            )
+            if not {
+                "platform_catalog_write",
+                "platform_catalog_publish",
+            }.issubset(existing_permissions):
+                await capability.bootstrap_first_manager(
+                    person_id=manager_id,
+                    command_id=uuid4(),
+                    reason="PostgreSQL CLI Free Course test bootstrap",
+                )
+                for permission in ("platform_catalog_write", "platform_catalog_publish"):
+                    await capability.grant(
+                        actor,
+                        command_id=uuid4(),
+                        subject_person_id=manager_id,
+                        permission=permission,
+                        scope=CapabilityScope("platform"),
+                        reason="PostgreSQL CLI Free Course test authority",
+                    )
+
+        command = [
+            "adopt-existing" if adopt_existing else "publish",
+            "--environment",
+            "test",
+            "--source-program-id",
+            str(source_program_id),
+            "--public-tenant-id",
+            str(public_id),
+            "--command-id",
+            str(uuid4()),
+            "--reason",
+            "PostgreSQL actual resolved session publication",
+        ]
+        if adopt_existing:
+            command.extend(
+                [
+                    "--program-id",
+                    str(target_program_id),
+                    "--program-version-id",
+                    str(target_version_id),
+                    "--video-activity-id",
+                    str(target_video_id),
+                ]
+            )
+        args = catalog_cli._parser().parse_args(command)  # noqa: SLF001 - actual CLI composition proof
+        environment = {
+            "AC_DATABASE_URL": schema_url.render_as_string(hide_password=False),
+            "AC_ENVIRONMENT": "test",
+            "AC_OPERATIONS_TENANT_ID": str(operations_id),
+        }
+        with (
+            patch.dict(os.environ, environment, clear=False),
+            patch.object(catalog_cli, "_read_session_token", lambda: token),
+        ):
+            result = await catalog_cli._execute(args)  # noqa: SLF001 - actual CLI entry proof
+        assert result["status"] in {"published", "adopted"}
+        assert UUID(str(result["video_activity_id"]))
+    finally:
+        await engine.dispose()
+
+
+def test_postgresql_free_course_cli_resolves_role_permissions(postgres_harness) -> None:  # noqa: F811
+    _run(_exercise_cli_actor(postgres_harness.schema_url))

@@ -25,6 +25,8 @@ from ac_platform.catalog.free_course_publication import (
 from ac_platform.catalog.models import (
     Activity,
     CatalogScope,
+    Module,
+    ModulePrerequisite,
     Program,
     ProgramVersion,
     ProgramVersionStatus,
@@ -72,7 +74,7 @@ async def _grant_publication_capabilities(state) -> None:
         )
 
 
-def _source_course(state, *, publish: bool = True):
+def _source_course(state, *, publish: bool = True, module_count: int = 1):
     service = CatalogService(SqlAlchemyCatalogStore(state.db), clock=lambda: NOW)
     program_id = uuid4()
     program = service.create_program(
@@ -83,15 +85,13 @@ def _source_course(state, *, publish: bool = True):
         program_id=program_id,
         now=NOW,
     )
-    digest = canonical_catalog_content_digest(
-        program_slug=program.slug,
-        program_title=program.title,
-        modules=(
-            CanonicalModuleContent(
-                position=1,
-                title="Module 1",
-                prerequisite_positions=(),
-                activities=(
+    content_modules = tuple(
+        CanonicalModuleContent(
+            position=position,
+            title=f"Module {position}",
+            prerequisite_positions=(position - 1,) if position > 1 else (),
+            activities=(
+                (
                     CanonicalActivityContent(
                         position=1,
                         kind="VIDEO",
@@ -106,9 +106,25 @@ def _source_course(state, *, publish: bool = True):
                         is_required=True,
                         prompt="Write one reflection.",
                     ),
-                ),
+                )
+                if position == 1
+                else (
+                    CanonicalActivityContent(
+                        position=1,
+                        kind="REFLECTION",
+                        title=f"Reflect {position}",
+                        is_required=True,
+                        prompt=f"Write reflection {position}.",
+                    ),
+                )
             ),
-        ),
+        )
+        for position in range(1, module_count + 1)
+    )
+    digest = canonical_catalog_content_digest(
+        program_slug=program.slug,
+        program_title=program.title,
+        modules=content_modules,
     )
     version = service.create_version(
         program.id,
@@ -122,30 +138,49 @@ def _source_course(state, *, publish: bool = True):
         content_seed_kind="reviewed" if publish else None,
         now=NOW,
     )
-    module = service.add_module(
-        version.id,
-        tenant_id=state.operations,
-        position=1,
-        title="Module 1",
-    )
-    service.add_activity(
-        module.id,
-        tenant_id=state.operations,
-        position=1,
-        kind="VIDEO",
-        title="Watch",
-        prompt="Watch the reviewed test lesson.",
-        is_required=True,
-    )
-    service.add_activity(
-        module.id,
-        tenant_id=state.operations,
-        position=2,
-        kind="REFLECTION",
-        title="Reflect",
-        prompt="Write one reflection.",
-        is_required=True,
-    )
+    modules = []
+    for position in range(1, module_count + 1):
+        module = service.add_module(
+            version.id,
+            tenant_id=state.operations,
+            position=position,
+            title=f"Module {position}",
+        )
+        modules.append(module)
+        if position == 1:
+            service.add_activity(
+                module.id,
+                tenant_id=state.operations,
+                position=1,
+                kind="VIDEO",
+                title="Watch",
+                prompt="Watch the reviewed test lesson.",
+                is_required=True,
+            )
+            service.add_activity(
+                module.id,
+                tenant_id=state.operations,
+                position=2,
+                kind="REFLECTION",
+                title="Reflect",
+                prompt="Write one reflection.",
+                is_required=True,
+            )
+        else:
+            service.add_activity(
+                module.id,
+                tenant_id=state.operations,
+                position=1,
+                kind="REFLECTION",
+                title=f"Reflect {position}",
+                prompt=f"Write reflection {position}.",
+                is_required=True,
+            )
+            service.add_module_prerequisite(
+                module.id,
+                modules[-2].id,
+                tenant_id=state.operations,
+            )
     if publish:
         service.publish_version(version.id, tenant_id=state.operations, now=NOW)
     return program
@@ -193,12 +228,18 @@ async def test_publication_is_idempotent_and_preserves_tenant_source(state) -> N
     adoption = await application.adopt_existing(
         actor=actor,
         source_program_id=source.id,
+        program_id=result.program_id,
+        program_version_id=result.program_version_id,
+        video_activity_id=result.video_activity_id,
         command_id=uuid4(),
         reason="Adopt the reviewed staging Free Course without changing progress",
     )
     adoption_replay = await application.adopt_existing(
         actor=actor,
         source_program_id=source.id,
+        program_id=result.program_id,
+        program_version_id=result.program_version_id,
+        video_activity_id=result.video_activity_id,
         command_id=adoption.command_id,
         reason="Adopt the reviewed staging Free Course without changing progress",
     )
@@ -210,6 +251,9 @@ async def test_publication_is_idempotent_and_preserves_tenant_source(state) -> N
         await application.adopt_existing(
             actor=actor,
             source_program_id=source.id,
+            program_id=result.program_id,
+            program_version_id=result.program_version_id,
+            video_activity_id=result.video_activity_id,
             command_id=result.command_id,
             reason="A publication command cannot be reused for adoption",
         )
@@ -339,6 +383,172 @@ async def test_publication_refuses_existing_global_course_without_mutation(state
         )
     source_version = state.db.query(ProgramVersion).filter_by(program_id=source.id).one()
     assert source_version.status == ProgramVersionStatus.PUBLISHED.value
+
+
+async def test_adopts_legacy_global_identity_with_four_modules_and_preserves_binding(state) -> None:
+    await _grant_publication_capabilities(state)
+    source = _source_course(state, module_count=4)
+    source_version = state.db.query(ProgramVersion).filter_by(program_id=source.id).one()
+    source_modules = (
+        state.db.query(Module)
+        .filter_by(program_version_id=source_version.id)
+        .order_by(Module.position)
+        .all()
+    )
+    service = CatalogService(SqlAlchemyCatalogStore(state.db), clock=lambda: NOW)
+    legacy_program_id, legacy_version_id = uuid4(), uuid4()
+    legacy = service.create_program(
+        tenant_id=None,
+        scope=CatalogScope.GLOBAL,
+        slug=AUTHORITY_CLOSERS_FREE_COURSE_SLUG,
+        title=source.title,
+        program_id=legacy_program_id,
+        now=NOW,
+    )
+    legacy_version = service.create_version(
+        legacy.id,
+        tenant_id=None,
+        version_number=1,
+        version_id=legacy_version_id,
+        content_source_ref=source_version.content_source_ref,
+        content_reviewed_by=source_version.content_reviewed_by,
+        content_reviewed_at=source_version.content_reviewed_at,
+        release_id=source_version.release_id,
+        content_seed_kind=source_version.content_seed_kind,
+        now=NOW,
+    )
+    legacy_modules = {}
+    legacy_video_id = None
+    for source_module in source_modules:
+        legacy_module = service.add_module(
+            legacy_version.id,
+            tenant_id=None,
+            position=source_module.position,
+            title=source_module.title,
+            module_id=uuid4(),
+        )
+        legacy_modules[source_module.id] = legacy_module
+        for source_activity in (
+            state.db.query(Activity)
+            .filter_by(module_id=source_module.id)
+            .order_by(Activity.position)
+            .all()
+        ):
+            legacy_activity = service.add_activity(
+                legacy_module.id,
+                tenant_id=None,
+                position=source_activity.position,
+                kind=source_activity.kind,
+                title=source_activity.title,
+                prompt=source_activity.prompt,
+                is_required=source_activity.is_required,
+                activity_id=uuid4(),
+            )
+            if source_activity.kind == "VIDEO":
+                legacy_video_id = legacy_activity.id
+    assert legacy_video_id is not None
+    for edge in state.db.query(ModulePrerequisite).filter_by(
+        program_version_id=source_version.id
+    ).all():
+        service.add_module_prerequisite(
+            legacy_modules[edge.module_id].id,
+            legacy_modules[edge.prerequisite_module_id].id,
+            tenant_id=None,
+        )
+    legacy_snapshot = service.get_version(legacy_version.id, tenant_id=None)
+    assert legacy_snapshot is not None
+    state.db.get(ProgramVersion, legacy_version.id).content_digest = (
+        service._canonical_content_digest(legacy_snapshot)  # noqa: SLF001
+    )
+    state.db.flush()
+    service.publish_version(legacy_version.id, tenant_id=None, now=NOW)
+
+    current_asset_id, current_version_id, current_binding_id = uuid4(), uuid4(), uuid4()
+    state.db.add(
+        MediaAsset(
+            id=current_asset_id,
+            tenant_id=state.academy,
+            owner_person_id=state.manager,
+            purpose=MediaPurpose.VIDEO.value,
+            state=MediaLifecycle.READY.value,
+            created_at=NOW,
+            updated_at=NOW,
+        )
+    )
+    state.db.add(
+        MediaVersion(
+            id=current_version_id,
+            tenant_id=state.academy,
+            asset_id=current_asset_id,
+            version_number=1,
+            purpose=MediaPurpose.VIDEO.value,
+            state=MediaLifecycle.READY.value,
+            content_type="video/mp4",
+            declared_bytes=4,
+            actual_bytes=4,
+            checksum_sha256="0" * 64,
+            object_key="legacy/current.mp4",
+            storage_version_id="legacy-v1",
+            duration_seconds=1.0,
+            width=3840,
+            height=2160,
+            created_at=NOW,
+            updated_at=NOW,
+        )
+    )
+    state.db.flush()
+    state.db.get(MediaAsset, current_asset_id).current_version_id = current_version_id
+    state.db.add(
+        ActivityMediaBinding(
+            id=current_binding_id,
+            tenant_id=state.academy,
+            activity_id=legacy_video_id,
+            module_id=legacy_modules[source_modules[0].id].id,
+            program_version_id=legacy_version.id,
+            program_id=legacy.id,
+            program_scope=CatalogScope.GLOBAL.value,
+            program_owner_key=UUID(int=0),
+            activity_version=f"activity:{legacy_video_id}",
+            asset_id=current_asset_id,
+            version_id=current_version_id,
+            state="approved",
+            approval_reference="legacy-current-binding",
+            approved_by_person_id=state.manager,
+            approved_at=NOW,
+            idempotency_key="legacy-current-binding",
+            request_fingerprint="1" * 64,
+            created_at=NOW,
+            updated_at=NOW,
+        )
+    )
+    state.db.flush()
+
+    actor = replace(
+        state.actor,
+        tenant_id=state.operations,
+        permissions=ROLE_PERMISSIONS["owner"],
+    )
+    result = await FreeCoursePublicationApplication(
+        PublicationSession(state.db),
+        operations_tenant_id=state.operations,
+        public_tenant_id=state.academy,
+        clock=lambda: NOW,
+    ).adopt_existing(
+        actor=actor,
+        source_program_id=source.id,
+        program_id=legacy_program_id,
+        program_version_id=legacy_version_id,
+        video_activity_id=legacy_video_id,
+        command_id=uuid4(),
+        reason="Adopt the reviewed legacy global Free Course without changing progress",
+    )
+
+    assert result.status == "adopted"
+    assert result.program_id == legacy_program_id
+    assert len(
+        state.db.query(Module).filter_by(program_version_id=legacy_version_id).all()
+    ) == 4
+    assert state.db.get(ActivityMediaBinding, current_binding_id).state == "approved"
 
 
 async def test_ready_media_promotion_copies_and_binds_without_source_mutation(state) -> None:

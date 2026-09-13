@@ -577,15 +577,19 @@ class FreeCoursePublicationApplication:
         *,
         actor: ActorContext,
         source_program_id: UUID,
+        program_id: UUID,
+        program_version_id: UUID,
+        video_activity_id: UUID,
         command_id: UUID,
         reason: str,
     ) -> FreeCoursePublicationResult:
         """Record adoption of an already matching global Free Course.
 
-        Staging may already contain the canonical global rows.  Adoption is a
-        separate audited command: it proves the deterministic global identity
-        and content match the reviewed Coach source, then leaves every catalog
-        row and learner progress untouched.
+        Staging may already contain canonical global rows with identities that
+        predate this command. Adoption is a separate audited command: it
+        proves the supplied global program/version/video IDs and content match
+        the reviewed Coach source, then leaves every catalog row and learner
+        progress untouched.
         """
 
         _require_transaction(self.database)
@@ -595,6 +599,13 @@ class FreeCoursePublicationApplication:
             raise FreeCoursePublicationError("the actor must select the operations tenant")
         if type(source_program_id) is not UUID or source_program_id.int == 0:
             raise FreeCoursePublicationError("a source program ID is required")
+        for value, label in (
+            (program_id, "existing global program ID"),
+            (program_version_id, "existing global version ID"),
+            (video_activity_id, "existing global video activity ID"),
+        ):
+            if type(value) is not UUID or value.int == 0:
+                raise FreeCoursePublicationError(f"a non-zero {label} is required")
         if (
             not isinstance(reason, str)
             or not reason.strip()
@@ -772,11 +783,9 @@ class FreeCoursePublicationApplication:
                 "the source content digest does not match its reviewed content"
             )
 
-        target_program_id = _stable_id("program", source_program.id)
-        target_version_id = _stable_id("version", source_version.id)
         target_program = await self.database.scalar(
             select(Program).where(
-                Program.id == target_program_id,
+                Program.id == program_id,
                 Program.scope == CatalogScope.GLOBAL.value,
                 Program.slug == AUTHORITY_CLOSERS_FREE_COURSE_SLUG,
                 Program.tenant_id.is_(None),
@@ -789,8 +798,8 @@ class FreeCoursePublicationApplication:
             )
         target_version = await self.database.scalar(
             select(ProgramVersion).where(
-                ProgramVersion.id == target_version_id,
-                ProgramVersion.program_id == target_program_id,
+                ProgramVersion.id == program_version_id,
+                ProgramVersion.program_id == program_id,
                 ProgramVersion.scope == CatalogScope.GLOBAL.value,
                 ProgramVersion.tenant_id.is_(None),
                 ProgramVersion.owner_key == UUID(int=0),
@@ -809,12 +818,11 @@ class FreeCoursePublicationApplication:
             raise FreeCoursePublicationConflict(
                 "the existing global Free Course version does not match the reviewed source"
             )
-        target_activity_id = _stable_id("activity", video_activities[0].id)
         target_activity = await self.database.scalar(
             select(Activity).where(
-                Activity.id == target_activity_id,
-                Activity.program_id == target_program_id,
-                Activity.program_version_id == target_version_id,
+                Activity.id == video_activity_id,
+                Activity.program_id == program_id,
+                Activity.program_version_id == program_version_id,
                 Activity.scope == CatalogScope.GLOBAL.value,
                 Activity.tenant_id.is_(None),
                 Activity.owner_key == UUID(int=0),
