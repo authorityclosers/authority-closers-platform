@@ -1451,9 +1451,14 @@ def install_identity_http(
         require_safe_origin(request, settings)
         try:
             async with sessions() as database, database.begin():
-                challenge = await PasswordIdentityService(
-                    database, token_secret=challenge_secret
-                ).begin_reset(email=body.email)
+                passwords = PasswordIdentityService(database, token_secret=challenge_secret)
+                challenge = await passwords.begin_reset(email=body.email)
+                if challenge is None:
+                    # Recovery must also help a password account whose first
+                    # verification email was missed. This remains a mailbox
+                    # challenge, never a verification flag or a reset bypass.
+                    # Ineligible/unknown addresses keep the same public reply.
+                    challenge = await passwords.begin_verification(email=body.email)
                 if challenge is not None:
                     await enqueue_password_email(
                         database,

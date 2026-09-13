@@ -61,7 +61,7 @@ def _settings() -> Settings:
     )
 
 
-@pytest.mark.parametrize("operation", ["register", "recovery", "resend"])
+@pytest.mark.parametrize("operation", ["register", "recovery", "recovery-unverified", "resend"])
 @pytest.mark.parametrize(
     ("context_name", "context"),
     [
@@ -83,7 +83,7 @@ def test_password_email_routes_forward_context_to_the_durable_event(
     events: list[tuple[EventEnvelope, str | None]] = []
     challenge_kind = (
         EmailChallengeKind.VERIFICATION
-        if operation in {"register", "resend"}
+        if operation in {"register", "recovery-unverified", "resend"}
         else EmailChallengeKind.PASSWORD_RESET
     )
     challenge = SimpleNamespace(
@@ -99,9 +99,9 @@ def test_password_email_routes_forward_context_to_the_durable_event(
         async def register(self, **_values: object) -> SimpleNamespace:
             return SimpleNamespace(created=True, challenge=challenge)
 
-        async def begin_reset(self, *, email: str) -> SimpleNamespace:
+        async def begin_reset(self, *, email: str) -> SimpleNamespace | None:
             del email
-            return challenge
+            return None if operation == "recovery-unverified" else challenge
 
         async def begin_verification(self, *, email: str) -> SimpleNamespace:
             del email
@@ -142,7 +142,7 @@ def test_password_email_routes_forward_context_to_the_durable_event(
     else:
         path = (
             "/v1/auth/password/recovery"
-            if operation == "recovery"
+            if operation in {"recovery", "recovery-unverified"}
             else "/v1/auth/password/resend-verification"
         )
         body = {"email": "learner@example.test"}
@@ -166,13 +166,13 @@ def test_password_email_routes_forward_context_to_the_durable_event(
     }
     expected_name = (
         PASSWORD_EMAIL_VERIFICATION_EVENT
-        if operation in {"register", "resend"}
+        if challenge_kind == EmailChallengeKind.VERIFICATION
         else PASSWORD_EMAIL_RESET_EVENT
     )
     if context_name != "v1":
         expected_name = (
             PASSWORD_EMAIL_VERIFICATION_EVENT_V2
-            if operation in {"register", "resend"}
+            if challenge_kind == EmailChallengeKind.VERIFICATION
             else PASSWORD_EMAIL_RESET_EVENT_V2
         )
         expected_payload["course"] = COURSE

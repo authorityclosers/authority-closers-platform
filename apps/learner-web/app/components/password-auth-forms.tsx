@@ -404,8 +404,8 @@ export function RecoveryRequestForm({
         <div className="auth-result" role="status">
           <p>
             If this address can receive an account recovery email, instructions
-            are on their way. If you are still verifying a new account, request
-            a fresh verification link instead.
+            are on their way. Follow the latest email to verify your account or
+            choose a new password.
           </p>
           <Link
             className="button button--outline button--full"

@@ -1,7 +1,9 @@
 # Auth pending-verification and recovery UX
 
-This bounded learner auth cut keeps the backend contract unchanged while making
-the normal pending-verification journey actionable.
+This learner auth cut makes the normal pending-verification journey actionable.
+The public recovery response remains neutral. The combined backend change also
+sends a canonical verification challenge when an eligible unverified password
+account requests recovery; it does not mark an account verified or bypass email.
 
 - `/verify-email` with no fragment token now presents a pending state: **Check
   your inbox**, with a clear fresh-link resend form. It no longer presents the
