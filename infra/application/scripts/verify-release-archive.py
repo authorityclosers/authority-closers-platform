@@ -47,6 +47,7 @@ required_files = {
     "infra/application/edge-routes/staging-hold.caddy",
     "infra/application/edge-routes/staging.caddy",
     "infra/application/scripts/public-films.py",
+    "infra/application/scripts/studio-video-upload.py",
     "infra/application/environments/staging.env",
     "infra/application/environments/production.env",
     "infra/application/scripts/install-application-release.sh",
