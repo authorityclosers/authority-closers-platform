@@ -38,9 +38,7 @@ def test_indian_daily_sets_keep_language_labels_and_draft_safety_flags():
         "india-daily-hinglish": "India daily practice · Hinglish",
         "india-daily-marlish": "India daily practice · Marathi-English (Marlish)",
     }
-    assert {
-        group["id"]: group["title"] for group in LIBRARY if group["id"] in expected
-    } == expected
+    assert {group["id"]: group["title"] for group in LIBRARY if group["id"] in expected} == expected
     for group in LIBRARY:
         if group["id"] not in expected:
             continue

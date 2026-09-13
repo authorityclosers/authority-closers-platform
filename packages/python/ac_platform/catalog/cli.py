@@ -178,13 +178,16 @@ async def _wire_prerequisite(
 
     if actor.tenant_id != tenant_id:
         raise FreeCourseCliError("the actor must select the operations tenant")
-    if any(type(value) is not UUID or value.int == 0 for value in (
-        program_id,
-        program_version_id,
-        module_id,
-        prerequisite_module_id,
-        command_id,
-    )):
+    if any(
+        type(value) is not UUID or value.int == 0
+        for value in (
+            program_id,
+            program_version_id,
+            module_id,
+            prerequisite_module_id,
+            command_id,
+        )
+    ):
         raise FreeCourseCliError("all catalog IDs must be non-zero UUIDs")
     if (
         not isinstance(reason, str)

@@ -210,9 +210,7 @@ def _reservation(
 def _router(bundle_box: dict[str, HostedApprovalBundle], child: Any) -> FixedProviderRouter:
     return FixedProviderRouter(
         {
-            "elevenlabs": ProviderRoute(
-                "elevenlabs", "ref:credential/elevenlabs/v1", child
-            ),
+            "elevenlabs": ProviderRoute("elevenlabs", "ref:credential/elevenlabs/v1", child),
             "groq": ProviderRoute("groq", "ref:credential/groq/v1", child),
         },
         current_authority=lambda _now: bundle_box["bundle"],

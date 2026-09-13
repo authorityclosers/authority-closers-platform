@@ -23,7 +23,12 @@ const profile = {
   display_name: "Chosen peer",
   avatar_asset_id: null,
   practice_xp_total: 30,
-  connection_state: null as "pending" | "accepted" | "declined" | "removed" | null,
+  connection_state: null as
+    | "pending"
+    | "accepted"
+    | "declined"
+    | "removed"
+    | null,
   connection_incoming: null as boolean | null,
 };
 
@@ -44,11 +49,31 @@ beforeEach(() => {
     })),
     communitySearch: vi.fn(async () => ({ items: [profile] })),
     communityPublicProfile: vi.fn(async () => profile),
-    requestCommunityConnection: vi.fn(async () => ({ username: profile.username, state: "pending", incoming: false })),
-    respondCommunityConnection: vi.fn(async (_username: string, action: "accept" | "decline") => ({ username: profile.username, state: action === "accept" ? "accepted" : "declined", incoming: true })),
-    removeCommunityConnection: vi.fn(async () => ({ username: profile.username, state: "removed", incoming: false })),
-    blockCommunityLearner: vi.fn(async () => ({ username: profile.username, blocked: true as const })),
-    reportCommunityLearner: vi.fn(async () => ({ username: profile.username, reported: true as const })),
+    requestCommunityConnection: vi.fn(async () => ({
+      username: profile.username,
+      state: "pending",
+      incoming: false,
+    })),
+    respondCommunityConnection: vi.fn(
+      async (_username: string, action: "accept" | "decline") => ({
+        username: profile.username,
+        state: action === "accept" ? "accepted" : "declined",
+        incoming: true,
+      }),
+    ),
+    removeCommunityConnection: vi.fn(async () => ({
+      username: profile.username,
+      state: "removed",
+      incoming: false,
+    })),
+    blockCommunityLearner: vi.fn(async () => ({
+      username: profile.username,
+      blocked: true as const,
+    })),
+    reportCommunityLearner: vi.fn(async () => ({
+      username: profile.username,
+      reported: true as const,
+    })),
   } as unknown as LearnerApi;
 });
 
@@ -85,7 +110,12 @@ describe("community discovery", () => {
     expect(container.textContent).toContain("Private by default");
     expect(container.textContent).toContain("Enable discovery");
     await click("Enable discovery");
-    expect(api.setCommunityDiscovery).toHaveBeenCalledWith(true, "Chosen display", null, 1);
+    expect(api.setCommunityDiscovery).toHaveBeenCalledWith(
+      true,
+      "Chosen display",
+      null,
+      1,
+    );
     expect(container.textContent).toContain("You can now be found by username");
   });
 
@@ -101,14 +131,18 @@ describe("community discovery", () => {
     expect(api.communityPublicProfile).toHaveBeenCalledWith("other_learner");
     expect(container.textContent).toContain("Chosen peer");
     await click("Connect");
-    expect(api.requestCommunityConnection).toHaveBeenCalledWith("other_learner");
+    expect(api.requestCommunityConnection).toHaveBeenCalledWith(
+      "other_learner",
+    );
     expect(container.textContent).toContain("Connection request sent");
     expect(container.textContent).not.toContain("other@example");
   });
 
   it("shows recipient controls for an incoming request", async () => {
     api.communitySearch = vi.fn(async () => ({
-      items: [{ ...profile, connection_state: "pending", connection_incoming: true }],
+      items: [
+        { ...profile, connection_state: "pending", connection_incoming: true },
+      ],
     })) as LearnerApi["communitySearch"];
     await mount();
     await act(async () => {
@@ -117,7 +151,10 @@ describe("community discovery", () => {
     });
     await click("Search");
     await click("Accept");
-    expect(api.respondCommunityConnection).toHaveBeenCalledWith("other_learner", "accept");
+    expect(api.respondCommunityConnection).toHaveBeenCalledWith(
+      "other_learner",
+      "accept",
+    );
     expect(container.textContent).toContain("now connected");
   });
 });

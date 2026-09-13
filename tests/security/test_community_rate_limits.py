@@ -5,9 +5,7 @@ from ac_platform.http.rate_limits import DEFAULT_RATE_LIMIT_RULES
 
 def test_community_discovery_and_connection_routes_have_bounded_rules() -> None:
     rules = {
-        rule.name: rule
-        for rule in DEFAULT_RATE_LIMIT_RULES
-        if rule.name.startswith("community-")
+        rule.name: rule for rule in DEFAULT_RATE_LIMIT_RULES if rule.name.startswith("community-")
     }
 
     assert set(rules) == {

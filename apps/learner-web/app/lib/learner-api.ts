@@ -1052,7 +1052,10 @@ export function createLearnerApi(
         }).toString()}`,
         { ...options, cache: "no-store" },
       ),
-    communityPublicProfile: (username: string, options: LearnerReadOptions = {}) =>
+    communityPublicProfile: (
+      username: string,
+      options: LearnerReadOptions = {},
+    ) =>
       request<CommunityPublicProfile>(
         `/v1/community/public/${encodeURIComponent(username.trim().toLowerCase())}`,
         { ...options, cache: "no-store" },

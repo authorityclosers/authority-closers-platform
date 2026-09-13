@@ -120,9 +120,7 @@ def test_composed_runner_advances_accepted_plan_once_to_private_c6(
                 )
                 for stage in setup.bundle.stages
             }
-            assert set(launchers) == {
-                stage.credential_ref for stage in setup.bundle.stages
-            }
+            assert set(launchers) == {stage.credential_ref for stage in setup.bundle.stages}
 
             def synthetic_broker(**kwargs: Any) -> Any:
                 launcher = kwargs["infisical"]
@@ -209,10 +207,8 @@ def test_composed_runner_advances_accepted_plan_once_to_private_c6(
                 checkpoints = list(
                     (
                         await database.scalars(
-                            select(ConversationCheckpoint)
-                            .where(
-                                ConversationCheckpoint.recording_id
-                                == setup.prepared.recording_id
+                            select(ConversationCheckpoint).where(
+                                ConversationCheckpoint.recording_id == setup.prepared.recording_id
                             )
                         )
                     ).all()
@@ -230,8 +226,7 @@ def test_composed_runner_advances_accepted_plan_once_to_private_c6(
                         select(func.count())
                         .select_from(ConversationReportDraft)
                         .where(
-                            ConversationReportDraft.recording_id
-                            == setup.prepared.recording_id,
+                            ConversationReportDraft.recording_id == setup.prepared.recording_id,
                             ConversationReportDraft.erased_at.is_(None),
                         )
                     )

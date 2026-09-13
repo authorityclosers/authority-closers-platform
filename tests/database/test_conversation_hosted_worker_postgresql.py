@@ -148,17 +148,22 @@ def test_hosted_worker_rejects_48k_quote_before_native_execution(
 
         try:
             hosted = HostedConversationWorker(
-                sessions, storage=prepared.storage, scratch=prepared.scratch,
-                environment="staging", native_runtime=MustNotRun(),
+                sessions,
+                storage=prepared.storage,
+                scratch=prepared.scratch,
+                environment="staging",
+                native_runtime=MustNotRun(),
             )
             with pytest.raises(RuntimeError, match="conversation job failed"):
                 await hosted.run_once()
             async with sessions() as database:
-                assert not list(await database.scalars(
-                    select(ConversationCheckpoint).where(
-                        ConversationCheckpoint.recording_id == prepared.recording_id,
+                assert not list(
+                    await database.scalars(
+                        select(ConversationCheckpoint).where(
+                            ConversationCheckpoint.recording_id == prepared.recording_id,
+                        )
                     )
-                ))
+                )
             _assert_scratch_empty(prepared.scratch)
         finally:
             await engine.dispose()

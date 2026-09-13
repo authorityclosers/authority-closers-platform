@@ -190,18 +190,25 @@ def test_recipe_cutover_rejects_old_quote_acceptance_and_upload(postgres_harness
             async with AsyncSession(engine) as database, database.begin():
                 intake = ConversationIntake(
                     app(database, state),
-                    replace(policy(scope_id, state.tenant_id),
-                            acoustic_recipe=AUDIOATLAS_HOSTED_RECIPE),
+                    replace(
+                        policy(scope_id, state.tenant_id), acoustic_recipe=AUDIOATLAS_HOSTED_RECIPE
+                    ),
                 )
                 with pytest.raises(ConversationConflict, match="recipe changed"):
                     await intake.accept(
-                        state.actor, UUID(view["id"]),
-                        QuoteAcceptance(quote_fingerprint=view["quote_fingerprint"],
-                                        privacy_revision=view["privacy_revision"], accepted=True),
+                        state.actor,
+                        UUID(view["id"]),
+                        QuoteAcceptance(
+                            quote_fingerprint=view["quote_fingerprint"],
+                            privacy_revision=view["privacy_revision"],
+                            accepted=True,
+                        ),
                     )
                 with pytest.raises(ConversationConflict, match="recipe changed"):
                     await intake.require_accepted(
-                        state.actor, UUID(view["recording_id"]), UUID(view["id"]),
+                        state.actor,
+                        UUID(view["recording_id"]),
+                        UUID(view["id"]),
                     )
         finally:
             await engine.dispose()
@@ -411,7 +418,11 @@ def test_approval_then_bounded_source_storage_and_local_run(
             state = await seed(engine)
             scope_id = await seed_budget(engine)
             intent, view = await issue(
-                engine, state, scope_id, source=source, key="approved-source",
+                engine,
+                state,
+                scope_id,
+                source=source,
+                key="approved-source",
                 acoustic_recipe=acoustic_recipe,
             )
             quote_id = UUID(view["id"])

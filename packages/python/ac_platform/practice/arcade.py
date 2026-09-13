@@ -42,12 +42,16 @@ def _published_sets() -> dict[str, dict[str, Any]]:
         Path(__file__).with_name("exercise-library.published.json").read_text("utf-8")
     )
     result = {item["id"]: item for item in payload["sets"]}
-    if payload.get("status") != "published" or len(result) != 3 or any(
-        item["review_status"] != "approved"
-        or item["competition_eligible"] is not False
-        or item["assessment_eligible"] is not False
-        or any(question["status"] != "published" for question in item["items"])
-        for item in result.values()
+    if (
+        payload.get("status") != "published"
+        or len(result) != 3
+        or any(
+            item["review_status"] != "approved"
+            or item["competition_eligible"] is not False
+            or item["assessment_eligible"] is not False
+            or any(question["status"] != "published" for question in item["items"])
+            for item in result.values()
+        )
     ):
         raise RuntimeError("Published practice inventory does not match its activation contract.")
     return result

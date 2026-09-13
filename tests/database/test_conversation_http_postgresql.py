@@ -69,8 +69,10 @@ def test_cookie_authenticated_saved_report_history_transcript_and_private_playba
             email_challenge_secret=secrets.token_urlsafe(32),
         )
         runtime = ConversationIntakeRuntime(
-            replace(policy(prepared.scope_id, prepared.state.tenant_id),
-                    acoustic_recipe=AUDIOATLAS_HOSTED_RECIPE),
+            replace(
+                policy(prepared.scope_id, prepared.state.tenant_id),
+                acoustic_recipe=AUDIOATLAS_HOSTED_RECIPE,
+            ),
             prepared.storage,
             prepared.scratch,
         )
@@ -119,10 +121,17 @@ def test_cookie_authenticated_saved_report_history_transcript_and_private_playba
                     assert (await client.get(path)).status_code == 401
                 stale_run = await client.post(
                     f"{root}/runs",
-                    headers={**cookie(token), "Origin": "http://learner.test",
-                             "Idempotency-Key": "stale-recipe-after-cutover"},
-                    json={"recording_id": str(prepared.recording_id), "source_revision": "1",
-                          "quote_id": str(prepared.quote_id), "recipe_revision": AUDIOATLAS_RECIPE},
+                    headers={
+                        **cookie(token),
+                        "Origin": "http://learner.test",
+                        "Idempotency-Key": "stale-recipe-after-cutover",
+                    },
+                    json={
+                        "recording_id": str(prepared.recording_id),
+                        "source_revision": "1",
+                        "quote_id": str(prepared.quote_id),
+                        "recipe_revision": AUDIOATLAS_RECIPE,
+                    },
                 )
                 assert stale_run.status_code == 409
                 assert "recipe changed" in stale_run.text

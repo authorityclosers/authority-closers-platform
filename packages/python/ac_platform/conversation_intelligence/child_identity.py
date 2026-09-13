@@ -119,11 +119,7 @@ def _parse_argv(argv: Sequence[str]) -> tuple[str, str, str, str]:
 def _identity_environment(token: str) -> dict[str, str]:
     """Build a sterile Infisical environment with only the fixed service token."""
 
-    environment = {
-        name: value
-        for name in _RUNTIME_ENV_NAMES
-        if (value := os.environ.get(name))
-    }
+    environment = {name: value for name in _RUNTIME_ENV_NAMES if (value := os.environ.get(name))}
     environment.pop(CHILD_TOKEN_FILE_ENV, None)
     environment.pop(_TOKEN_ENV, None)
     environment["INFISICAL_API_URL"] = INFISICAL_API_URL

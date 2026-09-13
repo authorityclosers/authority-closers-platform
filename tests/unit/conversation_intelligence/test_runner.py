@@ -236,9 +236,7 @@ async def test_non_boolean_component_result_is_rejected() -> None:
         (timedelta(seconds=1), timedelta(minutes=16)),
     ],
 )
-def test_delay_configuration_is_bounded(
-    idle_min: timedelta, idle_max: timedelta
-) -> None:
+def test_delay_configuration_is_bounded(idle_min: timedelta, idle_max: timedelta) -> None:
     log: list[str] = []
     with pytest.raises(ValueError, match="bounded and ordered"):
         ConversationWorkerRunner(

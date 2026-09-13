@@ -499,9 +499,7 @@ class CommunityApplication:
         await AuditRepository(self.database).append_for_actor(
             actor,
             action=(
-                "community.discovery_enabled"
-                if discoverable
-                else "community.discovery_disabled"
+                "community.discovery_enabled" if discoverable else "community.discovery_disabled"
             ),
             resource_type="community_discovery_preference",
             resource_id=actor.person_id,
@@ -509,9 +507,7 @@ class CommunityApplication:
         )
         return await self.discovery_profile(actor)
 
-    async def _public_candidate(
-        self, actor: ActorContext, username: str
-    ) -> dict[str, Any]:
+    async def _public_candidate(self, actor: ActorContext, username: str) -> dict[str, Any]:
         tenant_id = self._tenant(actor)
         target = self._lookup(username)
         blocked = exists(
@@ -530,48 +526,54 @@ class CommunityApplication:
             )
         )
         row = (
-            await self.database.execute(
-                select(
-                    CohorvaPublicProfile.person_id.label("person_id"),
-                    CohorvaPublicProfile.username.label("username"),
-                    CommunityDiscoveryPreference.public_display_name,
-                    CommunityDiscoveryPreference.avatar_asset_id,
-                    AcademyLeaderboardPreference.leaderboard_opted_in,
-                )
-                .join(
-                    CommunityDiscoveryPreference,
-                    and_(
-                        CommunityDiscoveryPreference.person_id == CohorvaPublicProfile.person_id,
-                        CommunityDiscoveryPreference.tenant_id == tenant_id,
-                    ),
-                )
-                .join(Person, Person.id == CohorvaPublicProfile.person_id)
-                .join(
-                    Membership,
-                    and_(
-                        Membership.person_id == CohorvaPublicProfile.person_id,
-                        Membership.tenant_id == tenant_id,
-                    ),
-                )
-                .outerjoin(
-                    AcademyLeaderboardPreference,
-                    and_(
-                        AcademyLeaderboardPreference.person_id == CohorvaPublicProfile.person_id,
-                        AcademyLeaderboardPreference.tenant_id == tenant_id,
-                    ),
-                )
-                .where(
-                    CohorvaPublicProfile.username == target,
-                    CohorvaPublicProfile.person_id != actor.person_id,
-                    CommunityDiscoveryPreference.discoverable.is_(True),
-                    Membership.role == "learner",
-                    Membership.status == "active",
-                    Person.status == "active",
-                    Person.email_verified_at.is_not(None),
-                    ~blocked,
+            (
+                await self.database.execute(
+                    select(
+                        CohorvaPublicProfile.person_id.label("person_id"),
+                        CohorvaPublicProfile.username.label("username"),
+                        CommunityDiscoveryPreference.public_display_name,
+                        CommunityDiscoveryPreference.avatar_asset_id,
+                        AcademyLeaderboardPreference.leaderboard_opted_in,
+                    )
+                    .join(
+                        CommunityDiscoveryPreference,
+                        and_(
+                            CommunityDiscoveryPreference.person_id
+                            == CohorvaPublicProfile.person_id,
+                            CommunityDiscoveryPreference.tenant_id == tenant_id,
+                        ),
+                    )
+                    .join(Person, Person.id == CohorvaPublicProfile.person_id)
+                    .join(
+                        Membership,
+                        and_(
+                            Membership.person_id == CohorvaPublicProfile.person_id,
+                            Membership.tenant_id == tenant_id,
+                        ),
+                    )
+                    .outerjoin(
+                        AcademyLeaderboardPreference,
+                        and_(
+                            AcademyLeaderboardPreference.person_id
+                            == CohorvaPublicProfile.person_id,
+                            AcademyLeaderboardPreference.tenant_id == tenant_id,
+                        ),
+                    )
+                    .where(
+                        CohorvaPublicProfile.username == target,
+                        CohorvaPublicProfile.person_id != actor.person_id,
+                        CommunityDiscoveryPreference.discoverable.is_(True),
+                        Membership.role == "learner",
+                        Membership.status == "active",
+                        Person.status == "active",
+                        Person.email_verified_at.is_not(None),
+                        ~blocked,
+                    )
                 )
             )
-        ).mappings().first()
+            .mappings()
+            .first()
+        )
         if row is None:
             raise CommunityTargetUnavailable("That learner is unavailable.")
         metric = None
@@ -794,21 +796,25 @@ class CommunityApplication:
             )
         )
         rows = (
-            await self.database.execute(
-                select(CommunityConnection)
-                .where(
-                    CommunityConnection.tenant_id == tenant_id,
-                    or_(
-                        CommunityConnection.person_a_id == actor.person_id,
-                        CommunityConnection.person_b_id == actor.person_id,
-                    ),
-                    CommunityConnection.state.in_(("pending", "accepted")),
-                    ~blocked,
+            (
+                await self.database.execute(
+                    select(CommunityConnection)
+                    .where(
+                        CommunityConnection.tenant_id == tenant_id,
+                        or_(
+                            CommunityConnection.person_a_id == actor.person_id,
+                            CommunityConnection.person_b_id == actor.person_id,
+                        ),
+                        CommunityConnection.state.in_(("pending", "accepted")),
+                        ~blocked,
+                    )
+                    .order_by(CommunityConnection.updated_at.desc())
+                    .limit(limit)
                 )
-                .order_by(CommunityConnection.updated_at.desc())
-                .limit(limit)
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         items: list[dict[str, Any]] = []
         for connection in rows:
             target_id = (

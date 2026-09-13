@@ -103,7 +103,9 @@ DEFAULT_RATE_LIMIT_RULES = (
     RateLimitRule(
         name="community-connection-actions",
         method="POST",
-        path=re.compile(r"^/v1/community/(?:discovery|connections/[^/]+(?:/(?:accept|decline))?|blocks/[^/]+)$"),
+        path=re.compile(
+            r"^/v1/community/(?:discovery|connections/[^/]+(?:/(?:accept|decline))?|blocks/[^/]+)$"
+        ),
         capacity=30,
         refill_seconds=60,
     ),

@@ -189,9 +189,7 @@ def test_source_prerequisite_apply_replay_and_wrong_scope_rollback(postgres_harn
                 )
                 assert await database.get(AuditEvent, wrong_scope_command) is None
                 assert (
-                    await database.run_sync(
-                        lambda sync: verify_audit_chain_sync(sync, tenant_id)
-                    )
+                    await database.run_sync(lambda sync: verify_audit_chain_sync(sync, tenant_id))
                 ).valid
         finally:
             await engine.dispose()
