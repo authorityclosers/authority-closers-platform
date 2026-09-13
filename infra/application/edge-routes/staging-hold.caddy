@@ -1,4 +1,4 @@
-	@staging_release_hold host staging.authorityclosers.com learner-staging.authorityclosers.com admin-staging.authorityclosers.com coach-staging.authorityclosers.com api-staging.authorityclosers.com
+	@staging_release_hold host staging.authorityclosers.com learner-staging.authorityclosers.com admin-staging.authorityclosers.com coach-staging.authorityclosers.com api-staging.authorityclosers.com salesxray-staging.authorityclosers.com
 	handle @staging_release_hold {
 		import base_security_headers
 		header X-Authority-Closers-Route "release-hold-staging"

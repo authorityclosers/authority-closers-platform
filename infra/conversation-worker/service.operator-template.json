@@ -9,7 +9,7 @@
   "sales_xray_scratch_root": "/srv/authority-closers/sales-xray/staging/scratch",
   "database_url_file": "/run/ac-sales-xray/database-url",
   "native_socket_path": "/run/ac-sales-xray/staging/native.sock",
-  "native_image_ref": "sha256:REPLACE_WITH_LOADED_NATIVE_IMAGE_ID",
+  "native_image_ref": "sha256:REPLACE_WITH_VERIFIED_OCI_TRANSPORT_MANIFEST_DIGEST",
   "providers": [
     {
       "credential_ref": "REPLACE_WITH_APPROVED_ELEVENLABS_CREDENTIAL_REF",

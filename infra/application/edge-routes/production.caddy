@@ -98,3 +98,24 @@
 		header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
 		reverse_proxy ac-production-api:8000
 	}
+
+	@production_sales_xray_api {
+		host salesxray.authorityclosers.com
+		path /v1 /v1/*
+	}
+	handle @production_sales_xray_api {
+		import base_security_headers
+		header X-Authority-Closers-Route "api-production"
+		header Cache-Control "no-store"
+		header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+		reverse_proxy ac-production-api:8000
+	}
+	@production_sales_xray host salesxray.authorityclosers.com
+	handle @production_sales_xray {
+		import base_security_headers
+		header X-Authority-Closers-Route "sales-xray-production"
+		header Cache-Control "no-store"
+		header Referrer-Policy "no-referrer"
+		header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; media-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests"
+		reverse_proxy ac-production-sales-xray-web:3016
+	}

@@ -40,12 +40,19 @@ def install_conversation_http(
         response.headers["Cache-Control"] = "private, no-store"
         if request.query_params:
             raise HTTPException(422, "Scope comes from your current AC session.")
+        sign_in_url = None
+        if settings is not None:
+            if (
+                settings.sales_xray_app_url is not None
+                and request.url.hostname == settings.sales_xray_app_url.host
+            ):
+                sign_in_url = str(settings.sales_xray_app_url).rstrip("/") + "/login"
+            else:
+                sign_in_url = str(settings.public_app_url).rstrip("/") + "/login?next=/sales-xray"
         answer: dict[str, Any] = {
             "authenticated": False,
             "intake_enabled": False,
-            "sign_in_url": str(settings.public_app_url).rstrip("/") + "/login?next=/sales-xray"
-            if settings
-            else None,
+            "sign_in_url": sign_in_url,
             "message": "Sign in with your AC account to upload and manage your calls."
             if settings
             else "Select and play a call here while server upload is being connected.",

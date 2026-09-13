@@ -88,7 +88,7 @@ class AuthTransaction:
         consent_version: str | None = None,
         now: int | None = None,
     ) -> AuthTransaction:
-        if surface not in {"learner", "admin", "coach"}:
+        if surface not in {"learner", "admin", "coach", "sales_xray"}:
             raise InvalidAuthTransaction("The requested application surface is not allowed.")
         return cls(
             transaction_id=uuid4(),
@@ -111,7 +111,7 @@ class AuthTransaction:
         return_path: str,
         consent_version: str | None = None,
     ) -> AuthTransaction:
-        if surface not in {"learner", "admin", "coach"}:
+        if surface not in {"learner", "admin", "coach", "sales_xray"}:
             raise InvalidAuthTransaction("The requested application surface is not allowed.")
         return cls(
             transaction_id=issued.transaction_id,
@@ -202,7 +202,7 @@ class AuthTransactionCodec:
             )
         except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
             raise InvalidAuthTransaction("The sign-in transaction payload is invalid.") from exc
-        if transaction.surface not in {"learner", "admin", "coach"}:
+        if transaction.surface not in {"learner", "admin", "coach", "sales_xray"}:
             raise InvalidAuthTransaction("The requested application surface is not allowed.")
         for value_name, token in (
             ("state", transaction.state),

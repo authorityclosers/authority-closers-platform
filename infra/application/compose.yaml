@@ -141,6 +141,7 @@ services:
       <<: *application-environment
       AC_PRACTICE_PILOT_ENABLED: ${AC_PRACTICE_PILOT_ENABLED:-false}
       AC_PRACTICE_PILOT_TENANT_ID: ${AC_PRACTICE_PILOT_TENANT_ID:-}
+      AC_SALES_XRAY_APP_URL: ${AC_SALES_XRAY_APP_URL:-}
     depends_on:
       postgres:
         condition: service_healthy

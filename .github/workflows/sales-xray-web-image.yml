@@ -1,0 +1,365 @@
+name: Sales Xray web image
+
+on:
+  workflow_dispatch:
+    inputs:
+      frozen_sha:
+        description: "Exact 40-character lowercase commit to build"
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: sales-xray-web-image-${{ inputs.frozen_sha }}
+  cancel-in-progress: false
+
+jobs:
+  build-sales-xray-web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    concurrency:
+      group: application-release-packaging
+      cancel-in-progress: false
+    env:
+      FROZEN_SHA: ${{ inputs.frozen_sha }}
+      WEB_TAG: ghcr.io/authorityclosers/ac-sales-xray-web:${{ inputs.frozen_sha }}
+      MAX_IMAGE_BYTES: "440000000"
+      MAX_ARTIFACT_BYTES: "450000000"
+    steps:
+      - name: Validate the manually supplied source commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$FROZEN_SHA" =~ ^[0-9a-f]{40}$ ]] || {
+            printf 'frozen_sha must be exactly 40 lowercase hexadecimal characters.\n' >&2
+            exit 2
+          }
+
+      - name: Checkout the exact source commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ inputs.frozen_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Prove the checked out source and web build context
+        shell: bash
+        run: |
+          set -euo pipefail
+          checked_out_sha="$(git rev-parse HEAD)"
+          [ "$checked_out_sha" = "$FROZEN_SHA" ] || {
+            printf 'Checkout SHA %s does not match requested SHA %s.\n' \
+              "$checked_out_sha" "$FROZEN_SHA" >&2
+            exit 1
+          }
+          test -f infra/sales-xray-web/Dockerfile
+          test -f apps/sales-xray-web/package.json
+          test -f apps/sales-xray-web/next.config.ts
+          test -f packages/typescript/sales-xray-client/package.json
+          test -f packages/typescript/ui/package.json
+          test -f pnpm-lock.yaml
+
+      - name: Set up the pinned Buildx action
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+
+      - name: Build the exact Sales Xray web image for Linux amd64
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        with:
+          context: .
+          file: infra/sales-xray-web/Dockerfile
+          target: runtime
+          platforms: linux/amd64
+          pull: true
+          load: true
+          tags: ${{ env.WEB_TAG }}
+          build-args: |
+            AC_RELEASE_ID=${{ inputs.frozen_sha }}
+
+      - name: Verify image identity, marker and local HTTP health
+        shell: bash
+        run: |
+          set -euo pipefail
+          image_id="$(docker image inspect --format '{{.Id}}' "$WEB_TAG")"
+          [[ "$image_id" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+            printf 'Docker image ID is not an immutable sha256 ID.\n' >&2
+            exit 1
+          }
+          docker image inspect "$image_id" --format '{{.Id}}' | grep -Fx "$image_id"
+          docker image inspect "$WEB_TAG" --format '{{.Architecture}}' | grep -Fx amd64
+          marker="$(docker run --rm --network=none --read-only \
+            --tmpfs /tmp:rw,nosuid,nodev,noexec \
+            --entrypoint /bin/sh "$image_id" -c 'cat /app/.ac-release-id')"
+          [ "$marker" = "$FROZEN_SHA" ] || {
+            printf 'Web image release marker does not match frozen source SHA.\n' >&2
+            exit 1
+          }
+
+          container_id="$(docker run --detach --network=none --read-only \
+            --tmpfs /tmp:rw,nosuid,nodev,noexec \
+            "$image_id")"
+          cleanup_container() {
+            docker rm --force "$container_id" >/dev/null 2>&1 || true
+          }
+          trap cleanup_container EXIT
+          health_ok=0
+          for _attempt in $(seq 1 30); do
+            if docker exec "$container_id" node -e '
+              fetch("http://127.0.0.1:3016/health")
+                .then(async (response) => {
+                  if (response.status !== 200) process.exit(1);
+                  const body = await response.json();
+                  if (body.status !== "ok" || body.service !== "sales-xray-web" || body.release_id !== process.env.AC_RELEASE_ID) process.exit(1);
+                })
+                .catch(() => process.exit(1));
+            '; then
+              health_ok=1
+              break
+            fi
+            sleep 1
+          done
+          [ "$health_ok" = 1 ] || {
+            printf 'Sales Xray web /health did not return the reviewed release contract.\n' >&2
+            docker logs "$container_id" >&2 || true
+            exit 1
+          }
+
+      - name: Create and reload the minimal offline web image artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifact_dir="$RUNNER_TEMP/ac-sales-xray-web-${FROZEN_SHA}"
+          transport_file="$artifact_dir/web-image.tar.gz"
+          mkdir -p "$artifact_dir"
+
+          image_id="$(docker image inspect --format '{{.Id}}' "$WEB_TAG")"
+          image_architecture="$(docker image inspect --format '{{.Architecture}}' "$WEB_TAG")"
+          image_os="$(docker image inspect --format '{{.Os}}' "$WEB_TAG")"
+          repo_digests_json="$(docker image inspect --format '{{json .RepoDigests}}' "$WEB_TAG")"
+          dockerfile_sha256="$(sha256sum infra/sales-xray-web/Dockerfile | cut -d' ' -f1)"
+          context_tree_id="$(git rev-parse HEAD^{tree})"
+
+          marker="$(docker run --rm --network=none --read-only \
+            --tmpfs /tmp:rw,nosuid,nodev,noexec \
+            --entrypoint /bin/sh "$image_id" -c 'cat /app/.ac-release-id')"
+          [ "$marker" = "$FROZEN_SHA" ] || {
+            printf 'Web image marker changed before transport creation.\n' >&2
+            exit 1
+          }
+
+          docker save --output "$RUNNER_TEMP/web-image.tar" "$WEB_TAG"
+          transport_index="$RUNNER_TEMP/web-image-index.json"
+          if ! tar --extract --to-stdout --file "$RUNNER_TEMP/web-image.tar" index.json > "$transport_index"; then
+            printf 'Web image transport has no OCI index.json; refusing an unproven runtime reference.\n' >&2
+            exit 1
+          fi
+          mapfile -t transport_manifests < <(
+            jq --raw-output --arg image "$WEB_TAG" \
+              '.manifests[] | select(.annotations["io.containerd.image.name"] == $image) | .digest' \
+              "$transport_index"
+          )
+          if [ "${#transport_manifests[@]}" -ne 1 ] \
+            || ! [[ "${transport_manifests[0]}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            printf 'OCI transport index does not contain exactly one manifest for %s.\n' \
+              "$WEB_TAG" >&2
+            exit 1
+          fi
+          transport_manifest_digest="${transport_manifests[0]}"
+          manifest_path="blobs/sha256/${transport_manifest_digest#sha256:}"
+          actual_transport_digest="sha256:$({
+            tar --extract --to-stdout --file "$RUNNER_TEMP/web-image.tar" "$manifest_path"
+          } | sha256sum | cut -d' ' -f1)"
+          [ "$actual_transport_digest" = "$transport_manifest_digest" ] || {
+            printf 'OCI transport manifest digest verification failed.\n' >&2
+            exit 1
+          }
+          transported_config_digest="$(
+            tar --extract --to-stdout --file "$RUNNER_TEMP/web-image.tar" "$manifest_path" \
+              | jq --raw-output '.config.digest'
+          )"
+          [ "$transported_config_digest" = "$image_id" ] || {
+            printf 'OCI transport manifest does not reference the built image config.\n' >&2
+            exit 1
+          }
+
+          gzip -9 < "$RUNNER_TEMP/web-image.tar" > "$transport_file"
+          rm -f "$RUNNER_TEMP/web-image.tar" "$transport_index"
+          gzip -t "$transport_file"
+          transport_bytes="$(stat --format='%s' "$transport_file")"
+          [[ "$transport_bytes" =~ ^[0-9]+$ && "$transport_bytes" -gt 0 ]] || {
+            printf 'Web image transport is empty or has an invalid size.\n' >&2
+            exit 1
+          }
+          [ "$transport_bytes" -le "$MAX_IMAGE_BYTES" ] || {
+            printf 'Web image transport is %s bytes; ceiling is %s.\n' \
+              "$transport_bytes" "$MAX_IMAGE_BYTES" >&2
+            exit 1
+          }
+
+          docker image rm --force "$WEB_TAG" >/dev/null
+          docker load --input "$transport_file" >/dev/null
+          loaded_id="$(docker image inspect --format '{{.Id}}' "$WEB_TAG")"
+          [ "$loaded_id" = "$image_id" ] || {
+            printf 'docker load changed the immutable image ID (%s -> %s).\n' \
+              "$image_id" "$loaded_id" >&2
+            exit 1
+          }
+          # Classic Docker can reload the tag/config but cannot address an OCI
+          # manifest digest directly. The VPS containerd store must prove that
+          # reference separately; never replace it with a mutable tag.
+          ci_bare_manifest_addressable=false
+          if loaded_runtime_id="$(docker image inspect --format '{{.Id}}' "$transport_manifest_digest" 2>/dev/null)"; then
+            [ "$loaded_runtime_id" = "$image_id" ] || {
+              printf 'OCI transport manifest resolves to a different image config.\n' >&2
+              exit 1
+            }
+            ci_bare_manifest_addressable=true
+          fi
+          export ci_bare_manifest_addressable
+
+          transport_sha256="$(sha256sum "$transport_file" | cut -d' ' -f1)"
+          repo_digest_count="$(printf '%s' "$repo_digests_json" | jq 'length')"
+          if [ "$repo_digest_count" -gt 0 ]; then
+            registry_digest="$(printf '%s' "$repo_digests_json" | jq -r '.[0]')"
+          else
+            registry_digest="none"
+          fi
+          export FROZEN_SHA WEB_TAG image_id image_architecture image_os marker
+          export dockerfile_sha256 context_tree_id transport_file transport_bytes
+          export transport_sha256 transport_manifest_digest transported_config_digest
+          export repo_digests_json registry_digest
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          artifact_dir = Path(os.environ["transport_file"]).parent
+          repository_digests = json.loads(os.environ["repo_digests_json"])
+          metadata = {
+              "schema": "ac.sales-xray.web-image/1",
+              "source_commit": os.environ["FROZEN_SHA"],
+              "context": ".",
+              "context_tree_id": os.environ["context_tree_id"],
+              "dockerfile": "infra/sales-xray-web/Dockerfile",
+              "dockerfile_sha256": os.environ["dockerfile_sha256"],
+              "target": "runtime",
+              "platform": {
+                  "os": os.environ["image_os"],
+                  "architecture": os.environ["image_architecture"],
+              },
+              "image": {
+                  "expected_runtime_ref": os.environ["transport_manifest_digest"],
+                  "image_id": os.environ["image_id"],
+                  "identity_type": "oci_transport_manifest",
+                  "repository_digests": repository_digests,
+                  "release_id": os.environ["marker"],
+              },
+              "transport": {
+                  "format": "docker-save-tar-gzip",
+                  "filename": "web-image.tar.gz",
+                  "bytes": int(os.environ["transport_bytes"]),
+                  "sha256": os.environ["transport_sha256"],
+                  "manifest_digest": os.environ["transport_manifest_digest"],
+                  "config_digest": os.environ["transported_config_digest"],
+                  "ci_bare_manifest_addressable": os.environ["ci_bare_manifest_addressable"] == "true",
+                  "load_command": "docker load --input web-image.tar.gz",
+                  "inspect_command": "docker image inspect " + os.environ["transport_manifest_digest"],
+              },
+              "health": {
+                  "path": "/health",
+                  "expected": {
+                      "status": "ok",
+                      "service": "sales-xray-web",
+                      "release_id": os.environ["marker"],
+                  },
+              },
+              "registry_publish": {
+                  "performed": False,
+                  "reason": "offline transport workflow does not push or require registry credentials",
+                  "repository_digest": os.environ["registry_digest"],
+              },
+          }
+          (artifact_dir / "web-image.json").write_text(
+              json.dumps(metadata, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          env_lines = [
+              f"AC_WEB_IMAGE={os.environ['transport_manifest_digest']}",
+              f"AC_WEB_IMAGE_ID={os.environ['image_id']}",
+              "AC_WEB_IMAGE_TYPE=oci_transport_manifest",
+              f"AC_WEB_REGISTRY_DIGEST={os.environ['registry_digest']}",
+              "AC_WEB_TRANSPORT_FILE=web-image.tar.gz",
+              f"AC_WEB_TRANSPORT_MANIFEST_DIGEST={os.environ['transport_manifest_digest']}",
+              f"AC_WEB_TRANSPORT_CONFIG_DIGEST={os.environ['transported_config_digest']}",
+              f"AC_WEB_TRANSPORT_SHA256={os.environ['transport_sha256']}",
+              f"AC_WEB_RELEASE_ID={os.environ['marker']}",
+          ]
+          (artifact_dir / "web-image.env").write_text("\n".join(env_lines) + "\n", encoding="utf-8")
+          PY
+          (
+            cd "$artifact_dir"
+            sha256sum web-image.tar.gz web-image.json web-image.env > SHA256SUMS
+            sha256sum --check --strict SHA256SUMS
+          )
+          artifact_bytes="$(du --bytes --summarize "$artifact_dir" | cut -f1)"
+          [[ "$artifact_bytes" =~ ^[0-9]+$ ]] || {
+            printf 'Web image artifact size could not be proven.\n' >&2
+            exit 1
+          }
+          [ "$artifact_bytes" -le "$MAX_ARTIFACT_BYTES" ] || {
+            printf 'Web image artifact is %s bytes; ceiling is %s.\n' \
+              "$artifact_bytes" "$MAX_ARTIFACT_BYTES" >&2
+            exit 1
+          }
+          find "$artifact_dir" -maxdepth 1 -type f -printf '%f\n' | sort | \
+            diff -u <(printf '%s\n' SHA256SUMS web-image.env web-image.json web-image.tar.gz | sort) -
+
+      - name: Admit the web artifact under the pooled ceiling
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifact_dir="$RUNNER_TEMP/ac-sales-xray-web-${FROZEN_SHA}"
+          max_artifact_bytes=450000000
+          max_artifact_pool_bytes=450000000
+          candidate_bytes="$(du --bytes --summarize "$artifact_dir" | cut -f1)"
+          if [ "$candidate_bytes" -gt "$max_artifact_bytes" ]; then
+            printf 'Web image artifact is %s bytes; refusing upload above %s bytes.\n' \
+              "$candidate_bytes" "$max_artifact_bytes" >&2
+            exit 1
+          fi
+
+          list_repository_artifacts() {
+            gh api --paginate \
+              --header 'Accept: application/vnd.github+json' \
+              --header 'X-GitHub-Api-Version: 2026-03-10' \
+              "/repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" \
+              | jq --slurp '[.[].artifacts[]]'
+          }
+
+          artifacts_before="$RUNNER_TEMP/sales-xray-web-artifacts-before.json"
+          list_repository_artifacts > "$artifacts_before"
+          retained_bytes="$(jq '[.[].size_in_bytes] | add // 0' "$artifacts_before")"
+          [[ "$retained_bytes" =~ ^[0-9]+$ ]] || {
+            printf 'Repository artifact usage could not be proven.\n' >&2
+            exit 1
+          }
+          projected_artifact_pool_bytes=$((retained_bytes + candidate_bytes))
+          if [ "$projected_artifact_pool_bytes" -gt "$max_artifact_pool_bytes" ]; then
+            printf 'Projected repository artifact pool is %s bytes; refusing upload above %s bytes.\n' \
+              "$projected_artifact_pool_bytes" "$max_artifact_pool_bytes" >&2
+            exit 1
+          fi
+          printf 'Web artifact is %s bytes; projected repository pool is %s bytes (ceiling %s).\n' \
+            "$candidate_bytes" "$projected_artifact_pool_bytes" "$max_artifact_pool_bytes"
+
+      - name: Upload the offline web image artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ac-sales-xray-web-${{ inputs.frozen_sha }}
+          path: ${{ runner.temp }}/ac-sales-xray-web-${{ inputs.frozen_sha }}
+          if-no-files-found: error
+          retention-days: 1
