@@ -209,10 +209,14 @@ def _compose_studio_video_delivery(
 ) -> MediaRuntime:
     """Connect one explicit filesystem upload graph to normal learner delivery."""
     studio = base.studio_video_runtime
-    allowed_environments = {"test", "staging", "production"} if filesystem_runtime else {
-        "local",
-        "test",
-    }
+    allowed_environments = (
+        {"test", "staging", "production"}
+        if filesystem_runtime
+        else {
+            "local",
+            "test",
+        }
+    )
     if (
         settings.environment not in allowed_environments
         or (filesystem_runtime and not settings.media_filesystem_enabled)

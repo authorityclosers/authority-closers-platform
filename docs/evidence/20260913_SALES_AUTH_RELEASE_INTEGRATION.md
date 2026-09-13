@@ -9,3 +9,5 @@ Validation on the combined tree:175 worker/outbox/bootstrap and Sales-auth HTTP 
 The canonical deployment smoke now probes /sales-xray on the existing learner host with its environment route marker. The existing controller regression suite passed15tests. This establishes page routing only; authenticated workspace and actual provider processing require separate browser/runtime acceptance.
 
 Settings Google-link source4d49d9a integrated as07be8b2 without conflicts. Combined HTTP authentication and status90tests passed, full mypy233sourcefiles passed, and full web Prettier check passed. Actual local browser acceptance is owned by the UI source lane; hosted acceptance will follow the immutable release.
+
+The pinned Ruff0.16.5 whole-tree release check found17 formatting-only mismatches across accepted Sales/media sources. Root applied the pinned formatter; whole-tree Ruff lint and formatting now pass. Full mypy after hosted-authority integration passed237 source files. These are release integration fixes, not provider or publication acceptance.

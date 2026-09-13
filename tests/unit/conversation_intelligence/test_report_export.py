@@ -30,7 +30,7 @@ def _transcript(audio: bytes) -> dict[str, Any]:
                 "end_ms": 900,
                 "text": (
                     '<img src="https://evil.test/x" onerror="alert(1)"> '
-                    '& [click](https://evil.test)'
+                    "& [click](https://evil.test)"
                 ),
             }
         ],
@@ -42,9 +42,7 @@ def _report(transcript: dict[str, Any], *, audio: bytes) -> Any:
     finding = {
         "title": "<script>alert(1)</script> ![x](https://evil.test)",
         "explanation": "<img src=x> & a [link](https://evil.test)",
-        "evidence": [
-            {"segment_id": "s1", "quote": quote, "start_ms": 0, "end_ms": 900}
-        ],
+        "evidence": [{"segment_id": "s1", "quote": quote, "start_ms": 0, "end_ms": 900}],
     }
     payload = {
         "summary": "<script>alert(1)</script> ![summary](https://evil.test)",
@@ -70,7 +68,7 @@ def test_html_escapes_untrusted_report_and_transcript_text() -> None:
 
     assert "&lt;script&gt;alert(1)&lt;/script&gt;" in output
     assert "&lt;img src=&quot;https://evil.test/x&quot;" in output
-    assert "<img src=\"https://evil.test\">" not in output
+    assert '<img src="https://evil.test">' not in output
     assert "<script>alert(1)</script>" not in output
     assert "https://evil.test/x" in output
 

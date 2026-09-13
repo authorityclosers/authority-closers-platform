@@ -115,9 +115,7 @@ async def _reconcile(sessions: async_sessionmaker[AsyncSession], state: ActorFix
         )
 
 
-async def _seed_minutes(
-    engine: Any, state: ActorFixture, *, seconds: int = 600
-) -> None:
+async def _seed_minutes(engine: Any, state: ActorFixture, *, seconds: int = 600) -> None:
     minutes = grant_minutes(
         MinuteAccount(str(state.tenant_id), str(state.person_id)),
         MinuteGrant(
@@ -157,9 +155,7 @@ async def _add_quote(
     current = now or state.now
     quoted = Quote(
         quote_id=str(quote_id),
-        source=SourceBinding(
-            str(state.tenant_id), str(recording_id), source_sha256, "1"
-        ),
+        source=SourceBinding(str(state.tenant_id), str(recording_id), source_sha256, "1"),
         account_id=str(state.person_id),
         budget_scope_id=str(scope_id),
         provider_id="local",
@@ -242,9 +238,7 @@ async def _prepare(postgres_harness: Any, tmp_path: Path) -> Prepared:
         assert stored["state"] == "ready"
         scope_id = await seed_budget(engine)
         await _seed_minutes(engine, state)
-        quote_id = await _add_quote(
-            sessions, state, recording_id, scope_id, source_sha256
-        )
+        quote_id = await _add_quote(sessions, state, recording_id, scope_id, source_sha256)
         async with sessions() as database, database.begin():
             requested = await build_application(database, state).request_run(
                 state.actor,
@@ -474,9 +468,7 @@ def test_cached_blob_damage_cannot_count_as_success(
                 assert len(reservations) == 2
                 assert reservations[-1].state != "settled"
                 assert (
-                    await database.scalar(
-                        select(Job.status).where(Job.id == run.job_id)
-                    )
+                    await database.scalar(select(Job.status).where(Job.id == run.job_id))
                     != "succeeded"
                 )
             _assert_scratch_empty(prepared.scratch)
@@ -494,6 +486,7 @@ def test_post_c0_crash_then_expired_lease_retries_exact_attempt(
         engine = create_async_engine(postgres_harness.url)
         sessions = async_sessionmaker(engine, expire_on_commit=False)
         try:
+
             def crash_after_c0(*args: Any, **kwargs: Any) -> dict[str, Any]:
                 raise RuntimeError("synthetic post-C0 worker crash")
 
@@ -597,9 +590,10 @@ def test_deletion_and_revocation_races_fence_publication_and_clean_scratch(
                 assert run is not None and run.state != "completed"
             if race == "deletion":
                 assert await prepared.worker.run_once()
-                assert prepared.storage.list_recording(
-                    prepared.state.tenant_id, prepared.recording_id
-                ) == ()
+                assert (
+                    prepared.storage.list_recording(prepared.state.tenant_id, prepared.recording_id)
+                    == ()
+                )
                 _assert_scratch_empty(prepared.scratch)
         finally:
             release.set()

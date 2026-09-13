@@ -333,6 +333,7 @@ def test_real_browser_hosted_authority_c2_c4_c5_and_cached_report(
                 browser = playwright.chromium.launch(headless=True)
                 context = browser.new_context(service_workers="block")
                 try:
+
                     def boundary(route: Any) -> None:
                         hostname = urlsplit(route.request.url).hostname or "unknown"
                         if hostname != "127.0.0.1":
@@ -345,15 +346,17 @@ def test_real_browser_hosted_authority_c2_c4_c5_and_cached_report(
                     page = context.new_page()
                     page.on(
                         "response",
-                        lambda response: network.append(
-                            {
-                                "method": response.request.method,
-                                "path": urlsplit(response.url).path,
-                                "status": response.status,
-                            }
-                        )
-                        if urlsplit(response.url).path.startswith("/v1/")
-                        else None,
+                        lambda response: (
+                            network.append(
+                                {
+                                    "method": response.request.method,
+                                    "path": urlsplit(response.url).path,
+                                    "status": response.status,
+                                }
+                            )
+                            if urlsplit(response.url).path.startswith("/v1/")
+                            else None
+                        ),
                     )
                     page.goto(server.origin, wait_until="networkidle")
                     status, _ = _fetch_status(page, "GET", "/v1/conversation/recordings")
@@ -468,9 +471,7 @@ def test_real_browser_hosted_authority_c2_c4_c5_and_cached_report(
                     )
                     c5_status = _wait_stage(page, recording_id, "C5")
                     assert c5_status["run_id"] == c5_run["id"]
-                    report = _fetch(
-                        page, "GET", f"/v1/conversation/runs/{c5_run['id']}/report"
-                    )
+                    report = _fetch(page, "GET", f"/v1/conversation/runs/{c5_run['id']}/report")
                     assert report["recording_id"] == recording_id
                     assert report["report"] is not None
                     assert report["report"]["review_status"] == "draft_not_dipak_adjudicated"
@@ -493,9 +494,7 @@ def test_real_browser_hosted_authority_c2_c4_c5_and_cached_report(
                     assert second_report["report"] == report["report"]
                     assert server.worker.broker.calls == calls_before_reload
                     page.reload(wait_until="networkidle")
-                    reloaded = _fetch(
-                        page, "GET", f"/v1/conversation/runs/{c5_run['id']}/report"
-                    )
+                    reloaded = _fetch(page, "GET", f"/v1/conversation/runs/{c5_run['id']}/report")
                     assert reloaded["report"] == report["report"]
                     assert server.worker.broker.calls == calls_before_reload
                     proof["checks"].append(

@@ -166,9 +166,9 @@ async def test_response_route_digest_and_duplicate_data_are_untrusted() -> None:
         {"data": {"answer": "untrusted duplicate"}},
     ]
     for change in cases:
-        runner = FakeRunner(lambda _header, payload, change=change: _response(
-            reservation, payload, raw, **change
-        ))
+        runner = FakeRunner(
+            lambda _header, payload, change=change: _response(reservation, payload, raw, **change)
+        )
         with pytest.raises(InferenceBrokerError):
             await ProcessInferenceBroker(python_executable=sys.executable, runner=runner).execute(
                 reservation, body
@@ -258,7 +258,7 @@ async def test_timeout_kills_wrapper_spawned_descendant(tmp_path) -> None:
         "import subprocess,sys\n"
         "child=subprocess.Popen([sys.executable,'-c',"
         "'import pathlib,sys,time; time.sleep(.5); "
-        "pathlib.Path(sys.argv[1]).write_text(\"leaked\")',sys.argv[1]])\n"
+        'pathlib.Path(sys.argv[1]).write_text("leaked")\',sys.argv[1]])\n'
         "child.wait()\n"
     )
     with pytest.raises(InferenceBrokerError, match="^broker_timeout$"):
@@ -299,7 +299,7 @@ async def test_cancellation_kills_wrapper_spawned_descendant(tmp_path) -> None:
         "sys.stdin.buffer.read()\n"
         "child=subprocess.Popen([sys.executable,'-c',"
         "'import pathlib,sys,time; time.sleep(.5); "
-        "pathlib.Path(sys.argv[1]).write_text(\"leaked\")',sys.argv[1]])\n"
+        'pathlib.Path(sys.argv[1]).write_text("leaked")\',sys.argv[1]])\n'
         "child.wait()\n"
     )
     task = asyncio.create_task(

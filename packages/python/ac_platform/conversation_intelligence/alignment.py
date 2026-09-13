@@ -23,9 +23,7 @@ _AUDIOATLAS_SUPPORT = "[start_sample, start_sample + valid_samples); attribution
 _MAX_SOURCE_BYTES = 128 * 1024 * 1024
 _MAX_DURATION_MS = 7_200_000
 _MAX_SEGMENTS = 2_000
-_KNOWN_TRANSCRIPT_TIMEBASES = frozenset(
-    {"decoded_audio_track", "elevenlabs-scribe-native-seconds"}
-)
+_KNOWN_TRANSCRIPT_TIMEBASES = frozenset({"decoded_audio_track", "elevenlabs-scribe-native-seconds"})
 
 
 class AlignmentError(ValueError):
@@ -180,8 +178,7 @@ def _validate_audioatlas(signal_payload: dict[str, Any]) -> _SignalInfo:
         timebase.get("clock") != "decoded_audio_track"
         or timebase.get("rate") != rate
         or timebase.get("sample_zero") != 0
-        or timebase.get("sample_to_seconds")
-        != {"numerator": 1, "denominator": rate}
+        or timebase.get("sample_to_seconds") != {"numerator": 1, "denominator": rate}
         or timebase.get("nominal_source_samples_per_decoded_sample")
         != {
             "numerator": source_rate,

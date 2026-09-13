@@ -94,21 +94,24 @@ class BoundedProviders:
         }
         deadline = self._monotonic() + MAX_STREAM_SECONDS
         try:
-            with httpx.Client(
-                timeout=httpx.Timeout(180, connect=15, write=60, pool=5),
-                follow_redirects=False,
-                trust_env=False,
-                transport=self._transport,
-            ) as client, client.stream(
-                "POST",
-                url,
-                headers=headers,
-                json=json_body,
-                data=fields if audio is not None else None,
-                files={"file": ("recording.audio", audio, "application/octet-stream")}
-                if audio is not None
-                else None,
-            ) as response:
+            with (
+                httpx.Client(
+                    timeout=httpx.Timeout(180, connect=15, write=60, pool=5),
+                    follow_redirects=False,
+                    trust_env=False,
+                    transport=self._transport,
+                ) as client,
+                client.stream(
+                    "POST",
+                    url,
+                    headers=headers,
+                    json=json_body,
+                    data=fields if audio is not None else None,
+                    files={"file": ("recording.audio", audio, "application/octet-stream")}
+                    if audio is not None
+                    else None,
+                ) as response,
+            ):
                 if self._monotonic() > deadline:
                     raise ProviderError("provider_execution_deadline")
                 if response.status_code != 200:
@@ -151,8 +154,7 @@ class BoundedProviders:
                     "request-id", response.headers.get("x-request-id")
                 )
                 if request_id is not None and (
-                    len(request_id) > 128
-                    or not all(c.isalnum() or c in "-_:" for c in request_id)
+                    len(request_id) > 128 or not all(c.isalnum() or c in "-_:" for c in request_id)
                 ):
                     request_id = None
                 usage: dict[str, int] = {}

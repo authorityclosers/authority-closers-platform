@@ -831,8 +831,7 @@ def test_queued_authority_task_is_fenced_after_bundle_expiry_before_dispatch(
                         select(func.count())
                         .select_from(ConversationCheckpoint)
                         .where(
-                            ConversationCheckpoint.recording_id
-                            == setup.prepared.recording_id,
+                            ConversationCheckpoint.recording_id == setup.prepared.recording_id,
                             ConversationCheckpoint.stage == "C2",
                         )
                     )

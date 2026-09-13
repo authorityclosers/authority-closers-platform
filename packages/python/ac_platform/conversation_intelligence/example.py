@@ -56,8 +56,7 @@ def example_report() -> dict[str, Any]:
                     "start_ms": 48000,
                     "end_ms": 60000,
                     "text": (
-                        "Let's start with that moment and practise "
-                        "one follow-up question together."
+                        "Let's start with that moment and practise one follow-up question together."
                     ),
                 },
             ],

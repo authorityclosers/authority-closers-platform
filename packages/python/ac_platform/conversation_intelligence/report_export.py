@@ -257,7 +257,7 @@ def report_html(
                 "<article>"
                 f"<h3>{escape(finding.title)}</h3>"
                 f"<p>{escape(finding.explanation)}</p>"
-                '<details><summary>Listen to the evidence</summary>'
+                "<details><summary>Listen to the evidence</summary>"
                 + "".join(evidence_html)
                 + "</details></article>"
             )
@@ -266,8 +266,8 @@ def report_html(
     transcript_rows = "".join(
         "<article>"
         f'<button data-seek="{_seek(segment["start_ms"])}">'
-        f'▶ {timestamp(segment["start_ms"])}</button> '
-        f'<small>{escape(segment["speaker_id"])} · {escape(segment["id"])}</small>'
+        f"▶ {timestamp(segment['start_ms'])}</button> "
+        f"<small>{escape(segment['speaker_id'])} · {escape(segment['id'])}</small>"
         f'<p lang="und">{escape(segment["text"])}</p>'
         "</article>"
         for segment in segments

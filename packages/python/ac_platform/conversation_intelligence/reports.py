@@ -49,9 +49,7 @@ class ReportError(ValueError):
 
 
 class _StrictModel(BaseModel):
-    model_config = ConfigDict(
-        extra="forbid", frozen=True, strict=True, populate_by_name=True
-    )
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True, populate_by_name=True)
 
 
 class ReportEvidence(_StrictModel):
@@ -615,9 +613,7 @@ def _profile_dimensions(profile: Mapping[str, Any]) -> list[dict[str, Any]]:
     return [dimension for dimension in dimensions if isinstance(dimension, dict)]
 
 
-def _normalise_dimensions(
-    raw_value: Any, *, profile: Mapping[str, Any]
-) -> list[dict[str, Any]]:
+def _normalise_dimensions(raw_value: Any, *, profile: Mapping[str, Any]) -> list[dict[str, Any]]:
     profile_dimensions = _profile_dimensions(profile)
     by_id = {str(item["id"]): item for item in profile_dimensions}
     if raw_value is None:
@@ -772,9 +768,7 @@ def _normalise_findings(value: Any, *, transcript: Mapping[str, Any]) -> list[di
         if not isinstance(evidence, list) or not evidence:
             raise ReportError("report_finding_evidence_missing")
         item = dict(finding)
-        item["evidence"] = [
-            _normalise_evidence(span, transcript) for span in evidence
-        ]
+        item["evidence"] = [_normalise_evidence(span, transcript) for span in evidence]
         normalized.append(item)
     return normalized
 
@@ -806,9 +800,7 @@ def _normalise_fact_observation(value: Any, transcript: Mapping[str, Any]) -> di
                 "end_ms": segment["end_ms"],
             }
         ]
-    item["evidence"] = [
-        _normalise_evidence(span, transcript) for span in item.get("evidence", [])
-    ]
+    item["evidence"] = [_normalise_evidence(span, transcript) for span in item.get("evidence", [])]
     return item
 
 
@@ -900,9 +892,7 @@ def parse_fact_packet(
         raise ReportError("fact_packet_invalid") from exc
 
 
-def merge_fact_packets(
-    packets: Sequence[FactPacket], transcript: Mapping[str, Any]
-) -> FactPacket:
+def merge_fact_packets(packets: Sequence[FactPacket], transcript: Mapping[str, Any]) -> FactPacket:
     """Merge complete chunk coverage while preserving every validated observation."""
 
     validated_transcript = _validated_transcript(transcript)
@@ -1071,9 +1061,7 @@ def parse_report_draft(
         "objection_analysis",
         "closing_analysis",
     ):
-        normalized[field] = _normalise_findings(
-            payload[field], transcript=validated_transcript
-        )
+        normalized[field] = _normalise_findings(payload[field], transcript=validated_transcript)
     if "dimensions" in payload and "dimension_assessments" in payload:
         raise ReportError("report_dimensions_ambiguous")
     dimensions = payload.get("dimensions")

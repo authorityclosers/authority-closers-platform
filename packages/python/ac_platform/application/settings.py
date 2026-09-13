@@ -381,9 +381,7 @@ class Settings(BaseSettings):
         )
         if not self.media_filesystem_enabled:
             if any(value is not None and str(value).strip() for value in configured):
-                raise ValueError(
-                    "filesystem media paths require AC_MEDIA_FILESYSTEM_ENABLED=true"
-                )
+                raise ValueError("filesystem media paths require AC_MEDIA_FILESYSTEM_ENABLED=true")
             return
         if self.environment not in {"test", "staging", "production"}:
             raise ValueError("filesystem media requires test, staging, or production")
@@ -416,10 +414,7 @@ class Settings(BaseSettings):
             raise ValueError("filesystem media requires exactly one ClamAV endpoint")
         # A deployment uses the scanner's private mounted Unix socket. TCP is
         # retained only for test harnesses and the existing local tunnel.
-        if (
-            self.environment in {"staging", "production"}
-            and self.media_scanner_unix_socket is None
-        ):
+        if self.environment in {"staging", "production"} and self.media_scanner_unix_socket is None:
             raise ValueError(
                 "staging and production filesystem media require the ClamAV Unix socket"
             )

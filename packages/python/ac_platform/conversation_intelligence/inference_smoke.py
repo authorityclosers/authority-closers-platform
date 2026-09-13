@@ -51,13 +51,7 @@ def main() -> None:
     with journal.open("x", encoding="utf-8") as stream:
         body: dict[str, Any] = {
             "contents": [
-                {
-                    "parts": [
-                        {
-                            "text": "Synthetic API connectivity test. Reply with READY only."
-                        }
-                    ]
-                }
+                {"parts": [{"text": "Synthetic API connectivity test. Reply with READY only."}]}
             ],
             "generationConfig": {
                 "maxOutputTokens": 16,

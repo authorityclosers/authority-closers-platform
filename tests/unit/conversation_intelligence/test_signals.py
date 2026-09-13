@@ -444,7 +444,8 @@ def test_native_gain_dbfs_invariant(tmp_path: Path, native: Path) -> None:
 
 
 def test_tail_peak_is_retained_without_fabricating_usable_pitch(
-    tmp_path: Path, native: Path,
+    tmp_path: Path,
+    native: Path,
 ) -> None:
     values = [0.0] * 641
     values[-1] = 0.9

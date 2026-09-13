@@ -161,9 +161,7 @@ def test_chunking_preserves_all_segments_and_rejects_silent_truncation() -> None
 
 def test_groq_prompt_is_bounded_and_has_complete_chunk_source() -> None:
     transcript = _transcript(count=40)
-    prompts = build_groq_prompts(
-        transcript, max_input_chars=1_800, max_completion_tokens=1_800
-    )
+    prompts = build_groq_prompts(transcript, max_input_chars=1_800, max_completion_tokens=1_800)
     assert prompts
     assert all(prompt["model"] == GROQ_MODEL for prompt in prompts)
     assert all(prompt["max_completion_tokens"] == 1_800 for prompt in prompts)
@@ -241,9 +239,7 @@ def test_merge_fact_packets_rejects_duplicate_coverage_and_timebase_drift() -> N
         for chunk in chunks
     ]
 
-    duplicate_coverage = packets[0].model_copy(
-        update={"covered_segment_ids": ["s1", "s1"]}
-    )
+    duplicate_coverage = packets[0].model_copy(update={"covered_segment_ids": ["s1", "s1"]})
     with pytest.raises(ReportError, match="fact_packet_coverage_duplicate"):
         merge_fact_packets([duplicate_coverage, packets[1]], transcript)
 
@@ -273,12 +269,13 @@ def test_merge_fact_packets_revalidates_evidence_against_transcript() -> None:
         )
         for chunk in chunks
     ]
-    forged_evidence = packets[0].observations[0].evidence[0].model_copy(
-        update={"quote": "text that is not in the native segment"}
+    forged_evidence = (
+        packets[0]
+        .observations[0]
+        .evidence[0]
+        .model_copy(update={"quote": "text that is not in the native segment"})
     )
-    forged_fact = packets[0].observations[0].model_copy(
-        update={"evidence": [forged_evidence]}
-    )
+    forged_fact = packets[0].observations[0].model_copy(update={"evidence": [forged_evidence]})
     forged_packet = packets[0].model_copy(update={"observations": [forged_fact]})
 
     with pytest.raises(ReportError, match="report_evidence_quote_mismatch"):
@@ -314,6 +311,8 @@ def test_fact_prompt_has_no_profile_and_report_prompt_is_single_judge_call() -> 
     assert prompt["model"] == GROQ_MODEL
     assert len(prompt["messages"]) == 2
     assert "dipak_report_v1" in prompt["messages"][0]["content"]
+
+
 def test_groq_envelope_parser_keeps_raw_response_out_of_draft() -> None:
     transcript = _transcript()
     payload = _payload(transcript)

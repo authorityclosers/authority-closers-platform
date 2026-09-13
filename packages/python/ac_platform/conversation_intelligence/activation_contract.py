@@ -55,9 +55,7 @@ class ActivationContractError(ValueError):
 
 
 class _StrictFrozenModel(BaseModel):
-    model_config = ConfigDict(
-        extra="forbid", frozen=True, strict=True, populate_by_name=True
-    )
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True, populate_by_name=True)
 
 
 def _validate_reference(value: str) -> str:
@@ -194,9 +192,7 @@ class HostedApprovalBundle(_StrictFrozenModel):
     stages: tuple[StageApproval, ...] = Field(max_length=MAX_STAGES)
 
     _deployment_ref = field_validator("deployment_ref")(_validate_reference)
-    _budget_authorization_ref = field_validator("budget_authorization_ref")(
-        _validate_reference
-    )
+    _budget_authorization_ref = field_validator("budget_authorization_ref")(_validate_reference)
     _intake_authorization_ref = field_validator("intake_authorization_ref")(_validate_reference)
     _intake_retention_ref = field_validator("intake_retention_ref")(_validate_reference)
 
