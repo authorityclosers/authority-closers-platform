@@ -196,7 +196,13 @@ describe("ReportTranscript", () => {
       },
     ];
 
-    for (const { language, title, searchLabel, factorTitle, status } of localizedCases) {
+    for (const {
+      language,
+      title,
+      searchLabel,
+      factorTitle,
+      status,
+    } of localizedCases) {
       await render(transcript, vi.fn(), language);
       await act(async () =>
         container
@@ -212,7 +218,9 @@ describe("ReportTranscript", () => {
       ).toBe(searchLabel);
 
       await act(async () =>
-        root.render(<ReportFactors dimensions={[dimension]} language={language} />),
+        root.render(
+          <ReportFactors dimensions={[dimension]} language={language} />,
+        ),
       );
       expect(container.textContent).toContain(factorTitle);
       expect(container.textContent).toContain(status);

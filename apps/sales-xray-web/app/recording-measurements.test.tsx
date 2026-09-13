@@ -68,6 +68,26 @@ describe("saved recording sound view", () => {
     expect(
       container.querySelector("svg[role=img] path[d*='M36']"),
     ).toBeTruthy();
+    for (const [language, label] of [
+      ["mr", "रेकॉर्डिंगचा आवाज"],
+      ["hi", "रिकॉर्डिंग की आवाज़"],
+      ["en-hi-mixed", "Sound of the recording · रिकॉर्डिंग की आवाज़"],
+    ] as const) {
+      await act(async () =>
+        root.render(
+          <RecordingMeasurements
+            recordingId="recording-1"
+            sourceSha256={"ab".repeat(32)}
+            language={language}
+          />,
+        ),
+      );
+      expect(container.querySelector("summary")?.textContent).toContain(label);
+      expect(container.querySelector("output")?.textContent).toContain(
+        "190.0 Hz",
+      );
+      expect(fetcher).toHaveBeenCalledTimes(1);
+    }
   });
   it("shows unavailable for missing or mismatched data and retries only a read", async () => {
     const fetcher = vi

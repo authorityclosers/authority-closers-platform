@@ -2494,6 +2494,8 @@
   body:has(.xray-app .studio-report) .xray-app .studio-footer,
   body:has(.xray-app .studio-report) .xray-app .studio-embedded-tools,
   body:has(.xray-app .studio-report) .xray-app .studio-report-actions,
+  body:has(.xray-app .studio-report) .xray-app .studio-playback-status,
+  body:has(.xray-app .studio-report) .xray-app .studio-report-details,
   body:has(.xray-app .studio-report) .xray-app .studio-report > .primary-button,
   body:has(.xray-app .studio-report) .site-frame--learner > .skip-link,
   body:has(.xray-app .studio-report) .site-frame--learner > .learner-sidebar,

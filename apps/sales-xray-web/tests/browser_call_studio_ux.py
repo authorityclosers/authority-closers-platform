@@ -123,10 +123,10 @@ RECORDING = {
 def silence_wav() -> bytes:
     buffer = BytesIO()
     with wave.open(buffer, "wb") as output:
-        output.setnchannels(1)
+        output.setnchannels(2)
         output.setsampwidth(2)
-        output.setframerate(8000)
-        output.writeframes(b"\x00\x00" * 8000 * 4)
+        output.setframerate(48000)
+        output.writeframes(b"\x00\x00" * 48000 * 4 * 2)
     return buffer.getvalue()
 
 
@@ -148,7 +148,7 @@ def synthetic_measurements():
         "container_video_sync_certified": False,
         "source_rate": 48000,
         "decoded_rate": 16000,
-        "physical_channels": 1,
+        "physical_channels": 2,
         "duration_ms": 4000,
     }
     return {
@@ -171,7 +171,7 @@ def synthetic_measurements():
             "feature_sha256": "12" * 32,
             "channels": [
                 {
-                    "channel_index": 0,
+                    "channel_index": channel_index,
                     "level": {
                         "status": "available",
                         "value": -18,
@@ -203,6 +203,7 @@ def synthetic_measurements():
                         )
                     ],
                 }
+                for channel_index in range(2)
             ],
         },
         "signallab": {
@@ -373,6 +374,7 @@ def main() -> None:
         assert page.locator("[data-segment-id]").count() == 2
         page.locator("summary").filter(has_text="Sound of the recording").click()
         page.get_by_text("-18.0 dBFS", exact=True).wait_for()
+        page.get_by_role("combobox", name="Audio channel", exact=True).select_option("1")
         page.get_by_role("button", name="Pitch estimate", exact=True).click()
         assert page.get_by_role("slider", name="Inspect pitch estimate over time").is_visible()
         page.get_by_role("slider").fill("2")
@@ -383,6 +385,7 @@ def main() -> None:
         assert not page.locator(".studio-header").is_visible()
         assert not page.locator(".studio-report-actions").is_visible()
         assert not page.get_by_role("searchbox", name="Search transcript phrases").is_visible()
+        assert not page.get_by_role("combobox", name="Audio channel", exact=True).is_visible()
         assert report.is_visible()
         assert "AI draft · Dipak has not reviewed this" in report.inner_text()
         page.screenshot(
@@ -393,14 +396,20 @@ def main() -> None:
         language = page.locator(".studio-language-control select")
         assert language.count() == 1
         modes = (
-            ("en", "Upload your call"),
-            ("hi", "कॉल अपलोड करें"),
-            ("mr", "कॉल अपलोड करा"),
-            ("en-hi-mixed", "Upload कॉल करें"),
+            ("en", "Upload your call", "Sound of the recording"),
+            ("hi", "कॉल अपलोड करें", "रिकॉर्डिंग की आवाज़"),
+            ("mr", "कॉल अपलोड करा", "रेकॉर्डिंगचा आवाज"),
+            ("en-hi-mixed", "Upload कॉल करें", "Sound of the recording · रिकॉर्डिंग की आवाज़"),
         )
-        for mode, expected_step in modes:
+        for mode, expected_step, expected_measurement in modes:
             language.select_option(mode)
             assert expected_step in page.locator(".studio-steps").inner_text()
+            assert (
+                expected_measurement
+                in page.locator("summary").filter(has_text=expected_measurement).inner_text()
+            )
+            assert TRANSCRIPT["segments"][1]["text"] in report.inner_text()
+            assert REPORT["summary"] in report.inner_text()
             page.set_viewport_size({"width": 1280, "height": 900})
             page.screenshot(
                 path=str(AUDIT_DIR / f"report-{mode}-desktop.png"),

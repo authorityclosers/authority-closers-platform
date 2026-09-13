@@ -2,10 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import type { ReportDimension } from "./report-contract";
-import {
-  getReportUiCopy,
-  type ReportDisplayLanguage,
-} from "./report-ui-copy";
+import { getReportUiCopy, type ReportDisplayLanguage } from "./report-ui-copy";
 import styles from "./report-factors.module.css";
 
 export function ReportFactors({

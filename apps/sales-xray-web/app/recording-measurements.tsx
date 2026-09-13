@@ -9,30 +9,29 @@ import {
   type SavedMeasurements,
 } from "./measurement-contract";
 import styles from "./recording-measurements.module.css";
+import { MEASUREMENT_COPY, type MeasurementLanguage } from "./measurement-copy";
 
 const clock = (ms: number) =>
   `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, "0")}`;
-const measured = (value: number | null, unit: string) =>
-  value === null ? "Not available" : `${value.toFixed(1)} ${unit}`;
+const measured = (value: number | null, unit: string, unavailable: string) =>
+  value === null ? unavailable : `${value.toFixed(1)} ${unit}`;
 
 function MeasurementChart({
   series,
   duration,
+  language,
 }: {
   series: MeasurementSeries;
   duration: number;
+  language: MeasurementLanguage;
 }) {
+  const copy = MEASUREMENT_COPY[language];
   const [cursor, setCursor] = useState(0);
   const points = series.points;
   const values = points.flatMap((point) =>
     point.value === null ? [] : [point.value],
   );
-  if (!values.length)
-    return (
-      <p className={styles.note}>
-        No usable values for this measurement. Missing values are not zero.
-      </p>
-    );
+  if (!values.length) return <p className={styles.note}>{copy.noValues}</p>;
   const low = Math.min(...values);
   const high = Math.max(...values);
   const span = high - low || 1;
@@ -46,20 +45,24 @@ function MeasurementChart({
     )
     .join(" ");
   const selected = points[Math.min(cursor, points.length - 1)];
-  const label =
-    series.measurement === "dbfs" ? "Recorded level" : "Pitch estimate";
+  const label = series.measurement === "dbfs" ? copy.level : copy.pitch;
   return (
     <div className={styles.chart}>
       <div className={styles.chartCaption}>
         <strong>{label}</strong>
         <output aria-live="polite">
-          {clock(selected.start_ms)} · {measured(selected.value, series.unit)}
+          {clock(selected.start_ms)} ·{" "}
+          {measured(selected.value, series.unit, copy.unavailable)}
         </output>
       </div>
       <svg
         viewBox="0 0 780 136"
         role="img"
-        aria-label={`${label} over the decoded recording. Displayed range ${low.toFixed(1)} to ${high.toFixed(1)} ${series.unit}. Missing values remain gaps.`}
+        aria-label={copy.chartRange
+          .replace("{label}", label)
+          .replace("{low}", low.toFixed(1))
+          .replace("{high}", high.toFixed(1))
+          .replace("{unit}", series.unit)}
       >
         <path d="M36 16H756 M36 58H756 M36 100H756" className={styles.grid} />
         <text x="30" y="20" textAnchor="end">
@@ -105,18 +108,24 @@ function MeasurementChart({
         step="1"
         value={Math.min(cursor, points.length - 1)}
         onChange={(event) => setCursor(Number(event.target.value))}
-        aria-label={`Inspect ${label.toLowerCase()} over time`}
-        aria-valuetext={`${clock(selected.start_ms)}, ${measured(selected.value, series.unit)}`}
+        aria-label={
+          series.measurement === "dbfs" ? copy.inspectLevel : copy.inspectPitch
+        }
+        aria-valuetext={`${clock(selected.start_ms)}, ${measured(selected.value, series.unit, copy.unavailable)}`}
       />
-      <p className={styles.note}>
-        Move through the saved overview. This chart uses the decoded audio
-        clock; it does not control playback.
-      </p>
+      <p className={styles.note}>{copy.clockNote}</p>
     </div>
   );
 }
 
-function MeasurementContent({ data }: { data: SavedMeasurements }) {
+function MeasurementContent({
+  data,
+  language,
+}: {
+  data: SavedMeasurements;
+  language: MeasurementLanguage;
+}) {
+  const copy = MEASUREMENT_COPY[language];
   const [channelIndex, setChannelIndex] = useState(0);
   const [kind, setKind] = useState<"dbfs" | "f0_hz">("dbfs");
   const channel = data.channels[channelIndex] ?? data.channels[0];
@@ -125,65 +134,70 @@ function MeasurementContent({ data }: { data: SavedMeasurements }) {
     <>
       {data.channels.length > 1 && (
         <label className={styles.select}>
-          Audio channel
+          {copy.channel}
           <select
             value={channelIndex}
             onChange={(event) => setChannelIndex(Number(event.target.value))}
           >
             {data.channels.map((item, index) => (
               <option key={item.channel_index} value={index}>
-                Channel {item.channel_index + 1}
+                {copy.channel} {item.channel_index + 1}
               </option>
             ))}
           </select>
         </label>
       )}
+      {data.channels.length > 1 && (
+        <p className={styles.printChannel}>
+          {copy.channel} {channel.channel_index + 1}
+        </p>
+      )}
       <div className={styles.metrics}>
         <div>
-          <span>Typical recorded level</span>
-          <strong>{measured(channel.level, "dBFS")}</strong>
-          <small>Median of usable audio windows</small>
+          <span>{copy.typicalLevel}</span>
+          <strong>{measured(channel.level, "dBFS", copy.unavailable)}</strong>
+          <small>{copy.median}</small>
         </div>
         <div>
-          <span>Typical pitch estimate</span>
-          <strong>{measured(channel.pitch, "Hz")}</strong>
+          <span>{copy.typicalPitch}</span>
+          <strong>{measured(channel.pitch, "Hz", copy.unavailable)}</strong>
           <small>
             {channel.pitchCoverage === null
-              ? "Estimate coverage is unavailable"
-              : `Estimate available in ${(channel.pitchCoverage * 100).toFixed(1)}% of windows`}
+              ? copy.noCoverage
+              : copy.coverage.replace(
+                  "{value}",
+                  (channel.pitchCoverage * 100).toFixed(1),
+                )}
           </small>
         </div>
       </div>
       <div
         className={styles.switcher}
         role="group"
-        aria-label="Audio measurement"
+        aria-label={copy.measurement}
       >
         <button
           type="button"
           aria-pressed={kind === "dbfs"}
           onClick={() => setKind("dbfs")}
         >
-          Sound level
+          {copy.soundLevel}
         </button>
         <button
           type="button"
           aria-pressed={kind === "f0_hz"}
           onClick={() => setKind("f0_hz")}
         >
-          Pitch estimate
+          {copy.pitch}
         </button>
       </div>
       <MeasurementChart
         key={`${channel.channel_index}:${kind}`}
         series={series}
         duration={data.durationMs}
+        language={language}
       />
-      <p className={styles.note}>
-        Audio channels are not speaker identities. These measurements describe
-        the recording, not emotion, confidence or sales ability. Microphones and
-        recording settings affect the values.
-      </p>
+      <p className={styles.note}>{copy.meaning}</p>
     </>
   );
 }
@@ -191,15 +205,18 @@ function MeasurementContent({ data }: { data: SavedMeasurements }) {
 export function RecordingMeasurements({
   recordingId,
   sourceSha256,
+  language = "en",
 }: {
   recordingId: string;
   sourceSha256: string;
+  language?: MeasurementLanguage;
 }) {
+  const copy = MEASUREMENT_COPY[language];
   const [expanded, setExpanded] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<{
     data?: SavedMeasurements;
-    error?: string;
+    error?: boolean;
   }>({});
   useEffect(() => {
     if (!expanded) return;
@@ -227,8 +244,7 @@ export function RecordingMeasurements({
       } catch {
         if (active)
           setState({
-            error:
-              "Saved sound measurements are unavailable for this call. Your sales report is still available.",
+            error: true,
           });
       }
     }
@@ -252,17 +268,15 @@ export function RecordingMeasurements({
       <summary>
         <AudioLines size={18} aria-hidden="true" />
         <span>
-          Sound of the recording
-          <small>Explore saved sound level and pitch estimates</small>
+          {copy.title}
+          <small>{copy.intro}</small>
         </span>
       </summary>
       <div className={styles.body}>
-        {!data && !state.error && (
-          <p role="status">Loading saved measurements…</p>
-        )}
+        {!data && !state.error && <p role="status">{copy.loading}</p>}
         {state.error && (
           <div role="status">
-            <p>{state.error}</p>
+            <p>{copy.error}</p>
             <button
               type="button"
               className="text-button"
@@ -271,7 +285,7 @@ export function RecordingMeasurements({
                 setAttempt((value) => value + 1);
               }}
             >
-              <RotateCcw size={14} aria-hidden="true" /> Try loading again
+              <RotateCcw size={14} aria-hidden="true" /> {copy.retry}
             </button>
           </div>
         )}
@@ -279,6 +293,7 @@ export function RecordingMeasurements({
           <MeasurementContent
             key={`${recordingId}:${sourceSha256}`}
             data={data}
+            language={language}
           />
         )}
       </div>

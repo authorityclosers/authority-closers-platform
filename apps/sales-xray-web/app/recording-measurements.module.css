@@ -166,10 +166,17 @@
     padding: 16px 14px;
   }
 }
+.printChannel {
+  display: none;
+}
 @media print {
+  .select,
   .switcher,
   .chart input {
     display: none;
+  }
+  .printChannel {
+    display: block;
   }
   .panel {
     break-inside: avoid;

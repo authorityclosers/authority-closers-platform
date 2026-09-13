@@ -20,6 +20,7 @@ import { BrandMark } from "@ac/ui";
 import { RecordingMeasurements } from "./recording-measurements";
 import { ReportFactors } from "./report-factors";
 import { ReportTranscript } from "./report-transcript";
+import { REPORT_SECTION_COPY } from "./report-section-copy";
 import {
   parseJobResponse,
   parseJobStatus,
@@ -152,7 +153,7 @@ const DISPLAY_COPY: Record<
     practiceFocusIntro:
       "Use the clearest improvement as a small rehearsal before your next call.",
     reportLanguageNotice:
-      "The report text stays in its server-provided language. Display modes translate interface labels only until reviewed report translations exist.",
+      "Navigation and report controls use your selected language. The call’s words and analysis stay in the language they were created.",
     printReport: "Print / save PDF",
     playbackUnavailable:
       "This moment is linked, but source playback is unavailable. Verify the authorized recording to listen.",
@@ -179,7 +180,7 @@ const DISPLAY_COPY: Record<
     practiceFocusIntro:
       "अगली कॉल से पहले सबसे स्पष्ट सुधार का छोटा अभ्यास करें।",
     reportLanguageNotice:
-      "रिपोर्ट का पाठ server-provided भाषा में ही रहता है। reviewed report translations उपलब्ध होने तक केवल interface labels बदलते हैं।",
+      "नेविगेशन और रिपोर्ट के विकल्प चुनी गई भाषा में हैं। कॉल के शब्द और विश्लेषण जिस भाषा में बने थे, उसी में रहते हैं।",
     printReport: "प्रिंट / PDF सहेजें",
     playbackUnavailable:
       "यह moment source से जुड़ा है, लेकिन playback उपलब्ध नहीं है। सुनने के लिए authorized recording जाँचें।",
@@ -205,7 +206,7 @@ const DISPLAY_COPY: Record<
     practiceFocus: "पुढच्या कॉलसाठी एक सराव",
     practiceFocusIntro: "पुढच्या कॉलआधी स्पष्ट सुधारण्याचा छोटा सराव करा.",
     reportLanguageNotice:
-      "रिपोर्टचा मजकूर server-provided भाषेतच राहतो. Reviewed report translations येईपर्यंत display modes फक्त interface labels बदलतात.",
+      "नेव्हिगेशन आणि अहवालाचे पर्याय निवडलेल्या भाषेत आहेत. कॉलचे शब्द आणि विश्लेषण तयार केलेल्या भाषेतच राहतात.",
     printReport: "प्रिंट / PDF जतन करा",
     playbackUnavailable:
       "हा moment source शी जोडलेला आहे, पण playback उपलब्ध नाही. ऐकण्यासाठी authorized recording तपासा.",
@@ -233,7 +234,7 @@ const DISPLAY_COPY: Record<
     practiceFocusIntro:
       "Use this improvement before your next call · अगली कॉल से पहले अभ्यास करें।",
     reportLanguageNotice:
-      "Report text stays in its server-provided language · रिपोर्ट का पाठ server-provided भाषा में रहता है। Display modes translate interface labels only until reviewed report translations exist.",
+      "Navigation और report controls चुनी गई भाषा में हैं। Call के शब्द और analysis अपनी original language में रहते हैं।",
     printReport: "Print / PDF सेव करें",
     playbackUnavailable:
       "This moment is linked but playback is unavailable · यह moment जुड़ा है पर playback उपलब्ध नहीं है।",
@@ -627,6 +628,7 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
   const requestKey = useRef("");
   const planRequestKey = useRef("");
   const copy = DISPLAY_COPY[displayLanguage];
+  const sections = REPORT_SECTION_COPY[displayLanguage];
   const interfaceLanguage =
     displayLanguage === "hi" ? "hi" : displayLanguage === "mr" ? "mr" : "en";
   const Main: "div" | "main" = embedded ? "div" : "main";
@@ -1891,10 +1893,14 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
             className="studio-report panel"
             aria-label="Sales call report"
           >
-            <p className="eyebrow">YOUR SALES CALL REPORT</p>
-            <h1>What to take into your next call.</h1>
+            <p className="eyebrow" lang={interfaceLanguage}>
+              {sections.heading}
+            </p>
+            <h1 lang={interfaceLanguage}>{sections.title}</h1>
             <p className="studio-report-summary">{job.report.summary}</p>
-            <span className="pill">AI draft · Dipak has not reviewed this</span>
+            <span className="pill" lang={interfaceLanguage}>
+              {sections.draft}
+            </span>
             <div className="studio-report-actions">
               <button
                 className="secondary-button"
@@ -2016,18 +2022,21 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
                 </div>
               </aside>
             )}
-            <ReportFactors dimensions={job.report.dimensions} />
+            <ReportFactors
+              dimensions={job.report.dimensions}
+              language={displayLanguage}
+            />
             {(
               [
-                ["What went well", job.report.strengths],
-                ["What to improve", job.report.missed_opportunities],
-                ["What to say next", job.report.improvements],
-                ["Questions and concerns", job.report.objection_analysis],
-                ["Next step", job.report.closing_analysis],
+                [sections.strengths, job.report.strengths],
+                [sections.missed, job.report.missed_opportunities],
+                [sections.improvements, job.report.improvements],
+                [sections.objections, job.report.objection_analysis],
+                [sections.closing, job.report.closing_analysis],
               ] as [string, Finding[]][]
             ).map(([title, rows]) => (
               <section key={title as string}>
-                <h2>{title as string}</h2>
+                <h2 lang={interfaceLanguage}>{title as string}</h2>
                 {rows.length ? (
                   rows.map((finding, i) => (
                     <article key={i}>
@@ -2056,18 +2065,19 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
                     </article>
                   ))
                 ) : (
-                  <p>No supported finding was produced for this section.</p>
+                  <p lang={interfaceLanguage}>{sections.empty}</p>
                 )}
               </section>
             ))}
             <section>
-              <h2>Final takeaway</h2>
+              <h2 lang={interfaceLanguage}>{sections.verdict}</h2>
               <p>{job.report.verdict}</p>
             </section>
             {activeTranscript && (
               <ReportTranscript
                 key={`${activeTranscript.source_sha256}:${activeTranscript.revision}`}
                 transcript={activeTranscript}
+                language={displayLanguage}
                 onSelect={(segment) =>
                   seekToMoment({
                     segment_id: segment.id,
@@ -2085,20 +2095,20 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
                 key={`${activeRecordingId}:${job.report.source_sha256}`}
                 recordingId={activeRecordingId}
                 sourceSha256={job.report.source_sha256}
+                language={displayLanguage}
               />
             )}
-            <details>
-              <summary>Report details</summary>
-              <p>
-                This draft uses evidence from the authorized recording. Speaker
-                labels remain unverified.
+            <details className="studio-report-details">
+              <summary lang={interfaceLanguage}>{sections.details}</summary>
+              <p lang={interfaceLanguage}>
+                {sections.detailNote}
                 {activeTranscript
                   ? ` Duration: ${time(activeTranscript.duration_ms)}.`
                   : ""}
               </p>
             </details>
             <button className="primary-button" onClick={restart}>
-              Analyze another call <ArrowRight size={17} />
+              {sections.another} <ArrowRight size={17} />
             </button>
           </section>
         )}

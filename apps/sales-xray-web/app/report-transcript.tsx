@@ -2,10 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { Transcript, TranscriptSegment } from "./report-contract";
-import {
-  getReportUiCopy,
-  type ReportDisplayLanguage,
-} from "./report-ui-copy";
+import { getReportUiCopy, type ReportDisplayLanguage } from "./report-ui-copy";
 import styles from "./report-transcript.module.css";
 
 const PAGE_SIZE = 50;
@@ -15,7 +12,10 @@ function speakerKey(speakerId: string | null): string {
   return speakerId === null ? "unlabelled" : `speaker:${speakerId}`;
 }
 
-function speakerLabel(speakerId: string | null, unlabelledLabel: string): string {
+function speakerLabel(
+  speakerId: string | null,
+  unlabelledLabel: string,
+): string {
   return speakerId ?? unlabelledLabel;
 }
 
@@ -118,9 +118,7 @@ export function ReportTranscript({
             </label>
           )}
         </div>
-        <p className={styles.note}>
-          {copy.speakerNote}
-        </p>
+        <p className={styles.note}>{copy.speakerNote}</p>
         <p className={styles.count} role="status" aria-live="polite">
           {resultLabel} · {copy.showing} {visibleSegments.length}
         </p>

@@ -622,7 +622,7 @@ describe("CallStudio", () => {
     }
     expect(container.textContent).toContain("आपकी कॉल के क्षण");
     expect(container.textContent).toContain(
-      "रिपोर्ट का पाठ server-provided भाषा में ही रहता है",
+      "कॉल के शब्द और विश्लेषण जिस भाषा में बने थे, उसी में रहते हैं",
     );
     expect(container.textContent).toContain(
       "The prospect asked for a clear next step.",
