@@ -854,22 +854,23 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
         setJob(null);
         return;
       }
+      const hasSavedReport = recording.has_report || run.has_report;
       setJob({
         id: run.id,
         state: run.state,
-        message:
-          recording.has_report || run.has_report
-            ? "Opening the saved report…"
-            : "This saved call has an analysis run, but its report is not ready yet.",
+        message: hasSavedReport
+          ? "Opening the saved report…"
+          : "This saved call has an analysis run, but its report is not ready yet.",
       });
-      if (
-        LOCAL_MEASUREMENT_RECIPES.has(run.recipe_revision) &&
-        run.state === "completed"
-      ) {
-        await requestProcessingPlan(recording.id, current);
+      if (!hasSavedReport) {
+        if (
+          LOCAL_MEASUREMENT_RECIPES.has(run.recipe_revision) &&
+          run.state === "completed"
+        ) {
+          await requestProcessingPlan(recording.id, current);
+        }
         return;
       }
-      if (!recording.has_report && !run.has_report) return;
       const status = await readReportStatus(recording.id, run.id);
       if (current !== attempt.current) return;
       if (!status.hasReport) {
