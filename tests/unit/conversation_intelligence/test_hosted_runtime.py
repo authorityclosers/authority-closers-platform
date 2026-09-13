@@ -77,6 +77,7 @@ def test_complete_pinned_runtime_loads_and_rechecks_artifact(tmp_path: Path) -> 
     settings = settings_for(tmp_path, approval_data())
     runtime = compose_hosted_intake(settings)
     assert runtime.authority is not None
+    assert runtime.policy.acoustic_recipe == "audioatlas-16000-v1"
     assert runtime.storage.root == tmp_path / "objects"
     assert runtime.scratch.root == tmp_path / "scratch"
     assert runtime.storage.root != runtime.scratch.root

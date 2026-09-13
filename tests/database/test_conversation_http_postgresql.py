@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import secrets
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +20,10 @@ from sqlalchemy import update
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from ac_platform.application.settings import Settings
+from ac_platform.conversation_intelligence.application import (
+    AUDIOATLAS_HOSTED_RECIPE,
+    AUDIOATLAS_RECIPE,
+)
 from ac_platform.conversation_intelligence.models import ConversationPermission
 from ac_platform.http.auth import install_identity_http
 from ac_platform.http.conversation import install_conversation_http
@@ -61,7 +66,8 @@ def test_cookie_authenticated_saved_report_history_transcript_and_private_playba
             email_challenge_secret=secrets.token_urlsafe(32),
         )
         runtime = ConversationIntakeRuntime(
-            policy(prepared.scope_id, prepared.state.tenant_id),
+            replace(policy(prepared.scope_id, prepared.state.tenant_id),
+                    acoustic_recipe=AUDIOATLAS_HOSTED_RECIPE),
             prepared.storage,
             prepared.scratch,
         )
@@ -108,6 +114,15 @@ def test_cookie_authenticated_saved_report_history_transcript_and_private_playba
             ) as client:
                 for path in (source_path, transcript_path, report_path, f"{root}/recordings"):
                     assert (await client.get(path)).status_code == 401
+                stale_run = await client.post(
+                    f"{root}/runs",
+                    headers={**cookie(token), "Origin": "http://learner.test",
+                             "Idempotency-Key": "stale-recipe-after-cutover"},
+                    json={"recording_id": str(prepared.recording_id), "source_revision": "1",
+                          "quote_id": str(prepared.quote_id), "recipe_revision": AUDIOATLAS_RECIPE},
+                )
+                assert stale_run.status_code == 409
+                assert "recipe changed" in stale_run.text
                 before = await client.get(report_path, headers=cookie(token))
                 assert before.status_code == 200, before.text
                 assert before.json()["report"] is None

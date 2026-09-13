@@ -888,6 +888,52 @@ describe("CallStudio", () => {
     );
   });
 
+  it("prepares the report plan for a completed hosted 16 kHz measurement", async () => {
+    const originalHandler = handleApi;
+    const savedRecording = {
+      id: "recording-1",
+      state: "completed",
+      source_revision: "source-1",
+      source_sha256: "00".repeat(32),
+      source_bytes: 128,
+      content_type: "audio/wav",
+      created_at: "2026-09-13T00:00:00Z",
+      latest_run: {
+        id: "run-1",
+        state: "completed",
+        recipe_revision: "audioatlas-16000-v1",
+        provider_calls: 0,
+        has_report: false,
+      },
+      has_report: false,
+    };
+    let planQuoteRequests = 0;
+    handleApi = (path, init) => {
+      if (path.endsWith("/recordings"))
+        return response({ recordings: [savedRecording] });
+      if (path.endsWith("/recordings/recording-1/plan/quote")) {
+        planQuoteRequests += 1;
+        return response(processingPlan);
+      }
+      return originalHandler(path, init);
+    };
+
+    await render();
+    await act(async () => getButton("Sales call").click());
+    await flush();
+
+    expect(planQuoteRequests).toBe(1);
+    expect(
+      requests.some(
+        (request) =>
+          request.url.endsWith("/recordings/recording-1/plan/quote") &&
+          request.init.method === "POST",
+      ),
+    ).toBe(true);
+    expect(container.textContent).toContain("Your approved report plan");
+    expect(container.textContent).not.toContain("Your sales call report");
+  });
+
   it("shows upload failures, allows retry, and never invents a report", async () => {
     let uploadAttempts = 0;
     handleApi = (path) => {

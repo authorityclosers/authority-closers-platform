@@ -159,6 +159,11 @@ def install_conversation_http(
         ) -> Any:
             admitted(request, response)
             require_safe_origin(request, settings)
+            if (
+                intake_runtime is not None
+                and payload.recipe_revision != intake_runtime.policy.acoustic_recipe
+            ):
+                raise HTTPException(409, "The analysis recipe changed. Prepare this call again.")
             if intake_runtime is not None and intake_runtime.authority is not None:
                 await result(
                     intake_runtime.authority.admit(

@@ -22,7 +22,7 @@ from collections.abc import Iterator
 from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import urlsplit
 from uuid import UUID
 
@@ -35,12 +35,18 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from ac_platform.application.settings import Settings
+from ac_platform.conversation_intelligence.application import AUDIOATLAS_HOSTED_RECIPE
+from ac_platform.conversation_intelligence.contracts import RunIntent
+from ac_platform.conversation_intelligence.hosted_runtime import compose_hosted_intake
 from ac_platform.conversation_intelligence.inference_worker import ConversationInferenceWorker
 from ac_platform.conversation_intelligence.models import (
+    ConversationCheckpoint,
     ConversationInferenceTask,
     ConversationProcessingPlan,
 )
 from ac_platform.conversation_intelligence.processing_plan import ProcessingPlanScheduler
+from ac_platform.conversation_intelligence.signals import inspect_media
+from ac_platform.conversation_intelligence.worker import HostedConversationWorker
 from ac_platform.http.auth import install_identity_http
 from ac_platform.http.conversation import install_conversation_http
 from ac_platform.http.conversation_intake import ConversationIntakeRuntime
@@ -50,9 +56,10 @@ from ac_platform.identity.application import AsyncIdentityApplication
 from ac_platform.identity.models import Person
 from ac_platform.identity.models import Session as IdentitySession
 from tests.database.test_conversation_authority_postgresql import AuthorityFixture, _setup
-from tests.database.test_conversation_intake_postgresql import policy
+from tests.database.test_conversation_postgresql import application as build_application
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
 from tests.database.test_conversation_postgresql import run, seed
+from tests.database.test_conversation_worker_postgresql import _add_quote
 
 
 @pytest.fixture(scope="module")
@@ -70,6 +77,7 @@ class BrowserServer:
     recording_id: str
     source_sha256: str
     report_summary: str
+    hosted_c1_rate: int
     worker: ConversationInferenceWorker
     broker: Any
 
@@ -131,6 +139,96 @@ def _read_plan_counts(database_url: Any, recording_id: str) -> tuple[int, int, i
         raise failure[0]
     assert result
     return result[0]
+
+
+async def _finish_hosted_c1(setup: AuthorityFixture) -> int:
+    """Add a real 16 kHz hosted-profile checkpoint beside the local 48 kHz one."""
+
+    calls: list[tuple[UUID, int]] = []
+
+    class SyntheticNativeAdapter:
+        def inspect(
+            self, source: Path, outdir: Path, *, job_id: UUID, rate: Literal[16000]
+        ) -> dict[str, Any]:
+            if rate != 16_000:
+                raise AssertionError("Hosted test adapter received a non-hosted profile.")
+            calls.append((job_id, rate))
+            return inspect_media(source, outdir, rate=rate)
+
+    quote_id = await _add_quote(
+        setup.sessions,
+        setup.prepared.state,
+        setup.prepared.recording_id,
+        setup.prepared.scope_id,
+        setup.prepared.state.source_sha256,
+        recipe_revision=AUDIOATLAS_HOSTED_RECIPE,
+    )
+    async with setup.sessions() as database, database.begin():
+        requested = await build_application(database, setup.prepared.state).request_run(
+            setup.prepared.state.actor,
+            RunIntent(
+                recording_id=setup.prepared.recording_id,
+                source_revision="1",
+                quote_id=quote_id,
+                recipe_revision=AUDIOATLAS_HOSTED_RECIPE,
+            ),
+            key="plan-browser-hosted-c1",
+        )
+    hosted = HostedConversationWorker(
+        setup.sessions,
+        storage=setup.prepared.storage,
+        scratch=setup.prepared.scratch,
+        environment="staging",
+        native_runtime=SyntheticNativeAdapter(),
+    )
+    if not await hosted.run_once():
+        raise AssertionError("Synthetic hosted C1 fixture did not complete.")
+    if len(calls) != 1 or calls[0][1] != 16_000:
+        raise AssertionError("Synthetic hosted adapter did not receive exactly one 16 kHz run.")
+
+    async with setup.sessions() as database:
+        checkpoints = (
+            await database.scalars(
+                select(ConversationCheckpoint).where(
+                    ConversationCheckpoint.recording_id == setup.prepared.recording_id,
+                    ConversationCheckpoint.stage == "C1",
+                    ConversationCheckpoint.erased_at.is_(None),
+                )
+            )
+        ).all()
+    rates = {
+        payload.get("timebase", {}).get("rate")
+        for checkpoint in checkpoints
+        if isinstance(payload := checkpoint.payload, dict)
+    }
+    if rates != {16_000, 48_000}:
+        raise AssertionError("Hosted C1 fixture did not preserve both exact profiles.")
+    if requested.get("recipe_revision") != AUDIOATLAS_HOSTED_RECIPE:
+        raise AssertionError("Hosted C1 fixture run was not issued with the hosted recipe.")
+    return calls[0][1]
+
+
+def _compose_runtime(setup: AuthorityFixture, settings: Settings) -> ConversationIntakeRuntime:
+    """Compose the actual hosted policy from a synthetic pinned approval file."""
+
+    raw = setup.bundle.to_json()
+    approval_path = setup.prepared.scratch.root.parent / "hosted-plan-browser-approval.json"
+    approval_path.write_bytes(raw)
+    configured = settings.model_copy(
+        update={
+            "sales_xray_enabled": True,
+            "sales_xray_approval_path": str(approval_path),
+            "sales_xray_approval_sha256": hashlib.sha256(raw).hexdigest(),
+            "sales_xray_storage_root": str(setup.prepared.storage.root),
+            "sales_xray_scratch_root": str(setup.prepared.scratch.root),
+        }
+    )
+    runtime = compose_hosted_intake(configured)
+    if runtime is None or runtime.authority is None:
+        raise AssertionError("Synthetic hosted intake composition did not produce a runtime.")
+    if runtime.policy.acoustic_recipe != AUDIOATLAS_HOSTED_RECIPE:
+        raise AssertionError("Synthetic hosted intake composed the wrong acoustic recipe.")
+    return runtime
 
 
 async def _plan_counts(database_url: Any, recording_id: str) -> tuple[int, int, int]:
@@ -231,7 +329,9 @@ def _wait_plan(page: Page, recording_id: str) -> dict[str, Any]:
     raise AssertionError("Timed out waiting for the durable processing plan")
 
 
-def _start_server(setup: AuthorityFixture, other_actor: Any) -> Iterator[BrowserServer]:
+def _start_server(
+    setup: AuthorityFixture, other_actor: Any, hosted_c1_rate: int
+) -> Iterator[BrowserServer]:
     listener = socket.socket()
     listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     listener.bind(("127.0.0.1", 0))
@@ -280,16 +380,12 @@ def _start_server(setup: AuthorityFixture, other_actor: Any) -> Iterator[Browser
 
             register_problem_handlers(app)
             require_actor = install_identity_http(app, settings=settings, sessions=sessions)
+            runtime = _compose_runtime(setup, settings)
             install_conversation_http(
                 app,
                 settings=settings,
                 require_actor=require_actor,
-                intake_runtime=ConversationIntakeRuntime(
-                    policy(setup.prepared.scope_id, setup.prepared.state.tenant_id),
-                    setup.prepared.storage,
-                    setup.prepared.scratch,
-                    authority=setup.authority,
-                ),
+                intake_runtime=runtime,
             )
             app.add_middleware(
                 RequestBodyLimitMiddleware,
@@ -298,11 +394,11 @@ def _start_server(setup: AuthorityFixture, other_actor: Any) -> Iterator[Browser
             broker = setup.broker
             worker = ConversationInferenceWorker(
                 sessions,
-                setup.prepared.storage,
+                runtime.storage,
                 broker,
-                authority=setup.authority,
+                authority=runtime.authority,
             )
-            scheduler = ProcessingPlanScheduler(sessions, setup.authority)
+            scheduler = ProcessingPlanScheduler(sessions, runtime.authority)
             control["worker"] = worker
             control["broker"] = broker
 
@@ -354,6 +450,7 @@ def _start_server(setup: AuthorityFixture, other_actor: Any) -> Iterator[Browser
             recording_id=str(setup.prepared.recording_id),
             source_sha256=setup.prepared.state.source_sha256,
             report_summary="A synthetic draft from saved facts.",
+            hosted_c1_rate=hosted_c1_rate,
             worker=control["worker"],
             broker=control["broker"],
         )
@@ -375,9 +472,10 @@ def browser_server(
     tmp_path_factory: pytest.TempPathFactory,
 ) -> Iterator[BrowserServer]:
     setup = run(_setup(postgres_harness, tmp_path_factory.mktemp("plan-browser")))
+    hosted_c1_rate = run(_finish_hosted_c1(setup))
     other_actor = run(seed(setup.engine, tenant_id=setup.prepared.state.tenant_id))
     try:
-        yield from _start_server(setup, other_actor)
+        yield from _start_server(setup, other_actor, hosted_c1_rate)
     finally:
         run(setup.engine.dispose())
 
@@ -405,12 +503,24 @@ def test_browser_explicit_plan_drives_durable_report_without_duplicate_provider_
     proof: dict[str, Any] = {
         "transport": "Chromium real TCP HTTP -> AC cookie auth -> disposable PostgreSQL",
         "surface": "synthetic HTML probe; this receipt is not a CallStudio UI claim",
-        "data": "synthetic one-second WAV and synthetic ReportingBroker responses",
-        "source": "real cookie-authenticated plan routes and durable C2/C4/C5/C6 worker",
+        "data": (
+            "synthetic one-second WAV, synthetic hosted native adapter at 16 kHz, "
+            "and synthetic ReportingBroker responses"
+        ),
+        "source": (
+            "real cookie-authenticated plan routes, compose_hosted_intake, and durable "
+            "C2/C4/C5/C6 worker"
+        ),
         "generatedViaDurableWorker": True,
         "api_route_mocks_configured": False,
         "provider_processing_configured": False,
-        "worker_kind": "ConversationInferenceWorker + ProcessingPlanScheduler",
+        "worker_kind": (
+            "HostedConversationWorker with synthetic native adapter + "
+            "ConversationInferenceWorker + ProcessingPlanScheduler"
+        ),
+        "hosted_c1_recipe": AUDIOATLAS_HOSTED_RECIPE,
+        "hosted_c1_native_adapter_rate": backend.hosted_c1_rate,
+        "local_48k_fixture_preserved": True,
         "expected_provider_calls": 3,
         "provider_network_counter_installed": False,
         "google_login_tested": False,
@@ -461,6 +571,7 @@ def test_browser_explicit_plan_drives_durable_report_without_duplicate_provider_
         page.on("response", record_response)
         page.on("request", record_request)
         try:
+            assert backend.hosted_c1_rate == 16_000
             page.goto(backend.origin, wait_until="networkidle")
             expect(
                 page.get_by_role("heading", name="Sales Xray processing plan browser probe")
