@@ -3,6 +3,7 @@ import {
   AdminApiProblem,
   lookupAdminLearners,
   loadAdminLearnerDiagnosis,
+  loadMemberDirectory,
 } from "./admin-api";
 import {
   diagnosis,
@@ -48,6 +49,40 @@ it("keeps the exact lookup key in a same-origin POST body with no client authori
     purpose: "learner_support",
   });
   expect(new Headers(init?.headers).get("origin")).toBe(options.origin);
+});
+
+it("loads a bounded directory without exposing search input in the URL", async () => {
+  const page = {
+    tenant_id: tenantId,
+    tenant_name: "Academy",
+    members: [],
+    summary: { total: 0, active_learners: 0, team: 0, unverified: 0 },
+    matching_count: 0,
+    page: 1,
+    page_size: 25,
+  };
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValue(response(page));
+  await expect(
+    loadMemberDirectory({ ...options, filters: { query: " Suy " }, fetcher }),
+  ).resolves.toEqual(page);
+  expect(fetcher.mock.calls[0][0]).toBe("/v1/admin/people/directory");
+  expect(JSON.parse(String(fetcher.mock.calls[0][1]?.body))).toEqual({
+    query: "Suy",
+    role: "all",
+    status: "all",
+    page: 1,
+    page_size: 25,
+  });
+  for (const changed of [
+    { tenant_id: otherId },
+    { page: 2 },
+    { matching_count: 4 },
+  ]) {
+    fetcher.mockResolvedValueOnce(response({ ...page, ...changed }));
+    await expect(
+      loadMemberDirectory({ ...options, fetcher }),
+    ).rejects.toThrow();
+  }
 });
 
 it("loads a selected learner diagnosis with only its declared purpose", async () => {

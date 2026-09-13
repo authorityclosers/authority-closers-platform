@@ -853,6 +853,86 @@ def test_admin_commands_deny_unknown_canonical_membership_without_mutation(
         )
 
 
+def test_admin_member_directory_is_scoped_paginated_and_commits_read_audit(
+    postgres_harness: _Harness,
+) -> None:
+    seed = _seed(postgres_harness.engine)
+    other = _seed(postgres_harness.engine)
+    with Session(postgres_harness.engine) as database:
+        before = _protected_learning_snapshot(database)
+    application, _actor = _application(
+        postgres_harness.schema_url,
+        person_id=seed.admin_id,
+        tenant_id=seed.tenant_id,
+        session_id=seed.admin_session_id,
+        permissions=frozenset({"admin_surface", "learner_diagnose"}),
+        reviewer_id=None,
+    )
+
+    async def scenario() -> None:
+        try:
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=application),
+                base_url="https://admin.authorityclosers.test",
+            ) as client:
+                origin = {"Origin": "https://admin.authorityclosers.test"}
+                first = await client.post("/v1/admin/people/directory", json={}, headers=origin)
+                assert first.status_code == 200
+                assert first.headers["cache-control"] == "no-store"
+                assert {row["person_id"] for row in first.json()["members"]} == {
+                    str(seed.admin_id),
+                    str(seed.learner_id),
+                }
+                assert first.json()["summary"] == {
+                    "total": 2,
+                    "active_learners": 1,
+                    "team": 1,
+                    "unverified": 0,
+                }
+                assert str(other.learner_id) not in first.text
+                pages = []
+                for page in [1, 2]:
+                    reply = await client.post(
+                        "/v1/admin/people/directory",
+                        json={"page_size": 1, "page": page},
+                        headers=origin,
+                    )
+                    assert reply.status_code == 200
+                    pages.append(reply.json()["members"][0]["person_id"])
+                assert len(set(pages)) == 2
+                filtered = await client.post(
+                    "/v1/admin/people/directory",
+                    json={"query": f"LEARNER-{seed.learner_id.hex[:8]}"},
+                    headers=origin,
+                )
+                assert filtered.status_code == 200
+                assert filtered.json()["members"][0]["person_id"] == str(seed.learner_id)
+                assert filtered.json()["matching_count"] == 1
+                wrong = await client.post(
+                    "/v1/admin/people/directory",
+                    json={"tenant_id": str(other.tenant_id)},
+                    headers=origin,
+                )
+                assert wrong.status_code == 422
+        finally:
+            await application.state.async_engine.dispose()
+
+    _run_async(scenario())
+    with Session(postgres_harness.engine) as database:
+        events = list(
+            database.scalars(
+                select(AuditEvent).where(
+                    AuditEvent.tenant_id == seed.tenant_id,
+                    AuditEvent.action == "audit.admin.people.directory.v1",
+                )
+            )
+        )
+        assert len(events) == 4
+        assert all(event.payload["purpose"] == "learner_support" for event in events)
+        assert all(seed.learner_id.hex not in str(event.payload) for event in events)
+        assert _protected_learning_snapshot(database) == before
+
+
 def test_admin_people_lookup_and_diagnosis_use_canonical_learning_scope(
     postgres_harness: _Harness,
 ) -> None:
