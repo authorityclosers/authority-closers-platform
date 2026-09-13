@@ -727,6 +727,7 @@ load_sales_xray_hosted_inputs() {
     # Infisical supplies the managed operations scope only to this child. Pass
     # it to the release validator as an explicit bounded argument; never copy
     # the tenant into a committed release profile or print the secret scope.
+    # shellcheck disable=SC2016 -- expansion belongs to the secret-scoped child shell
     with_release_secrets \
       sh -euc '
         exec python3 "$1" compose-inputs "$2" "$3" \

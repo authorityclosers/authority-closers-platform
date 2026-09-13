@@ -126,3 +126,12 @@ the combined shell retains additional release functionality.
 The final UI commit must be integrated into the consolidated release. Its exact
 Linux CI/image validation and staging/production deployment smoke are separate
 steps. This local evidence does not claim the UI is deployed.
+
+PR control-plane validation exposed ShellCheck SC2016 in the existing hosted
+input loader. Its single-quoted command intentionally expands the managed
+Operations tenant in the secret-scoped child, so the command now has a scoped
+SC2016 annotation explaining that behavior. Shell syntax is unchanged and passed
+`bash -n`; the existing hosted lifecycle tests exercise the child scope.
+On this Windows host, 17 hosted lifecycle tests passed and 16 POSIX ownership
+tests were skipped. The merged release repair requires those ownership tests
+under root in a separate Linux CI gate; the skips do not satisfy that gate.
