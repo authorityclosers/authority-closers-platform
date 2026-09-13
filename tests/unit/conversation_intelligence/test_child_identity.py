@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import io
 import os
+import stat
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -162,8 +164,16 @@ def test_identity_file_rejects_symlinks_and_multiline_values(
     if os.name == "posix":
         target.chmod(0o600)
     symlink = tmp_path / "token-link"
+    linked_parent = tmp_path / "linked-parent"
+    linked_parent.mkdir()
+    nested_token = linked_parent / "nested-token"
+    nested_token.write_text("synthetic-child-service-token", encoding="ascii")
+    if os.name == "posix":
+        nested_token.chmod(0o600)
+    parent_link = tmp_path / "parent-link"
     try:
         symlink.symlink_to(target)
+        parent_link.symlink_to(linked_parent, target_is_directory=True)
     except (OSError, NotImplementedError):
         pytest.skip("symlink creation is unavailable on this Windows runner")
 
@@ -171,7 +181,7 @@ def test_identity_file_rejects_symlinks_and_multiline_values(
     multiline.write_text("synthetic-child-service-token\nsecond-line", encoding="ascii")
     if os.name == "posix":
         multiline.chmod(0o600)
-    for reference in (symlink, multiline):
+    for reference in (symlink, parent_link / nested_token.name, multiline):
         output = _BinaryStdout()
         with monkeypatch.context() as child_scope:
             child_scope.setattr(
@@ -183,6 +193,25 @@ def test_identity_file_rejects_symlinks_and_multiline_values(
             assert child_identity.main(_command()) == 0
         header, _ = _frame_from(output)
         assert header["error_code"] == "broker_service_identity_file_invalid"
+
+    # Synthetic metadata proof keeps this boundary explicit on platforms
+    # where creating a hard link is unavailable to the test runner.
+    real_fstat = os.fstat
+
+    def fake_fstat(file_descriptor: int) -> SimpleNamespace:
+        metadata = real_fstat(file_descriptor)
+        return SimpleNamespace(
+            st_mode=stat.S_IFREG | 0o600,
+            st_nlink=2,
+            st_size=metadata.st_size,
+        )
+
+    monkeypatch.setattr(child_identity.os, "fstat", fake_fstat)
+    with pytest.raises(
+        child_identity.InferenceBrokerError,
+        match="broker_service_identity_file_invalid",
+    ):
+        child_identity._read_token_file(target)
 
 
 def test_launcher_missing_identity_fails_closed_before_process_runner() -> None:
@@ -230,7 +259,9 @@ async def test_real_child_identity_failure_is_bounded_and_redacted(tmp_path: Pat
         ),
         b"",
         environment=environment,
-        timeout_seconds=1.0,
+        # Windows may cold-start the interpreter and import asyncio lazily;
+        # timeout behavior itself is covered by the broker timeout tests.
+        timeout_seconds=10.0,
         max_output_bytes=64 * 1024,
     )
     header, payload = _decode_frame(output, maximum_payload=64 * 1024)

@@ -55,15 +55,17 @@ def _read_token_file(reference: object) -> str:
 
     file_descriptor: int | None = None
     try:
-        if path.is_symlink():
+        if any(candidate.is_symlink() for candidate in (path, *path.parents)):
             raise InferenceBrokerError("broker_service_identity_file_invalid")
         flags = os.O_RDONLY
         if os.name == "posix":
             flags |= getattr(os, "O_NOFOLLOW", 0)
         file_descriptor = os.open(path, flags)
         information = os.fstat(file_descriptor)
-        if not stat.S_ISREG(information.st_mode) or not 0 < information.st_size <= (
-            _TOKEN_FILE_MAX_BYTES
+        if (
+            not stat.S_ISREG(information.st_mode)
+            or information.st_nlink != 1
+            or not 0 < information.st_size <= _TOKEN_FILE_MAX_BYTES
         ):
             raise InferenceBrokerError("broker_service_identity_file_invalid")
         if os.name == "posix" and stat.S_IMODE(information.st_mode) not in {0o400, 0o600}:
