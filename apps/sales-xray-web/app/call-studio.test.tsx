@@ -965,7 +965,36 @@ describe("CallStudio", () => {
     expect(container.textContent).toContain("Your approved report plan");
   });
 
-  it("rejects a nonzero-cost plan response before showing a report", async () => {
+  it("shows a funded upper limit and requires explicit cost consent", async () => {
+    vi.useFakeTimers();
+    const originalHandler = handleApi;
+    handleApi = (path, init) => {
+      if (path.endsWith("/recordings/recording-1/plan/quote"))
+        return response({
+          ...processingPlan,
+          max_cost_paise: 50_050,
+          cost_label: "Up to ₹500.50 · approved budget",
+        });
+      return originalHandler(path, init);
+    };
+    await render();
+    const file = await selectAudio("funded-plan.wav");
+    await prepareAndAuthorize(file);
+    await act(async () => getButton("Upload and measure privately").click());
+    await flush();
+    await act(async () => vi.advanceTimersByTimeAsync(2500));
+    await flush();
+    expect(container.textContent).toContain("Up to ₹500.50 · approved budget");
+    expect(container.textContent).toContain(
+      "I approve this processing plan up to ₹500.50",
+    );
+    expect(getButton("Start approved report").disabled).toBe(true);
+    expect(container.textContent).not.toContain(
+      "exact zero-cost processing plan",
+    );
+  });
+
+  it("rejects a false zero-cost label before showing a report", async () => {
     vi.useFakeTimers();
     const originalHandler = handleApi;
     handleApi = (path, init) => {

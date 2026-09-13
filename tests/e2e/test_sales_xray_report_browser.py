@@ -104,7 +104,9 @@ async def _generate_durable_report(postgres_harness: Any, fixture: Any) -> None:
             c2 = c2_row.id
         assert c2 == await completed_checkpoint(sessions, asr)
 
-        facts = StageRequest(stage="C4", transcript_checkpoint_id=c2)
+        facts = StageRequest(
+            stage="C4", transcript_checkpoint_id=c2, provider="gemini", model="gemini-3.8-flash"
+        )
         quote_id, quote = await text_quote(sessions, prepared, facts)
         fact_view = await enqueue(
             sessions, prepared, quote_id, quote, facts, "browser-durable-facts"
@@ -116,6 +118,8 @@ async def _generate_durable_report(postgres_harness: Any, fixture: Any) -> None:
             stage="C5",
             transcript_checkpoint_id=c2,
             fact_checkpoint_ids=(c4,),
+            provider="gemini",
+            model="gemini-3.8-flash",
             max_completion_tokens=1_800,
         )
         quote_id, quote = await text_quote(sessions, prepared, coaching)
@@ -124,6 +128,7 @@ async def _generate_durable_report(postgres_harness: Any, fixture: Any) -> None:
         )
         assert await worker.run_once()
         await completed_checkpoint(sessions, report_view)
+        assert broker.routes == ["elevenlabs", "gemini", "gemini"]
         async with sessions() as db:
             async with db.begin():
                 report = await ConversationReports(ConversationApplication(db)).get(
@@ -326,6 +331,9 @@ def _exercise_browser(backend: BrowserBackend, evidence: Path) -> None:
             else "synthetic durable C2/C4/C5/C6 worker via ReportingBroker"
         ),
         "generatedViaDurableWorker": backend.mode == "durable",
+        "synthetic_task_routes": ["elevenlabs:scribe_v2", "gemini:gemini-3.8-flash"]
+        if backend.mode == "durable"
+        else [],
         "api_route_mocks_configured": False,
         "provider_processing_configured": False,
         "worker_kind": (

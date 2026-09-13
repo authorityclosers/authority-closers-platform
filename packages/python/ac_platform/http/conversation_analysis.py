@@ -79,6 +79,7 @@ class AnalysisSelection(BaseModel):
             transcript_checkpoint_id=self.transcript_checkpoint_id,
             fact_checkpoint_ids=self.fact_checkpoint_ids,
             chunk_index=self.chunk_index,
+            provider=approval.provider_id,
             model=approval.model_id,
             max_completion_tokens=stage_completion_limit(
                 self.stage, approval.max_completion_tokens

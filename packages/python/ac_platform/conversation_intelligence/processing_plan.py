@@ -25,13 +25,14 @@ from ac_platform.conversation_intelligence.application import (
 )
 from ac_platform.conversation_intelligence.authority import ConversationAuthority
 from ac_platform.conversation_intelligence.checkpoints import canonical, content_hash
-from ac_platform.conversation_intelligence.entitlements import MinuteAccount, Quote
+from ac_platform.conversation_intelligence.entitlements import BudgetAccount, MinuteAccount, Quote
 from ac_platform.conversation_intelligence.inference import (
     TRANSCRIPT_RECIPE,
     ConversationInference,
     ServicePlan,
 )
 from ac_platform.conversation_intelligence.models import (
+    ConversationBudgetAccount,
     ConversationCommand,
     ConversationInferenceTask,
     ConversationMinuteAccount,
@@ -61,6 +62,18 @@ from ac_platform.outbox.repository import RecoveryStateRepository
 PLAN_PRIVACY_REVISION: Literal["sales-xray-processing-plan-v1"] = "sales-xray-processing-plan-v1"
 
 
+def maximum_plan_cost(stages: tuple[StageApproval, StageApproval, StageApproval]) -> int:
+    """Upper bound: one ASR, each permitted fact chunk, then one judge request."""
+    c2, c4, c5 = stages
+    return c2.max_cost_paise + c4.max_cost_paise * c4.max_requests + c5.max_cost_paise
+
+
+def plan_cost_label(maximum: int) -> str:
+    if maximum == 0:
+        return "₹0 · approved allowance"
+    return f"Up to ₹{maximum // 100}.{maximum % 100:02d} · approved budget"
+
+
 class PlanManifest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     schema_id: Literal["ac.sales-xray.processing-plan/1"]
@@ -81,7 +94,7 @@ class PlanManifest(BaseModel):
     privacy_revision: Literal["sales-xray-processing-plan-v1"] = PLAN_PRIVACY_REVISION
     created_at_epoch: int = Field(strict=True, gt=0)
     expires_at_epoch: int = Field(strict=True, gt=0)
-    max_cost_paise: Literal[0] = 0
+    max_cost_paise: int = Field(default=0, strict=True, ge=0, le=2_147_483_647)
     max_entitlement_seconds: int = Field(strict=True, ge=0, le=86400)
 
     @model_validator(mode="after")
@@ -111,6 +124,7 @@ class PlanManifest(BaseModel):
             # provider requests have separate request/token/budget approvals and
             # must not add the same audio duration or text work to that ledger.
             or self.max_entitlement_seconds != 0
+            or self.max_cost_paise != maximum_plan_cost(self.stages)
         ):
             raise ValueError("processing_plan_bounds_invalid")
         return self
@@ -223,7 +237,8 @@ def require_derived_input(value: PlanManifest, plan: ServicePlan) -> None:
         raise ConversationDenied("The derived stage is unavailable.")
     approval = next(item for item in value.stages if item.stage == plan.checkpoint.stage)
     if (
-        plan.request.model != approval.model_id
+        plan.request.provider != approval.provider_id
+        or plan.request.model != approval.model_id
         or plan.request.max_input_chars != value.max_input_chars
         or plan.request.max_completion_tokens
         != stage_completion_limit(plan.checkpoint.stage, approval.max_completion_tokens)
@@ -297,8 +312,8 @@ class ConversationProcessingPlans:
             "accepted": row.acceptance_command_id is not None,
             "state": row.state,
             "automatic_progression": True,
-            "cost_label": "₹0 · approved allowance",
-            "max_cost_paise": 0,
+            "cost_label": plan_cost_label(value.max_cost_paise),
+            "max_cost_paise": value.max_cost_paise,
             "max_entitlement_seconds": value.max_entitlement_seconds,
             "expires_at_epoch": value.expires_at_epoch,
             "stages": [
@@ -362,7 +377,7 @@ class ConversationProcessingPlans:
         ):
             item = approvals[stage]
             if (
-                item.provider_id != "groq"
+                item.provider_id not in {"groq", "gemini"}
                 or item.max_completion_tokens < 256
                 or source.duration_ms > item.max_source_duration_ms
             ):
@@ -373,7 +388,7 @@ class ConversationProcessingPlans:
                 item,
                 bundle=bundle,
                 task=task,
-                provider="groq",
+                provider=item.provider_id,
                 model=item.model_id,
                 recipe=recipe,
                 profile_revision=str(profile["revision"]) if stage == "C5" else None,
@@ -383,6 +398,16 @@ class ConversationProcessingPlans:
         # provider plan needs zero additional user minutes, even when the last
         # authorized call consumed the account's entire allowance.
         maximum_seconds = 0
+        maximum_cost = maximum_plan_cost((c2, c4, c5))
+        if maximum_cost > bundle.budget_cap_paise:
+            raise ConversationDenied("The complete plan exceeds the approved provider budget.")
+        if maximum_cost:
+            budget_row = await self.db.get(ConversationBudgetAccount, bundle.budget_scope_id)
+            if (
+                budget_row is None
+                or BudgetAccount.from_dict(budget_row.snapshot).available_paise < maximum_cost
+            ):
+                raise ConversationConflict("The provider budget cannot cover this complete plan.")
         minutes = await self.db.get(
             ConversationMinuteAccount, (recording.tenant_id, recording.person_id)
         )
@@ -415,6 +440,7 @@ class ConversationProcessingPlans:
                     *(item.expires_at_epoch for item in approvals.values()),
                 ),
                 max_entitlement_seconds=maximum_seconds,
+                max_cost_paise=maximum_cost,
             )
         except ValueError:
             raise ConversationDenied("The complete processing plan is not approved.") from None
@@ -558,6 +584,7 @@ class ConversationProcessingPlans:
             first_request = StageRequest(
                 stage="C4",
                 transcript_checkpoint_id=c2.checkpoint_id,
+                provider=c4.provider_id,
                 model=c4.model_id,
                 max_input_chars=value.max_input_chars,
                 max_completion_tokens=stage_completion_limit("C4", c4.max_completion_tokens),
@@ -590,6 +617,7 @@ class ConversationProcessingPlans:
                         stage="C5",
                         transcript_checkpoint_id=c2.checkpoint_id,
                         fact_checkpoint_ids=tuple(facts),
+                        provider=c5.provider_id,
                         model=c5.model_id,
                         max_input_chars=value.max_input_chars,
                         max_completion_tokens=stage_completion_limit(

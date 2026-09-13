@@ -6,13 +6,14 @@ from uuid import uuid4
 import pytest
 
 from ac_platform.conversation_intelligence.application import ConversationDenied
-from ac_platform.conversation_intelligence.checkpoints import content_hash
+from ac_platform.conversation_intelligence.checkpoints import canonical, content_hash
 from ac_platform.conversation_intelligence.models import ConversationProcessingPlan
 from ac_platform.conversation_intelligence.processing_plan import (
     PLAN_PRIVACY_REVISION,
     PlanAcceptance,
     PlanManifest,
     manifest_for,
+    plan_cost_label,
 )
 from ac_platform.conversation_intelligence.reporting_pipeline import COACHING_RECIPE, FACT_RECIPE
 from tests.unit.conversation_intelligence.test_activation_contract import (
@@ -103,6 +104,34 @@ def test_saved_plan_preserves_actual_weight_discrepancy_and_finite_bound() -> No
     assert value.profile["weights_actual"] == 95
     assert value.profile["weights_declared"] == 100
     assert value.max_entitlement_seconds == 0
+
+
+def test_paid_plan_adds_one_asr_all_fact_requests_and_one_judge() -> None:
+    data = manifest_for(saved_plan()).as_dict()
+    for stage, price in zip(data["stages"], (50, 7, 9), strict=True):
+        stage.update(
+            max_cost_paise=price, zero_cost_basis="paid_pricing_evidence", free_allowance_ref=None
+        )
+    # The fixture approves three requests per stage, but only C4 is chunked.
+    data["max_cost_paise"] = 50 + 3 * 7 + 9
+    parsed = PlanManifest.model_validate_json(canonical(data))
+    assert parsed.max_cost_paise == 80
+    assert plan_cost_label(parsed.max_cost_paise) == "Up to ₹0.80 · approved budget"
+    for incorrect in (0, 79, 81, True, -1, 80.5):
+        with pytest.raises(ValueError):
+            PlanManifest.model_validate_json(canonical({**data, "max_cost_paise": incorrect}))
+
+
+@pytest.mark.parametrize(
+    ("paise", "label"),
+    [
+        (0, "₹0 · approved allowance"),
+        (1, "Up to ₹0.01 · approved budget"),
+        (150_000, "Up to ₹1500.00 · approved budget"),
+    ],
+)
+def test_price_labels_preserve_paise(paise: int, label: str) -> None:
+    assert plan_cost_label(paise) == label
 
 
 @pytest.mark.parametrize("alteration", ["source", "profile", "price", "recipient", "erased"])

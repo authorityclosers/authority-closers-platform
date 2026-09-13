@@ -163,6 +163,8 @@ class BoundedProviders:
                     for key in (
                         "promptTokenCount",
                         "candidatesTokenCount",
+                        "thoughtsTokenCount",
+                        "cachedContentTokenCount",
                         "totalTokenCount",
                         "prompt_tokens",
                         "completion_tokens",

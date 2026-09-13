@@ -71,8 +71,8 @@ type ProcessingPlan = {
   privacy_revision: "sales-xray-processing-plan-v1";
   accepted: boolean;
   state: "quoted" | "active" | "held" | "completed" | "cancelled";
-  cost_label: "₹0 · approved allowance";
-  max_cost_paise: 0;
+  cost_label: string;
+  max_cost_paise: number;
   max_entitlement_seconds: number;
   expires_at_epoch: number;
   stages: ProcessingPlanStage[];
@@ -225,10 +225,18 @@ function parseProcessingPlan(
   ) as ProcessingPlan["state"];
   if (!PLAN_STATES.has(state))
     throw new ReportContractError("plan_state_invalid");
-  if (plan.cost_label !== "₹0 · approved allowance")
+  const maximumCost = planInteger(
+    plan.max_cost_paise,
+    "plan_cost_limit",
+    0,
+    2_147_483_647,
+  );
+  const costLabel =
+    maximumCost === 0
+      ? "₹0 · approved allowance"
+      : `Up to ₹${Math.floor(maximumCost / 100)}.${String(maximumCost % 100).padStart(2, "0")} · approved budget`;
+  if (plan.cost_label !== costLabel)
     throw new ReportContractError("plan_cost_invalid");
-  if (plan.max_cost_paise !== 0)
-    throw new ReportContractError("plan_cost_limit_invalid");
   const maxEntitlement = planInteger(
     plan.max_entitlement_seconds,
     "plan_entitlement",
@@ -314,8 +322,8 @@ function parseProcessingPlan(
     privacy_revision: "sales-xray-processing-plan-v1",
     accepted: plan.accepted,
     state,
-    cost_label: "₹0 · approved allowance",
-    max_cost_paise: 0,
+    cost_label: costLabel,
+    max_cost_paise: maximumCost,
     max_entitlement_seconds: maxEntitlement,
     expires_at_epoch: expires,
     stages,
@@ -1462,8 +1470,9 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
                     checked={planConsent}
                     onChange={(e) => setPlanConsent(e.target.checked)}
                   />
-                  I approve this exact zero-cost processing plan and its privacy
-                  terms.
+                  {plan.max_cost_paise === 0
+                    ? "I approve this exact zero-cost processing plan and its privacy terms."
+                    : `I approve this processing plan up to ₹${Math.floor(plan.max_cost_paise / 100)}.${String(plan.max_cost_paise % 100).padStart(2, "0")} and its privacy terms.`}
                 </label>
                 <button
                   className="primary-button studio-wide"

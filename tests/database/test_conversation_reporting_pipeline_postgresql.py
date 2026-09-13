@@ -62,7 +62,12 @@ class ReportingBroker(FakeBroker):
         self.calls += 1
         self.payloads.append(payload)
         body = json.loads(payload)
-        user = body["messages"][1]["content"]
+        provider = reservation.quote.provider_id
+        user = (
+            body["contents"][0]["parts"][0]["text"]
+            if provider == "gemini"
+            else body["messages"][1]["content"]
+        )
         if user.startswith("{"):
             packet = json.loads(user)
             segment = packet["segments"][0]
@@ -97,9 +102,18 @@ class ReportingBroker(FakeBroker):
             }
             data["overview"] = overview_for(data)
         envelope = {"choices": [{"message": {"content": json.dumps(data)}}]}
+        if provider == "gemini":
+            envelope = {
+                "candidates": [
+                    {
+                        "finishReason": "STOP",
+                        "content": {"role": "model", "parts": [{"text": json.dumps(data)}]},
+                    }
+                ]
+            }
         raw = canonical(envelope)
         return ProviderResult(
-            provider="groq",
+            provider=provider,
             model=reservation.quote.provider_model,
             request_id=f"synthetic-text-{self.calls}",
             response_sha256=hashlib.sha256(raw).hexdigest(),
@@ -221,10 +235,12 @@ async def completed_checkpoint(sessions: Any, view: dict[str, Any]) -> UUID:
 
 
 @pytest.mark.parametrize("multiple_chunks", [False, True])
+@pytest.mark.parametrize("provider", ["groq", "gemini"])
 def test_saved_transcript_to_private_report_and_profile_reuse(
     postgres_harness: Any,
     tmp_path: Path,
     multiple_chunks: bool,
+    provider: str,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     async def exercise() -> None:
@@ -250,8 +266,17 @@ def test_saved_transcript_to_private_report_and_profile_reuse(
                     prepared.state.actor, prepared.recording_id
                 )
                 assert early["segments"][0]["text"].startswith("hello buyer")
-            facts = StageRequest(stage="C4", transcript_checkpoint_id=c2, max_input_chars=512)
-            chunk_count = len(prepare_fact_inputs(early, max_input_chars=512))
+            model = "gemini-3.8-flash" if provider == "gemini" else "openai/gpt-oss-120b"
+            facts = StageRequest(
+                stage="C4",
+                transcript_checkpoint_id=c2,
+                max_input_chars=512,
+                provider=provider,
+                model=model,
+            )
+            chunk_count = len(
+                prepare_fact_inputs(early, provider=provider, model=model, max_input_chars=512)
+            )
             assert chunk_count == (3 if multiple_chunks else 1)
             qid, quote = await text_quote(sessions, prepared, facts)
             # A quote cannot authorize different model bytes.
@@ -261,7 +286,15 @@ def test_saved_transcript_to_private_report_and_profile_reuse(
                     prepared,
                     qid,
                     quote,
-                    facts.model_copy(update={"model": "different-model"}),
+                    facts.model_copy(
+                        update={
+                            "model": (
+                                "gemini-3.1-pro-preview"
+                                if provider == "gemini"
+                                else "llama-3.3-70b-versatile"
+                            )
+                        }
+                    ),
                     "wrong-model",
                 )
             fact_ids = []
@@ -277,6 +310,8 @@ def test_saved_transcript_to_private_report_and_profile_reuse(
                 stage="C5",
                 transcript_checkpoint_id=c2,
                 fact_checkpoint_ids=tuple(reversed(fact_ids)),
+                provider=provider,
+                model=model,
                 max_completion_tokens=1800,
             )
             qid, quote = await text_quote(sessions, prepared, coaching)
@@ -335,12 +370,22 @@ def test_saved_transcript_to_private_report_and_profile_reuse(
             assert not await worker.run_once()
             profile = load_report_profile()
             profile["revision"] = "synthetic-next-profile"
-            changed = coaching.model_copy(update={"profile": profile})
+            next_provider = "groq" if provider == "gemini" else "gemini"
+            next_model = "openai/gpt-oss-120b" if next_provider == "groq" else "gemini-3.8-flash"
+            changed = coaching.model_copy(
+                update={
+                    "profile": profile,
+                    "provider": next_provider,
+                    "model": next_model,
+                }
+            )
             qid, quote = await text_quote(sessions, prepared, changed)
             new_view = await enqueue(sessions, prepared, qid, quote, changed, "report-new-profile")
             assert await worker.run_once()
             await completed_checkpoint(sessions, new_view)
-            assert broker.routes == ["elevenlabs"] + ["groq"] * (chunk_count + 2)
+            assert broker.routes == ["elevenlabs"] + [provider] * (chunk_count + 1) + [
+                next_provider
+            ]
             assert broker.payloads[0] == prepared.data
             assert all(payload.startswith(b"{") for payload in broker.payloads[1:])
             async with sessions() as db, db.begin():

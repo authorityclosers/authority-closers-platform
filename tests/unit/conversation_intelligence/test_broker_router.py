@@ -213,6 +213,7 @@ def _router(bundle_box: dict[str, HostedApprovalBundle], child: Any) -> FixedPro
         {
             "elevenlabs": ProviderRoute("elevenlabs", "ref:credential/elevenlabs/v1", child),
             "groq": ProviderRoute("groq", "ref:credential/groq/v1", child),
+            "gemini": ProviderRoute("gemini", "ref:credential/gemini/v1", child),
         },
         current_authority=lambda _now: bundle_box["bundle"],
         clock=lambda: NOW,
@@ -246,8 +247,8 @@ async def test_changed_credential_reference_is_rejected_before_child() -> None:
 @pytest.mark.asyncio
 async def test_unknown_provider_has_no_fallback_child() -> None:
     child = FakeChild()
-    bundle = _bundle(_stage(provider_id="gemini"))
-    reservation = _reservation(bundle, provider_id="gemini")
+    bundle = _bundle(_stage(provider_id="unconfigured-provider"))
+    reservation = _reservation(bundle, provider_id="unconfigured-provider")
     # An unconfigured approved provider cannot fall through to ElevenLabs.
 
     with pytest.raises(ProviderRouterError, match="broker_router_provider_unconfigured"):
@@ -353,6 +354,77 @@ def _synthetic_transcript() -> dict[str, Any]:
             }
         ],
     }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("price", [0, 50])
+async def test_gemini_uses_exact_free_or_paid_scope_without_fallback(price: int) -> None:
+    prepared = prepare_fact_inputs(
+        _synthetic_transcript(), provider="gemini", model="gemini-3.8-flash"
+    )[0]
+    stage = _stage(
+        stage="C4", provider_id="gemini", model_id=prepared.model, recipe_revision=FACT_RECIPE
+    )
+    value = _bundle(stage).model_dump(mode="json")
+    if price:
+        value.update(budget_cap_paise=100, paid_approval_ref="ref:owner/paid-test")
+        value["stages"][0].update(
+            max_cost_paise=price, zero_cost_basis="paid_pricing_evidence", free_allowance_ref=None
+        )
+    bundle = HostedApprovalBundle.model_validate_json(canonical(value))
+    reservation = _reservation(
+        bundle,
+        provider_id="gemini",
+        provider_model=prepared.model,
+        recipe_revision=FACT_RECIPE,
+        operation="extract_context_evidence",
+        input_sha256=prepared.input_sha256,
+        entitlement_seconds=0,
+    )
+    quote = replace(reservation.quote, max_cost_paise=price)
+    reservation = replace(
+        reservation,
+        quote=quote,
+        permission=replace(reservation.permission, quote_fingerprint=quote.fingerprint),
+    )
+    child = FakeChild()
+    router = _router({"bundle": bundle}, child)
+    result = await router.execute(reservation, prepared.payload)
+    assert result.provider == "gemini" and len(child.calls) == 1
+    changed_quote = replace(quote, max_cost_paise=price + 1)
+    changed = replace(
+        reservation,
+        quote=changed_quote,
+        permission=replace(reservation.permission, quote_fingerprint=changed_quote.fingerprint),
+    )
+    with pytest.raises(ProviderRouterError, match="broker_router_authorization_mismatch"):
+        await router.execute(changed, prepared.payload)
+    assert len(child.calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_gemini_router_checks_native_output_cap_before_child() -> None:
+    prepared = prepare_fact_inputs(
+        _synthetic_transcript(), provider="gemini", model="gemini-3.8-flash"
+    )[0]
+    stage = _stage(
+        stage="C4", provider_id="gemini", model_id=prepared.model, recipe_revision=FACT_RECIPE
+    )
+    stage = stage.model_copy(update={"max_completion_tokens": 512})
+    bundle = _bundle(stage)
+    reservation = _reservation(
+        bundle,
+        provider_id="gemini",
+        provider_model=prepared.model,
+        recipe_revision=FACT_RECIPE,
+        operation="extract_context_evidence",
+        input_sha256=prepared.input_sha256,
+        entitlement_seconds=0,
+    )
+    child = FakeChild()
+    with pytest.raises(ProviderRouterError, match="broker_router_payload_mismatch"):
+        await _router({"bundle": bundle}, child).execute(reservation, prepared.payload)
+    assert child.calls == []
 
 
 @pytest.mark.asyncio

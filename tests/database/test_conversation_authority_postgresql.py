@@ -130,7 +130,15 @@ def _provider(
     )
 
 
-def _registry_config(revision: str, *, funded: bool = False) -> RegistryConfig:
+def _registry_config(
+    revision: str, *, funded: bool = False, text_provider: str = "groq", text_cost_paise: int = 0
+) -> RegistryConfig:
+    text_model = "gemini-3.8-flash" if text_provider == "gemini" else "openai/gpt-oss-120b"
+    text_endpoint = (
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent"
+        if text_provider == "gemini"
+        else "https://api.groq.com/openai/v1/chat/completions"
+    )
     return RegistryConfig(
         revision=revision,
         policy=RegistryPolicy(
@@ -145,9 +153,10 @@ def _registry_config(revision: str, *, funded: bool = False) -> RegistryConfig:
                 max_cost_paise=50_000 if funded else 0,
             ),
             _provider(
-                "groq",
-                "openai/gpt-oss-120b",
-                "https://api.groq.com/openai/v1/chat/completions",
+                text_provider,
+                text_model,
+                text_endpoint,
+                max_cost_paise=text_cost_paise,
             ),
         ),
         routes=(
@@ -163,8 +172,8 @@ def _registry_config(revision: str, *, funded: bool = False) -> RegistryConfig:
             ),
             RouteConfig(
                 "facts",
-                "groq",
-                "openai/gpt-oss-120b",
+                text_provider,
+                text_model,
                 FACT_RECIPE,
                 "profile-none-v1",
                 "prompt-facts-v1",
@@ -173,8 +182,8 @@ def _registry_config(revision: str, *, funded: bool = False) -> RegistryConfig:
             ),
             RouteConfig(
                 "coaching",
-                "groq",
-                "openai/gpt-oss-120b",
+                text_provider,
+                text_model,
                 COACHING_RECIPE,
                 str(load_report_profile()["revision"]),
                 "prompt-coaching-v1",
@@ -241,6 +250,8 @@ def _bundle(
     now_epoch: int,
     expires_at_epoch: int | None = None,
     funded: bool = False,
+    text_provider: str = "groq",
+    text_cost_paise: int = 0,
 ) -> HostedApprovalBundle:
     bundle_expires = expires_at_epoch or now_epoch + 3_600
     stage_expires = min(bundle_expires, now_epoch + 1_800)
@@ -296,26 +307,30 @@ def _bundle(
                 source_sha256=source_sha256,
                 config_sha256=config_sha256,
                 stage="C4",
-                provider="groq",
-                model="openai/gpt-oss-120b",
+                provider=text_provider,
+                model="gemini-3.8-flash" if text_provider == "gemini" else "openai/gpt-oss-120b",
                 recipe=FACT_RECIPE,
                 expires_at_epoch=stage_expires,
                 entitlement_seconds=0,
                 max_completion_tokens=4_000,
                 profile_sha256=None,
+                paid=text_cost_paise > 0,
+                max_cost_paise=text_cost_paise,
             ),
             _stage(
                 state=state,
                 source_sha256=source_sha256,
                 config_sha256=config_sha256,
                 stage="C5",
-                provider="groq",
-                model="openai/gpt-oss-120b",
+                provider=text_provider,
+                model="gemini-3.8-flash" if text_provider == "gemini" else "openai/gpt-oss-120b",
                 recipe=COACHING_RECIPE,
                 expires_at_epoch=stage_expires,
                 entitlement_seconds=0,
                 max_completion_tokens=4_000,
                 profile_sha256=profile_sha256,
+                paid=text_cost_paise > 0,
+                max_cost_paise=text_cost_paise,
             ),
         ),
     )
@@ -345,7 +360,12 @@ async def _promote_admin(engine: Any, state: Any) -> ActorContext:
 
 
 async def _setup(
-    postgres_harness: Any, tmp_path: Path, *, funded: bool = False
+    postgres_harness: Any,
+    tmp_path: Path,
+    *,
+    funded: bool = False,
+    text_provider: str = "groq",
+    text_cost_paise: int = 0,
 ) -> AuthorityFixture:
     prepared = await prepare_local(postgres_harness, tmp_path)
     assert await prepared.worker.run_once(), "The synthetic C1 fixture did not complete."
@@ -353,7 +373,12 @@ async def _setup(
     sessions = async_sessionmaker(engine, expire_on_commit=False)
     try:
         actor = await _promote_admin(engine, prepared.state)
-        config = _registry_config("hosted-test-config-v1", funded=funded)
+        config = _registry_config(
+            "hosted-test-config-v1",
+            funded=funded,
+            text_provider=text_provider,
+            text_cost_paise=text_cost_paise,
+        )
         async with sessions() as database, database.begin():
             config_view = await ConversationProviderAdmin(
                 ConversationApplication(database, clock=lambda: prepared.state.now)
@@ -366,6 +391,8 @@ async def _setup(
             config_view["configuration_sha256"],
             now_epoch=int(prepared.state.now.timestamp()),
             funded=funded,
+            text_provider=text_provider,
+            text_cost_paise=text_cost_paise,
         )
         bundle_box = {"bundle": bundle}
         authority = ConversationAuthority(
