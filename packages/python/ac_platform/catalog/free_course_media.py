@@ -50,7 +50,9 @@ from ac_platform.media.models import (
     MediaLifecycle,
     MediaPurpose,
     MediaRendition,
+    MediaUploadIntent,
     MediaVersion,
+    StudioVideoUpload,
 )
 from ac_platform.media.processing import inspect_hls_playlist_inventory
 from ac_platform.media.service import MediaService
@@ -186,6 +188,55 @@ def _existing_metadata(storage: PrivateObjectStorage, key: str) -> StoredObjectM
     return head
 
 
+async def _require_source_studio_upload(
+    database: AsyncSession,
+    *,
+    operations_tenant_id: UUID,
+    source_program_id: UUID,
+    owner_person_id: UUID,
+    source_asset: MediaAsset,
+    source_version: MediaVersion,
+) -> None:
+    """Bind the READY bytes to one immutable, exact Studio course admission."""
+
+    admissions = (
+        await database.execute(
+            select(StudioVideoUpload, MediaUploadIntent)
+            .join(
+                MediaUploadIntent,
+                (MediaUploadIntent.id == StudioVideoUpload.upload_id)
+                & (MediaUploadIntent.tenant_id == StudioVideoUpload.tenant_id),
+            )
+            .where(
+                StudioVideoUpload.tenant_id == operations_tenant_id,
+                MediaUploadIntent.tenant_id == operations_tenant_id,
+                MediaUploadIntent.asset_id == source_asset.id,
+                MediaUploadIntent.version_id == source_version.id,
+            )
+            .limit(2)
+            .with_for_update(read=True)
+        )
+    ).all()
+    if len(admissions) != 1:
+        raise FreeCourseMediaPromotionError("the source Studio upload provenance is unavailable")
+    admission, intent = admissions[0]
+    if (
+        admission.program_id != source_program_id
+        or source_asset.tenant_id != operations_tenant_id
+        or source_version.tenant_id != operations_tenant_id
+        or source_version.asset_id != source_asset.id
+        or source_asset.owner_person_id != owner_person_id
+        or intent.actor_person_id != owner_person_id
+        or intent.state != MediaLifecycle.READY.value
+        or intent.object_key != source_version.object_key
+        or intent.content_type != source_version.content_type
+        or intent.declared_bytes != source_version.actual_bytes
+        or intent.checksum_sha256 != source_version.checksum_sha256
+        or intent.completion_fingerprint is None
+    ):
+        raise FreeCourseMediaPromotionError("the source Studio upload does not match its context")
+
+
 class FreeCourseMediaPromotionApplication:
     """Promote one processed source video and bind it to one global activity."""
 
@@ -283,6 +334,7 @@ class FreeCourseMediaPromotionApplication:
                 "the publication receipt does not match this tenant"
             )
         try:
+            source_program_id = UUID(str(publication.payload["source_program_id"]))
             target_program_id = UUID(str(publication.payload["program_id"]))
             target_version_id = UUID(str(publication.payload["program_version_id"]))
         except (KeyError, TypeError, ValueError) as error:
@@ -372,6 +424,15 @@ class FreeCourseMediaPromotionApplication:
             raise FreeCourseMediaPromotionError("the source video is not a verified READY version")
         source_checksum = source_version.checksum_sha256
         assert source_checksum is not None
+
+        await _require_source_studio_upload(
+            self.database,
+            operations_tenant_id=self.operations_tenant_id,
+            source_program_id=source_program_id,
+            owner_person_id=actor.person_id,
+            source_asset=source_asset,
+            source_version=source_version,
+        )
 
         renditions = tuple(
             (
