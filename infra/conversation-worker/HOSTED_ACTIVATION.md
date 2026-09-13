@@ -27,9 +27,16 @@ must use that same file and digest. The service file's release_id must equal
 `/app/.ac-release-id` inside the frozen API image. Its native_image_ref is the
 verified `sha256:...` OCI transport manifest digest from the loaded native
 artifact. The artifact records the separate Docker config/image ID and proves
-that the transport manifest references it. After loading on the VPS, inspect the
-transport digest and require its `.Id` to match that recorded config ID before
-starting the helper.
+that the transport manifest references it. After loading, inspect that exact
+transport digest and record the store's actual identity behavior. Docker29's
+containerd image store on the current VPS returns the verified OCI manifest as
+its `.Id`; classic Docker returns the independently bound configuration ID.
+Accept `.Id` only if it is that exact verified manifest or its independently
+verified configuration ID. A configuration-reference fallback must resolve to
+that exact configuration ID. In every case retain the verified archive checksum
+and manifest-to-configuration binding; a mutable tag or an unrelated image ID
+does not establish image identity. Use the manifest reference when the store
+supports it.
 
 For production, replace both the environment and every staging path with their
 separate production counterpart; use its own approved bundle and DB credential.
@@ -128,6 +135,48 @@ with the same socket/workspace/image and a fresh external receipt path. Verify
 actual container confinement, output ownership, timeout/reap and current headroom.
 Do not treat a successful `docker load`, configuration check or CI build as that
 runtime proof.
+
+### Persistent helper supervision
+
+`infra/application/scripts/render-sales-xray-native.py` renders environment-specific
+systemd service and mount units as JSON. It installs nothing and reads no secrets.
+Render with the final application's versioned script path and the independently
+verified native helper artifact, then retain and hash the exact rendered units.
+The current verified helper reference is:
+
+```text
+helper source: 6204dc48df72ec133d30ce32e24dbddf3ea4993d
+helper root: /srv/authority-closers/application/artifacts/sales-xray-native-6204dc48df72ec133d30ce32e24dbddf3ea4993d/helper
+host Python: /usr/bin/python3 (3.12.3)
+native manifest: sha256:fd29cbf1edc9f6b13ca9fcebc6903adee0fd70583c77b60bd1753816f7f57ef9
+bound config: sha256:75e3b01d100534ce667a97822ab34216b09553f820b60c2f66a223b72b481866
+native smoke receipt SHA256: 2ff3aa8733f69cb3f280bb87fec4afaad0292784b9427b09706c420f759fa1f4
+```
+
+Release Recovery verified that artifact and its two-run, wrong-image rejection
+and helper cleanup receipt on the VPS. Reuse that proof; a later API source
+release does not require rebuilding the unchanged native image. The six helper
+files remain root-owned and their manifest hashes must still match.
+
+The renderer binds each service to its environment's 64 MiB output mount and
+fixed helper/image. Its root helper has only the native Docker bridge role;
+provider identity directories are inaccessible and its process environment is
+cleared before launch. The API and database/provider worker receive no Docker
+socket. The helper drains for up to 800 seconds before forced termination.
+
+Keep the socket directory's inode stable because the worker bind-mounts it.
+Prestart accepts an absent socket or removes only a root-owned, mode0660 socket
+whose connection is refused and whose inode has not changed. A live helper,
+foreign node, symlink, writable parent or ambiguous error blocks duplicate start.
+It never removes the socket directory or recursively deletes anything.
+
+After owned storage preparation, the release operator installs the reviewed units
+root-owned mode0644 through the infrastructure release process and verifies them
+with `systemd-analyze verify`. Start the mount before the helper and the helper
+before accepting jobs. Record `systemctl is-active`, effective unit properties,
+mount capacity/options/ownership, and a supervised stop/restart with successful
+worker reconnection. The earlier native receipt proves native execution; it does
+not claim this newly rendered supervisor was installed or restart-tested.
 
 ## Coordinated API/worker activation and rollback
 
