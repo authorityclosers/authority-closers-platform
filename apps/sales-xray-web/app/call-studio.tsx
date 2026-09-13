@@ -17,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { BrandMark } from "@ac/ui";
+import { RecordingMeasurements } from "./recording-measurements";
 import {
   parseJobResponse,
   parseJobStatus,
@@ -2060,6 +2061,13 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
               <h2>Final takeaway</h2>
               <p>{job.report.verdict}</p>
             </section>
+            {activeRecordingId && (
+              <RecordingMeasurements
+                key={`${activeRecordingId}:${job.report.source_sha256}`}
+                recordingId={activeRecordingId}
+                sourceSha256={job.report.source_sha256}
+              />
+            )}
             <details>
               <summary>Report details</summary>
               <p>

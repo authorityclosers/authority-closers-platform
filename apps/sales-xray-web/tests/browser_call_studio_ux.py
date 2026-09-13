@@ -4,17 +4,21 @@ The API responses are bounded synthetic fixtures. No provider is called and no
 private audio is used; the WAV is generated as four seconds of silence.
 """
 
-from io import BytesIO
 import os
+import wave
+from io import BytesIO
 from pathlib import Path
 from urllib.parse import urlparse
-import wave
 
 from playwright.sync_api import Page, sync_playwright
 
-
 BASE_URL = os.environ.get("SALES_XRAY_BASE_URL", "http://127.0.0.1:3016")
-AUDIT_DIR = Path(r"D:\AC-authority-closers-release-audit\sales-xray-live-ux-20260913")
+AUDIT_DIR = Path(
+    os.environ.get(
+        "SALES_XRAY_UX_EVIDENCE_DIR",
+        r"D:\AC-authority-closers-release-audit\sales-xray-measurement-ux-20260913",
+    )
+)
 SOURCE_SHA = "00" * 32
 CITATION = {"doc": "Doc-1", "sections": ["source section"]}
 TRANSCRIPT = {
@@ -136,6 +140,79 @@ def json_response(route, body, status=200):
     )
 
 
+def synthetic_measurements():
+    source = {
+        "recording_id": "recording-1",
+        "source_sha256": SOURCE_SHA,
+        "clock": "decoded_audio_track",
+        "container_video_sync_certified": False,
+        "source_rate": 48000,
+        "decoded_rate": 16000,
+        "physical_channels": 1,
+        "duration_ms": 4000,
+    }
+    return {
+        "schema": "ac.sales-xray.measurement-view/1",
+        "availability": "available",
+        "source": source,
+        "checkpoint": {
+            "stage": "C1",
+            "cache_key": "ab" * 32,
+            "manifest_sha256": "cd" * 32,
+            "payload_sha256": "ef" * 32,
+        },
+        "audioatlas": {
+            **source,
+            "status": "available",
+            "profile": "audioatlas-native-0.1-40ms-10ms",
+            "window_ms": 40,
+            "hop_ms": 10,
+            "sample_count": 64000,
+            "feature_sha256": "12" * 32,
+            "channels": [
+                {
+                    "channel_index": 0,
+                    "level": {
+                        "status": "available",
+                        "value": -18,
+                        "unit": "dBFS",
+                        "available_fraction": None,
+                    },
+                    "pitch": {
+                        "status": "available",
+                        "value": 190,
+                        "unit": "Hz",
+                        "available_fraction": 0.75,
+                    },
+                    "series": [
+                        {
+                            "measurement": kind,
+                            "unit": unit,
+                            "clock": "decoded_audio_track",
+                            "window_ms": 40,
+                            "hop_ms": 10,
+                            "display_stride": 100,
+                            "points": [
+                                {"start_ms": index * 1000, "value": value}
+                                for index, value in enumerate(values)
+                            ],
+                        }
+                        for kind, unit, values in (
+                            ("dbfs", "dBFS", [-20, -16, None, -18]),
+                            ("f0_hz", "Hz", [180, 190, None, 210]),
+                        )
+                    ],
+                }
+            ],
+        },
+        "signallab": {
+            "status": "unavailable",
+            "reason": "source_inspected_adapter_not_implemented",
+            "runtime_output": False,
+        },
+    }
+
+
 def route_api(route) -> None:
     path = urlparse(route.request.url).path
     if path.endswith("/workspace"):
@@ -169,6 +246,8 @@ def route_api(route) -> None:
         route.fulfill(status=200, content_type="audio/wav", body=silence_wav())
     elif path.endswith("/recordings/recording-1/plan"):
         json_response(route, {"detail": "No processing plan."}, status=404)
+    elif path.endswith("/recordings/recording-1/measurements"):
+        json_response(route, synthetic_measurements())
     else:
         route.continue_()
 
@@ -191,6 +270,8 @@ def install_routes(page: Page) -> None:
     page.add_init_script(
         """
         window.__playMode = 'resolve';
+        window.__printCalls = 0;
+        window.print = () => { window.__printCalls += 1; };
         Object.defineProperty(HTMLMediaElement.prototype, 'play', {
           configurable: true,
           value: function () {
@@ -200,7 +281,9 @@ def install_routes(page: Page) -> None:
           }
         });
         window.__seekTimes = [];
-        const currentTimeDescriptor = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'currentTime');
+        const currentTimeDescriptor = Object.getOwnPropertyDescriptor(
+          HTMLMediaElement.prototype, 'currentTime'
+        );
         Object.defineProperty(HTMLMediaElement.prototype, 'currentTime', {
           configurable: true,
           get: function () { return currentTimeDescriptor.get.call(this); },
@@ -245,8 +328,12 @@ def main() -> None:
         page.locator("audio").evaluate("el => el.load()")
         page.wait_for_timeout(500)
         assert "Source moments" in report.inner_text()
-        assert "No approved score · source 95 / declared 100" in report.inner_text()
+        assert "Recommended next steps" in report.inner_text()
+        assert "Internal testing" not in page.locator("body").inner_text()
+        assert "Advanced: checkpoints" not in page.locator("body").inner_text()
         assert page.locator(".studio-moment").count() == 2
+        page.get_by_role("button", name="Print / save PDF", exact=True).click()
+        assert page.evaluate("window.__printCalls") == 1
 
         first_moment = page.locator(".studio-moment").first
         first_moment.click()
@@ -269,6 +356,22 @@ def main() -> None:
         page.set_viewport_size({"width": 1280, "height": 900})
         page.evaluate("window.__playMode = 'resolve'")
         open_report(page)
+        page.locator("summary").filter(has_text="Sound of the recording").click()
+        page.get_by_text("-18.0 dBFS", exact=True).wait_for()
+        page.get_by_role("button", name="Pitch estimate", exact=True).click()
+        assert page.get_by_role("slider", name="Inspect pitch estimate over time").is_visible()
+        page.get_by_role("slider").fill("2")
+        assert "Not available" in page.locator("output").inner_text()
+        page.get_by_role("slider").fill("1")
+        assert "190.0 Hz" in page.locator("output").inner_text()
+        page.emulate_media(media="print")
+        assert not page.locator(".studio-header").is_visible()
+        assert not page.locator(".studio-report-actions").is_visible()
+        assert report.is_visible()
+        assert "AI draft · Dipak has not reviewed this" in report.inner_text()
+        page.screenshot(path=str(AUDIT_DIR / "report-print-layout.png"), full_page=True)
+        page.pdf(path=str(AUDIT_DIR / "synthetic-report.pdf"), format="A4", print_background=True)
+        page.emulate_media(media="screen")
         language = page.locator(".studio-language-control select")
         assert language.count() == 1
         modes = (

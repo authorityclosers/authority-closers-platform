@@ -3,8 +3,16 @@ import type { ReactNode } from "react";
 import { expect, it, vi } from "vitest";
 
 vi.mock("../../../sales-xray-web/app/call-studio", () => ({
-  CallStudio: ({ homeHref }: { homeHref: string }) => (
-    <div data-home-href={homeHref}>Call Studio</div>
+  CallStudio: ({
+    homeHref,
+    variant,
+  }: {
+    homeHref: string;
+    variant: string;
+  }) => (
+    <div data-home-href={homeHref} data-variant={variant}>
+      Call Studio
+    </div>
   ),
 }));
 vi.mock("../components/site-shell", () => ({
@@ -26,6 +34,7 @@ it("keeps the LMS route inside the Academy shell with an internal return path", 
   expect(markup).toContain('id="main-content"');
   expect(markup).toContain('class="learner-main"');
   expect(markup).toContain('data-home-href="/home"');
+  expect(markup).toContain('data-variant="embedded"');
   expect(markup).toContain("Call Studio");
   expect(markup).not.toContain("http://");
   expect(markup).not.toContain("https://");

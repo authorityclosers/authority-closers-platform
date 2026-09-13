@@ -373,9 +373,9 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
             ).to_be_visible()
             checks.append("Opening the saved call loads its source-bound report.")
 
-            measurement_summary = page.locator("details").filter(
-                has_text="Sound of the recording"
-            ).locator("summary")
+            measurement_summary = (
+                page.locator("details").filter(has_text="Sound of the recording").locator("summary")
+            )
             expect(measurement_summary).to_be_visible()
             measurement_url = re.compile(
                 re.escape(
@@ -400,18 +400,24 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
             assert abs(_metric_value(page, "Typical recorded level", "dBFS") - level) < 0.051
             assert abs(_metric_value(page, "Typical pitch estimate", "Hz") - pitch) < 0.051
             checks.append(
-                "The report displays the saved C1 level and pitch numbers from the private measurement response."
+                "The report displays saved C1 level and pitch from the private API response."
             )
 
             pitch_button = page.get_by_role("button", name="Pitch estimate", exact=True)
             pitch_button.click()
             expect(pitch_button).to_have_attribute("aria-pressed", "true")
             expect(
-                page.get_by_role("img", name=re.compile("Pitch estimate over the decoded recording"))
+                page.get_by_role(
+                    "img", name=re.compile("Pitch estimate over the decoded recording")
+                )
             ).to_be_visible()
-            checks.append("The saved measurement chart switches from sound level to pitch estimate.")
+            checks.append(
+                "The saved measurement chart switches from sound level to pitch estimate."
+            )
             page.screenshot(path=str(evidence / "authenticated-call-studio.png"), full_page=True)
-            page.screenshot(path=str(evidence / "authenticated-report-measurements.png"), full_page=True)
+            page.screenshot(
+                path=str(evidence / "authenticated-report-measurements.png"), full_page=True
+            )
 
             cookies = context.cookies(backend.origin)
             session_cookie = next(
@@ -477,7 +483,9 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
                 "status": 401,
                 "cacheControl": "private, no-store",
             }
-            checks.append("After logout, saved measurements return 401 and remain private/no-store.")
+            checks.append(
+                "After logout, saved measurements return 401 and remain private/no-store."
+            )
             page.reload(wait_until="networkidle")
             expect(page.get_by_role("link", name="Sign in with AC")).to_be_visible()
             expect(page.locator(".recording-history-item")).to_have_count(0)

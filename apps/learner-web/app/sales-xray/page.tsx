@@ -5,7 +5,7 @@ export default function SalesXrayPage() {
   return (
     <LearnerShell current="sales-xray">
       <main id="main-content" className="learner-main" tabIndex={-1}>
-        <CallStudio homeHref="/home" />
+        <CallStudio homeHref="/home" variant="embedded" />
       </main>
     </LearnerShell>
   );
