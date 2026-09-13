@@ -350,12 +350,27 @@ def main() -> None:
         first_moment.click()
         assert "playback is unavailable" in page.locator(".studio-playback-status").inner_text()
         AUDIT_DIR.mkdir(parents=True, exist_ok=True)
-        page.screenshot(path=str(AUDIT_DIR / "report-playback-recovery.png"), full_page=True)
+        page.screenshot(
+            path=str(AUDIT_DIR / "report-playback-recovery.png"),
+            full_page=True,
+            animations="disabled",
+        )
 
         # Reload to restore the authorized source element before the visual matrix.
         page.set_viewport_size({"width": 1280, "height": 900})
         page.evaluate("window.__playMode = 'resolve'")
         open_report(page)
+        factors = page.locator('[aria-label="Sales factors"]')
+        assert factors.locator("details").count() == 8
+        factors.locator("summary").first.click()
+        assert REPORT["dimensions"][0]["observation"] in factors.inner_text()
+        page.locator("summary").filter(has_text="Read full transcript").click()
+        page.get_by_role("searchbox", name="Search transcript phrases").fill("useful")
+        assert page.locator("[data-segment-id]").count() == 1
+        page.locator("[data-segment-id]").click()
+        assert page.evaluate("window.__seekTimes.includes(2.5)")
+        page.get_by_role("searchbox", name="Search transcript phrases").fill("")
+        assert page.locator("[data-segment-id]").count() == 2
         page.locator("summary").filter(has_text="Sound of the recording").click()
         page.get_by_text("-18.0 dBFS", exact=True).wait_for()
         page.get_by_role("button", name="Pitch estimate", exact=True).click()
@@ -367,9 +382,12 @@ def main() -> None:
         page.emulate_media(media="print")
         assert not page.locator(".studio-header").is_visible()
         assert not page.locator(".studio-report-actions").is_visible()
+        assert not page.get_by_role("searchbox", name="Search transcript phrases").is_visible()
         assert report.is_visible()
         assert "AI draft · Dipak has not reviewed this" in report.inner_text()
-        page.screenshot(path=str(AUDIT_DIR / "report-print-layout.png"), full_page=True)
+        page.screenshot(
+            path=str(AUDIT_DIR / "report-print-layout.png"), full_page=True, animations="disabled"
+        )
         page.pdf(path=str(AUDIT_DIR / "synthetic-report.pdf"), format="A4", print_background=True)
         page.emulate_media(media="screen")
         language = page.locator(".studio-language-control select")
@@ -384,10 +402,18 @@ def main() -> None:
             language.select_option(mode)
             assert expected_step in page.locator(".studio-steps").inner_text()
             page.set_viewport_size({"width": 1280, "height": 900})
-            page.screenshot(path=str(AUDIT_DIR / f"report-{mode}-desktop.png"), full_page=True)
+            page.screenshot(
+                path=str(AUDIT_DIR / f"report-{mode}-desktop.png"),
+                full_page=True,
+                animations="disabled",
+            )
             page.set_viewport_size({"width": 320, "height": 780})
             assert_mobile_header_contained(page)
-            page.screenshot(path=str(AUDIT_DIR / f"report-{mode}-mobile.png"), full_page=True)
+            page.screenshot(
+                path=str(AUDIT_DIR / f"report-{mode}-mobile.png"),
+                full_page=True,
+                animations="disabled",
+            )
 
         browser.close()
 

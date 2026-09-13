@@ -18,6 +18,8 @@ import {
 } from "lucide-react";
 import { BrandMark } from "@ac/ui";
 import { RecordingMeasurements } from "./recording-measurements";
+import { ReportFactors } from "./report-factors";
+import { ReportTranscript } from "./report-transcript";
 import {
   parseJobResponse,
   parseJobStatus,
@@ -2014,6 +2016,7 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
                 </div>
               </aside>
             )}
+            <ReportFactors dimensions={job.report.dimensions} />
             {(
               [
                 ["What went well", job.report.strengths],
@@ -2061,6 +2064,22 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
               <h2>Final takeaway</h2>
               <p>{job.report.verdict}</p>
             </section>
+            {activeTranscript && (
+              <ReportTranscript
+                key={`${activeTranscript.source_sha256}:${activeTranscript.revision}`}
+                transcript={activeTranscript}
+                onSelect={(segment) =>
+                  seekToMoment({
+                    segment_id: segment.id,
+                    quote: segment.text,
+                    start_ms: segment.start_ms,
+                    end_ms: segment.end_ms,
+                    findingTitle: "Transcript",
+                    key: `${segment.id}:${segment.start_ms}:${segment.end_ms}`,
+                  })
+                }
+              />
+            )}
             {activeRecordingId && (
               <RecordingMeasurements
                 key={`${activeRecordingId}:${job.report.source_sha256}`}

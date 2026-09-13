@@ -8,7 +8,7 @@ This document describes implemented routes, not permission to activate processin
 
 | Client | Owned addition | Integration needed |
 | --- | --- | --- |
-| Standalone | `apps/sales-xray-web`, upload/report screen and optional technical viewer | Separate server image and exact host/API/auth routing |
+| Standalone | `apps/sales-xray-web`, upload/report screen with evidence moments, saved sound measurements and report printing | Separate server image and exact host/API/auth routing |
 | LMS | New `apps/learner-web/app/sales-xray/page.tsx` and `layout.tsx` | UI owner adds the Practice/navigation entry using current session/layout conventions |
 | Admin | New `apps/admin-web/app/sales-xray/` | UI owner adds its admin navigation entry; backend rechecks verified control account and current admin permission |
 | Free course / website | Reusable shared client and server API | Distinct entry buttons and entitlement policy remain to integrate; no invented minute grants |
@@ -38,6 +38,7 @@ permission returns 403. Write routes require the approved AC Origin.
 | `GET /v1/conversation/runs/{id}` | Current authorized run state |
 | `GET /v1/conversation/runs/{id}/report` | Run state plus validated qualitative draft, or `report: null` with honest status |
 | `GET /v1/conversation/recordings/{id}/transcript` | Validated transcript source hash/revision, source clock, duration and literal segments; no raw provider receipt |
+| `GET /v1/conversation/recordings/{id}/measurements` | Current authorized saved C1 display, canonical C0 parent, explicit physical-channel units and decoded clock; no audio reread or inference |
 | `GET /v1/conversation/recordings/{id}/checkpoints` | Own source-bound checkpoint metadata |
 | `DELETE /v1/conversation/recordings/{id}` | Idempotent durable deletion request; blocks further use and erases private descendants through worker |
 | `POST /v1/conversation/intake/quote` | Configured private composition: checks explicit allowance/storage capacity and returns exact local-processing quote |

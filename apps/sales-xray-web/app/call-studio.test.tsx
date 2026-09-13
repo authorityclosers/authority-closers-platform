@@ -564,6 +564,19 @@ describe("CallStudio", () => {
     expect(container.textContent).not.toContain("No approved score");
     expect(container.textContent).not.toContain("source 95 / declared 100");
     expect(container.textContent).toContain("Dimensions observed");
+    const factors = container.querySelector('[aria-label="Sales factors"]');
+    expect(factors?.querySelectorAll("details")).toHaveLength(8);
+    expect(factors?.textContent).toContain("Dimension 1");
+    expect(factors?.textContent).toContain("Not assessed");
+    expect(factors?.textContent).toContain(
+      "There is not enough evidence for a client-side conclusion.",
+    );
+    const factorRows = [...factors!.querySelectorAll("details")];
+    factorRows[0].open = true;
+    await act(async () => window.dispatchEvent(new Event("beforeprint")));
+    expect(factorRows.every((detail) => detail.open)).toBe(true);
+    await act(async () => window.dispatchEvent(new Event("afterprint")));
+    expect(factorRows.filter((detail) => detail.open)).toEqual([factorRows[0]]);
     expect(container.textContent).toContain("Observed: 0 of 8");
     expect(container.textContent).toContain("Moments from your call");
     expect(container.querySelectorAll(".studio-moment")).toHaveLength(2);
