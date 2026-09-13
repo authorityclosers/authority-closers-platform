@@ -1,0 +1,16 @@
+{
+  "schema": "ac.sales-xray.hosted-approval/1",
+  "environment": "staging",
+  "deployment_ref": "REPLACE_WITH_APPROVED_DEPLOYMENT_REF",
+  "issued_at_epoch": "REPLACE_WITH_ACTUAL_INTEGER_ISSUE_TIME",
+  "expires_at_epoch": "REPLACE_WITH_APPROVED_INTEGER_EXPIRY",
+  "budget_scope_id": "REPLACE_WITH_CANONICAL_BUDGET_SCOPE_UUID",
+  "budget_authorization_ref": "REPLACE_WITH_EXISTING_BUDGET_APPROVAL_REF",
+  "budget_owner_id": "REPLACE_WITH_VERIFIED_OWNER_PERSON_UUID",
+  "intake_authorization_ref": "REPLACE_WITH_EXISTING_INTAKE_APPROVAL_REF",
+  "intake_retention_ref": "REPLACE_WITH_APPROVED_RETENTION_REF",
+  "retention_days": "REPLACE_WITH_APPROVED_INTEGER_1_TO_7",
+  "max_stored_source_bytes": "REPLACE_WITH_APPROVED_INTEGER_STORAGE_CAP",
+  "allowances": [],
+  "stages": []
+}

@@ -1,6 +1,32 @@
 # Explicit overlay on infra/application/compose.yaml. No ordinary API env anchor.
 # The release manifest supplies digest-pinned images and individual file mounts.
 services:
+  # API-only activation. These references do not enter the ordinary worker,
+  # migrator, learner, admin or coach environment anchors.
+  api:
+    environment:
+      AC_SALES_XRAY_ENABLED: "true"
+      AC_SALES_XRAY_APPROVAL_PATH: /run/ac-sales-xray/approval.json
+      AC_SALES_XRAY_APPROVAL_SHA256: ${AC_XRAY_APPROVAL_SHA256:?exact hosted approval digest required}
+      AC_SALES_XRAY_STORAGE_ROOT: ${AC_XRAY_STORAGE_ROOT:?environment-specific private store required}
+      AC_SALES_XRAY_SCRATCH_ROOT: ${AC_XRAY_SCRATCH_ROOT:?separate environment-specific scratch required}
+    volumes:
+      - type: bind
+        source: ${AC_XRAY_APPROVAL_FILE:?exact hosted approval artifact required}
+        target: /run/ac-sales-xray/approval.json
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${AC_XRAY_STORAGE_ROOT:?environment-specific private store required}
+        target: ${AC_XRAY_STORAGE_ROOT:?environment-specific private store required}
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${AC_XRAY_SCRATCH_ROOT:?separate environment-specific scratch required}
+        target: ${AC_XRAY_SCRATCH_ROOT:?separate environment-specific scratch required}
+        bind:
+          create_host_path: false
   sales-xray-worker:
     image: ${AC_API_IMAGE:?reviewed immutable API image required}
     pull_policy: never
