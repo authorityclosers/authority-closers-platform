@@ -129,17 +129,6 @@ class ConversationAuthority:
     async def claim_allowance(self, app: ConversationApplication, actor: ConversationActor) -> None:
         """POST-only application command; finite grants are never inferred from login."""
         bundle = await self.admit(app, actor)
-        if isinstance(actor, ProcessingActor):
-            # Public acquisition minutes belong to the append-only acquisition
-            # ledger. The processing principal's empty canonical ledger is
-            # enough for zero-entitlement provider stages; never mint a second
-            # user grant for the same measured source.
-            return
-        approval = next(
-            item
-            for item in bundle.allowances
-            if (item.tenant_id, item.person_id) == (actor.tenant_id, actor.person_id)
-        )
         db = app.database
         # Serialize first creation of the shared project budget, too. This is a
         # transaction-scoped advisory lock, not operational SQL data editing.
@@ -186,6 +175,19 @@ class ConversationAuthority:
                 or previous.cap_approval.owner_actor_id != str(bundle.budget_owner_id)
             ):
                 raise ConversationDenied("The approved shared testing budget does not match.")
+        if isinstance(actor, ProcessingActor):
+            # Public acquisition minutes belong to the append-only acquisition
+            # ledger. The processing principal's empty canonical ledger is
+            # enough for zero-entitlement provider stages; never mint a second
+            # user grant for the same measured source. The shared budget still
+            # needs to exist so a later paid provider plan can reserve against
+            # its approved project cap.
+            return
+        approval = next(
+            item
+            for item in bundle.allowances
+            if (item.tenant_id, item.person_id) == (actor.tenant_id, actor.person_id)
+        )
         row = await db.scalar(
             select(ConversationMinuteAccount)
             .where(
