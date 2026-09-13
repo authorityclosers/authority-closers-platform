@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from ac_platform.application.settings import Settings
+from ac_platform.catalog.models import GLOBAL_CATALOG_OWNER_KEY
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.learning.catalog_activity import resolve_catalog_activity
 from ac_platform.learning.services import LearningAccessContext
@@ -37,7 +38,13 @@ from ac_platform.media.delivery import (
     PrivateMediaDeliveryHandler,
 )
 from ac_platform.media.errors import MediaConfigurationError, MediaForbidden
-from ac_platform.media.models import ActivityMediaBinding, MediaUploadIntent, StudioVideoUpload
+from ac_platform.media.models import (
+    ActivityMediaBinding,
+    MediaBindingState,
+    MediaUploadIntent,
+    MediaVersion,
+    StudioVideoUpload,
+)
 from ac_platform.media.policy import (
     MediaCorsPolicy,
     RangeMode,
@@ -102,14 +109,39 @@ def _owns_key(database: Session, actor: ActorContext, key: str) -> bool:
         return False
     if (
         tenant != actor.tenant_id
-        or parts[6] != "original"
         or any(
             str(value) != parts[index]
             for value, index in zip((tenant, asset, version), (1, 4, 5), strict=True)
         )
     ):
         return False
-    return _upload_program(database, tenant, asset, version) is not None
+    if parts[6] == "original" and _upload_program(database, tenant, asset, version) is not None:
+        return True
+    media_version = database.scalar(
+        select(MediaVersion).where(
+            MediaVersion.tenant_id == tenant,
+            MediaVersion.asset_id == asset,
+            MediaVersion.id == version,
+            MediaVersion.state == "ready",
+        )
+    )
+    if not isinstance(media_version, MediaVersion) or (
+        key != media_version.object_key and not key.startswith(media_version.object_key + "/")
+    ):
+        return False
+    return (
+        database.scalar(
+            select(ActivityMediaBinding.id).where(
+                ActivityMediaBinding.tenant_id == tenant,
+                ActivityMediaBinding.asset_id == asset,
+                ActivityMediaBinding.version_id == version,
+                ActivityMediaBinding.program_scope == "global",
+                ActivityMediaBinding.program_owner_key == GLOBAL_CATALOG_OWNER_KEY,
+                ActivityMediaBinding.state == MediaBindingState.APPROVED.value,
+            )
+        )
+        is not None
+    )
 
 
 class _StudioHandler(PrivateMediaDeliveryHandler):
@@ -138,10 +170,21 @@ class _StudioHandler(PrivateMediaDeliveryHandler):
             return (
                 binding is not None
                 and binding.tenant_id == actor.tenant_id
-                and binding.program_scope == "tenant"
-                and binding.program_owner_key == actor.tenant_id
-                and _upload_program(database, actor.tenant_id, binding.asset_id, binding.version_id)
-                == binding.program_id
+                and binding.state == MediaBindingState.APPROVED.value
+                and (
+                    (
+                        binding.program_scope == "global"
+                        and binding.program_owner_key == GLOBAL_CATALOG_OWNER_KEY
+                    )
+                    or (
+                        binding.program_scope == "tenant"
+                        and binding.program_owner_key == actor.tenant_id
+                        and _upload_program(
+                            database, actor.tenant_id, binding.asset_id, binding.version_id
+                        )
+                        == binding.program_id
+                    )
+                )
             )
 
         super().__init__(
@@ -293,6 +336,11 @@ def _compose_studio_video_delivery(
     def binding_resolver(database: Session, tenant: UUID, row: object, version: object) -> object:
         binding = resolve_activity_media_binding_for_learning(database, tenant, row, version)
         if binding is not None:
+            if (
+                binding.program_scope == "global"
+                and binding.program_owner_key == GLOBAL_CATALOG_OWNER_KEY
+            ):
+                return binding
             admitted_program = _upload_program(
                 database, tenant, binding.asset_id, binding.version_id
             )
@@ -326,6 +374,13 @@ def _compose_studio_video_delivery(
                 return ActivityMediaDescriptorResponse(
                     state="unavailable", reason="activity_media_not_available"
                 )
+            return await service.resolve_activity_media_descriptor_for_learner(
+                database, actor, access
+            )
+        if (
+            getattr(access.activity, "program_scope", None) == "global"
+            and access.activity.program_owner_key == GLOBAL_CATALOG_OWNER_KEY
+        ):
             return await service.resolve_activity_media_descriptor_for_learner(
                 database, actor, access
             )

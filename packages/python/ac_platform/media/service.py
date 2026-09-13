@@ -119,6 +119,7 @@ from ac_platform.media.storage import (
 )
 
 if TYPE_CHECKING:
+    from ac_platform.catalog.free_course_media import FreeCourseMediaBindingAuthorization
     from ac_platform.learning.services import LearningAccessContext
     from ac_platform.media.public_film_import import PublicFilmImportAuthorization
     from ac_platform.media.public_film_manifest import (
@@ -566,6 +567,7 @@ class MediaService:
         idempotency_key: str,
         public_film_authorization: PublicFilmImportAuthorization | None = None,
         studio_authorization: StudioBindingAuthorization | None = None,
+        free_course_authorization: FreeCourseMediaBindingAuthorization | None = None,
     ) -> ActivityMediaBindingResponse:
         """Append a human-approved, tenant-scoped activity/media binding.
 
@@ -578,11 +580,22 @@ class MediaService:
             raise MediaBadRequest(
                 "A bounded Idempotency-Key is required for activity media bindings."
             )
+        if free_course_authorization is not None:
+            from ac_platform.catalog.free_course_media import FreeCourseMediaBindingAuthorization
+
+            if (
+                public_film_authorization is not None
+                or studio_authorization is not None
+                or type(free_course_authorization) is not FreeCourseMediaBindingAuthorization
+            ):
+                raise MediaForbidden("One exact Free Course media authorization is required.")
+            free_course_authorization.require(database, actor, service=self, request=request)
         if studio_authorization is not None:
             from ac_platform.media.studio_selection import StudioBindingAuthorization
 
             if (
                 public_film_authorization is not None
+                or free_course_authorization is not None
                 or type(studio_authorization) is not StudioBindingAuthorization
             ):
                 raise MediaForbidden("One exact Studio approval authorization is required.")
@@ -599,13 +612,19 @@ class MediaService:
                 request=request,
                 service=self,
             )
-        elif studio_authorization is None and not self._manager(actor):
+        elif (
+            studio_authorization is None
+            and free_course_authorization is None
+            and not self._manager(actor)
+        ):
             raise MediaForbidden("The actor is not authorized to approve activity media.")
         from ac_platform.media.public_film_manifest import is_public_film_media_identity
 
         tenant_id = self._tenant(actor)
-        if public_film_authorization is None and is_public_film_media_identity(
-            tenant_id, request.asset_id, request.version_id
+        if (
+            public_film_authorization is None
+            and free_course_authorization is None
+            and is_public_film_media_identity(tenant_id, request.asset_id, request.version_id)
         ):
             raise MediaForbidden(
                 "Public test films require their dedicated demonstration authorization."
@@ -655,7 +674,11 @@ class MediaService:
             raise MediaConflict("Only published catalog activities can receive approved media.")
 
         asset = self._asset(database, actor, request.asset_id, lock=True)
-        if public_film_authorization is None and studio_authorization is None:
+        if (
+            public_film_authorization is None
+            and studio_authorization is None
+            and free_course_authorization is None
+        ):
             self._require_write(actor, purpose=MediaPurpose.VIDEO, asset=asset)
         if asset.purpose != MediaPurpose.VIDEO.value or asset.state == MediaLifecycle.RETIRED.value:
             raise MediaConflict("Only active video media can be approved for an activity.")
@@ -728,6 +751,7 @@ class MediaService:
         )
         if (
             public_film_authorization is None
+            and free_course_authorization is None
             and current is not None
             and is_public_film_media_identity(tenant_id, current.asset_id, current.version_id)
         ):
@@ -783,6 +807,8 @@ class MediaService:
             )
         if studio_authorization is not None:
             studio_authorization.require(database, actor, service=self, request=request)
+        if free_course_authorization is not None:
+            free_course_authorization.require(database, actor, service=self, request=request)
         binding = ActivityMediaBinding(
             tenant_id=tenant_id,
             activity_id=activity.id,
