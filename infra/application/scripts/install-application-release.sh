@@ -280,6 +280,10 @@ initialize_release_profile_contract() {
   for profile_key in "${profile_required_keys[@]}"; do
     profile_allowed_keys["$profile_key"]=1
   done
+  # Older deployment profiles may omit the optional standalone Sales Xray
+  # surface. When present, validate_release_profile binds it to the exact
+  # environment-owned origin below; it never permits a generic host.
+  profile_allowed_keys[AC_SALES_XRAY_APP_URL]=1
 }
 
 initialize_release_profile_contract
@@ -383,6 +387,20 @@ validate_release_profile() {
       )
       ;;
   esac
+  if [[ -n "${profile_values[AC_SALES_XRAY_APP_URL]+present}" ]]; then
+    case "$target_environment" in
+      staging)
+        expected_profile_assignments+=(
+          "AC_SALES_XRAY_APP_URL=https://salesxray-staging.authorityclosers.com"
+        )
+        ;;
+      production)
+        expected_profile_assignments+=(
+          "AC_SALES_XRAY_APP_URL=https://salesxray.authorityclosers.com"
+        )
+        ;;
+    esac
+  fi
   for expected_profile_assignment in "${expected_profile_assignments[@]}"; do
     expected_profile_key="${expected_profile_assignment%%=*}"
     expected_profile_value="${expected_profile_assignment#*=}"
@@ -723,6 +741,7 @@ compose_for() {
         -u AC_ENVIRONMENT \
         -u AC_STATE_ROOT \
         -u AC_PUBLIC_APP_URL \
+        -u AC_SALES_XRAY_APP_URL \
         -u AC_ADMIN_APP_URL \
         -u AC_COACH_APP_URL \
         -u AC_API_URL \
