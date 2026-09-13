@@ -727,8 +727,15 @@ def test_hosted_intake_http_rejects_capacity_after_existing_recording(
                 response = await client.post(
                     "/v1/conversation/intake/quote", headers=headers, json=payload
                 )
+                oversized = await client.post(
+                    "/v1/conversation/intake/quote",
+                    headers={**headers, "Idempotency-Key": "hosted-oversized-source"},
+                    json={**payload, "source_bytes": 32 * 1024 * 1024 + 1},
+                )
             assert response.status_code == 409, response.text
             assert "capacity" in response.text.lower()
+            assert oversized.status_code == 403
+            assert "32 MB" in oversized.text
             assert setup.broker.calls == 0
             async with setup.sessions() as database:
                 assert (

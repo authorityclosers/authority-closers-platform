@@ -17,6 +17,13 @@ routes with current worker rechecks. This supplies no live approval values,
 provider free credits, worker deployment or automatic progression. Runtime,
 provider-tested, staged and published status remain separate below.
 
+`SALES_XRAY_PROCESSING_PLAN.md` adds one explicit bounded processing-plan consent,
+durable C2/C4/C5/C6 progression from saved checkpoints, Call Studio plan/progress
+states and automatic retention-deadline enqueueing. Migration 0032 preserves plan
+intent, immutable acceptance references and derived stage-authority links. These
+are source implementations tested with synthetic providers; dedicated hosted
+worker/broker packaging and actual deployment configuration are still required.
+
 ## User-visible result
 
 The supplied 20m53s recording has a private, source-checked AI sales draft outside
@@ -59,14 +66,22 @@ API run/report endpoint can return an imported private draft, or local analysis
 status with `report: null`. Its local import accepts opaque operator-supplied
 approval/generation/review receipt hashes; it does not independently authenticate
 those external receipts or establish provider execution/human review. Hosted
-composition rejects activation of this import path. Self-service new uploads still
-run local measurements only; durable provider generation is not connected.
+composition rejects activation of this import path. The processing-plan slice now
+connects consent and durable provider generation in source, with synthetic API and
+browser proof. Hosted worker/broker activation remains pending; a deployed route
+alone does not establish that real uploads can complete this chain.
 
 ## Tested here
 
 Receipts are under
 `D:/Projects/authority-closers-release-transfer/2026-09-13-sales-xray/receipts/`.
 Overlapping historical subset counts must not be added to these totals.
+
+The current processing-plan increment has 445 unit/composition passes, six new
+PostgreSQL plan passes, two retention/migration parity passes, 17 Call Studio
+component passes, and one real Chromium API-probe pass. The Next production build
+passed. Exact receipt filenames, failure/rerun distinctions and browser scope are
+in `SALES_XRAY_PROCESSING_PLAN.md`; the table below preserves prior slice evidence.
 
 | Evidence | Observed result |
 | --- | --- |
@@ -122,11 +137,13 @@ request does not establish generation access. Sarvam generation was not tested.
 
 ## Staged / production-published / remaining work
 
-**Staged: no. Production-published: no.** No Sales Xray public URL or VPS
-deployment is claimed. The existing AC release is coordinated in the referenced
+**Complete hosted upload-to-report: staging and production are not verified by
+this lane.** The existing learner `/sales-xray` route is the coordinated first
+target; a route or UI deployment alone is not a processing-runtime receipt.
+The existing AC release is coordinated in the referenced
 Release Recovery task; this lane has not changed its deployment or apex site.
 
-Remaining work includes durable provider/checkpoint/report generation, current
+Remaining work includes dedicated hosted processing worker/broker composition, current
 hosted AC-authenticated browser/network proof, exact reviewer identity/feed mapping,
 incremental review import, quality reproduction/calibration and approval,
 hosted storage/retention composition, deployment target/release integration,

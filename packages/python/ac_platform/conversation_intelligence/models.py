@@ -331,3 +331,60 @@ class ConversationInferenceTask(Base):
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     erased_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ConversationProcessingPlan(Base):
+    """Frozen processing intent; acceptance points to an append-only AC command."""
+
+    __tablename__ = "conversation_processing_plans"
+    __table_args__ = (
+        recording_fk(),
+        UniqueConstraint("id", "tenant_id", "person_id"),
+        CheckConstraint("generation >= 1", name="positive_generation"),
+        CheckConstraint(
+            "state IN ('quoted','active','completed','held','cancelled')", name="state"
+        ),
+        CheckConstraint("state <> 'active' OR acceptance_command_id IS NOT NULL", name="consent"),
+    )
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    person_id: Mapped[UUID] = mapped_column(Uuid)
+    recording_id: Mapped[UUID] = mapped_column(Uuid)
+    session_id: Mapped[UUID] = mapped_column(Uuid, ForeignKey("sessions.id"))
+    generation: Mapped[int] = mapped_column(Integer)
+    plan_sha256: Mapped[str] = mapped_column(String(64))
+    manifest: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    acceptance_command_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("conversation_commands.id")
+    )
+    state: Mapped[str] = mapped_column(String(16), index=True)
+    progress: Mapped[dict[str, Any]] = mapped_column(JSON)
+    next_check_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    erased_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ConversationPlanStageAuthorization(Base):
+    """Derived quote authorization, never an invented per-stage user click."""
+
+    __tablename__ = "conversation_plan_stage_authorizations"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["plan_id", "tenant_id", "person_id"],
+            [
+                "conversation_processing_plans.id",
+                "conversation_processing_plans.tenant_id",
+                "conversation_processing_plans.person_id",
+            ],
+        ),
+    )
+    quote_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("conversation_quotes.id"), primary_key=True
+    )
+    plan_id: Mapped[UUID] = mapped_column(Uuid)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    person_id: Mapped[UUID] = mapped_column(Uuid)
+    quote_fingerprint: Mapped[str] = mapped_column(String(64))
+    cache_key: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

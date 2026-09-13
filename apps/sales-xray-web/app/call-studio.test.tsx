@@ -8,13 +8,13 @@ import { CallStudio } from "./call-studio";
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
 type RequestRecord = { url: string; init: RequestInit };
-type JsonResponse = { ok: boolean; body: unknown };
+type JsonResponse = { ok: boolean; body: unknown; status?: number };
 
 const quote = {
   id: "quote-1",
   recording_id: "recording-1",
   source_revision: "source-1",
-  recipe_revision: "dipak-report-v1",
+  recipe_revision: "audioatlas-48000-v1",
   cost_label: "No charge in this test workspace",
   privacy_summary: "Synthetic review data stays within the approved workspace.",
   providers: ["synthetic-review"],
@@ -22,6 +22,51 @@ const quote = {
   quote_fingerprint: "f".repeat(64),
   privacy_revision: "privacy-1",
   output_kind: "measurements",
+};
+const processingPlan = {
+  id: "plan-1",
+  recording_id: "recording-1",
+  plan_fingerprint: "ab".repeat(32),
+  privacy_revision: "sales-xray-processing-plan-v1",
+  accepted: false,
+  state: "quoted",
+  cost_label: "₹0 · approved allowance",
+  max_cost_paise: 0,
+  max_entitlement_seconds: 120,
+  expires_at_epoch: 4_102_444_800,
+  stages: [
+    {
+      stage: "C2",
+      provider: "synthetic-transcriber",
+      model: "scribe-v2",
+      max_requests: 1,
+      privacy_revision: "sales-xray-processing-plan-v1",
+      privacy_notice:
+        "Synthetic transcript processing stays in the approved workspace.",
+    },
+    {
+      stage: "C4",
+      provider: "synthetic-facts",
+      model: "facts-v1",
+      max_requests: 1,
+      privacy_revision: "sales-xray-processing-plan-v1",
+      privacy_notice:
+        "Synthetic fact extraction stays in the approved workspace.",
+    },
+    {
+      stage: "C5",
+      provider: "synthetic-coach",
+      model: "coach-v1",
+      max_requests: 1,
+      privacy_revision: "sales-xray-processing-plan-v1",
+      privacy_notice: "Synthetic coaching stays in the approved workspace.",
+    },
+  ],
+  current_stage: null,
+  report_ready: false,
+  report_run_id: null,
+  automatic_progression: true,
+  failure_code: null,
 };
 const citation = { doc: "Doc-1", sections: ["source section"] };
 const dimensions = Array.from({ length: 8 }, (_, index) => ({
@@ -136,8 +181,8 @@ let handleApi: (
 ) => JsonResponse | Promise<JsonResponse>;
 let fetchMock: ReturnType<typeof vi.fn>;
 
-function response(body: unknown, ok = true): JsonResponse {
-  return { ok, body };
+function response(body: unknown, ok = true, status?: number): JsonResponse {
+  return { ok, body, status };
 }
 
 function getButton(label: string): HTMLButtonElement {
@@ -190,10 +235,23 @@ async function prepareAndAuthorize(file: File) {
     'input[type="checkbox"]',
   );
   expect(checkbox).not.toBeNull();
-  expect(getButton("Analyze my call").disabled).toBe(true);
+  expect(getButton("Upload and measure privately").disabled).toBe(true);
   await act(async () => checkbox?.click());
   await flush();
   return file;
+}
+
+async function acceptProcessingPlan() {
+  expect(container.textContent).toContain("Your approved report plan");
+  const checkbox = container.querySelector<HTMLInputElement>(
+    'input[type="checkbox"]',
+  );
+  expect(checkbox).not.toBeNull();
+  expect(getButton("Start approved report").disabled).toBe(true);
+  await act(async () => checkbox?.click());
+  await flush();
+  await act(async () => getButton("Start approved report").click());
+  await flush();
 }
 
 beforeEach(() => {
@@ -201,7 +259,9 @@ beforeEach(() => {
   document.body.append(container);
   root = createRoot(container);
   requests = [];
-  handleApi = (path) => {
+  let planAccepted = false;
+  let reportMode: "measurement" | "report" = "measurement";
+  handleApi = (path, init) => {
     if (path.endsWith("/workspace"))
       return response({
         intake_enabled: true,
@@ -210,6 +270,36 @@ beforeEach(() => {
         message: "Ready for a synthetic call.",
       });
     if (path.endsWith("/recordings")) return response({ recordings: [] });
+    if (
+      path.endsWith("/recordings/recording-1/plan") &&
+      init.method !== "POST"
+    ) {
+      if (!planAccepted)
+        return response({ detail: "No processing plan." }, false, 404);
+      reportMode = "report";
+      return response({
+        ...processingPlan,
+        accepted: true,
+        state: "completed",
+        current_stage: "C6",
+        report_ready: true,
+        report_run_id: "run-1",
+      });
+    }
+    if (/\/recordings\/[^/]+\/plan$/.test(path) && init.method !== "POST")
+      return response({ detail: "No processing plan." }, false, 404);
+    if (path.endsWith("/recordings/recording-1/plan/quote"))
+      return response(processingPlan);
+    if (path.endsWith("/recordings/recording-1/plan")) {
+      planAccepted = true;
+      return response({
+        ...processingPlan,
+        accepted: true,
+        state: "active",
+        current_stage: "C2",
+        report_run_id: "run-1",
+      });
+    }
     if (path.endsWith("/recordings/recording-1/transcript"))
       return response(transcript);
     if (path.endsWith("/intake/quote")) return response(quote);
@@ -229,8 +319,11 @@ beforeEach(() => {
         id: "run-1",
         recording_id: "recording-1",
         state: "completed",
-        message: "Report ready.",
-        report,
+        message:
+          reportMode === "report"
+            ? "Report ready."
+            : "Local measurement complete.",
+        report: reportMode === "report" ? report : null,
       });
     throw new Error(`Unexpected API path ${path}`);
   };
@@ -242,6 +335,7 @@ beforeEach(() => {
     );
     return {
       ok: result.ok,
+      status: result.status ?? (result.ok ? 200 : 400),
       json: async () => result.body,
     } as Response;
   });
@@ -277,14 +371,14 @@ describe("CallStudio", () => {
 
     await act(async () => getButton("Continue to analysis").click());
     await flush();
-    expect(container.textContent).toContain("Ready to analyze");
+    expect(container.textContent).toContain("Ready to upload privately");
     expect(
       requests.filter((request) => request.init.method === "PUT"),
     ).toHaveLength(0);
 
     await selectAudio("replacement.wav", "replacement source");
     expect(container.textContent).toContain("replacement.wav");
-    expect(container.textContent).not.toContain("Ready to analyze");
+    expect(container.textContent).not.toContain("Ready to upload privately");
     expect(
       requests.filter((request) => request.init.method === "POST"),
     ).toHaveLength(1);
@@ -294,7 +388,7 @@ describe("CallStudio", () => {
     await render();
     const file = await selectAudio();
     await prepareAndAuthorize(file);
-    await act(async () => getButton("Analyze my call").click());
+    await act(async () => getButton("Upload and measure privately").click());
     await flush();
 
     const quoteRequest = requests.find((request) =>
@@ -347,12 +441,47 @@ describe("CallStudio", () => {
     await render();
     const file = await selectAudio("seekable.wav");
     await prepareAndAuthorize(file);
-    await act(async () => getButton("Analyze my call").click());
+    await act(async () => getButton("Upload and measure privately").click());
     await flush();
     expect(
       requests.filter((request) => request.url.endsWith("/report")),
     ).toHaveLength(0);
 
+    await act(async () => vi.advanceTimersByTimeAsync(2500));
+    await flush();
+    expect(container.textContent).toContain("Your approved report plan");
+    expect(
+      requests.filter((request) =>
+        request.url.endsWith("/recordings/recording-1/plan/quote"),
+      ),
+    ).toHaveLength(1);
+    await acceptProcessingPlan();
+    const planQuoteRequest = requests.find((request) =>
+      request.url.endsWith("/recordings/recording-1/plan/quote"),
+    );
+    expect(planQuoteRequest?.init.method).toBe("POST");
+    expect(planQuoteRequest?.init.headers).toEqual({
+      "Idempotency-Key": "request-key-1:plan",
+    });
+    expect(planQuoteRequest?.init.body).toBeUndefined();
+    const planAcceptRequest = requests.find(
+      (request) =>
+        request.url.endsWith("/recordings/recording-1/plan") &&
+        request.init.method === "POST",
+    );
+    expect(planAcceptRequest?.init.headers).toEqual({
+      "Content-Type": "application/json",
+      "Idempotency-Key": "request-key-1:plan:accept",
+    });
+    expect(JSON.parse(String(planAcceptRequest?.init.body))).toEqual({
+      plan_id: "plan-1",
+      plan_fingerprint: "ab".repeat(32),
+      privacy_revision: "sales-xray-processing-plan-v1",
+      accepted: true,
+    });
+    expect(requests.some((request) => request.url.endsWith("/analysis"))).toBe(
+      false,
+    );
     await act(async () => vi.advanceTimersByTimeAsync(2500));
     await flush();
     expect(container.textContent).toContain(
@@ -382,6 +511,7 @@ describe("CallStudio", () => {
     let reportRequests = 0;
     let transcriptRequests = 0;
     const originalHandler = handleApi;
+    let planReads = 0;
     handleApi = (path, init) => {
       if (path.endsWith("/runs/run-1/report")) {
         reportRequests += 1;
@@ -389,8 +519,9 @@ describe("CallStudio", () => {
           ? response({
               id: "run-1",
               recording_id: "recording-1",
-              state: "running",
-              message: "Still processing.",
+              state: "completed",
+              message: "Local measurement complete.",
+              report: null,
             })
           : response({
               id: "run-1",
@@ -399,6 +530,20 @@ describe("CallStudio", () => {
               message: "Report ready.",
               report,
             });
+      }
+      if (
+        path.endsWith("/recordings/recording-1/plan") &&
+        init.method !== "POST"
+      ) {
+        planReads += 1;
+        if (planReads === 1)
+          return response({
+            ...processingPlan,
+            accepted: true,
+            state: "active",
+            current_stage: "C2",
+            report_run_id: "run-1",
+          });
       }
       if (path.endsWith("/recordings/recording-1/transcript")) {
         transcriptRequests += 1;
@@ -409,23 +554,26 @@ describe("CallStudio", () => {
     await render();
     const file = await selectAudio("delayed-report.wav");
     await prepareAndAuthorize(file);
-    await act(async () => getButton("Analyze my call").click());
+    await act(async () => getButton("Upload and measure privately").click());
     await flush();
 
+    await act(async () => vi.advanceTimersByTimeAsync(2500));
+    await flush();
+    await acceptProcessingPlan();
     await act(async () => vi.advanceTimersByTimeAsync(2500));
     await flush();
     expect(reportRequests).toBe(1);
     expect(transcriptRequests).toBe(0);
     expect(container.textContent).not.toContain("Your sales call report");
 
-    await act(async () => vi.advanceTimersByTimeAsync(5000));
+    await act(async () => vi.advanceTimersByTimeAsync(2500));
     await flush();
     expect(reportRequests).toBe(2);
     expect(transcriptRequests).toBe(1);
     expect(container.textContent).toContain("YOUR SALES CALL REPORT");
   });
 
-  it("stops polling after a completed run has no report", async () => {
+  it("stops polling after a completed plan has no report", async () => {
     vi.useFakeTimers();
     let reportRequests = 0;
     const originalHandler = handleApi;
@@ -436,22 +584,39 @@ describe("CallStudio", () => {
           id: "run-1",
           recording_id: "recording-1",
           state: "completed",
-          message: "Analysis finished; report unavailable.",
+          message: "Local measurement complete.",
+          report: null,
         });
       }
+      if (
+        path.endsWith("/recordings/recording-1/plan") &&
+        init.method !== "POST"
+      )
+        return response({
+          ...processingPlan,
+          accepted: true,
+          state: "completed",
+          current_stage: "C6",
+          report_ready: false,
+          report_run_id: null,
+        });
       return originalHandler(path, init);
     };
     await render();
     const file = await selectAudio("completed-without-report.wav");
     await prepareAndAuthorize(file);
-    await act(async () => getButton("Analyze my call").click());
+    await act(async () => getButton("Upload and measure privately").click());
     await flush();
 
     await act(async () => vi.advanceTimersByTimeAsync(2500));
     await flush();
+    await acceptProcessingPlan();
+    await act(async () => vi.advanceTimersByTimeAsync(2500));
+    await flush();
     expect(reportRequests).toBe(1);
-    expect(container.textContent).toContain("Local audio analysis is ready");
-    expect(container.textContent).toContain("report unavailable");
+    expect(container.textContent).toContain(
+      "Analysis finished without a saved report",
+    );
 
     await act(async () => vi.advanceTimersByTimeAsync(60_000));
     await flush();
@@ -461,8 +626,18 @@ describe("CallStudio", () => {
   it("rejects a report bound to a different source and keeps it hidden", async () => {
     vi.useFakeTimers();
     const originalHandler = handleApi;
+    let reportRequests = 0;
     handleApi = (path, init) => {
       if (path.endsWith("/runs/run-1/report")) {
+        reportRequests += 1;
+        if (reportRequests === 1)
+          return response({
+            id: "run-1",
+            recording_id: "recording-1",
+            state: "completed",
+            message: "Local measurement complete.",
+            report: null,
+          });
         return response({
           id: "run-1",
           recording_id: "recording-1",
@@ -476,23 +651,36 @@ describe("CallStudio", () => {
     await render();
     const file = await selectAudio("mismatched.wav");
     await prepareAndAuthorize(file);
-    await act(async () => getButton("Analyze my call").click());
+    await act(async () => getButton("Upload and measure privately").click());
     await flush();
+    await act(async () => vi.advanceTimersByTimeAsync(2500));
+    await flush();
+    await acceptProcessingPlan();
     await act(async () => vi.advanceTimersByTimeAsync(2500));
     await flush();
     expect(
       container.querySelector('[aria-label="Sales call report"]'),
     ).toBeNull();
     expect(container.querySelector('[role="alert"]')?.textContent).toContain(
-      "could not be verified against the recording",
+      "could not be verified",
     );
   });
 
   it("rejects a report status bound to a different run or recording", async () => {
     vi.useFakeTimers();
     const originalHandler = handleApi;
+    let reportRequests = 0;
     handleApi = (path, init) => {
-      if (path.endsWith("/runs/run-1/report"))
+      if (path.endsWith("/runs/run-1/report")) {
+        reportRequests += 1;
+        if (reportRequests === 1)
+          return response({
+            id: "run-1",
+            recording_id: "recording-1",
+            state: "completed",
+            message: "Local measurement complete.",
+            report: null,
+          });
         return response({
           id: "run-other",
           recording_id: "recording-other",
@@ -500,20 +688,203 @@ describe("CallStudio", () => {
           message: "Report ready.",
           report,
         });
+      }
       return originalHandler(path, init);
     };
     await render();
     const file = await selectAudio("mismatched-status.wav");
     await prepareAndAuthorize(file);
-    await act(async () => getButton("Analyze my call").click());
+    await act(async () => getButton("Upload and measure privately").click());
     await flush();
+    await act(async () => vi.advanceTimersByTimeAsync(2500));
+    await flush();
+    await acceptProcessingPlan();
     await act(async () => vi.advanceTimersByTimeAsync(2500));
     await flush();
     expect(container.querySelector('[aria-label="Sales call report"]')).toBe(
       null,
     );
     expect(container.querySelector('[role="alert"]')?.textContent).toContain(
-      "could not be verified against the recording",
+      "could not be verified",
+    );
+  });
+
+  it("shows held plans honestly and requires a fresh quote to resume", async () => {
+    vi.useFakeTimers();
+    const originalHandler = handleApi;
+    let planReads = 0;
+    handleApi = (path, init) => {
+      if (
+        path.endsWith("/recordings/recording-1/plan") &&
+        init.method !== "POST"
+      ) {
+        planReads += 1;
+        if (planReads >= 1)
+          return response({
+            ...processingPlan,
+            accepted: true,
+            state: "held",
+            current_stage: "C4",
+            failure_code: "provider_timeout",
+          });
+      }
+      return originalHandler(path, init);
+    };
+    await render();
+    const file = await selectAudio("held-plan.wav");
+    await prepareAndAuthorize(file);
+    await act(async () => getButton("Upload and measure privately").click());
+    await flush();
+    await act(async () => vi.advanceTimersByTimeAsync(2500));
+    await flush();
+    await acceptProcessingPlan();
+    await act(async () => vi.advanceTimersByTimeAsync(2500));
+    await flush();
+
+    expect(container.textContent).toContain("report needs a fresh plan");
+    expect(container.textContent).toContain("Processing is paused");
+    expect(container.querySelector('[aria-label="Sales call report"]')).toBe(
+      null,
+    );
+    await act(async () => getButton("Request a fresh plan").click());
+    await flush();
+    expect(
+      requests.filter((request) =>
+        request.url.endsWith("/recordings/recording-1/plan/quote"),
+      ),
+    ).toHaveLength(2);
+    expect(container.textContent).toContain("Your approved report plan");
+  });
+
+  it("rejects a nonzero-cost plan response before showing a report", async () => {
+    vi.useFakeTimers();
+    const originalHandler = handleApi;
+    handleApi = (path, init) => {
+      if (
+        path.endsWith("/recordings/recording-1/plan") &&
+        init.method !== "POST"
+      )
+        return response({
+          ...processingPlan,
+          accepted: true,
+          state: "active",
+          current_stage: "C2",
+          report_run_id: "run-1",
+          max_cost_paise: 1,
+        });
+      return originalHandler(path, init);
+    };
+    await render();
+    const file = await selectAudio("malformed-plan.wav");
+    await prepareAndAuthorize(file);
+    await act(async () => getButton("Upload and measure privately").click());
+    await flush();
+    await act(async () => vi.advanceTimersByTimeAsync(2500));
+    await flush();
+    await acceptProcessingPlan();
+    await act(async () => vi.advanceTimersByTimeAsync(2500));
+    await flush();
+    expect(container.querySelector('[aria-label="Sales call report"]')).toBe(
+      null,
+    );
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+      "approved processing plan could not be verified",
+    );
+  });
+
+  it("keeps a deferred report read alive while the plan view updates", async () => {
+    vi.useFakeTimers();
+    const originalHandler = handleApi;
+    let releaseReport: ((value: JsonResponse) => void) | undefined;
+    let reportCalls = 0;
+    handleApi = (path, init) => {
+      if (path.endsWith("/runs/run-1/report")) {
+        reportCalls += 1;
+        if (reportCalls === 1) return originalHandler(path, init);
+        return new Promise<JsonResponse>((resolve) => {
+          releaseReport = resolve;
+        });
+      }
+      return originalHandler(path, init);
+    };
+    await render();
+    const file = await selectAudio("deferred-report.wav");
+    await prepareAndAuthorize(file);
+    await act(async () => getButton("Upload and measure privately").click());
+    await flush();
+    await act(async () => vi.advanceTimersByTimeAsync(2500));
+    await flush();
+    await acceptProcessingPlan();
+    await act(async () => vi.advanceTimersByTimeAsync(2500));
+    await flush();
+    expect(container.querySelector('[aria-label="Sales call report"]')).toBe(
+      null,
+    );
+    expect(releaseReport).toBeDefined();
+    releaseReport?.(
+      response({
+        id: "run-1",
+        recording_id: "recording-1",
+        state: "completed",
+        message: "Report ready.",
+        report,
+      }),
+    );
+    await flush();
+    expect(container.textContent).toContain(
+      "The prospect asked for a clear next step.",
+    );
+  });
+
+  it("restores an active plan for a saved call and polls its current stage", async () => {
+    vi.useFakeTimers();
+    const originalHandler = handleApi;
+    const savedRecording = {
+      id: "recording-1",
+      state: "running",
+      source_revision: "source-1",
+      source_sha256: "00".repeat(32),
+      source_bytes: 128,
+      content_type: "audio/wav",
+      created_at: "2026-09-13T00:00:00Z",
+      latest_run: {
+        id: "run-1",
+        state: "running",
+        recipe_revision: "audioatlas-48000-v1",
+        provider_calls: 0,
+        has_report: false,
+      },
+      has_report: false,
+    };
+    let planReads = 0;
+    handleApi = (path, init) => {
+      if (path.endsWith("/recordings"))
+        return response({ recordings: [savedRecording] });
+      if (
+        path.endsWith("/recordings/recording-1/plan") &&
+        init.method !== "POST"
+      ) {
+        planReads += 1;
+        return response({
+          ...processingPlan,
+          accepted: true,
+          state: "active",
+          current_stage: planReads === 1 ? "C2" : "C4",
+          report_run_id: "run-1",
+        });
+      }
+      return originalHandler(path, init);
+    };
+    await render();
+    await act(async () => getButton("Sales call").click());
+    await flush();
+    expect(container.textContent).toContain("Transcribing the call");
+    await act(async () => vi.advanceTimersByTimeAsync(2500));
+    await flush();
+    expect(planReads).toBe(2);
+    expect(container.textContent).toContain("Extracting conversation facts");
+    expect(container.querySelector('[aria-label="Sales call report"]')).toBe(
+      null,
     );
   });
 
@@ -551,15 +922,15 @@ describe("CallStudio", () => {
     await render();
     const file = await selectAudio();
     await prepareAndAuthorize(file);
-    await act(async () => getButton("Analyze my call").click());
+    await act(async () => getButton("Upload and measure privately").click());
     await flush();
     expect(container.querySelector('[role="alert"]')?.textContent).toContain(
       "Synthetic upload failed.",
     );
     expect(container.textContent).not.toContain("Your sales call report");
-    expect(getButton("Analyze my call").disabled).toBe(false);
+    expect(getButton("Upload and measure privately").disabled).toBe(false);
 
-    await act(async () => getButton("Analyze my call").click());
+    await act(async () => getButton("Upload and measure privately").click());
     await flush();
     expect(uploadAttempts).toBe(2);
     expect(container.textContent).toContain("Your call is being processed");
@@ -584,7 +955,7 @@ describe("CallStudio", () => {
     await render();
     const file = await selectAudio();
     await prepareAndAuthorize(file);
-    await act(async () => getButton("Analyze my call").click());
+    await act(async () => getButton("Upload and measure privately").click());
     await flush();
     expect(container.querySelector('[role="alert"]')?.textContent).toContain(
       "Quote approval expired.",
@@ -775,7 +1146,7 @@ describe("CallStudio", () => {
     await render();
     const file = await selectAudio();
     await prepareAndAuthorize(file);
-    await act(async () => getButton("Analyze my call").click());
+    await act(async () => getButton("Upload and measure privately").click());
     await flush();
     expect(setItem).not.toHaveBeenCalled();
     expect(Object.keys(localStorage)).toHaveLength(0);

@@ -796,6 +796,18 @@ class ConversationApplication:
         ):
             raise ConversationConflict("Erasure was fenced.")
         now = utc(self.clock())
+        from ac_platform.conversation_intelligence.models import ConversationProcessingPlan
+
+        for plan in (
+            await self.database.scalars(
+                select(ConversationProcessingPlan).where(
+                    ConversationProcessingPlan.recording_id == recording.id,
+                    ConversationProcessingPlan.erased_at.is_(None),
+                )
+            )
+        ).all():
+            plan.manifest, plan.erased_at, plan.state = None, now, "cancelled"
+            plan.progress = {}
         for task in (
             await self.database.scalars(
                 select(ConversationInferenceTask).where(

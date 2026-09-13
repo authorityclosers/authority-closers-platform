@@ -103,8 +103,14 @@ Shared edits: model registration in `db/models.py`, optional HTTP composition in
 and generated-output ignores. No existing LMS navigation, release manifests,
 identity implementation, apex routing, secrets or production DB data are changed.
 
-The internal durable C2-C6 worker and source-owned hosted API composition now have
-separate implementation evidence. Dedicated confined Linux worker composition,
-approved actual storage/allowance/provider configuration, automatic progression,
-cross-subdomain session integration, retention scheduling, current KVM4 capacity,
-canary and rollback remain required before claiming the product is live.
+The internal durable C2-C6 worker, source-owned hosted API composition and
+single-consent processing plan now have separate implementation evidence. The
+`/recordings/{id}/plan/quote` POST, `/plan` acceptance POST and `/plan` progress GET
+are the Call Studio workflow; learners do not select internal checkpoints or
+providers. Migration0032 and the plan/retention scheduler contracts are documented
+in `docs/evidence/SALES_XRAY_PROCESSING_PLAN.md`.
+Dedicated confined Linux worker composition, approved actual
+storage/allowance/provider configuration, regular scheduler invocation, current
+KVM4 capacity, complete hosted browser acceptance, canary and rollback remain
+required before claiming the product is live. First acceptance uses the existing
+learner[-staging] `/sales-xray` path and its AC authentication continuity.
