@@ -22,6 +22,10 @@ from ac_platform.http.auth import install_identity_http
 from ac_platform.http.certificates import install_certificate_http
 from ac_platform.http.community import install_community_http
 from ac_platform.http.conversation import install_conversation_http
+from ac_platform.http.conversation_acquisition_runtime import (
+    compose_acquisition,
+    install_acquisition_runtime,
+)
 from ac_platform.http.conversation_admin import install_conversation_admin_http
 from ac_platform.http.conversation_intake import ConversationIntakeRuntime
 from ac_platform.http.conversation_reviews import install_conversation_review_http
@@ -150,6 +154,19 @@ def create_app(
         resolved_conversation = None
         logger.warning("sales_xray_composition_unavailable")
     application.state.sales_xray_intake_configured = resolved_conversation is not None
+    try:
+        resolved_acquisition = compose_acquisition(settings, resolved_conversation)
+    except (ValueError, OSError):
+        resolved_acquisition = None
+        logger.warning("sales_xray_acquisition_unavailable")
+    application.state.sales_xray_acquisition_configured = resolved_acquisition is not None
+    install_acquisition_runtime(
+        application,
+        settings=settings,
+        sessions=session_factory,
+        require_actor=require_actor,
+        runtime=resolved_acquisition,
+    )
     install_conversation_http(
         application,
         settings=settings,
@@ -289,6 +306,9 @@ def create_app(
         studio_video_upload_max_bytes=studio_video_max_source_bytes,
         conversation_upload_max_bytes=resolved_conversation.storage.max_bytes
         if resolved_conversation
+        else None,
+        acquisition_upload_max_bytes=resolved_acquisition.intake.storage.max_bytes
+        if resolved_acquisition
         else None,
     )
     application.add_middleware(

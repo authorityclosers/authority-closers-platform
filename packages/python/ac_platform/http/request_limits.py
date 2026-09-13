@@ -28,6 +28,7 @@ _STUDIO_VIDEO_BYTES_PATH = re.compile(
 )
 _FILESYSTEM_AVATAR_BYTES_PATH = re.compile(r"/v1/media/filesystem-avatar-upload/.{1,512}")
 _CONVERSATION_BYTES_PATH = re.compile(rf"/v1/conversation/recordings/{_UUID}/source")
+_ACQUISITION_BYTES_PATH = re.compile(rf"/v1/conversation/acquisition/submissions/{_UUID}/source")
 _CONVERSATION_DRAFT_IMPORT_PATH = re.compile(rf"/v1/admin/conversation/runs/{_UUID}/draft")
 
 
@@ -116,6 +117,7 @@ class RequestBodyLimitMiddleware:
         filesystem_avatar_upload_enabled: bool = False,
         studio_video_upload_max_bytes: int | None = None,
         conversation_upload_max_bytes: int | None = None,
+        acquisition_upload_max_bytes: int | None = None,
     ) -> None:
         self.app = app
         self.local_avatar_upload_enabled = local_avatar_upload_enabled is True
@@ -132,22 +134,31 @@ class RequestBodyLimitMiddleware:
         ):
             raise ValueError("The explicitly enabled conversation byte limit is invalid.")
         self.conversation_upload_max_bytes = conversation_upload_max_bytes
+        if acquisition_upload_max_bytes is not None and (
+            type(acquisition_upload_max_bytes) is not int
+            or not 1 <= acquisition_upload_max_bytes <= 128 * 1024**2
+        ):
+            raise ValueError("The explicitly enabled acquisition byte limit is invalid.")
+        self.acquisition_upload_max_bytes = acquisition_upload_max_bytes
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope.get("type") != "http" or scope.get("method", "").upper() in SAFE_METHODS:
             await self.app(scope, receive, send)
             return
 
-        if (
-            self.conversation_upload_max_bytes is not None
-            and scope.get("method") == "PUT"
-            and _CONVERSATION_BYTES_PATH.fullmatch(scope.get("path", ""))
-        ):
+        upload_limit = (
+            self.conversation_upload_max_bytes
+            if _CONVERSATION_BYTES_PATH.fullmatch(scope.get("path", ""))
+            else self.acquisition_upload_max_bytes
+            if _ACQUISITION_BYTES_PATH.fullmatch(scope.get("path", ""))
+            else None
+        )
+        if upload_limit is not None and scope.get("method") == "PUT":
             lengths = tuple(_header_values(scope, b"content-length"))
             if (
                 len(lengths) != 1
                 or re.fullmatch(rb"[1-9][0-9]{0,8}", lengths[0]) is None
-                or int(lengths[0]) > self.conversation_upload_max_bytes
+                or int(lengths[0]) > upload_limit
                 or tuple(_header_values(scope, b"transfer-encoding"))
             ):
                 await _send_too_large(scope, send)
