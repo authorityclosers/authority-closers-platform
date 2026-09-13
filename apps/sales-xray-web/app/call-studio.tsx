@@ -4,17 +4,23 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   AudioLines,
-  ArrowLeft,
   ArrowRight,
   Check,
   ChevronDown,
   FileText,
+  Languages,
   LoaderCircle,
+  ListChecks,
+  Play,
+  Printer,
   Upload,
   X,
 } from "lucide-react";
 import { BrandMark } from "@ac/ui";
-import { Workbench, time } from "./workbench";
+import { RecordingMeasurements } from "./recording-measurements";
+import { ReportFactors } from "./report-factors";
+import { ReportTranscript } from "./report-transcript";
+import { REPORT_SECTION_COPY } from "./report-section-copy";
 import {
   parseJobResponse,
   parseJobStatus,
@@ -41,6 +47,13 @@ type Quote = {
   privacy_revision: string;
   output_kind?: "measurements" | "report";
 };
+
+const time = (ms: number) =>
+  `${Math.floor(ms / 60000)
+    .toString()
+    .padStart(2, "0")}:${Math.floor((ms / 1000) % 60)
+    .toString()
+    .padStart(2, "0")}`;
 type ProcessingPlanStage = {
   stage: "C2" | "C4" | "C5";
   provider: string;
@@ -87,6 +100,172 @@ const LOCAL_MEASUREMENT_RECIPES = new Set([
   "audioatlas-48000-v1",
   "audioatlas-16000-v1",
 ]);
+
+type DisplayLanguage = "en" | "hi" | "mr" | "en-hi-mixed";
+type EvidenceMoment = Finding["evidence"][number] & {
+  findingTitle: string;
+  key: string;
+};
+
+const DISPLAY_COPY: Record<
+  DisplayLanguage,
+  {
+    label: string;
+    modeNote: string;
+    uploadStep: string;
+    analyzeStep: string;
+    reportStep: string;
+    languageLabel: string;
+    sourceMoments: string;
+    evidenceFindings: string;
+    dimensionsObserved: string;
+    recommendedNextSteps: string;
+    recommendedNextStepsDetail: string;
+    sourceMomentsHeading: string;
+    sourceMomentsIntro: string;
+    playMoment: string;
+    practiceFocus: string;
+    practiceFocusIntro: string;
+    reportLanguageNotice: string;
+    printReport: string;
+    playbackUnavailable: string;
+    playbackBlocked: string;
+    playingMoment: string;
+  }
+> = {
+  en: {
+    label: "English",
+    modeNote: "UI labels only",
+    uploadStep: "Upload your call",
+    analyzeStep: "Analyze",
+    reportStep: "Read your report",
+    languageLabel: "Display language",
+    sourceMoments: "Source moments",
+    evidenceFindings: "Evidence-backed findings",
+    dimensionsObserved: "Dimensions observed",
+    recommendedNextSteps: "Recommended next steps",
+    recommendedNextStepsDetail: "Improvements grounded in this call",
+    sourceMomentsHeading: "Moments from your call",
+    sourceMomentsIntro:
+      "Jump to the exact source-bound moments behind this draft.",
+    playMoment: "Play source moment",
+    practiceFocus: "One move to practise next",
+    practiceFocusIntro:
+      "Use the clearest improvement as a small rehearsal before your next call.",
+    reportLanguageNotice:
+      "Navigation and report controls use your selected language. The call’s words and analysis stay in the language they were created.",
+    printReport: "Print / save PDF",
+    playbackUnavailable:
+      "This moment is linked, but source playback is unavailable. Verify the authorized recording to listen.",
+    playbackBlocked:
+      "Playback was blocked. Press play in the audio controls to continue from this moment.",
+    playingMoment: "Playing source moment",
+  },
+  hi: {
+    label: "हिन्दी · देवनागरी",
+    modeNote: "केवल UI labels",
+    uploadStep: "कॉल अपलोड करें",
+    analyzeStep: "विश्लेषण",
+    reportStep: "रिपोर्ट पढ़ें",
+    languageLabel: "दिखाने की भाषा",
+    sourceMoments: "स्रोत क्षण",
+    evidenceFindings: "सबूत से जुड़े निष्कर्ष",
+    dimensionsObserved: "देखे गए आयाम",
+    recommendedNextSteps: "अगले सुझाए गए कदम",
+    recommendedNextStepsDetail: "इस कॉल से जुड़े सुधार",
+    sourceMomentsHeading: "आपकी कॉल के क्षण",
+    sourceMomentsIntro: "इस ड्राफ्ट के स्रोत से जुड़े सटीक क्षण पर जाएँ।",
+    playMoment: "स्रोत क्षण चलाएँ",
+    practiceFocus: "अगली बार अभ्यास करने की एक बात",
+    practiceFocusIntro:
+      "अगली कॉल से पहले सबसे स्पष्ट सुधार का छोटा अभ्यास करें।",
+    reportLanguageNotice:
+      "नेविगेशन और रिपोर्ट के विकल्प चुनी गई भाषा में हैं। कॉल के शब्द और विश्लेषण जिस भाषा में बने थे, उसी में रहते हैं।",
+    printReport: "प्रिंट / PDF सहेजें",
+    playbackUnavailable:
+      "यह moment source से जुड़ा है, लेकिन playback उपलब्ध नहीं है। सुनने के लिए authorized recording जाँचें।",
+    playbackBlocked:
+      "Playback block हो गया। इस moment से सुनने के लिए audio controls में play दबाएँ।",
+    playingMoment: "Source moment चल रहा है",
+  },
+  mr: {
+    label: "मराठी · देवनागरी",
+    modeNote: "फक्त UI labels",
+    uploadStep: "कॉल अपलोड करा",
+    analyzeStep: "विश्लेषण",
+    reportStep: "रिपोर्ट वाचा",
+    languageLabel: "दाखवण्याची भाषा",
+    sourceMoments: "स्रोत क्षण",
+    evidenceFindings: "पुराव्याशी जोडलेले निष्कर्ष",
+    dimensionsObserved: "निरीक्षित आयाम",
+    recommendedNextSteps: "सुचवलेले पुढचे टप्पे",
+    recommendedNextStepsDetail: "या कॉलवर आधारित सुधारणा",
+    sourceMomentsHeading: "तुमच्या कॉलमधले क्षण",
+    sourceMomentsIntro: "या ड्राफ्टमागचे अचूक source-bound moments उघडा.",
+    playMoment: "स्रोत क्षण चालवा",
+    practiceFocus: "पुढच्या कॉलसाठी एक सराव",
+    practiceFocusIntro: "पुढच्या कॉलआधी स्पष्ट सुधारण्याचा छोटा सराव करा.",
+    reportLanguageNotice:
+      "नेव्हिगेशन आणि अहवालाचे पर्याय निवडलेल्या भाषेत आहेत. कॉलचे शब्द आणि विश्लेषण तयार केलेल्या भाषेतच राहतात.",
+    printReport: "प्रिंट / PDF जतन करा",
+    playbackUnavailable:
+      "हा moment source शी जोडलेला आहे, पण playback उपलब्ध नाही. ऐकण्यासाठी authorized recording तपासा.",
+    playbackBlocked:
+      "Playback block झाला. या moment पासून ऐकण्यासाठी audio controls मध्ये play करा.",
+    playingMoment: "Source moment चालू आहे",
+  },
+  "en-hi-mixed": {
+    label: "English + हिन्दी mixed",
+    modeNote: "UI labels only · मिश्रित",
+    uploadStep: "Upload कॉल करें",
+    analyzeStep: "Analyze करें",
+    reportStep: "Report पढ़ें",
+    languageLabel: "Display language · भाषा",
+    sourceMoments: "Source moments · स्रोत क्षण",
+    evidenceFindings: "Evidence-backed findings · सबूत",
+    dimensionsObserved: "Dimensions observed · देखे गए आयाम",
+    recommendedNextSteps: "Recommended next steps · अगले कदम",
+    recommendedNextStepsDetail: "Improvements from this call · इस कॉल के सुधार",
+    sourceMomentsHeading: "Moments from your call · आपकी कॉल के क्षण",
+    sourceMomentsIntro:
+      "Jump to exact source-bound moments · सटीक क्षण पर जाएँ।",
+    playMoment: "Play source moment · स्रोत क्षण चलाएँ",
+    practiceFocus: "One move to practise · अगला अभ्यास",
+    practiceFocusIntro:
+      "Use this improvement before your next call · अगली कॉल से पहले अभ्यास करें।",
+    reportLanguageNotice:
+      "Navigation और report controls चुनी गई भाषा में हैं। Call के शब्द और analysis अपनी original language में रहते हैं।",
+    printReport: "Print / PDF सेव करें",
+    playbackUnavailable:
+      "This moment is linked but playback is unavailable · यह moment जुड़ा है पर playback उपलब्ध नहीं है।",
+    playbackBlocked: "Playback was blocked · audio controls में play दबाएँ।",
+    playingMoment: "Playing source moment · moment चल रहा है",
+  },
+};
+
+function evidenceMoments(report: Job["report"]): EvidenceMoment[] {
+  if (!report) return [];
+  const seen = new Set<string>();
+  const moments: EvidenceMoment[] = [];
+  const groups: Array<[string, Finding[]]> = [
+    ["strength", report.strengths],
+    ["missed", report.missed_opportunities],
+    ["improvement", report.improvements],
+    ["objection", report.objection_analysis],
+    ["closing", report.closing_analysis],
+  ];
+  for (const [, findings] of groups) {
+    for (const finding of findings) {
+      for (const evidence of finding.evidence) {
+        const key = `${evidence.segment_id}:${evidence.start_ms}:${evidence.end_ms}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        moments.push({ ...evidence, findingTitle: finding.title, key });
+      }
+    }
+  }
+  return moments.sort((a, b) => a.start_ms - b.start_ms);
+}
 
 function planObject(value: unknown, code: string): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value))
@@ -400,8 +579,19 @@ async function readProcessingPlan(
   }
 }
 
-export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
-  const [advanced, setAdvanced] = useState(false);
+export type CallStudioVariant = "standalone" | "embedded";
+
+export type CallStudioProps = {
+  homeHref?: string;
+  /** Existing LMS callers identify their embedded mount with the /home return path. */
+  variant?: CallStudioVariant;
+};
+
+export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
+  const resolvedVariant =
+    variant ?? (homeHref === "/" ? "standalone" : "embedded");
+  const embedded = resolvedVariant === "embedded";
+  const [displayLanguage, setDisplayLanguage] = useState<DisplayLanguage>("en");
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -428,11 +618,20 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
   const [planConsent, setPlanConsent] = useState(false);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
+  const [selectedMomentKey, setSelectedMomentKey] = useState<string | null>(
+    null,
+  );
+  const [momentStatus, setMomentStatus] = useState("");
   const input = useRef<HTMLInputElement>(null);
   const audio = useRef<HTMLAudioElement>(null);
   const attempt = useRef(0);
   const requestKey = useRef("");
   const planRequestKey = useRef("");
+  const copy = DISPLAY_COPY[displayLanguage];
+  const sections = REPORT_SECTION_COPY[displayLanguage];
+  const interfaceLanguage =
+    displayLanguage === "hi" ? "hi" : displayLanguage === "mr" ? "mr" : "en";
+  const Main: "div" | "main" = embedded ? "div" : "main";
 
   useEffect(() => {
     const controller = new AbortController();
@@ -716,6 +915,8 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
     setReportBlocked(false);
     setConsent(false);
     setPlanConsent(false);
+    setSelectedMomentKey(null);
+    setMomentStatus("");
     setError("");
     requestKey.current = crypto.randomUUID();
     planRequestKey.current = "";
@@ -833,6 +1034,8 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
     setSourceSha256(recording.source_sha256);
     setDuration(0);
     setPlanConsent(false);
+    setSelectedMomentKey(null);
+    setMomentStatus("");
     requestKey.current = crypto.randomUUID();
     planRequestKey.current = "";
     try {
@@ -1024,6 +1227,49 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
       if (current === attempt.current) setBusy("");
     }
   }
+  const report = job?.report;
+  const reportMoments = evidenceMoments(report);
+  const reportFindingsWithEvidence = report
+    ? [
+        ...report.strengths,
+        ...report.missed_opportunities,
+        ...report.improvements,
+        ...report.objection_analysis,
+        ...report.closing_analysis,
+      ].filter((finding) => finding.evidence.length > 0).length
+    : 0;
+  const observedDimensions = report
+    ? report.dimensions.filter((dimension) => dimension.status === "observed")
+        .length
+    : 0;
+  const durationLabel = activeTranscript
+    ? time(activeTranscript.duration_ms)
+    : duration
+      ? time(duration)
+      : "Not available";
+  function seekToMoment(moment: EvidenceMoment) {
+    setSelectedMomentKey(moment.key);
+    const player = audio.current;
+    if (!player || !player.isConnected) {
+      setMomentStatus(copy.playbackUnavailable);
+      return;
+    }
+    try {
+      player.currentTime = moment.start_ms / 1000;
+      const playback = player.play();
+      if (!playback || typeof playback.then !== "function") {
+        setMomentStatus(copy.playbackBlocked);
+        return;
+      }
+      void playback
+        .then(() =>
+          setMomentStatus(`${copy.playingMoment} · ${time(moment.start_ms)}.`),
+        )
+        .catch(() => setMomentStatus(copy.playbackBlocked));
+    } catch {
+      setMomentStatus(copy.playbackUnavailable);
+    }
+  }
   function restart() {
     ++attempt.current;
     clearAudioPlayback();
@@ -1040,36 +1286,88 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
     setBusy("");
     setConsent(false);
     setPlanConsent(false);
+    setSelectedMomentKey(null);
+    setMomentStatus("");
     planRequestKey.current = "";
   }
-  if (advanced)
-    return (
-      <>
-        <div className="advanced-return">
-          <button onClick={() => setAdvanced(false)}>
-            <ArrowLeft size={17} /> Back to upload & reports
-          </button>
-        </div>
-        <Workbench />
-      </>
-    );
   return (
-    <div className="xray-app simple-app" data-theme="light">
-      <header className="studio-header">
-        <Link href={homeHref} aria-label="Sales Xray home">
-          <span className="studio-mark">
-            <BrandMark />
-          </span>
-          <span>
-            Dipak’s <strong>Sales Xray</strong>
-            <small>AUTHORITY CLOSERS</small>
-          </span>
-        </Link>
-        <span className="studio-preview">Internal testing</span>
-      </header>
-      <main id="main" className="studio-main">
-        <nav className="studio-steps" aria-label="Analysis steps">
-          {["Upload your call", "Analyze", "Read your report"].map(
+    <div
+      className={`xray-app simple-app${embedded ? " embedded-studio" : ""}`}
+      data-theme="light"
+      data-variant={resolvedVariant}
+    >
+      {!embedded && (
+        <header className="studio-header">
+          <Link href={homeHref} aria-label="Sales Xray home">
+            <span className="studio-mark">
+              <BrandMark />
+            </span>
+            <span>
+              Dipak’s <strong>Sales Xray</strong>
+              <small>AUTHORITY CLOSERS</small>
+            </span>
+          </Link>
+          <div className="studio-header-tools">
+            <label className="studio-language-control">
+              <Languages size={15} aria-hidden="true" />
+              <span>{copy.languageLabel}</span>
+              <select
+                aria-label={copy.languageLabel}
+                title={copy.modeNote}
+                value={displayLanguage}
+                onChange={(event) =>
+                  setDisplayLanguage(event.target.value as DisplayLanguage)
+                }
+              >
+                {(
+                  Object.entries(DISPLAY_COPY) as [
+                    DisplayLanguage,
+                    (typeof DISPLAY_COPY)[DisplayLanguage],
+                  ][]
+                ).map(([value, language]) => (
+                  <option key={value} value={value}>
+                    {language.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </header>
+      )}
+      <Main id="main" className="studio-main">
+        {embedded && (
+          <div className="studio-embedded-tools">
+            <label className="studio-language-control">
+              <Languages size={15} aria-hidden="true" />
+              <span>{copy.languageLabel}</span>
+              <select
+                aria-label={copy.languageLabel}
+                title={copy.modeNote}
+                value={displayLanguage}
+                onChange={(event) =>
+                  setDisplayLanguage(event.target.value as DisplayLanguage)
+                }
+              >
+                {(
+                  Object.entries(DISPLAY_COPY) as [
+                    DisplayLanguage,
+                    (typeof DISPLAY_COPY)[DisplayLanguage],
+                  ][]
+                ).map(([value, language]) => (
+                  <option key={value} value={value}>
+                    {language.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        )}
+        <nav
+          className="studio-steps"
+          aria-label="Analysis steps"
+          lang={interfaceLanguage}
+        >
+          {[copy.uploadStep, copy.analyzeStep, copy.reportStep].map(
             (label, i) => (
               <span
                 key={label}
@@ -1100,7 +1398,7 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
             </p>
           </div>
         )}
-        <div className="studio-body">
+        <div className={`studio-body${job?.report ? " report-active" : ""}`}>
           <section className="panel studio-upload" aria-label="Your call">
             {!file && !activeRecording ? (
               <>
@@ -1154,6 +1452,7 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
                     if (value && Number.isFinite(value))
                       setDuration(value * 1000);
                   }}
+                  onError={() => setMomentStatus(copy.playbackUnavailable)}
                 />
                 <p className="small-text">
                   Listen here to check you chose the right recording. Selecting
@@ -1195,6 +1494,7 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
                     if (value && Number.isFinite(value))
                       setDuration(value * 1000);
                   }}
+                  onError={() => setMomentStatus(copy.playbackUnavailable)}
                 />
                 <p className="small-text">
                   Playback uses the authorized recording in this workspace. No
@@ -1343,6 +1643,17 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
                     ? "You can retry with a fresh analysis after checking the selected file."
                     : "We keep completed work so a retry does not need to transcribe your call again."}
                 </p>
+                {(reportBlocked ||
+                  ["failed", "cancelled", "completed"].includes(job.state)) && (
+                  <button
+                    className="secondary-button studio-recovery-button"
+                    type="button"
+                    onClick={restart}
+                  >
+                    Choose a call to retry
+                    <ArrowRight size={16} />
+                  </button>
+                )}
               </div>
             )}
             {plan && !job?.report && plan.accepted && (
@@ -1373,6 +1684,57 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
                   {reportBlocked
                     ? "No report is shown until it matches this recording."
                     : processingPlanMessage(plan)}
+                </p>
+                {(reportBlocked || plan.state === "completed") && (
+                  <button
+                    className="secondary-button studio-recovery-button"
+                    type="button"
+                    onClick={restart}
+                  >
+                    Choose a call to retry
+                    <ArrowRight size={16} />
+                  </button>
+                )}
+                <div
+                  className="studio-stage-rail"
+                  aria-label="Approved analysis stages"
+                >
+                  {plan.stages.map((stage, index) => {
+                    const complete = plan.report_ready;
+                    const current =
+                      !complete &&
+                      plan.state === "active" &&
+                      plan.current_stage === stage.stage;
+                    return (
+                      <div
+                        className={`studio-stage${complete ? " complete" : current ? " current" : ""}`}
+                        key={stage.stage}
+                      >
+                        <span aria-hidden="true">
+                          {complete ? <Check size={13} /> : index + 1}
+                        </span>
+                        <strong>
+                          {stage.stage} · {processingStageLabel(stage.stage)}
+                        </strong>
+                        <small>
+                          {complete
+                            ? "Complete"
+                            : current
+                              ? "In progress"
+                              : plan.state === "held" ||
+                                  plan.state === "cancelled" ||
+                                  plan.state === "completed"
+                                ? "Not confirmed"
+                                : "Queued"}
+                        </small>
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="studio-stage-note">
+                  The plan reports its current stage and approved stages.
+                  Per-stage completion receipts are not included in this
+                  response.
                 </p>
                 {(plan.state === "held" || plan.state === "cancelled") && (
                   <button
@@ -1448,10 +1810,10 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
             </aside>
           )}
         </div>
-        <section
-          className="recording-history panel"
-          aria-labelledby="saved-calls-title"
-        >
+        <details className="recording-history panel" open={!job?.report}>
+          <summary className={job?.report ? "" : "visually-hidden"}>
+            Saved calls{recordings.length ? ` (${recordings.length})` : ""}
+          </summary>
           <div className="history-heading">
             <div>
               <p className="eyebrow">YOUR WORKSPACE</p>
@@ -1525,27 +1887,156 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
               No saved calls are available in this workspace yet.
             </p>
           )}
-        </section>
+        </details>
         {job?.report && (
           <section
             className="studio-report panel"
             aria-label="Sales call report"
           >
-            <p className="eyebrow">YOUR SALES CALL REPORT</p>
-            <h1>What to take into your next call.</h1>
+            <p className="eyebrow" lang={interfaceLanguage}>
+              {sections.heading}
+            </p>
+            <h1 lang={interfaceLanguage}>{sections.title}</h1>
             <p className="studio-report-summary">{job.report.summary}</p>
-            <span className="pill">AI draft · Dipak has not reviewed this</span>
+            <span className="pill" lang={interfaceLanguage}>
+              {sections.draft}
+            </span>
+            <div className="studio-report-actions">
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => window.print()}
+              >
+                <Printer size={16} aria-hidden="true" />
+                {copy.printReport}
+              </button>
+            </div>
+            <div
+              className="studio-report-language-note"
+              role="status"
+              lang={interfaceLanguage}
+            >
+              <Languages size={16} aria-hidden="true" />
+              <span>{copy.reportLanguageNotice}</span>
+            </div>
+            <div
+              className="studio-report-metrics"
+              aria-label="Report measurements"
+              role="list"
+              lang={interfaceLanguage}
+            >
+              <div className="studio-report-metric" role="listitem">
+                <span>{copy.sourceMoments}</span>
+                <strong>
+                  {report ? reportMoments.length : "Not available"}
+                </strong>
+                <small>Unique timestamped spans</small>
+              </div>
+              <div className="studio-report-metric" role="listitem">
+                <span>{copy.evidenceFindings}</span>
+                <strong>
+                  {report ? reportFindingsWithEvidence : "Not available"}
+                </strong>
+                <small>Findings linked to the source</small>
+              </div>
+              <div className="studio-report-metric" role="listitem">
+                <span>{copy.dimensionsObserved}</span>
+                <strong>
+                  {job.report.dimensions.length
+                    ? `${observedDimensions}/${job.report.dimensions.length}`
+                    : "Not available"}
+                </strong>
+                <small>
+                  Observed: {observedDimensions} of{" "}
+                  {job.report.dimensions.length}
+                </small>
+              </div>
+              <div className="studio-report-metric" role="listitem">
+                <span>{copy.recommendedNextSteps}</span>
+                <strong>{job.report.improvements.length}</strong>
+                <small>{copy.recommendedNextStepsDetail}</small>
+              </div>
+            </div>
+            <section
+              className="studio-moment-browser"
+              aria-labelledby="source-moments-title"
+              lang={interfaceLanguage}
+            >
+              <div className="studio-moment-browser-heading">
+                <div>
+                  <p className="eyebrow">SOURCE-BOUND AUDIO</p>
+                  <h2 id="source-moments-title">{copy.sourceMomentsHeading}</h2>
+                  <p>{copy.sourceMomentsIntro}</p>
+                </div>
+                <span className="pill subtle">
+                  {durationLabel} · {activeTranscript?.segments.length ?? 0}{" "}
+                  transcript segments
+                </span>
+              </div>
+              {reportMoments.length ? (
+                <div className="studio-moment-list">
+                  {reportMoments.map((moment) => (
+                    <button
+                      className={`studio-moment${selectedMomentKey === moment.key ? " selected" : ""}`}
+                      key={moment.key}
+                      type="button"
+                      aria-pressed={selectedMomentKey === moment.key}
+                      aria-label={`${copy.playMoment}, ${time(moment.start_ms)} to ${time(moment.end_ms)}: ${moment.quote}`}
+                      onClick={() => seekToMoment(moment)}
+                    >
+                      <span className="studio-moment-time">
+                        <Play size={12} aria-hidden="true" />
+                        {time(moment.start_ms)}–{time(moment.end_ms)}
+                      </span>
+                      <span className="studio-moment-copy">
+                        <strong>{moment.findingTitle}</strong>
+                        <span>“{moment.quote}”</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="small-text">
+                  No source-linked moments were produced for this draft.
+                </p>
+              )}
+              {momentStatus && (
+                <p className="studio-playback-status" role="status">
+                  {momentStatus}
+                </p>
+              )}
+            </section>
+            {job.report.improvements[0] && (
+              <aside
+                className="studio-practice-callout"
+                lang={interfaceLanguage}
+              >
+                <span className="studio-practice-icon" aria-hidden="true">
+                  <ListChecks size={20} />
+                </span>
+                <div>
+                  <p className="eyebrow">{copy.practiceFocus}</p>
+                  <h2>{job.report.improvements[0].title}</h2>
+                  <p>{copy.practiceFocusIntro}</p>
+                  <p>{job.report.improvements[0].explanation}</p>
+                </div>
+              </aside>
+            )}
+            <ReportFactors
+              dimensions={job.report.dimensions}
+              language={displayLanguage}
+            />
             {(
               [
-                ["What went well", job.report.strengths],
-                ["What to improve", job.report.missed_opportunities],
-                ["What to say next", job.report.improvements],
-                ["Questions and concerns", job.report.objection_analysis],
-                ["Next step", job.report.closing_analysis],
+                [sections.strengths, job.report.strengths],
+                [sections.missed, job.report.missed_opportunities],
+                [sections.improvements, job.report.improvements],
+                [sections.objections, job.report.objection_analysis],
+                [sections.closing, job.report.closing_analysis],
               ] as [string, Finding[]][]
             ).map(([title, rows]) => (
               <section key={title as string}>
-                <h2>{title as string}</h2>
+                <h2 lang={interfaceLanguage}>{title as string}</h2>
                 {rows.length ? (
                   rows.map((finding, i) => (
                     <article key={i}>
@@ -1554,12 +2045,18 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
                       {finding.evidence.map((e, j) => (
                         <blockquote key={j}>
                           <button
-                            className="text-button"
-                            onClick={() => {
-                              if (audio.current)
-                                audio.current.currentTime = e.start_ms / 1000;
-                            }}
+                            className={`text-button evidence-time-button${selectedMomentKey === `${e.segment_id}:${e.start_ms}:${e.end_ms}` ? " selected" : ""}`}
+                            type="button"
+                            aria-label={`${copy.playMoment}, ${time(e.start_ms)} to ${time(e.end_ms)}: ${e.quote}`}
+                            onClick={() =>
+                              seekToMoment({
+                                ...e,
+                                findingTitle: finding.title,
+                                key: `${e.segment_id}:${e.start_ms}:${e.end_ms}`,
+                              })
+                            }
                           >
+                            <Play size={12} aria-hidden="true" />
                             {time(e.start_ms)}–{time(e.end_ms)}
                           </button>{" "}
                           <small>{e.segment_id}</small> “{e.quote}”
@@ -1568,32 +2065,50 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
                     </article>
                   ))
                 ) : (
-                  <p>No supported finding was produced for this section.</p>
+                  <p lang={interfaceLanguage}>{sections.empty}</p>
                 )}
               </section>
             ))}
             <section>
-              <h2>Final takeaway</h2>
+              <h2 lang={interfaceLanguage}>{sections.verdict}</h2>
               <p>{job.report.verdict}</p>
             </section>
-            <details>
-              <summary>Report details</summary>
-              <p>Source SHA-256: {job.report.source_sha256}</p>
-              <p>Transcript revision: {job.report.transcript_revision}</p>
-              <p>
-                Numeric scoring is awaiting approval: the supplied category
-                weights total 95 while the source declares 100.
-              </p>
-              <p>
-                Speaker labels remain unverified; transcript revision was
-                checked against the selected recording.
+            {activeTranscript && (
+              <ReportTranscript
+                key={`${activeTranscript.source_sha256}:${activeTranscript.revision}`}
+                transcript={activeTranscript}
+                language={displayLanguage}
+                onSelect={(segment) =>
+                  seekToMoment({
+                    segment_id: segment.id,
+                    quote: segment.text,
+                    start_ms: segment.start_ms,
+                    end_ms: segment.end_ms,
+                    findingTitle: "Transcript",
+                    key: `${segment.id}:${segment.start_ms}:${segment.end_ms}`,
+                  })
+                }
+              />
+            )}
+            {activeRecordingId && (
+              <RecordingMeasurements
+                key={`${activeRecordingId}:${job.report.source_sha256}`}
+                recordingId={activeRecordingId}
+                sourceSha256={job.report.source_sha256}
+                language={displayLanguage}
+              />
+            )}
+            <details className="studio-report-details">
+              <summary lang={interfaceLanguage}>{sections.details}</summary>
+              <p lang={interfaceLanguage}>
+                {sections.detailNote}
                 {activeTranscript
                   ? ` Duration: ${time(activeTranscript.duration_ms)}.`
                   : ""}
               </p>
             </details>
             <button className="primary-button" onClick={restart}>
-              Analyze another call <ArrowRight size={17} />
+              {sections.another} <ArrowRight size={17} />
             </button>
           </section>
         )}
@@ -1604,17 +2119,13 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
             runs. The report uses transcript moments from this call to explain
             what worked and what to try next.
           </p>
-          <button className="text-button" onClick={() => setAdvanced(true)}>
-            Open technical results viewer <ArrowRight size={16} />
-          </button>
         </details>
-        <footer className="studio-footer">
-          <span>Dipak’s Sales Xray · Authority Closers</span>
-          <button className="text-button" onClick={() => setAdvanced(true)}>
-            Advanced: checkpoints & review tools
-          </button>
-        </footer>
-      </main>
+        {!embedded && (
+          <footer className="studio-footer">
+            <span>Dipak’s Sales Xray · Authority Closers</span>
+          </footer>
+        )}
+      </Main>
     </div>
   );
 }

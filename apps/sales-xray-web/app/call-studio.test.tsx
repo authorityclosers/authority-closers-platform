@@ -1,7 +1,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CallStudio } from "./call-studio";
+import { CallStudio, type CallStudioProps } from "./call-studio";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -201,8 +201,8 @@ async function flush() {
   });
 }
 
-async function render() {
-  await act(async () => root.render(<CallStudio />));
+async function render(props: CallStudioProps = {}) {
+  await act(async () => root.render(<CallStudio {...props} />));
   await flush();
 }
 
@@ -359,6 +359,40 @@ afterEach(async () => {
 });
 
 describe("CallStudio", () => {
+  it("uses the embedded variant for the LMS mount without its standalone header", async () => {
+    await render({ homeHref: "/home", variant: "embedded" });
+
+    const app = container.querySelector<HTMLElement>(
+      '[data-variant="embedded"]',
+    );
+    expect(app).not.toBeNull();
+    expect(app?.classList.contains("embedded-studio")).toBe(true);
+    expect(container.querySelector(".studio-header")).toBeNull();
+    expect(container.querySelector(".studio-preview")).toBeNull();
+    expect(
+      container.querySelector('[data-variant="embedded"] main'),
+    ).toBeNull();
+    expect(
+      container.querySelector('[data-variant="embedded"] #main')?.tagName,
+    ).toBe("DIV");
+    expect(container.textContent).not.toContain("Workbench");
+    expect(container.textContent).not.toContain("Advanced:");
+    expect(
+      container.querySelector(
+        '.studio-embedded-tools select[aria-label="Display language"]',
+      ),
+    ).not.toBeNull();
+  });
+
+  it("keeps developer testing labels out of the standalone learner surface", async () => {
+    await render();
+
+    expect(
+      container.querySelector('[data-variant="standalone"] > main#main'),
+    ).not.toBeNull();
+    expect(container.textContent).not.toContain("Internal testing");
+  });
+
   it("keeps source selection local and clears a quote when the source changes", async () => {
     await render();
     const first = await selectAudio("first.wav", "first source");
@@ -493,6 +527,8 @@ describe("CallStudio", () => {
       "AI draft · Dipak has not reviewed this",
     );
     expect(container.textContent).not.toContain("draft_not_dipak_adjudicated");
+    expect(container.textContent).not.toContain("Source SHA-256");
+    expect(container.textContent).not.toContain("weights total 95");
     expect(container.textContent).not.toContain("Practise:");
     const audio = container.querySelector<HTMLAudioElement>("audio");
     expect(audio).not.toBeNull();
@@ -504,6 +540,93 @@ describe("CallStudio", () => {
       });
     await act(async () => getButton("00:01").click());
     expect(audio?.currentTime).toBe(1.5);
+  });
+
+  it("shows source-derived report measurements and keeps display language scoped to UI labels", async () => {
+    vi.useFakeTimers();
+    await render();
+    const file = await selectAudio("language-mode.wav");
+    await prepareAndAuthorize(file);
+    await act(async () => getButton("Upload and measure privately").click());
+    await flush();
+    await act(async () => vi.advanceTimersByTimeAsync(2500));
+    await flush();
+    await acceptProcessingPlan();
+    await act(async () => vi.advanceTimersByTimeAsync(2500));
+    await flush();
+
+    expect(container.textContent).toContain("Source moments");
+    expect(container.textContent).toContain("Evidence-backed findings");
+    expect(container.textContent).toContain("Recommended next steps");
+    const reportMetrics = container.querySelectorAll(".studio-report-metric");
+    expect(reportMetrics).toHaveLength(4);
+    expect(reportMetrics[3]?.querySelector("strong")?.textContent).toBe("1");
+    expect(container.textContent).not.toContain("No approved score");
+    expect(container.textContent).not.toContain("source 95 / declared 100");
+    expect(container.textContent).toContain("Dimensions observed");
+    const factors = container.querySelector('[aria-label="Sales factors"]');
+    expect(factors?.querySelectorAll("details")).toHaveLength(8);
+    expect(factors?.textContent).toContain("Dimension 1");
+    expect(factors?.textContent).toContain("Not assessed");
+    expect(factors?.textContent).toContain(
+      "There is not enough evidence for a client-side conclusion.",
+    );
+    const factorRows = [...factors!.querySelectorAll("details")];
+    factorRows[0].open = true;
+    await act(async () => window.dispatchEvent(new Event("beforeprint")));
+    expect(factorRows.every((detail) => detail.open)).toBe(true);
+    await act(async () => window.dispatchEvent(new Event("afterprint")));
+    expect(factorRows.filter((detail) => detail.open)).toEqual([factorRows[0]]);
+    expect(container.textContent).toContain("Observed: 0 of 8");
+    expect(container.textContent).toContain("Moments from your call");
+    expect(container.querySelectorAll(".studio-moment")).toHaveLength(2);
+
+    const print = vi.fn();
+    Object.defineProperty(window, "print", {
+      configurable: true,
+      value: print,
+    });
+    await act(async () => getButton("Print / save PDF").click());
+    expect(print).toHaveBeenCalledOnce();
+
+    const audio = container.querySelector<HTMLAudioElement>("audio");
+    expect(audio).not.toBeNull();
+    if (audio)
+      Object.defineProperty(audio, "currentTime", {
+        configurable: true,
+        writable: true,
+        value: 0,
+      });
+    const firstMoment =
+      container.querySelector<HTMLButtonElement>(".studio-moment");
+    expect(firstMoment?.getAttribute("aria-pressed")).toBe("false");
+    await act(async () => firstMoment?.click());
+    expect(audio?.currentTime).toBe(1.5);
+    expect(firstMoment?.getAttribute("aria-pressed")).toBe("true");
+
+    const language = container.querySelector<HTMLSelectElement>(
+      'select[aria-label="Display language"]',
+    );
+    expect(language).not.toBeNull();
+    if (language) {
+      expect([...language.options].map((option) => option.value)).toEqual([
+        "en",
+        "hi",
+        "mr",
+        "en-hi-mixed",
+      ]);
+      language.value = "hi";
+      await act(async () =>
+        language.dispatchEvent(new Event("change", { bubbles: true })),
+      );
+    }
+    expect(container.textContent).toContain("आपकी कॉल के क्षण");
+    expect(container.textContent).toContain(
+      "कॉल के शब्द और विश्लेषण जिस भाषा में बने थे, उसी में रहते हैं",
+    );
+    expect(container.textContent).toContain(
+      "The prospect asked for a clear next step.",
+    );
   });
 
   it("polls report status before transcript and continues when the report arrives later", async () => {
@@ -617,6 +740,11 @@ describe("CallStudio", () => {
     expect(container.textContent).toContain(
       "Analysis finished without a saved report",
     );
+    expect(
+      [...container.querySelectorAll(".studio-stage small")].map(
+        (stage) => stage.textContent,
+      ),
+    ).toEqual(["Not confirmed", "Not confirmed", "Not confirmed"]);
 
     await act(async () => vi.advanceTimersByTimeAsync(60_000));
     await flush();
@@ -664,6 +792,12 @@ describe("CallStudio", () => {
     expect(container.querySelector('[role="alert"]')?.textContent).toContain(
       "could not be verified",
     );
+    expect(getButton("Choose a call to retry")).toBeTruthy();
+    await act(async () => getButton("Choose a call to retry").click());
+    await flush();
+    expect(
+      container.querySelector("label.upload-label")?.textContent,
+    ).toContain("Choose audio file");
   });
 
   it("rejects a report status bound to a different run or recording", async () => {

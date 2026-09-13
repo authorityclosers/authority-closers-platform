@@ -36,11 +36,13 @@ from ac_platform.conversation_intelligence.application import ConversationApplic
 from ac_platform.conversation_intelligence.report_store import ConversationReports
 from ac_platform.http.auth import install_identity_http
 from ac_platform.http.conversation import install_conversation_http
+from ac_platform.http.conversation_intake import ConversationIntakeRuntime
 from ac_platform.http.problem import register_problem_handlers
 from ac_platform.identity.models import PasswordCredential, Person
 from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.identity.password_auth import hash_password
 from ac_platform.tenancy.models import Membership, Tenant
+from tests.database.test_conversation_intake_postgresql import policy
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
 from tests.database.test_conversation_postgresql import run
 from tests.database.test_conversation_reports_postgresql import _build_fixture
@@ -168,6 +170,11 @@ def _make_backend(
 
     fixture = run(_build_fixture(postgres_harness, tmp_path_factory.mktemp("standalone-browser")))
     account = run(_prepare_account(postgres_harness, fixture))
+    intake_runtime = ConversationIntakeRuntime(
+        policy(fixture.prepared.scope_id, fixture.prepared.state.tenant_id),
+        fixture.prepared.storage,
+        fixture.prepared.scratch,
+    )
     listener = socket.socket()
     request.addfinalizer(listener.close)
     listener.bind(("127.0.0.1", 0))
@@ -199,6 +206,7 @@ def _make_backend(
                 application,
                 settings=settings,
                 require_actor=require_actor,
+                intake_runtime=intake_runtime,
             )
             application.mount("/", StaticFiles(directory=exported, html=True))
             server = uvicorn.Server(
@@ -259,6 +267,14 @@ def _evidence_dir(tmp_path: Path) -> Path:
     return evidence
 
 
+def _metric_value(page: Any, label: str, unit: str) -> float:
+    metric = page.get_by_text(label, exact=True).locator("..")
+    value = metric.locator("strong").inner_text()
+    match = re.fullmatch(rf"(-?\d+(?:\.\d+)?)\s+{re.escape(unit)}", value.strip())
+    assert match is not None, f"Unexpected {label} value: {value!r}"
+    return float(match.group(1))
+
+
 def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
     receipt_path = evidence / "standalone-auth-browser.json"
     assert not receipt_path.exists(), "Use a fresh standalone browser evidence directory."
@@ -316,6 +332,8 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
                         "method": response.request.method,
                         "path": path,
                         "status": response.status,
+                        "cache_control": (response.header_value("cache-control") or "")[:128],
+                        "content_type": (response.header_value("content-type") or "")[:128],
                     }
                 )
 
@@ -356,7 +374,120 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
             expect(page.get_by_role("heading", name="Saved calls")).to_be_visible()
             expect(page.locator(".recording-history-item")).to_have_count(1)
             checks.append("Selecting the assigned workspace opens CallStudio and private history.")
+
+            saved_call = page.locator(".recording-history-item").first
+            expect(saved_call.get_by_text("Open report", exact=True)).to_be_visible()
+            saved_call.click()
+            expect(
+                page.get_by_role("heading", name="What to take into your next call.")
+            ).to_be_visible()
+            checks.append("Opening the saved call loads its source-bound report.")
+
+            audio = page.locator("audio").first
+            expect(audio).to_be_visible()
+            page.wait_for_function("document.querySelector('audio')?.readyState >= 1")
+            assert audio.get_attribute("src") == (
+                f"/v1/conversation/recordings/{backend.account.recording_id}/source"
+            )
+            duration = audio.evaluate("audio => audio.duration")
+            assert duration == pytest.approx(1, abs=0.02)
+            source_events = [
+                item
+                for item in network
+                if item["method"] == "GET" and item["path"].endswith("/source")
+            ]
+            assert source_events
+            assert any(
+                item["status"] in (200, 206)
+                and item["content_type"].startswith("audio/wav")
+                and item["cache_control"] == "private, no-store"
+                for item in source_events
+            )
+            playback = audio.evaluate(
+                """
+                async audio => {
+                  await audio.play();
+                  return {paused: audio.paused, readyState: audio.readyState};
+                }
+                """
+            )
+            assert playback["paused"] is False
+            page.wait_for_function("document.querySelector('audio')?.currentTime > 0.05")
+            audio.evaluate("audio => { audio.pause(); audio.currentTime = 0.5; }")
+            page.wait_for_function(
+                "Math.abs((document.querySelector('audio')?.currentTime ?? 0) - 0.5) < 0.05"
+            )
+            assert audio.evaluate("audio => audio.currentTime") == pytest.approx(0.5, abs=0.05)
+            checks.append(
+                "The saved report plays synthetic source audio over authenticated HTTP "
+                "and seeks it."
+            )
+
+            measurement_summary = (
+                page.locator("details").filter(has_text="Sound of the recording").locator("summary")
+            )
+            expect(measurement_summary).to_be_visible()
+            measurement_url = re.compile(
+                re.escape(
+                    f"{backend.origin}/v1/conversation/recordings/"
+                    f"{backend.account.recording_id}/measurements"
+                )
+            )
+            with page.expect_response(measurement_url) as measurement_info:
+                measurement_summary.click()
+            measurement_response = measurement_info.value
+            assert measurement_response.status == 200
+            assert measurement_response.header_value("cache-control") == "private, no-store"
+            measurements = measurement_response.json()
+            assert measurements["availability"] == "available"
+            assert measurements["checkpoint"]["stage"] == "C1"
+            assert measurements["source"]["recording_id"] == str(backend.account.recording_id)
+            channel = measurements["audioatlas"]["channels"][0]
+            assert channel["level"]["status"] == "available"
+            assert channel["pitch"]["status"] == "available"
+            level = float(channel["level"]["value"])
+            pitch = float(channel["pitch"]["value"])
+            assert abs(_metric_value(page, "Typical recorded level", "dBFS") - level) < 0.051
+            assert abs(_metric_value(page, "Typical pitch estimate", "Hz") - pitch) < 0.051
+            checks.append(
+                "The report displays saved C1 level and pitch from the private API response."
+            )
+
+            pitch_button = page.get_by_role("button", name="Pitch estimate", exact=True)
+            pitch_button.click()
+            expect(pitch_button).to_have_attribute("aria-pressed", "true")
+            expect(
+                page.get_by_role(
+                    "img", name=re.compile("Pitch estimate over the decoded recording")
+                )
+            ).to_be_visible()
+            checks.append(
+                "The saved measurement chart switches from sound level to pitch estimate."
+            )
+
+            factors = page.get_by_role("region", name="Sales factors")
+            expect(
+                factors.get_by_role("heading", name="Explore the sales factors")
+            ).to_be_visible()
+            factor_details = factors.locator("details")
+            expect(factor_details).to_have_count(8)
+            factor_details.first.locator("summary").click()
+            expect(factor_details.first.locator("p")).to_be_visible()
+            checks.append(
+                "The report exposes all eight saved sales factors with bounded observations."
+            )
+
+            transcript = page.locator("details").filter(has_text="Read full transcript")
+            expect(transcript.locator("summary")).to_be_visible()
+            transcript.locator("summary").click()
+            expect(transcript.get_by_role("search")).to_be_visible()
+            expect(transcript.locator("button[data-segment-id]")).to_have_count(1)
+            expect(transcript.get_by_text("Hello buyer", exact=True)).to_be_visible()
+            checks.append("The report exposes the one source-bound synthetic transcript segment.")
             page.screenshot(path=str(evidence / "authenticated-call-studio.png"), full_page=True)
+            page.screenshot(
+                path=str(evidence / "authenticated-report-measurements.png"), full_page=True
+            )
 
             cookies = context.cookies(backend.origin)
             session_cookie = next(
@@ -403,6 +534,39 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
                 item["name"] == backend.session_cookie_name
                 for item in context.cookies(backend.origin)
             )
+            unauthorized_measurements = page.evaluate(
+                """
+                async (recordingId) => {
+                  const response = await fetch(
+                    `/v1/conversation/recordings/${recordingId}/measurements`,
+                    {credentials: 'same-origin', cache: 'no-store'},
+                  );
+                  return {
+                    status: response.status,
+                    cacheControl: response.headers.get('cache-control'),
+                  };
+                }
+                """,
+                str(backend.account.recording_id),
+            )
+            assert unauthorized_measurements["status"] == 401
+            unauthorized_source = page.evaluate(
+                """
+                async (recordingId) => {
+                  const response = await fetch(
+                    `/v1/conversation/recordings/${recordingId}/source`,
+                    {credentials: 'same-origin', cache: 'no-store'},
+                  );
+                  return {status: response.status};
+                }
+                """,
+                str(backend.account.recording_id),
+            )
+            assert unauthorized_source["status"] == 401
+            checks.append(
+                "After logout, saved measurements and source playback return 401; "
+                "the authorized read was private/no-store."
+            )
             page.reload(wait_until="networkidle")
             expect(page.get_by_role("link", name="Sign in with AC")).to_be_visible()
             expect(page.locator(".recording-history-item")).to_have_count(0)
@@ -432,6 +596,33 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
                 and item["status"] == 204
                 for item in network
             )
+            assert any(
+                item["method"] == "GET"
+                and item["path"].endswith("/measurements")
+                and item["status"] == 200
+                and item["cache_control"] == "private, no-store"
+                for item in network
+            )
+            assert any(
+                item["method"] == "GET"
+                and item["path"].endswith("/measurements")
+                and item["status"] == 401
+                for item in network
+            )
+            assert any(
+                item["method"] == "GET"
+                and item["path"].endswith("/source")
+                and item["status"] in (200, 206)
+                and item["content_type"].startswith("audio/wav")
+                and item["cache_control"] == "private, no-store"
+                for item in network
+            )
+            assert any(
+                item["method"] == "GET"
+                and item["path"].endswith("/source")
+                and item["status"] == 401
+                for item in network
+            )
             assert not external
             assert not browser_errors
             # Next's navigation probe and a completed authentication response can
@@ -440,12 +631,20 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
             # cancellations after their exact success status and session effects
             # have independently passed above. Other failures still fail proof.
             accepted_aborts = {"HEAD /: net::ERR_ABORTED"}
-            for path, status in (
-                ("/v1/auth/password/login", 200),
-                ("/v1/auth/logout", 204),
+            for method, path, status in (
+                ("POST", "/v1/auth/password/login", 200),
+                ("POST", "/v1/auth/logout", 204),
+                (
+                    "GET",
+                    f"/v1/conversation/recordings/{backend.account.recording_id}/measurements",
+                    401,
+                ),
             ):
-                if {"method": "POST", "path": path, "status": status} in network:
-                    accepted_aborts.add(f"POST {path}: net::ERR_ABORTED")
+                if any(
+                    item["method"] == method and item["path"] == path and item["status"] == status
+                    for item in network
+                ):
+                    accepted_aborts.add(f"{method} {path}: net::ERR_ABORTED")
             proof["navigation_cancellations"] = [
                 failure for failure in request_failures if failure in accepted_aborts
             ]
