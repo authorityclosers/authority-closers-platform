@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 import pytest
+from sqlalchemy import select, update
 
 from ac_platform.authorization.policy import CapabilityScope
 from ac_platform.catalog.content import (
@@ -39,7 +40,9 @@ from ac_platform.media.models import (
     MediaLifecycle,
     MediaPurpose,
     MediaRendition,
+    MediaUploadIntent,
     MediaVersion,
+    StudioVideoUpload,
 )
 from ac_platform.media.service import MediaService
 from ac_platform.media.signing import MediaSigner
@@ -259,6 +262,53 @@ async def test_publication_is_idempotent_and_preserves_tenant_source(state) -> N
         )
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (
+        ("content_digest", "0" * 64),
+        ("content_source_ref", None),
+        ("content_reviewed_by", None),
+        ("content_reviewed_at", None),
+        ("release_id", "not-a-release"),
+        ("content_seed_kind", "technical-validation"),
+    ),
+)
+async def test_adoption_validates_target_review_independently(state, field, value) -> None:
+    await _grant_publication_capabilities(state)
+    source = _source_course(state)
+    actor = replace(state.actor, tenant_id=state.operations, permissions=ROLE_PERMISSIONS["owner"])
+    application = FreeCoursePublicationApplication(
+        PublicationSession(state.db),
+        operations_tenant_id=state.operations,
+        public_tenant_id=state.other,
+        clock=lambda: NOW,
+    )
+    published = await application.apply(
+        actor=actor,
+        source_program_id=source.id,
+        command_id=uuid4(),
+        reason="Prepare independently validated target",
+    )
+    # Fixture-only corruption represents an untrustworthy pre-existing target.
+    # Adoption must verify stored target evidence instead of trusting its status.
+    state.db.execute(
+        update(ProgramVersion.__table__)
+        .where(ProgramVersion.id == published.program_version_id)
+        .values({field: value})
+    )
+    state.db.expire_all()
+    with pytest.raises(FreeCoursePublicationConflict, match="reviewed content"):
+        await application.adopt_existing(
+            actor=actor,
+            source_program_id=source.id,
+            program_id=published.program_id,
+            program_version_id=published.program_version_id,
+            video_activity_id=published.video_activity_id,
+            command_id=uuid4(),
+            reason="Do not adopt an untrustworthy target",
+        )
+
+
 async def test_publication_rejects_cross_tenant_actor_before_copy(state) -> None:
     await _grant_publication_capabilities(state)
     source = _source_course(state)
@@ -387,8 +437,9 @@ async def test_publication_refuses_existing_global_course_without_mutation(state
 
 async def test_adopts_legacy_global_identity_with_four_modules_and_preserves_binding(state) -> None:
     await _grant_publication_capabilities(state)
-    source = _source_course(state, module_count=4)
-    source_version = state.db.query(ProgramVersion).filter_by(program_id=source.id).one()
+    source = _source_course(state, publish=False)
+    template = _source_course(state, module_count=4)
+    source_version = state.db.query(ProgramVersion).filter_by(program_id=template.id).one()
     source_modules = (
         state.db.query(Module)
         .filter_by(program_version_id=source_version.id)
@@ -401,7 +452,7 @@ async def test_adopts_legacy_global_identity_with_four_modules_and_preserves_bin
         tenant_id=None,
         scope=CatalogScope.GLOBAL,
         slug=AUTHORITY_CLOSERS_FREE_COURSE_SLUG,
-        title=source.title,
+        title="Legacy four-module learner course",
         program_id=legacy_program_id,
         now=NOW,
     )
@@ -410,10 +461,10 @@ async def test_adopts_legacy_global_identity_with_four_modules_and_preserves_bin
         tenant_id=None,
         version_number=1,
         version_id=legacy_version_id,
-        content_source_ref=source_version.content_source_ref,
+        content_source_ref="controlled:independently-reviewed-legacy-course",
         content_reviewed_by=source_version.content_reviewed_by,
         content_reviewed_at=source_version.content_reviewed_at,
-        release_id=source_version.release_id,
+        release_id="b" * 40,
         content_seed_kind=source_version.content_seed_kind,
         now=NOW,
     )
@@ -447,9 +498,9 @@ async def test_adopts_legacy_global_identity_with_four_modules_and_preserves_bin
             if source_activity.kind == "VIDEO":
                 legacy_video_id = legacy_activity.id
     assert legacy_video_id is not None
-    for edge in state.db.query(ModulePrerequisite).filter_by(
-        program_version_id=source_version.id
-    ).all():
+    for edge in (
+        state.db.query(ModulePrerequisite).filter_by(program_version_id=source_version.id).all()
+    ):
         service.add_module_prerequisite(
             legacy_modules[edge.module_id].id,
             legacy_modules[edge.prerequisite_module_id].id,
@@ -528,12 +579,33 @@ async def test_adopts_legacy_global_identity_with_four_modules_and_preserves_bin
         tenant_id=state.operations,
         permissions=ROLE_PERMISSIONS["owner"],
     )
-    result = await FreeCoursePublicationApplication(
+    protected_models = (
+        Program,
+        ProgramVersion,
+        Module,
+        ModulePrerequisite,
+        Activity,
+        MediaAsset,
+        MediaVersion,
+        ActivityMediaBinding,
+    )
+
+    def snapshot():
+        return {
+            model.__tablename__: tuple(
+                state.db.execute(select(model.__table__).order_by(model.id)).all()
+            )
+            for model in protected_models
+        }
+
+    before = snapshot()
+    application = FreeCoursePublicationApplication(
         PublicationSession(state.db),
         operations_tenant_id=state.operations,
         public_tenant_id=state.academy,
         clock=lambda: NOW,
-    ).adopt_existing(
+    )
+    result = await application.adopt_existing(
         actor=actor,
         source_program_id=source.id,
         program_id=legacy_program_id,
@@ -544,10 +616,26 @@ async def test_adopts_legacy_global_identity_with_four_modules_and_preserves_bin
     )
 
     assert result.status == "adopted"
+    assert snapshot() == before
+    assert state.db.get(ProgramVersion, result.source_version_id).status == "draft"
+    for changed_field in ("program_id", "program_version_id", "video_activity_id"):
+        target = {
+            "program_id": legacy_program_id,
+            "program_version_id": legacy_version_id,
+            "video_activity_id": legacy_video_id,
+        }
+        target[changed_field] = uuid4()
+        with pytest.raises(FreeCoursePublicationConflict, match="another adoption target"):
+            await application.adopt_existing(
+                actor=actor,
+                source_program_id=source.id,
+                command_id=result.command_id,
+                reason="Replay must preserve the exact adoption target",
+                **target,
+            )
+    assert snapshot() == before
     assert result.program_id == legacy_program_id
-    assert len(
-        state.db.query(Module).filter_by(program_version_id=legacy_version_id).all()
-    ) == 4
+    assert len(state.db.query(Module).filter_by(program_version_id=legacy_version_id).all()) == 4
     assert state.db.get(ActivityMediaBinding, current_binding_id).state == "approved"
 
 
@@ -571,11 +659,15 @@ async def test_ready_media_promotion_copies_and_binds_without_source_mutation(st
         command_id=uuid4(),
         reason="Approved initial public Free Course publication",
     )
-    target_activity = state.db.query(Activity).filter_by(
-        program_id=publication_result.program_id,
-        program_version_id=publication_result.program_version_id,
-        kind="VIDEO",
-    ).one()
+    target_activity = (
+        state.db.query(Activity)
+        .filter_by(
+            program_id=publication_result.program_id,
+            program_version_id=publication_result.program_version_id,
+            kind="VIDEO",
+        )
+        .one()
+    )
 
     signer = MediaSigner(b"free-course-media-test-signing-key-32")
     storage = InMemoryPrivateObjectStorage(signer)
@@ -585,9 +677,7 @@ async def test_ready_media_promotion_copies_and_binds_without_source_mutation(st
         webhook_secret=b"free-course-media-test-webhook-secret",
     )
     source_asset_id, source_version_id = uuid4(), uuid4()
-    source_prefix = (
-        f"tenants/{state.operations}/media/video/{source_asset_id}/{source_version_id}/"
-    )
+    source_prefix = f"tenants/{state.operations}/media/video/{source_asset_id}/{source_version_id}/"
     source_body = b"verified source bytes"
     source_metadata = storage.put(
         object_key=source_prefix + "original",
@@ -604,17 +694,13 @@ async def test_ready_media_promotion_copies_and_binds_without_source_mutation(st
     hls_segment_key = source_prefix + "renditions/hls/variant/segments/seg-000.ts"
     storage.put(
         object_key=hls_master_key,
-        body=(
-            b"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=100000\n"
-            b"variant/index.m3u8\n"
-        ),
+        body=(b"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=100000\nvariant/index.m3u8\n"),
         content_type="application/vnd.apple.mpegurl",
     )
     storage.put(
         object_key=hls_variant_key,
         body=(
-            b"#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4,\n"
-            b"segments/seg-000.ts\n#EXT-X-ENDLIST\n"
+            b"#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4,\nsegments/seg-000.ts\n#EXT-X-ENDLIST\n"
         ),
         content_type="application/vnd.apple.mpegurl",
     )
@@ -681,6 +767,34 @@ async def test_ready_media_promotion_copies_and_binds_without_source_mutation(st
             object_key=hls_master_key,
             width=3840,
             height=2160,
+        )
+    )
+    state.db.flush()
+
+    upload_intent = MediaUploadIntent(
+        id=uuid4(),
+        tenant_id=state.operations,
+        actor_person_id=state.manager,
+        asset_id=source_asset_id,
+        version_id=source_version_id,
+        object_key=source_metadata.object_key,
+        filename="approved-4k-test.mp4",
+        content_type="video/mp4",
+        declared_bytes=source_metadata.content_length,
+        checksum_sha256=source_metadata.checksum_sha256,
+        expires_at=NOW,
+        max_bytes=source_metadata.content_length,
+        state="ready",
+        request_fingerprint="a" * 64,
+        completion_fingerprint="b" * 64,
+    )
+    state.db.add(upload_intent)
+    state.db.flush()
+    state.db.add(
+        StudioVideoUpload(
+            upload_id=upload_intent.id,
+            tenant_id=state.operations,
+            program_id=source.id,
         )
     )
     state.db.flush()
@@ -790,9 +904,7 @@ async def test_ready_media_promotion_copies_and_binds_without_source_mutation(st
     assert target_asset is not None and target_asset.owner_person_id == state.manager
     assert target_version is not None and target_version.state == MediaLifecycle.READY.value
     assert state.db.get(MediaAsset, source_asset_id).tenant_id == state.operations
-    target_prefix = (
-        f"tenants/{state.academy}/media/video/{result.asset_id}/{result.version_id}/"
-    )
+    target_prefix = f"tenants/{state.academy}/media/video/{result.asset_id}/{result.version_id}/"
     assert storage.head(target_prefix + "renditions/hls/master.m3u8") is not None
     assert storage.head(target_prefix + "renditions/hls/variant/index.m3u8") is not None
     assert storage.head(target_prefix + "renditions/hls/variant/segments/seg-000.ts") is not None

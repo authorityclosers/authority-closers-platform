@@ -33,11 +33,15 @@ through the existing catalog publication service, then records the global
 publication receipt `catalog.free_course_published.v1`. A replay requires fresh
 platform authority and the same source/public-tenant intent; it returns the
 original IDs without creating rows. A different command ID cannot occupy the
-canonical global slug. If staging already contains the same deterministic
-global program/version/activity, use the separate `adopt-existing` command
-below. Adoption verifies the reviewed source digest and provenance, records
-`catalog.free_course_adopted.v1`, and leaves catalog rows and learner progress
-unchanged; it cannot adopt a different source identity or content.
+canonical global slug. Existing staging identities are adopted using the
+separate `adopt-existing` command. The owned Studio program supplies the upload
+context only; its draft curriculum need not match the existing global course.
+Adoption locks the exact global program, its current published version and its
+complete module/activity/prerequisite graph. It independently validates that
+target's reviewed provenance and canonical digest, then records
+`catalog.free_course_adopted.v1` without changing catalog rows or learner
+progress. Every supplied target UUID must match on replay. The source IDs in
+this distinct receipt identify the upload context, not a curriculum derivation.
 
 The reviewed runtime caller must resolve the authenticated Coach `ActorContext`
 and execute the application inside its own transaction, for example:
@@ -75,7 +79,9 @@ operator and must have active membership in the configured public tenant.
 `FreeCourseMediaPromotionApplication` is the second, idempotent command. It
 requires the publication receipt, the same operations actor, the target global
 VIDEO activity, and one current READY source asset/version in the operations
-tenant. It verifies source checksum, object identity, processed rendition
+tenant. One immutable `StudioVideoUpload` and its completed `MediaUploadIntent`
+must bind those exact bytes to the receipt's source Studio program and owner;
+ambiguous or unrelated admissions are refused before storage work. It verifies source checksum, object identity, processed rendition
 inventory, and owner membership, then copies original and every object in
 each validated HLS playlist/segment graph through the configured
 private-storage port into deterministic public-tenant keys. Relative playlist
@@ -116,18 +122,18 @@ printf '%s\n' "$COACH_SESSION_TOKEN" | uv run python -m ac_platform.catalog.cli 
   --reviewed-at <timezone-aware-review-timestamp>
 ```
 
-For staging that already has a matching global course with pre-existing IDs,
+For staging that already has an independently reviewed global course with pre-existing IDs,
 record adoption instead of attempting a second publication. Supply the exact
 IDs returned by the reviewed read-only inspection:
 
 ```text
 printf '%s\n' "$COACH_SESSION_TOKEN" | uv run python -m ac_platform.catalog.cli adopt-existing \
   --environment staging \
-  --source-program-id a1993f11-f43d-446a-821f-550bc40b950c \
+  --source-program-id <verified-staging-owned-studio-program-uuid> \
   --program-id <existing-global-program-uuid> \
   --program-version-id <existing-global-version-uuid> \
   --video-activity-id <existing-global-video-activity-uuid> \
-  --public-tenant-id c1d51741-6e0f-4ddc-8cc4-58856d0e778f \
+  --public-tenant-id <verified-staging-public-tenant-uuid> \
   --command-id <new-adoption-command-uuid> \
   --reason "Adopt the reviewed staging Free Course without changing progress"
 ```
@@ -151,29 +157,33 @@ printf '%s\n' "$COACH_SESSION_TOKEN" | uv run python -m ac_platform.catalog.cli 
   --approval-reference AC-FREE-COURSE-PROMOTION:<change-reference>
 ```
 
-Focused evidence:
+Validation record (supersedes the earlier six-test count):
 
-```text
-uv run pytest -q tests/unit/catalog/test_free_course_publication.py
-6 passed
-uv run ruff check packages/python/ac_platform/catalog/free_course_publication.py \
-  packages/python/ac_platform/catalog/__init__.py \
-  tests/unit/catalog/test_free_course_publication.py
-All checks passed
-uv run mypy --config-file pyproject.toml \
-  packages/python/ac_platform/catalog/free_course_publication.py \
-  packages/python/ac_platform/catalog/free_course_media.py \
-  packages/python/ac_platform/catalog/cli.py
-Success: no issues found in 4 source files
-```
+- Publication, source-media provenance and CLI focused suite: 29 passed.
+- Legacy adoption uses a separate one-module DRAFT upload context and an
+  independently reviewed four-module GLOBAL course with distinct title,
+  provenance and identities. All catalog/media rows are compared before/after.
+- Changed program/version/video replay targets are refused. Invalid stored
+  digest and missing/invalid review evidence are refused independently.
+- Source-media provenance suite: 13 relational cases, included in the 29 above;
+  exact admission, wrong program, missing/ambiguous admission and mismatched
+  intent fields are exercised. Completed upload URL expiry is irrelevant.
+- Ruff checks and focused mypy (three catalog sources) passed. The compatible
+  local-avatar create-only adapter passed 42 avatar tests and package-wide
+  mypy (198 sources).
+- Actual PostgreSQL publication/promotion/HTTP and legacy-adoption CLI suite:
+  `2 passed in 8.95s`. The separate owned database
+  `ac_free_course_pgproof_full_20260913082617` was verified as owned by
+  `ac_owner` and dropped after completion. This includes existing enrollment,
+  progress and binding preservation with an independent four-module legacy
+  target and one-module draft upload context.
+- Independent review found no actionable P0/P1 in the final adoption rewrite.
+  Historical replay returns only the same actor's immutable receipt after
+  fresh platform/session authority; it does not claim a fresh source-course
+  permission or mutate any content. No actual deployment is implied.
 
-The tests cover an idempotent publication and adoption replay, preservation of the tenant
-source, cross-tenant actor denial, missing review evidence, draft review and
-publish, command-ID intent conflict, refusal to replace an existing global
-course, READY source checksum/rendition checks, public-tenant asset creation,
-binding, replay, nested HLS playlist/segment delivery, and explicit
-supersession of an existing global binding. The PostgreSQL integration test is
-opt-in through `AC_MEDIA_DELIVERY_RENEWAL_POSTGRES_TEST_URL` (or
-`AC_TEST_DATABASE_URL`)
-and uses a disposable schema; it is skipped when no local PostgreSQL URL is
-configured.
+The opt-in PostgreSQL suite uses `AC_MEDIA_DELIVERY_RENEWAL_POSTGRES_TEST_URL`
+(or `AC_TEST_DATABASE_URL`) and a disposable schema. No production database is
+used for implementation tests. Existing source, progress, bindings and audit
+history remain authoritative; deployment and actual video playback require
+separate runtime receipts.

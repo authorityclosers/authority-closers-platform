@@ -20,7 +20,7 @@ from uuid import UUID, uuid5
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import SessionTransactionOrigin
+from sqlalchemy.orm import Session, SessionTransactionOrigin
 
 from ac_platform.audit.models import AuditEvent
 from ac_platform.audit.service import AuditRepository
@@ -40,7 +40,12 @@ from ac_platform.catalog.models import (
     ProgramVersion,
     ProgramVersionStatus,
 )
-from ac_platform.catalog.services import AsyncCatalogApplication
+from ac_platform.catalog.services import (
+    AsyncCatalogApplication,
+    CatalogService,
+    CatalogServiceError,
+    SqlAlchemyCatalogStore,
+)
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.tenancy.models import Tenant, TenantStatus
 
@@ -583,13 +588,12 @@ class FreeCoursePublicationApplication:
         command_id: UUID,
         reason: str,
     ) -> FreeCoursePublicationResult:
-        """Record adoption of an already matching global Free Course.
+        """Adopt independently reviewed global content without changing its rows.
 
-        Staging may already contain canonical global rows with identities that
-        predate this command. Adoption is a separate audited command: it
-        proves the supplied global program/version/video IDs and content match
-        the reviewed Coach source, then leaves every catalog row and learner
-        progress untouched.
+        The owned Studio program is only the upload context. Existing learner
+        content has its own identities, curriculum and review provenance; this
+        command validates those independently and records an adoption receipt.
+        It does not assert that the Studio curriculum produced the global one.
         """
 
         _require_transaction(self.database)
@@ -632,7 +636,7 @@ class FreeCoursePublicationApplication:
 
         existing = await self.database.get(AuditEvent, command_id)
         if existing is not None:
-            return _result_from_audit(
+            replay = _result_from_audit(
                 existing,
                 command_id=command_id,
                 source_program_id=source_program_id,
@@ -641,6 +645,13 @@ class FreeCoursePublicationApplication:
                 actor_person_id=actor.person_id,
                 expected_action=FREE_COURSE_ADOPTION_ACTION,
             )
+            if (
+                replay.program_id != program_id
+                or replay.program_version_id != program_version_id
+                or replay.video_activity_id != video_activity_id
+            ):
+                raise FreeCoursePublicationConflict("the command ID has another adoption target")
+            return replay
 
         source_program = await self.database.scalar(
             select(Program)
@@ -668,166 +679,131 @@ class FreeCoursePublicationApplication:
         if public_tenant is None or public_tenant.status != TenantStatus.ACTIVE.value:
             raise FreeCoursePublicationError("the public learner tenant is unavailable")
 
+        # This version identifies the owned upload context only. In particular,
+        # a one-module Studio draft may supply media for a legacy four-module
+        # global course. Publication and adoption have separate audit meanings.
         source_version = await self.database.scalar(
             select(ProgramVersion)
             .where(
                 ProgramVersion.program_id == source_program.id,
                 ProgramVersion.scope == CatalogScope.TENANT.value,
                 ProgramVersion.tenant_id == self.operations_tenant_id,
-                ProgramVersion.status == ProgramVersionStatus.PUBLISHED.value,
+                ProgramVersion.status.in_(
+                    (ProgramVersionStatus.DRAFT.value, ProgramVersionStatus.PUBLISHED.value)
+                ),
             )
             .order_by(ProgramVersion.version_number.desc())
+            .limit(1)
             .with_for_update()
         )
-        if source_version is None or source_version.content_seed_kind != "reviewed":
-            raise FreeCoursePublicationError(
-                "the source version must carry reviewed publication provenance"
-            )
-
-        modules = tuple(
-            (
-                await self.database.scalars(
-                    select(Module)
-                    .where(
-                        Module.program_version_id == source_version.id,
-                        Module.scope == CatalogScope.TENANT.value,
-                        Module.tenant_id == self.operations_tenant_id,
-                    )
-                    .order_by(Module.position.asc())
-                )
-            ).all()
-        )
-        if not modules:
-            raise FreeCoursePublicationError("the published source has no modules")
-        module_ids = {module.id for module in modules}
-        activities_by_module: dict[UUID, tuple[Activity, ...]] = {}
-        for module in modules:
-            activities_by_module[module.id] = tuple(
-                (
-                    await self.database.scalars(
-                        select(Activity)
-                        .where(
-                            Activity.module_id == module.id,
-                            Activity.program_version_id == source_version.id,
-                            Activity.scope == CatalogScope.TENANT.value,
-                            Activity.tenant_id == self.operations_tenant_id,
-                        )
-                        .order_by(Activity.position.asc())
-                    )
-                ).all()
-            )
-        video_activities = tuple(
-            activity
-            for activities in activities_by_module.values()
-            for activity in activities
-            if activity.kind == "VIDEO"
-        )
-        if len(video_activities) != 1:
-            raise FreeCoursePublicationError(
-                "the initial Free Course requires exactly one VIDEO activity"
-            )
-        prerequisites = tuple(
-            (
-                await self.database.scalars(
-                    select(ModulePrerequisite).where(
-                        ModulePrerequisite.program_version_id == source_version.id,
-                        ModulePrerequisite.scope == CatalogScope.TENANT.value,
-                        ModulePrerequisite.tenant_id == self.operations_tenant_id,
-                    )
-                )
-            ).all()
-        )
-        if any(
-            edge.module_id not in module_ids or edge.prerequisite_module_id not in module_ids
-            for edge in prerequisites
-        ):
-            raise FreeCoursePublicationError("the source prerequisite graph is out of scope")
-        target_modules = tuple(
-            CanonicalModuleContent(
-                position=module.position,
-                title=module.title,
-                prerequisite_positions=tuple(
-                    sorted(
-                        prerequisite_module.position
-                        for prerequisite in prerequisites
-                        if prerequisite.module_id == module.id
-                        for prerequisite_module in modules
-                        if prerequisite_module.id == prerequisite.prerequisite_module_id
-                    )
-                ),
-                activities=tuple(
-                    CanonicalActivityContent(
-                        position=activity.position,
-                        kind=activity.kind,
-                        title=activity.title,
-                        is_required=activity.is_required,
-                        prompt=activity.prompt,
-                    )
-                    for activity in activities_by_module[module.id]
-                ),
-            )
-            for module in modules
-        )
-        source_digest = canonical_catalog_content_digest(
-            program_slug=source_program.slug,
-            program_title=source_program.title,
-            modules=target_modules,
-        )
-        target_digest = canonical_catalog_content_digest(
-            program_slug=AUTHORITY_CLOSERS_FREE_COURSE_SLUG,
-            program_title=source_program.title,
-            modules=target_modules,
-        )
-        if source_version.content_digest != source_digest:
-            raise FreeCoursePublicationError(
-                "the source content digest does not match its reviewed content"
-            )
+        if source_version is None:
+            raise FreeCoursePublicationError("the source upload context has no current version")
 
         target_program = await self.database.scalar(
-            select(Program).where(
+            select(Program)
+            .where(
                 Program.id == program_id,
                 Program.scope == CatalogScope.GLOBAL.value,
                 Program.slug == AUTHORITY_CLOSERS_FREE_COURSE_SLUG,
                 Program.tenant_id.is_(None),
                 Program.owner_key == UUID(int=0),
             )
+            .with_for_update()
         )
-        if target_program is None or target_program.title != source_program.title:
-            raise FreeCoursePublicationConflict(
-                "the existing global Free Course does not match the reviewed source"
-            )
+        if target_program is None:
+            raise FreeCoursePublicationConflict("the existing global Free Course is unavailable")
         target_version = await self.database.scalar(
-            select(ProgramVersion).where(
-                ProgramVersion.id == program_version_id,
+            select(ProgramVersion)
+            .where(
                 ProgramVersion.program_id == program_id,
                 ProgramVersion.scope == CatalogScope.GLOBAL.value,
                 ProgramVersion.tenant_id.is_(None),
                 ProgramVersion.owner_key == UUID(int=0),
                 ProgramVersion.status == ProgramVersionStatus.PUBLISHED.value,
             )
+            .order_by(ProgramVersion.version_number.desc())
+            .limit(1)
+            .with_for_update()
         )
-        if (
-            target_version is None
-            or target_version.content_digest != target_digest
-            or target_version.content_source_ref != source_version.content_source_ref
-            or target_version.content_reviewed_by != source_version.content_reviewed_by
-            or target_version.content_reviewed_at != source_version.content_reviewed_at
-            or target_version.release_id != source_version.release_id
-            or target_version.content_seed_kind != source_version.content_seed_kind
-        ):
+        if target_version is None or target_version.id != program_version_id:
             raise FreeCoursePublicationConflict(
-                "the existing global Free Course version does not match the reviewed source"
+                "the supplied version is not the current published global Free Course"
             )
-        target_activity = await self.database.scalar(
-            select(Activity).where(
-                Activity.id == video_activity_id,
-                Activity.program_id == program_id,
-                Activity.program_version_id == program_version_id,
-                Activity.scope == CatalogScope.GLOBAL.value,
-                Activity.tenant_id.is_(None),
-                Activity.owner_key == UUID(int=0),
-                Activity.kind == "VIDEO",
+
+        # Lock the entire target graph before validating its own reviewed digest.
+        # Existing catalog immutability remains authoritative; no catalog writer
+        # or provenance update is called by adoption.
+        modules = tuple(
+            (
+                await self.database.scalars(
+                    select(Module)
+                    .where(Module.program_version_id == target_version.id)
+                    .with_for_update()
+                )
+            ).all()
+        )
+        activities = tuple(
+            (
+                await self.database.scalars(
+                    select(Activity)
+                    .where(Activity.program_version_id == target_version.id)
+                    .with_for_update()
+                )
+            ).all()
+        )
+        prerequisites = tuple(
+            (
+                await self.database.scalars(
+                    select(ModulePrerequisite)
+                    .where(ModulePrerequisite.program_version_id == target_version.id)
+                    .with_for_update()
+                )
+            ).all()
+        )
+        module_ids = {module.id for module in modules}
+        graph_rows: tuple[Module | Activity | ModulePrerequisite, ...] = (
+            *modules,
+            *activities,
+            *prerequisites,
+        )
+        if not modules or any(
+            row.scope != CatalogScope.GLOBAL.value
+            or row.tenant_id is not None
+            or row.owner_key != UUID(int=0)
+            or row.program_id != target_program.id
+            for row in graph_rows
+        ):
+            raise FreeCoursePublicationConflict("the existing global content graph is out of scope")
+        if any(activity.module_id not in module_ids for activity in activities):
+            raise FreeCoursePublicationConflict(
+                "the existing global activity graph is out of scope"
             )
+
+        def validate_target(database: Session) -> None:
+            service = CatalogService(SqlAlchemyCatalogStore(database))
+            version = service.get_version(target_version.id, tenant_id=None)
+            # Reuse canonical catalog validation, including timestamp normalization
+            # at the persistence boundary, rather than inventing a second policy.
+            service._validate_structure(version)  # noqa: SLF001
+            service._validate_publication_provenance(version)  # noqa: SLF001
+            if service._canonical_content_digest(version) != version.content_digest:  # noqa: SLF001
+                raise FreeCoursePublicationConflict(
+                    "the existing global content digest does not match its reviewed content"
+                )
+
+        try:
+            await self.database.run_sync(validate_target)
+        except CatalogServiceError as error:
+            raise FreeCoursePublicationConflict(
+                "the existing global Free Course lacks valid reviewed content provenance"
+            ) from error
+        target_activity = next(
+            (
+                activity
+                for activity in activities
+                if activity.id == video_activity_id and activity.kind == "VIDEO"
+            ),
+            None,
         )
         if target_activity is None:
             raise FreeCoursePublicationConflict(
