@@ -1,0 +1,5 @@
+*.json -text whitespace=cr-at-eol
+*.xml -text whitespace=cr-at-eol
+*.log -text -whitespace
+*.png binary
+*.pdf binary

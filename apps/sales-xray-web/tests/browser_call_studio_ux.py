@@ -34,19 +34,19 @@ TRANSCRIPT = {
             "speaker_id": "speaker-1",
             "start_ms": 1000,
             "end_ms": 2200,
-            "text": "Let us agree on the next step.",
+            "text": "कल follow-up करूया — next step तय करते हैं।",
         },
         {
             "id": "s2",
             "speaker_id": "speaker-2",
             "start_ms": 2500,
             "end_ms": 3200,
-            "text": "What would make this useful?",
+            "text": "हे useful कसे होईल? बजट ₹15,000 है।",
         },
     ],
 }
 REPORT = {
-    "summary": "The prospect asked for a clear next step.",
+    "summary": "ग्राहकाने next step मान्य केला; exact time अभी तय नहीं है।",
     "strengths": [
         {
             "title": "You clarified the decision",
@@ -56,7 +56,7 @@ REPORT = {
                     "segment_id": "s1",
                     "start_ms": 1500,
                     "end_ms": 2200,
-                    "quote": "Let us agree on the next step.",
+                    "quote": "कल follow-up करूया — next step तय करते हैं।",
                 }
             ],
         }
@@ -71,7 +71,7 @@ REPORT = {
                     "segment_id": "s2",
                     "start_ms": 2500,
                     "end_ms": 3200,
-                    "quote": "What would make this useful?",
+                    "quote": "हे useful कसे होईल? बजट ₹15,000 है।",
                 }
             ],
         }
@@ -310,12 +310,9 @@ def open_report(page: Page) -> None:
 def assert_mobile_header_contained(page: Page) -> None:
     header = page.locator(".studio-header").bounding_box()
     brand = page.locator(".studio-header > a").bounding_box()
-    tools = page.locator(".studio-header-tools").bounding_box()
-    assert header and brand and tools
+    assert header and brand
     assert brand["y"] >= header["y"]
     assert brand["y"] + brand["height"] <= header["y"] + header["height"] + 1
-    assert tools["y"] >= header["y"]
-    assert tools["y"] + tools["height"] <= header["y"] + header["height"] + 1
     assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
 
 
@@ -337,6 +334,15 @@ def main() -> None:
         assert page.locator(".studio-moment").count() == 2
         page.get_by_role("button", name="Print / save PDF", exact=True).click()
         assert page.evaluate("window.__printCalls") == 1
+
+        disclosures = page.locator(".studio-finding-evidence")
+        assert disclosures.count() > 0
+        assert not disclosures.first.evaluate("el => el.open")
+        disclosures.first.locator("summary").focus()
+        page.keyboard.press("Enter")
+        assert disclosures.first.evaluate("el => el.open")
+        assert REPORT["strengths"][0]["evidence"][0]["quote"] in disclosures.first.inner_text()
+        disclosures.first.locator("summary").click()
 
         page.get_by_role("tab", name="Call moments", exact=True).click()
         first_moment = page.locator(".studio-moment").first
@@ -423,62 +429,35 @@ def main() -> None:
         )
         page.pdf(path=str(AUDIT_DIR / "synthetic-report.pdf"), format="A4", print_background=True)
         page.emulate_media(media="screen")
-        language = page.locator(".studio-language-control select")
-        assert language.count() == 1
-        modes = (
-            ("en", "Upload your call", "Sound of the recording", "Overview", "Transcript", "Sound"),
-            ("hi", "कॉल अपलोड करें", "रिकॉर्डिंग की आवाज़", "सारांश", "पूरी बातचीत", "आवाज़"),
-            ("mr", "कॉल अपलोड करा", "रेकॉर्डिंगचा आवाज", "सारांश", "संपूर्ण संभाषण", "आवाज"),
-            (
-                "en-hi-mixed",
-                "Upload कॉल करें",
-                "Sound of the recording · रिकॉर्डिंग की आवाज़",
-                "Overview · सारांश",
-                "Transcript · पूरी बातचीत",
-                "Sound · आवाज़",
-            ),
+        assert page.locator(".studio-language-control select").count() == 0
+        assert "Upload your call" in page.locator(".studio-steps").inner_text()
+        page.get_by_role("tab", name="Transcript", exact=True).click()
+        for segment in TRANSCRIPT["segments"]:
+            assert segment["text"] in report.inner_text()
+        search = page.get_by_role("searchbox", name="Search transcript phrases")
+        search.fill("बजट")
+        assert page.locator("[data-segment-id]").count() == 1
+        assert TRANSCRIPT["segments"][1]["text"] in page.locator("[data-segment-id]").inner_text()
+        search.fill("")
+        assert REPORT["summary"] in report.inner_text()
+        for section in ("Overview", "Transcript"):
+            page.get_by_role("tab", name=section, exact=True).click()
+            for width, height in ((1280, 900), (390, 844), (320, 780)):
+                page.set_viewport_size({"width": width, "height": height})
+                assert_mobile_header_contained(page)
+                page.screenshot(
+                    path=str(AUDIT_DIR / f"mixed-script-{section.lower()}-{width}.png"),
+                    full_page=True,
+                    animations="disabled",
+                )
+        tab = page.get_by_role("tab", name="Overview", exact=True)
+        tab.focus()
+        tab.press("End")
+        assert page.locator('[role="tab"][aria-selected="true"]').evaluate(
+            "el => el === document.activeElement"
         )
-        for (
-            mode,
-            expected_step,
-            expected_measurement,
-            overview_tab,
-            transcript_tab,
-            sound_tab,
-        ) in modes:
-            language.select_option(mode)
-            page.get_by_role("tab", name=sound_tab, exact=True).click()
-            assert expected_step in page.locator(".studio-steps").inner_text()
-            assert (
-                expected_measurement
-                in page.locator("summary").filter(has_text=expected_measurement).inner_text()
-            )
-            assert "190.0 Hz" in page.locator("output").inner_text()
-            page.get_by_role("tab", name=transcript_tab, exact=True).click()
-            assert TRANSCRIPT["segments"][1]["text"] in report.inner_text()
-            assert REPORT["summary"] in report.inner_text()
-            page.get_by_role("tab", name=overview_tab, exact=True).click()
-            page.set_viewport_size({"width": 1280, "height": 900})
-            page.screenshot(
-                path=str(AUDIT_DIR / f"report-{mode}-desktop.png"),
-                full_page=True,
-                animations="disabled",
-            )
-            page.set_viewport_size({"width": 320, "height": 780})
-            assert_mobile_header_contained(page)
-            tab = page.get_by_role("tab", name=overview_tab, exact=True)
-            tab.focus()
-            tab.press("End")
-            assert page.locator('[role="tab"][aria-selected="true"]').evaluate(
-                "el => el === document.activeElement"
-            )
-            assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
-            page.locator('[role="tab"][aria-selected="true"]').press("Home")
-            page.screenshot(
-                path=str(AUDIT_DIR / f"report-{mode}-mobile.png"),
-                full_page=True,
-                animations="disabled",
-            )
+        assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+        page.locator('[role="tab"][aria-selected="true"]').press("Home")
 
         browser.close()
         root = Path(__file__).resolve().parents[3]
@@ -490,6 +469,7 @@ def main() -> None:
                 for path in [
                     root / "apps/sales-xray-web/app/call-studio.tsx",
                     root / "apps/sales-xray-web/app/report-explorer.tsx",
+                    root / "apps/sales-xray-web/app/finding-evidence.tsx",
                     root / "apps/sales-xray-web/app/report-explorer.module.css",
                 ]
             },
@@ -499,11 +479,13 @@ def main() -> None:
             "provider_calls": 0,
             "checks": [
                 "six usable sections",
+                "collapsed source evidence expands by keyboard and remains complete for print",
                 "same media element across navigation",
                 "source moment seek and blocked/missing recovery",
                 "transcript filter and exact seek",
                 "retained sound channel and cursor",
-                "four language modes without changing source text",
+                "English shell without global language controls",
+                "literal Hindi/Marathi/English mixed transcript and report; Devanagari search",
                 "keyboard Home/End and selected focus at320px",
                 "print includes hidden sections and excludes tab controls",
             ],
