@@ -339,6 +339,28 @@ def _seed_review_submission(engine: Engine, seed: _Seed, enrollment_id: UUID) ->
     return submission_id
 
 
+def _protected_learning_snapshot(database: Session) -> dict[str, Any]:
+    """Capture exact pre-existing protected learning rows for no-mutation checks."""
+
+    snapshot: dict[str, Any] = {}
+    for model in (
+        ActivityProgress,
+        LearningProgressProjection,
+        ActivityDraft,
+        LearningEvidence,
+        EvidenceSubmission,
+    ):
+        columns = tuple(model.__table__.columns.keys())
+        rows = database.scalars(select(model)).all()
+        snapshot[model.__tablename__] = tuple(
+            sorted(
+                (tuple((column, getattr(row, column)) for column in columns) for row in rows),
+                key=repr,
+            )
+        )
+    return snapshot
+
+
 def _publication_etag(engine: Engine, seed: _Seed) -> str:
     with Session(engine) as database:
         service = CatalogService(SqlAlchemyCatalogStore(database))
@@ -835,6 +857,8 @@ def test_admin_people_lookup_and_diagnosis_use_canonical_learning_scope(
     postgres_harness: _Harness,
 ) -> None:
     seed = _seed(postgres_harness.engine)
+    with Session(postgres_harness.engine) as database:
+        protected_learning_before = _protected_learning_snapshot(database)
     application, _actor = _application(
         postgres_harness.schema_url,
         person_id=seed.admin_id,
@@ -958,8 +982,4 @@ def test_admin_people_lookup_and_diagnosis_use_canonical_learning_scope(
         assert all(
             f"learner-{seed.learner_id.hex}@" not in str(event.payload) for event in read_events
         )
-        assert database.scalar(select(func.count()).select_from(ActivityProgress)) == 0
-        assert database.scalar(select(func.count()).select_from(LearningProgressProjection)) == 0
-        assert database.scalar(select(func.count()).select_from(ActivityDraft)) == 0
-        assert database.scalar(select(func.count()).select_from(LearningEvidence)) == 0
-        assert database.scalar(select(func.count()).select_from(EvidenceSubmission)) == 0
+        assert _protected_learning_snapshot(database) == protected_learning_before
