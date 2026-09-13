@@ -674,6 +674,7 @@ def inspect_media(
             checkpoint.write_text(
                 json.dumps(result, allow_nan=False, sort_keys=True, separators=(",", ":")) + "\n",
                 encoding="utf-8",
+                newline="\n",
             )
             features.replace(outdir / "features.aaf")
             checkpoint.replace(outdir / "checkpoint.json")

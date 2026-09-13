@@ -162,6 +162,14 @@ class Settings(BaseSettings):
     sales_xray_approval_sha256: str | None = None
     sales_xray_storage_root: str | None = None
     sales_xray_scratch_root: str | None = None
+    # Guest admission is a separate release-owned capability. The file contains
+    # only the challenge credential; inference credentials remain broker-only.
+    sales_xray_acquisition_enabled: bool = False
+    sales_xray_acquisition_policy_revision: str | None = None
+    sales_xray_challenge_secret_file: str | None = None
+    sales_xray_challenge_site_key: str | None = None
+    sales_xray_native_socket_path: str | None = None
+    sales_xray_native_image_ref: str | None = None
 
     @field_validator(
         "public_learner_tenant_id",

@@ -1,0 +1,32 @@
+[
+  {
+    "file": "native-unit.junit.xml",
+    "sha256": "520b302e119b8c7da25bc6ca021a49347b2f6ee9d0dcc347257200021251bb52",
+    "bytes": 14183
+  },
+  {
+    "file": "postgres-http.junit.xml",
+    "sha256": "9d9edd4b4d93452ce715d419309765a4f6bd8e8f7ea7bfdb6adc8ad7b5d3d7bf",
+    "bytes": 959
+  },
+  {
+    "file": "postgres-http.log",
+    "sha256": "43aac9839ac0829b6a7115eab327b327c77935424a1f13fb01c4d4fa6f6b863c",
+    "bytes": 103
+  },
+  {
+    "file": "regression-unit.junit.xml",
+    "sha256": "40fe3ffd17ab374af90cd1bb0bc4b48dbd2d313542983e90098f914f75cf2762",
+    "bytes": 43632
+  },
+  {
+    "file": "runtime-unit.junit.xml",
+    "sha256": "71420797279b51428d03f8675f8bd5a8cb69efb94aa9ebc60ba854f16e4823ab",
+    "bytes": 1597
+  },
+  {
+    "file": "static-checks.log",
+    "sha256": "7c224447e0bc23a3370a8cf561066b06f6c87a2c483b40ea006a88189e3a7f76",
+    "bytes": 92
+  }
+]
