@@ -2,21 +2,20 @@
 
 import { useEffect, useRef } from "react";
 import type { ReportDimension } from "./report-contract";
+import {
+  getReportUiCopy,
+  type ReportDisplayLanguage,
+} from "./report-ui-copy";
 import styles from "./report-factors.module.css";
-
-const STATUS: Record<string, string> = {
-  observed: "Evidence found",
-  insufficient_evidence: "Need more evidence",
-  not_applicable: "Not relevant here",
-  conflicted: "Mixed evidence",
-  unknown: "Not assessed",
-};
 
 export function ReportFactors({
   dimensions,
+  language = "en",
 }: {
   dimensions: ReportDimension[];
+  language?: ReportDisplayLanguage;
 }) {
+  const copy = getReportUiCopy(language);
   const section = useRef<HTMLElement>(null);
   useEffect(() => {
     let previous: Map<HTMLDetailsElement, boolean> | null = null;
@@ -50,19 +49,19 @@ export function ReportFactors({
     <section
       ref={section}
       className={styles.section}
-      aria-label="Sales factors"
+      aria-label={copy.factorsLabel}
     >
-      <h2>Explore the sales factors</h2>
-      <p className={styles.note}>
-        Open a factor to read the draft observation. Evidence found does not
-        mean a positive or negative score.
-      </p>
+      <h2>{copy.factorsTitle}</h2>
+      <p className={styles.note}>{copy.factorsNote}</p>
       <div className={styles.grid}>
         {dimensions.map((dimension) => (
           <details key={dimension.dimension_id} className={styles.factor}>
             <summary>
               <span>{dimension.label}</span>
-              <small>{STATUS[dimension.status] ?? "Not assessed"}</small>
+              <small>
+                {copy.factorStatus[dimension.status] ??
+                  copy.factorStatus.unknown}
+              </small>
             </summary>
             <p>{dimension.observation}</p>
           </details>

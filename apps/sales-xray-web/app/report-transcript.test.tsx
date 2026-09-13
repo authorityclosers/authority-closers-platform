@@ -4,8 +4,14 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ReportFactors } from "./report-factors";
 import { formatTranscriptTime, ReportTranscript } from "./report-transcript";
-import type { Transcript, TranscriptSegment } from "./report-contract";
+import type {
+  ReportDimension,
+  Transcript,
+  TranscriptSegment,
+} from "./report-contract";
+import type { ReportDisplayLanguage } from "./report-ui-copy";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -37,10 +43,16 @@ function transcriptWithSegments(count: number): Transcript {
 async function render(
   transcript: Transcript,
   onSelect = vi.fn<(segment: TranscriptSegment) => void>(),
+  language: ReportDisplayLanguage = "en",
 ) {
   await act(async () =>
     root.render(
-      <ReportTranscript transcript={transcript} onSelect={onSelect} />,
+      <ReportTranscript
+        key={language}
+        transcript={transcript}
+        onSelect={onSelect}
+        language={language}
+      />,
     ),
   );
   return onSelect;
@@ -143,6 +155,70 @@ describe("ReportTranscript", () => {
     expect(
       container.querySelector("[data-segment-id=segment-51]"),
     ).not.toBeNull();
+  });
+
+  it("localizes report controls while preserving source text, speaker IDs, and observations", async () => {
+    const transcript = transcriptWithSegments(1);
+    const dimension: ReportDimension = {
+      dimension_id: "discovery",
+      label: "Discovery",
+      status: "observed",
+      observation: "Literal server observation",
+      citations: [],
+    };
+    const localizedCases: Array<{
+      language: ReportDisplayLanguage;
+      title: string;
+      searchLabel: string;
+      factorTitle: string;
+      status: string;
+    }> = [
+      {
+        language: "hi",
+        title: "पूरा ट्रांसक्रिप्ट पढ़ें",
+        searchLabel: "ट्रांसक्रिप्ट खोजें",
+        factorTitle: "बिक्री के आयाम देखें",
+        status: "साक्ष्य मिला",
+      },
+      {
+        language: "mr",
+        title: "संपूर्ण ट्रान्सक्रिप्ट वाचा",
+        searchLabel: "ट्रान्सक्रिप्ट शोधा",
+        factorTitle: "विक्रीचे आयाम पाहा",
+        status: "पुरावा मिळाला",
+      },
+      {
+        language: "en-hi-mixed",
+        title: "Read full transcript · पूरा ट्रांसक्रिप्ट पढ़ें",
+        searchLabel: "Search transcript · ट्रांसक्रिप्ट खोजें",
+        factorTitle: "Explore sales factors · बिक्री के आयाम देखें",
+        status: "Evidence found · साक्ष्य मिला",
+      },
+    ];
+
+    for (const { language, title, searchLabel, factorTitle, status } of localizedCases) {
+      await render(transcript, vi.fn(), language);
+      await act(async () =>
+        container
+          .querySelector("summary")
+          ?.dispatchEvent(new MouseEvent("click", { bubbles: true })),
+      );
+
+      expect(container.textContent).toContain(title);
+      expect(container.textContent).toContain("Literal source phrase 1");
+      expect(container.textContent).toContain("speaker-1");
+      expect(
+        container.querySelector('[role="search"]')?.getAttribute("aria-label"),
+      ).toBe(searchLabel);
+
+      await act(async () =>
+        root.render(<ReportFactors dimensions={[dimension]} language={language} />),
+      );
+      expect(container.textContent).toContain(factorTitle);
+      expect(container.textContent).toContain(status);
+      expect(container.textContent).toContain("Discovery");
+      expect(container.textContent).toContain("Literal server observation");
+    }
   });
 
   it("hides the interactive transcript from print output", () => {

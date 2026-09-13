@@ -2,6 +2,10 @@
 
 import { useMemo, useState } from "react";
 import type { Transcript, TranscriptSegment } from "./report-contract";
+import {
+  getReportUiCopy,
+  type ReportDisplayLanguage,
+} from "./report-ui-copy";
 import styles from "./report-transcript.module.css";
 
 const PAGE_SIZE = 50;
@@ -11,8 +15,8 @@ function speakerKey(speakerId: string | null): string {
   return speakerId === null ? "unlabelled" : `speaker:${speakerId}`;
 }
 
-function speakerLabel(speakerId: string | null): string {
-  return speakerId ?? "Unlabelled speaker";
+function speakerLabel(speakerId: string | null, unlabelledLabel: string): string {
+  return speakerId ?? unlabelledLabel;
 }
 
 export function formatTranscriptTime(milliseconds: number): string {
@@ -25,12 +29,15 @@ export function formatTranscriptTime(milliseconds: number): string {
 export type ReportTranscriptProps = {
   transcript: Transcript;
   onSelect: (segment: TranscriptSegment) => void;
+  language?: ReportDisplayLanguage;
 };
 
 export function ReportTranscript({
   transcript,
   onSelect,
+  language = "en",
 }: ReportTranscriptProps) {
+  const copy = getReportUiCopy(language);
   const [query, setQuery] = useState("");
   const [selectedSpeaker, setSelectedSpeaker] = useState(ALL_SPEAKERS);
   const [pagination, setPagination] = useState({ key: "", count: PAGE_SIZE });
@@ -41,11 +48,11 @@ export function ReportTranscript({
     transcript.segments.forEach((segment) => {
       options.set(
         speakerKey(segment.speaker_id),
-        speakerLabel(segment.speaker_id),
+        speakerLabel(segment.speaker_id, copy.unlabelledSpeaker),
       );
     });
     return [...options.entries()];
-  }, [transcript]);
+  }, [copy.unlabelledSpeaker, transcript]);
 
   const filteredSegments = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -66,38 +73,42 @@ export function ReportTranscript({
   const remainingCount = filteredSegments.length - visibleSegments.length;
   const resultLabel =
     query.trim() || selectedSpeaker !== ALL_SPEAKERS
-      ? `${filteredSegments.length} matching segments`
-      : `${filteredSegments.length} segments`;
+      ? `${filteredSegments.length} ${copy.matchingSegments}`
+      : `${filteredSegments.length} ${copy.segmentsLabel}`;
 
   return (
     <details className={styles.root}>
       <summary className={styles.summary}>
-        <span>Read full transcript</span>
+        <span>{copy.transcriptTitle}</span>
         <span className={styles.summaryMeta}>
-          {transcript.segments.length} segments
+          {transcript.segments.length} {copy.segmentsLabel}
         </span>
       </summary>
       <div className={styles.body}>
-        <div className={styles.controls} role="search">
+        <div
+          className={styles.controls}
+          role="search"
+          aria-label={copy.searchLabel}
+        >
           <label className={styles.field}>
-            <span>Search transcript</span>
+            <span>{copy.searchLabel}</span>
             <input
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Find a phrase"
-              aria-label="Search transcript phrases"
+              placeholder={copy.searchPlaceholder}
+              aria-label={copy.searchInputLabel}
             />
           </label>
           {speakerOptions.length > 0 && (
             <label className={styles.field}>
-              <span>Speaker</span>
+              <span>{copy.speakerLabel}</span>
               <select
                 value={selectedSpeaker}
                 onChange={(event) => setSelectedSpeaker(event.target.value)}
-                aria-label="Filter transcript by speaker"
+                aria-label={copy.speakerFilterLabel}
               >
-                <option value={ALL_SPEAKERS}>All speakers</option>
+                <option value={ALL_SPEAKERS}>{copy.allSpeakers}</option>
                 {speakerOptions.map(([value, label]) => (
                   <option key={value} value={value}>
                     {label}
@@ -108,11 +119,10 @@ export function ReportTranscript({
           )}
         </div>
         <p className={styles.note}>
-          Speaker labels come from the source and are unverified. Filter labels
-          may be IDs rather than names.
+          {copy.speakerNote}
         </p>
         <p className={styles.count} role="status" aria-live="polite">
-          {resultLabel} · showing {visibleSegments.length}
+          {resultLabel} · {copy.showing} {visibleSegments.length}
         </p>
         {visibleSegments.length > 0 ? (
           <div className={styles.list}>
@@ -134,7 +144,7 @@ export function ReportTranscript({
                     {start}–{end}
                   </span>
                   <span className={styles.speaker}>
-                    {speakerLabel(segment.speaker_id)}
+                    {speakerLabel(segment.speaker_id, copy.unlabelledSpeaker)}
                   </span>
                   <span className={styles.text}>{segment.text}</span>
                 </button>
@@ -142,7 +152,7 @@ export function ReportTranscript({
             })}
           </div>
         ) : (
-          <p className={styles.empty}>No transcript segments match.</p>
+          <p className={styles.empty}>{copy.noMatches}</p>
         )}
         {remainingCount > 0 && (
           <button
@@ -158,7 +168,7 @@ export function ReportTranscript({
               })
             }
           >
-            Load {Math.min(PAGE_SIZE, remainingCount)} more
+            {copy.loadMore(Math.min(PAGE_SIZE, remainingCount))}
           </button>
         )}
       </div>

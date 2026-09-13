@@ -16,8 +16,13 @@
 .factor {
   border: 1px solid var(--border, #d9e0e8);
   border-radius: 8px;
+  margin: 0;
   padding: 14px;
   min-width: 0;
+}
+/* The report shell applies a margin to every details element; keep factor cards tight. */
+.section .factor {
+  margin: 0;
 }
 .factor summary {
   display: flex;
