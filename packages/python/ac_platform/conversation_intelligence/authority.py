@@ -49,7 +49,10 @@ from ac_platform.conversation_intelligence.models import (
     ConversationQuoteAcceptance,
     ConversationRecording,
 )
-from ac_platform.conversation_intelligence.provider_admin import lock_provider_configuration
+from ac_platform.conversation_intelligence.provider_admin import (
+    CONTROL_ACCOUNT,
+    lock_provider_configuration,
+)
 from ac_platform.conversation_intelligence.provider_registry import (
     DispatchRequest,
     parse_registry_config,
@@ -57,20 +60,29 @@ from ac_platform.conversation_intelligence.provider_registry import (
 )
 from ac_platform.conversation_intelligence.providers import MAX_AUDIO_BYTES
 from ac_platform.conversation_intelligence.reporting_pipeline import ReportingPipeline, StageRequest
+from ac_platform.identity.models import Person
 from ac_platform.kernel.authz import ActorContext
+from ac_platform.tenancy.models import Membership, Tenant
 
 ApprovalLoader = Callable[[], HostedApprovalBundle]
 
 
 class ConversationAuthority:
-    def __init__(self, loader: ApprovalLoader, *, environment: str) -> None:
+    def __init__(
+        self, loader: ApprovalLoader, *, environment: str, operations_tenant_id: UUID
+    ) -> None:
+        if not isinstance(operations_tenant_id, UUID):
+            raise ValueError("hosted_operations_tenant_required")
         self.loader, self.environment = loader, environment
+        self.operations_tenant_id = operations_tenant_id
 
     def current(self, now: datetime) -> HostedApprovalBundle:
         try:
             # Never trust model_copy or mutable dictionaries supplied by a caller.
             bundle = HostedApprovalBundle.model_validate_json(self.loader().to_json())
             bundle.current(int(now.timestamp()), self.environment)
+            if bundle.provider_control_tenant_id != self.operations_tenant_id:
+                raise ValueError("hosted_control_tenant_mismatch")
             if self.environment != "test" and any(
                 item.zero_cost_basis == "synthetic" for item in bundle.stages
             ):
@@ -306,10 +318,11 @@ class ConversationAuthority:
     ) -> None:
         """Resolve a pinned future stage without inventing its as-yet unknown input."""
         assert actor.tenant_id is not None
-        await lock_provider_configuration(app.database, actor.tenant_id, shared=True)
+        control_tenant_id = self.operations_tenant_id
+        await lock_provider_configuration(app.database, control_tenant_id, shared=True)
         latest = await app.database.scalar(
             select(ConversationProviderConfiguration)
-            .where(ConversationProviderConfiguration.tenant_id == actor.tenant_id)
+            .where(ConversationProviderConfiguration.tenant_id == control_tenant_id)
             .order_by(ConversationProviderConfiguration.revision.desc())
             .limit(1)
             .with_for_update(read=True)
@@ -317,6 +330,42 @@ class ConversationAuthority:
         )
         if latest is None or latest.configuration_sha256 != approval.configuration_sha256:
             raise ConversationDenied("The current provider configuration is not approved.")
+        # A persisted configuration cannot retain authority after its control
+        # owner loses the verified identity or active operations membership.
+        # This checks current authorization, not the historical browser session:
+        # signing out normally does not erase a valid saved configuration.
+        controller = await app.database.scalar(
+            select(Person)
+            .where(Person.id == latest.person_id)
+            .with_for_update(read=True)
+            .execution_options(populate_existing=True)
+        )
+        membership = await app.database.scalar(
+            select(Membership)
+            .where(
+                Membership.tenant_id == control_tenant_id,
+                Membership.person_id == latest.person_id,
+            )
+            .with_for_update(read=True)
+            .execution_options(populate_existing=True)
+        )
+        control_tenant = await app.database.scalar(
+            select(Tenant)
+            .where(Tenant.id == control_tenant_id)
+            .with_for_update(read=True)
+            .execution_options(populate_existing=True)
+        )
+        if (
+            controller is None
+            or (controller.email or "").casefold() != CONTROL_ACCOUNT
+            or controller.email_verified_at is None
+            or membership is None
+            or membership.status != "active"
+            or membership.role not in {"owner", "admin"}
+            or control_tenant is None
+            or control_tenant.status != "active"
+        ):
+            raise ConversationDenied("The provider control authorization is no longer active.")
         try:
             config = parse_registry_config(latest.configuration)
             if config.digest != approval.configuration_sha256 or config.policy.allow_paid:

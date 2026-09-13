@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
+from uuid import UUID
 
 from ac_platform.conversation_intelligence.activation_contract import (
     MAX_APPROVAL_BUNDLE_BYTES,
@@ -35,6 +36,9 @@ class HostedConversationSettings(Protocol):
     def environment(self) -> str: ...
 
     @property
+    def operations_tenant_id(self) -> UUID | None: ...
+
+    @property
     def sales_xray_enabled(self) -> bool: ...
 
     @property
@@ -55,6 +59,7 @@ class PinnedApprovalLoader:
     path: Path
     sha256: str
     environment: str
+    operations_tenant_id: UUID
 
     def __call__(self) -> HostedApprovalBundle:
         try:
@@ -81,6 +86,8 @@ class PinnedApprovalLoader:
                 raise ValueError
             bundle = load_hosted_approval_bundle(raw)
             bundle.current(int(datetime.now(UTC).timestamp()), self.environment)
+            if bundle.provider_control_tenant_id != self.operations_tenant_id:
+                raise ValueError
             if self.environment != "test" and any(
                 item.zero_cost_basis != "verified_free_allowance" for item in bundle.stages
             ):
@@ -104,16 +111,24 @@ def compose_hosted_intake(settings: HostedConversationSettings) -> ConversationI
             settings.sales_xray_approval_sha256,
             settings.sales_xray_storage_root,
             settings.sales_xray_scratch_root,
+            settings.operations_tenant_id,
         )
     ):
+        raise ValueError("hosted_conversation_configuration_incomplete")
+    if not isinstance(settings.operations_tenant_id, UUID):
         raise ValueError("hosted_conversation_configuration_incomplete")
     loader = PinnedApprovalLoader(
         Path(settings.sales_xray_approval_path or ""),
         settings.sales_xray_approval_sha256 or "",
         settings.environment,
+        settings.operations_tenant_id,
     )
     bundle = loader()
-    authority = ConversationAuthority(loader, environment=settings.environment)
+    authority = ConversationAuthority(
+        loader,
+        environment=settings.environment,
+        operations_tenant_id=settings.operations_tenant_id,
+    )
     storage_path, scratch_path = (
         Path(settings.sales_xray_storage_root or ""),
         Path(settings.sales_xray_scratch_root or ""),

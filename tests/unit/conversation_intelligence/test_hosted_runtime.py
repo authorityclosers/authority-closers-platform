@@ -7,7 +7,7 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -25,6 +25,7 @@ def approval_data(environment: str = "test") -> dict[str, Any]:
     return {
         "schema": "ac.sales-xray.hosted-approval/1",
         "environment": environment,
+        "provider_control_tenant_id": tenant,
         "deployment_ref": "ref:synthetic/deployment",
         "issued_at_epoch": now - 1,
         "expires_at_epoch": now + 3600,
@@ -59,6 +60,7 @@ def settings_for(tmp_path: Path, data: dict[str, Any]) -> Settings:
     path.write_bytes(raw)
     return Settings(
         environment="test",
+        operations_tenant_id=UUID(data["provider_control_tenant_id"]),
         sales_xray_enabled=True,
         sales_xray_approval_path=str(path),
         sales_xray_approval_sha256=hashlib.sha256(raw).hexdigest(),
@@ -94,6 +96,7 @@ def test_complete_pinned_runtime_loads_and_rechecks_artifact(tmp_path: Path) -> 
         "sales_xray_approval_sha256",
         "sales_xray_storage_root",
         "sales_xray_scratch_root",
+        "operations_tenant_id",
     ],
 )
 def test_incomplete_activation_cannot_mount_intake(tmp_path: Path, field: str) -> None:
@@ -132,9 +135,18 @@ def test_private_roots_cannot_overlap(tmp_path: Path) -> None:
         compose_hosted_intake(settings)
 
 
+def test_approval_cannot_select_a_different_control_tenant(tmp_path: Path) -> None:
+    settings = settings_for(tmp_path, approval_data()).model_copy(
+        update={"operations_tenant_id": uuid4()}
+    )
+    with pytest.raises(ValueError, match="^hosted_approval_unavailable$"):
+        compose_hosted_intake(settings)
+    assert not (tmp_path / "objects").exists()
+
+
 def test_loader_rejects_relative_path_and_malformed_digest() -> None:
     with pytest.raises(ValueError, match="^hosted_approval_unavailable$"):
-        PinnedApprovalLoader(Path("approval.json"), "a" * 64, "test")()
+        PinnedApprovalLoader(Path("approval.json"), "a" * 64, "test", uuid4())()
 
 
 def test_unavailable_sales_approval_keeps_the_existing_api_available(
@@ -177,7 +189,7 @@ def test_deployed_composition_has_owned_routes_without_local_proof_import(
         update={
             key: value
             for key, value in configured.model_dump().items()
-            if key.startswith("sales_xray_")
+            if key.startswith("sales_xray_") or key == "operations_tenant_id"
         }
     )
     monkeypatch.setattr(app_module, "settings", settings)

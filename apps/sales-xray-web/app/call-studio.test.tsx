@@ -32,7 +32,7 @@ const processingPlan = {
   state: "quoted",
   cost_label: "₹0 · approved allowance",
   max_cost_paise: 0,
-  max_entitlement_seconds: 120,
+  max_entitlement_seconds: 0,
   expires_at_epoch: 4_102_444_800,
   stages: [
     {

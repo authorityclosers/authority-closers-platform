@@ -180,6 +180,7 @@ class StageApproval(_StrictFrozenModel):
 class HostedApprovalBundle(_StrictFrozenModel):
     schema_id: Literal["ac.sales-xray.hosted-approval/1"] = Field(alias="schema")
     environment: Literal["staging", "production", "test"]
+    provider_control_tenant_id: UUID
     deployment_ref: str = Field(min_length=6, max_length=256)
     issued_at_epoch: StrictInt = Field(gt=0)
     expires_at_epoch: StrictInt = Field(gt=0)

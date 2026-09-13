@@ -303,6 +303,11 @@ class ConversationInference:
             # audio charge made by local C1. Offline callers retain their
             # existing quote semantics.
             or (self.authority is not None and quote.entitlement_seconds != 0)
+            or (
+                self.authority is None
+                and plan.checkpoint.stage == "C2"
+                and quote.entitlement_seconds != (plan.duration_ms + 999) // 1000
+            )
             or permission.quote_fingerprint != quote.fingerprint
             or permission.approved_by != str(actor.person_id)
             or not quote.created_at_epoch

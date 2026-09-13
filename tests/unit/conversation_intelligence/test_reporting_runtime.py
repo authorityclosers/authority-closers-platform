@@ -84,6 +84,7 @@ def _bundle(
     return HostedApprovalBundle(
         schema=HOSTED_APPROVAL_SCHEMA,
         environment=environment,
+        provider_control_tenant_id=TENANT_ID,
         deployment_ref="ref:deployment/reporting-runtime-test-v1",
         issued_at_epoch=issued_at_epoch,
         expires_at_epoch=expires_at_epoch,
@@ -159,7 +160,9 @@ def _compose(
     sessions: async_sessionmaker[AsyncSession] | None = None,
     storage: object | None = None,
 ) -> tuple[runtime_module.HostedReportingRuntime | None, ConversationAuthority, object]:
-    authority = ConversationAuthority(lambda: bundle, environment="test")
+    authority = ConversationAuthority(
+        lambda: bundle, environment="test", operations_tenant_id=bundle.provider_control_tenant_id
+    )
     resolved_storage = object() if storage is None else storage
     intake = cast(Any, type("IntakeStub", (), {})())
     intake.authority = authority

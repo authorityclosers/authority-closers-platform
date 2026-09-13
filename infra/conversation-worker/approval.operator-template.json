@@ -1,6 +1,7 @@
 {
   "schema": "ac.sales-xray.hosted-approval/1",
   "environment": "staging",
+  "provider_control_tenant_id": "REPLACE_WITH_CANONICAL_CONFIGURED_OPERATIONS_TENANT_UUID",
   "deployment_ref": "REPLACE_WITH_APPROVED_DEPLOYMENT_REF",
   "issued_at_epoch": "REPLACE_WITH_ACTUAL_INTEGER_ISSUE_TIME",
   "expires_at_epoch": "REPLACE_WITH_APPROVED_INTEGER_EXPIRY",

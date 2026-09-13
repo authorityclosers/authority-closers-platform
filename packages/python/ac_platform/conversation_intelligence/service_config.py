@@ -13,6 +13,7 @@ import re
 import stat
 from pathlib import Path
 from typing import Annotated, Any, Literal, Self
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy.engine import URL, make_url
@@ -74,6 +75,7 @@ class WorkerServiceConfig(StrictConfig):
     schema_version: Literal["ac.sales_xray.worker_service/1"]
     environment: Literal["staging", "production"]
     release_id: Annotated[str, Field(pattern=r"^[0-9a-f]{40}$")]
+    operations_tenant_id: UUID
     sales_xray_enabled: Literal[True] = True
     sales_xray_approval_path: str
     sales_xray_approval_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
@@ -83,6 +85,17 @@ class WorkerServiceConfig(StrictConfig):
     native_socket_path: str
     native_image_ref: Annotated[str, Field(pattern=r"^(?:[A-Za-z0-9._/-]+@)?sha256:[0-9a-f]{64}$")]
     providers: Annotated[list[ProviderLauncherConfig], Field(min_length=1, max_length=3)]
+
+    @field_validator("operations_tenant_id", mode="before")
+    @classmethod
+    def canonical_operations_tenant(cls, value: Any) -> UUID:
+        if isinstance(value, UUID):
+            return value
+        if isinstance(value, str):
+            parsed = UUID(value)
+            if str(parsed) == value:
+                return parsed
+        raise ValueError("worker_operations_tenant_invalid")
 
     _paths = field_validator(
         "sales_xray_approval_path",

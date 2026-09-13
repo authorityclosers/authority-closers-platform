@@ -145,6 +145,7 @@ def _bundle(stage: StageApproval | None = None) -> HostedApprovalBundle:
     return HostedApprovalBundle(
         schema_id=HOSTED_APPROVAL_SCHEMA,
         environment="test",
+        provider_control_tenant_id=TENANT_ID,
         deployment_ref="ref:deployment/router-test-v1",
         issued_at_epoch=900,
         expires_at_epoch=2_000,

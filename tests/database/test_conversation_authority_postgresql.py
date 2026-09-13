@@ -238,6 +238,7 @@ def _bundle(
     return HostedApprovalBundle(
         schema="ac.sales-xray.hosted-approval/1",
         environment="test",
+        provider_control_tenant_id=state.tenant_id,
         deployment_ref="ref:deployment:synthetic",
         issued_at_epoch=now_epoch - 1,
         expires_at_epoch=bundle_expires,
@@ -353,6 +354,7 @@ async def _setup(postgres_harness: Any, tmp_path: Path) -> AuthorityFixture:
         authority = ConversationAuthority(
             lambda: bundle_box["bundle"],
             environment="test",
+            operations_tenant_id=prepared.state.tenant_id,
         )
         async with sessions() as database, database.begin():
             await authority.claim_allowance(
@@ -526,6 +528,13 @@ def test_authority_runs_c2_c4_c5_and_reuses_cached_effect(
     async def exercise() -> None:
         setup = await _setup(postgres_harness, tmp_path)
         try:
+            async with setup.sessions() as database:
+                minutes_before = await database.get(
+                    ConversationMinuteAccount,
+                    (setup.actor.tenant_id, setup.actor.person_id),
+                )
+                assert minutes_before is not None
+                audio_balance = MinuteAccount.from_dict(minutes_before.snapshot).available_seconds
             c2_quote = await _issue(setup, key="hosted-pipeline-c2-quote")
             c2_run = await _start(setup, c2_quote, key="hosted-pipeline-c2-run")
             assert await setup.worker.run_once()
@@ -570,7 +579,7 @@ def test_authority_runs_c2_c4_c5_and_reuses_cached_effect(
                 )
                 assert minutes is not None
                 account = MinuteAccount.from_dict(minutes.snapshot)
-                assert account.available_seconds == 599
+                assert account.available_seconds == audio_balance
                 assert [
                     reservation.quote.entitlement_seconds
                     for reservation in account.reservations
@@ -794,7 +803,9 @@ def test_authority_rejects_config_change_expired_or_unavailable_bundle_before_di
                 changed["configuration_sha256"],
                 now_epoch=int(setup.prepared.state.now.timestamp()),
             ).model_copy(update={"expires_at_epoch": int(setup.prepared.state.now.timestamp()) - 1})
-            expired_authority = ConversationAuthority(lambda: expired, environment="test")
+            expired_authority = ConversationAuthority(
+                lambda: expired, environment="test", operations_tenant_id=setup.actor.tenant_id
+            )
             with pytest.raises(ConversationDenied):
                 await _issue(
                     setup,
@@ -805,7 +816,9 @@ def test_authority_rejects_config_change_expired_or_unavailable_bundle_before_di
             def unavailable() -> HostedApprovalBundle:
                 raise ValueError("synthetic approval manifest unavailable")
 
-            unavailable_authority = ConversationAuthority(unavailable, environment="test")
+            unavailable_authority = ConversationAuthority(
+                unavailable, environment="test", operations_tenant_id=setup.actor.tenant_id
+            )
             with pytest.raises(ConversationDenied):
                 await _issue(
                     setup,

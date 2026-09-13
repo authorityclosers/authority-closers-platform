@@ -52,7 +52,7 @@ def saved_plan() -> ConversationProcessingPlan:
         profile=profile,
         created_at_epoch=1000,
         expires_at_epoch=1800,
-        max_entitlement_seconds=61,
+        max_entitlement_seconds=0,
     )
     return ConversationProcessingPlan(
         id=uuid4(),
@@ -102,7 +102,7 @@ def test_saved_plan_preserves_actual_weight_discrepancy_and_finite_bound() -> No
     value = manifest_for(saved_plan())
     assert value.profile["weights_actual"] == 95
     assert value.profile["weights_declared"] == 100
-    assert value.max_entitlement_seconds == 61
+    assert value.max_entitlement_seconds == 0
 
 
 @pytest.mark.parametrize("alteration", ["source", "profile", "price", "recipient", "erased"])

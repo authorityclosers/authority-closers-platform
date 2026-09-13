@@ -21,6 +21,7 @@ def manifest(tmp_path: Path) -> dict[str, Any]:
         "schema_version": "ac.sales_xray.worker_service/1",
         "environment": "staging",
         "release_id": "a" * 40,
+        "operations_tenant_id": "10000000-0000-4000-8000-000000000001",
         "sales_xray_approval_path": str(tmp_path / "approval.json"),
         "sales_xray_approval_sha256": "b" * 64,
         "sales_xray_storage_root": str(tmp_path / "storage"),
@@ -97,6 +98,19 @@ def test_rejects_modified_or_ambiguous_configuration(tmp_path: Path, change: str
 def test_rejects_credentials_inside_audio_storage(tmp_path: Path, field: str) -> None:
     value = manifest(tmp_path)
     value["providers"][0]["token_file_ref"] = str(Path(value[field]) / "token")
+    with pytest.raises(ValueError, match="^worker_config_invalid$"):
+        load_service_config(*write_config(tmp_path, value))
+
+
+@pytest.mark.parametrize("control", [None, "", "not-a-uuid", 123])
+def test_worker_requires_an_explicit_canonical_operations_tenant(
+    tmp_path: Path, control: Any
+) -> None:
+    value = manifest(tmp_path)
+    if control is None:
+        value.pop("operations_tenant_id")
+    else:
+        value["operations_tenant_id"] = control
     with pytest.raises(ValueError, match="^worker_config_invalid$"):
         load_service_config(*write_config(tmp_path, value))
 

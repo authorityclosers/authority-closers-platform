@@ -97,6 +97,7 @@ def _bundle(
     return HostedApprovalBundle(
         schema_id=HOSTED_APPROVAL_SCHEMA,
         environment=environment,  # type: ignore[arg-type]
+        provider_control_tenant_id=TENANT_ID,
         deployment_ref="ref:deployment/test-1",
         issued_at_epoch=issued_at_epoch,
         expires_at_epoch=expires_at_epoch,

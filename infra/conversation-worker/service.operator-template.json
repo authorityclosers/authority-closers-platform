@@ -2,6 +2,7 @@
   "schema_version": "ac.sales_xray.worker_service/1",
   "environment": "staging",
   "release_id": "REPLACE_WITH_FROZEN_INTEGRATED_RELEASE_SHA40",
+  "operations_tenant_id": "REPLACE_WITH_CANONICAL_CONFIGURED_OPERATIONS_TENANT_UUID",
   "sales_xray_enabled": true,
   "sales_xray_approval_path": "/run/ac-sales-xray/approval.json",
   "sales_xray_approval_sha256": "REPLACE_WITH_EXACT_APPROVAL_FILE_SHA256",
