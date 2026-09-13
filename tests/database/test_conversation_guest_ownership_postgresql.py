@@ -24,6 +24,10 @@ from ac_platform.conversation_intelligence.acquisition_sessions import (
     MeasuredSource,
 )
 from ac_platform.conversation_intelligence.acquisition_usage import acquisition_seconds
+from ac_platform.conversation_intelligence.activation_contract import (
+    AcquisitionProviderPolicy,
+    AcquisitionStagePolicy,
+)
 from ac_platform.conversation_intelligence.application import (
     DELETE_JOB,
     LOCAL_JOB,
@@ -31,8 +35,9 @@ from ac_platform.conversation_intelligence.application import (
     ConversationDenied,
     ConversationNotFound,
 )
+from ac_platform.conversation_intelligence.authority import ConversationAuthority
 from ac_platform.conversation_intelligence.contracts import QuoteAcceptance, RunIntent
-from ac_platform.conversation_intelligence.entitlements import MinuteAccount
+from ac_platform.conversation_intelligence.entitlements import BudgetAccount, MinuteAccount
 from ac_platform.conversation_intelligence.guest_models import (
     ConversationGuestSubmission,
     ConversationProcessingLease,
@@ -42,8 +47,9 @@ from ac_platform.conversation_intelligence.guest_ownership import (
     GuestOwnership,
     admit_processing_actor,
 )
-from ac_platform.conversation_intelligence.intake import ConversationIntake
+from ac_platform.conversation_intelligence.intake import ConversationIntake, IntakePolicy
 from ac_platform.conversation_intelligence.models import (
+    ConversationBudgetAccount,
     ConversationCheckpoint,
     ConversationCommand,
     ConversationMinuteAccount,
@@ -58,6 +64,7 @@ from ac_platform.identity.models import PasswordCredential, ProviderIdentity
 from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.outbox.models import Job
 from ac_platform.tenancy.models import Membership
+from tests.database.test_conversation_authority_postgresql import _bundle as authority_bundle
 from tests.database.test_conversation_intake_postgresql import make_intent, policy
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
 from tests.database.test_conversation_postgresql import run, seed, seed_budget
@@ -145,6 +152,94 @@ async def _processing_actor(
         )
 
 
+def _processing_policy(
+    state: Any, person_id: UUID, expires_at_epoch: int
+) -> AcquisitionProviderPolicy:
+    def stage(
+        stage_name: str,
+        provider_id: str,
+        model_id: str,
+        recipe_revision: str,
+        permission_ref: str,
+        *,
+        max_cost_paise: int,
+        max_completion_tokens: int,
+        profile_sha256: str | None,
+    ) -> AcquisitionStagePolicy:
+        return AcquisitionStagePolicy(
+            stage=stage_name,
+            configuration_sha256="a" * 64,
+            provider_id=provider_id,
+            model_id=model_id,
+            recipe_revision=recipe_revision,
+            permission_ref=permission_ref,
+            retention_ref="ref:retention:guest-budget-test",
+            professional_gate_ref="ref:professional:guest-budget-test",
+            pricing_ref="ref:pricing:guest-budget-test",
+            provider_terms_ref="ref:provider-terms:guest-budget-test",
+            privacy_ref="ref:privacy:guest-budget-test",
+            credential_ref=f"ref:credential/{provider_id}/v1",
+            free_allowance_ref=None,
+            no_paid_overage_ref="ref:no-paid-overage:guest-budget-test",
+            privacy_revision="guest-budget-privacy-v1",
+            privacy_notice="Disposable synthetic PostgreSQL budget initialization test.",
+            expires_at_epoch=expires_at_epoch,
+            max_requests=1,
+            entitlement_seconds=None if stage_name == "C2" else 0,
+            zero_cost_basis="paid_pricing_evidence",
+            price_evidence_sha256="b" * 64,
+            max_cost_paise=max_cost_paise,
+            max_source_duration_ms=1_800_000,
+            max_input_bytes=134_217_728,
+            max_completion_tokens=max_completion_tokens,
+            profile_sha256=profile_sha256,
+        )
+
+    return AcquisitionProviderPolicy(
+        schema="ac.sales-xray.acquisition-provider-policy/1",
+        id=uuid4(),
+        tenant_id=state.tenant_id,
+        processing_person_id=person_id,
+        authorization_ref="ref:acquisition:guest-budget-test",
+        expires_at_epoch=expires_at_epoch,
+        max_recordings=64,
+        max_source_bytes=134_217_728,
+        max_stored_source_bytes=8_589_934_592,
+        stages=(
+            stage(
+                "C2",
+                "elevenlabs",
+                "scribe_v2",
+                "scribe-v2-native-normalized-v1",
+                "ref:permission:guest-budget-asr",
+                max_cost_paise=50_000,
+                max_completion_tokens=0,
+                profile_sha256=None,
+            ),
+            stage(
+                "C4",
+                "gemini",
+                "gemini-3.8-flash",
+                "source-fact-chunk-v1",
+                "ref:permission:guest-budget-facts",
+                max_cost_paise=25_000,
+                max_completion_tokens=4_000,
+                profile_sha256=None,
+            ),
+            stage(
+                "C5",
+                "gemini",
+                "gemini-3.8-flash",
+                "qualitative-coaching-v1",
+                "ref:permission:guest-budget-coaching",
+                max_cost_paise=25_000,
+                max_completion_tokens=4_000,
+                profile_sha256="c" * 64,
+            ),
+        ),
+    )
+
+
 def _metadata_actor_constraints(postgres_harness: Any) -> None:
     inspector = inspect(postgres_harness)
     for table in (
@@ -161,6 +256,140 @@ def _metadata_actor_constraints(postgres_harness: Any) -> None:
             for column in foreign_key["constrained_columns"]
         }
         assert {"session_id", "processing_lease_id"} <= constrained
+
+
+def test_first_guest_acceptance_bootstraps_shared_budget_without_learner_grant(
+    postgres_harness: Any,
+) -> None:
+    """The first processing actor creates only the finite project budget."""
+
+    async def exercise() -> None:
+        engine = create_async_engine(postgres_harness.url)
+        try:
+            state = await seed(engine)
+            processing_person_id = await _provision(engine, state)
+            guest, measured, intent, _ = await _guest(
+                engine, state, duration_seconds=7, marker="budget-bootstrap"
+            )
+            actor = await _processing_actor(
+                engine, state, measured.submission_id, guest.token
+            )
+            assert actor.person_id == processing_person_id
+
+            now_epoch = int(state.now.timestamp())
+            bundle = authority_bundle(
+                state,
+                state.source_sha256,
+                "a" * 64,
+                now_epoch=now_epoch,
+                funded=True,
+                text_cost_paise=25_000,
+            ).model_copy(
+                update={
+                    "acquisition_policy": _processing_policy(
+                        state, processing_person_id, now_epoch + 1_800
+                    )
+                }
+            )
+            bundle_box = {"bundle": bundle}
+            authority = ConversationAuthority(
+                lambda: bundle_box["bundle"],
+                environment="test",
+                operations_tenant_id=state.tenant_id,
+            )
+            intake_policy = IntakePolicy(
+                budget_scope_id=bundle.budget_scope_id,
+                tenant_ids=frozenset({state.tenant_id}),
+                authorization_ref=bundle.intake_authorization_ref,
+                retention_ref=bundle.intake_retention_ref,
+                retention_days=bundle.retention_days,
+            )
+
+            async with AsyncSession(engine) as database, database.begin():
+                intake = ConversationIntake(
+                    ConversationApplication(database, clock=lambda: state.now),
+                    intake_policy,
+                    authority=authority,
+                )
+                quote = await intake.prepare(
+                    actor, intent, key="guest-budget-bootstrap"
+                )
+                accepted = await intake.accept(
+                    actor,
+                    UUID(quote["id"]),
+                    QuoteAcceptance(
+                        quote_fingerprint=quote["quote_fingerprint"],
+                        privacy_revision=quote["privacy_revision"],
+                        accepted=True,
+                    ),
+                )
+                replay = await intake.prepare(
+                    actor, intent, key="guest-budget-bootstrap"
+                )
+
+            assert accepted["state"] == "accepted"
+            assert replay["id"] == quote["id"]
+
+            async with AsyncSession(engine) as database, database.begin():
+                budget = await database.get(
+                    ConversationBudgetAccount, bundle.budget_scope_id
+                )
+                assert budget is not None
+                snapshot = BudgetAccount.from_dict(budget.snapshot)
+                assert snapshot.scope_id == str(bundle.budget_scope_id)
+                assert snapshot.cap_paise == 100_000
+                assert snapshot.available_paise == 100_000
+                assert snapshot.reservations == ()
+                assert budget.revision == 1
+
+                processing_minutes = await database.get(
+                    ConversationMinuteAccount,
+                    (state.tenant_id, processing_person_id),
+                )
+                assert processing_minutes is not None
+                minutes = MinuteAccount.from_dict(processing_minutes.snapshot)
+                assert minutes.grants == ()
+                assert minutes.available_seconds == 0
+                assert (
+                    await database.scalar(
+                        select(func.count())
+                        .select_from(ConversationMinuteAccount)
+                        .where(
+                            ConversationMinuteAccount.tenant_id == state.tenant_id,
+                            ConversationMinuteAccount.person_id == state.person_id,
+                        )
+                    )
+                    == 0
+                )
+                assert (
+                    await database.scalar(
+                        select(func.count())
+                        .select_from(ConversationBudgetAccount)
+                        .where(
+                            ConversationBudgetAccount.scope_id
+                            == bundle.budget_scope_id
+                        )
+                    )
+                    == 1
+                )
+
+            # A changed approval/cap cannot mutate the established budget, and
+            # the existing retry remains idempotent above.
+            bundle_box["bundle"] = bundle.model_copy(
+                update={
+                    "budget_cap_paise": 99_999,
+                    "paid_approval_ref": "ref:approval:guest-budget-changed",
+                }
+            )
+            with pytest.raises(ConversationDenied, match="budget"):
+                async with AsyncSession(engine) as database, database.begin():
+                    await authority.claim_allowance(
+                        ConversationApplication(database, clock=lambda: state.now), actor
+                    )
+        finally:
+            await engine.dispose()
+
+    run(exercise())
 
 
 def test_guest_processing_principal_is_non_login_and_intake_binds_each_submission(
