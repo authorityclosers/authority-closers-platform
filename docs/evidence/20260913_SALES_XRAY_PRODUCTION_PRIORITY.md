@@ -25,3 +25,5 @@ Completion: actual production URL and exact immutable source/image identity; nor
 Ownership: this root owns integration, guest/identity/quota boundary and single core deploy. Existing original Sales root owns report/engine/runtime/provider benchmarks; existing original UI root owns dedicated Admin reviewer admission, queue and model/control UX. No new subagents. All ready work merges to main/v0.2 only with validation; preserve dirty worktrees until integrated.
 
 Integration preflight: the last reviewer CI stopped at formatting. The combined release corrects that test formatting and the final Sales browser/style test formatting before dispatch. Functional receipts remain in their source evidence; combined CI is still required.
+
+CombinedCI34773977688 passed formatting/frontend lint but found two Python lint issues in the inherited routing test. Fixed only the synthetic credential marker annotation and overlong test name. All572 Python files format clean, full Ruff and mypy259 files pass, and16 routing behavior tests pass locally before restarting CI.
