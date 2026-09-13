@@ -5,9 +5,10 @@ Date: 2026-09-13 (Asia/Kolkata). Source base: `15a8ee8`.
 The release owner found that callback recovery directed existing password users
 to link Google from Settings, but Settings offered no such action. This bounded
 follow-up adds the existing authenticated Google LINK entry and a canonical
-read-only status. Implementation and automated validation are complete; canonical
-local browser acceptance is pending. This document does not claim deployment or
-an external Google authorization.
+read-only status. Implementation, automated validation and canonical local
+browser acceptance are complete at source/API
+`4d49d9a66883263ec44c66882162ff5187551f3a`. This document does not claim deployment
+or an external Google authorization.
 
 ## Contract and authority
 
@@ -62,3 +63,20 @@ fixtures. The Google start document navigation is intercepted before any
 provider request and checked for the fixed action, surface and return route.
 These checks do not claim a real Google link. The release owner separately owns
 normal hosted Google authorization and canonical linked-state acceptance.
+
+The accepted receipt is recovery packet
+`canonical-google-settings-20260913T010432Z/proof.json`. Normal synthetic
+registration and verification established the browser session; the live endpoint
+returned exactly `{linked:false}`. Keyboard activation reached the fixed Google
+LINK document destination, intercepted as described above. Canonical unlinked
+Settings passed at 320, 390 and 1440 px. Named linked and 503 presentation
+fixtures passed at 320 px; retry returned to the real unlinked response. A
+status-only 401 fixture invalidated previously ready identity and displayed
+sign-in recovery. Finally, real logout returned 204, the real status endpoint
+returned 401, and the link control disappeared after reload.
+
+All five viewport checks had no horizontal overflow; there were zero page errors
+or unexpected requests. The unlinked, linked-fixture and error-fixture mobile
+screenshots were visually inspected. The receipt binds the four implementation
+sources and helper by SHA-256. The UI remains frozen for release integration;
+hosted Google authorization is not replaced by these local fixtures.
