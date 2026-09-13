@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
@@ -179,6 +180,35 @@ async def _report_count(sessions: async_sessionmaker[AsyncSession], fixture: Rep
         )
 
 
+async def _import_for_fixture(
+    database: AsyncSession,
+    fixture: ReportFixture,
+    actor: ActorContext,
+    intent: PrivateDraftIntent,
+    *,
+    key: str,
+) -> dict[str, Any]:
+    """Import with the unique synthetic control identity used by this fixture.
+
+    The production provider-admin check remains unchanged.  The disposable
+    fixture deliberately avoids the shared fixed control-account email from
+    c8499b8; this narrow seam lets the report tests exercise the remaining
+    verified-email, active-membership, and ``admin_surface`` checks.
+    """
+
+    with patch(
+        "ac_platform.conversation_intelligence.provider_admin.CONTROL_ACCOUNT",
+        f"sales-xray-browser-{fixture.prepared.state.person_id}@example.test",
+    ):
+        return await _reports(database, fixture).import_internal_draft(
+            actor,
+            fixture.prepared.run_id,
+            intent,
+            storage=fixture.prepared.storage,
+            key=key,
+        )
+
+
 async def _import_valid(
     fixture: ReportFixture,
     sessions: async_sessionmaker[AsyncSession],
@@ -186,11 +216,11 @@ async def _import_valid(
     key: str = "report-import-valid",
 ) -> dict[str, Any]:
     async with sessions() as database, database.begin():
-        return await _reports(database, fixture).import_internal_draft(
+        return await _import_for_fixture(
+            database,
+            fixture,
             fixture.actor,
-            fixture.prepared.run_id,
             fixture.intent,
-            storage=fixture.prepared.storage,
             key=key,
         )
 
@@ -253,11 +283,11 @@ def test_forged_native_hash_quote_and_timing_are_rejected(
             )
             with pytest.raises(ConversationError, match="does not match its receipt"):
                 async with sessions() as database, database.begin():
-                    await _reports(database, report_fixture).import_internal_draft(
+                    await _import_for_fixture(
+                        database,
+                        report_fixture,
                         report_fixture.actor,
-                        report_fixture.prepared.run_id,
                         bad_receipt,
-                        storage=report_fixture.prepared.storage,
                         key="report-forged-native-hash",
                     )
 
@@ -266,11 +296,11 @@ def test_forged_native_hash_quote_and_timing_are_rejected(
             bad_quote = report_fixture.intent.model_copy(update={"report": bad_quote_payload})
             with pytest.raises(ConversationError, match="draft or its exact transcript evidence"):
                 async with sessions() as database, database.begin():
-                    await _reports(database, report_fixture).import_internal_draft(
+                    await _import_for_fixture(
+                        database,
+                        report_fixture,
                         report_fixture.actor,
-                        report_fixture.prepared.run_id,
                         bad_quote,
-                        storage=report_fixture.prepared.storage,
                         key="report-forged-quote",
                     )
 
@@ -292,11 +322,11 @@ def test_forged_native_hash_quote_and_timing_are_rejected(
             )
             with pytest.raises(ConversationError, match="draft or its exact transcript evidence"):
                 async with sessions() as database, database.begin():
-                    await _reports(database, report_fixture).import_internal_draft(
+                    await _import_for_fixture(
+                        database,
+                        report_fixture,
                         report_fixture.actor,
-                        report_fixture.prepared.run_id,
                         bad_timing,
-                        storage=report_fixture.prepared.storage,
                         key="report-forged-timing",
                     )
             assert await _report_count(sessions, report_fixture) == before
@@ -347,11 +377,11 @@ def test_another_owner_and_tenant_cannot_read_or_import_source_bound_report(
             other = await seed(engine, role="owner")
             async with sessions() as database, database.begin():
                 with pytest.raises(ConversationDenied):
-                    await _reports(database, report_fixture).import_internal_draft(
+                    await _import_for_fixture(
+                        database,
+                        report_fixture,
                         other.actor,
-                        report_fixture.prepared.run_id,
                         report_fixture.intent,
-                        storage=report_fixture.prepared.storage,
                         key="report-other-owner",
                     )
             other_tenant = await _other_tenant_admin(engine, report_fixture)
@@ -361,11 +391,11 @@ def test_another_owner_and_tenant_cannot_read_or_import_source_bound_report(
                         other_tenant, report_fixture.prepared.run_id
                     )
                 with pytest.raises(ConversationNotFound):
-                    await _reports(database, report_fixture).import_internal_draft(
+                    await _import_for_fixture(
+                        database,
+                        report_fixture,
                         other_tenant,
-                        report_fixture.prepared.run_id,
                         report_fixture.intent,
-                        storage=report_fixture.prepared.storage,
                         key="report-other-tenant",
                     )
         finally:

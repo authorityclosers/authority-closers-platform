@@ -21,7 +21,6 @@ from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-from unittest.mock import patch
 from urllib.parse import urlsplit
 from uuid import UUID
 
@@ -56,7 +55,10 @@ from tests.database.test_conversation_reporting_pipeline_postgresql import (
     enqueue,
     text_quote,
 )
-from tests.database.test_conversation_reports_postgresql import _build_fixture
+from tests.database.test_conversation_reports_postgresql import (
+    _build_fixture,
+    _import_for_fixture,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -194,24 +196,13 @@ def _make_live_backend(
                     )
                 )
                 if mode == "imported":
-                    # c8499b8 deliberately gives each shared-PG browser
-                    # actor a unique synthetic email. Keep that identity
-                    # while exercising the provider-admin checks; the
-                    # production control-account address is not a fixture
-                    # prerequisite for this disposable proof.
-                    with patch(
-                        "ac_platform.conversation_intelligence.provider_admin.CONTROL_ACCOUNT",
-                        f"sales-xray-browser-{prepared.state.person_id}@example.test",
-                    ):
-                        await ConversationReports(
-                            ConversationApplication(database)
-                        ).import_internal_draft(
-                            fixture.actor,
-                            prepared.run_id,
-                            fixture.intent,
-                            storage=prepared.storage,
-                            key="synthetic-browser-prepared-draft",
-                        )
+                    await _import_for_fixture(
+                        database,
+                        fixture,
+                        fixture.actor,
+                        fixture.intent,
+                        key="synthetic-browser-prepared-draft",
+                    )
             app = FastAPI(docs_url=None, redoc_url=None)
             register_problem_handlers(app)
             require_actor = install_identity_http(app, settings=settings, sessions=sessions)
