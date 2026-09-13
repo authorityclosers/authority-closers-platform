@@ -142,11 +142,18 @@ class _RecordingStorageFence:
                     self._handle.write(b"\0")
                     self._handle.flush()
                 self._handle.seek(0)
-                msvcrt.locking(self._handle.fileno(), msvcrt.LK_LOCK, 1)
+                msvcrt.locking(  # type: ignore[attr-defined,unused-ignore]
+                    self._handle.fileno(),
+                    msvcrt.LK_LOCK,  # type: ignore[attr-defined,unused-ignore]
+                    1,
+                )
             else:
                 import fcntl
 
-                fcntl.flock(self._handle.fileno(), fcntl.LOCK_EX)  # type: ignore[attr-defined]
+                fcntl.flock(  # type: ignore[attr-defined,unused-ignore]
+                    self._handle.fileno(),
+                    fcntl.LOCK_EX,  # type: ignore[attr-defined,unused-ignore]
+                )
             self._locked = True
         except StorageError:
             self._close()
@@ -163,11 +170,18 @@ class _RecordingStorageFence:
                     import msvcrt
 
                     self._handle.seek(0)
-                    msvcrt.locking(self._handle.fileno(), msvcrt.LK_UNLCK, 1)
+                    msvcrt.locking(  # type: ignore[attr-defined,unused-ignore]
+                        self._handle.fileno(),
+                        msvcrt.LK_UNLCK,  # type: ignore[attr-defined,unused-ignore]
+                        1,
+                    )
                 else:
                     import fcntl
 
-                    fcntl.flock(self._handle.fileno(), fcntl.LOCK_UN)  # type: ignore[attr-defined]
+                    fcntl.flock(  # type: ignore[attr-defined,unused-ignore]
+                        self._handle.fileno(),
+                        fcntl.LOCK_UN,  # type: ignore[attr-defined,unused-ignore]
+                    )
         except OSError:
             raise StorageError("storage_worker_fence_release_failed") from None
         finally:

@@ -299,7 +299,9 @@ class _WindowsJob:
 
     @staticmethod
     def _kernel32() -> Any:
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32 = ctypes.WinDLL(  # type: ignore[attr-defined,unused-ignore]
+            "kernel32", use_last_error=True
+        )
         kernel32.CreateJobObjectW.argtypes = [ctypes.c_void_p, ctypes.c_wchar_p]
         kernel32.CreateJobObjectW.restype = ctypes.c_void_p
         kernel32.SetInformationJobObject.argtypes = [
@@ -375,7 +377,7 @@ class _WindowsJob:
             raise InferenceBrokerError("broker_process_tree_unsupported")
         try:
             try:
-                ntdll = ctypes.WinDLL("ntdll")
+                ntdll = ctypes.WinDLL("ntdll")  # type: ignore[attr-defined,unused-ignore]
                 ntdll.NtResumeProcess.argtypes = [ctypes.c_void_p]
                 ntdll.NtResumeProcess.restype = ctypes.c_long
             except OSError:
