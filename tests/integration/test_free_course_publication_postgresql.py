@@ -65,8 +65,20 @@ from tests.integration.test_media_delivery_renewal_postgresql import (
     postgres_harness,  # noqa: F401 - shared disposable PostgreSQL schema
 )
 
-NOW = datetime(2026, 9, 13, 12, tzinfo=UTC)
+# Keep the fixture's reference time close to the wall clock used by the
+# authorization and media-delivery boundaries.  Individual expiry fixtures
+# continue to derive from this value, so their expired/current distinction is
+# preserved while long-lived CI runs do not age the named sessions out before
+# the proof reaches them.
+NOW = datetime.now(UTC)
 TEST_SESSION_PEPPER = b"local-session-token-pepper-change-before-production"
+
+
+def _refresh_fixture_clock() -> None:
+    """Refresh the disposable fixture clock immediately before each proof."""
+
+    global NOW
+    NOW = datetime.now(UTC)
 
 
 def _run(coroutine):
@@ -77,6 +89,7 @@ def _run(coroutine):
 
 
 async def _exercise(schema_url) -> None:
+    _refresh_fixture_clock()
     engine = create_async_engine(schema_url, hide_parameters=True)
     sessions = async_sessionmaker(engine, expire_on_commit=False)
     try:
@@ -332,6 +345,7 @@ async def _exercise(schema_url) -> None:
                 delivery_port=port,
                 delivery_activity_resolver=resolve_catalog_activity,
             )
+            service._now = lambda: NOW
             with patch(
                 "ac_platform.catalog.free_course_media.platform_projection",
                 new=test_platform_projection,
@@ -419,6 +433,7 @@ async def _exercise(schema_url) -> None:
                         learner_actor,
                         signer=signer,
                         activity_resolver=resolve_catalog_activity,
+                        clock=lambda: NOW,
                     ),
                 )
                 response = handler.serve(
@@ -426,6 +441,7 @@ async def _exercise(schema_url) -> None:
                     token_type="playback",  # noqa: S106 - bounded token kind, not a secret
                     object_key=target_key,
                     origin="https://learner.test",
+                    now=NOW,
                 )
                 return response.status_code, b"".join(response.body or ())
 
@@ -444,6 +460,7 @@ def test_postgresql_free_course_publish_promote_and_http_delivery(postgres_harne
 async def _exercise_cli_actor(schema_url) -> None:
     """Exercise adoption against the actual legacy staging row shape."""
 
+    _refresh_fixture_clock()
     engine = create_async_engine(schema_url, hide_parameters=True)
     sessions = async_sessionmaker(engine, expire_on_commit=False)
     token = "A" * 43

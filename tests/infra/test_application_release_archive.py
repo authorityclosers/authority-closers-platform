@@ -245,6 +245,23 @@ def _run_rollback_harness(
     fail_stage: str | None = None,
 ) -> tuple[subprocess.CompletedProcess[str], list[str]]:
     rollback = _installer_function("rollback_release", "\n\ncontain_forward_recovery() {")
+    hosted_helpers = "\n".join(
+        (
+            _installer_function(
+                "load_sales_xray_hosted_inputs", "\n\nsales_xray_hosted_enabled() {"
+            ),
+            _installer_function(
+                "sales_xray_hosted_enabled", "\n\nstop_hosted_sales_xray_worker() {"
+            ),
+            _installer_function(
+                "stop_hosted_sales_xray_worker",
+                "\n\nstop_application_services_with_hosted_drain() {",
+            ),
+            _installer_function(
+                "stop_application_services_with_hosted_drain", "\n\ncompose_for() {"
+            ),
+        )
+    )
     events = tmp_path / "rollback-events"
     backup = tmp_path / "pre-migration.dump"
     backup.write_bytes(b"PGDMP fixture")
@@ -274,9 +291,22 @@ current_tmp=''
   database_mutation_started=1
   write_exposure_started=0
 
+# Both rollback targets model a release without the optional hosted capability.
+# The real loader returns status 1 for this disabled policy, so no hosted
+# worker drain or provider inputs are admitted.
+mkdir -p "$release_dir/capabilities" "$previous_release/capabilities"
+sales_xray_hosted_inputs=()
+with_release_secrets() {{ "$@"; }}
+
+{hosted_helpers}
+
 compose_for() {{
-  if [[ "$*" == *"stop --timeout 30 api worker learner-web admin-web coach-web"* ]]; then
-    printf 'compose:stop\n' >> "$events"
+  if [[ "$*" == *"stop --timeout 30 api worker"* ]]; then
+    printf 'compose:stop-core\n' >> "$events"
+    return 0
+  fi
+  if [[ "$*" == *"stop --timeout 30 learner-web admin-web coach-web"* ]]; then
+    printf 'compose:stop-web\n' >> "$events"
     return 0
   fi
   if [[ "$*" == *"pg_restore"* ]]; then
@@ -831,7 +861,7 @@ def test_installer_quiesces_writers_before_dump_and_reopens_connect_by_phase() -
     assert "ac_runtime" in writer_access and "ac_migrator" in writer_access
     assert '[ "$remaining" = 0 ]' in writer_access
 
-    stop_writers = 'compose_for "$writer_release" stop --timeout 30 api worker'
+    stop_writers = 'stop_application_services_with_hosted_drain "$writer_release" false'
     fence_writers = "set_database_writer_access fence"
     dump_database = "pg_dump "
     grant_migrator = "set_database_writer_access migrator"
@@ -851,9 +881,7 @@ def test_installer_quiesces_writers_before_dump_and_reopens_connect_by_phase() -
 
 def test_rollback_fences_and_restores_before_reopening_or_restarting() -> None:
     rollback = _installer_function("rollback_release", "\n\nrecord_forward_recovery_required() {")
-    stop_services = (
-        'compose_for "$release_dir" stop --timeout 30 api worker learner-web admin-web coach-web'
-    )
+    stop_services = 'stop_application_services_with_hosted_drain "$release_dir" true'
     fence_writers = "if set_database_writer_access fence; then"
     restore_database = "pg_restore "
     grant_runtime = "set_database_writer_access runtime || rollback_failed=1"
@@ -867,7 +895,10 @@ def test_rollback_fences_and_restores_before_reopening_or_restarting() -> None:
     assert rollback.index(restore_link) < rollback.index(restore_edge)
     assert rollback.index(restore_edge) < rollback.index(grant_runtime)
     assert rollback.index(grant_runtime) < rollback.index(restart_previous)
-    assert '[[ "$backup_ready" == 1 && "$rollback_fenced" == 1 ]]' in rollback
+    assert (
+        '[[ "$rollback_failed" == 0 && "$backup_ready" == 1 && "$rollback_fenced" == 1 ]]'
+        in rollback
+    )
     assert '[[ "$rollback_fenced" == 1 && "$rollback_failed" == 0 ]]' in rollback
 
 
@@ -878,7 +909,8 @@ def test_rollback_restarts_previous_release_only_after_restore_and_runtime_grant
 
     assert result.returncode == 0, result.stderr
     assert events == [
-        "compose:stop",
+        "compose:stop-core",
+        "compose:stop-web",
         "access:fence",
         "compose:restore",
         "link:restore",
@@ -891,11 +923,12 @@ def test_rollback_restarts_previous_release_only_after_restore_and_runtime_grant
 @pytest.mark.parametrize(
     ("fail_stage", "expected_events"),
     (
-        ("restore", ["compose:stop", "access:fence", "compose:restore"]),
+        ("restore", ["compose:stop-core", "compose:stop-web", "access:fence", "compose:restore"]),
         (
             "runtime",
             [
-                "compose:stop",
+                "compose:stop-core",
+                "compose:stop-web",
                 "access:fence",
                 "compose:restore",
                 "link:restore",
@@ -905,7 +938,14 @@ def test_rollback_restarts_previous_release_only_after_restore_and_runtime_grant
         ),
         (
             "edge",
-            ["compose:stop", "access:fence", "compose:restore", "link:restore", "edge:restore"],
+            [
+                "compose:stop-core",
+                "compose:stop-web",
+                "access:fence",
+                "compose:restore",
+                "link:restore",
+                "edge:restore",
+            ],
         ),
     ),
 )

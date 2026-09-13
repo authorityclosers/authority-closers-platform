@@ -7,7 +7,8 @@ import shlex
 import shutil
 import subprocess
 import sys
-from collections.abc import Callable
+import tempfile
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
@@ -19,6 +20,23 @@ VALIDATOR = APPLICATION / "scripts" / "sales-xray-hosted.py"
 WORKER_OVERLAY = ROOT / "infra" / "conversation-worker" / "compose.hosted.yaml"
 RELEASE_ID = "a" * 40
 OPERATIONS_TENANT = "10000000-0000-4000-8000-000000000001"
+
+
+@pytest.fixture
+def activation_root(tmp_path: Path) -> Iterator[Path]:
+    """Exercise the real root trust boundary under the dedicated Linux CI gate."""
+
+    if os.name != "posix":
+        yield tmp_path
+        return
+    if os.geteuid() != 0:
+        if os.environ.get("AC_REQUIRE_HOSTED_ACTIVATION_ROOT_TEST") == "1":
+            pytest.fail("The required hosted activation proof must run as root")
+        pytest.skip("root-owned activation paths are exercised by the required Linux gate")
+    # /tmp and runner homes are intentionally untrusted by the production validator.
+    # Use a disposable tree below /run; never relax the validator for a test host.
+    with tempfile.TemporaryDirectory(prefix="ac-hosted-activation-", dir="/run") as folder:
+        yield Path(folder)
 
 
 def _bash_executable() -> str:
@@ -190,6 +208,9 @@ def _make_release(
     )
     paths["descriptor"] = descriptor_file
     paths["digest"] = digest_file
+    if os.name == "posix":
+        for trusted_file in (approval, service, env_file, descriptor_file, digest_file):
+            trusted_file.chmod(0o444)
     return release, paths
 
 
@@ -230,8 +251,8 @@ def test_source_overlay_and_per_environment_capabilities_are_archive_inputs() ->
         }
 
 
-def test_hosted_validator_projects_only_target_release_inputs(tmp_path: Path) -> None:
-    release, paths = _make_release(tmp_path)
+def test_hosted_validator_projects_only_target_release_inputs(activation_root: Path) -> None:
+    release, paths = _make_release(activation_root)
 
     result = _validator_result(release)
 
@@ -243,8 +264,8 @@ def test_hosted_validator_projects_only_target_release_inputs(tmp_path: Path) ->
     ]
 
 
-def test_hosted_validator_supports_the_production_policy_shape(tmp_path: Path) -> None:
-    release, paths = _make_release(tmp_path, environment="production")
+def test_hosted_validator_supports_the_production_policy_shape(activation_root: Path) -> None:
+    release, paths = _make_release(activation_root, environment="production")
 
     result = _validator_result(release, "production")
 
@@ -256,9 +277,9 @@ def test_hosted_validator_supports_the_production_policy_shape(tmp_path: Path) -
     ]
 
 
-def test_rollback_target_uses_its_own_release_descriptor(tmp_path: Path) -> None:
-    candidate, candidate_paths = _make_release(tmp_path / "candidate", release_id="a" * 40)
-    previous, previous_paths = _make_release(tmp_path / "previous", release_id="d" * 40)
+def test_rollback_target_uses_its_own_release_descriptor(activation_root: Path) -> None:
+    candidate, candidate_paths = _make_release(activation_root / "candidate", release_id="a" * 40)
+    previous, previous_paths = _make_release(activation_root / "previous", release_id="d" * 40)
 
     candidate_result = _validator_result(candidate)
     previous_result = _validator_result(previous)
@@ -270,8 +291,8 @@ def test_rollback_target_uses_its_own_release_descriptor(tmp_path: Path) -> None
     assert candidate_paths["descriptor"] != previous_paths["descriptor"]
 
 
-def test_hosted_validator_preserves_older_release_without_policy(tmp_path: Path) -> None:
-    release, _ = _make_release(tmp_path)
+def test_hosted_validator_preserves_older_release_without_policy(activation_root: Path) -> None:
+    release, _ = _make_release(activation_root)
     (release / "capabilities" / "sales-xray-hosted-staging.json").unlink()
 
     result = _validator_result(release)
@@ -289,9 +310,9 @@ def test_hosted_validator_preserves_older_release_without_policy(tmp_path: Path)
     ),
 )
 def test_hosted_validator_rejects_descriptor_identity_tampering(
-    tmp_path: Path, mutation: Callable[[dict[str, object]], None]
+    activation_root: Path, mutation: Callable[[dict[str, object]], None]
 ) -> None:
-    release, paths = _make_release(tmp_path)
+    release, paths = _make_release(activation_root)
     descriptor = json.loads(paths["descriptor"].read_text(encoding="utf-8"))
     mutation(descriptor)
     paths["descriptor"].write_bytes(_json_bytes(descriptor))
@@ -308,8 +329,8 @@ def test_hosted_validator_rejects_descriptor_identity_tampering(
     assert result.returncode != 0
 
 
-def test_hosted_validator_rejects_compose_environment_key_injection(tmp_path: Path) -> None:
-    release, paths = _make_release(tmp_path)
+def test_hosted_validator_rejects_compose_environment_key_injection(activation_root: Path) -> None:
+    release, paths = _make_release(activation_root)
     paths["env"].write_text(
         paths["env"].read_text(encoding="utf-8") + "AC_DATABASE_URL=secret\n", encoding="utf-8"
     )
@@ -317,8 +338,8 @@ def test_hosted_validator_rejects_compose_environment_key_injection(tmp_path: Pa
     assert result.returncode != 0
 
 
-def test_hosted_validator_requires_managed_runtime_operations_scope(tmp_path: Path) -> None:
-    release, _ = _make_release(tmp_path)
+def test_hosted_validator_requires_managed_runtime_operations_scope(activation_root: Path) -> None:
+    release, _ = _make_release(activation_root)
 
     missing = _validator_result(release, operations_tenant_id=None)
     mismatched = _validator_result(
@@ -332,9 +353,9 @@ def test_hosted_validator_requires_managed_runtime_operations_scope(tmp_path: Pa
 
 
 def test_hosted_validator_uses_explicit_managed_scope_over_ambient_value(
-    tmp_path: Path,
+    activation_root: Path,
 ) -> None:
-    release, _ = _make_release(tmp_path)
+    release, _ = _make_release(activation_root)
     command = [
         sys.executable,
         str(VALIDATOR),
@@ -357,8 +378,11 @@ def test_hosted_validator_uses_explicit_managed_scope_over_ambient_value(
 
 
 @pytest.mark.skipif(os.name != "posix", reason="POSIX ownership and mode boundary")
-def test_hosted_validator_rejects_writable_external_activation_parent(tmp_path: Path) -> None:
-    release, paths = _make_release(tmp_path)
+def test_hosted_validator_rejects_writable_external_activation_parent(
+    activation_root: Path,
+) -> None:
+    release, paths = _make_release(activation_root)
+    assert _validator_result(release).returncode == 0
     parent = paths["descriptor"].parent
     original_mode = parent.stat().st_mode & 0o7777
     parent.chmod(original_mode | 0o002)
@@ -369,13 +393,31 @@ def test_hosted_validator_rejects_writable_external_activation_parent(tmp_path: 
     assert result.returncode != 0
 
 
-def test_installer_compose_for_uses_target_release_overlay_and_clears_ambient_inputs(
-    tmp_path: Path,
+@pytest.mark.skipif(os.name != "posix", reason="POSIX ownership and mode boundary")
+@pytest.mark.parametrize("path_key", ("descriptor", "digest", "env", "service", "approval"))
+@pytest.mark.parametrize("tamper", ("foreign_owner", "owner_writable", "hardlink"))
+def test_hosted_validator_rejects_untrusted_activation_files(
+    activation_root: Path, path_key: str, tamper: str
 ) -> None:
-    release, paths = _make_release(tmp_path)
-    fake_bin = tmp_path / "bin"
+    release, paths = _make_release(activation_root)
+    assert _validator_result(release).returncode == 0
+    target = paths[path_key]
+    if tamper == "foreign_owner":
+        os.chown(target, 65534, 65534)
+    elif tamper == "owner_writable":
+        target.chmod(0o644)
+    else:
+        target.with_name(target.name + ".alias").hardlink_to(target)
+    assert _validator_result(release).returncode != 0
+
+
+def test_installer_compose_for_uses_target_release_overlay_and_clears_ambient_inputs(
+    activation_root: Path,
+) -> None:
+    release, paths = _make_release(activation_root)
+    fake_bin = activation_root / "bin"
     fake_bin.mkdir()
-    capture = tmp_path / "compose-args"
+    capture = activation_root / "compose-args"
     fake_docker = fake_bin / "docker"
     fake_docker.write_text(
         "#!/usr/bin/env bash\n"

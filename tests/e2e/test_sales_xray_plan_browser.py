@@ -343,6 +343,7 @@ def _start_server(
     settings = Settings(
         _env_file=None,
         environment="test",
+        operations_tenant_id=setup.prepared.state.tenant_id,
         public_app_url=origin,
         admin_app_url="http://admin.test",
         coach_app_url="http://coach.test",
