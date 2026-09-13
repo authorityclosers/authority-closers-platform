@@ -181,11 +181,18 @@ jobs:
               "$image_id" "$loaded_id" >&2
             exit 1
           }
-          loaded_runtime_id="$(docker image inspect --format '{{.Id}}' "$transport_manifest_digest")"
-          [ "$loaded_runtime_id" = "$image_id" ] || {
-            printf 'OCI transport manifest does not resolve to the loaded image config.\n' >&2
-            exit 1
-          }
+          # Classic Docker can reload the tag/config but cannot address an OCI
+          # manifest digest directly. The VPS containerd store must prove that
+          # reference separately; never replace it with a mutable tag.
+          ci_bare_manifest_addressable=false
+          if loaded_runtime_id="$(docker image inspect --format '{{.Id}}' "$transport_manifest_digest" 2>/dev/null)"; then
+            [ "$loaded_runtime_id" = "$image_id" ] || {
+              printf 'OCI transport manifest resolves to a different image config.\n' >&2
+              exit 1
+            }
+            ci_bare_manifest_addressable=true
+          fi
+          export ci_bare_manifest_addressable
 
           helper_files=(
             "scripts/native_runtime_helper.py"
@@ -275,6 +282,7 @@ jobs:
                   "sha256": os.environ["transport_sha256"],
                   "manifest_digest": os.environ["transport_manifest_digest"],
                   "config_digest": os.environ["transported_config_digest"],
+                  "ci_bare_manifest_addressable": os.environ["ci_bare_manifest_addressable"] == "true",
                   "load_command": "docker load --input native-image.tar.gz",
                   "inspect_command": "docker image inspect " + os.environ["transport_manifest_digest"],
               },
