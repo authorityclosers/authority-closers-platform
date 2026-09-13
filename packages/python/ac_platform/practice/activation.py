@@ -65,6 +65,16 @@ def validate_bundle(
         raise PracticeActivationError("questionbank is not published; Dipak review is required")
     if _required_text(policy.get("status"), "daily-selection policy status").lower() != "approved":
         raise PracticeActivationError("daily-selection policy is not approved")
+    publication = catalog.get("publication")
+    if not isinstance(publication, dict):
+        raise PracticeActivationError("published questionbank approval is missing")
+    _required_text(publication.get("reviewer"), "questionbank reviewer")
+    _required_text(publication.get("approver"), "questionbank approver")
+    approval = policy.get("approval")
+    if not isinstance(approval, dict):
+        raise PracticeActivationError("daily-selection policy approval is missing")
+    _required_text(approval.get("reviewer"), "daily-selection policy reviewer")
+    _required_text(approval.get("approver"), "daily-selection policy approver")
 
     sets = catalog.get("sets")
     if not isinstance(sets, list) or not sets:

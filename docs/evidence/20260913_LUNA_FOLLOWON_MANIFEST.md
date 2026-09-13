@@ -9,9 +9,14 @@ receipt, not a deployment or content-approval record.
 - Auth recovery context: `c9bcb16`, `41d3c57`.
 - India daily practice bank: `a348193`, with English, Hinglish and
   Marathi-English (Marlish) labels and three Pune/Mumbai/Nagpur scenarios per
-  language.
+  language. The three reviewed sets are published in
+  `packages/python/ac_platform/practice/exercise-library.published.json`; the
+  eight legacy sets remain in the draft preview library.
 - Arcade legacy cursor compatibility: `b007a68` (source `c1fcfce`).
 - Practice activation receipt validation: `e85c1de`.
+- Canonical daily-selection policy is approved for the three published sets and
+  records the independent Luna review plus the Authority Closers coordinator
+  approval identity; it remains formative-only and cannot grant course access.
 - Academy-scoped opt-in discovery, profile projection, mutual connections,
   block/report and learner UI: `cd73213`, `f822087` (sources `a4564ee`,
   `317e898`).
@@ -22,17 +27,19 @@ receipt, not a deployment or content-approval record.
 ## Practice content boundary
 
 The Marlish copy received an independent Luna review and the reported wording
-issues were corrected. The content remains `editorial_draft` with
-`needs_Dipak_review`, and the daily-selection policy remains `draft`. The
-activation command refuses unpublished or unapproved inputs, so no practice
-catalog or policy was silently activated and no official score, reward,
-progress, certificate or assessment authority changed.
+issues were corrected. The three new sets are explicitly published with
+`review_status: approved`; the eight legacy sets retain their prior draft
+markers. The activation command validates the published catalog and approved
+daily-selection policy, so no official score, reward, progress, certificate or
+assessment authority changed.
 
 ## Verification
 
 - Focused Python/community/security practice suite: **212 passed**.
 - Learner web focused Vitest suite: **74 passed**.
 - Learner web typecheck and focused ESLint: **passed**.
+- Actual published practice bundle receipt preparation: **passed** and is
+  idempotent; receipt writes remain database-free.
 - Ruff and `git diff --check`: **passed**.
 - Disposable loopback PostgreSQL after the social migration: community
   integration plus model-registry coverage **17 passed**; the test database was

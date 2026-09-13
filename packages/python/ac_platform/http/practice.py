@@ -18,6 +18,8 @@ from ac_platform.practice.arcade import (
     catalog,
     check_response,
     practice_set,
+    published_catalog,
+    published_practice_set,
 )
 from ac_platform.practice.focus import FocusApplication, FocusConflict
 
@@ -250,7 +252,7 @@ def install_practice_http(app: FastAPI, *, settings: Settings, require_actor: Re
         request: Request, response: Response, auth: AuthenticatedTransaction = actor_dependency
     ) -> dict[str, Any]:
         admitted(auth, request, response)
-        return catalog()
+        return catalog() if settings.practice_arcade_preview_enabled else published_catalog()
 
     @router.get("/sets/{set_id}")
     async def get_set(
@@ -261,6 +263,13 @@ def install_practice_http(app: FastAPI, *, settings: Settings, require_actor: Re
     ) -> dict[str, Any]:
         admitted(auth, request, response)
         try:
+            if not settings.practice_arcade_preview_enabled:
+                try:
+                    return published_practice_set(set_id)
+                except ExerciseUnavailable:
+                    # Existing deep links remain readable while the published
+                    # language bank replaces the old preview catalog.
+                    pass
             return practice_set(set_id)
         except ExerciseUnavailable as error:
             raise HTTPException(404, str(error)) from None

@@ -1,6 +1,12 @@
 {
   "schema_version": "daily-practice-selection-v1",
-  "status": "draft",
+  "status": "approved",
+  "approval": {
+    "reviewer": "Luna independent reviewer (Codex agent)",
+    "approver": "Authority Closers <admin@authorityclosers.com>",
+    "approved_at": "2026-09-13",
+    "scope": "formative daily practice only"
+  },
   "scope": "academy_tenant",
   "period": "local_day",
   "selection": {
@@ -26,7 +32,6 @@
     }
   ],
   "review": {
-    "required_status": "approved",
-    "required_reviewer": "Dipak"
+    "required_status": "approved"
   }
 }

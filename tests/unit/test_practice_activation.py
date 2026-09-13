@@ -10,6 +10,7 @@ from ac_platform.practice.activation import PracticeActivationError, prepare_rec
 
 ROOT = Path(__file__).parents[2]
 CATALOG = ROOT / "packages/python/ac_platform/practice/exercise-library.draft.json"
+PUBLISHED_CATALOG = ROOT / "packages/python/ac_platform/practice/exercise-library.published.json"
 POLICY = ROOT / "packages/python/ac_platform/practice/daily-selection-policy.v1.json"
 
 
@@ -27,6 +28,7 @@ def test_current_editorial_draft_is_refused_until_review(tmp_path: Path) -> None
 def test_approved_bundle_receipt_is_deterministic_and_idempotent(tmp_path: Path) -> None:
     catalog = {
         "status": "published",
+        "publication": {"reviewer": "Luna", "approver": "Authority Closers"},
         "sets": [
             {
                 "id": "india-daily-english",
@@ -38,6 +40,7 @@ def test_approved_bundle_receipt_is_deterministic_and_idempotent(tmp_path: Path)
     }
     policy = {
         "status": "approved",
+        "approval": {"reviewer": "Luna", "approver": "Authority Closers"},
         "languages": [
             {
                 "id": "english",
@@ -72,3 +75,22 @@ def test_approved_bundle_receipt_is_deterministic_and_idempotent(tmp_path: Path)
     assert second["receipt_status"] == "already_prepared"
     assert first["questionbank_digest"] == second["questionbank_digest"]
     assert json.loads(output_path.read_text("utf-8"))["database_mutated"] is False
+
+
+def test_canonical_published_language_bundle_prepares_a_receipt(tmp_path: Path) -> None:
+    receipt = prepare_receipt(
+        catalog_path=PUBLISHED_CATALOG,
+        policy_path=POLICY,
+        output_path=tmp_path / "release" / "receipt.json",
+        environment="staging",
+        tenant_id=UUID("22222222-2222-4222-8222-222222222222"),
+    )
+
+    assert receipt["receipt_status"] == "prepared"
+    assert receipt["activation"] == "prepared"
+    assert receipt["set_ids"] == [
+        "india-daily-english",
+        "india-daily-hinglish",
+        "india-daily-marlish",
+    ]
+    assert receipt["database_mutated"] is False

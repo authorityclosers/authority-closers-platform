@@ -27,7 +27,13 @@ from ac_platform.audit.service import AuditRepository
 from ac_platform.identity.models import Person
 from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.kernel.authz import ActorContext
-from ac_platform.practice.arcade import check_snapshot_response, public_snapshot, set_snapshot
+from ac_platform.practice.arcade import (
+    ExerciseUnavailable,
+    check_snapshot_response,
+    public_snapshot,
+    published_set_snapshot,
+    set_snapshot,
+)
 from ac_platform.practice.models import (
     PracticeAttempt,
     PracticeCommand,
@@ -368,7 +374,12 @@ class PracticeApplication:
             return await self._view(await self._attempt(actor, replay.result_id))
         if await self._profile(actor) is None:
             raise PracticeConflict("Save your timezone before starting practice.")
-        snapshot = set_snapshot(set_id)
+        try:
+            snapshot = published_set_snapshot(set_id)
+        except ExerciseUnavailable:
+            # Preserve existing draft attempts while the published language
+            # bank is introduced; the UI only advertises published sets.
+            snapshot = set_snapshot(set_id)
         content_digest = digest(snapshot)
         version_id = uuid5(NAMESPACE_URL, f"ac-practice:{self.tenant_id}:{content_digest}")
         values = dict(
@@ -705,7 +716,14 @@ class PracticeApplication:
             "revision": attempt.revision,
             "issued_at": iso(attempt.issued_at),
             "completed_at": iso(attempt.completed_at),
-            "set": public_snapshot(version.snapshot),
+            "set": public_snapshot(
+                version.snapshot,
+                mode=(
+                    "published"
+                    if version.snapshot.get("review_status") == "approved"
+                    else "editorial_preview"
+                ),
+            ),
             "acknowledged_item_ids": [item["item_id"] for item in states if item["acknowledged"]],
             "item_states": states,
             "reward_receipts": [self._receipt(row) for row in receipts],
