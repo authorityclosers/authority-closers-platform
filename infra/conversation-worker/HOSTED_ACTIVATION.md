@@ -25,7 +25,11 @@ Canonicalize the approved bundle with `load_hosted_approval_bundle(raw).to_json(
 before installation, then hash those exact installed bytes. The API and worker
 must use that same file and digest. The service file's release_id must equal
 `/app/.ac-release-id` inside the frozen API image. Its native_image_ref is the
-verified `sha256:...` image ID from the loaded native artifact.
+verified `sha256:...` OCI transport manifest digest from the loaded native
+artifact. The artifact records the separate Docker config/image ID and proves
+that the transport manifest references it. After loading on the VPS, inspect the
+transport digest and require its `.Id` to match that recorded config ID before
+starting the helper.
 
 For production, replace both the environment and every staging path with their
 separate production counterpart; use its own approved bundle and DB credential.
@@ -115,7 +119,7 @@ PYTHONPATH="$AC_XRAY_HELPER_ROOT/packages/python" python3 \
   --socket "$AC_XRAY_NATIVE_SOCKET_DIR/native.sock" \
   --workspace-root "$AC_XRAY_SCRATCH_ROOT" \
   --output-root "$AC_XRAY_SCRATCH_ROOT/native-output-tmpfs" \
-  --image-ref "$AC_XRAY_NATIVE_IMAGE_ID" --peer-uid 10001 --peer-gid 10001
+  --image-ref "$AC_XRAY_NATIVE_IMAGE_REF" --peer-uid 10001 --peer-gid 10001
 ```
 
 The helper alone has Docker access and permission to manage its fixed temporary
