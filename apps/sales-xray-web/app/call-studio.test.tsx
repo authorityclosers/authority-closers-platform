@@ -506,6 +506,65 @@ describe("CallStudio", () => {
     expect(audio?.currentTime).toBe(1.5);
   });
 
+  it("shows source-derived report measurements and keeps display language scoped to UI labels", async () => {
+    vi.useFakeTimers();
+    await render();
+    const file = await selectAudio("language-mode.wav");
+    await prepareAndAuthorize(file);
+    await act(async () => getButton("Upload and measure privately").click());
+    await flush();
+    await act(async () => vi.advanceTimersByTimeAsync(2500));
+    await flush();
+    await acceptProcessingPlan();
+    await act(async () => vi.advanceTimersByTimeAsync(2500));
+    await flush();
+
+    expect(container.textContent).toContain("Source moments");
+    expect(container.textContent).toContain("Evidence-backed findings");
+    expect(container.textContent).toContain("Held");
+    expect(container.textContent).toContain("95 / 100 weights declared");
+    expect(container.textContent).toContain("Moments from your call");
+    expect(container.querySelectorAll(".studio-moment")).toHaveLength(2);
+
+    const audio = container.querySelector<HTMLAudioElement>("audio");
+    expect(audio).not.toBeNull();
+    if (audio)
+      Object.defineProperty(audio, "currentTime", {
+        configurable: true,
+        writable: true,
+        value: 0,
+      });
+    const firstMoment = container.querySelector<HTMLButtonElement>(
+      ".studio-moment",
+    );
+    expect(firstMoment?.getAttribute("aria-pressed")).toBe("false");
+    await act(async () => firstMoment?.click());
+    expect(audio?.currentTime).toBe(1.5);
+    expect(firstMoment?.getAttribute("aria-pressed")).toBe("true");
+
+    const language = container.querySelector<HTMLSelectElement>(
+      'select[aria-label="Display language"]',
+    );
+    expect(language).not.toBeNull();
+    if (language) {
+      expect([...language.options].map((option) => option.value)).toEqual([
+        "en",
+        "hi",
+        "mr",
+        "en-hi-mixed",
+      ]);
+      language.value = "hi";
+      await act(async () =>
+        language.dispatchEvent(new Event("change", { bubbles: true })),
+      );
+    }
+    expect(container.textContent).toContain("आपकी कॉल के क्षण");
+    expect(container.textContent).toContain(
+      "रिपोर्ट का पाठ server-provided भाषा में ही रहता है",
+    );
+    expect(container.textContent).toContain("The prospect asked for a clear next step.");
+  });
+
   it("polls report status before transcript and continues when the report arrives later", async () => {
     vi.useFakeTimers();
     let reportRequests = 0;

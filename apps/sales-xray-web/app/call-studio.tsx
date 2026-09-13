@@ -9,7 +9,10 @@ import {
   Check,
   ChevronDown,
   FileText,
+  Languages,
   LoaderCircle,
+  ListChecks,
+  Play,
   Upload,
   X,
 } from "lucide-react";
@@ -83,10 +86,153 @@ const PLAN_STATES = new Set([
 ]);
 const PLAN_STAGES = new Set(["C2", "C4", "C5"]);
 const PROCESSING_STAGES = new Set(["C1", "C2", "C3", "C4", "C5", "C6"]);
+const PROCESSING_STAGE_ORDER = ["C1", "C2", "C3", "C4", "C5", "C6"] as const;
 const LOCAL_MEASUREMENT_RECIPES = new Set([
   "audioatlas-48000-v1",
   "audioatlas-16000-v1",
 ]);
+
+type DisplayLanguage = "en" | "hi" | "mr" | "en-hi-mixed";
+type EvidenceMoment = Finding["evidence"][number] & {
+  findingTitle: string;
+  key: string;
+};
+
+const DISPLAY_COPY: Record<
+  DisplayLanguage,
+  {
+    label: string;
+    modeNote: string;
+    uploadStep: string;
+    analyzeStep: string;
+    reportStep: string;
+    languageLabel: string;
+    sourceMoments: string;
+    evidenceFindings: string;
+    dimensionsChecked: string;
+    scoreHold: string;
+    scoreHoldDetail: string;
+    sourceMomentsHeading: string;
+    sourceMomentsIntro: string;
+    playMoment: string;
+    practiceFocus: string;
+    practiceFocusIntro: string;
+    reportLanguageNotice: string;
+  }
+> = {
+  en: {
+    label: "English",
+    modeNote: "UI labels only",
+    uploadStep: "Upload your call",
+    analyzeStep: "Analyze",
+    reportStep: "Read your report",
+    languageLabel: "Display language",
+    sourceMoments: "Source moments",
+    evidenceFindings: "Evidence-backed findings",
+    dimensionsChecked: "Dimensions checked",
+    scoreHold: "Score publication",
+    scoreHoldDetail: "Held · 95 / 100 weights declared",
+    sourceMomentsHeading: "Moments from your call",
+    sourceMomentsIntro:
+      "Jump to the exact source-bound moments behind this draft.",
+    playMoment: "Play source moment",
+    practiceFocus: "One move to practise next",
+    practiceFocusIntro:
+      "Use the clearest improvement as a small rehearsal before your next call.",
+    reportLanguageNotice:
+      "The report text stays in its server-provided language. Display modes translate interface labels only until reviewed report translations exist.",
+  },
+  hi: {
+    label: "हिन्दी · देवनागरी",
+    modeNote: "केवल UI labels",
+    uploadStep: "कॉल अपलोड करें",
+    analyzeStep: "विश्लेषण",
+    reportStep: "रिपोर्ट पढ़ें",
+    languageLabel: "दिखाने की भाषा",
+    sourceMoments: "स्रोत क्षण",
+    evidenceFindings: "सबूत से जुड़े निष्कर्ष",
+    dimensionsChecked: "जाँचे गए आयाम",
+    scoreHold: "स्कोर प्रकाशन",
+    scoreHoldDetail: "रुका हुआ · 95 / 100 weights declared",
+    sourceMomentsHeading: "आपकी कॉल के क्षण",
+    sourceMomentsIntro:
+      "इस ड्राफ्ट के स्रोत से जुड़े सटीक क्षण पर जाएँ।",
+    playMoment: "स्रोत क्षण चलाएँ",
+    practiceFocus: "अगली बार अभ्यास करने की एक बात",
+    practiceFocusIntro:
+      "अगली कॉल से पहले सबसे स्पष्ट सुधार का छोटा अभ्यास करें।",
+    reportLanguageNotice:
+      "रिपोर्ट का पाठ server-provided भाषा में ही रहता है। reviewed report translations उपलब्ध होने तक केवल interface labels बदलते हैं।",
+  },
+  mr: {
+    label: "मराठी · देवनागरी",
+    modeNote: "फक्त UI labels",
+    uploadStep: "कॉल अपलोड करा",
+    analyzeStep: "विश्लेषण",
+    reportStep: "रिपोर्ट वाचा",
+    languageLabel: "दाखवण्याची भाषा",
+    sourceMoments: "स्रोत क्षण",
+    evidenceFindings: "पुराव्याशी जोडलेले निष्कर्ष",
+    dimensionsChecked: "तपासलेले आयाम",
+    scoreHold: "स्कोअर प्रकाशन",
+    scoreHoldDetail: "थांबवले · 95 / 100 weights declared",
+    sourceMomentsHeading: "तुमच्या कॉलमधले क्षण",
+    sourceMomentsIntro:
+      "या ड्राफ्टमागचे अचूक source-bound moments उघडा.",
+    playMoment: "स्रोत क्षण चालवा",
+    practiceFocus: "पुढच्या कॉलसाठी एक सराव",
+    practiceFocusIntro:
+      "पुढच्या कॉलआधी स्पष्ट सुधारण्याचा छोटा सराव करा.",
+    reportLanguageNotice:
+      "रिपोर्टचा मजकूर server-provided भाषेतच राहतो. Reviewed report translations येईपर्यंत display modes फक्त interface labels बदलतात.",
+  },
+  "en-hi-mixed": {
+    label: "English + हिन्दी mixed",
+    modeNote: "UI labels only · मिश्रित",
+    uploadStep: "Upload कॉल करें",
+    analyzeStep: "Analyze करें",
+    reportStep: "Report पढ़ें",
+    languageLabel: "Display language · भाषा",
+    sourceMoments: "Source moments · स्रोत क्षण",
+    evidenceFindings: "Evidence-backed findings · सबूत",
+    dimensionsChecked: "Dimensions checked · जाँच",
+    scoreHold: "Score publication · स्कोर",
+    scoreHoldDetail: "Held · 95 / 100 weights declared",
+    sourceMomentsHeading: "Moments from your call · आपकी कॉल के क्षण",
+    sourceMomentsIntro:
+      "Jump to exact source-bound moments · सटीक क्षण पर जाएँ।",
+    playMoment: "Play source moment · स्रोत क्षण चलाएँ",
+    practiceFocus: "One move to practise · अगला अभ्यास",
+    practiceFocusIntro:
+      "Use this improvement before your next call · अगली कॉल से पहले अभ्यास करें।",
+    reportLanguageNotice:
+      "Report text stays in its server-provided language · रिपोर्ट का पाठ server-provided भाषा में रहता है। Display modes translate interface labels only until reviewed report translations exist.",
+  },
+};
+
+function evidenceMoments(report: Job["report"]): EvidenceMoment[] {
+  if (!report) return [];
+  const seen = new Set<string>();
+  const moments: EvidenceMoment[] = [];
+  const groups: Array<[string, Finding[]]> = [
+    ["strength", report.strengths],
+    ["missed", report.missed_opportunities],
+    ["improvement", report.improvements],
+    ["objection", report.objection_analysis],
+    ["closing", report.closing_analysis],
+  ];
+  for (const [, findings] of groups) {
+    for (const finding of findings) {
+      for (const evidence of finding.evidence) {
+        const key = `${evidence.segment_id}:${evidence.start_ms}:${evidence.end_ms}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        moments.push({ ...evidence, findingTitle: finding.title, key });
+      }
+    }
+  }
+  return moments.sort((a, b) => a.start_ms - b.start_ms);
+}
 
 function planObject(value: unknown, code: string): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value))
@@ -402,6 +548,8 @@ async function readProcessingPlan(
 
 export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
   const [advanced, setAdvanced] = useState(false);
+  const [displayLanguage, setDisplayLanguage] =
+    useState<DisplayLanguage>("en");
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -428,11 +576,15 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
   const [planConsent, setPlanConsent] = useState(false);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
+  const [selectedMomentKey, setSelectedMomentKey] = useState<string | null>(
+    null,
+  );
   const input = useRef<HTMLInputElement>(null);
   const audio = useRef<HTMLAudioElement>(null);
   const attempt = useRef(0);
   const requestKey = useRef("");
   const planRequestKey = useRef("");
+  const copy = DISPLAY_COPY[displayLanguage];
 
   useEffect(() => {
     const controller = new AbortController();
@@ -1024,6 +1176,32 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
       if (current === attempt.current) setBusy("");
     }
   }
+  const report = job?.report;
+  const reportMoments = evidenceMoments(report);
+  const reportFindingsWithEvidence = report
+    ? [
+        ...report.strengths,
+        ...report.missed_opportunities,
+        ...report.improvements,
+        ...report.objection_analysis,
+        ...report.closing_analysis,
+      ].filter((finding) => finding.evidence.length > 0).length
+    : 0;
+  const observedDimensions = report
+    ? report.dimensions.filter((dimension) => dimension.status === "observed")
+        .length
+    : 0;
+  const durationLabel = activeTranscript
+    ? time(activeTranscript.duration_ms)
+    : duration
+      ? time(duration)
+      : "Not available";
+  function seekToMoment(moment: EvidenceMoment) {
+    setSelectedMomentKey(moment.key);
+    if (!audio.current) return;
+    audio.current.currentTime = moment.start_ms / 1000;
+    void audio.current.play().catch(() => undefined);
+  }
   function restart() {
     ++attempt.current;
     clearAudioPlayback();
@@ -1040,6 +1218,7 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
     setBusy("");
     setConsent(false);
     setPlanConsent(false);
+    setSelectedMomentKey(null);
     planRequestKey.current = "";
   }
   if (advanced)
@@ -1065,11 +1244,36 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
             <small>AUTHORITY CLOSERS</small>
           </span>
         </Link>
-        <span className="studio-preview">Internal testing</span>
+        <div className="studio-header-tools">
+          <label className="studio-language-control">
+            <Languages size={15} aria-hidden="true" />
+            <span>{copy.languageLabel}</span>
+            <select
+              aria-label={copy.languageLabel}
+              title={copy.modeNote}
+              value={displayLanguage}
+              onChange={(event) =>
+                setDisplayLanguage(event.target.value as DisplayLanguage)
+              }
+            >
+              {(
+                Object.entries(DISPLAY_COPY) as [
+                  DisplayLanguage,
+                  (typeof DISPLAY_COPY)[DisplayLanguage],
+                ][]
+              ).map(([value, language]) => (
+                <option key={value} value={value}>
+                  {language.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <span className="studio-preview">Internal testing</span>
+        </div>
       </header>
       <main id="main" className="studio-main">
         <nav className="studio-steps" aria-label="Analysis steps">
-          {["Upload your call", "Analyze", "Read your report"].map(
+          {[copy.uploadStep, copy.analyzeStep, copy.reportStep].map(
             (label, i) => (
               <span
                 key={label}
@@ -1374,6 +1578,41 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
                     ? "No report is shown until it matches this recording."
                     : processingPlanMessage(plan)}
                 </p>
+                <div
+                  className="studio-stage-rail"
+                  aria-label="Verified analysis progress"
+                >
+                  {PROCESSING_STAGE_ORDER.map((stage, index) => {
+                    const currentIndex = plan.current_stage
+                      ? PROCESSING_STAGE_ORDER.indexOf(
+                          plan.current_stage as (typeof PROCESSING_STAGE_ORDER)[number],
+                        )
+                      : -1;
+                    const complete =
+                      plan.report_ready ||
+                      plan.state === "completed" ||
+                      (currentIndex >= 0 && index < currentIndex);
+                    const current =
+                      !complete &&
+                      currentIndex >= 0 &&
+                      index === currentIndex &&
+                      plan.state === "active";
+                    return (
+                      <div
+                        className={`studio-stage${complete ? " complete" : current ? " current" : ""}`}
+                        key={stage}
+                      >
+                        <span aria-hidden="true">
+                          {complete ? <Check size={13} /> : index + 1}
+                        </span>
+                        <strong>{processingStageLabel(stage)}</strong>
+                        <small>
+                          {complete ? "Complete" : current ? "In progress" : "Waiting"}
+                        </small>
+                      </div>
+                    );
+                  })}
+                </div>
                 {(plan.state === "held" || plan.state === "cancelled") && (
                   <button
                     className="secondary-button"
@@ -1535,6 +1774,97 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
             <h1>What to take into your next call.</h1>
             <p className="studio-report-summary">{job.report.summary}</p>
             <span className="pill">AI draft · Dipak has not reviewed this</span>
+            <div className="studio-report-language-note" role="status">
+              <Languages size={16} aria-hidden="true" />
+              <span>{copy.reportLanguageNotice}</span>
+            </div>
+            <div
+              className="studio-report-metrics"
+              aria-label="Report measurements"
+              role="list"
+            >
+              <div className="studio-report-metric" role="listitem">
+                <span>{copy.sourceMoments}</span>
+                <strong>{report ? reportMoments.length : "Not available"}</strong>
+                <small>Unique timestamped spans</small>
+              </div>
+              <div className="studio-report-metric" role="listitem">
+                <span>{copy.evidenceFindings}</span>
+                <strong>
+                  {report ? reportFindingsWithEvidence : "Not available"}
+                </strong>
+                <small>Findings linked to the source</small>
+              </div>
+              <div className="studio-report-metric" role="listitem">
+                <span>{copy.dimensionsChecked}</span>
+                <strong>
+                  {job.report.dimensions.length
+                    ? `${observedDimensions}/${job.report.dimensions.length}`
+                    : "Not available"}
+                </strong>
+                <small>Observed dimensions only</small>
+              </div>
+              <div className="studio-report-metric hold" role="listitem">
+                <span>{copy.scoreHold}</span>
+                <strong>Held</strong>
+                <small>{copy.scoreHoldDetail}</small>
+              </div>
+            </div>
+            <section
+              className="studio-moment-browser"
+              aria-labelledby="source-moments-title"
+            >
+              <div className="studio-moment-browser-heading">
+                <div>
+                  <p className="eyebrow">SOURCE-BOUND AUDIO</p>
+                  <h2 id="source-moments-title">{copy.sourceMomentsHeading}</h2>
+                  <p>{copy.sourceMomentsIntro}</p>
+                </div>
+                <span className="pill subtle">
+                  {durationLabel} · {activeTranscript?.segments.length ?? 0} transcript segments
+                </span>
+              </div>
+              {reportMoments.length ? (
+                <div className="studio-moment-list">
+                  {reportMoments.map((moment) => (
+                    <button
+                      className={`studio-moment${selectedMomentKey === moment.key ? " selected" : ""}`}
+                      key={moment.key}
+                      type="button"
+                      aria-pressed={selectedMomentKey === moment.key}
+                      aria-label={`${copy.playMoment}, ${time(moment.start_ms)} to ${time(moment.end_ms)}: ${moment.quote}`}
+                      onClick={() => seekToMoment(moment)}
+                    >
+                      <span className="studio-moment-time">
+                        <Play size={12} aria-hidden="true" />
+                        {time(moment.start_ms)}–{time(moment.end_ms)}
+                      </span>
+                      <span className="studio-moment-copy">
+                        <strong>{moment.findingTitle}</strong>
+                        <span>“{moment.quote}”</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="small-text">
+                  No source-linked moments were produced for this draft.
+                </p>
+              )}
+            </section>
+            {job.report.improvements[0] && (
+              <aside className="studio-practice-callout">
+                <span className="studio-practice-icon" aria-hidden="true">
+                  <ListChecks size={20} />
+                </span>
+                <div>
+                  <p className="eyebrow">{copy.practiceFocus}</p>
+                  <h2>{job.report.improvements[0].title}</h2>
+                  <p>{copy.practiceFocusIntro}</p>
+                  <p>{job.report.improvements[0].explanation}</p>
+                </div>
+              </aside>
+            )}
             {(
               [
                 ["What went well", job.report.strengths],
@@ -1554,12 +1884,18 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
                       {finding.evidence.map((e, j) => (
                         <blockquote key={j}>
                           <button
-                            className="text-button"
-                            onClick={() => {
-                              if (audio.current)
-                                audio.current.currentTime = e.start_ms / 1000;
-                            }}
+                            className={`text-button evidence-time-button${selectedMomentKey === `${e.segment_id}:${e.start_ms}:${e.end_ms}` ? " selected" : ""}`}
+                            type="button"
+                            aria-label={`${copy.playMoment}, ${time(e.start_ms)} to ${time(e.end_ms)}: ${e.quote}`}
+                            onClick={() =>
+                              seekToMoment({
+                                ...e,
+                                findingTitle: finding.title,
+                                key: `${e.segment_id}:${e.start_ms}:${e.end_ms}`,
+                              })
+                            }
                           >
+                            <Play size={12} aria-hidden="true" />
                             {time(e.start_ms)}–{time(e.end_ms)}
                           </button>{" "}
                           <small>{e.segment_id}</small> “{e.quote}”
