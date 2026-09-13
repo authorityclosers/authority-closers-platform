@@ -128,7 +128,7 @@ class _FakeStdin:
 class _FakeProcess:
     def __init__(self, *, fail_after: int | None = None, returncode: int = 0) -> None:
         self.stdin = _FakeStdin(fail_after=fail_after)
-        self.stdout = io.BytesIO()
+        self.stdout = io.BytesIO(b"\n204")
         self.stderr = io.BytesIO()
         self.returncode = returncode
         self.killed = False
@@ -268,3 +268,57 @@ def test_real_subprocess_accepts_detached_closed_stdin(
 
     assert code == 204
     assert body == b""
+
+
+def test_real_subprocess_timeout_is_injected_and_bounded(
+    uploader: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real_popen = uploader.subprocess.Popen
+
+    def local_process(_args, **kwargs):
+        return real_popen(
+            [
+                sys.executable,
+                "-c",
+                "import time; time.sleep(0.2); print('\\n204', end='')",
+            ],
+            **kwargs,
+        )
+
+    monkeypatch.setattr(uploader.subprocess, "Popen", local_process)
+    with pytest.raises(uploader.UploadOperatorError, match="timed out"):
+        uploader._run_remote(
+            ssh_target="ac",
+            command="safe-command",
+            cookie="D" * 43,
+            wait_timeout_seconds=0.05,
+        )
+
+
+def test_real_subprocess_response_is_stopped_at_bounded_limit(
+    uploader: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real_popen = uploader.subprocess.Popen
+
+    def local_process(_args, **kwargs):
+        return real_popen(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "import sys; "
+                    f"sys.stdout.buffer.write(b'x' * {uploader.MAX_RESPONSE_BYTES + 1}); "
+                    "sys.stdout.flush()"
+                ),
+            ],
+            **kwargs,
+        )
+
+    monkeypatch.setattr(uploader.subprocess, "Popen", local_process)
+    with pytest.raises(uploader.UploadOperatorError, match="bounded response"):
+        uploader._run_remote(
+            ssh_target="ac",
+            command="safe-command",
+            cookie="E" * 43,
+            wait_timeout_seconds=1,
+        )

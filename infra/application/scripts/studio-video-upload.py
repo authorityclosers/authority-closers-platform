@@ -27,6 +27,7 @@ import shlex
 import stat
 import subprocess
 import sys
+import threading
 import time
 import uuid
 import warnings
@@ -40,6 +41,9 @@ from urllib.parse import urlsplit
 
 MAX_SOURCE_BYTES = 2_000_000_000
 MAX_RESPONSE_BYTES = 1 * 1024 * 1024
+REMOTE_CONTROL_TIMEOUT_SECONDS = 30.0
+REMOTE_VIDEO_TIMEOUT_SECONDS = 1800.0
+REMOTE_EXIT_GRACE_SECONDS = 30.0
 MAX_POLL_SECONDS = 60.0
 MAX_POLL_TIMEOUT_SECONDS = 3600.0
 SESSION_COOKIE_ENV = "AC_STUDIO_SESSION_COOKIE"
@@ -260,7 +264,7 @@ def _remote_command(
     idempotency_key: str | None = None,
     read_body_line: bool = False,
     upload: bool = False,
-    timeout_seconds: int = 900,
+    timeout_seconds: int = int(REMOTE_CONTROL_TIMEOUT_SECONDS),
 ) -> str:
     if method not in {"GET", "POST", "PUT"}:
         raise UploadOperatorError("Unsupported canonical API method.")
@@ -316,11 +320,14 @@ def _run_remote(
     ssh_binary: str = "ssh",
     stream: BinaryIO | None = None,
     stream_bytes: int | None = None,
+    wait_timeout_seconds: float = REMOTE_CONTROL_TIMEOUT_SECONDS + REMOTE_EXIT_GRACE_SECONDS,
 ) -> tuple[int, bytes]:
     if ssh_target != "ac":
         raise UploadOperatorError("The operator tool permits only the reviewed SSH alias 'ac'.")
     if stream is not None and (type(stream_bytes) is not int or stream_bytes < 0):
         raise UploadOperatorError("The streamed video length is required.")
+    if not math.isfinite(wait_timeout_seconds) or not 0 < wait_timeout_seconds <= 3600:
+        raise UploadOperatorError("The SSH/API wait deadline is outside bounded limits.")
     # OpenSSH joins remote arguments into one login-shell command. Quote the
     # complete payload so semicolons and process substitution are interpreted
     # only by the intended ``bash -c`` process on the reviewed host.
@@ -349,6 +356,31 @@ def _run_remote(
     assert process.stdin is not None
     assert process.stdout is not None
     stdin = process.stdin
+    stdout_buffer = bytearray()
+    stdout_overflow = False
+    stdout_error: BaseException | None = None
+
+    def collect_stdout() -> None:
+        nonlocal stdout_overflow, stdout_error
+        try:
+            while True:
+                remaining = MAX_RESPONSE_BYTES + 1 - len(stdout_buffer)
+                chunk = process.stdout.read(min(64 * 1024, remaining))
+                if not chunk:
+                    return
+                stdout_buffer.extend(chunk)
+                if len(stdout_buffer) > MAX_RESPONSE_BYTES:
+                    stdout_overflow = True
+                    with suppress(Exception):
+                        process.kill()
+                    return
+        except BaseException as error:
+            stdout_error = error
+            with suppress(Exception):
+                process.kill()
+
+    reader = threading.Thread(target=collect_stdout, daemon=True)
+    reader.start()
     try:
         stdin.write(cookie.encode("ascii") + b"\n")
         if body:
@@ -365,14 +397,14 @@ def _run_remote(
             if stream.read(1):
                 raise UploadOperatorError("The video changed during streaming.")
         stdin.close()
-        # communicate() owns stdin unless it is detached. Some supported
-        # Python runtimes otherwise flush the already-closed pipe again.
+        # Detach the closed handle from Popen's lifecycle before waiting.
         process.stdin = None
     except (BrokenPipeError, OSError) as error:
         with suppress(Exception):
             process.kill()
         with suppress(Exception):
             process.wait(timeout=10)
+        reader.join(timeout=10)
         raise UploadOperatorError(
             "The SSH/API stream closed before the upload completed."
         ) from error
@@ -383,20 +415,27 @@ def _run_remote(
             process.kill()
         with suppress(Exception):
             process.wait(timeout=10)
+        reader.join(timeout=10)
         raise
     try:
-        stdout, _stderr = process.communicate(timeout=30)
+        process.wait(timeout=wait_timeout_seconds)
     except subprocess.TimeoutExpired as error:
         with suppress(Exception):
             process.kill()
         with suppress(Exception):
             process.wait(timeout=10)
+        reader.join(timeout=10)
         raise UploadOperatorError("The SSH/API command timed out.") from error
-    if len(stdout) > MAX_RESPONSE_BYTES:
+    reader.join(timeout=10)
+    if reader.is_alive():
+        raise UploadOperatorError("The SSH API response reader did not finish.")
+    if stdout_error is not None:
+        raise UploadOperatorError("The SSH API response could not be read.") from stdout_error
+    if stdout_overflow:
         raise UploadOperatorError("The SSH API response exceeded the bounded response limit.")
     if process.returncode not in {0, 22}:
         raise UploadOperatorError("The SSH/API command failed before a canonical response arrived.")
-    return _status_from_output(stdout)
+    return _status_from_output(bytes(stdout_buffer))
 
 
 def _json_response(code: int, body: bytes, operation: str) -> object:
@@ -482,6 +521,7 @@ def put_video(
         path=intent.upload_path,
         headers=headers,
         upload=True,
+        timeout_seconds=int(REMOTE_VIDEO_TIMEOUT_SECONDS),
     )
     try:
         with file.path.open("rb") as stream:
@@ -492,6 +532,7 @@ def put_video(
                 ssh_binary=ssh_binary,
                 stream=stream,
                 stream_bytes=file.byte_length,
+                wait_timeout_seconds=REMOTE_VIDEO_TIMEOUT_SECONDS + REMOTE_EXIT_GRACE_SECONDS,
             )
     except OSError as error:
         raise UploadOperatorError("The video could not be opened for streaming.") from error
@@ -508,19 +549,24 @@ def _json_command(
     ssh_binary: str,
     method: str = "GET",
     idempotency_key: str | None = None,
+    timeout_seconds: float = REMOTE_CONTROL_TIMEOUT_SECONDS,
 ) -> object:
+    if not math.isfinite(timeout_seconds) or not 0 < timeout_seconds <= 3600:
+        raise UploadOperatorError("The SSH/API request deadline is outside bounded limits.")
     command = _remote_command(
         method=method,
         profile=profile,
         path=path,
         headers={},
         idempotency_key=idempotency_key,
+        timeout_seconds=int(timeout_seconds),
     )
     code, body = _run_remote(
         ssh_target=ssh_target,
         command=command,
         cookie=cookie,
         ssh_binary=ssh_binary,
+        wait_timeout_seconds=timeout_seconds + REMOTE_EXIT_GRACE_SECONDS,
     )
     return _json_response(code, body, method.lower())
 
@@ -556,6 +602,7 @@ def complete_and_poll(
         ssh_binary=ssh_binary,
         method="POST",
         idempotency_key=key,
+        timeout_seconds=REMOTE_VIDEO_TIMEOUT_SECONDS,
     )
     if not isinstance(response, dict):
         raise UploadOperatorError("The completion response was not an object.")
