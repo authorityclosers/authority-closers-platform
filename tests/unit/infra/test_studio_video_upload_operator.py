@@ -8,6 +8,7 @@ import json
 import os
 import shlex
 import sys
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import ModuleType
@@ -33,6 +34,175 @@ def _file(module: ModuleType) -> Any:
         123,
         "a" * 64,
         (1, 2, 123, 4),
+    )
+
+
+def test_scp_cache_is_verified_before_intent_and_removed_after_success(
+    uploader, tmp_path, monkeypatch
+):
+    video = tmp_path / "fixture.mp4"
+    video.write_bytes(b"fixture video")
+    actions = []
+    cache = uploader.RemoteInputCache(
+        uploader.REMOTE_STAGE_ROOT + "a" * 32,
+        uploader.REMOTE_STAGE_ROOT + "a" * 32 + "/input.data",
+    )
+
+    @contextmanager
+    def staged(**kwargs):
+        actions.append("verified cache")
+        yield cache
+        actions.append("cache removed")
+
+    monkeypatch.setattr(uploader, "remote_input_cache", staged)
+    monkeypatch.setattr(uploader, "_read_session_cookie", lambda: "S" * 43)
+    monkeypatch.setattr(
+        uploader,
+        "create_intent",
+        lambda **kw: actions.append("intent") or type("Intent", (), {"upload_id": "test-upload"})(),
+    )
+
+    def put(**kwargs):
+        assert kwargs["remote_source"] == cache.file_path
+        actions.append("canonical bytes")
+
+    monkeypatch.setattr(uploader, "put_video", put)
+    monkeypatch.setattr(
+        uploader,
+        "complete_and_poll",
+        lambda **kw: actions.append("complete/status") or {"state": "ready"},
+    )
+    assert (
+        uploader.main(
+            [
+                "--video",
+                str(video),
+                "--program-id",
+                "11111111-1111-4111-8111-111111111111",
+                "--transport",
+                "scp",
+            ]
+        )
+        == 0
+    )
+    assert actions == [
+        "verified cache",
+        "intent",
+        "canonical bytes",
+        "complete/status",
+        "cache removed",
+    ]
+
+
+def test_scp_transfer_failure_never_creates_an_upload_intent(uploader, tmp_path, monkeypatch):
+    video = tmp_path / "fixture.mp4"
+    video.write_bytes(b"fixture")
+    monkeypatch.setattr(uploader, "_read_session_cookie", lambda: "S" * 43)
+
+    def failure(**kwargs):
+        raise uploader.UploadOperatorError("Transfer failed")
+
+    def unexpected(**kwargs):
+        raise AssertionError("Intent must wait for verified staging")
+
+    monkeypatch.setattr(uploader, "remote_input_cache", failure)
+    monkeypatch.setattr(uploader, "create_intent", unexpected)
+    assert (
+        uploader.main(
+            [
+                "--video",
+                str(video),
+                "--program-id",
+                "11111111-1111-4111-8111-111111111111",
+                "--transport",
+                "scp",
+            ]
+        )
+        == 2
+    )
+
+
+def test_private_staging_reads_bounded_parts_and_cleans_up_on_error(
+    uploader, tmp_path, monkeypatch
+):
+    video = tmp_path / "fixture.mp4"
+    video.write_bytes(b"abcdefghijkl")
+    file = uploader.inspect_file(video)
+    monkeypatch.setattr(uploader, "SCP_CHUNK_BYTES", 5)
+    scripts = []
+    monkeypatch.setattr(uploader, "_run_staging_ssh", lambda **kw: scripts.append(kw["script"]))
+    parts = []
+
+    def copy(**kwargs):
+        value = kwargs["local_part"].read_bytes()
+        parts.append(value)
+        assert kwargs["part_size"] == len(value)
+        assert kwargs["part_digest"] == uploader.hashlib.sha256(value).hexdigest()
+
+    monkeypatch.setattr(uploader, "_copy_staging_part", copy)
+    with uploader.remote_input_cache(
+        file=file, ssh_target="ac", ssh_binary="ssh", scp_binary="scp"
+    ):
+        assert parts == [b"abcde", b"fghij", b"kl"]
+        assert file.checksum_sha256 in scripts[-1]
+    assert "rm -rf" in scripts[-1]
+    with (
+        pytest.raises(RuntimeError),
+        uploader.remote_input_cache(file=file, ssh_target="ac", ssh_binary="ssh", scp_binary="scp"),
+    ):
+        raise RuntimeError("canonical API failed")
+    assert "rm -rf" in scripts[-1]
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/srv/media/input.data",
+        "/var/tmp/ac-studio-video-input-../input.data",  # noqa: S108 - rejected traversal input
+        "/var/tmp/ac-studio-video-input-" + "a" * 32 + "/../../etc/passwd",  # noqa: S108
+    ],
+)
+def test_remote_cache_paths_cannot_target_authoritative_or_unrelated_files(uploader, path):
+    with pytest.raises(uploader.UploadOperatorError):
+        uploader._remote_command(
+            method="PUT",
+            profile=uploader.edge_profile("https://coach.authorityclosers.com"),
+            path="/v1/upload",
+            headers={},
+            upload=True,
+            upload_source=path,
+        )
+
+
+@pytest.mark.skipif(
+    os.name != "nt" or os.environ.get("AC_RUN_OPERATOR_NETWORK_PROOF") != "1",
+    reason="opt-in private SSH cache roundtrip",
+)
+def test_real_private_scp_cache_roundtrip_and_cleanup(uploader, tmp_path, monkeypatch):
+    video = tmp_path / "synthetic-roundtrip.mp4"
+    video.write_bytes(bytes(range(256)) * 8193)
+    envelope = uploader.inspect_file(video)
+    monkeypatch.setattr(uploader, "SCP_CHUNK_BYTES", 1024 * 1024)
+    with uploader.remote_input_cache(
+        file=envelope,
+        ssh_target="ac",
+        ssh_binary=r"C:\Windows\System32\OpenSSH\ssh.exe",
+        scp_binary=r"C:\Windows\System32\OpenSSH\scp.exe",
+    ) as cache:
+        uploader._run_staging_ssh(
+            script=f"set -eu\ntest -f {shlex.quote(cache.file_path)}\n"
+            f"test $(stat -c %a {shlex.quote(cache.directory)}) = 700\n"
+            f"printf '%s  %s\\n' {envelope.checksum_sha256} {shlex.quote(cache.file_path)} "
+            "| sha256sum --check --status\n",
+            ssh_target="ac",
+            ssh_binary=r"C:\Windows\System32\OpenSSH\ssh.exe",
+            wait_timeout_seconds=30,
+        )
+    uploader._run_staging_ssh(
+        script=f"test ! -e {shlex.quote(cache.directory)}\n",
+        ssh_target="ac",
+        ssh_binary=r"C:\Windows\System32\OpenSSH\ssh.exe",
+        wait_timeout_seconds=30,
     )
 
 

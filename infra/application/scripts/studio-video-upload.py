@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-"""Stream one local Studio video through the canonical authenticated API.
+"""Send one local Studio video through the canonical authenticated API.
 
 The operator runs this from a trusted workstation after signing in on Coach.
-The video is never copied to the VPS: its bytes are piped through ``ssh ac``
-to the loopback Caddy route, which preserves the normal upload intent, audit,
-scanner, processing and catalog boundaries.  The session cookie is read from
-hidden input (or a private, ephemeral environment variable) and is sent only
-as the first line of the SSH stdin stream; it is never an argument, log line,
-or persisted file.
+The default transport pipes bytes through ``ssh ac`` to the loopback Caddy
+route.  The opt-in ``scp`` transport sends verified 16 MiB parts to a private,
+temporary VPS cache, then uses the same loopback API request from that cache;
+the cache is deleted after the canonical lifecycle finishes.  It is never
+authoritative media or a database recovery path.  The session cookie is read
+from hidden input (or a private, ephemeral environment variable) and is sent
+only as the first line of canonical API SSH stdin; it is never an argument,
+log line, or persisted file.
 
 This is deliberately a whole-object uploader.  The application contract has
 no resumable or range upload operation, so an interrupted PUT must restart
@@ -27,12 +29,13 @@ import shlex
 import stat
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import uuid
 import warnings
 from collections.abc import Mapping, Sequence
-from contextlib import suppress
+from contextlib import contextmanager, nullcontext, suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -51,6 +54,11 @@ REMOTE_EXIT_GRACE_SECONDS = 30.0
 BROKEN_PIPE_DRAIN_SECONDS = 2.0
 MAX_POLL_SECONDS = 60.0
 MAX_POLL_TIMEOUT_SECONDS = 3600.0
+SCP_CHUNK_BYTES = 16 * 1024 * 1024
+SCP_MAX_ATTEMPTS = 4
+SCP_PART_TIMEOUT_SECONDS = 300.0
+REMOTE_STAGE_TIMEOUT_SECONDS = 3600.0
+REMOTE_STAGE_ROOT = "/var/tmp/ac-studio-video-input-"  # noqa: S108 - random UUID, exclusive mkdir, mode 0700
 SESSION_COOKIE_ENV = "AC_STUDIO_SESSION_COOKIE"
 HTTP_STATUS_MARKER = b"\nAC_HTTP_STATUS:"
 SESSION_PATTERN = re.compile(r"[A-Za-z0-9_-]{43,512}\Z")
@@ -97,6 +105,12 @@ class UploadIntent:
     max_bytes: int
 
 
+@dataclass(frozen=True, slots=True)
+class RemoteInputCache:
+    directory: str
+    file_path: str
+
+
 def _require_uuid(value: object, label: str) -> str:
     if not isinstance(value, str) or UUID_PATTERN.fullmatch(value) is None:
         raise UploadOperatorError(f"{label} must be a UUID.")
@@ -106,6 +120,24 @@ def _require_uuid(value: object, label: str) -> str:
 def _require_idempotency(value: str) -> str:
     if SAFE_IDEMPOTENCY_PATTERN.fullmatch(value) is None:
         raise UploadOperatorError("The idempotency key is invalid.")
+    return value
+
+
+def _remote_input_cache_path(value: str, *, file_name: str | None = None) -> str:
+    expected_name = file_name or "input.data"
+    expected = re.escape(expected_name)
+    pattern = rf"{re.escape(REMOTE_STAGE_ROOT)}[0-9a-f]{{32}}/{expected}"
+    if re.fullmatch(pattern, value) is None:
+        raise UploadOperatorError("The remote input path is outside the private operator cache.")
+    return value
+
+
+def _remote_input_directory(value: str) -> str:
+    pattern = rf"{re.escape(REMOTE_STAGE_ROOT)}[0-9a-f]{{32}}"
+    if re.fullmatch(pattern, value) is None:
+        raise UploadOperatorError(
+            "The remote input directory is outside the private operator cache."
+        )
     return value
 
 
@@ -270,10 +302,15 @@ def _remote_command(
     idempotency_key: str | None = None,
     read_body_line: bool = False,
     upload: bool = False,
+    upload_source: str | None = None,
     timeout_seconds: int = int(REMOTE_CONTROL_TIMEOUT_SECONDS),
 ) -> str:
     if method not in {"GET", "POST", "PUT"}:
         raise UploadOperatorError("Unsupported canonical API method.")
+    if upload_source is not None:
+        _remote_input_cache_path(upload_source)
+    if upload_source is not None and not upload:
+        raise UploadOperatorError("A remote upload source requires an upload request.")
     _require_idempotency(idempotency_key) if idempotency_key is not None else None
     prefix = [
         "set -euo pipefail",
@@ -309,7 +346,9 @@ def _remote_command(
         # explicitly remove the generated header so the signed length is the
         # only request framing authority.
         curl.extend(("--header", shlex.quote("Transfer-Encoding:")))
-        curl.append("--upload-file -")
+        curl.append(
+            "--upload-file " + (shlex.quote(upload_source) if upload_source is not None else "-")
+        )
         curl.append("--output /dev/null")
     curl.append(shlex.quote(profile.loopback_base + path))
     return "; ".join(prefix) + "; " + " ".join(curl)
@@ -328,6 +367,406 @@ def _status_from_output(output: bytes) -> tuple[int, bytes]:
         raise UploadOperatorError("The SSH API response had no HTTP status.") from error
     body = output[:marker_offset]
     return code, body
+
+
+def _run_staging_ssh(
+    *,
+    script: str,
+    ssh_target: str,
+    ssh_binary: str,
+    wait_timeout_seconds: float,
+) -> None:
+    if ssh_target != "ac":
+        raise UploadOperatorError("The operator tool permits only the reviewed SSH alias 'ac'.")
+    if not math.isfinite(wait_timeout_seconds) or not 0 < wait_timeout_seconds <= 3600:
+        raise UploadOperatorError("The private staging SSH deadline is outside bounded limits.")
+    remote_argv = [
+        ssh_binary,
+        "-T",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "ConnectTimeout=15",
+        "-o",
+        "ServerAliveInterval=30",
+        "-o",
+        "ServerAliveCountMax=2",
+        ssh_target,
+        "bash",
+        "-s",
+    ]
+    try:
+        result = subprocess.run(  # noqa: S603 - reviewed SSH alias and bash stdin only
+            remote_argv,
+            input=script.encode("utf-8"),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=wait_timeout_seconds,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise UploadOperatorError("The private staging SSH command timed out.") from error
+    except OSError as error:
+        raise UploadOperatorError("The private staging SSH command could not start.") from error
+    if result.returncode != 0:
+        raise UploadOperatorError("The private staging SSH command failed.")
+
+
+def _private_stage_script(directory: str) -> str:
+    directory = _remote_input_directory(directory)
+    quoted = shlex.quote(directory)
+    return (
+        "\n".join(
+            (
+                "set -euo pipefail",
+                "umask 077",
+                f"directory={quoted}",
+                'test ! -e "$directory"',
+                'test ! -L "$directory"',
+                'mkdir -- "$directory"',
+                'chmod 700 -- "$directory"',
+                'test -d "$directory"',
+                'test ! -L "$directory"',
+                "printf 'ready\\n'",
+            )
+        )
+        + "\n"
+    )
+
+
+def _stage_part_verification_script(
+    *,
+    directory: str,
+    part_index: int,
+    part_size: int,
+    part_digest: str,
+) -> str:
+    directory = _remote_input_directory(directory)
+    if type(part_index) is not int or part_index < 0:
+        raise UploadOperatorError("The private staging part index is invalid.")
+    if type(part_size) is not int or part_size <= 0 or part_size > SCP_CHUNK_BYTES:
+        raise UploadOperatorError("The private staging part size is invalid.")
+    if re.fullmatch(r"[0-9a-f]{64}", part_digest) is None:
+        raise UploadOperatorError("The private staging part digest is invalid.")
+    part_name = f"part-{part_index:08d}"
+    partial_path = f"{directory}/{part_name}.partial"
+    final_path = f"{directory}/{part_name}"
+    quoted_partial = shlex.quote(partial_path)
+    quoted_final = shlex.quote(final_path)
+    return (
+        "\n".join(
+            (
+                "set -euo pipefail",
+                f"partial={quoted_partial}",
+                f"final={quoted_final}",
+                f"expected_size={part_size}",
+                f"expected_digest={shlex.quote(part_digest)}",
+                # A previous verification may have committed before SSH disconnected.
+                # Accept only an exact verified final part on retry.
+                'if test -f "$final" && ! test -L "$final"; then',
+                '  test "$(stat --format=\'%s\' -- "$final")" = "$expected_size"',
+                '  printf \'%s  %s\\n\' "$expected_digest" "$final" | sha256sum --check --status',
+                '  test ! -L "$partial"',
+                '  rm -f -- "$partial"',
+                "  exit 0",
+                "fi",
+                'test ! -L "$partial"',
+                'test -f "$partial"',
+                "actual_size=$(stat --format='%s' -- \"$partial\")",
+                'test "$actual_size" = "$expected_size"',
+                'printf \'%s  %s\\n\' "$expected_digest" "$partial" | sha256sum --check --status',
+                'test ! -e "$final"',
+                'test ! -L "$final"',
+                'mv -- "$partial" "$final"',
+                'test ! -e "$partial"',
+                'test ! -L "$final"',
+            )
+        )
+        + "\n"
+    )
+
+
+def _remote_stage_finalization_script(
+    *,
+    directory: str,
+    part_count: int,
+    expected_bytes: int,
+    expected_digest: str,
+) -> str:
+    directory = _remote_input_directory(directory)
+    if type(part_count) is not int or not 0 < part_count <= MAX_SOURCE_BYTES // SCP_CHUNK_BYTES + 1:
+        raise UploadOperatorError("The private staging part count is invalid.")
+    if type(expected_bytes) is not int or not 0 < expected_bytes <= MAX_SOURCE_BYTES:
+        raise UploadOperatorError("The private staging byte length is invalid.")
+    if re.fullmatch(r"[0-9a-f]{64}", expected_digest) is None:
+        raise UploadOperatorError("The private staging digest is invalid.")
+    output = f"{directory}/input.data"
+    lines = [
+        "set -euo pipefail",
+        "umask 077",
+        f"directory={shlex.quote(directory)}",
+        f"output={shlex.quote(output)}",
+        f"expected_bytes={expected_bytes}",
+        f"expected_digest={shlex.quote(expected_digest)}",
+        'test -d "$directory"',
+        'test ! -L "$directory"',
+        'test ! -e "$output"',
+        'test ! -L "$output"',
+        ': > "$output"',
+    ]
+    for part_index in range(part_count):
+        part_path = f"{directory}/part-{part_index:08d}"
+        lines.extend(
+            (
+                f"part={shlex.quote(part_path)}",
+                'test -f "$part"',
+                'test ! -L "$part"',
+                'cat -- "$part" >> "$output"',
+            )
+        )
+    lines.extend(
+        (
+            "actual_bytes=$(stat --format='%s' -- \"$output\")",
+            'test "$actual_bytes" = "$expected_bytes"',
+            'printf \'%s  %s\\n\' "$expected_digest" "$output" | sha256sum --check --status',
+            'chmod 600 -- "$output"',
+        )
+    )
+    for part_index in range(part_count):
+        lines.append(f"rm -- {shlex.quote(f'{directory}/part-{part_index:08d}')}")
+    return "\n".join(lines) + "\n"
+
+
+def _remote_stage_cleanup_script(directory: str) -> str:
+    directory = _remote_input_directory(directory)
+    quoted = shlex.quote(directory)
+    return (
+        "\n".join(
+            (
+                "set -euo pipefail",
+                f"directory={quoted}",
+                'if test -L "$directory"; then exit 1; fi',
+                'if test -e "$directory"; then',
+                '  test -d "$directory"',
+                '  rm -rf -- "$directory"',
+                "fi",
+            )
+        )
+        + "\n"
+    )
+
+
+def _copy_staging_part(
+    *,
+    local_part: Path,
+    remote_directory: str,
+    part_index: int,
+    part_size: int,
+    part_digest: str,
+    ssh_target: str,
+    ssh_binary: str,
+    scp_binary: str,
+    deadline: float,
+) -> None:
+    if ssh_target != "ac":
+        raise UploadOperatorError("The operator tool permits only the reviewed SSH alias 'ac'.")
+    directory = _remote_input_directory(remote_directory)
+    if type(part_index) is not int or part_index < 0:
+        raise UploadOperatorError("The private staging part index is invalid.")
+    part_name = f"part-{part_index:08d}"
+    remote_partial = f"{directory}/{part_name}.partial"
+    try:
+        part_info = local_part.stat()
+    except OSError as error:
+        raise UploadOperatorError("The local staging part could not be inspected.") from error
+    if not stat.S_ISREG(part_info.st_mode) or part_info.st_size != part_size:
+        raise UploadOperatorError("The local staging part has an unexpected size.")
+    arguments = [
+        scp_binary,
+        "-q",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "ConnectTimeout=15",
+        "-o",
+        "ServerAliveInterval=30",
+        "-o",
+        "ServerAliveCountMax=2",
+        str(local_part),
+        f"{ssh_target}:{remote_partial}",
+    ]
+    for attempt in range(1, SCP_MAX_ATTEMPTS + 1):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise UploadOperatorError("The private staging transfer timed out.")
+        try:
+            result = subprocess.run(  # noqa: S603 - fixed remote alias and generated cache path
+                arguments,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=min(SCP_PART_TIMEOUT_SECONDS, remaining),
+                check=False,
+            )
+        except subprocess.TimeoutExpired:
+            result = None
+        except OSError as error:
+            raise UploadOperatorError("The SCP staging command could not start.") from error
+        if result is not None and result.returncode == 0:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise UploadOperatorError("The private staging transfer timed out.")
+            try:
+                _run_staging_ssh(
+                    script=_stage_part_verification_script(
+                        directory=directory,
+                        part_index=part_index,
+                        part_size=part_size,
+                        part_digest=part_digest,
+                    ),
+                    ssh_target=ssh_target,
+                    ssh_binary=ssh_binary,
+                    wait_timeout_seconds=min(REMOTE_CONTROL_TIMEOUT_SECONDS, remaining),
+                )
+                return
+            except UploadOperatorError:
+                pass
+        if attempt == SCP_MAX_ATTEMPTS:
+            raise UploadOperatorError(
+                f"The private staging part {part_index} failed after {attempt} attempts."
+            )
+        time.sleep(2.0)
+
+
+def stage_remote_input(
+    *,
+    file: FileEnvelope,
+    ssh_target: str,
+    ssh_binary: str,
+    scp_binary: str,
+) -> RemoteInputCache:
+    current = file.path.stat()
+    if _path_identity(current) != file.stat_identity:
+        raise UploadOperatorError("The video changed before private staging began.")
+    remote_directory = f"{REMOTE_STAGE_ROOT}{uuid.uuid4().hex}"
+    remote_file = f"{remote_directory}/input.data"
+    _remote_input_directory(remote_directory)
+    _remote_input_cache_path(remote_file)
+    deadline = time.monotonic() + REMOTE_STAGE_TIMEOUT_SECONDS
+    try:
+        _run_staging_ssh(
+            script=_private_stage_script(remote_directory),
+            ssh_target=ssh_target,
+            ssh_binary=ssh_binary,
+            wait_timeout_seconds=REMOTE_CONTROL_TIMEOUT_SECONDS,
+        )
+        part_count = 0
+        with (
+            tempfile.TemporaryDirectory(prefix="ac-studio-video-parts-") as local_directory,
+            file.path.open("rb") as source,
+        ):
+            remaining = file.byte_length
+            while remaining:
+                part_size = min(SCP_CHUNK_BYTES, remaining)
+                part_path = Path(local_directory) / f"part-{part_count:08d}"
+                digest = hashlib.sha256()
+                part_remaining = part_size
+                try:
+                    with part_path.open("xb") as part:
+                        while part_remaining:
+                            chunk = source.read(min(1024 * 1024, part_remaining))
+                            if not chunk:
+                                raise UploadOperatorError(
+                                    "The video changed during private staging."
+                                )
+                            part.write(chunk)
+                            digest.update(chunk)
+                            part_remaining -= len(chunk)
+                except OSError as error:
+                    raise UploadOperatorError(
+                        "The local staging part could not be written."
+                    ) from error
+                _copy_staging_part(
+                    local_part=part_path,
+                    remote_directory=remote_directory,
+                    part_index=part_count,
+                    part_size=part_size,
+                    part_digest=digest.hexdigest(),
+                    ssh_target=ssh_target,
+                    ssh_binary=ssh_binary,
+                    scp_binary=scp_binary,
+                    deadline=deadline,
+                )
+                part_path.unlink(missing_ok=True)
+                remaining -= part_size
+                part_count += 1
+            if source.read(1):
+                raise UploadOperatorError("The video changed during private staging.")
+        current = file.path.stat()
+        if _path_identity(current) != file.stat_identity:
+            raise UploadOperatorError("The video changed during private staging.")
+        _run_staging_ssh(
+            script=_remote_stage_finalization_script(
+                directory=remote_directory,
+                part_count=part_count,
+                expected_bytes=file.byte_length,
+                expected_digest=file.checksum_sha256,
+            ),
+            ssh_target=ssh_target,
+            ssh_binary=ssh_binary,
+            wait_timeout_seconds=min(
+                REMOTE_CONTROL_TIMEOUT_SECONDS,
+                max(1.0, deadline - time.monotonic()),
+            ),
+        )
+        return RemoteInputCache(remote_directory, remote_file)
+    except BaseException:
+        with suppress(UploadOperatorError):
+            _run_staging_ssh(
+                script=_remote_stage_cleanup_script(remote_directory),
+                ssh_target=ssh_target,
+                ssh_binary=ssh_binary,
+                wait_timeout_seconds=REMOTE_CONTROL_TIMEOUT_SECONDS,
+            )
+        raise
+
+
+def cleanup_remote_input_cache(
+    cache: RemoteInputCache,
+    *,
+    ssh_target: str,
+    ssh_binary: str,
+) -> None:
+    _remote_input_directory(cache.directory)
+    _remote_input_cache_path(cache.file_path)
+    _run_staging_ssh(
+        script=_remote_stage_cleanup_script(cache.directory),
+        ssh_target=ssh_target,
+        ssh_binary=ssh_binary,
+        wait_timeout_seconds=REMOTE_CONTROL_TIMEOUT_SECONDS,
+    )
+
+
+@contextmanager
+def remote_input_cache(
+    *,
+    file: FileEnvelope,
+    ssh_target: str,
+    ssh_binary: str,
+    scp_binary: str,
+):
+    cache = stage_remote_input(
+        file=file,
+        ssh_target=ssh_target,
+        ssh_binary=ssh_binary,
+        scp_binary=scp_binary,
+    )
+    try:
+        yield cache
+    except BaseException:
+        with suppress(UploadOperatorError):
+            cleanup_remote_input_cache(cache, ssh_target=ssh_target, ssh_binary=ssh_binary)
+        raise
+    cleanup_remote_input_cache(cache, ssh_target=ssh_target, ssh_binary=ssh_binary)
 
 
 def _run_remote(
@@ -493,10 +932,15 @@ def _run_remote(
         raise UploadOperatorError("The SSH API response could not be read.") from stdout_error
     if stdout_overflow:
         raise UploadOperatorError("The SSH API response exceeded the bounded response limit.")
+    with stdout_lock:
+        response = _status_from_output(bytes(stdout_buffer))
+    # The reader deliberately stops SSH after a canonical rejection. Its exit
+    # code must not replace the already received API response with a pipe error.
+    if not 200 <= response[0] < 300:
+        return response
     if process.returncode not in {0, 22}:
         raise UploadOperatorError("The SSH/API command failed before a canonical response arrived.")
-    with stdout_lock:
-        return _status_from_output(bytes(stdout_buffer))
+    return response
 
 
 def _json_response(code: int, body: bytes, operation: str) -> object:
@@ -563,6 +1007,7 @@ def put_video(
     cookie: str,
     ssh_target: str,
     ssh_binary: str,
+    remote_source: str | None = None,
 ) -> None:
     if intent.expires_at <= datetime.now(UTC):
         raise UploadOperatorError("The upload intent expired before byte streaming began.")
@@ -582,17 +1027,18 @@ def put_video(
         path=intent.upload_path,
         headers=headers,
         upload=True,
+        upload_source=remote_source,
         timeout_seconds=int(REMOTE_VIDEO_TIMEOUT_SECONDS),
     )
     try:
-        with file.path.open("rb") as stream:
+        with file.path.open("rb") if remote_source is None else nullcontext() as stream:
             code, _ = _run_remote(
                 ssh_target=ssh_target,
                 command=command,
                 cookie=cookie,
                 ssh_binary=ssh_binary,
                 stream=stream,
-                stream_bytes=file.byte_length,
+                stream_bytes=file.byte_length if stream is not None else None,
                 wait_timeout_seconds=REMOTE_VIDEO_TIMEOUT_SECONDS + REMOTE_EXIT_GRACE_SECONDS,
             )
     except OSError as error:
@@ -704,6 +1150,8 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--filename")
     parser.add_argument("--ssh-target", default="ac")
     parser.add_argument("--ssh-binary", default="ssh")
+    parser.add_argument("--transport", choices=("ssh", "scp"), default="ssh")
+    parser.add_argument("--scp-binary", default="scp")
     parser.add_argument("--poll-seconds", type=float, default=10.0)
     parser.add_argument("--poll-timeout", type=float, default=1800.0)
     return parser
@@ -735,43 +1183,59 @@ def main(argv: Sequence[str] | None = None) -> int:
         cookie = _read_session_cookie()
         if SESSION_PATTERN.fullmatch(cookie) is None:
             raise UploadOperatorError("The Coach session cookie is malformed.")
-        intent = create_intent(
-            profile=profile,
-            program_id=args.program_id,
-            filename=filename,
-            content_type=content_type,
-            file=file,
-            cookie=cookie,
-            ssh_target=args.ssh_target,
-            ssh_binary=args.ssh_binary,
-        )
-        put_video(
-            profile=profile,
-            program_id=args.program_id,
-            intent=intent,
-            file=file,
-            cookie=cookie,
-            ssh_target=args.ssh_target,
-            ssh_binary=args.ssh_binary,
-        )
-        status = complete_and_poll(
-            profile=profile,
-            program_id=args.program_id,
-            intent=intent,
-            cookie=cookie,
-            ssh_target=args.ssh_target,
-            ssh_binary=args.ssh_binary,
-            poll_seconds=args.poll_seconds,
-            poll_timeout=args.poll_timeout,
-        )
-        print(
-            f"Studio video ready: upload_id={intent.upload_id} "
-            f"bytes={file.byte_length} state={status.get('state')}"
-        )
-        return 0
+        with (
+            remote_input_cache(
+                file=file,
+                ssh_target=args.ssh_target,
+                ssh_binary=args.ssh_binary,
+                scp_binary=args.scp_binary,
+            )
+            if args.transport == "scp"
+            else nullcontext()
+        ) as cache:
+            return _upload_admitted(args, profile, filename, content_type, file, cookie, cache)
     except (UploadOperatorError, OSError, ValueError) as error:
         print(f"Studio video upload refused: {error}", file=sys.stderr)
         return 2
+
+
+def _upload_admitted(args, profile, filename, content_type, file, cookie, cache) -> int:
+    # Admit only after staging; a slow workstation transfer consumes no intent lifetime.
+    intent = create_intent(
+        profile=profile,
+        program_id=args.program_id,
+        filename=filename,
+        content_type=content_type,
+        file=file,
+        cookie=cookie,
+        ssh_target=args.ssh_target,
+        ssh_binary=args.ssh_binary,
+    )
+    put_video(
+        profile=profile,
+        program_id=args.program_id,
+        intent=intent,
+        file=file,
+        cookie=cookie,
+        ssh_target=args.ssh_target,
+        ssh_binary=args.ssh_binary,
+        remote_source=cache.file_path if cache else None,
+    )
+    status = complete_and_poll(
+        profile=profile,
+        program_id=args.program_id,
+        intent=intent,
+        cookie=cookie,
+        ssh_target=args.ssh_target,
+        ssh_binary=args.ssh_binary,
+        poll_seconds=args.poll_seconds,
+        poll_timeout=args.poll_timeout,
+    )
+    print(
+        f"Studio video ready: upload_id={intent.upload_id} "
+        f"bytes={file.byte_length} state={status.get('state')}"
+    )
+    return 0
 
 
 if __name__ == "__main__":
