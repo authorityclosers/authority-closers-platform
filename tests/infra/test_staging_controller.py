@@ -26,6 +26,7 @@ def test_staging_controller_is_exact_sha_and_idempotent() -> None:
     assert "RecoveryWorkflowSha" in CONTROLLER
     assert "reviewed recovery workflow run" in CONTROLLER
     assert '".github/workflows/application-recovery.yml"' in CONTROLLER
+    assert '".github/workflows/application.yml"' in CONTROLLER
     assert '"sha256:$artifactDigest" -ne $artifact.digest' in CONTROLLER
     assert '$run.conclusion -ne "success"' in CONTROLLER
     assert "verify-release-archive.py" in CONTROLLER

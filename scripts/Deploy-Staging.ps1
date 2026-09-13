@@ -848,7 +848,11 @@ if ($run.status -ne "completed" -or $run.conclusion -ne "success") {
     throw "The exact-SHA packaging run is not successful."
 }
 $runHeadSha = [string]$run.head_sha
-$standardReleaseRun = $runHeadSha -eq $ReleaseSha
+$standardReleaseRun = (
+    $runHeadSha -eq $ReleaseSha -and
+    [string]$run.event -eq "workflow_dispatch" -and
+    [string]$run.path -eq ".github/workflows/application.yml"
+)
 $recoveryReleaseRun = (
     $recoveryWorkflowRequested -and
     $runHeadSha -eq $RecoveryWorkflowSha -and
