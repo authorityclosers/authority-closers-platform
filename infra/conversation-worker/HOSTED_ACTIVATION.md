@@ -89,7 +89,9 @@ delivery operator; it is never placed in a Compose environment file, command
 argument, image or log. Its fixed basename and metadata are part of activation:
 it must be a singly-linked regular file no larger than 4 KiB, owned by UID
 `10001`, GID `0`, mode `0400`. Every existing parent must be a root-owned,
-non-writable directory with execute access for UID/GID10001. The operator
+non-writable directory with no symlink. Docker resolves the host-side bind as
+root; the API only sees `/run/ac-sales-xray/challenge-secret`, so private `0700`
+source parents are valid. The operator
 creates or rotates it atomically and verifies those facts without printing its
 contents. `sales-xray-hosted.py compose-inputs` repeats the no-symlink, regular
 file, size, ownership and mode checks before Compose receives the path. See

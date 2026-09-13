@@ -6,8 +6,10 @@ enabled acquisition settings, public challenge site key, policy revision and a
 narrow challenge-only file mount. The challenge source is the fixed
 `challenge-secret` file, bounded to 4 KiB and provisioned for the API runtime as
 UID10001:GID0 mode0400; the release validator checks this metadata without
-opening its contents. Provider identity mounts remain worker-only. Gemini has its
-own provider-specific directory alongside ElevenLabs and Groq.
+opening its contents. Root-owned non-writable source parents may remain private
+0700 directories because Docker resolves the host-side bind as root. Provider
+identity mounts remain worker-only. Gemini has its own provider-specific
+directory alongside ElevenLabs and Groq.
 
 The installer clears ambient copies of every new input before selecting the
 target release's descriptor. The validator binds API preflight to the worker's

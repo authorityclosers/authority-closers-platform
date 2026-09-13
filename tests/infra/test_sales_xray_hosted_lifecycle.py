@@ -37,10 +37,7 @@ def activation_root(tmp_path: Path) -> Iterator[Path]:
     # /tmp and runner homes are intentionally untrusted by the production validator.
     # Use a disposable tree below /run; never relax the validator for a test host.
     with tempfile.TemporaryDirectory(prefix="ac-hosted-activation-", dir="/run") as folder:
-        root = Path(folder)
-        os.chown(root, 0, 10001)
-        root.chmod(0o750)
-        yield root
+        yield Path(folder)
 
 
 def _bash_executable() -> str:
@@ -406,6 +403,7 @@ def test_hosted_validator_accepts_api_readable_challenge_file(activation_root: P
         assert info.st_uid == 10001
         assert info.st_gid == 0
         assert stat.S_IMODE(info.st_mode) == 0o400
+        assert stat.S_IMODE(paths["challenge"].parent.stat().st_mode) == 0o700
 
 
 def test_hosted_validator_rejects_missing_or_directory_challenge_file(

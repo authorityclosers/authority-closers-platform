@@ -167,17 +167,6 @@ def _validate_challenge_secret_reference(value: object) -> None:
                 raise _fail("upload challenge file ancestor is not a directory")
             if os.name == "posix":
                 _trusted_metadata(info, file=False)
-                mode = stat.S_IMODE(info.st_mode)
-                if (
-                    (info.st_uid == API_UID and not mode & 0o100)
-                    or (info.st_uid != API_UID and info.st_gid == API_GID and not mode & 0o010)
-                    or (
-                        info.st_uid != API_UID
-                        and info.st_gid != API_GID
-                        and not mode & 0o001
-                    )
-                ):
-                    raise _fail("upload challenge file ancestor is not API-traversable")
             continue
         if (
             not stat.S_ISREG(info.st_mode)

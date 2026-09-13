@@ -14,8 +14,9 @@ production: /etc/authority-closers/secrets/sales-xray/production/challenge-secre
 The approved Cloudflare/secret-manager operator provisions the file outside
 Git and outside the release archive. The final host boundary is:
 
-- every existing parent is a root-owned, non-writable directory and grants
-  execute access to UID/GID `10001`;
+- every existing parent is a root-owned, non-writable directory with no
+  symlink; private `0700` source parents are valid because Docker resolves the
+  host-side bind as root;
 - the final path is a singly-linked regular file named `challenge-secret`, with
   no symlink in any ancestor;
 - the file is no larger than 4 KiB, owned by UID `10001`, GID `0`, and mode
