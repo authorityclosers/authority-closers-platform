@@ -51,15 +51,21 @@ def test_indian_daily_sets_keep_language_labels_and_draft_safety_flags():
         assert all(item["status"] == "editorial_draft" for item in group["items"])
 
 
-def test_published_daily_catalog_exposes_only_approved_language_sets():
+def test_published_catalog_preserves_baseline_and_adds_approved_language_sets():
     data = published_catalog()
     assert data["mode"] == "published"
     assert data["responses_stored"] is True
-    assert [item["id"] for item in data["items"]] == [
+    assert len(data["items"]) == 11
+    assert [item["id"] for item in data["items"]][-3:] == [
         "india-daily-english",
         "india-daily-hinglish",
         "india-daily-marlish",
     ]
+    assert {item["id"] for item in data["items"]} >= {
+        "match",
+        "gaps",
+        "dialogue",
+    }
     assert published_practice_set("india-daily-marlish")["mode"] == "published"
 
 

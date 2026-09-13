@@ -86,8 +86,12 @@ def catalog() -> dict[str, Any]:
 
 
 def published_catalog() -> dict[str, Any]:
-    """Return only the approved sets available to the deployment pilot."""
-    return _catalog_for(_published_sets(), mode="published", responses_stored=True)
+    """Return the baseline pilot catalog plus the approved language sets."""
+    # Preserve the eight existing Arcade cards and overlay the three reviewed
+    # language sets. Only the new IDs have a published snapshot; legacy cards
+    # continue to use their existing durable-attempt contract.
+    merged = {**_sets(), **_published_sets()}
+    return _catalog_for(merged, mode="published", responses_stored=True)
 
 
 def _node(item: dict[str, Any], node_id: str) -> dict[str, Any]:

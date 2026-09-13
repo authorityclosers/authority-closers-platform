@@ -11,10 +11,11 @@ receipt, not a deployment or content-approval record.
   Marathi-English (Marlish) labels and three Pune/Mumbai/Nagpur scenarios per
   language. The three reviewed sets are published in
   `packages/python/ac_platform/practice/exercise-library.published.json`; the
-  eight legacy sets remain in the draft preview library.
+  eight legacy sets remain visible in the baseline pilot catalog and retain
+  their existing draft/deep-link behavior.
 - Arcade legacy cursor compatibility: `b007a68` (source `c1fcfce`).
 - Practice activation receipt validation: `e85c1de`.
-- Canonical daily-selection policy is approved for the three published sets and
+- Canonical daily-selection policy is approved for the three new published sets and
   records the independent Luna review plus the Codex release coordinator's
   approval under user delegation; it remains formative-only and cannot grant
   course access.
@@ -30,7 +31,8 @@ receipt, not a deployment or content-approval record.
 The Marlish copy received an independent Luna review and the reported wording
 issues were corrected. The three new sets are explicitly published with
 `review_status: approved`; the eight legacy sets retain their prior draft
-markers. The activation command validates the published catalog and approved
+markers and remain visible. The activation command validates the published
+language catalog and approved
 daily-selection policy, so no official score, reward, progress, certificate or
 assessment authority changed.
 
