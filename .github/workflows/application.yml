@@ -104,6 +104,12 @@ jobs:
           command -v ffprobe
           ffmpeg -version
           ffprobe -version
+      - name: Build verified AudioAtlas for conversation regressions
+        run: |
+          set -euo pipefail
+          command -v g++
+          g++ --version
+          uv run python -c 'from ac_platform.conversation_intelligence.signals import build_native, _native_executable; built = build_native(); assert _native_executable(None) == built.resolve()'
       - name: Prove the scanner filesystem capacity boundary
         shell: bash
         run: |

@@ -173,3 +173,25 @@ def test_sales_xray_static_preview_is_built_before_application_validation() -> N
     install = _required_step(job, "Install locked dependencies")
     validate = _required_step(job, "Validate application")
     assert job["steps"].index(install) < job["steps"].index(preview) < job["steps"].index(validate)
+
+
+def test_conversation_native_build_is_verified_before_application_validation() -> None:
+    job = _validation_job("application.yml")
+    native = _required_step(job, "Build verified AudioAtlas for conversation regressions")
+    assert [shlex.split(line) for line in native["run"].splitlines()] == [
+        ["set", "-euo", "pipefail"],
+        ["command", "-v", "g++"],
+        ["g++", "--version"],
+        [
+            "uv",
+            "run",
+            "python",
+            "-c",
+            "from ac_platform.conversation_intelligence.signals import build_native, "
+            "_native_executable; built = build_native(); "
+            "assert _native_executable(None) == built.resolve()",
+        ],
+    ]
+    install = _required_step(job, "Install locked dependencies")
+    validate = _required_step(job, "Validate application")
+    assert job["steps"].index(install) < job["steps"].index(native) < job["steps"].index(validate)
