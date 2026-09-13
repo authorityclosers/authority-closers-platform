@@ -1272,8 +1272,8 @@ export function CallStudio({ homeHref = "/" }: { homeHref?: string }) {
                 <p className="small-text">
                   {plan.max_entitlement_seconds === 0
                     ? "Your audio minutes are already counted. This report uses no additional audio minutes."
-                    : `Up to ${time(plan.max_entitlement_seconds * 1000)} of additional audio minutes.`}
-                  {" "}Plan expires{" "}
+                    : `Up to ${time(plan.max_entitlement_seconds * 1000)} of additional audio minutes.`}{" "}
+                  Plan expires{" "}
                   {new Date(plan.expires_at_epoch * 1000).toLocaleString()}.
                 </p>
                 <ul>
