@@ -1244,7 +1244,11 @@ function TechnicalPlaybackDisclosure({
       <strong>{provenance.label}</strong>
       <span>{provenance.title}</span>
       <span>{provenance.attribution}</span>
-      <a href={provenance.license_url} target="_blank" rel="noopener noreferrer">
+      <a
+        href={provenance.license_url}
+        target="_blank"
+        rel="noopener noreferrer"
+      >
         {provenance.license}
       </a>
     </aside>
