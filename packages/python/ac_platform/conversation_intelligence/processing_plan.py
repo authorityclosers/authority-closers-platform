@@ -44,6 +44,7 @@ from ac_platform.conversation_intelligence.models import (
 )
 from ac_platform.conversation_intelligence.processing_actor import (
     ConversationActor,
+    ProcessingActor,
     actor_binding,
     actor_columns,
     actor_from_row,
@@ -360,12 +361,31 @@ class ConversationProcessingPlans:
         )
         if active is not None:
             return self.view(active)
-        approvals: dict[str, StageApproval] = {
-            item.stage: item
-            for item in bundle.stages
-            if (item.tenant_id, item.person_id, item.source_sha256)
-            == (actor.tenant_id, actor.person_id, recording.source_sha256)
-        }
+        approvals: dict[str, StageApproval]
+        if isinstance(actor, ProcessingActor):
+            derived_approvals = {
+                stage: self.authority.stage_approval(
+                    bundle,
+                    actor,
+                    source_sha256=recording.source_sha256,
+                    stage=stage,
+                )
+                for stage in ("C2", "C4", "C5")
+            }
+            if any(item is None for item in derived_approvals.values()):
+                raise ConversationDenied(
+                    "This call needs an approved transcription, facts and coaching route."
+                )
+            approvals = {
+                stage: item for stage, item in derived_approvals.items() if item is not None
+            }
+        else:
+            approvals = {
+                item.stage: item
+                for item in bundle.stages
+                if (item.tenant_id, item.person_id, item.source_sha256)
+                == (actor.tenant_id, actor.person_id, recording.source_sha256)
+            }
         if set(approvals) != {"C2", "C4", "C5"}:
             raise ConversationDenied(
                 "This call needs an approved transcription, facts and coaching route."

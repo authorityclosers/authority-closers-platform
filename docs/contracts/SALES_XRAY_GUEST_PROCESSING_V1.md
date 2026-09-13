@@ -81,3 +81,69 @@ This contract does not activate anonymous provider processing by itself. Runtime
 composition still needs the approved source/provider policy, cost cap, abuse
 admission, private storage and worker configuration. A cookie/IP address does not
 prove that a human has only one account.
+
+## Release-approved public provider policy
+
+Hosted approval bundle schema `ac.sales-xray.hosted-approval/1` may include the
+optional `acquisition_policy` object. Its exact JSON shape is:
+
+```json
+{
+  "schema": "ac.sales-xray.acquisition-provider-policy/1",
+  "id": "<release-policy-uuid>",
+  "tenant_id": "<configured-public-tenant-uuid>",
+  "processing_person_id": "<provisioned-processing-principal-person-uuid>",
+  "authorization_ref": "ref:acquisition/approval",
+  "expires_at_epoch": 0,
+  "max_recordings": 1,
+  "max_source_bytes": 1,
+  "max_stored_source_bytes": 1,
+  "stages": [
+    {
+      "stage": "C2|C4|C5",
+      "configuration_sha256": "<sha256>",
+      "provider_id": "<approved-provider>",
+      "model_id": "<approved-model>",
+      "recipe_revision": "<approved-recipe>",
+      "permission_ref": "ref:...",
+      "retention_ref": "ref:...",
+      "professional_gate_ref": "ref:...",
+      "pricing_ref": "ref:...",
+      "provider_terms_ref": "ref:...",
+      "privacy_ref": "ref:...",
+      "credential_ref": "ref:...",
+      "free_allowance_ref": "ref:...",
+      "no_paid_overage_ref": "ref:...",
+      "privacy_revision": "<revision>",
+      "privacy_notice": "<notice>",
+      "expires_at_epoch": 0,
+      "max_requests": 1,
+      "entitlement_seconds": 0,
+      "zero_cost_basis": "verified_free_allowance|paid_pricing_evidence",
+      "price_evidence_sha256": "<sha256>",
+      "max_cost_paise": 0,
+      "max_source_duration_ms": 1,
+      "max_input_bytes": 1,
+      "max_completion_tokens": 0,
+      "profile_sha256": null
+    }
+  ]
+}
+```
+
+The three stages are ordered `C2`, `C4`, `C5`; each retains the same bounds as
+an exact `StageApproval`. At runtime the server derives an exact stage approval
+ID with UUID5 over the policy ID, configured tenant, provisioned processing
+person, source SHA-256 and stage. The source hash comes from the measured
+server receipt and the person/tenant/lease come from `ProcessingActor`; an
+ordinary `ActorContext` cannot select this policy. Canonical intake permission
+and later processing-plan acceptance remain required, and provider stages keep
+zero user entitlement. The router recomputes this exact stage from the source
+binding and its approval reference, rather than trusting a caller-selected
+provider or stage.
+
+When `acquisition_policy` is absent, it is omitted from canonical JSON so
+existing `/1` bundle bytes and digests remain unchanged. Reporting composition
+binds the policy's credential references at startup even when no public source
+has been measured yet. The policy adds no browser credential, no wildcard
+source grant and no second acquisition-minute grant.

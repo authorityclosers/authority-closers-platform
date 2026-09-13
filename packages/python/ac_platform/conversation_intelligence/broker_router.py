@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from types import MappingProxyType
 from typing import Any, Protocol, cast
+from uuid import UUID
 
 from ac_platform.conversation_intelligence.activation_contract import (
     HostedApprovalBundle,
@@ -183,6 +184,59 @@ class FixedProviderRouter:
     @staticmethod
     def _stage(reservation: Reservation, bundle: HostedApprovalBundle) -> StageApproval:
         quote = reservation.quote
+        # A public source has no pre-issued source row in the release bundle.
+        # Derive the candidate from the immutable policy and source binding,
+        # then require the permission reference to name that derived approval.
+        # This keeps a reservation payload from selecting a wildcard provider
+        # route or borrowing a different source's stage.
+        policy = bundle.acquisition_policy
+        if policy is not None:
+            try:
+                tenant_id = UUID(quote.source.tenant_id)
+                person_id = UUID(quote.account_id)
+                if tenant_id == policy.tenant_id and person_id == policy.processing_person_id:
+                    derived = tuple(
+                        policy.derive_stage(
+                            tenant_id=tenant_id,
+                            person_id=person_id,
+                            source_sha256=quote.source.source_sha256,
+                            stage=stage,
+                        )
+                        for stage in ("C2", "C4", "C5")
+                    )
+                    by_route = tuple(
+                        item
+                        for item in derived
+                        if (
+                            item.provider_id,
+                            item.model_id,
+                            item.recipe_revision,
+                        )
+                        == (
+                            quote.provider_id,
+                            quote.provider_model,
+                            quote.recipe_revision,
+                        )
+                    )
+                    if len(by_route) == 1:
+                        return by_route[0]
+                for stage in ("C2", "C4", "C5"):
+                    candidate = policy.derive_stage(
+                        tenant_id=tenant_id,
+                        person_id=person_id,
+                        source_sha256=quote.source.source_sha256,
+                        stage=stage,
+                    )
+                    if reservation.permission.authorization_ref == (
+                        f"hosted-stage-v1:{candidate.id}:{bundle.digest}"
+                    ):
+                        return candidate
+                if tenant_id == policy.tenant_id and person_id == policy.processing_person_id:
+                    raise ProviderRouterError("broker_router_route_mismatch")
+            except (TypeError, ValueError):
+                # The static exact-source path below will fail closed if this
+                # is not a valid hosted reservation.
+                pass
         candidates = tuple(
             item
             for item in bundle.stages

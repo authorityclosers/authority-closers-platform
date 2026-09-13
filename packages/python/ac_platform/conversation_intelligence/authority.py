@@ -15,6 +15,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import func, select
 
 from ac_platform.conversation_intelligence.activation_contract import (
+    AcquisitionProviderPolicy,
     HostedApprovalBundle,
     StageApproval,
 )
@@ -49,7 +50,11 @@ from ac_platform.conversation_intelligence.models import (
     ConversationQuoteAcceptance,
     ConversationRecording,
 )
-from ac_platform.conversation_intelligence.processing_actor import ConversationActor, same_actor
+from ac_platform.conversation_intelligence.processing_actor import (
+    ConversationActor,
+    ProcessingActor,
+    same_actor,
+)
 from ac_platform.conversation_intelligence.provider_admin import (
     CONTROL_ACCOUNTS,
     lock_provider_configuration,
@@ -83,8 +88,15 @@ class ConversationAuthority:
             bundle.current(int(now.timestamp()), self.environment)
             if bundle.provider_control_tenant_id != self.operations_tenant_id:
                 raise ValueError("hosted_control_tenant_mismatch")
-            if self.environment != "test" and any(
-                item.zero_cost_basis == "synthetic" for item in bundle.stages
+            if self.environment != "test" and (
+                any(item.zero_cost_basis == "synthetic" for item in bundle.stages)
+                or (
+                    bundle.acquisition_policy is not None
+                    and any(
+                        item.zero_cost_basis == "synthetic"
+                        for item in bundle.acquisition_policy.stages
+                    )
+                )
             ):
                 raise ValueError("synthetic_approval_not_hosted")
             return bundle
@@ -94,6 +106,13 @@ class ConversationAuthority:
             ) from None
 
     def recipient(self, bundle: HostedApprovalBundle, actor: ConversationActor) -> None:
+        if isinstance(actor, ProcessingActor):
+            policy = bundle.acquisition_policy
+            if policy is None or not policy.matches_actor(actor):
+                raise ConversationDenied(
+                    "This processing lease has no approved acquisition provider policy."
+                )
+            return
         if not any(
             item.tenant_id == actor.tenant_id and item.person_id == actor.person_id
             for item in bundle.allowances
@@ -110,6 +129,12 @@ class ConversationAuthority:
     async def claim_allowance(self, app: ConversationApplication, actor: ConversationActor) -> None:
         """POST-only application command; finite grants are never inferred from login."""
         bundle = await self.admit(app, actor)
+        if isinstance(actor, ProcessingActor):
+            # Public acquisition minutes belong to the append-only acquisition
+            # ledger. The processing principal's empty canonical ledger is
+            # enough for zero-entitlement provider stages; never mint a second
+            # user grant for the same measured source.
+            return
         approval = next(
             item
             for item in bundle.allowances
@@ -222,11 +247,24 @@ class ConversationAuthority:
         bundle = await self.admit(app, actor)
         if intent.source_bytes > MAX_AUDIO_BYTES:
             raise ConversationDenied("Choose a recording up to 32 MB for this processing route.")
-        approval = next(
-            item
-            for item in bundle.allowances
-            if (item.tenant_id, item.person_id) == (actor.tenant_id, actor.person_id)
-        )
+        if isinstance(actor, ProcessingActor):
+            policy = bundle.acquisition_policy
+            if policy is None or not policy.matches_actor(actor):
+                raise ConversationDenied(
+                    "This processing lease has no approved acquisition upload policy."
+                )
+            max_recordings = policy.max_recordings
+            max_source_bytes = policy.max_source_bytes
+            max_stored_source_bytes = policy.max_stored_source_bytes
+        else:
+            approval = next(
+                item
+                for item in bundle.allowances
+                if (item.tenant_id, item.person_id) == (actor.tenant_id, actor.person_id)
+            )
+            max_recordings = approval.max_recordings
+            max_source_bytes = approval.max_source_bytes
+            max_stored_source_bytes = approval.max_stored_source_bytes
         # Reserve space by counting the immutable source-size registration in
         # the same transaction. Awaiting/deleting records still consume capacity.
         # This conservative global count protects a shared root across tenants.
@@ -253,9 +291,9 @@ class ConversationAuthority:
             )
         ).one()
         if (
-            intent.source_bytes > approval.max_source_bytes
-            or count >= approval.max_recordings
-            or owner_bytes + intent.source_bytes > approval.max_stored_source_bytes
+            intent.source_bytes > max_source_bytes
+            or count >= max_recordings
+            or owner_bytes + intent.source_bytes > max_stored_source_bytes
             or int(total or 0) + intent.source_bytes > bundle.max_stored_source_bytes
         ):
             raise ConversationConflict("The approved private recording capacity is full.")
@@ -270,19 +308,15 @@ class ConversationAuthority:
     ) -> tuple[HostedApprovalBundle, StageApproval]:
         bundle = self.current(now)
         self.recipient(bundle, actor)
-        approval = next(
-            (
-                item
-                for item in bundle.stages
-                if (item.tenant_id, item.person_id, item.source_sha256, item.stage)
-                == (
-                    actor.tenant_id,
-                    actor.person_id,
-                    recording.source_sha256,
-                    plan.checkpoint.stage,
-                )
-            ),
-            None,
+        if isinstance(actor, ProcessingActor):
+            # Selecting the public template still requires the canonical exact
+            # recording permission created by the intake consent command.
+            await app._permission(actor, recording.permission_id, recording.source_sha256, now)
+        approval = self.stage_approval(
+            bundle,
+            actor,
+            source_sha256=recording.source_sha256,
+            stage=plan.checkpoint.stage,
         )
         if approval is None or approval.expires_at_epoch <= int(now.timestamp()):
             raise ConversationDenied("This recording and processing stage need current approval.")
@@ -312,6 +346,44 @@ class ConversationAuthority:
             profile_revision=plan.prepared.profile_revision,
         )
         return bundle, approval
+
+    @staticmethod
+    def stage_approval(
+        bundle: HostedApprovalBundle,
+        actor: ConversationActor,
+        *,
+        source_sha256: str,
+        stage: str,
+    ) -> StageApproval | None:
+        """Resolve one static or exact-source acquisition approval.
+
+        Processing actors can use only the policy bound to the release's
+        processing principal. Human actors can use only pre-issued exact-source
+        stages; no caller-supplied provider or wildcard source is accepted.
+        """
+
+        if isinstance(actor, ProcessingActor):
+            policy: AcquisitionProviderPolicy | None = bundle.acquisition_policy
+            if policy is None or not policy.matches_actor(actor):
+                return None
+            try:
+                return policy.derive_stage(
+                    tenant_id=actor.tenant_id,
+                    person_id=actor.person_id,
+                    source_sha256=source_sha256,
+                    stage=stage,  # type: ignore[arg-type]
+                )
+            except ValueError:
+                return None
+        return next(
+            (
+                item
+                for item in bundle.stages
+                if (item.tenant_id, item.person_id, item.source_sha256, item.stage)
+                == (actor.tenant_id, actor.person_id, source_sha256, stage)
+            ),
+            None,
+        )
 
     async def validate_route(
         self,

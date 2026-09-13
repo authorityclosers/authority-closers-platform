@@ -88,8 +88,15 @@ class PinnedApprovalLoader:
             bundle.current(int(datetime.now(UTC).timestamp()), self.environment)
             if bundle.provider_control_tenant_id != self.operations_tenant_id:
                 raise ValueError
-            if self.environment != "test" and any(
-                item.zero_cost_basis == "synthetic" for item in bundle.stages
+            if self.environment != "test" and (
+                any(item.zero_cost_basis == "synthetic" for item in bundle.stages)
+                or (
+                    bundle.acquisition_policy is not None
+                    and any(
+                        item.zero_cost_basis == "synthetic"
+                        for item in bundle.acquisition_policy.stages
+                    )
+                )
             ):
                 raise ValueError
             return bundle
@@ -138,7 +145,16 @@ def compose_hosted_intake(settings: HostedConversationSettings) -> ConversationI
     return ConversationIntakeRuntime(
         policy=IntakePolicy(
             budget_scope_id=bundle.budget_scope_id,
-            tenant_ids=frozenset(item.tenant_id for item in bundle.allowances),
+            tenant_ids=frozenset(
+                {
+                    *(item.tenant_id for item in bundle.allowances),
+                    *(
+                        ()
+                        if bundle.acquisition_policy is None
+                        else (bundle.acquisition_policy.tenant_id,)
+                    ),
+                }
+            ),
             authorization_ref=bundle.intake_authorization_ref,
             retention_ref=bundle.intake_retention_ref,
             retention_days=bundle.retention_days,

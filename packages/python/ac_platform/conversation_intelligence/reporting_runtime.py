@@ -69,9 +69,17 @@ def compose_hosted_reporting(
     if not isinstance(launchers, Mapping):
         raise ValueError("hosted_reporting_launchers_required")
     references: dict[str, str] = {}
-    for stage in bundle.stages:
-        previous = references.setdefault(stage.provider_id, stage.credential_ref)
-        if previous != stage.credential_ref:
+    approved_references = tuple(
+        (stage.provider_id, stage.credential_ref) for stage in bundle.stages
+    )
+    if bundle.acquisition_policy is not None:
+        # Public sources do not exist when the worker starts. Bind their
+        # release-approved credential references now so a later source cannot
+        # introduce a browser-selected provider or secret path.
+        approved_references += bundle.acquisition_policy.provider_references()
+    for provider, credential_ref in approved_references:
+        previous = references.setdefault(provider, credential_ref)
+        if previous != credential_ref:
             raise ValueError("hosted_reporting_provider_reference_ambiguous")
     if not references:
         raise ValueError("hosted_reporting_stage_approval_required")

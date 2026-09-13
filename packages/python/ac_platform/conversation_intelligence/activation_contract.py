@@ -14,7 +14,7 @@ import json
 import re
 from collections.abc import Mapping
 from typing import Any, Literal, NoReturn, Self
-from uuid import UUID
+from uuid import UUID, uuid5
 
 from pydantic import (
     BaseModel,
@@ -34,6 +34,10 @@ HOSTED_APPROVAL_SCHEMA: Literal["ac.sales-xray.hosted-approval/1"] = (
 MAX_APPROVAL_BUNDLE_BYTES = 512 * 1024
 MAX_ALLOWANCES = 64
 MAX_STAGES = 192
+ACQUISITION_POLICY_SCHEMA: Literal["ac.sales-xray.acquisition-provider-policy/1"] = (
+    "ac.sales-xray.acquisition-provider-policy/1"
+)
+MAX_ACQUISITION_POLICY_STAGES = 3
 
 _DIGEST = r"^[0-9a-f]{64}$"
 _IDENTIFIER = re.compile(r"^[A-Za-z][A-Za-z0-9_.:/-]{0,255}$")
@@ -196,6 +200,169 @@ class StageApproval(_StrictFrozenModel):
         return self
 
 
+class AcquisitionStagePolicy(_StrictFrozenModel):
+    """Release-approved provider template for a newly measured source.
+
+    Scope and identity are intentionally absent.  ``AcquisitionProviderPolicy``
+    derives them from the server-owned processing actor and exact source hash
+    before a stage can enter a plan or reservation.
+    """
+
+    stage: Literal["C2", "C4", "C5"]
+    configuration_sha256: str = Field(pattern=_DIGEST)
+    provider_id: str = Field(min_length=1, max_length=256)
+    model_id: str = Field(min_length=1, max_length=256)
+    recipe_revision: str = Field(min_length=1, max_length=256)
+    permission_ref: str = Field(min_length=6, max_length=256)
+    retention_ref: str = Field(min_length=6, max_length=256)
+    professional_gate_ref: str = Field(min_length=6, max_length=256)
+    pricing_ref: str = Field(min_length=6, max_length=256)
+    provider_terms_ref: str = Field(min_length=6, max_length=256)
+    privacy_ref: str = Field(min_length=6, max_length=256)
+    credential_ref: str = Field(min_length=6, max_length=256)
+    free_allowance_ref: str | None = Field(default=None, min_length=6, max_length=256)
+    no_paid_overage_ref: str = Field(min_length=6, max_length=256)
+    privacy_revision: str = Field(min_length=1, max_length=128)
+    privacy_notice: str = Field(min_length=1, max_length=1_500)
+    expires_at_epoch: StrictInt = Field(gt=0)
+    max_requests: StrictInt = Field(ge=1, le=64)
+    entitlement_seconds: StrictInt | None = Field(default=None, ge=0, le=86_400)
+    zero_cost_basis: Literal[
+        "verified_free_allowance", "synthetic", "paid_pricing_evidence"
+    ]
+    price_evidence_sha256: str = Field(pattern=_DIGEST)
+    max_cost_paise: StrictInt = Field(default=0, ge=0, le=2_147_483_647)
+    max_source_duration_ms: StrictInt = Field(ge=1, le=14_400_000)
+    max_input_bytes: StrictInt = Field(ge=1, le=134_217_728)
+    max_completion_tokens: StrictInt = Field(ge=0, le=4_000)
+    profile_sha256: str | None = Field(default=None, pattern=_DIGEST)
+
+    _permission_ref = field_validator(
+        "permission_ref",
+        "retention_ref",
+        "professional_gate_ref",
+        "pricing_ref",
+        "provider_terms_ref",
+        "privacy_ref",
+        "credential_ref",
+        "no_paid_overage_ref",
+    )(_validate_reference)
+    _free_allowance_ref = field_validator("free_allowance_ref")(_validate_optional_reference)
+    _provider_id = field_validator("provider_id")(_validate_identifier)
+    _model_id = field_validator("model_id")(_validate_identifier)
+    _recipe_revision = field_validator("recipe_revision")(_validate_identifier)
+    _privacy_revision = field_validator("privacy_revision")(_validate_identifier)
+    _privacy_notice = field_validator("privacy_notice")(_validate_notice)
+
+    @model_validator(mode="after")
+    def validate_stage_bounds(self) -> Self:
+        # Keep this in lockstep with StageApproval.  A public template may
+        # never widen a bound merely because its source is not known yet.
+        if self.zero_cost_basis == "paid_pricing_evidence":
+            if self.max_cost_paise <= 0 or self.free_allowance_ref is not None:
+                raise ValueError("paid_stage_template_invalid")
+        elif self.max_cost_paise != 0 or self.free_allowance_ref is None:
+            raise ValueError("free_stage_template_invalid")
+        if self.stage == "C2":
+            if self.entitlement_seconds is not None:
+                raise ValueError("c2_entitlement_must_be_none")
+            if self.max_completion_tokens != 0:
+                raise ValueError("c2_completion_tokens_must_be_zero")
+            if self.profile_sha256 is not None:
+                raise ValueError("c2_profile_must_be_none")
+        else:
+            if self.entitlement_seconds != 0:
+                raise ValueError("provider_entitlement_must_be_zero")
+            if self.max_completion_tokens < 1:
+                raise ValueError("text_completion_tokens_required")
+            if self.stage == "C5" and self.profile_sha256 is None:
+                raise ValueError("c5_profile_required")
+            if self.stage == "C4" and self.profile_sha256 is not None:
+                raise ValueError("c4_profile_must_be_none")
+        return self
+
+
+class AcquisitionProviderPolicy(_StrictFrozenModel):
+    """An exact processing principal's bounded public acquisition template."""
+
+    schema_id: Literal["ac.sales-xray.acquisition-provider-policy/1"] = Field(alias="schema")
+    id: UUID
+    tenant_id: UUID
+    processing_person_id: UUID
+    authorization_ref: str = Field(min_length=6, max_length=256)
+    expires_at_epoch: StrictInt = Field(gt=0)
+    max_recordings: StrictInt = Field(ge=1, le=64)
+    max_source_bytes: StrictInt = Field(ge=1, le=134_217_728)
+    max_stored_source_bytes: StrictInt = Field(ge=1, le=8_589_934_592)
+    stages: tuple[AcquisitionStagePolicy, ...] = Field(
+        min_length=MAX_ACQUISITION_POLICY_STAGES, max_length=MAX_ACQUISITION_POLICY_STAGES
+    )
+
+    _authorization_ref = field_validator("authorization_ref")(_validate_reference)
+
+    @model_validator(mode="after")
+    def validate_policy(self) -> Self:
+        if self.max_source_bytes > self.max_stored_source_bytes:
+            raise ValueError("acquisition_source_bytes_exceed_stored_cap")
+        if tuple(item.stage for item in self.stages) != ("C2", "C4", "C5"):
+            raise ValueError("acquisition_policy_stages_invalid")
+        if len({item.stage for item in self.stages}) != len(self.stages):
+            raise ValueError("duplicate_acquisition_policy_stage")
+        if self.max_source_bytes > self.stages[0].max_input_bytes:
+            raise ValueError("acquisition_source_bytes_exceed_stage_cap")
+        if any(item.expires_at_epoch > self.expires_at_epoch for item in self.stages):
+            raise ValueError("acquisition_stage_expiry_outside_policy")
+        return self
+
+    def matches_actor(self, actor: Any) -> bool:
+        """Return true only for the release's processing principal identity."""
+
+        from ac_platform.conversation_intelligence.processing_actor import ProcessingActor
+
+        return (
+            isinstance(actor, ProcessingActor)
+            and actor.tenant_id == self.tenant_id
+            and actor.person_id == self.processing_person_id
+        )
+
+    def derive_stage(
+        self,
+        *,
+        tenant_id: UUID,
+        person_id: UUID,
+        source_sha256: str,
+        stage: Literal["C2", "C4", "C5"],
+    ) -> StageApproval:
+        """Bind a template to one exact source and deterministic approval id."""
+
+        if (
+            tenant_id != self.tenant_id
+            or person_id != self.processing_person_id
+            or re.fullmatch(_DIGEST, source_sha256) is None
+        ):
+            raise ValueError("acquisition_policy_scope_mismatch")
+        template = next((item for item in self.stages if item.stage == stage), None)
+        if template is None:
+            raise ValueError("acquisition_policy_stage_unavailable")
+        # UUID5 makes the approval stable across retries while binding policy,
+        # principal and source.  The source hash is the immutable source key;
+        # the plan separately retains source revision and the lease binding.
+        approval_id = uuid5(
+            self.id,
+            f"{self.tenant_id}:{self.processing_person_id}:{source_sha256}:{stage}",
+        )
+        return StageApproval(
+            id=approval_id,
+            tenant_id=tenant_id,
+            person_id=person_id,
+            source_sha256=source_sha256,
+            **template.model_dump(),
+        )
+
+    def provider_references(self) -> tuple[tuple[str, str], ...]:
+        return tuple((item.provider_id, item.credential_ref) for item in self.stages)
+
+
 class HostedApprovalBundle(_StrictFrozenModel):
     schema_id: Literal["ac.sales-xray.hosted-approval/1"] = Field(alias="schema")
     environment: Literal["staging", "production", "test"]
@@ -214,6 +381,7 @@ class HostedApprovalBundle(_StrictFrozenModel):
     max_stored_source_bytes: StrictInt = Field(ge=1, le=34_359_738_368)
     allowances: tuple[AllowanceApproval, ...] = Field(max_length=MAX_ALLOWANCES)
     stages: tuple[StageApproval, ...] = Field(max_length=MAX_STAGES)
+    acquisition_policy: AcquisitionProviderPolicy | None = None
 
     _deployment_ref = field_validator("deployment_ref")(_validate_reference)
     _budget_authorization_ref = field_validator("budget_authorization_ref")(_validate_reference)
@@ -245,17 +413,24 @@ class HostedApprovalBundle(_StrictFrozenModel):
         ):
             raise ValueError("allowance_stored_bytes_exceed_bundle_cap")
 
+        policy = self.acquisition_policy
         paid_stages = [
             approval
             for approval in self.stages
             if approval.zero_cost_basis == "paid_pricing_evidence"
         ]
-        if paid_stages:
+        policy_has_paid_stages = policy is not None and any(
+            item.zero_cost_basis == "paid_pricing_evidence" for item in policy.stages
+        )
+        if paid_stages or policy_has_paid_stages:
             if self.budget_cap_paise <= 0:
                 raise ValueError("paid_project_cap_required")
             if self.paid_approval_ref is None:
                 raise ValueError("paid_approval_reference_required")
-            if any(approval.max_cost_paise > self.budget_cap_paise for approval in paid_stages):
+            if any(approval.max_cost_paise > self.budget_cap_paise for approval in paid_stages) or (
+                policy is not None
+                and any(item.max_cost_paise > self.budget_cap_paise for item in policy.stages)
+            ):
                 raise ValueError("paid_stage_cost_exceeds_project_cap")
         elif self.budget_cap_paise != 0 or self.paid_approval_ref is not None:
             raise ValueError("free_bundle_cannot_bind_paid_budget")
@@ -273,6 +448,20 @@ class HostedApprovalBundle(_StrictFrozenModel):
             for approval in self.stages
         ):
             raise ValueError("stage_expiry_outside_bundle")
+        if policy is not None:
+            if (
+                policy.expires_at_epoch <= self.issued_at_epoch
+                or policy.expires_at_epoch > self.expires_at_epoch
+                or policy.max_stored_source_bytes > self.max_stored_source_bytes
+            ):
+                raise ValueError("acquisition_policy_expiry_or_capacity_invalid")
+            if any(
+                item.expires_at_epoch <= self.issued_at_epoch
+                for item in policy.stages
+            ):
+                raise ValueError("acquisition_stage_expiry_outside_bundle")
+            if policy.id in approval_ids:
+                raise ValueError("duplicate_approval_id")
         return self
 
     @property
@@ -289,6 +478,9 @@ class HostedApprovalBundle(_StrictFrozenModel):
             value.pop("budget_cap_paise", None)
         if self.paid_approval_ref is None:
             value.pop("paid_approval_ref", None)
+        if self.acquisition_policy is None:
+            # Existing /1 artifacts retain byte-for-byte canonical form.
+            value.pop("acquisition_policy", None)
         for stage in value["stages"]:
             if stage.get("max_cost_paise") == 0:
                 stage.pop("max_cost_paise", None)
@@ -304,6 +496,8 @@ class HostedApprovalBundle(_StrictFrozenModel):
             raise ActivationContractError("approval_environment_mismatch")
         if not self.issued_at_epoch <= now < self.expires_at_epoch:
             raise ActivationContractError("approval_bundle_inactive")
+        if self.acquisition_policy is not None and now >= self.acquisition_policy.expires_at_epoch:
+            raise ActivationContractError("acquisition_policy_inactive")
         return self
 
 
@@ -388,6 +582,9 @@ def load_approval_bundle(raw: bytes | str | Mapping[str, Any]) -> HostedApproval
 
 __all__ = [
     "ActivationContractError",
+    "ACQUISITION_POLICY_SCHEMA",
+    "AcquisitionProviderPolicy",
+    "AcquisitionStagePolicy",
     "AllowanceApproval",
     "HOSTED_APPROVAL_SCHEMA",
     "HostedApprovalBundle",
