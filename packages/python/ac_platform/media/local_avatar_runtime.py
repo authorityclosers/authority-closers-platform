@@ -408,7 +408,6 @@ def compose_local_avatar_runtime(settings: Settings, base: MediaRuntime) -> Medi
 
     return replace(
         base,
-        service=service,
         local_avatar_runtime=local,
         authenticated_delivery_handler_factory=factory,
     )
@@ -486,7 +485,6 @@ def compose_filesystem_avatar_runtime(settings: Settings, base: MediaRuntime) ->
 
     return replace(
         base,
-        service=service,
         filesystem_avatar_runtime=filesystem_avatar,
         authenticated_delivery_handler_factory=factory,
     )

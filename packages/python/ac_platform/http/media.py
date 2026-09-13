@@ -49,6 +49,11 @@ def _service(runtime: MediaRuntime) -> MediaService:
     return runtime.service
 
 
+def _avatar_service(runtime: MediaRuntime) -> MediaService:
+    avatar_runtime = runtime.filesystem_avatar_runtime or runtime.local_avatar_runtime
+    return runtime.service if avatar_runtime is None else avatar_runtime.service
+
+
 def install_media_http(
     application: FastAPI,
     *,
@@ -82,6 +87,7 @@ def install_media_http(
 
     local_avatar = runtime.local_avatar_runtime
     filesystem_avatar = runtime.filesystem_avatar_runtime
+    avatar_service = _avatar_service(runtime)
     if local_avatar is not None:
         if settings.environment != "local" or not settings.media_local_avatar_enabled:
             raise ValueError("Local profile upload routes require the explicit sandbox opt-in.")
@@ -191,7 +197,7 @@ def install_media_http(
         require_safe_origin(request, settings)
         actor = auth.resolved.actor
         result = await auth.database.run_sync(
-            lambda database: _service(runtime).create_upload_intent(
+            lambda database: avatar_service.create_upload_intent(
                 database, actor, body, idempotency_key=idempotency_key or ""
             )
         )
@@ -250,7 +256,7 @@ def install_media_http(
         auth: AuthenticatedTransaction = actor_dependency,
     ) -> ProfileAvatarResponse:
         result = await auth.database.run_sync(
-            lambda database: _service(runtime).get_profile_avatar(database, auth.resolved.actor)
+            lambda database: avatar_service.get_profile_avatar(database, auth.resolved.actor)
         )
         _no_store(response)
         return result
@@ -267,8 +273,9 @@ def install_media_http(
     ) -> MediaAssetResponse:
         require_safe_origin(request, settings)
         actor = auth.resolved.actor
+        service = avatar_service if avatar_only else _service(runtime)
         result = await auth.database.run_sync(
-            lambda database: _service(runtime).complete_upload(
+            lambda database: service.complete_upload(
                 database,
                 actor,
                 upload_id,

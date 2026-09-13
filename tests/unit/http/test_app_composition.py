@@ -11,7 +11,7 @@ import ac_platform.http.app as app_module
 from ac_platform.application.settings import Settings
 from ac_platform.http.app import create_app
 from ac_platform.http.identity_provider import DisabledIdentityProvider, OAuthIdentityProvider
-from ac_platform.media.runtime import create_media_runtime
+from ac_platform.media.runtime import create_default_media_runtime, create_media_runtime
 
 
 def _deployment_settings(environment: str) -> Settings:
@@ -130,6 +130,18 @@ def test_deployment_composes_explicit_filesystem_video_profile(
     assert application.state.studio_video_worker.pipeline.service.storage.max_store_bytes == (
         8 * 1024**3
     )
+
+    runtime = create_default_media_runtime(settings)
+    assert runtime.studio_video_runtime is not None
+    assert runtime.filesystem_avatar_runtime is not None
+    # Profile-photo composition must leave the Studio admission/completion
+    # service authoritative for VIDEO while routing AVATAR commands to its
+    # separate filesystem service.
+    assert runtime.service is not runtime.filesystem_avatar_runtime.service
+    assert runtime.filesystem_avatar_runtime.service is not runtime.service
+    from ac_platform.http.media import _avatar_service
+
+    assert _avatar_service(runtime) is runtime.filesystem_avatar_runtime.service
 
 
 @pytest.mark.parametrize("environment", ["staging", "production"])
