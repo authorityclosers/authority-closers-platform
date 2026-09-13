@@ -23,6 +23,8 @@ from ac_platform.conversation_intelligence.async_io import join_thread
 from ac_platform.conversation_intelligence.review_contracts import (
     ReviewAssignmentCreateRequest,
     ReviewFeedbackRequest,
+    ReviewInvitationAcceptRequest,
+    ReviewInvitationCreateRequest,
 )
 from ac_platform.conversation_intelligence.review_service import ConversationReviewService
 from ac_platform.conversation_intelligence.storage import (
@@ -67,10 +69,14 @@ def install_conversation_review_http(
         operations_tenant_id = settings.operations_tenant_id
         if operations_tenant_id is None:
             raise HTTPException(503, "Conversation review is not configured.")
-        return ConversationReviewService(
+        service = ConversationReviewService(
             ConversationApplication(auth.database),
             operations_tenant_id=operations_tenant_id,
         )
+        # Keep cryptographic email delivery configuration at the HTTP composition
+        # boundary; the service never reads process settings itself.
+        service.token_secret = settings.email_challenge_secret.get_secret_value()
+        return service
 
     function_dependency = Depends(require_actor, scope="function")
     request_dependency = Depends(require_actor, scope="request")
@@ -127,6 +133,36 @@ def install_conversation_review_http(
         except ConversationError as error:
             raise _raise_conversation(error) from None
 
+    @admin.post("/review-invitations", status_code=201)
+    async def create_invitation(
+        intent: ReviewInvitationCreateRequest,
+        request: Request,
+        response: Response,
+        key: ReviewKey,
+        auth: AuthenticatedTransaction = function_dependency,
+    ) -> Any:
+        admin_scope(request, response, write=True)
+        try:
+            return await review_service(auth).invite(auth.resolved.actor, intent, key)
+        except ConversationError as error:
+            raise _raise_conversation(error) from None
+
+    @admin.post("/review-invitations/{invitation_id}/revoke")
+    async def revoke_invitation(
+        invitation_id: UUID,
+        request: Request,
+        response: Response,
+        key: ReviewKey,
+        auth: AuthenticatedTransaction = function_dependency,
+    ) -> Any:
+        admin_scope(request, response, write=True)
+        try:
+            return await review_service(auth).revoke_invitation(
+                auth.resolved.actor, invitation_id, key
+            )
+        except ConversationError as error:
+            raise _raise_conversation(error) from None
+
     @admin.post("/review-assignments/{assignment_id}/revoke")
     async def revoke_assignment(
         assignment_id: UUID,
@@ -151,6 +187,19 @@ def install_conversation_review_http(
         learner_scope(request, response)
         try:
             return await review_service(auth).get(auth.resolved.actor, assignment_id)
+        except ConversationError as error:
+            raise _raise_conversation(error) from None
+
+    @learner.post("/review-invitations/accept", status_code=201)
+    async def accept_invitation(
+        intent: ReviewInvitationAcceptRequest,
+        request: Request,
+        response: Response,
+        auth: AuthenticatedTransaction = function_dependency,
+    ) -> Any:
+        learner_scope(request, response, write=True)
+        try:
+            return await review_service(auth).accept_invitation(auth.resolved.actor, intent)
         except ConversationError as error:
             raise _raise_conversation(error) from None
 

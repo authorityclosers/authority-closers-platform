@@ -1,5 +1,5 @@
-import { ProviderControls } from "./provider-controls";
+import { SalesXrayControlCenter } from "./control-center";
 
-export default function SalesXrayProviderControlsPage() {
-  return <ProviderControls />;
+export default function SalesXrayControlCenterPage() {
+  return <SalesXrayControlCenter />;
 }

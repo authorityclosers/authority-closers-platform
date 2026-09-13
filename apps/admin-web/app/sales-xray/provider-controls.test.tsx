@@ -188,7 +188,8 @@ describe("provider control contract", () => {
     expect(host.textContent).toContain("planned_no_transport");
     expect(host.textContent).toContain("Groq open weights");
     expect(host.textContent).toContain("₹0");
-    expect(host.textContent).toContain("execution_activated false");
+    expect(host.textContent).toContain("catalog metadata only");
+    expect(host.textContent).not.toContain("execution_activated false");
     expect(host.textContent).not.toContain("API key");
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });

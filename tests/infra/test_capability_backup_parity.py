@@ -40,6 +40,7 @@ INFERENCE = "20260913_0031"
 PLANS = "20260913_0032"
 COMMUNITY_CONNECTIONS = "20260913_0033"
 REVIEWS = "20260913_0034"
+REVIEW_INVITATIONS = "20260913_0035"
 HEADS = (
     LEGACY,
     CAPABILITIES,
@@ -58,6 +59,7 @@ HEADS = (
     PLANS,
     COMMUNITY_CONNECTIONS,
     REVIEWS,
+    REVIEW_INVITATIONS,
 )
 VERSIONED_HEADS = HEADS[1:]
 TABLELESS_VERSIONED_HEADS = (REVISION, MEDIA_LIBRARY, COURSE_CREATION)
@@ -113,6 +115,11 @@ NEW_TABLES = {
         "conversation_review_assignments",
         "conversation_review_revocations",
         "conversation_review_feedback",
+    ),
+    REVIEW_INVITATIONS: (
+        "conversation_review_invitations",
+        "conversation_review_invitation_revocations",
+        "conversation_review_invitation_acceptances",
     ),
 }
 ROOT = Path(__file__).parents[2]
@@ -175,7 +182,7 @@ def test_three_separately_packaged_helpers_have_identical_versioned_contracts() 
             assert module.parity_tables_for_head(head) == backup.PARITY_TABLES
 
 
-@pytest.mark.parametrize("head", ["", "20000101_0001", "20260913_0035", "20260907_0019;bad"])
+@pytest.mark.parametrize("head", ["", "20000101_0001", "20260907_0019;bad"])
 def test_unknown_or_unsafe_heads_never_fall_back_to_legacy(head: str) -> None:
     for module in (backup, proof, drill):
         with pytest.raises(RuntimeError, match="no reviewed"):
@@ -513,7 +520,7 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
             and node.func.attr == "create_table"
         }
         assert created == set()
-    expected_counts = (39, 41, 50, 52, 53, 53, 53, 53, 54, 55, 57, 58, 71, 72, 74, 79, 82)
+    expected_counts = (39, 41, 50, 52, 53, 53, 53, 53, 54, 55, 57, 58, 71, 72, 74, 79, 82, 85)
     expected_contracts = (
         None,
         "ac-postgres-parity-v2",
@@ -532,6 +539,7 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
         "ac-postgres-parity-v12",
         "ac-postgres-parity-v13",
         "ac-postgres-parity-v14",
+        "ac-postgres-parity-v15",
     )
     for module in (backup, proof, drill):
         assert module.VERSIONED_PARITY_CONTRACTS == backup.VERSIONED_PARITY_CONTRACTS

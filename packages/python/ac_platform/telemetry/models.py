@@ -68,6 +68,7 @@ _KNOWN_VALUES: dict[str, frozenset[str]] = {
     "job_kind": frozenset(
         {
             "email.enrollment_welcome.v1",
+            "email.conversation_review_invitation.v1",
             "email.identity_password_reset.v1",
             "email.identity_verification.v1",
             "internal.test.v1",

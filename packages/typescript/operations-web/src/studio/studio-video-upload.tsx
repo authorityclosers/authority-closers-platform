@@ -205,6 +205,7 @@ function UploadSessionView({
   return (
     <section
       className={`${panel.panel} ${styles.upload}`}
+      data-stage={snapshot.stage}
       aria-labelledby={`${id}-title`}
     >
       <div className={styles.heading}>
@@ -216,10 +217,13 @@ function UploadSessionView({
           )}
         </span>
         <div>
-          <span className={panel.eyebrow}>Course video library</span>
+          <span className={panel.eyebrow}>Media for lessons</span>
           <h3 id={`${id}-title`}>
             {hidden ? "Add a course video" : titles[snapshot.stage]}
           </h3>
+          <p className={styles.subheading}>
+            Upload once, then connect the ready video to a lesson.
+          </p>
         </div>
         {canChoose ? (
           <ActionButton

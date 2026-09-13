@@ -40,6 +40,7 @@ from ac_platform.conversation_intelligence.models import (
     ConversationReportDraft,
     ConversationReview,
     ConversationReviewFeedback,
+    ConversationReviewInvitation,
 )
 from ac_platform.conversation_intelligence.provider_admin import CONTROL_ACCOUNT
 from ac_platform.conversation_intelligence.report_store import (
@@ -54,11 +55,18 @@ from ac_platform.conversation_intelligence.review_contracts import (
     ReviewEvidenceRef,
     ReviewFeedbackRequest,
     ReviewFeedbackSubmission,
+    ReviewInvitationAcceptRequest,
+    ReviewInvitationCreateRequest,
     ReviewProposedCorrection,
+)
+from ac_platform.conversation_intelligence.review_invitations import (
+    REVIEW_INVITATION_EVENT,
+    decrypt_invitation_token,
 )
 from ac_platform.conversation_intelligence.review_service import ConversationReviewService
 from ac_platform.identity.models import Person
 from ac_platform.kernel.authz import ActorContext
+from ac_platform.outbox.models import OutboxEvent
 from tests.database.test_conversation_inference_postgresql import _provider_quote
 from tests.database.test_conversation_postgresql import run, seed
 from tests.database.test_conversation_reporting_pipeline_postgresql import (
@@ -189,6 +197,10 @@ async def _build_report_case(postgres_harness: Any, scratch_root: Path) -> Revie
         foreign = await seed(engine, role="learner")
         operations = await seed(engine, role="owner")
         async with sessions() as database, database.begin():
+            for identity in (reviewer, other_reviewer, foreign):
+                learner_person = await database.get(Person, identity.person_id)
+                assert learner_person is not None
+                learner_person.email = f"reviewer-{identity.person_id.hex}@example.test"
             admin_person = await database.get(Person, operations.person_id)
             assert admin_person is not None
             admin_person.email = CONTROL_ACCOUNT
@@ -242,6 +254,7 @@ def _service(database: AsyncSession, case: ReviewCase) -> ConversationReviewServ
     return ConversationReviewService(
         ConversationApplication(database, clock=lambda: case.prepared.state.now),
         operations_tenant_id=case.operations_tenant_id,
+        token_secret="review-invitation-test-secret-012345678901234567890123",  # noqa: S106 - synthetic test secret
     )
 
 
@@ -368,6 +381,61 @@ def test_assigned_reviewer_reads_durable_report_submits_and_replays(
             assert len(canonical_rows) == 1
             assert canonical_rows[0].proposal is not None
             assert canonical_rows[0].proposal["status"] == "proposal_pending_adjudication"
+
+    run(exercise())
+
+
+def test_email_invitation_is_transactional_one_use_and_acl_bound(review_case: ReviewCase) -> None:
+    async def exercise() -> None:
+        async with review_case.sessions() as database, database.begin():
+            reviewer = await database.get(Person, review_case.reviewer_actor.person_id)
+            assert reviewer is not None and reviewer.email is not None
+            service = _service(database, review_case)
+            intent = ReviewInvitationCreateRequest(
+                schema="ac.sales-xray.review-invitation-create/1",
+                run_id=review_case.report_run_id,
+                invited_email=reviewer.email,
+                allowed_lenses=("sales", "technical", "ux"),
+                expires_at_epoch=int(review_case.prepared.state.now.timestamp()) + 1_800,
+            )
+            invitation = await service.invite(
+                review_case.admin_actor, intent, "review-invitation-create-1"
+            )
+            row = await database.get(ConversationReviewInvitation, UUID(invitation["id"]))
+            assert row is not None
+            outbox = await database.scalar(
+                select(OutboxEvent).where(OutboxEvent.event_type == REVIEW_INVITATION_EVENT)
+            )
+            assert outbox is not None
+            assert outbox.payload == {"invitation_id": str(row.id)}
+            assert row.invited_email == reviewer.email.lower()
+            token = decrypt_invitation_token(
+                "review-invitation-test-secret-012345678901234567890123",
+                row.encrypted_token,
+                row.id,
+            )
+            accepted = await service.accept_invitation(
+                review_case.reviewer_actor,
+                ReviewInvitationAcceptRequest(
+                    schema="ac.sales-xray.review-invitation-accept/1", token=token
+                ),
+            )
+            assignment = ReviewAssignment.model_validate(accepted)
+            assert assignment.reviewer_person_id == review_case.reviewer_actor.person_id
+            replay = await service.accept_invitation(
+                review_case.reviewer_actor,
+                ReviewInvitationAcceptRequest(
+                    schema="ac.sales-xray.review-invitation-accept/1", token=token
+                ),
+            )
+            assert replay["id"] == accepted["id"]
+            with pytest.raises(ConversationNotFound):
+                await service.accept_invitation(
+                    review_case.foreign_actor,
+                    ReviewInvitationAcceptRequest(
+                        schema="ac.sales-xray.review-invitation-accept/1", token=token
+                    ),
+                )
 
     run(exercise())
 

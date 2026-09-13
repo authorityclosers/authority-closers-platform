@@ -1,4 +1,5 @@
 .form {
+  --review-accent: var(--theme-primary, #3156d3);
   display: grid;
   gap: 1.15rem;
   padding: 1.35rem;
@@ -7,6 +8,152 @@
   background: #fff;
   box-shadow: 0 12px 34px rgb(22 57 94 / 7%);
   color: #1b3551;
+}
+
+.reviewLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+.callColumn,
+.feedbackColumn,
+.findings {
+  display: grid;
+  min-width: 0;
+  gap: 1rem;
+}
+.feedbackColumn {
+  border: 1px solid #dce6f0;
+  border-radius: 1rem;
+  padding: 1.2rem;
+  background: #fff;
+}
+.feedbackColumn .fieldGrid {
+  grid-template-columns: 1fr;
+}
+.feedbackColumn .lensGrid {
+  gap: 0.4rem;
+}
+.feedbackColumn .lensButton {
+  padding: 0.6rem;
+  min-height: 4.5rem;
+}
+.feedbackColumn .lensButton small {
+  line-height: 1.4;
+}
+.feedbackColumn textarea {
+  min-height: 9rem;
+}
+.reviewPrompt {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.65;
+  color: #3d5873;
+}
+.selectedMoment {
+  margin: 0;
+  padding: 0.65rem 0.75rem;
+  font-size: 0.8rem;
+  border-radius: 0.6rem;
+  background: #edf3fc;
+  color: #24438d;
+}
+.findings {
+  padding: 0.5rem 0.25rem;
+}
+.findingGroup {
+  border-bottom: 1px solid #dce6f0;
+  padding: 0.8rem 0;
+}
+.findingGroup summary {
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 650;
+  min-height: 1.75rem;
+}
+.findingGroup summary span {
+  margin-left: 0.65rem;
+  border-radius: 0.4rem;
+  padding: 0.15rem 0.5rem;
+  color: #516983;
+  background: #edf3f9;
+  font-size: 0.75rem;
+}
+.findingGroup article {
+  padding: 0.4rem 0;
+}
+.findingGroup h4 {
+  margin-bottom: 0.4rem;
+  font-size: 0.95rem;
+}
+.findingGroup p,
+.findingGroup blockquote {
+  margin: 0.5rem 0;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+.findingGroup blockquote {
+  border-left: 3px solid #90b6db;
+  padding-left: 0.7rem;
+  color: #516983;
+}
+.clipSearch {
+  display: grid;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.clipSearch input {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 2.75rem;
+  border: 1px solid #cddbe9;
+  border-radius: 0.55rem;
+  padding: 0.65rem;
+  background: #fff;
+  color: #1b3551;
+  font: inherit;
+}
+.form :is(summary, button, input):focus-visible {
+  outline: 3px solid var(--review-accent);
+  outline-offset: 3px;
+}
+
+@media (max-width: 1100px) {
+  .reviewLayout {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 480px) {
+  .form {
+    padding: 0.85rem;
+  }
+  .feedbackColumn {
+    padding: 0.85rem;
+  }
+  .form .lensGrid {
+    grid-template-columns: 1fr;
+  }
+  .feedbackColumn .lensButton {
+    min-height: 2.75rem;
+  }
+}
+:global(html[data-theme="dark"]) .form :is(.feedbackColumn, .clipSearch input) {
+  color: var(--theme-text, #edf2fb);
+  background: var(--theme-surface, #101a2b);
+  border-color: var(--theme-border, #34425a);
+}
+:global(html[data-theme="dark"]) .form .findingGroup {
+  border-color: var(--theme-border, #34425a);
+}
+:global(html[data-theme="dark"])
+  .form
+  :is(.selectedMoment, .findingGroup summary span) {
+  background: #203b5b;
+  color: #d0e0ff;
 }
 
 .header,
@@ -223,6 +370,7 @@
 
 .fieldGrid label {
   display: grid;
+  align-content: start;
   gap: 0.35rem;
   color: #3d5873;
   font-size: 0.78rem;
@@ -230,6 +378,7 @@
 }
 
 .fieldGrid textarea,
+.fieldGrid select,
 .fieldGrid input {
   width: 100%;
   box-sizing: border-box;
@@ -248,6 +397,7 @@
 }
 
 .fieldGrid textarea:focus,
+.fieldGrid select:focus,
 .fieldGrid input:focus {
   border-color: #4b84bc;
   outline: 3px solid rgb(75 132 188 / 15%);
@@ -304,6 +454,57 @@
   margin: 0;
 }
 
+.form {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.clipList {
+  max-height: 16rem;
+  overflow-y: auto;
+  padding: 0.25rem;
+}
+.clipButton {
+  min-height: 2.75rem;
+}
+.clipButton[aria-pressed="true"] {
+  border-color: #4a84bd;
+  background: #edf6ff;
+}
+.check {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+.fieldGrid select {
+  min-height: 2.75rem;
+}
+.report {
+  padding: 1rem;
+  border: 1px solid #dce6f0;
+  border-radius: 0.8rem;
+}
+.report summary {
+  cursor: pointer;
+  font-weight: 700;
+  min-height: 1.5rem;
+}
+.report h3 {
+  margin: 1.2rem 0 0.7rem;
+}
+.report h4 {
+  margin: 0.8rem 0 0.4rem;
+}
+.report p,
+.report blockquote {
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+.report blockquote {
+  margin: 0.7rem 0;
+  padding-left: 0.8rem;
+  border-left: 3px solid #90b6db;
+}
+
 @media (max-width: 720px) {
   .facts,
   .lensGrid,
@@ -315,4 +516,52 @@
   .sectionHeading {
     flex-direction: column;
   }
+}
+
+:global(html[data-theme="dark"]) .form {
+  color: var(--theme-text, #edf2fb);
+  background: var(--theme-surface, #101a2b);
+  border-color: var(--theme-border, #34425a);
+}
+:global(html[data-theme="dark"])
+  .form
+  :is(h2, h3, h4, dd, label, strong, summary) {
+  color: var(--theme-text, #edf2fb);
+}
+:global(html[data-theme="dark"]) .form :is(p, dt, small, .eyebrow, .muted) {
+  color: var(--theme-text-muted, #b6c0d2);
+}
+:global(html[data-theme="dark"])
+  .form
+  :is(
+    .facts div,
+    .evidence,
+    .report,
+    .quote,
+    .clipButton,
+    .lensButton,
+    textarea,
+    select,
+    input
+  ) {
+  color: var(--theme-text, #edf2fb);
+  background: #162238;
+  border-color: var(--theme-border, #34425a);
+}
+:global(html[data-theme="dark"])
+  .form
+  :is(.lensButtonActive, .clipButtonActive) {
+  background: #203b5b;
+  border-color: #9bb3ff;
+}
+:global(html[data-theme="dark"]) .form :is(.boundPill, .smallPill, .success) {
+  background: #173c32;
+  color: #b9ecd4;
+}
+:global(html[data-theme="dark"]) .form .error {
+  background: #492c32;
+  color: #ffd5cc;
+}
+:global(html[data-theme="dark"]) .form :is(.header, .report, .facts div) {
+  border-color: var(--theme-border, #34425a);
 }

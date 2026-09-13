@@ -48,6 +48,8 @@ from ac_platform.worker import (
     PASSWORD_EMAIL_VERIFICATION_JOB,
     PASSWORD_EMAIL_VERIFICATION_JOB_V2,
     PASSWORD_EMAIL_VERIFICATION_JOB_V3,
+    REVIEW_INVITATION_EVENT,
+    REVIEW_INVITATION_JOB,
     AllowlistedDispatcher,
     AmbiguousProviderReceiptError,
     DurableWorker,
@@ -188,6 +190,7 @@ def test_outbox_route_is_exact_and_contains_no_unsafe_default_email_kind() -> No
         PASSWORD_EMAIL_VERIFICATION_EVENT_V2,
         PASSWORD_EMAIL_RESET_EVENT_V2,
         PASSWORD_EMAIL_VERIFICATION_EVENT_V3,
+        REVIEW_INVITATION_EVENT,
         PASSWORD_EMAIL_RESET_EVENT_V3,
     }
     assert OUTBOX_JOB_ROUTES[ENROLLMENT_WELCOME_EVENT].job_kind == ENROLLMENT_WELCOME_JOB
@@ -780,6 +783,7 @@ def test_default_worker_provider_is_fake_and_unconfigured_resend_is_rejected() -
             PASSWORD_EMAIL_VERIFICATION_JOB_V2,
             PASSWORD_EMAIL_RESET_JOB_V2,
             PASSWORD_EMAIL_VERIFICATION_JOB_V3,
+            REVIEW_INVITATION_JOB,
             PASSWORD_EMAIL_RESET_JOB_V3,
         }
     )
