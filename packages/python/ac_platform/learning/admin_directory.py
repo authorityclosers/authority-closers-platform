@@ -82,7 +82,11 @@ def list_members(
         select(Membership, Person, CohorvaPublicProfile)
         .join(Person, Person.id == Membership.person_id)
         .outerjoin(CohorvaPublicProfile, CohorvaPublicProfile.person_id == Person.id)
-        .where(Membership.tenant_id == tenant_id, Person.status != "deleted")
+        .where(
+            Membership.tenant_id == tenant_id,
+            Membership.role != "processing",
+            Person.status != "deleted",
+        )
     )
     active = (Membership.status == "active") & (Person.status == "active")
     counts = database.execute(

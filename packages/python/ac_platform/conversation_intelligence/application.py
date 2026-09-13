@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from collections.abc import Callable, Iterable
@@ -42,6 +43,10 @@ from ac_platform.conversation_intelligence.models import (
     ConversationReviewFeedback,
     ConversationRun,
 )
+from ac_platform.conversation_intelligence.processing_actor import (
+    ConversationActor,
+    ProcessingActor,
+)
 from ac_platform.conversation_intelligence.signals import NATIVE_SOURCE_SHA256, _feature_metadata
 from ac_platform.conversation_intelligence.storage import (
     ObjectKey,
@@ -51,7 +56,6 @@ from ac_platform.conversation_intelligence.storage import (
 )
 from ac_platform.identity.models import Person
 from ac_platform.identity.models import Session as IdentitySession
-from ac_platform.kernel.authz import ActorContext
 from ac_platform.outbox.models import Job
 from ac_platform.outbox.repository import JobRepository
 from ac_platform.tenancy.models import Membership, Tenant
@@ -93,13 +97,19 @@ class ConversationApplication:
         self.database = database
         self.clock = clock
 
-    async def admit(self, actor: ActorContext) -> datetime:
+    async def admit(self, actor: ConversationActor) -> datetime:
         tx = self.database.get_transaction()
         sync_tx = tx.sync_transaction if tx is not None else None
         if sync_tx is None or sync_tx.origin is not SessionTransactionOrigin.BEGIN:
             raise ConversationError("A caller-owned transaction is required.")
         if actor.tenant_id is None:
             raise ConversationDenied("Select your AC workspace.")
+        if isinstance(actor, ProcessingActor):
+            from ac_platform.conversation_intelligence.guest_ownership import admit_processing_actor
+
+            now = utc(self.clock())
+            await admit_processing_actor(self.database, actor, now)
+            return now
         # The same person/session locks as existing AC commands serialize revocation
         # and idempotency. Never trust a previously hydrated actor as current authority.
         person = await self.database.scalar(
@@ -145,12 +155,15 @@ class ConversationApplication:
             or tenant.status != "active"
             or member is None
             or member.status != "active"
+            or member.role == "processing"
             or member.ended_at is not None
         ):
             raise ConversationDenied("A current AC workspace session is required.")
         return now
 
-    async def _recording(self, actor: ActorContext, recording_id: UUID) -> ConversationRecording:
+    async def _recording(
+        self, actor: ConversationActor, recording_id: UUID
+    ) -> ConversationRecording:
         recording = await self.database.scalar(
             select(ConversationRecording)
             .where(
@@ -163,11 +176,25 @@ class ConversationApplication:
         )
         if recording is None:
             raise ConversationNotFound("Recording not found.")
+        if isinstance(actor, ProcessingActor):
+            from ac_platform.conversation_intelligence.guest_models import (
+                ConversationGuestSubmission,
+            )
+
+            binding = await self.database.scalar(
+                select(ConversationGuestSubmission).where(
+                    ConversationGuestSubmission.recording_id == recording.id,
+                    ConversationGuestSubmission.tenant_id == actor.tenant_id,
+                    ConversationGuestSubmission.processing_lease_id == actor.processing_lease_id,
+                )
+            )
+            if binding is None or binding.source_sha256 != recording.source_sha256:
+                raise ConversationNotFound("Recording not found.")
         return recording
 
     async def _permission(
         self,
-        actor: ActorContext,
+        actor: ConversationActor,
         permission_id: UUID,
         sha: str,
         now: datetime,
@@ -207,15 +234,24 @@ class ConversationApplication:
             "created_at": utc(recording.created_at).isoformat(),
         }
 
+    @staticmethod
+    def command_key(actor: ConversationActor, key: str) -> str:
+        if not re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", key):
+            raise ConversationError("A valid Idempotency-Key is required.")
+        if isinstance(actor, ProcessingActor):
+            return (
+                f"guest:{actor.processing_lease_id.hex}:{hashlib.sha256(key.encode()).hexdigest()}"
+            )
+        return key
+
     async def _replay(
         self,
-        actor: ActorContext,
+        actor: ConversationActor,
         key: str,
         action: str,
         intent: dict[str, Any],
     ) -> ConversationCommand | None:
-        if not re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", key):
-            raise ConversationError("A valid Idempotency-Key is required.")
+        key = self.command_key(actor, key)
         command = await self.database.scalar(
             select(ConversationCommand).where(
                 ConversationCommand.tenant_id == actor.tenant_id,
@@ -231,7 +267,7 @@ class ConversationApplication:
 
     async def _receipt(
         self,
-        actor: ActorContext,
+        actor: ConversationActor,
         key: str,
         action: str,
         intent: dict[str, Any],
@@ -241,20 +277,35 @@ class ConversationApplication:
         resource_type: str = "conversation_recording",
     ) -> None:
         digest = content_hash(intent)
-        audit = await AuditRepository(self.database).append_for_actor(
-            actor,
-            action=f"conversation.{action}",
-            resource_type=resource_type,
-            resource_id=result_id,
-            payload={"intent_sha256": digest},
-            now=now,
-        )
+        if isinstance(actor, ProcessingActor):
+            audit = await AuditRepository(self.database).append(
+                tenant_id=actor.tenant_id,
+                actor_person_id=actor.person_id,
+                actor_type="system",
+                action=f"conversation.{action}",
+                resource_type=resource_type,
+                resource_id=result_id,
+                payload={
+                    "intent_sha256": digest,
+                    "processing_lease_id": str(actor.processing_lease_id),
+                },
+                now=now,
+            )
+        else:
+            audit = await AuditRepository(self.database).append_for_actor(
+                actor,
+                action=f"conversation.{action}",
+                resource_type=resource_type,
+                resource_id=result_id,
+                payload={"intent_sha256": digest},
+                now=now,
+            )
         self.database.add(
             ConversationCommand(
                 id=uuid4(),
                 tenant_id=actor.tenant_id,
                 person_id=actor.person_id,
-                key=key,
+                key=self.command_key(actor, key),
                 action=action,
                 intent_sha256=digest,
                 result_id=result_id,
@@ -266,7 +317,7 @@ class ConversationApplication:
 
     async def register(
         self,
-        actor: ActorContext,
+        actor: ConversationActor,
         intent: RecordingIntent,
         *,
         key: str,
@@ -277,12 +328,28 @@ class ConversationApplication:
         replay = await self._replay(actor, key, "register", payload)
         if replay is not None and replay.result_id is not None:
             return self._view(await self._recording(actor, replay.result_id))
+        if isinstance(actor, ProcessingActor):
+            from ac_platform.conversation_intelligence.guest_models import (
+                ConversationGuestSubmission,
+            )
+            from ac_platform.conversation_intelligence.guest_ownership import admit_processing_actor
+
+            usage = await admit_processing_actor(self.database, actor, now)
+            if usage.source_sha256 != intent.source_sha256:
+                raise ConversationDenied("The recording differs from its reserved source.")
+            if (
+                await self.database.get(
+                    ConversationGuestSubmission, (actor.tenant_id, usage.submission_id)
+                )
+                is not None
+            ):
+                raise ConversationConflict("This upload already owns a recording.")
         recording = ConversationRecording(
             id=uuid4(),
             tenant_id=actor.tenant_id,
             person_id=actor.person_id,
             permission_id=intent.permission_reference,
-            request_key=key,
+            request_key=self.command_key(actor, key),
             intent_sha256=content_hash(payload),
             source_sha256=intent.source_sha256,
             source_bytes=intent.source_bytes,
@@ -294,10 +361,16 @@ class ConversationApplication:
         )
         self.database.add(recording)
         await self.database.flush()
+        if isinstance(actor, ProcessingActor):
+            from ac_platform.conversation_intelligence.guest_ownership import (
+                link_registered_recording,
+            )
+
+            await link_registered_recording(self.database, actor, recording, now)
         await self._receipt(actor, key, "register", payload, recording.id, now)
         return self._view(recording)
 
-    async def get(self, actor: ActorContext, recording_id: UUID) -> dict[str, Any]:
+    async def get(self, actor: ConversationActor, recording_id: UUID) -> dict[str, Any]:
         now = await self.admit(actor)
         recording = await self._recording(actor, recording_id)
         if recording.state in {"deleting", "deleted"}:
@@ -307,7 +380,7 @@ class ConversationApplication:
 
     async def store_source(
         self,
-        actor: ActorContext,
+        actor: ConversationActor,
         recording_id: UUID,
         *,
         chunks: Iterable[bytes],
@@ -366,7 +439,9 @@ class ConversationApplication:
             await self._receipt(actor, key, "source_stored", payload, recording.id, now)
         return self._view(recording)
 
-    async def checkpoints(self, actor: ActorContext, recording_id: UUID) -> list[dict[str, Any]]:
+    async def checkpoints(
+        self, actor: ConversationActor, recording_id: UUID
+    ) -> list[dict[str, Any]]:
         await self.get(actor, recording_id)
         rows = (
             await self.database.scalars(
@@ -387,13 +462,25 @@ class ConversationApplication:
 
     async def request_deletion(
         self,
-        actor: ActorContext,
+        actor: ConversationActor,
         recording_id: UUID,
         *,
         key: str,
     ) -> dict[str, Any]:
         now = await self.admit(actor)
         recording = await self._recording(actor, recording_id)
+        return await self._request_owned_deletion(actor, recording, key=key, now=now)
+
+    async def _request_owned_deletion(
+        self,
+        actor: ConversationActor,
+        recording: ConversationRecording,
+        *,
+        key: str,
+        now: datetime,
+    ) -> dict[str, Any]:
+        """Internal port after current owner authorization and recording lock."""
+        recording_id = recording.id
         intent = {"recording_id": str(recording_id)}
         replay = await self._replay(actor, key, "delete", intent)
         if replay is not None or recording.state in {"deleting", "deleted"}:
@@ -413,7 +500,7 @@ class ConversationApplication:
 
     async def request_run(
         self,
-        actor: ActorContext,
+        actor: ConversationActor,
         intent: RunIntent,
         *,
         key: str,
@@ -533,7 +620,7 @@ class ConversationApplication:
                 tenant_id=recording.tenant_id,
                 person_id=recording.person_id,
                 recording_id=recording.id,
-                request_key=key,
+                request_key=self.command_key(actor, key),
                 intent_sha256=content_hash(payload),
                 recipe_revision=intent.recipe_revision,
                 generation=recording.generation,
@@ -546,7 +633,7 @@ class ConversationApplication:
         await self._receipt(actor, key, "run", payload, identifier, now)
         return await self._run_view(actor, identifier)
 
-    async def _run_view(self, actor: ActorContext, run_id: UUID) -> dict[str, Any]:
+    async def _run_view(self, actor: ConversationActor, run_id: UUID) -> dict[str, Any]:
         run = await self.database.scalar(
             select(ConversationRun).where(
                 ConversationRun.id == run_id,
@@ -556,6 +643,8 @@ class ConversationApplication:
         )
         if run is None:
             raise ConversationNotFound("Run not found.")
+        if isinstance(actor, ProcessingActor):
+            await self._recording(actor, run.recording_id)
         job = await self.database.get(Job, run.job_id)
         state = run.state
         if job is not None and job.status == "dead_letter" and state in {"queued", "running"}:
@@ -569,7 +658,7 @@ class ConversationApplication:
             "provider_calls": int(job is not None and job.provider_receipt is not None),
         }
 
-    async def get_run(self, actor: ActorContext, run_id: UUID) -> dict[str, Any]:
+    async def get_run(self, actor: ConversationActor, run_id: UUID) -> dict[str, Any]:
         await self.admit(actor)
         result = await self._run_view(actor, run_id)
         await self.get(actor, UUID(result["recording_id"]))
@@ -600,14 +689,19 @@ class ConversationApplication:
                 ConversationRecording.tenant_id == job.tenant_id,
             )
         )
-        if owner is None:
+        if owner is None or job.tenant_id is None:
             raise ConversationConflict("Checkpoint publication was fenced.")
+        from ac_platform.conversation_intelligence.guest_ownership import admit_processing_recording
+
+        processing_usage = await admit_processing_recording(
+            self.database, job.tenant_id, recording_id, utc(self.clock())
+        )
         # Same identity-first lock order as interactive commands. Holding these
         # locks through commit also fences suspension and membership revocation.
         person = await self.database.scalar(
             select(Person)
             .where(Person.id == owner)
-            .with_for_update()
+            .with_for_update(read=processing_usage is not None)
             .execution_options(populate_existing=True)
         )
         tenant = await self.database.scalar(
@@ -665,6 +759,7 @@ class ConversationApplication:
             or member is None
             or member.status != "active"
             or member.ended_at is not None
+            or (member.role == "processing" and processing_usage is None)
             or person is None
             or person.status != "active"
             or tenant is None

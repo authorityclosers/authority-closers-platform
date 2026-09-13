@@ -50,6 +50,7 @@ from ac_platform.conversation_intelligence.models import (
     ConversationRecording,
     ConversationRun,
 )
+from ac_platform.conversation_intelligence.processing_actor import actor_from_row
 from ac_platform.conversation_intelligence.providers import MAX_AUDIO_BYTES, ProviderResult
 from ac_platform.conversation_intelligence.reporting_pipeline import StagePlan
 from ac_platform.conversation_intelligence.storage import (
@@ -59,7 +60,6 @@ from ac_platform.conversation_intelligence.storage import (
     StorageError,
 )
 from ac_platform.conversation_intelligence.worker import Work, _drain, _FencedExecutor
-from ac_platform.kernel.authz import ActorContext
 from ac_platform.outbox.models import Job
 from ac_platform.outbox.repository import JobRepository, RecoveryStateRepository
 
@@ -169,7 +169,7 @@ class ConversationInferenceWorker:
         if task is None or task.erased_at is not None or task.state not in {"queued", "running"}:
             raise ConversationDenied("The provider task is no longer active.")
         application = ConversationApplication(db)
-        actor = ActorContext(task.person_id, task.session_id, task.tenant_id)
+        actor = actor_from_row(task)
         now = await application.admit(actor)
         await application.get(actor, task.recording_id)
         recording = await application._recording(actor, task.recording_id)

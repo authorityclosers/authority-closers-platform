@@ -41,7 +41,12 @@ from ac_platform.conversation_intelligence.models import (
     ConversationQuote,
     ConversationQuoteAcceptance,
 )
-from ac_platform.kernel.authz import ActorContext
+from ac_platform.conversation_intelligence.processing_actor import (
+    ConversationActor,
+    ProcessingActor,
+    actor_columns,
+    same_actor,
+)
 
 if TYPE_CHECKING:
     from ac_platform.conversation_intelligence.authority import ConversationAuthority
@@ -86,7 +91,7 @@ class ConversationIntake:
         self.database = application.database
         self.authority = authority
 
-    async def admit(self, actor: ActorContext) -> None:
+    async def admit(self, actor: ConversationActor) -> None:
         await self.application.admit(actor)
         if actor.tenant_id not in self.policy.tenant_ids:
             raise ConversationDenied("Analysis has not been enabled for this workspace.")
@@ -100,7 +105,7 @@ class ConversationIntake:
             ):
                 raise ConversationDenied("The approved private intake configuration changed.")
 
-    async def _quote(self, actor: ActorContext, identifier: UUID) -> ConversationQuote:
+    async def _quote(self, actor: ConversationActor, identifier: UUID) -> ConversationQuote:
         await self.admit(actor)
         row = await self.database.scalar(
             select(ConversationQuote)
@@ -145,10 +150,19 @@ class ConversationIntake:
         }
 
     async def prepare(
-        self, actor: ActorContext, intent: IntakeIntent, *, key: str
+        self, actor: ConversationActor, intent: IntakeIntent, *, key: str
     ) -> dict[str, Any]:
         await self.admit(actor)
         now = utc(self.application.clock())
+        if isinstance(actor, ProcessingActor):
+            from ac_platform.conversation_intelligence.guest_ownership import admit_processing_actor
+
+            usage = await admit_processing_actor(self.database, actor, now)
+            if (
+                usage.source_sha256 != intent.source_sha256
+                or usage.reserved_seconds != (intent.duration_ms + 999) // 1000
+            ):
+                raise ConversationDenied("The call differs from its reserved source receipt.")
         if self.authority is not None:
             await self.authority.claim_allowance(self.application, actor)
         payload = intent.model_dump(mode="json")
@@ -217,7 +231,7 @@ class ConversationIntake:
             self.policy.retention_ref,
             self.policy.authorization_ref,
             "local-zero-cost-v1",
-            (intent.duration_ms + 999) // 1000,
+            0 if isinstance(actor, ProcessingActor) else (intent.duration_ms + 999) // 1000,
             0,
             int(now.timestamp()),
             int((now + timedelta(minutes=30)).timestamp()),
@@ -253,7 +267,7 @@ class ConversationIntake:
         return self._view(row)
 
     async def accept(
-        self, actor: ActorContext, identifier: UUID, intent: QuoteAcceptance
+        self, actor: ConversationActor, identifier: UUID, intent: QuoteAcceptance
     ) -> dict[str, Any]:
         row = await self._quote(actor, identifier)
         quote = Quote.from_dict(row.quote)
@@ -271,7 +285,7 @@ class ConversationIntake:
                     quote_id=identifier,
                     tenant_id=actor.tenant_id,
                     person_id=actor.person_id,
-                    session_id=actor.session_id,
+                    **actor_columns(actor),
                     quote_fingerprint=quote.fingerprint,
                     privacy_revision=quote.privacy_revision,
                     accepted_at=now,
@@ -289,7 +303,7 @@ class ConversationIntake:
         elif (
             existing.person_id != actor.person_id
             or existing.tenant_id != actor.tenant_id
-            or existing.session_id != actor.session_id
+            or not same_actor(existing, actor)
             or existing.quote_fingerprint != quote.fingerprint
             or existing.privacy_revision != quote.privacy_revision
         ):
@@ -297,7 +311,7 @@ class ConversationIntake:
         return {"id": str(identifier), "state": "accepted"}
 
     async def require_accepted(
-        self, actor: ActorContext, recording_id: UUID, quote_id: UUID
+        self, actor: ConversationActor, recording_id: UUID, quote_id: UUID
     ) -> dict[str, Any]:
         row = await self._quote(actor, quote_id)
         if row.recording_id != recording_id:
@@ -307,7 +321,7 @@ class ConversationIntake:
 
 
 async def require_intake_acceptance(
-    application: ConversationApplication, actor: ActorContext, row: ConversationQuote
+    application: ConversationApplication, actor: ConversationActor, row: ConversationQuote
 ) -> None:
     quote = Quote.from_dict(row.quote)
     if not quote.permission_ref.startswith(CONSENT_PREFIX):
@@ -317,7 +331,7 @@ async def require_intake_acceptance(
         accepted is None
         or accepted.tenant_id != actor.tenant_id
         or accepted.person_id != actor.person_id
-        or accepted.session_id != actor.session_id
+        or not same_actor(accepted, actor)
         or accepted.quote_fingerprint != quote.fingerprint
         or accepted.privacy_revision != quote.privacy_revision
     ):

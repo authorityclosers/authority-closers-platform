@@ -36,6 +36,7 @@ from ac_platform.conversation_intelligence.models import (
     ConversationReportDraft,
     ConversationRun,
 )
+from ac_platform.conversation_intelligence.processing_actor import actor_from_row
 from ac_platform.conversation_intelligence.providers import ProviderResult
 from ac_platform.conversation_intelligence.reports import (
     GROQ_MODEL,
@@ -43,7 +44,6 @@ from ac_platform.conversation_intelligence.reports import (
     load_report_profile,
     merge_fact_packets,
 )
-from ac_platform.kernel.authz import ActorContext
 from ac_platform.outbox.models import Job
 
 if TYPE_CHECKING:
@@ -454,7 +454,7 @@ class ReportingPipeline:
         self.database.add(draft)
         await self.database.flush()
         await self.service.application._receipt(
-            ActorContext(task.person_id, task.session_id, task.tenant_id),
+            actor_from_row(task),
             f"provider-draft:{run.id}",
             "provider_draft_persisted",
             {
@@ -466,3 +466,30 @@ class ReportingPipeline:
             utc(self.service.application.clock()),
             resource_type="conversation_report_draft",
         )
+        from ac_platform.conversation_intelligence.acquisition_models import (
+            ConversationAcquisitionSettlement,
+        )
+        from ac_platform.conversation_intelligence.acquisition_sessions import AcquisitionSessions
+        from ac_platform.conversation_intelligence.guest_ownership import admit_processing_actor
+        from ac_platform.conversation_intelligence.processing_actor import ProcessingActor
+
+        actor = actor_from_row(task)
+        if isinstance(actor, ProcessingActor):
+            now = utc(self.service.application.clock())
+            usage = await admit_processing_actor(self.database, actor, now)
+            previous = await self.database.get(ConversationAcquisitionSettlement, usage.id)
+            if previous is None:
+                await AcquisitionSessions(
+                    self.database,
+                    tenant_id=actor.tenant_id,
+                    policy_revision=usage.policy_revision,
+                    clock=lambda: now,
+                ).settle(
+                    usage.id,
+                    charged_seconds=usage.reserved_seconds,
+                    receipt_sha256=c6.manifest_sha256,
+                )
+            elif previous.kind != "completed" or previous.charged_seconds != usage.reserved_seconds:
+                raise ConversationConflict("The source usage receipt differs.")
+            # A later authorized model/profile report retains the original
+            # completed source charge and its first receipt; it never rewrites it.

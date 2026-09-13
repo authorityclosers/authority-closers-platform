@@ -118,7 +118,7 @@ class Membership(Base):
             name="fk_memberships_person_id_persons",
         ),
         CheckConstraint(
-            "role IN ('learner', 'support', 'admin', 'owner')",
+            "role IN ('learner', 'support', 'admin', 'owner', 'processing')",
             name="role_supported",
         ),
         CheckConstraint(

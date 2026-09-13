@@ -41,6 +41,13 @@ from ac_platform.conversation_intelligence.models import (
     ConversationRecording,
     ConversationReportDraft,
 )
+from ac_platform.conversation_intelligence.processing_actor import (
+    ConversationActor,
+    actor_binding,
+    actor_columns,
+    actor_from_row,
+    same_actor,
+)
 from ac_platform.conversation_intelligence.reporting_pipeline import (
     COACHING_RECIPE,
     FACT_RECIPE,
@@ -49,7 +56,6 @@ from ac_platform.conversation_intelligence.reporting_pipeline import (
     StageRequest,
 )
 from ac_platform.conversation_intelligence.reports import load_report_profile
-from ac_platform.kernel.authz import ActorContext
 from ac_platform.outbox.repository import RecoveryStateRepository
 
 PLAN_PRIVACY_REVISION: Literal["sales-xray-processing-plan-v1"] = "sales-xray-processing-plan-v1"
@@ -61,7 +67,8 @@ class PlanManifest(BaseModel):
     recording_id: UUID
     tenant_id: UUID
     person_id: UUID
-    session_id: UUID
+    session_id: UUID | None
+    processing_lease_id: UUID | None = None
     generation: int = Field(strict=True, ge=1)
     source_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
     source_revision: int = Field(strict=True, ge=1)
@@ -79,6 +86,8 @@ class PlanManifest(BaseModel):
 
     @model_validator(mode="after")
     def bounded(self) -> PlanManifest:
+        if (self.session_id is None) == (self.processing_lease_id is None):
+            raise ValueError("processing_plan_actor_invalid")
         if tuple(item.stage for item in self.stages) != ("C2", "C4", "C5"):
             raise ValueError("processing_plan_stages_invalid")
         if self.expires_at_epoch <= self.created_at_epoch:
@@ -107,7 +116,10 @@ class PlanManifest(BaseModel):
         return self
 
     def as_dict(self) -> dict[str, Any]:
-        return self.model_dump(mode="json")
+        value = self.model_dump(mode="json")
+        if self.processing_lease_id is None:
+            value.pop("processing_lease_id", None)
+        return value
 
 
 class PlanAcceptance(BaseModel):
@@ -137,9 +149,17 @@ def manifest_for(row: ConversationProcessingPlan) -> PlanManifest:
                 value.tenant_id,
                 value.person_id,
                 value.session_id,
+                value.processing_lease_id,
                 value.generation,
             )
-            != (row.recording_id, row.tenant_id, row.person_id, row.session_id, row.generation)
+            != (
+                row.recording_id,
+                row.tenant_id,
+                row.person_id,
+                row.session_id,
+                row.processing_lease_id,
+                row.generation,
+            )
             or value.expires_at_epoch != int(utc(row.expires_at).timestamp())
         ):
             raise ValueError
@@ -153,14 +173,14 @@ def acceptance_intent(row: ConversationProcessingPlan) -> dict[str, Any]:
         "plan_id": str(row.id),
         "plan_fingerprint": row.plan_sha256,
         "privacy_revision": PLAN_PRIVACY_REVISION,
-        "session_id": str(row.session_id),
+        **actor_binding(actor_from_row(row)),
         "accepted": True,
     }
 
 
 async def require_plan_consent(
     app: ConversationApplication,
-    actor: ActorContext,
+    actor: ConversationActor,
     row: ConversationProcessingPlan,
     authority: ConversationAuthority,
 ) -> PlanManifest:
@@ -176,8 +196,7 @@ async def require_plan_consent(
     )
     if (
         row.state not in {"active", "completed"}
-        or (row.tenant_id, row.person_id, row.session_id)
-        != (actor.tenant_id, actor.person_id, actor.session_id)
+        or not same_actor(row, actor)
         or row.generation != recording.generation
         or value.source_sha256 != recording.source_sha256
         or value.source_revision != recording.source_revision
@@ -219,7 +238,7 @@ def require_derived_input(value: PlanManifest, plan: ServicePlan) -> None:
 
 async def require_stage_authorization(
     app: ConversationApplication,
-    actor: ActorContext,
+    actor: ConversationActor,
     recording: ConversationRecording,
     quoted: ConversationQuote,
     quote: Quote,
@@ -249,7 +268,7 @@ class ConversationProcessingPlans:
         self.inference = ConversationInference(app, authority=authority)
 
     async def _row(
-        self, actor: ActorContext, recording_id: UUID, identifier: UUID | None = None
+        self, actor: ConversationActor, recording_id: UUID, identifier: UUID | None = None
     ) -> ConversationProcessingPlan:
         await self.app.get(actor, recording_id)
         query = select(ConversationProcessingPlan).where(
@@ -299,10 +318,12 @@ class ConversationProcessingPlans:
             "failure_code": row.progress.get("failure_code"),
         }
 
-    async def get(self, actor: ActorContext, recording_id: UUID) -> dict[str, Any]:
+    async def get(self, actor: ConversationActor, recording_id: UUID) -> dict[str, Any]:
         return self.view(await self._row(actor, recording_id))
 
-    async def quote(self, actor: ActorContext, recording_id: UUID, *, key: str) -> dict[str, Any]:
+    async def quote(
+        self, actor: ConversationActor, recording_id: UUID, *, key: str
+    ) -> dict[str, Any]:
         now = await self.app.admit(actor)
         await self.app.get(actor, recording_id)
         recording = await self.app._recording(actor, recording_id)
@@ -310,7 +331,7 @@ class ConversationProcessingPlans:
         bundle, c2 = await self.authority.approval(self.app, actor, recording, source, now)
         command = {
             "recording_id": str(recording_id),
-            "session_id": str(actor.session_id),
+            **actor_binding(actor),
             "authority_sha256": bundle.digest,
         }
         replay = await self.app._replay(actor, key, "processing_plan_quote", command)
@@ -378,7 +399,7 @@ class ConversationProcessingPlans:
                 recording_id=recording_id,
                 tenant_id=recording.tenant_id,
                 person_id=recording.person_id,
-                session_id=actor.session_id,
+                **actor_columns(actor),
                 generation=recording.generation,
                 source_sha256=recording.source_sha256,
                 source_revision=recording.source_revision,
@@ -402,7 +423,7 @@ class ConversationProcessingPlans:
             tenant_id=recording.tenant_id,
             person_id=recording.person_id,
             recording_id=recording_id,
-            session_id=actor.session_id,
+            **actor_columns(actor),
             generation=recording.generation,
             plan_sha256=content_hash(value.as_dict()),
             manifest=value.as_dict(),
@@ -418,7 +439,7 @@ class ConversationProcessingPlans:
         return self.view(row)
 
     async def accept(
-        self, actor: ActorContext, recording_id: UUID, payload: PlanAcceptance, *, key: str
+        self, actor: ConversationActor, recording_id: UUID, payload: PlanAcceptance, *, key: str
     ) -> dict[str, Any]:
         now = await self.app.admit(actor)
         row = await self._row(actor, recording_id, payload.plan_id)
@@ -427,7 +448,7 @@ class ConversationProcessingPlans:
         if (
             payload.accepted is not True
             or payload.plan_fingerprint != row.plan_sha256
-            or actor.session_id != row.session_id
+            or not same_actor(row, actor)
             or bundle.digest != value.authority_sha256
             or int(now.timestamp()) >= value.expires_at_epoch
             or row.state not in {"quoted", "active", "completed"}
@@ -460,7 +481,7 @@ class ConversationProcessingPlans:
 
     async def _enqueue(
         self,
-        actor: ActorContext,
+        actor: ConversationActor,
         row: ConversationProcessingPlan,
         value: PlanManifest,
         request: StageRequest | None,
@@ -521,7 +542,7 @@ class ConversationProcessingPlans:
         assert task is not None
         return task
 
-    async def advance(self, actor: ActorContext, row: ConversationProcessingPlan) -> None:
+    async def advance(self, actor: ConversationActor, row: ConversationProcessingPlan) -> None:
         from ac_platform.conversation_intelligence.report_overview import stage_completion_limit
 
         value = await require_plan_consent(self.app, actor, row, self.authority)
@@ -626,7 +647,7 @@ class ProcessingPlanScheduler:
             if candidate is None:
                 return False
             identifier, recording_id = candidate.id, candidate.recording_id
-            actor = ActorContext(candidate.person_id, candidate.session_id, candidate.tenant_id)
+            actor = actor_from_row(candidate)
             try:
                 async with db.begin_nested():
                     app = ConversationApplication(db)

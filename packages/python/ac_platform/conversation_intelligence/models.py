@@ -201,13 +201,19 @@ class ConversationQuoteAcceptance(Base):
     """Separate immutable owner consent: issuing a quote cannot approve itself."""
 
     __tablename__ = "conversation_quote_acceptances"
-    __table_args__ = (member_fk(),)
+    __table_args__ = (
+        member_fk(),
+        CheckConstraint("(session_id IS NULL) <> (processing_lease_id IS NULL)", name="one_actor"),
+    )
     quote_id: Mapped[UUID] = mapped_column(
         Uuid, ForeignKey("conversation_quotes.id"), primary_key=True
     )
     tenant_id: Mapped[UUID] = mapped_column(Uuid)
     person_id: Mapped[UUID] = mapped_column(Uuid)
-    session_id: Mapped[UUID] = mapped_column(Uuid, ForeignKey("sessions.id"))
+    session_id: Mapped[UUID | None] = mapped_column(Uuid, ForeignKey("sessions.id"))
+    processing_lease_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("conversation_processing_leases.id")
+    )
     quote_fingerprint: Mapped[str] = mapped_column(String(64))
     privacy_revision: Mapped[str] = mapped_column(String(128))
     accepted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
@@ -308,6 +314,7 @@ class ConversationInferenceTask(Base):
         UniqueConstraint("job_id"),
         CheckConstraint("stage IN ('C2','C4','C5')", name="stage"),
         CheckConstraint("generation >= 1", name="positive_generation"),
+        CheckConstraint("(session_id IS NULL) <> (processing_lease_id IS NULL)", name="one_actor"),
         CheckConstraint(
             "state IN ('queued','running','completed','failed','uncertain','cancelled')",
             name="state",
@@ -317,7 +324,10 @@ class ConversationInferenceTask(Base):
     tenant_id: Mapped[UUID] = mapped_column(Uuid)
     person_id: Mapped[UUID] = mapped_column(Uuid)
     recording_id: Mapped[UUID] = mapped_column(Uuid)
-    session_id: Mapped[UUID] = mapped_column(Uuid, ForeignKey("sessions.id"))
+    session_id: Mapped[UUID | None] = mapped_column(Uuid, ForeignKey("sessions.id"))
+    processing_lease_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("conversation_processing_leases.id")
+    )
     job_id: Mapped[UUID] = mapped_column(Uuid, ForeignKey("jobs.id"))
     quote_id: Mapped[UUID] = mapped_column(Uuid, ForeignKey("conversation_quotes.id"))
     generation: Mapped[int] = mapped_column(Integer)
@@ -346,12 +356,16 @@ class ConversationProcessingPlan(Base):
             "state IN ('quoted','active','completed','held','cancelled')", name="state"
         ),
         CheckConstraint("state <> 'active' OR acceptance_command_id IS NOT NULL", name="consent"),
+        CheckConstraint("(session_id IS NULL) <> (processing_lease_id IS NULL)", name="one_actor"),
     )
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
     tenant_id: Mapped[UUID] = mapped_column(Uuid)
     person_id: Mapped[UUID] = mapped_column(Uuid)
     recording_id: Mapped[UUID] = mapped_column(Uuid)
-    session_id: Mapped[UUID] = mapped_column(Uuid, ForeignKey("sessions.id"))
+    session_id: Mapped[UUID | None] = mapped_column(Uuid, ForeignKey("sessions.id"))
+    processing_lease_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("conversation_processing_leases.id")
+    )
     generation: Mapped[int] = mapped_column(Integer)
     plan_sha256: Mapped[str] = mapped_column(String(64))
     manifest: Mapped[dict[str, Any] | None] = mapped_column(JSON)

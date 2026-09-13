@@ -156,12 +156,30 @@ class AcquisitionSessions:
         await self.database.flush()
         return VisitorCredential(identifier, token, expires)
 
+    async def fence_visitor(self, visitor_id: UUID, *, shared: bool) -> None:
+        """Fence one visitor's claim/revoke against retained source streaming."""
+        await self._admit()
+        if self.database.get_bind().dialect.name != "postgresql":
+            raise ConversationError("Visitor ownership fences require PostgreSQL.")
+        lock = int.from_bytes(
+            hashlib.sha256(b"visitor-owner:" + self.tenant_id.bytes + visitor_id.bytes).digest()[
+                :8
+            ],
+            "big",
+            signed=True,
+        )
+        operation = func.pg_advisory_xact_lock_shared if shared else func.pg_advisory_xact_lock
+        await self.database.execute(select(operation(lock)))
+
     async def claim(self, token: str, actor: ActorContext) -> UUID:
-        if actor.tenant_id != self.tenant_id:
+        if type(actor) is not ActorContext or actor.tenant_id != self.tenant_id:
             raise ConversationDenied("Use your Academy account for this report.")
         # Identity HTTP already holds Person -> Session locks. Preserve that
         # order for direct callers before taking the acquisition transaction lock.
         await ConversationApplication(self.database, clock=self.clock).admit(actor)
+        now = await self._admit()
+        visitor = await self._visitor(token, now)
+        await self.fence_visitor(visitor.id, shared=False)
         now = await self._admit(mutation=True)
         visitor = await self._visitor(token, now)
         previous = await self.database.get(ConversationVisitorClaim, visitor.id)
@@ -184,6 +202,8 @@ class AcquisitionSessions:
     async def _owner(
         self, token: str | None, actor: ActorContext | None, now: datetime
     ) -> tuple[UUID | None, UUID | None]:
+        if actor is not None and type(actor) is not ActorContext:
+            raise ConversationDenied("A current Academy identity is required.")
         if token is not None:
             visitor = await self._visitor(token, now)
             claim = await self.database.get(ConversationVisitorClaim, visitor.id)
@@ -285,12 +305,18 @@ class AcquisitionSessions:
         self, usage_id: UUID, *, charged_seconds: int, receipt_sha256: str, no_work: bool = False
     ) -> None:
         """Worker-only receipt; a browser cannot release an uncertain provider run."""
-        now = await self._admit(mutation=True)
+        # Completion preserves the exact original charge, so it needs only the
+        # usage row lock. Taking the tenant admission lock while a processing
+        # worker holds its source lease would invert upload/resume lock order.
+        # Only a proven no-work refund changes available capacity.
+        now = await self._admit(mutation=no_work)
         usage = await self.database.scalar(
-            select(ConversationAcquisitionUsage).where(
+            select(ConversationAcquisitionUsage)
+            .where(
                 ConversationAcquisitionUsage.id == usage_id,
                 ConversationAcquisitionUsage.tenant_id == self.tenant_id,
             )
+            .with_for_update()
         )
         if (
             usage is None
@@ -323,6 +349,9 @@ class AcquisitionSessions:
         await self.database.flush()
 
     async def revoke(self, token: str) -> None:
+        now = await self._admit()
+        visitor = await self._visitor(token, now)
+        await self.fence_visitor(visitor.id, shared=False)
         now = await self._admit(mutation=True)
         visitor = await self._visitor(token, now)
         visitor.revoked_at = now

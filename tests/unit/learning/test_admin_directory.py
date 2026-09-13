@@ -66,6 +66,9 @@ def directory_db():
                     legacy_profile_count=1,
                 )
             )
+        processing_id = uuid4()
+        db.add(Person(id=processing_id, display_name="Sales Xray processing", status="active"))
+        db.add(Membership(tenant_id=tenant, person_id=processing_id, role="processing"))
         db.commit()
         yield db, tenant, other
     engine.dispose()
@@ -88,6 +91,7 @@ def test_first_load_lists_all_roles_and_keeps_account_scope(directory_db):
     assert all(m.masked_email == "p***@example.test" for m in result.members)
     assert all(m.active_enrollments == 0 for m in result.members)
     assert list_members(db, tenant_id=tenant, query="Other Academy").members == ()
+    assert list_members(db, tenant_id=tenant, query="Sales Xray processing").members == ()
 
 
 @pytest.mark.parametrize(

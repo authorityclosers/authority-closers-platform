@@ -49,6 +49,7 @@ from ac_platform.conversation_intelligence.models import (
     ConversationQuoteAcceptance,
     ConversationRecording,
 )
+from ac_platform.conversation_intelligence.processing_actor import ConversationActor, same_actor
 from ac_platform.conversation_intelligence.provider_admin import (
     CONTROL_ACCOUNTS,
     lock_provider_configuration,
@@ -61,7 +62,6 @@ from ac_platform.conversation_intelligence.provider_registry import (
 from ac_platform.conversation_intelligence.providers import MAX_AUDIO_BYTES
 from ac_platform.conversation_intelligence.reporting_pipeline import ReportingPipeline, StageRequest
 from ac_platform.identity.models import Person
-from ac_platform.kernel.authz import ActorContext
 from ac_platform.tenancy.models import Membership, Tenant
 
 ApprovalLoader = Callable[[], HostedApprovalBundle]
@@ -93,7 +93,7 @@ class ConversationAuthority:
                 "The approved processing configuration is unavailable."
             ) from None
 
-    def recipient(self, bundle: HostedApprovalBundle, actor: ActorContext) -> None:
+    def recipient(self, bundle: HostedApprovalBundle, actor: ConversationActor) -> None:
         if not any(
             item.tenant_id == actor.tenant_id and item.person_id == actor.person_id
             for item in bundle.allowances
@@ -101,13 +101,13 @@ class ConversationAuthority:
             raise ConversationDenied("This account has no approved processing allowance.")
 
     async def admit(
-        self, app: ConversationApplication, actor: ActorContext
+        self, app: ConversationApplication, actor: ConversationActor
     ) -> HostedApprovalBundle:
         bundle = self.current(await app.admit(actor))
         self.recipient(bundle, actor)
         return bundle
 
-    async def claim_allowance(self, app: ConversationApplication, actor: ActorContext) -> None:
+    async def claim_allowance(self, app: ConversationApplication, actor: ConversationActor) -> None:
         """POST-only application command; finite grants are never inferred from login."""
         bundle = await self.admit(app, actor)
         approval = next(
@@ -216,7 +216,7 @@ class ConversationAuthority:
     async def admit_upload(
         self,
         app: ConversationApplication,
-        actor: ActorContext,
+        actor: ConversationActor,
         intent: IntakeIntent,
     ) -> None:
         bundle = await self.admit(app, actor)
@@ -263,7 +263,7 @@ class ConversationAuthority:
     async def approval(
         self,
         app: ConversationApplication,
-        actor: ActorContext,
+        actor: ConversationActor,
         recording: ConversationRecording,
         plan: ServicePlan,
         now: datetime,
@@ -316,7 +316,7 @@ class ConversationAuthority:
     async def validate_route(
         self,
         app: ConversationApplication,
-        actor: ActorContext,
+        actor: ConversationActor,
         approval: StageApproval,
         *,
         bundle: HostedApprovalBundle | None = None,
@@ -418,8 +418,7 @@ class ConversationAuthority:
                 ):
                     raise ValueError("paid_approval_changed")
             elif (
-                approval.max_cost_paise != 0
-                or approval.zero_cost_basis == "paid_pricing_evidence"
+                approval.max_cost_paise != 0 or approval.zero_cost_basis == "paid_pricing_evidence"
             ):
                 raise ValueError("free_approval_changed")
             if (
@@ -442,7 +441,7 @@ class ConversationAuthority:
     async def validate_quote(
         self,
         app: ConversationApplication,
-        actor: ActorContext,
+        actor: ConversationActor,
         recording: ConversationRecording,
         plan: ServicePlan,
         row: ConversationQuote,
@@ -499,7 +498,7 @@ class ConversationAuthority:
     async def issue(
         self,
         app: ConversationApplication,
-        actor: ActorContext,
+        actor: ConversationActor,
         recording_id: UUID,
         *,
         key: str,
@@ -625,6 +624,7 @@ class ConversationAuthority:
             "input_sha256": quote.input_sha256,
             "expires_at_epoch": quote.expires_at_epoch,
             "accepted": accepted is not None
+            and same_actor(accepted, actor)
             and (
                 accepted.tenant_id,
                 accepted.person_id,

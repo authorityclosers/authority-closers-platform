@@ -48,6 +48,7 @@ from ac_platform.conversation_intelligence.entitlements import (
     metered_seconds,
     settle,
 )
+from ac_platform.conversation_intelligence.guest_ownership import admit_processing_recording
 from ac_platform.conversation_intelligence.models import (
     ConversationBudgetAccount,
     ConversationCheckpoint,
@@ -421,12 +422,15 @@ class OfflineConversationWorker:
                 ConversationRecording.tenant_id == job.tenant_id,
             )
         )
-        if owner is None:
+        if owner is None or job.tenant_id is None:
             raise ConversationDenied("Recording unavailable.")
+        processing_usage = await admit_processing_recording(
+            db, job.tenant_id, recording_id, datetime.now(UTC)
+        )
         person = await db.scalar(
             select(Person)
             .where(Person.id == owner)
-            .with_for_update()
+            .with_for_update(read=processing_usage is not None)
             .execution_options(populate_existing=True)
         )
         tenant = await db.scalar(
@@ -456,12 +460,13 @@ class OfflineConversationWorker:
         if (
             person is None
             or person.status != "active"
-            or person.email_verified_at is None
+            or (processing_usage is None and person.email_verified_at is None)
             or tenant is None
             or tenant.status != "active"
             or member is None
             or member.status != "active"
             or member.ended_at is not None
+            or (processing_usage is None and member.role == "processing")
             or recording is None
             or recording.state != "ready"
             or recording.generation != job.payload.get("generation")
@@ -832,6 +837,16 @@ class OfflineConversationWorker:
                 async with self.sessions() as db, db.begin():
                     job = await self._job(db, work)
                     recording, run, quoted, quote = await self._scope(db, job)
+                    processing_usage = await admit_processing_recording(
+                        db, recording.tenant_id, recording.id, datetime.now(UTC)
+                    )
+                    measured_seconds = metered_seconds(result["media_duration_ms"])
+                    if processing_usage is not None and (
+                        processing_usage.source_sha256 != recording.source_sha256
+                        or processing_usage.reserved_seconds != measured_seconds
+                        or quote.entitlement_seconds != 0
+                    ):
+                        raise ConversationConflict("Measured audio differs from its reservation.")
                     blob_id = cached_row[1] if cached_row is not None else None
                     if cached is None:
                         await fenced.run(
@@ -865,7 +880,8 @@ class OfflineConversationWorker:
                             quote.fingerprint,
                             "local",
                             str(job.id),
-                            metered_seconds(result["media_duration_ms"]),
+                            # The acquisition ledger already charged this source.
+                            0 if processing_usage is not None else measured_seconds,
                             0,
                             f"checkpoint:{c1.manifest_sha256}",
                         ),

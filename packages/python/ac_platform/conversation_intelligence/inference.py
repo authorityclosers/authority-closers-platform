@@ -49,13 +49,17 @@ from ac_platform.conversation_intelligence.models import (
     ConversationRecording,
     ConversationRun,
 )
+from ac_platform.conversation_intelligence.processing_actor import (
+    ConversationActor,
+    actor_columns,
+    same_actor,
+)
 from ac_platform.conversation_intelligence.providers import ProviderResult
 from ac_platform.conversation_intelligence.reporting_pipeline import (
     ReportingPipeline,
     StagePlan,
     StageRequest,
 )
-from ac_platform.kernel.authz import ActorContext
 from ac_platform.outbox.repository import JobRepository
 
 if TYPE_CHECKING:
@@ -264,7 +268,7 @@ class ConversationInference:
 
     async def _quote(
         self,
-        actor: ActorContext,
+        actor: ConversationActor,
         recording: ConversationRecording,
         quote_id: UUID,
         plan: ServicePlan,
@@ -353,7 +357,7 @@ class ConversationInference:
             elif (
                 accepted.person_id != actor.person_id
                 or accepted.tenant_id != actor.tenant_id
-                or accepted.session_id != actor.session_id
+                or not same_actor(accepted, actor)
                 or accepted.quote_fingerprint != quote.fingerprint
                 or accepted.privacy_revision != quote.privacy_revision
             ):
@@ -364,7 +368,7 @@ class ConversationInference:
 
     async def accept(
         self,
-        actor: ActorContext,
+        actor: ConversationActor,
         recording_id: UUID,
         quote_id: UUID,
         acceptance: QuoteAcceptance,
@@ -395,7 +399,7 @@ class ConversationInference:
                     quote_id=quote_id,
                     tenant_id=recording.tenant_id,
                     person_id=recording.person_id,
-                    session_id=actor.session_id,
+                    **actor_columns(actor),
                     quote_fingerprint=quote.fingerprint,
                     privacy_revision=quote.privacy_revision,
                     accepted_at=now,
@@ -441,7 +445,7 @@ class ConversationInference:
 
     async def request_transcription(
         self,
-        actor: ActorContext,
+        actor: ConversationActor,
         recording_id: UUID,
         quote_id: UUID,
         *,
@@ -451,7 +455,7 @@ class ConversationInference:
 
     async def request_stage(
         self,
-        actor: ActorContext,
+        actor: ConversationActor,
         recording_id: UUID,
         quote_id: UUID,
         *,
@@ -531,7 +535,7 @@ class ConversationInference:
                 tenant_id=recording.tenant_id,
                 person_id=recording.person_id,
                 recording_id=recording.id,
-                request_key=key,
+                request_key=self.application.command_key(actor, key),
                 intent_sha256=content_hash(command),
                 recipe_revision=plan.recipe_revision,
                 generation=recording.generation,
@@ -547,7 +551,7 @@ class ConversationInference:
                 tenant_id=recording.tenant_id,
                 person_id=recording.person_id,
                 recording_id=recording.id,
-                session_id=actor.session_id,
+                **actor_columns(actor),
                 job_id=job.id,
                 quote_id=quote_id,
                 generation=recording.generation,

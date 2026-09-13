@@ -1,0 +1,12 @@
+[
+  {
+    "file": "database.log",
+    "sha256": "a62c2d0cb2eca2fac416b1d4c6522d573267defd02d3d5585f852ec66e43a3a5",
+    "bytes": 177
+  },
+  {
+    "file": "database.junit.xml",
+    "sha256": "2881e0b44a39321f12a9ace0ed53ad6edbc48353c2b328910e7fdcec7edca619",
+    "bytes": 4210
+  }
+]
