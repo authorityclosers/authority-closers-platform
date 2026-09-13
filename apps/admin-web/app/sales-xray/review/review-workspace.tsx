@@ -1,40 +1,138 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import {
+  ArrowLeft,
   CheckCircle2,
   CircleAlert,
   Clock3,
-  FileSearch,
-  LockKeyhole,
-  MessageSquareText,
+  ExternalLink,
+  FileCheck2,
+  LoaderCircle,
+  Plus,
   RefreshCw,
   ShieldCheck,
-  UsersRound,
+  UserRound,
+  XCircle,
 } from "lucide-react";
 
 import { AdminShell } from "../../components/admin-shell";
-import { AuditPanel, SectionHeading } from "../../components/ops-primitives";
+import { SectionHeading } from "../../components/ops-primitives";
 import {
-  AssignedReviewForm,
+  buildAcademyReviewLink,
+  createReviewAssignment,
+  loadReviewAssignments,
+  newReviewIdempotencyKey,
+  reviewError,
+  reviewLenses,
+  revokeReviewAssignment,
   type ReviewAssignment,
-  type SubmitReviewProposal,
-} from "@ac/sales-xray-review-ui";
-import { type ReviewMode, type ReviewQueueState } from "./review-api";
+  type ReviewMode,
+  type ReviewQueueState,
+} from "./review-api";
 import styles from "./review-workspace.module.css";
 
-const modes: Array<{ id: ReviewMode; label: string; detail: string }> = [
-  { id: "sales", label: "Sales", detail: "Context and adjudication" },
-  { id: "technical", label: "Technical", detail: "Transcript and measurement" },
-  { id: "ux", label: "UX", detail: "Attribution and alignment" },
-];
+const lensLabels: Record<ReviewMode, { label: string; detail: string }> = {
+  sales: { label: "Sales", detail: "Context and adjudication" },
+  technical: { label: "Technical", detail: "Transcript and measurement" },
+  ux: { label: "UX", detail: "Attribution and alignment" },
+};
 
-type Reviewer = { id: string; name: string; detail: string };
+const stateLabels: Record<ReviewAssignment["state"], string> = {
+  assigned: "Assigned",
+  in_progress: "In progress",
+  submitted: "Submitted",
+  revoked: "Revoked",
+  expired: "Expired",
+};
 
-const reviewers: Reviewer[] = [
-  { id: "dipak", name: "Dipak", detail: "Server assignment required" },
-  { id: "suyash", name: "Suyash", detail: "Server assignment required" },
-];
+type CreateMutation =
+  | { status: "idle" }
+  | { status: "submitting" }
+  | { status: "success"; assignment: ReviewAssignment }
+  | { status: "error"; message: string; retryable: boolean };
+
+type RevokeMutation =
+  | { status: "idle" }
+  | { status: "submitting"; assignmentId: string }
+  | { status: "success"; assignment: ReviewAssignment }
+  | {
+      status: "error";
+      assignmentId: string;
+      message: string;
+      retryable: boolean;
+    };
+
+type CreateIntent = Readonly<{
+  runId: string;
+  reviewerPersonId: string;
+  allowedLenses: readonly ReviewMode[];
+  expiresAtEpoch: number;
+}>;
+
+type FormErrors = Partial<
+  Record<
+    "runId" | "reviewerPersonId" | "allowedLenses" | "expiresAtEpoch",
+    string
+  >
+>;
+
+function formatEpoch(epoch: number): string {
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(epoch * 1000));
+}
+
+function shortId(value: string): string {
+  return `${value.slice(0, 8)}…${value.slice(-4)}`;
+}
+
+function mergeAssignment(
+  items: readonly ReviewAssignment[],
+  next: ReviewAssignment,
+): ReviewAssignment[] {
+  const existing = items.findIndex((item) => item.id === next.id);
+  if (existing === -1) return [next, ...items];
+  return items.map((item) => (item.id === next.id ? next : item));
+}
+
+function validateCreateIntent(
+  runId: string,
+  reviewerPersonId: string,
+  allowedLenses: readonly ReviewMode[],
+  expiry: string,
+): { intent?: CreateIntent; errors: FormErrors } {
+  const errors: FormErrors = {};
+  const uuidPattern =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+  const runValue = runId.trim();
+  const reviewerValue = reviewerPersonId.trim();
+  if (!uuidPattern.test(runValue)) errors.runId = "Enter a canonical UUID.";
+  if (!uuidPattern.test(reviewerValue)) {
+    errors.reviewerPersonId = "Enter a canonical UUID.";
+  }
+  if (allowedLenses.length === 0) {
+    errors.allowedLenses = "Choose at least one review lens.";
+  }
+  const expiresAtEpoch = Number(expiry.trim());
+  if (!Number.isInteger(expiresAtEpoch) || expiresAtEpoch <= 0) {
+    errors.expiresAtEpoch = "Enter expiry as UTC epoch seconds.";
+  } else if (expiresAtEpoch <= Math.floor(Date.now() / 1000)) {
+    errors.expiresAtEpoch = "Expiry must be in the future.";
+  }
+  if (Object.keys(errors).length > 0) return { errors };
+  return {
+    errors,
+    intent: {
+      runId: runValue,
+      reviewerPersonId: reviewerValue,
+      allowedLenses: [...allowedLenses],
+      expiresAtEpoch,
+    },
+  };
+}
 
 function StatePanel({
   state,
@@ -43,26 +141,21 @@ function StatePanel({
   state: ReviewQueueState;
   onRetry: () => void;
 }) {
-  if (state.status === "loading") {
+  if (state.status === "loading" && state.items.length === 0) {
     return (
       <div className={styles.queueState} role="status" aria-live="polite">
-        <RefreshCw size={26} className="spin" aria-hidden="true" />
-        <strong>Checking the review queue</strong>
-        <p>
-          Reading server-owned assignments and the current append-only cursor.
-        </p>
+        <LoaderCircle size={26} className="spin" aria-hidden="true" />
+        <strong>Checking the review assignment queue</strong>
+        <p>Loading the latest assignments for this admin session.</p>
       </div>
     );
   }
-  if (state.status === "error") {
+  if (state.status === "error" && state.items.length === 0) {
     return (
       <div className={styles.queueState} role="alert">
         <CircleAlert size={28} aria-hidden="true" />
         <strong>{state.message}</strong>
-        <p>
-          No report, reviewer, clip, or saved review is shown until the server
-          returns an authorized response.
-        </p>
+        <p>Retry the queue before creating a new handoff.</p>
         {state.retryable ? (
           <button
             className="button button-secondary"
@@ -78,232 +171,755 @@ function StatePanel({
   return null;
 }
 
+function AssignmentStatePill({ state }: { state: ReviewAssignment["state"] }) {
+  const className =
+    state === "revoked" || state === "expired"
+      ? styles.pillMuted
+      : state === "submitted"
+        ? styles.pillSuccess
+        : styles.pillPending;
+  return (
+    <span className={`${styles.pill} ${className}`}>
+      {state === "revoked" || state === "expired" ? (
+        <XCircle size={12} aria-hidden="true" />
+      ) : state === "submitted" ? (
+        <CheckCircle2 size={12} aria-hidden="true" />
+      ) : (
+        <Clock3 size={12} aria-hidden="true" />
+      )}
+      {stateLabels[state]}
+    </span>
+  );
+}
+
+function AssignmentSummary({
+  assignment,
+  academyOrigin,
+  detail,
+  onRevoke,
+  revoking,
+}: {
+  assignment: ReviewAssignment;
+  academyOrigin?: string | null;
+  detail?: boolean;
+  onRevoke: (assignment: ReviewAssignment) => void;
+  revoking: boolean;
+}) {
+  const academyLink = buildAcademyReviewLink(academyOrigin, assignment.id);
+  return (
+    <article
+      className={`${styles.assignmentCard} ${detail ? styles.assignmentCardDetail : ""}`}
+    >
+      <div className={styles.assignmentCardHeader}>
+        <div>
+          <span className={styles.eyebrow}>Assignment</span>
+          <h3 title={assignment.id}>{shortId(assignment.id)}</h3>
+        </div>
+        <AssignmentStatePill state={assignment.state} />
+      </div>
+      <dl className={styles.assignmentFacts}>
+        <div>
+          <dt>Run ID</dt>
+          <dd title={assignment.run_id}>{shortId(assignment.run_id)}</dd>
+        </div>
+        <div>
+          <dt>Reviewer person</dt>
+          <dd title={assignment.reviewer_person_id}>
+            <UserRound size={13} aria-hidden="true" />{" "}
+            {shortId(assignment.reviewer_person_id)}
+          </dd>
+        </div>
+        <div>
+          <dt>Expires</dt>
+          <dd>{formatEpoch(assignment.expires_at_epoch)}</dd>
+        </div>
+        <div>
+          <dt>Lenses</dt>
+          <dd>{assignment.allowed_lenses.join(" · ")}</dd>
+        </div>
+      </dl>
+      {detail ? (
+        <div className={styles.lineage}>
+          <span>
+            <strong>Tenant</strong> <code>{assignment.tenant_id}</code>
+          </span>
+          <span>
+            <strong>Source</strong>{" "}
+            <code>{assignment.source.recording_id}</code>
+          </span>
+          <span>
+            <strong>Checkpoint</strong> <code>{assignment.checkpoint.id}</code>{" "}
+            · {assignment.checkpoint.stage}
+          </span>
+        </div>
+      ) : null}
+      <div className={styles.assignmentActions}>
+        {academyLink ? (
+          <a
+            className="button button-secondary"
+            href={academyLink}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <ExternalLink size={15} aria-hidden="true" /> Open in Academy
+          </a>
+        ) : (
+          <span className={styles.mutedAction}>Academy link unavailable</span>
+        )}
+        {assignment.state !== "revoked" && assignment.state !== "expired" ? (
+          <button
+            className={`button ${styles.buttonDanger}`}
+            type="button"
+            onClick={() => onRevoke(assignment)}
+            disabled={revoking}
+          >
+            {revoking ? (
+              <LoaderCircle size={15} className="spin" aria-hidden="true" />
+            ) : (
+              <XCircle size={15} aria-hidden="true" />
+            )}
+            {revoking ? "Revoking…" : "Revoke assignment"}
+          </button>
+        ) : null}
+      </div>
+    </article>
+  );
+}
+
 export function ReviewWorkspace({
   assignmentId,
-  assignment,
-  onSubmit,
+  academyOrigin,
 }: {
-  assignmentId: string;
-  assignment?: ReviewAssignment;
-  onSubmit?: SubmitReviewProposal;
+  assignmentId?: string;
+  academyOrigin?: string | null;
 }) {
-  const [state] = useState<ReviewQueueState>({
-    status: "error",
-    message: "The review bridge contract is pending its server-owned DTO.",
-    retryable: false,
+  const [queue, setQueue] = useState<ReviewQueueState>({
+    status: "loading",
+    items: [],
   });
-  const [selectedMode, setSelectedMode] = useState<ReviewMode>("sales");
-  const [selectedReviewer, setSelectedReviewer] = useState("dipak");
-  const [feedback, setFeedback] = useState("");
-  const [confidence, setConfidence] = useState("");
+  const [runId, setRunId] = useState("");
+  const [reviewerPersonId, setReviewerPersonId] = useState("");
+  const [allowedLenses, setAllowedLenses] = useState<ReviewMode[]>([
+    ...reviewLenses,
+  ]);
+  const [expiry, setExpiry] = useState(() =>
+    String(Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60),
+  );
+  const [formErrors, setFormErrors] = useState<FormErrors>({});
+  const [createMutation, setCreateMutation] = useState<CreateMutation>({
+    status: "idle",
+  });
+  const [revokeMutation, setRevokeMutation] = useState<RevokeMutation>({
+    status: "idle",
+  });
+  const [revokeTarget, setRevokeTarget] = useState<ReviewAssignment | null>(
+    null,
+  );
+  const createIntent = useRef<CreateIntent | null>(null);
+  const createKey = useRef<string | null>(null);
+  const revokeKeys = useRef(new Map<string, string>());
+  const queueRequest = useRef(0);
+  const createRequest = useRef(0);
+  const revokeRequest = useRef(0);
+  const mounted = useRef(true);
 
-  if (assignment && onSubmit) {
-    return (
-      <AdminShell
-        active="overview"
-        surface="organization"
-        eyebrow="Review / assigned conversation evidence"
-        title="Conversation review"
-        description="Review a server-assigned conversation report with timestamped evidence, one lens at a time. Reviewer mode changes the form view; it never grants access."
-      >
-        <AssignedReviewForm assignment={assignment} onSubmit={onSubmit} />
-      </AdminShell>
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      queueRequest.current += 1;
+      createRequest.current += 1;
+      revokeRequest.current += 1;
+    };
+  }, []);
+
+  const refreshQueue = useCallback(() => {
+    const request = ++queueRequest.current;
+    const controller = new AbortController();
+    void loadReviewAssignments(fetch, controller.signal).then(
+      (payload) => {
+        if (!mounted.current || request !== queueRequest.current) return;
+        setQueue({ status: "ready", items: payload.items });
+      },
+      (error: unknown) => {
+        if (!mounted.current || request !== queueRequest.current) return;
+        const parsed = reviewError(error);
+        setQueue((current) => ({
+          status: "error",
+          items: current.items,
+          message: parsed.message,
+          retryable: parsed.retryable,
+        }));
+      },
+    );
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    const cancel = refreshQueue();
+    return cancel;
+  }, [refreshQueue]);
+
+  function requestQueueRefresh() {
+    setQueue((current) => ({ status: "loading", items: current.items }));
+    refreshQueue();
+  }
+
+  const selectedAssignment = useMemo(
+    () =>
+      assignmentId
+        ? queue.items.find((assignment) => assignment.id === assignmentId)
+        : undefined,
+    [assignmentId, queue.items],
+  );
+
+  const beginCreate = useCallback(
+    (intent: CreateIntent, idempotencyKey: string) => {
+      const request = ++createRequest.current;
+      createIntent.current = intent;
+      createKey.current = idempotencyKey;
+      setCreateMutation({ status: "submitting" });
+      void createReviewAssignment({
+        ...intent,
+        idempotencyKey,
+      }).then(
+        (assignment) => {
+          if (!mounted.current || request !== createRequest.current) return;
+          setCreateMutation({ status: "success", assignment });
+          createIntent.current = null;
+          createKey.current = null;
+          queueRequest.current += 1;
+          setQueue((current) => {
+            const items = mergeAssignment(current.items, assignment);
+            return current.status === "error"
+              ? { ...current, items }
+              : { status: "ready", items };
+          });
+        },
+        (error: unknown) => {
+          if (!mounted.current || request !== createRequest.current) return;
+          const parsed = reviewError(error);
+          setCreateMutation({
+            status: "error",
+            message: parsed.message,
+            retryable: parsed.retryable,
+          });
+        },
+      );
+    },
+    [],
+  );
+
+  function submitCreate() {
+    const validated = validateCreateIntent(
+      runId,
+      reviewerPersonId,
+      allowedLenses,
+      expiry,
+    );
+    setFormErrors(validated.errors);
+    if (!validated.intent) return;
+    let key: string;
+    try {
+      key = newReviewIdempotencyKey();
+    } catch (error) {
+      const parsed = reviewError(error);
+      setCreateMutation({ status: "error", ...parsed });
+      return;
+    }
+    beginCreate(validated.intent, key);
+  }
+
+  function retryCreate() {
+    if (!createIntent.current || !createKey.current) return;
+    beginCreate(createIntent.current, createKey.current);
+  }
+
+  function startRevoke(assignment: ReviewAssignment) {
+    setRevokeTarget(assignment);
+    setRevokeMutation({ status: "idle" });
+  }
+
+  function confirmRevoke() {
+    if (!revokeTarget) return;
+    const assignment = revokeTarget;
+    const request = ++revokeRequest.current;
+    let key = revokeKeys.current.get(assignment.id);
+    try {
+      if (!key) {
+        key = newReviewIdempotencyKey();
+        revokeKeys.current.set(assignment.id, key);
+      }
+    } catch (error) {
+      const parsed = reviewError(error);
+      setRevokeMutation({
+        status: "error",
+        assignmentId: assignment.id,
+        ...parsed,
+      });
+      return;
+    }
+    setRevokeMutation({ status: "submitting", assignmentId: assignment.id });
+    void revokeReviewAssignment({
+      assignmentId: assignment.id,
+      idempotencyKey: key,
+    }).then(
+      (revoked) => {
+        if (!mounted.current || request !== revokeRequest.current) return;
+        revokeKeys.current.delete(assignment.id);
+        setRevokeMutation({ status: "success", assignment: revoked });
+        setRevokeTarget(null);
+        queueRequest.current += 1;
+        setQueue((current) => {
+          const items = mergeAssignment(current.items, revoked);
+          return current.status === "error"
+            ? { ...current, items }
+            : { status: "ready", items };
+        });
+      },
+      (error: unknown) => {
+        if (!mounted.current || request !== revokeRequest.current) return;
+        const parsed = reviewError(error);
+        setRevokeMutation({
+          status: "error",
+          assignmentId: assignment.id,
+          ...parsed,
+        });
+      },
     );
   }
+
+  const isCreating = createMutation.status === "submitting";
+  const isRevoking = revokeMutation.status === "submitting";
+  const detailMissing = Boolean(
+    assignmentId && queue.status === "ready" && !selectedAssignment,
+  );
 
   return (
     <AdminShell
       active="overview"
-      surface="organization"
-      eyebrow="Review / assigned conversation evidence"
-      title="Conversation review"
-      description="Review a server-assigned conversation report with timestamped evidence, one lens at a time. Reviewer mode changes the form view; it never grants access."
+      surface="operations"
+      eyebrow="Sales Xray / assignment management"
+      title={
+        assignmentId ? "Review assignment" : "Conversation review assignments"
+      }
+      description="Create and revoke reviewer assignments, then hand off the work to Academy."
+      footerText="Review assignments · Saved changes confirmed by the service"
     >
-      <div className={styles.workspace} data-assignment-id={assignmentId}>
+      <div className={styles.workspace}>
+        {assignmentId ? (
+          <div className={styles.breadcrumbRow}>
+            <Link className="back-link" href="/sales-xray/review">
+              <ArrowLeft size={15} aria-hidden="true" /> Back to assignments
+            </Link>
+            <span className={styles.routeCode}>
+              ASSIGNMENT · {shortId(assignmentId)}
+            </span>
+          </div>
+        ) : null}
+
         <div className={styles.notice} role="note">
           <div className={styles.noticeIcon} aria-hidden="true">
             <ShieldCheck size={20} />
           </div>
           <div>
-            <h2>Evidence stays private and append-only.</h2>
+            <h2>Prepare an Academy handoff.</h2>
             <p>
-              Reports, clips, identities, and review history must come from the
-              authenticated tenant boundary. A correction supersedes a prior
-              proposal; it never rewrites the original evidence.
+              Use a saved run and a verified reviewer person ID. The server
+              checks access, lineage, retention, and expiry before confirming
+              the assignment.
             </p>
           </div>
-          <span className={styles.noticeCode}>SERVER OWNED</span>
+          <span className={styles.noticeCode}>ADMIN · MANAGE ONLY</span>
         </div>
+
+        {assignmentId && selectedAssignment ? (
+          <section
+            className={styles.panel}
+            aria-labelledby="assignment-detail-title"
+          >
+            <SectionHeading
+              eyebrow="Server response"
+              id="assignment-detail-title"
+              title="Assignment lineage"
+              body="Review the confirmed lineage and open the Academy handoff when the reviewer is ready."
+            />
+            <AssignmentSummary
+              assignment={selectedAssignment}
+              academyOrigin={academyOrigin}
+              detail
+              onRevoke={startRevoke}
+              revoking={
+                isRevoking && revokeTarget?.id === selectedAssignment.id
+              }
+            />
+          </section>
+        ) : null}
+
+        {detailMissing ? (
+          <section className={styles.panel} role="alert">
+            <div className={styles.queueStateCompact}>
+              <CircleAlert size={24} aria-hidden="true" />
+              <div>
+                <strong>
+                  Assignment not found in the current server response.
+                </strong>
+                <p>
+                  Refresh the queue or return to the assignment list. No
+                  client-provided ID is treated as an assignment.
+                </p>
+              </div>
+              <button
+                className="button button-secondary"
+                type="button"
+                onClick={requestQueueRefresh}
+              >
+                <RefreshCw size={15} aria-hidden="true" /> Retry queue
+              </button>
+            </div>
+          </section>
+        ) : null}
 
         <div className={styles.layout}>
           <section className={styles.panel} aria-labelledby="queue-title">
             <div className={styles.panelHeader}>
               <div>
-                <span className={styles.eyebrow}>Assigned queue</span>
-                <h2 id="queue-title">Reports awaiting review</h2>
+                <span className={styles.eyebrow}>Server queue · 50 max</span>
+                <h2 id="queue-title">Active and historical assignments</h2>
               </div>
-              <span className={`${styles.pill} ${styles.pillPending}`}>
-                <Clock3 size={12} aria-hidden="true" /> Cursor bound
-              </span>
+              <button
+                className="icon-button"
+                type="button"
+                aria-label="Refresh review assignment queue"
+                onClick={requestQueueRefresh}
+                disabled={queue.status === "loading"}
+              >
+                <RefreshCw
+                  size={17}
+                  className={queue.status === "loading" ? "spin" : undefined}
+                  aria-hidden="true"
+                />
+              </button>
             </div>
             <p className={styles.panelIntro}>
-              The queue is paged by the server cursor. A stale cursor or changed
-              tenant context must fail closed.
+              Open an assignment for its lineage, expiry, and Academy handoff.
             </p>
-            {state.status === "ready" ? (
-              <div className={styles.queueState} role="status">
-                <FileSearch size={28} aria-hidden="true" />
-                <strong>Queue response received.</strong>
+            <StatePanel state={queue} onRetry={requestQueueRefresh} />
+            {queue.status === "error" && queue.items.length > 0 ? (
+              <div className={styles.inlineError} role="alert">
+                <CircleAlert size={16} aria-hidden="true" />
+                <span>{queue.message}</span>
+                {queue.retryable ? (
+                  <button
+                    className="button button-secondary"
+                    type="button"
+                    onClick={requestQueueRefresh}
+                  >
+                    Retry
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+            {queue.status !== "loading" && queue.items.length === 0 ? (
+              <div className={styles.emptyState} role="status">
+                <FileCheck2 size={25} aria-hidden="true" />
+                <strong>No review assignments yet</strong>
                 <p>
-                  The review contract is ready to render once its report and
-                  assignment fields are bound to this surface.
+                  Create one after a saved report and verified reviewer
+                  membership are available.
                 </p>
               </div>
-            ) : (
-              <StatePanel state={state} onRetry={() => undefined} />
-            )}
-          </section>
-
-          <div className={styles.detailStack}>
-            <section className={styles.panel} aria-labelledby="evidence-title">
-              <SectionHeading
-                eyebrow="Selected report / evidence player"
-                id="evidence-title"
-                title="Choose a report to inspect its clips."
-                body="Playback will use the server-issued private clip URL and exact timestamps. The browser never constructs a storage key or accepts a caller supplied recording URL."
-              />
-              <div className={styles.playerPlaceholder}>
-                <LockKeyhole size={20} aria-hidden="true" />
-                <span>
-                  Awaiting an authorized report selection for {assignmentId}
-                </span>
-              </div>
-              <div className={styles.clipRow}>
-                <span>No clip loaded</span>
-                <span className={styles.pill}>0 clips</span>
-              </div>
-            </section>
-
-            <section className={styles.panel} aria-labelledby="review-title">
-              <div className={styles.panelHeader}>
-                <div>
-                  <span className={styles.eyebrow}>Review draft</span>
-                  <h2 id="review-title">Record a lens-specific proposal</h2>
-                </div>
-                <MessageSquareText size={19} aria-hidden="true" />
-              </div>
-              <p className={styles.panelIntro}>
-                You can prepare a draft while reviewing. Save stays disabled
-                until an assigned report and the append-only write contract are
-                present.
-              </p>
-              <div className={styles.disabledForm}>
-                <div>
-                  <span className={styles.eyebrow}>Reviewer</span>
-                  <div
-                    className={styles.reviewerGrid}
-                    role="group"
-                    aria-label="Reviewer identity"
-                  >
-                    {reviewers.map((reviewer) => (
-                      <button
-                        className={styles.reviewerButton}
-                        type="button"
-                        key={reviewer.id}
-                        aria-pressed={selectedReviewer === reviewer.id}
-                        onClick={() => setSelectedReviewer(reviewer.id)}
-                      >
-                        <strong>{reviewer.name}</strong>
-                        <small>{reviewer.detail}</small>
-                      </button>
-                    ))}
-                    <button
-                      className={styles.reviewerButton}
-                      type="button"
-                      disabled
+            ) : null}
+            {queue.items.length > 0 ? (
+              <div className={styles.queueList}>
+                {queue.items.map((assignment) => (
+                  <div className={styles.queueRow} key={assignment.id}>
+                    <Link
+                      className={`${styles.queueItem} ${assignment.id === assignmentId ? styles.queueItemActive : ""}`}
+                      href={`/sales-xray/review/${encodeURIComponent(assignment.id)}`}
                     >
-                      <strong>
-                        <UsersRound size={14} aria-hidden="true" /> Invite
-                        reviewer
-                      </strong>
-                      <small>Server assignment required</small>
+                      <span className={styles.queueItemMeta}>
+                        <span>{shortId(assignment.id)}</span>
+                        <AssignmentStatePill state={assignment.state} />
+                      </span>
+                      <strong>{shortId(assignment.run_id)}</strong>
+                      <span>
+                        Reviewer {shortId(assignment.reviewer_person_id)}
+                      </span>
+                    </Link>
+                    <button
+                      className={styles.rowRevoke}
+                      type="button"
+                      onClick={() => startRevoke(assignment)}
+                      disabled={
+                        assignment.state === "revoked" ||
+                        assignment.state === "expired" ||
+                        isRevoking
+                      }
+                    >
+                      Revoke
                     </button>
                   </div>
+                ))}
+              </div>
+            ) : null}
+          </section>
+
+          <section className={styles.panel} aria-labelledby="create-title">
+            <SectionHeading
+              eyebrow="Admin command"
+              id="create-title"
+              title="Create a reviewer assignment"
+              body="Enter the saved run and reviewer person UUIDs, choose the review lenses, and set a future expiry."
+            />
+            <form
+              className={styles.formStack}
+              onSubmit={(event) => {
+                event.preventDefault();
+                submitCreate();
+              }}
+            >
+              <label className={styles.field} htmlFor="review-run-id">
+                <span>
+                  Run ID <small>canonical UUID</small>
+                </span>
+                <input
+                  id="review-run-id"
+                  value={runId}
+                  onChange={(event) => setRunId(event.target.value)}
+                  placeholder="e.g. 01234567-89ab-4cde-8123-456789abcdef"
+                  aria-invalid={Boolean(formErrors.runId)}
+                  aria-describedby={
+                    formErrors.runId ? "review-run-id-error" : undefined
+                  }
+                  disabled={isCreating}
+                />
+                {formErrors.runId ? (
+                  <span className={styles.fieldError} id="review-run-id-error">
+                    {formErrors.runId}
+                  </span>
+                ) : null}
+              </label>
+              <label className={styles.field} htmlFor="reviewer-person-id">
+                <span>
+                  Reviewer person ID{" "}
+                  <small>canonical UUID · server checks membership</small>
+                </span>
+                <input
+                  id="reviewer-person-id"
+                  value={reviewerPersonId}
+                  onChange={(event) => setReviewerPersonId(event.target.value)}
+                  placeholder="e.g. 01234567-89ab-4cde-8123-456789abcdef"
+                  aria-invalid={Boolean(formErrors.reviewerPersonId)}
+                  aria-describedby={
+                    formErrors.reviewerPersonId
+                      ? "reviewer-person-id-error"
+                      : undefined
+                  }
+                  disabled={isCreating}
+                />
+                {formErrors.reviewerPersonId ? (
+                  <span
+                    className={styles.fieldError}
+                    id="reviewer-person-id-error"
+                  >
+                    {formErrors.reviewerPersonId}
+                  </span>
+                ) : null}
+              </label>
+              <fieldset className={styles.lensFieldset}>
+                <legend>Allowed review lenses</legend>
+                <p>Choose the review lanes for this handoff.</p>
+                <div className={styles.lensGrid}>
+                  {reviewLenses.map((lens) => (
+                    <label className={styles.lensOption} key={lens}>
+                      <input
+                        type="checkbox"
+                        checked={allowedLenses.includes(lens)}
+                        onChange={(event) => {
+                          setAllowedLenses((current) =>
+                            event.target.checked
+                              ? [...current, lens]
+                              : current.filter((item) => item !== lens),
+                          );
+                        }}
+                        disabled={isCreating}
+                      />
+                      <span>
+                        <strong>{lensLabels[lens].label}</strong>
+                        <small>{lensLabels[lens].detail}</small>
+                      </span>
+                    </label>
+                  ))}
                 </div>
+                {formErrors.allowedLenses ? (
+                  <span className={styles.fieldError}>
+                    {formErrors.allowedLenses}
+                  </span>
+                ) : null}
+              </fieldset>
+              <label className={styles.field} htmlFor="review-expiry">
+                <span>
+                  Expiry{" "}
+                  <small>UTC epoch seconds · server caps at 30 days</small>
+                </span>
+                <input
+                  id="review-expiry"
+                  type="number"
+                  min={1}
+                  value={expiry}
+                  onChange={(event) => setExpiry(event.target.value)}
+                  aria-invalid={Boolean(formErrors.expiresAtEpoch)}
+                  aria-describedby={
+                    formErrors.expiresAtEpoch
+                      ? "review-expiry-error"
+                      : undefined
+                  }
+                  disabled={isCreating}
+                />
+                {formErrors.expiresAtEpoch ? (
+                  <span className={styles.fieldError} id="review-expiry-error">
+                    {formErrors.expiresAtEpoch}
+                  </span>
+                ) : null}
+              </label>
+              <button
+                className="button button-primary"
+                type="submit"
+                disabled={isCreating}
+              >
+                {isCreating ? (
+                  <LoaderCircle size={15} className="spin" aria-hidden="true" />
+                ) : (
+                  <Plus size={15} aria-hidden="true" />
+                )}
+                {isCreating ? "Creating assignment…" : "Create assignment"}
+              </button>
+            </form>
+            {createMutation.status === "success" ? (
+              <div
+                className={styles.successNotice}
+                role="status"
+                aria-live="polite"
+              >
+                <CheckCircle2 size={18} aria-hidden="true" />
                 <div>
-                  <span className={styles.eyebrow}>Review mode</span>
-                  <div
-                    className={styles.modeGrid}
-                    role="group"
-                    aria-label="Review mode"
-                  >
-                    {modes.map((mode) => (
-                      <button
-                        className={styles.modeButton}
-                        type="button"
-                        key={mode.id}
-                        aria-pressed={selectedMode === mode.id}
-                        onClick={() => setSelectedMode(mode.id)}
-                      >
-                        <strong>{mode.label}</strong>
-                        <small>{mode.detail}</small>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className={styles.fieldStack}>
-                  <label htmlFor="review-feedback">
-                    Factual correction or feedback
-                    <textarea
-                      id="review-feedback"
-                      value={feedback}
-                      onChange={(event) => setFeedback(event.target.value)}
-                      placeholder="Capture the observable correction or feedback."
-                    />
-                    <span className={styles.fieldHint}>
-                      Draft remains local until the server accepts an
-                      append-only review proposal.
-                    </span>
-                  </label>
-                  <label htmlFor="review-confidence">
-                    Confidence
-                    <input
-                      id="review-confidence"
-                      value={confidence}
-                      onChange={(event) => setConfidence(event.target.value)}
-                      placeholder="e.g. high — grounded in clip 00:42–01:08"
-                    />
-                  </label>
-                  <button
-                    className="button button-primary"
-                    type="button"
-                    disabled
-                  >
-                    <CheckCircle2 size={15} aria-hidden="true" /> Save
-                    append-only proposal (locked)
-                  </button>
+                  <strong>Assignment created and confirmed.</strong>
+                  <span>
+                    {shortId(createMutation.assignment.id)} is now in the server
+                    response.
+                  </span>
                 </div>
               </div>
-              <p className={styles.footnote}>
-                Current selection: {selectedReviewer} · {selectedMode}. The role
-                mode controls the lens only; permission remains
-                server-authoritative.
-              </p>
-            </section>
-          </div>
+            ) : null}
+            {createMutation.status === "error" ? (
+              <div className={styles.mutationError} role="alert">
+                <CircleAlert size={18} aria-hidden="true" />
+                <div>
+                  <strong>Assignment was not confirmed.</strong>
+                  <span>{createMutation.message}</span>
+                </div>
+                {createMutation.retryable ? (
+                  <button
+                    className="button button-secondary"
+                    type="button"
+                    onClick={retryCreate}
+                  >
+                    Retry same request
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+          </section>
         </div>
 
-        <AuditPanel
-          id="review-audit"
-          title="Review history is never overwritten."
-          body="Every accepted proposal will bind the server assignment, report revision, clip evidence, reviewer identity, selected lens, confidence, and request idempotency key. No event is written by this disconnected UI."
-          fields={[
-            "Server-assigned report and immutable revision",
-            "Authenticated reviewer and tenant context",
-            "Timestamped clip evidence and factual rationale",
-            "Append-only chain, cursor, and idempotency key",
-          ]}
-        />
+        {revokeTarget ? (
+          <section
+            className={styles.confirmPanel}
+            aria-labelledby="revoke-title"
+          >
+            <div>
+              <span className={styles.eyebrow}>Destructive admin command</span>
+              <h2 id="revoke-title">
+                Revoke assignment {shortId(revokeTarget.id)}?
+              </h2>
+              <p>
+                The server will append a revocation. The reviewer link will stop
+                working after the authorized response.
+              </p>
+            </div>
+            <div className={styles.confirmActions}>
+              <button
+                className="button button-secondary"
+                type="button"
+                onClick={() => setRevokeTarget(null)}
+                disabled={isRevoking}
+              >
+                Keep assignment
+              </button>
+              <button
+                className={`button ${styles.buttonDanger}`}
+                type="button"
+                onClick={confirmRevoke}
+                disabled={isRevoking}
+              >
+                {isRevoking ? (
+                  <LoaderCircle size={15} className="spin" aria-hidden="true" />
+                ) : (
+                  <XCircle size={15} aria-hidden="true" />
+                )}
+                {isRevoking ? "Revoking…" : "Confirm revoke"}
+              </button>
+            </div>
+            {revokeMutation.status === "error" &&
+            revokeMutation.assignmentId === revokeTarget.id ? (
+              <div className={styles.mutationError} role="alert">
+                <CircleAlert size={17} aria-hidden="true" />
+                <span>{revokeMutation.message}</span>
+                {revokeMutation.retryable ? (
+                  <button
+                    className="button button-secondary"
+                    type="button"
+                    onClick={confirmRevoke}
+                  >
+                    Retry same request
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+          </section>
+        ) : null}
+        {revokeMutation.status === "success" ? (
+          <div
+            className={styles.successNotice}
+            role="status"
+            aria-live="polite"
+          >
+            <CheckCircle2 size={18} aria-hidden="true" />
+            <div>
+              <strong>Revocation confirmed by the server.</strong>
+              <span>
+                {shortId(revokeMutation.assignment.id)} now has state “
+                {stateLabels[revokeMutation.assignment.state]}”.
+              </span>
+            </div>
+          </div>
+        ) : null}
+
+        <section
+          className={styles.boundaryPanel}
+          aria-labelledby="review-boundary-title"
+        >
+          <div>
+            <span className={styles.eyebrow}>Workflow boundary</span>
+            <h2 id="review-boundary-title">Handoff to Academy</h2>
+            <p>
+              Admin controls the assignment lifecycle. Academy handles the
+              evidence review and submission.
+            </p>
+          </div>
+          <span className={styles.noticeCode}>ADMIN → ACADEMY</span>
+        </section>
       </div>
     </AdminShell>
   );

@@ -44,8 +44,10 @@ import { initialsForDisplayName } from "../lib/profile-identity";
 import { ROUTES } from "../lib/routes";
 import { SignOutControl } from "./sign-out-control";
 import { usePracticeNavigationAvailability } from "./practice-availability";
+import { requestReviewNavigation } from "../sales-xray/review/review-navigation";
 import {
   CommandPalette,
+  getDefaultCommandPaletteItems,
   MobileBottomNav,
   MobileMoreSheet,
   SidebarBadge,
@@ -429,17 +431,33 @@ function LearnerShellContent({
     // Graceful fallback for non-Router execution
   }
 
+  function navigateWithReviewGuard(destination: string): void {
+    const currentRouter = router;
+    requestReviewNavigation(() => {
+      if (currentRouter) currentRouter.push(destination);
+      else window.location.assign(destination);
+    });
+  }
+
+  const commandPaletteItems: CommandPaletteItem[] =
+    getDefaultCommandPaletteItems(learningHref).map((item) => {
+      if (!item.href) return item;
+      const destination = item.href;
+      return {
+        ...item,
+        onSelect: () => navigateWithReviewGuard(destination),
+      };
+    });
+
   useCommandPaletteShortcuts({
     onOpenPalette: () => {
       openCommandPalette();
     },
     onNavigateHome: () => {
-      if (router) router.push(ROUTES.dashboard);
-      else window.location.href = ROUTES.dashboard;
+      navigateWithReviewGuard(ROUTES.dashboard);
     },
     onNavigateLearning: () => {
-      if (router) router.push(learningHref);
-      else window.location.href = learningHref;
+      navigateWithReviewGuard(learningHref);
     },
   });
 
@@ -1126,6 +1144,7 @@ function LearnerShellContent({
           setCommandPaletteOpen(false);
           setCommandPaletteInvoker(null);
         }}
+        items={commandPaletteItems}
         learningHref={learningHref}
         triggerRef={searchTriggerRef}
         invokingElement={commandPaletteInvoker}
