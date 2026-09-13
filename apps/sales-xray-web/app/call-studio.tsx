@@ -18,6 +18,8 @@ import {
 } from "lucide-react";
 import { BrandMark } from "@ac/ui";
 import { RecordingMeasurements } from "./recording-measurements";
+import { ReportExplorer } from "./report-explorer";
+import { REPORT_NAVIGATION_COPY } from "./report-navigation-copy";
 import { ReportFactors } from "./report-factors";
 import { ReportTranscript } from "./report-transcript";
 import { REPORT_SECTION_COPY } from "./report-section-copy";
@@ -629,6 +631,7 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
   const planRequestKey = useRef("");
   const copy = DISPLAY_COPY[displayLanguage];
   const sections = REPORT_SECTION_COPY[displayLanguage];
+  const navigation = REPORT_NAVIGATION_COPY[displayLanguage];
   const interfaceLanguage =
     displayLanguage === "hi" ? "hi" : displayLanguage === "mr" ? "mr" : "en";
   const Main: "div" | "main" = embedded ? "div" : "main";
@@ -1289,6 +1292,44 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
     setSelectedMomentKey(null);
     setMomentStatus("");
     planRequestKey.current = "";
+  }
+
+  function renderFindings(title: string, rows: Finding[]) {
+    return (
+      <section key={title}>
+        <h2 lang={interfaceLanguage}>{title}</h2>
+        {rows.length ? (
+          rows.map((finding, i) => (
+            <article key={i}>
+              <h3>{finding.title}</h3>
+              <p>{finding.explanation}</p>
+              {finding.evidence.map((e, j) => (
+                <blockquote key={j}>
+                  <button
+                    className={`text-button evidence-time-button${selectedMomentKey === `${e.segment_id}:${e.start_ms}:${e.end_ms}` ? " selected" : ""}`}
+                    type="button"
+                    aria-label={`${copy.playMoment}, ${time(e.start_ms)} to ${time(e.end_ms)}: ${e.quote}`}
+                    onClick={() =>
+                      seekToMoment({
+                        ...e,
+                        findingTitle: finding.title,
+                        key: `${e.segment_id}:${e.start_ms}:${e.end_ms}`,
+                      })
+                    }
+                  >
+                    <Play size={12} aria-hidden="true" />
+                    {time(e.start_ms)}–{time(e.end_ms)}
+                  </button>{" "}
+                  <small>{e.segment_id}</small> “{e.quote}”
+                </blockquote>
+              ))}
+            </article>
+          ))
+        ) : (
+          <p lang={interfaceLanguage}>{sections.empty}</p>
+        )}
+      </section>
+    );
   }
   return (
     <div
@@ -1957,147 +1998,185 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
                 <small>{copy.recommendedNextStepsDetail}</small>
               </div>
             </div>
-            <section
-              className="studio-moment-browser"
-              aria-labelledby="source-moments-title"
-              lang={interfaceLanguage}
-            >
-              <div className="studio-moment-browser-heading">
-                <div>
-                  <p className="eyebrow">SOURCE-BOUND AUDIO</p>
-                  <h2 id="source-moments-title">{copy.sourceMomentsHeading}</h2>
-                  <p>{copy.sourceMomentsIntro}</p>
-                </div>
-                <span className="pill subtle">
-                  {durationLabel} · {activeTranscript?.segments.length ?? 0}{" "}
-                  transcript segments
-                </span>
-              </div>
-              {reportMoments.length ? (
-                <div className="studio-moment-list">
-                  {reportMoments.map((moment) => (
-                    <button
-                      className={`studio-moment${selectedMomentKey === moment.key ? " selected" : ""}`}
-                      key={moment.key}
-                      type="button"
-                      aria-pressed={selectedMomentKey === moment.key}
-                      aria-label={`${copy.playMoment}, ${time(moment.start_ms)} to ${time(moment.end_ms)}: ${moment.quote}`}
-                      onClick={() => seekToMoment(moment)}
-                    >
-                      <span className="studio-moment-time">
-                        <Play size={12} aria-hidden="true" />
-                        {time(moment.start_ms)}–{time(moment.end_ms)}
-                      </span>
-                      <span className="studio-moment-copy">
-                        <strong>{moment.findingTitle}</strong>
-                        <span>“{moment.quote}”</span>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <p className="small-text">
-                  No source-linked moments were produced for this draft.
-                </p>
-              )}
-              {momentStatus && (
-                <p className="studio-playback-status" role="status">
-                  {momentStatus}
-                </p>
-              )}
-            </section>
-            {job.report.improvements[0] && (
-              <aside
-                className="studio-practice-callout"
-                lang={interfaceLanguage}
-              >
-                <span className="studio-practice-icon" aria-hidden="true">
-                  <ListChecks size={20} />
-                </span>
-                <div>
-                  <p className="eyebrow">{copy.practiceFocus}</p>
-                  <h2>{job.report.improvements[0].title}</h2>
-                  <p>{copy.practiceFocusIntro}</p>
-                  <p>{job.report.improvements[0].explanation}</p>
-                </div>
-              </aside>
-            )}
-            <ReportFactors
-              dimensions={job.report.dimensions}
-              language={displayLanguage}
-            />
-            {(
-              [
-                [sections.strengths, job.report.strengths],
-                [sections.missed, job.report.missed_opportunities],
-                [sections.improvements, job.report.improvements],
-                [sections.objections, job.report.objection_analysis],
-                [sections.closing, job.report.closing_analysis],
-              ] as [string, Finding[]][]
-            ).map(([title, rows]) => (
-              <section key={title as string}>
-                <h2 lang={interfaceLanguage}>{title as string}</h2>
-                {rows.length ? (
-                  rows.map((finding, i) => (
-                    <article key={i}>
-                      <h3>{finding.title}</h3>
-                      <p>{finding.explanation}</p>
-                      {finding.evidence.map((e, j) => (
-                        <blockquote key={j}>
-                          <button
-                            className={`text-button evidence-time-button${selectedMomentKey === `${e.segment_id}:${e.start_ms}:${e.end_ms}` ? " selected" : ""}`}
-                            type="button"
-                            aria-label={`${copy.playMoment}, ${time(e.start_ms)} to ${time(e.end_ms)}: ${e.quote}`}
-                            onClick={() =>
-                              seekToMoment({
-                                ...e,
-                                findingTitle: finding.title,
-                                key: `${e.segment_id}:${e.start_ms}:${e.end_ms}`,
-                              })
-                            }
+            <ReportExplorer
+              key={job.id}
+              label={navigation.label}
+              panels={[
+                {
+                  id: "overview",
+                  label: navigation.overview,
+                  content: (
+                    <>
+                      {job.report.improvements[0] && (
+                        <aside
+                          className="studio-practice-callout"
+                          lang={interfaceLanguage}
+                        >
+                          <span
+                            className="studio-practice-icon"
+                            aria-hidden="true"
                           >
-                            <Play size={12} aria-hidden="true" />
-                            {time(e.start_ms)}–{time(e.end_ms)}
-                          </button>{" "}
-                          <small>{e.segment_id}</small> “{e.quote}”
-                        </blockquote>
-                      ))}
-                    </article>
-                  ))
-                ) : (
-                  <p lang={interfaceLanguage}>{sections.empty}</p>
-                )}
-              </section>
-            ))}
-            <section>
-              <h2 lang={interfaceLanguage}>{sections.verdict}</h2>
-              <p>{job.report.verdict}</p>
-            </section>
-            {activeTranscript && (
-              <ReportTranscript
-                key={`${activeTranscript.source_sha256}:${activeTranscript.revision}`}
-                transcript={activeTranscript}
-                language={displayLanguage}
-                onSelect={(segment) =>
-                  seekToMoment({
-                    segment_id: segment.id,
-                    quote: segment.text,
-                    start_ms: segment.start_ms,
-                    end_ms: segment.end_ms,
-                    findingTitle: "Transcript",
-                    key: `${segment.id}:${segment.start_ms}:${segment.end_ms}`,
-                  })
-                }
-              />
-            )}
-            {activeRecordingId && (
-              <RecordingMeasurements
-                key={`${activeRecordingId}:${job.report.source_sha256}`}
-                recordingId={activeRecordingId}
-                sourceSha256={job.report.source_sha256}
-                language={displayLanguage}
-              />
-            )}
+                            <ListChecks size={20} />
+                          </span>
+                          <div>
+                            <p className="eyebrow">{copy.practiceFocus}</p>
+                            <h2>{job.report.improvements[0].title}</h2>
+                            <p>{copy.practiceFocusIntro}</p>
+                            <p>{job.report.improvements[0].explanation}</p>
+                          </div>
+                        </aside>
+                      )}
+                      {renderFindings(sections.strengths, job.report.strengths)}
+                      {renderFindings(
+                        sections.missed,
+                        job.report.missed_opportunities,
+                      )}
+                      <section>
+                        <h2 lang={interfaceLanguage}>{sections.verdict}</h2>
+                        <p>{job.report.verdict}</p>
+                      </section>
+                    </>
+                  ),
+                },
+                {
+                  id: "factors",
+                  label: navigation.factors,
+                  content: (
+                    <ReportFactors
+                      dimensions={job.report.dimensions}
+                      language={displayLanguage}
+                    />
+                  ),
+                },
+                {
+                  id: "moments",
+                  label: navigation.moments,
+                  content: (
+                    <section
+                      className="studio-moment-browser"
+                      aria-labelledby="source-moments-title"
+                      lang={interfaceLanguage}
+                    >
+                      <div className="studio-moment-browser-heading">
+                        <div>
+                          <p className="eyebrow">SOURCE-BOUND AUDIO</p>
+                          <h2 id="source-moments-title">
+                            {copy.sourceMomentsHeading}
+                          </h2>
+                          <p>{copy.sourceMomentsIntro}</p>
+                        </div>
+                        <span className="pill subtle">
+                          {durationLabel} ·{" "}
+                          {activeTranscript?.segments.length ?? 0} transcript
+                          segments
+                        </span>
+                      </div>
+                      {reportMoments.length ? (
+                        <div className="studio-moment-list">
+                          {reportMoments.map((moment) => (
+                            <button
+                              className={`studio-moment${selectedMomentKey === moment.key ? " selected" : ""}`}
+                              key={moment.key}
+                              type="button"
+                              aria-pressed={selectedMomentKey === moment.key}
+                              aria-label={`${copy.playMoment}, ${time(moment.start_ms)} to ${time(moment.end_ms)}: ${moment.quote}`}
+                              onClick={() => seekToMoment(moment)}
+                            >
+                              <span className="studio-moment-time">
+                                <Play size={12} aria-hidden="true" />
+                                {time(moment.start_ms)}–{time(moment.end_ms)}
+                              </span>
+                              <span className="studio-moment-copy">
+                                <strong>{moment.findingTitle}</strong>
+                                <span>“{moment.quote}”</span>
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="small-text">
+                          No source-linked moments were produced for this draft.
+                        </p>
+                      )}
+                      {momentStatus && (
+                        <p className="studio-playback-status" role="status">
+                          {momentStatus}
+                        </p>
+                      )}
+                    </section>
+                  ),
+                },
+                ...(activeTranscript
+                  ? [
+                      {
+                        id: "transcript",
+                        label: navigation.transcript,
+                        content: (
+                          <>
+                            {activeTranscript && (
+                              <ReportTranscript
+                                key={`${activeTranscript.source_sha256}:${activeTranscript.revision}`}
+                                transcript={activeTranscript}
+                                language={displayLanguage}
+                                onSelect={(segment) =>
+                                  seekToMoment({
+                                    segment_id: segment.id,
+                                    quote: segment.text,
+                                    start_ms: segment.start_ms,
+                                    end_ms: segment.end_ms,
+                                    findingTitle: "Transcript",
+                                    key: `${segment.id}:${segment.start_ms}:${segment.end_ms}`,
+                                  })
+                                }
+                              />
+                            )}
+                          </>
+                        ),
+                      },
+                    ]
+                  : []),
+                ...(activeRecordingId
+                  ? [
+                      {
+                        id: "sound",
+                        label: navigation.sound,
+                        content: (
+                          <>
+                            {activeRecordingId && (
+                              <RecordingMeasurements
+                                key={`${activeRecordingId}:${job.report.source_sha256}`}
+                                recordingId={activeRecordingId}
+                                sourceSha256={job.report.source_sha256}
+                                language={displayLanguage}
+                              />
+                            )}
+                          </>
+                        ),
+                      },
+                    ]
+                  : []),
+                {
+                  id: "next",
+                  label: navigation.next,
+                  content: (
+                    <>
+                      {renderFindings(
+                        sections.improvements,
+                        job.report.improvements,
+                      )}
+                      {renderFindings(
+                        sections.objections,
+                        job.report.objection_analysis,
+                      )}
+                      {renderFindings(
+                        sections.closing,
+                        job.report.closing_analysis,
+                      )}
+                    </>
+                  ),
+                },
+              ]}
+            />
             <details className="studio-report-details">
               <summary lang={interfaceLanguage}>{sections.details}</summary>
               <p lang={interfaceLanguage}>

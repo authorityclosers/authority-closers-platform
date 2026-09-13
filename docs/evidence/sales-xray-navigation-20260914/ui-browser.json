@@ -1,0 +1,111 @@
+{
+  "schema": "ac.sales-xray.report-navigation-browser/1",
+  "source_commit": "cb886effe8f6d21c5fbe1e645d625adeca4d3107",
+  "source_files": {
+    "apps\\sales-xray-web\\app\\call-studio.tsx": "30ca9643d25381c585120cf2d3d52f152583ffda0f9120c779e488634d12a537",
+    "apps\\sales-xray-web\\app\\report-explorer.tsx": "61953a2c8820a15d6ec9b7e8edb0f60c5301fd517a98cbbd61e0abf8652b20e3",
+    "apps\\sales-xray-web\\app\\report-explorer.module.css": "fc81237606fc767590081f5cff5fd75144d6afd21b2538385889c98318aaa8d2"
+  },
+  "url": "http://127.0.0.1:3204",
+  "fixture_api": true,
+  "media_play_substituted_for_recovery": true,
+  "provider_calls": 0,
+  "checks": [
+    "six usable sections",
+    "same media element across navigation",
+    "source moment seek and blocked/missing recovery",
+    "transcript filter and exact seek",
+    "retained sound channel and cursor",
+    "four language modes without changing source text",
+    "keyboard Home/End and selected focus at320px",
+    "print includes hidden sections and excludes tab controls"
+  ],
+  "result": "passed",
+  "artifacts": [
+    {
+      "file": "report-en-desktop.png",
+      "sha256": "e092c356de86ec4f6e2aade275dd8cdc9db15a496ca2ce37cc7e5166f92250c0",
+      "bytes": 109730
+    },
+    {
+      "file": "report-en-hi-mixed-desktop.png",
+      "sha256": "54d5e7340ebfba2a0ccee9f72f08eb8361f92a2c98bb2de25fceb75f439e2e85",
+      "bytes": 130627
+    },
+    {
+      "file": "report-en-hi-mixed-mobile.png",
+      "sha256": "86977335d278fce1647813a605d640a666c7db16b4d56f19b5732fadd91c8668",
+      "bytes": 116191
+    },
+    {
+      "file": "report-en-mobile.png",
+      "sha256": "a0632111297682726c90c6db2c6704bb4408f75a51b086a4dd2525fbf8249097",
+      "bytes": 100600
+    },
+    {
+      "file": "report-hi-desktop.png",
+      "sha256": "8201aad5a0613b7bf1f60461487020f9a93383fdff439e9800dbe3c6c790a814",
+      "bytes": 112497
+    },
+    {
+      "file": "report-hi-mobile.png",
+      "sha256": "29aa4daeb63765245a208813be5e302296468a6c672fe553a3b547a6177c8c76",
+      "bytes": 100844
+    },
+    {
+      "file": "report-mr-desktop.png",
+      "sha256": "0fd2131d9a7dc1f609dd965cf3c9fa60f23b8d4061b2c6e1d1293dc7af3ca0e2",
+      "bytes": 114744
+    },
+    {
+      "file": "report-mr-mobile.png",
+      "sha256": "6541775e1e54c9012c2530238593241593d3ad959abd99dcd3cc3b310ac23354",
+      "bytes": 102579
+    },
+    {
+      "file": "report-playback-recovery.png",
+      "sha256": "ab6f288c9c8c376d82d23a1ae303a4e8435efab37469ee0730d7ec5fb39e83d8",
+      "bytes": 95838
+    },
+    {
+      "file": "report-print-layout.png",
+      "sha256": "e9e6602e4f7937b9b183c93a59f4ad8d667cb6d18e7440eec34c256e43c1e5c5",
+      "bytes": 156047
+    },
+    {
+      "file": "section-call-moments.png",
+      "sha256": "8f33fe208ff8d79afb9c0dbbf39706b755226a550aee69ee7c6aa7aa3025af43",
+      "bytes": 96965
+    },
+    {
+      "file": "section-next-steps.png",
+      "sha256": "58a84dd78ee26f4f432b2882210f9dd2d16da74ba02ebab6d60fe4cf30fd9ae1",
+      "bytes": 100162
+    },
+    {
+      "file": "section-overview.png",
+      "sha256": "e092c356de86ec4f6e2aade275dd8cdc9db15a496ca2ce37cc7e5166f92250c0",
+      "bytes": 109730
+    },
+    {
+      "file": "section-sales-factors.png",
+      "sha256": "355d34df93fb6a690d0910614933e5c4ca50bafa9884cb056a80e2f6711a190c",
+      "bytes": 104765
+    },
+    {
+      "file": "section-sound.png",
+      "sha256": "b808bd27c02ba1f3e78ab191065c3d72a89709d08b4ec196a6a8c5849cf50b52",
+      "bytes": 111238
+    },
+    {
+      "file": "section-transcript.png",
+      "sha256": "5ecda3aea23b6b23188263d85536a3a31c8eeaba27f6c92b17b7e4abd1240a74",
+      "bytes": 96476
+    },
+    {
+      "file": "synthetic-report.pdf",
+      "sha256": "ce58c060437973d456e512bc7eb4af9d52933e12c66ca367174260f563f37f9c",
+      "bytes": 121239
+    }
+  ]
+}

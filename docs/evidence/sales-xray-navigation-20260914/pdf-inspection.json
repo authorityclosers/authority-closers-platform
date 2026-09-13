@@ -1,0 +1,10 @@
+{
+  "pages": 3,
+  "checks": {
+    "all_8_factor_labels": true,
+    "draft_label": true,
+    "measurement": true,
+    "next_step": true,
+    "tab_controls_absent": true
+  }
+}

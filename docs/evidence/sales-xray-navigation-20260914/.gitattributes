@@ -1,0 +1,6 @@
+*.json -text whitespace=cr-at-eol
+*.xml -text whitespace=cr-at-eol
+# Raw terminal logs preserve their original trailing spaces for checksum verification.
+*.log -text -whitespace
+*.png binary
+*.pdf binary

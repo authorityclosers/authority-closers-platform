@@ -423,6 +423,7 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
                 "and seeks it."
             )
 
+            page.get_by_role("tab", name="Sound", exact=True).click()
             measurement_summary = (
                 page.locator("details").filter(has_text="Sound of the recording").locator("summary")
             )
@@ -465,6 +466,7 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
                 "The saved measurement chart switches from sound level to pitch estimate."
             )
 
+            page.get_by_role("tab", name="Sales factors", exact=True).click()
             factors = page.get_by_role("region", name="Sales factors")
             expect(factors.get_by_role("heading", name="Explore the sales factors")).to_be_visible()
             factor_details = factors.locator("details")
@@ -475,6 +477,7 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
                 "The report exposes all eight saved sales factors with bounded observations."
             )
 
+            page.get_by_role("tab", name="Transcript", exact=True).click()
             transcript = page.locator("details").filter(has_text="Read full transcript")
             expect(transcript.locator("summary")).to_be_visible()
             transcript.locator("summary").click()
@@ -625,7 +628,7 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
             assert not browser_errors
             # Next's navigation probe and a completed authentication response can
             # be cancelled when a full document navigation replaces the page.
-            # Preserve every event in the receipt; only accept the two API
+            # Preserve every event in the receipt; only accept the three API
             # cancellations after their exact success status and session effects
             # have independently passed above. Other failures still fail proof.
             accepted_aborts = {"HEAD /: net::ERR_ABORTED"}
@@ -635,6 +638,11 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
                 (
                     "GET",
                     f"/v1/conversation/recordings/{backend.account.recording_id}/measurements",
+                    401,
+                ),
+                (
+                    "GET",
+                    f"/v1/conversation/recordings/{backend.account.recording_id}/source",
                     401,
                 ),
             ):
