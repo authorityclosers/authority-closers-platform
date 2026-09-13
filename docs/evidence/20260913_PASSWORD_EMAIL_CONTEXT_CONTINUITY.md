@@ -160,6 +160,41 @@ adds seven regressions, preserving unrelated primitive fields and UUID
 coercion. Main independently reviewed the three-path fix; the bounded run
 passed 63 tests plus Ruff/format/mypy. The final expanded auth/outbox/worker
 suite passed **193 tests** (`email-continuity-schema-python-final.log`).
-Fresh-browser acceptance must pass before handoff. External email delivery and
-production deployment remain outside this local acceptance. The separate Sales
-Xray login return destination is a dependent follow-up outside this email cut.
+The schema follow-up is `02bdb91fdf2bf47d107656cc2664daaee6c669d4`.
+External email delivery and production deployment remain outside this local
+acceptance. The separate Sales Xray login return destination is a dependent
+follow-up outside this email cut.
+
+### Canonical fresh-browser acceptance — passed
+
+The local API and auth source were frozen at `02bdb91`. The accepted receipt is
+`canonical-email-continuity-20260912T235916Z/proof.json` in the release packet.
+It records the exact source hashes and reusable helper hash.
+
+- Normal registration persisted the canonical person, verification challenge
+  and course-only v2 outbox event. The actual worker message resolver built the
+  verification link from those records. A fresh browser verified the same
+  person, removed the token fragment and retained the course at onboarding.
+- Normal password recovery persisted a course/activity v2 outbox event for the
+  prior synthetic draft subject. The actual resolver built the reset link. A
+  fresh browser consumed it, reset the password, signed in and automatically
+  returned to the same activity with the server draft still visible.
+- Snapshots of enrollment, entitlement, draft, progress, learning evidence and
+  evidence submission tables for that subject were unchanged. Canonical
+  completion remained zero of five. No learning mutation was issued.
+- Verification/reset screenshots passed 320/1440 reflow; the returned activity
+  passed at 390. Main inspected the mobile images. No page errors, blocked
+  requests or unexpected API status codes occurred.
+
+The helper uses the installed psycopg async dialect with a Windows selector
+event loop, reads persisted outbox records and rolls back after resolving the
+message. It does not materialize jobs, dispatch a worker or contact a provider.
+Queue materialization is covered separately by the repository tests above.
+The browser proof is synthetic local acceptance, not real recipient delivery.
+
+Earlier helper failures are retained in `canonical-email-continuity-` folders
+ending `235600Z`, `235727Z` and `235829Z`: an ambiguous consent selector, an
+uninstalled asyncpg driver and the Windows psycopg event loop. The corrected
+helper selects the actual checkbox, uses the installed driver and a selector
+loop, and uses the model's generic JSON accessor. Product source did not change
+between those attempts and the accepted run.
