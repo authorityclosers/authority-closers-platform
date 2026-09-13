@@ -27,7 +27,10 @@ from ac_platform.conversation_intelligence.acquisition_models import (
     ConversationAcquisitionSettlement,
     ConversationAcquisitionUsage,
 )
-from ac_platform.conversation_intelligence.acquisition_sessions import AcquisitionSessions
+from ac_platform.conversation_intelligence.acquisition_sessions import (
+    AcquisitionSessions,
+    MeasuredSource,
+)
 from ac_platform.conversation_intelligence.acquisition_source import NativeUploadPreflight
 from ac_platform.conversation_intelligence.application import ConversationApplication
 from ac_platform.conversation_intelligence.authority import ConversationAuthority
@@ -305,6 +308,63 @@ def test_original_upload_worker_and_expired_lease_playback_are_owner_bound(
     run(exercise())
 
 
+def test_exact_owned_upload_retry_survives_exhausted_allowance(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                client.cookies.set("ac_xray_guest", setup.guest.token)
+                data, submission = _wav_one_second_48k(), uuid4()
+                path = f"{PREFIX}/submissions/{submission}/source"
+                headers = await _headers(client, data)
+                original = await client.put(path, content=data, headers=headers)
+                assert original.status_code == 202
+                # Canonical ledger fixture consumes the remaining allowance;
+                # it creates no recording/job or external provider execution.
+                async with setup.sessions() as db, db.begin():
+                    await setup.factory(db).reserve(
+                        MeasuredSource(uuid4(), "a" * 64, 5999 * 1000, "b" * 64),
+                        token=setup.guest.token,
+                    )
+                replay = await client.put(path, content=data, headers=headers)
+                assert replay.status_code == 202, replay.text
+                assert replay.json()["recording_id"] == original.json()["recording_id"]
+                assert replay.json()["allowance"]["available_seconds"] == 0
+                changed = await client.put(
+                    path, content=data, headers={**headers, "X-Source-SHA256": "f" * 64}
+                )
+                assert changed.status_code == 409
+                new = await client.put(
+                    f"{PREFIX}/submissions/{uuid4()}/source", content=data, headers=headers
+                )
+                assert new.status_code == 409
+                async with setup.sessions() as db:
+                    assert (
+                        await db.scalar(
+                            select(func.count())
+                            .select_from(ConversationAcquisitionUsage)
+                            .where(ConversationAcquisitionUsage.submission_id == submission)
+                        )
+                        == 1
+                    )
+            await _reconcile(setup.sessions, setup.state)
+            worker = OfflineConversationWorker(
+                setup.sessions,
+                storage=setup.runtime.storage,
+                scratch=setup.runtime.scratch,
+                environment="test",
+            )
+            assert await worker.run_once()
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
 def test_create_app_mounts_guest_flow_and_streams_more_than_generic_body_limit(
     postgres_harness: Any,
     tmp_path: Path,
@@ -374,6 +434,8 @@ def test_create_app_mounts_guest_flow_and_streams_more_than_generic_body_limit(
                 assert uploaded.status_code == 202, uploaded.text
                 assert uploaded.json()["duration_ms"] == 12000
                 assert uploaded.json()["allowance"]["available_seconds"] == 5988
+                pending = await client.get(f"{PREFIX}/submissions/{submission}")
+                assert pending.json()["local_state"] == "queued"
                 # The new byte exemption applies only to its explicit UUID PUT,
                 # not arbitrary account JSON or a neighboring route.
                 rejected = await client.post(
@@ -388,6 +450,12 @@ def test_create_app_mounts_guest_flow_and_streams_more_than_generic_body_limit(
                 environment="test",
             )
             assert await local.run_once()
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=application), base_url=ORIGIN
+            ) as client:
+                client.cookies.set("ac_xray_guest", setup.guest.token)
+                ready = await client.get(f"{PREFIX}/submissions/{submission}")
+                assert ready.json()["local_state"] == "completed"
         finally:
             await setup.engine.dispose()
 

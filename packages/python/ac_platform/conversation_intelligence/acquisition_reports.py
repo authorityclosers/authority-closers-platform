@@ -25,6 +25,7 @@ from ac_platform.conversation_intelligence.models import (
     ConversationReportDraft,
     ConversationRun,
 )
+from ac_platform.conversation_intelligence.processing_actor import ProcessingActor
 from ac_platform.conversation_intelligence.report_access import (
     ReportAccess,
     ReportSourceBinding,
@@ -129,6 +130,21 @@ class AcquisitionReports:
         self, submission_id: UUID, *, token: str | None = None, actor: ActorContext | None = None
     ) -> dict[str, Any]:
         scope, recording = await self.recording(submission_id, token=token, actor=actor)
+        local_run = await self.database.scalar(
+            select(ConversationRun).where(
+                ConversationRun.recording_id == recording.id,
+                ConversationRun.tenant_id == scope.tenant_id,
+                ConversationRun.person_id == scope.processing_person_id,
+                ConversationRun.generation == recording.generation,
+                ConversationRun.request_key
+                == self.application.command_key(
+                    ProcessingActor(
+                        scope.processing_person_id, scope.tenant_id, scope.processing_lease_id
+                    ),
+                    f"acquisition-local-run:{recording.id}",
+                ),
+            )
+        )
         plan = await self.database.scalar(
             select(ConversationProcessingPlan)
             .where(
@@ -168,6 +184,7 @@ class AcquisitionReports:
             "submission_id": str(submission_id),
             "recording_id": str(recording.id),
             "source_sha256": recording.source_sha256,
+            "local_state": local_run.state if local_run else None,
             "state": "report_ready" if has_report else plan.state if plan else recording.state,
             "has_report": has_report,
             "automatic_progression": plan is not None and plan.state == "active",
