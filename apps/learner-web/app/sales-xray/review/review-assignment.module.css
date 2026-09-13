@@ -1,0 +1,98 @@
+.page {
+  width: calc(100% - 2rem);
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 2rem 0 4rem;
+}
+
+.breadcrumb {
+  margin-bottom: 1rem;
+  color: #7790aa;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+}
+
+.pending {
+  display: grid;
+  gap: 0.85rem;
+  max-width: 58rem;
+  padding: clamp(1.4rem, 3vw, 2.5rem);
+  border: 1px solid #d5e0ec;
+  border-radius: 1rem;
+  background: linear-gradient(135deg, #fff, #f6faff);
+  box-shadow: 0 16px 38px rgb(22 57 94 / 8%);
+}
+
+.eyebrow {
+  color: #5a7da3;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.pending h1,
+.pending p {
+  margin: 0;
+}
+
+.pending h1 {
+  max-width: 40rem;
+  color: #172e4a;
+  font-size: clamp(1.5rem, 4vw, 2.35rem);
+  line-height: 1.1;
+}
+
+.pending p {
+  max-width: 50rem;
+  color: #5b728e;
+  line-height: 1.6;
+}
+
+.pending code {
+  overflow-wrap: anywhere;
+  color: #234c79;
+  font-size: 0.85em;
+}
+
+.pending dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0.5rem 0;
+}
+
+.pending dl div {
+  padding: 0.75rem;
+  border: 1px solid #e0e9f2;
+  border-radius: 0.65rem;
+  background: rgb(255 255 255 / 70%);
+}
+
+.pending dt {
+  color: #7890a8;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.pending dd {
+  margin: 0.3rem 0 0;
+  color: #294662;
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.note {
+  padding-top: 0.85rem;
+  border-top: 1px solid #dde7f0;
+  color: #6d8299 !important;
+  font-size: 0.78rem;
+}
+
+@media (max-width: 720px) {
+  .pending dl {
+    grid-template-columns: 1fr;
+  }
+}

@@ -15,6 +15,11 @@ import {
 
 import { AdminShell } from "../../components/admin-shell";
 import { AuditPanel, SectionHeading } from "../../components/ops-primitives";
+import {
+  AssignedReviewForm,
+  type ReviewAssignment,
+  type SubmitReviewProposal,
+} from "@ac/sales-xray-review-ui";
 import { type ReviewMode, type ReviewQueueState } from "./review-api";
 import styles from "./review-workspace.module.css";
 
@@ -67,12 +72,35 @@ function StatePanel({
   return null;
 }
 
-export function ReviewWorkspace({ assignmentId }: { assignmentId: string }) {
+export function ReviewWorkspace({
+  assignmentId,
+  assignment,
+  onSubmit,
+}: {
+  assignmentId: string;
+  assignment?: ReviewAssignment;
+  onSubmit?: SubmitReviewProposal;
+}) {
   const [state] = useState<ReviewQueueState>({
     status: "error",
     message: "The review bridge contract is pending its server-owned DTO.",
     retryable: false,
   });
+
+  if (assignment && onSubmit) {
+    return (
+      <AdminShell
+        active="overview"
+        surface="organization"
+        eyebrow="Review / assigned conversation evidence"
+        title="Conversation review"
+        description="Review a server-assigned conversation report with timestamped evidence, one lens at a time. Reviewer mode changes the form view; it never grants access."
+      >
+        <AssignedReviewForm assignment={assignment} onSubmit={onSubmit} />
+      </AdminShell>
+    );
+  }
+
   const [selectedMode, setSelectedMode] = useState<ReviewMode>("sales");
   const [selectedReviewer, setSelectedReviewer] = useState("dipak");
   const [feedback, setFeedback] = useState("");

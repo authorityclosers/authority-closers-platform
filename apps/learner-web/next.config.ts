@@ -35,7 +35,7 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   // Keep framework chrome off the viewport while reviewing the actual app UI.
   devIndicators: false,
-  transpilePackages: ["@ac/ui"],
+  transpilePackages: ["@ac/ui", "@ac/sales-xray-review-ui"],
   poweredByHeader: false,
   // Next logs fetch warnings separately from incoming-request ignore rules.
   // Disable framework URL logging only for this validated opt-in dev bridge.
