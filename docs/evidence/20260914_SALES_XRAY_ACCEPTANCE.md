@@ -18,7 +18,7 @@ because another feature works.
 | Upload/analysis/recovery/progress | Reuse durable stages and source validation; implement guest ownership through the same engine. Show actual stage state, retry without duplicate charge, and truthful failure recovery. | Pending |
 | Useful guest report, roughly 70% open | Server projection now selects summary, strengths, missed opportunities, eight observations and one immediate action. Transcript and call moments are guest-visible once owner-bound endpoints exist. | Pending |
 | Deeper 30% unlocked after signup | Complete action plan, objection/closing detail and final coaching guidance absent from guest JSON. Claim-aware route and UI still need integration. This is a section partition, not a measured byte ratio. | Pending |
-| Shared canonical Academy identity | Existing Google/password identity is reused. A visitor is not a second account or verified person. Google new-account continuity and return-to-report need hosted proof. | Pending |
+| Shared canonical Academy identity | Consent-aware Sales Google entry now registers a new canonical person or reuses the same provider identity and selects the public Academy. Actual HTTP/PostgreSQL proof passes; hosted proof remains. A visitor is not a second account or verified person. | Pending |
 | No mailbox round-trip interrupts report viewing | Google verified assertion supports immediate canonical claim. Password registration must preserve the visitor's own report and give a report-scoped continuation; do not grant unrelated account access or falsify email verification. | Pending |
 | Name, phone, email and available Cohorva username | Progressive form, canonical availability lookup and race-safe final username claim; retain input on conflicts and return to the same report. | Pending |
 | 100 minutes and no signup reset | New PostgreSQL admission ledger passes concurrent reservation and immutable claim tests. Integrate with the existing worker and existing account allowance without double charging or parallel grants. | Pending |
@@ -95,6 +95,35 @@ canonical-identity `POST /v1/conversation/acquisition/claim`. Responses include
 is only a Secure, HttpOnly, host-only cookie, never JSON or browser storage.
 Claim deletes that cookie and keeps the same used minutes on the existing person.
 These endpoint definitions are ready for integration, **not live endpoints**.
+
+## Shared Google entry implementation
+
+Sales now accepts canonical Google registration on its own configured host.
+`GET /v1/auth/google/start?action=authenticate&surface=sales_xray&consent=true`
+with the current `consent_version` and safe same-host `return_path` binds a
+REGISTER transaction before redirecting. The existing canonical registration
+command handles new people and existing linked Google people; email matching
+does not silently attach an identity. Explicit `action=register` works too.
+Existing-account authenticate without consent retains its previous behavior.
+Provider linking stays on Academy account settings.
+
+Both start and callback require the current registration consent. The callback
+creates or preserves the public Academy learner context and returns to the same
+report. It does not auto-claim an arbitrary report ID in the return URL; the
+separate guest-cookie plus canonical-session claim still establishes ownership.
+
+Actual PostgreSQL suite now passes **12 cases in 19.15s**. The new real identity
+and HTTP case creates a previously absent canonical Google learner, returns to
+the original report path, claims 124 used seconds, then signs in again with the
+same provider key and proves there is exactly one additional Person. A separate
+case rejects an unverified provider assertion without creating a person/session.
+Only the provider exchange is synthetic; no real Google network call occurred.
+Earlier test assertions expected generic422 for denied consent/assertion rather
+than the existing400/401 domain responses; corrected to the actual contracts.
+Production source activation and real Google browser acceptance remain pending.
+The two auth route suites pass117 tests in11.26s, including exact-host/cookie
+boundaries, consent-aware entry, missing/stale consent and callback revalidation.
+Changed Python lint, formatting and strict auth types pass.
 
 ## Focused product research
 

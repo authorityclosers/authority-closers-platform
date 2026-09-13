@@ -7,6 +7,7 @@ import hashlib
 import hmac
 import secrets
 from datetime import timedelta
+from urllib.parse import parse_qs, urlencode, urlsplit
 from uuid import uuid4
 
 import httpx
@@ -43,6 +44,7 @@ from ac_platform.http.conversation_acquisition import install_acquisition_http
 from ac_platform.http.problem import register_problem_handlers
 from ac_platform.identity.models import Person
 from ac_platform.identity.models import Session as IdentitySession
+from ac_platform.identity.services import VerifiedProviderAssertion
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
 from tests.database.test_conversation_postgresql import run, seed
 
@@ -485,6 +487,135 @@ def test_http_cookie_claim_and_boundary_use_real_identity_and_postgres(
                     route + "/session", headers={"Cookie": f"__Host-ac_xray_guest={visitor_token}"}
                 )
                 assert old_cookie.status_code == 403
+        finally:
+            await engine.dispose()
+
+    run(exercise())
+
+
+@pytest.mark.parametrize("verified", [True, False])
+def test_google_entry_creates_one_canonical_learner_and_retains_guest_usage(
+    postgres_harness, verified
+):
+    """Real HTTP/identity/PG with a synthetic provider, never a Google network call."""
+
+    async def exercise():
+        engine = create_async_engine(postgres_harness.url)
+        try:
+            state = await seed(engine)
+            sessions = async_sessionmaker(engine, expire_on_commit=False)
+            origin = "https://salesxray.example.test"
+            provider_subject = uuid4().hex
+
+            class SyntheticProvider:
+                audience = "synthetic-google-acquisition"
+
+                def authorization_url(self, transaction, *, redirect_uri):
+                    return origin + "/synthetic-provider?" + urlencode({"state": transaction.state})
+
+                async def exchange_code(self, code, transaction, *, callback_state, redirect_uri):
+                    assert code == "synthetic-code"
+                    assert redirect_uri == origin + "/v1/auth/google/callback"
+                    return VerifiedProviderAssertion(
+                        issuer="https://accounts.google.com",
+                        subject=provider_subject,
+                        audience=self.audience,
+                        state=callback_state,
+                        nonce=transaction.nonce,
+                        authorization_type=transaction.authorization_type,
+                        email=f"{provider_subject}@example.test",
+                        email_verified=verified,
+                    )
+
+            settings = Settings(
+                _env_file=None,
+                environment="test",
+                public_app_url="https://learner.example.test",
+                admin_app_url="https://admin.example.test",
+                coach_app_url="https://coach.example.test",
+                api_url="https://api.example.test",
+                sales_xray_app_url=origin,
+                public_learner_tenant_id=state.tenant_id,
+                operations_tenant_id=uuid4(),
+                session_token_pepper=SecretStr(secrets.token_urlsafe(32)),
+                oauth_transaction_secret=SecretStr(secrets.token_urlsafe(32)),
+                learner_consent_version="synthetic-acquisition-consent-v1",
+            )
+            app = FastAPI()
+            register_problem_handlers(app)
+            require_actor = install_identity_http(
+                app, settings=settings, sessions=sessions, provider=SyntheticProvider()
+            )
+            install_acquisition_http(
+                app,
+                settings=settings,
+                sessions=sessions,
+                require_actor=require_actor,
+                factory=lambda db: service(db, state),
+                challenge=UploadChallenge(
+                    secret=SecretStr(secrets.token_urlsafe(32)), hostname="salesxray.example.test"
+                ),
+            )
+            guest = await issue(engine, state)
+            async with sessions() as db, db.begin():
+                await service(db, state).reserve(source(124), token=guest.token)
+                before = await db.scalar(select(func.count()).select_from(Person))
+
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app), base_url=origin
+            ) as client:
+                client.cookies.set(
+                    "ac_xray_guest", guest.token, domain="salesxray.example.test", path="/"
+                )
+                person_id = None
+                for _ in range(2 if verified else 1):
+                    start = await client.get(
+                        "/v1/auth/google/start",
+                        params={
+                            "action": "authenticate",
+                            "surface": "sales_xray",
+                            "consent": "true",
+                            "consent_version": settings.learner_consent_version,
+                            "return_path": "/?report=synthetic-owned-report&continue=claim",
+                        },
+                    )
+                    assert start.status_code == 303
+                    callback_state = parse_qs(urlsplit(start.headers["location"]).query)["state"][0]
+                    callback = await client.get(
+                        "/v1/auth/google/callback",
+                        params={"state": callback_state, "code": "synthetic-code"},
+                    )
+                    if not verified:
+                        assert callback.status_code == 401, callback.text
+                        assert settings.session_cookie_name not in client.cookies
+                        async with sessions() as db:
+                            assert (
+                                await db.scalar(select(func.count()).select_from(Person)) == before
+                            )
+                        return
+                    assert callback.status_code == 303, callback.text
+                    assert (
+                        callback.headers["location"]
+                        == origin + "/?report=synthetic-owned-report&continue=claim"
+                    )
+                    me = await client.get("/v1/me")
+                    assert me.status_code == 200, me.text
+                    assert me.json()["selected_tenant_id"] == str(state.tenant_id)
+                    assert me.json()["membership_role"] == "learner"
+                    if person_id is None:
+                        person_id = me.json()["person_id"]
+                        claim = await client.post(
+                            "/v1/conversation/acquisition/claim", headers={"Origin": origin}
+                        )
+                        assert claim.status_code == 200, claim.text
+                        assert claim.json()["allowance"]["available_seconds"] == 5876
+                    else:
+                        assert me.json()["person_id"] == person_id
+                    async with sessions() as db:
+                        assert (
+                            await db.scalar(select(func.count()).select_from(Person)) == before + 1
+                        )
+                    client.cookies.clear()
         finally:
             await engine.dispose()
 
