@@ -256,6 +256,7 @@ export function AdminShell({
   title,
   description,
   surface = "organization",
+  footerText,
   children,
 }: {
   active: AdminArea;
@@ -264,6 +265,7 @@ export function AdminShell({
   title: string;
   description: string;
   surface?: AdminSurface;
+  footerText?: string;
   children: ReactNode;
 }) {
   return (
@@ -361,11 +363,11 @@ export function AdminShell({
           <footer className="admin-footer">
             <span>{PLATFORM_BRAND.name} / Academy operations</span>
             <span>
-              {surface === "studio"
+              {footerText ?? (surface === "studio"
                 ? "TENANT-SCOPED · SERVER-AUTHORIZED · NO STORE"
                 : active === "people"
                   ? "ACADEMY LEARNER RECORDS · AUDITED ACCESS"
-                  : "PREVIEW DATA · NO RECORDS ASSERTED"}
+                  : "PREVIEW DATA · NO RECORDS ASSERTED")}
             </span>
           </footer>
         </main>

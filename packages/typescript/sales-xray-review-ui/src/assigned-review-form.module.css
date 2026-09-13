@@ -223,6 +223,7 @@
 
 .fieldGrid label {
   display: grid;
+  align-content: start;
   gap: 0.35rem;
   color: #3d5873;
   font-size: 0.78rem;
@@ -230,6 +231,7 @@
 }
 
 .fieldGrid textarea,
+.fieldGrid select,
 .fieldGrid input {
   width: 100%;
   box-sizing: border-box;
@@ -248,6 +250,7 @@
 }
 
 .fieldGrid textarea:focus,
+.fieldGrid select:focus,
 .fieldGrid input:focus {
   border-color: #4b84bc;
   outline: 3px solid rgb(75 132 188 / 15%);
@@ -304,6 +307,57 @@
   margin: 0;
 }
 
+.form {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.clipList {
+  max-height: 16rem;
+  overflow-y: auto;
+  padding: 0.25rem;
+}
+.clipButton {
+  min-height: 2.75rem;
+}
+.clipButton[aria-pressed="true"] {
+  border-color: #4a84bd;
+  background: #edf6ff;
+}
+.check {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+.fieldGrid select {
+  min-height: 2.75rem;
+}
+.report {
+  padding: 1rem;
+  border: 1px solid #dce6f0;
+  border-radius: 0.8rem;
+}
+.report summary {
+  cursor: pointer;
+  font-weight: 700;
+  min-height: 1.5rem;
+}
+.report h3 {
+  margin: 1.2rem 0 0.7rem;
+}
+.report h4 {
+  margin: 0.8rem 0 0.4rem;
+}
+.report p,
+.report blockquote {
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+.report blockquote {
+  margin: 0.7rem 0;
+  padding-left: 0.8rem;
+  border-left: 3px solid #90b6db;
+}
+
 @media (max-width: 720px) {
   .facts,
   .lensGrid,
@@ -315,4 +369,52 @@
   .sectionHeading {
     flex-direction: column;
   }
+}
+
+:global(html[data-theme="dark"]) .form {
+  color: var(--theme-text, #edf2fb);
+  background: var(--theme-surface, #101a2b);
+  border-color: var(--theme-border, #34425a);
+}
+:global(html[data-theme="dark"])
+  .form
+  :is(h2, h3, h4, dd, label, strong, summary) {
+  color: var(--theme-text, #edf2fb);
+}
+:global(html[data-theme="dark"]) .form :is(p, dt, small, .eyebrow, .muted) {
+  color: var(--theme-text-muted, #b6c0d2);
+}
+:global(html[data-theme="dark"])
+  .form
+  :is(
+    .facts div,
+    .evidence,
+    .report,
+    .quote,
+    .clipButton,
+    .lensButton,
+    textarea,
+    select,
+    input
+  ) {
+  color: var(--theme-text, #edf2fb);
+  background: #162238;
+  border-color: var(--theme-border, #34425a);
+}
+:global(html[data-theme="dark"])
+  .form
+  :is(.lensButtonActive, .clipButtonActive) {
+  background: #203b5b;
+  border-color: #9bb3ff;
+}
+:global(html[data-theme="dark"]) .form :is(.boundPill, .smallPill, .success) {
+  background: #173c32;
+  color: #b9ecd4;
+}
+:global(html[data-theme="dark"]) .form .error {
+  background: #492c32;
+  color: #ffd5cc;
+}
+:global(html[data-theme="dark"]) .form :is(.header, .report, .facts div) {
+  border-color: var(--theme-border, #34425a);
 }
