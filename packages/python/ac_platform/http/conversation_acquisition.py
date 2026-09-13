@@ -11,6 +11,7 @@ import asyncio
 import json
 import re
 from collections.abc import Awaitable, Callable
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response
@@ -19,11 +20,15 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from ac_platform.application.settings import Settings
 from ac_platform.conversation_intelligence.acquisition_challenge import UploadChallenge
 from ac_platform.conversation_intelligence.acquisition_sessions import AcquisitionSessions
-from ac_platform.conversation_intelligence.application import ConversationError
+from ac_platform.conversation_intelligence.application import (
+    ConversationConflict,
+    ConversationError,
+)
 from ac_platform.http.auth import (
     AuthenticatedTransaction,
     RequireActor,
     _InvalidRawCookie,
+    _session_cookie,
     _single_raw_cookie,
     require_safe_origin,
 )
@@ -137,7 +142,32 @@ def install_acquisition_http(
     @router.get("/session")
     async def read_session(request: Request, response: Response) -> Any:
         admit(request, response)
-        current = token(request)
+        # The account cookie is optional for this read, but if it is present
+        # it must be resolved before considering the guest cookie.  An invalid
+        # account cannot silently fall back to a guest bearer.
+        account_token = _session_cookie(request, settings, required=False)
+        current = token(request, required=False)
+        if account_token is not None:
+            async with asynccontextmanager(require_actor)(request) as auth:
+                app = service(auth.database)
+                if current is None:
+                    allowance = await result(app.allowance(actor=auth.resolved.actor))
+                    return {"state": "account", "allowance": allowance}
+                try:
+                    allowance = await app.allowance(
+                        token=current, actor=auth.resolved.actor
+                    )
+                except ConversationConflict:
+                    # An unclaimed visitor remains the current owner until
+                    # the explicit POST /claim action.  Resolve its allowance
+                    # without granting the account any visitor ownership.
+                    allowance = await result(app.allowance(token=current))
+                    return {"state": "claim_required", "allowance": allowance}
+                except ConversationError as error:
+                    raise fail(error.status, str(error)) from None
+                return {"state": "account", "allowance": allowance}
+        if current is None:
+            raise fail(401, "Start an upload session to continue.")
         async with sessions() as database, database.begin():
             allowance = await result(service(database).allowance(token=current))
         return {"state": "guest", "allowance": allowance}
