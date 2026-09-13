@@ -11,10 +11,12 @@ import { AuthFlowPage } from "../../components/auth-flow-page";
 import { SurfaceStatePanel } from "../../components/surface-state";
 import { ROUTES } from "../../lib/routes";
 import { parseCourseIntent } from "../../lib/course-intent";
+import { parseActivityIntent } from "../../lib/activity-intent";
 import {
-  activityIntentHref,
-  parseActivityIntent,
-} from "../../lib/activity-intent";
+  authIntentHref,
+  parseSalesAuthNext,
+  preferredSalesAuthNext,
+} from "../../lib/sales-auth-return";
 import {
   isContentVisible,
   parseSurfaceState,
@@ -27,6 +29,7 @@ type CallbackPageProps = {
     state?: QueryValue;
     course?: QueryValue;
     activity?: QueryValue;
+    next?: QueryValue;
   }>;
 };
 
@@ -112,21 +115,34 @@ export default async function CallbackPage({
   const result = parseCallbackResult(query.result);
   const courseIntent = parseCourseIntent(query.course);
   const activityIntent = parseActivityIntent(query.activity);
-  const loginHref = activityIntentHref(
+  const salesNext = parseSalesAuthNext(query.next);
+  const effectiveSalesNext = preferredSalesAuthNext(
+    courseIntent,
+    activityIntent,
+    salesNext,
+  );
+  const loginHref = authIntentHref(
     ROUTES.login,
     activityIntent,
     courseIntent,
+    salesNext,
   );
   const recovery = result ? callbackResults[result] : null;
   const recoveryHref =
     recovery?.actionHref === ROUTES.login ||
     recovery?.actionHref === ROUTES.register
-      ? activityIntentHref(recovery.actionHref, activityIntent, courseIntent)
+      ? authIntentHref(
+          recovery.actionHref,
+          activityIntent,
+          courseIntent,
+          salesNext,
+        )
       : recovery?.actionHref;
   const retryParameters = new URLSearchParams();
   if (result) retryParameters.set("result", result);
   if (courseIntent) retryParameters.set("course", courseIntent);
   if (activityIntent) retryParameters.set("activity", activityIntent);
+  if (effectiveSalesNext) retryParameters.set("next", effectiveSalesNext);
   const retryHref = `${ROUTES.callback}${retryParameters.size ? `?${retryParameters}` : ""}`;
   const RecoveryIcon = recovery?.icon ?? ShieldCheck;
 

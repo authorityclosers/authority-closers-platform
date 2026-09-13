@@ -38,12 +38,16 @@ from ac_platform.worker import (
     OUTBOX_JOB_ROUTES,
     PASSWORD_EMAIL_RESET_EVENT,
     PASSWORD_EMAIL_RESET_EVENT_V2,
+    PASSWORD_EMAIL_RESET_EVENT_V3,
     PASSWORD_EMAIL_RESET_JOB,
     PASSWORD_EMAIL_RESET_JOB_V2,
+    PASSWORD_EMAIL_RESET_JOB_V3,
     PASSWORD_EMAIL_VERIFICATION_EVENT,
     PASSWORD_EMAIL_VERIFICATION_EVENT_V2,
+    PASSWORD_EMAIL_VERIFICATION_EVENT_V3,
     PASSWORD_EMAIL_VERIFICATION_JOB,
     PASSWORD_EMAIL_VERIFICATION_JOB_V2,
+    PASSWORD_EMAIL_VERIFICATION_JOB_V3,
     AllowlistedDispatcher,
     AmbiguousProviderReceiptError,
     DurableWorker,
@@ -183,6 +187,8 @@ def test_outbox_route_is_exact_and_contains_no_unsafe_default_email_kind() -> No
         PASSWORD_EMAIL_RESET_EVENT,
         PASSWORD_EMAIL_VERIFICATION_EVENT_V2,
         PASSWORD_EMAIL_RESET_EVENT_V2,
+        PASSWORD_EMAIL_VERIFICATION_EVENT_V3,
+        PASSWORD_EMAIL_RESET_EVENT_V3,
     }
     assert OUTBOX_JOB_ROUTES[ENROLLMENT_WELCOME_EVENT].job_kind == ENROLLMENT_WELCOME_JOB
     assert ENROLLMENT_WELCOME_JOB != "email.send"
@@ -198,6 +204,10 @@ def test_outbox_route_is_exact_and_contains_no_unsafe_default_email_kind() -> No
         PASSWORD_EMAIL_VERIFICATION_JOB_V2
     )
     assert OUTBOX_JOB_ROUTES[PASSWORD_EMAIL_RESET_EVENT_V2].job_kind == PASSWORD_EMAIL_RESET_JOB_V2
+    assert OUTBOX_JOB_ROUTES[PASSWORD_EMAIL_VERIFICATION_EVENT_V3].job_kind == (
+        PASSWORD_EMAIL_VERIFICATION_JOB_V3
+    )
+    assert OUTBOX_JOB_ROUTES[PASSWORD_EMAIL_RESET_EVENT_V3].job_kind == PASSWORD_EMAIL_RESET_JOB_V3
     assert all(route.job_kind != "email.send" for route in OUTBOX_JOB_ROUTES.values())
 
 
@@ -722,6 +732,8 @@ async def test_recovery_fence_before_provider_call_does_not_mark_delivery_ambigu
         PASSWORD_EMAIL_RESET_JOB,
         PASSWORD_EMAIL_VERIFICATION_JOB_V2,
         PASSWORD_EMAIL_RESET_JOB_V2,
+        PASSWORD_EMAIL_VERIFICATION_JOB_V3,
+        PASSWORD_EMAIL_RESET_JOB_V3,
     ],
 )
 async def test_durable_receipt_skips_provider_redispatch(job_kind: str) -> None:
@@ -767,6 +779,8 @@ def test_default_worker_provider_is_fake_and_unconfigured_resend_is_rejected() -
             PASSWORD_EMAIL_RESET_JOB,
             PASSWORD_EMAIL_VERIFICATION_JOB_V2,
             PASSWORD_EMAIL_RESET_JOB_V2,
+            PASSWORD_EMAIL_VERIFICATION_JOB_V3,
+            PASSWORD_EMAIL_RESET_JOB_V3,
         }
     )
     with pytest.raises(PermanentProviderError, match="injected API key"):

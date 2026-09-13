@@ -19,10 +19,8 @@ import {
 
 import { googleAuthReturnPath, googleAuthStartUrl } from "../lib/auth-links";
 import { type CourseIntent } from "../lib/course-intent";
-import {
-  activityIntentHref,
-  type ActivityIntent,
-} from "../lib/activity-intent";
+import { type ActivityIntent } from "../lib/activity-intent";
+import { authIntentHref, type SalesAuthNext } from "../lib/sales-auth-return";
 import { createLearnerApi } from "../lib/learner-api";
 import { ROUTES } from "../lib/routes";
 import {
@@ -56,19 +54,22 @@ const registrationServerHydrated = () => false;
 export function RegistrationForm({
   courseIntent = null,
   activityIntent = null,
+  salesNext = null,
 }: {
   courseIntent?: CourseIntent;
   activityIntent?: ActivityIntent;
+  salesNext?: SalesAuthNext;
 }) {
   const hydrated = useSyncExternalStore(
     subscribeRegistrationHydration,
     registrationClientHydrated,
     registrationServerHydrated,
   );
-  const loginHref = activityIntentHref(
+  const loginHref = authIntentHref(
     ROUTES.login,
     activityIntent,
     courseIntent,
+    salesNext,
   );
   const [pending, setPending] = useState(false);
   const [complete, setComplete] = useState(false);
@@ -94,12 +95,14 @@ export function RegistrationForm({
         whatsappNumber: String(values.get("whatsappNumber") ?? ""),
         password: String(values.get("password") ?? ""),
         consent: true,
-        ...(courseIntent
+        ...(courseIntent || activityIntent
           ? {
-              courseIntent,
+              ...(courseIntent ? { courseIntent } : {}),
               ...(activityIntent ? { activityIntent } : {}),
             }
-          : {}),
+          : salesNext
+            ? { salesNext }
+            : {}),
       });
       setComplete(true);
     } catch (requestError) {
@@ -123,10 +126,11 @@ export function RegistrationForm({
         </Link>
         <Link
           className="text-link"
-          href={activityIntentHref(
+          href={authIntentHref(
             ROUTES.verifyEmail,
             activityIntent,
             courseIntent,
+            salesNext,
           )}
         >
           Need a fresh verification link?
@@ -145,8 +149,9 @@ export function RegistrationForm({
       </div>
       <h2>Account details.</h2>
       <p className="auth-card__intro">
-        Start the free course and keep progress, reflections, and recovery tied
-        to one verified identity.
+        {salesNext && !courseIntent && !activityIntent
+          ? "Create your account to continue to Sales Xray."
+          : "Start the free course and keep progress, reflections, and recovery tied to one verified identity."}
       </p>
       <form className="stack-form" method="post" onSubmit={submit}>
         <fieldset className="auth-fieldset">
@@ -277,7 +282,12 @@ export function RegistrationForm({
       </div>
       <form
         className="stack-form"
-        action={googleAuthStartUrl("register", courseIntent, activityIntent)}
+        action={googleAuthStartUrl(
+          "register",
+          courseIntent,
+          activityIntent,
+          salesNext,
+        )}
         method="get"
       >
         <input type="hidden" name="action" value="register" />
@@ -285,7 +295,12 @@ export function RegistrationForm({
         <input
           type="hidden"
           name="return_path"
-          value={googleAuthReturnPath("register", courseIntent, activityIntent)}
+          value={googleAuthReturnPath(
+            "register",
+            courseIntent,
+            activityIntent,
+            salesNext,
+          )}
         />
         <input
           type="hidden"
@@ -319,9 +334,11 @@ export function RegistrationForm({
 export function RecoveryRequestForm({
   courseIntent = null,
   activityIntent = null,
+  salesNext = null,
 }: {
   courseIntent?: CourseIntent;
   activityIntent?: ActivityIntent;
+  salesNext?: SalesAuthNext;
 } = {}) {
   const hydrated = useSyncExternalStore(
     subscribeRegistrationHydration,
@@ -332,10 +349,11 @@ export function RecoveryRequestForm({
   const [complete, setComplete] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const errorRef = useRef<HTMLDivElement>(null);
-  const loginHref = activityIntentHref(
+  const loginHref = authIntentHref(
     ROUTES.login,
     activityIntent,
     courseIntent,
+    salesNext,
   );
 
   useEffect(() => {
@@ -350,10 +368,11 @@ export function RecoveryRequestForm({
     const values = new FormData(event.currentTarget);
     try {
       const email = String(values.get("email") ?? "");
-      if (courseIntent) {
+      if (courseIntent || activityIntent || salesNext) {
         await createLearnerApi().requestPasswordRecovery(email, {
           courseIntent,
           activityIntent,
+          salesNext,
         });
       } else {
         await createLearnerApi().requestPasswordRecovery(email);
@@ -432,9 +451,11 @@ export function RecoveryRequestForm({
 export function VerifyEmailFlow({
   courseIntent = null,
   activityIntent = null,
+  salesNext = null,
 }: {
   courseIntent?: CourseIntent;
   activityIntent?: ActivityIntent;
+  salesNext?: SalesAuthNext;
 } = {}) {
   const started = useRef(false);
   const [state, setState] = useState<"working" | "success" | "error">(
@@ -444,15 +465,17 @@ export function VerifyEmailFlow({
   const [resendPending, setResendPending] = useState(false);
   const [resendComplete, setResendComplete] = useState(false);
   const [resendError, setResendError] = useState<string | null>(null);
-  const onboardingHref = activityIntentHref(
+  const onboardingHref = authIntentHref(
     ROUTES.onboarding,
     activityIntent,
     courseIntent,
+    salesNext,
   );
-  const loginHref = activityIntentHref(
+  const loginHref = authIntentHref(
     ROUTES.login,
     activityIntent,
     courseIntent,
+    salesNext,
   );
 
   async function resend(event: FormEvent<HTMLFormElement>) {
@@ -462,10 +485,11 @@ export function VerifyEmailFlow({
     const values = new FormData(event.currentTarget);
     try {
       const email = String(values.get("email") ?? "");
-      if (courseIntent) {
+      if (courseIntent || activityIntent || salesNext) {
         await createLearnerApi().resendPasswordVerification(email, {
           courseIntent,
           activityIntent,
+          salesNext,
         });
       } else {
         await createLearnerApi().resendPasswordVerification(email);
@@ -577,9 +601,11 @@ export function VerifyEmailFlow({
 export function PasswordResetForm({
   courseIntent = null,
   activityIntent = null,
+  salesNext = null,
 }: {
   courseIntent?: CourseIntent;
   activityIntent?: ActivityIntent;
+  salesNext?: SalesAuthNext;
 } = {}) {
   const tokenRead = useRef(false);
   const [token, setToken] = useState<string | null | undefined>(undefined);
@@ -588,15 +614,17 @@ export function PasswordResetForm({
   const [error, setError] = useState<string | null>(null);
   const [passwordVisible, setPasswordVisible] = useState(false);
   const errorRef = useRef<HTMLDivElement>(null);
-  const forgotPasswordHref = activityIntentHref(
+  const forgotPasswordHref = authIntentHref(
     ROUTES.forgotPassword,
     activityIntent,
     courseIntent,
+    salesNext,
   );
-  const loginHref = activityIntentHref(
+  const loginHref = authIntentHref(
     ROUTES.login,
     activityIntent,
     courseIntent,
+    salesNext,
   );
 
   useEffect(() => {

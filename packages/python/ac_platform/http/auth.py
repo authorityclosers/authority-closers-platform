@@ -53,8 +53,10 @@ from ac_platform.identity.onboarding import (
 from ac_platform.identity.password_auth import (
     PASSWORD_EMAIL_RESET_EVENT,
     PASSWORD_EMAIL_RESET_EVENT_V2,
+    PASSWORD_EMAIL_RESET_EVENT_V3,
     PASSWORD_EMAIL_VERIFICATION_EVENT,
     PASSWORD_EMAIL_VERIFICATION_EVENT_V2,
+    PASSWORD_EMAIL_VERIFICATION_EVENT_V3,
     EmailVerificationRequired,
     InvalidEmailChallenge,
     InvalidPasswordCredentials,
@@ -247,6 +249,7 @@ class PasswordRegistrationRequest(BaseModel):
     consent_version: str | None = Field(default=None, min_length=1, max_length=64)
     course: Literal["authority-closers-free-course"] | None = None
     activity: UUID | None = None
+    next: Literal["/sales-xray"] | None = None
 
     @model_validator(mode="after")
     def validate_navigation_context(self) -> PasswordRegistrationRequest:
@@ -268,6 +271,7 @@ class PasswordRecoveryRequest(BaseModel):
     email: str = Field(min_length=3, max_length=320)
     course: Literal["authority-closers-free-course"] | None = None
     activity: UUID | None = None
+    next: Literal["/sales-xray"] | None = None
 
     @model_validator(mode="after")
     def validate_navigation_context(self) -> PasswordRecoveryRequest:
@@ -356,13 +360,19 @@ def _password_email_event(
     kind: str,
     course: str | None = None,
     activity: UUID | None = None,
+    next: str | None = None,
 ) -> EventEnvelope:
     event_names = {
         "email_verification": (
             PASSWORD_EMAIL_VERIFICATION_EVENT,
             PASSWORD_EMAIL_VERIFICATION_EVENT_V2,
+            PASSWORD_EMAIL_VERIFICATION_EVENT_V3,
         ),
-        "password_reset": (PASSWORD_EMAIL_RESET_EVENT, PASSWORD_EMAIL_RESET_EVENT_V2),
+        "password_reset": (
+            PASSWORD_EMAIL_RESET_EVENT,
+            PASSWORD_EMAIL_RESET_EVENT_V2,
+            PASSWORD_EMAIL_RESET_EVENT_V3,
+        ),
     }.get(kind)
     if event_names is None:
         raise PasswordRequestInvalid("unsupported email challenge kind")
@@ -370,13 +380,20 @@ def _password_email_event(
         raise PasswordRequestInvalid("activity requires an allowlisted course")
     if course is not None and course != "authority-closers-free-course":
         raise PasswordRequestInvalid("course is not allowlisted")
+    if next is not None and next != "/sales-xray":
+        raise PasswordRequestInvalid("next is not allowlisted")
     payload: dict[str, str] = {"challenge_id": str(challenge_id), "kind": kind}
+    event_name = event_names[0]
     if course is not None:
+        event_name = event_names[1]
         payload["course"] = course
         if activity is not None:
             payload["activity"] = str(activity).lower()
+    elif next is not None:
+        event_name = event_names[2]
+        payload["next"] = next
     return EventEnvelope(
-        name=event_names[1] if course is not None else event_names[0],
+        name=event_name,
         category=EventCategory.OPERATIONAL,
         aggregate_type="person",
         aggregate_id=person_id,
@@ -1157,6 +1174,7 @@ _LEARNER_COURSE_INTENT = "authority-closers-free-course"
 _LEARNER_COURSE_RETURN_PATHS = frozenset(
     f"{path}?course={_LEARNER_COURSE_INTENT}" for path in ("/home", "/onboarding")
 )
+_LEARNER_SALES_RETURN_PATH = "/onboarding?next=/sales-xray"
 _LEARNER_ACTIVITY_RETURN_PATH = re.compile(
     r"/onboarding\?(?:course=(?P<course>authority-closers-free-course)&)?"
     r"activity=(?P<activity>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"
@@ -1177,6 +1195,8 @@ def _learner_oauth_recovery_response(
     transaction_return_path: str | None = None,
 ) -> Response:
     parameters: dict[str, str] = {"result": result}
+    if transaction_return_path == _LEARNER_SALES_RETURN_PATH:
+        parameters["next"] = "/sales-xray"
     if transaction_return_path in _LEARNER_COURSE_RETURN_PATHS:
         parameters["course"] = _LEARNER_COURSE_INTENT
     activity_return = _LEARNER_ACTIVITY_RETURN_PATH.fullmatch(transaction_return_path or "")
@@ -1294,6 +1314,7 @@ def install_identity_http(
         kind: str,
         course: str | None = None,
         activity: UUID | None = None,
+        next: str | None = None,
     ) -> None:
         await OutboxRepository(database).enqueue(
             _password_email_event(
@@ -1302,6 +1323,7 @@ def install_identity_http(
                 kind=kind,
                 course=course,
                 activity=activity,
+                next=next,
             ),
             dedupe_key=f"identity-email:{kind}:{challenge_id}",
         )
@@ -1363,6 +1385,7 @@ def install_identity_http(
                         kind=registration.challenge.kind.value,
                         course=body.course,
                         activity=body.activity,
+                        next=body.next,
                     )
         except (PasswordAuthError, ValueError) as error:
             raise PasswordRequestInvalid(str(error)) from error
@@ -1433,6 +1456,7 @@ def install_identity_http(
                         kind=challenge.kind.value,
                         course=body.course,
                         activity=body.activity,
+                        next=body.next,
                     )
         except (PasswordAuthError, ValueError):
             pass
@@ -1462,6 +1486,7 @@ def install_identity_http(
                         kind=challenge.kind.value,
                         course=body.course,
                         activity=body.activity,
+                        next=body.next,
                     )
         except (PasswordAuthError, ValueError):
             pass

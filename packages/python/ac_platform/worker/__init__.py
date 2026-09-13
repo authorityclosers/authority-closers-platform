@@ -24,12 +24,16 @@ from ac_platform.identity.models import EmailChallenge, EmailChallengeKind, Pers
 from ac_platform.identity.password_auth import (
     PASSWORD_EMAIL_RESET_EVENT,
     PASSWORD_EMAIL_RESET_EVENT_V2,
+    PASSWORD_EMAIL_RESET_EVENT_V3,
     PASSWORD_EMAIL_RESET_JOB,
     PASSWORD_EMAIL_RESET_JOB_V2,
+    PASSWORD_EMAIL_RESET_JOB_V3,
     PASSWORD_EMAIL_VERIFICATION_EVENT,
     PASSWORD_EMAIL_VERIFICATION_EVENT_V2,
+    PASSWORD_EMAIL_VERIFICATION_EVENT_V3,
     PASSWORD_EMAIL_VERIFICATION_JOB,
     PASSWORD_EMAIL_VERIFICATION_JOB_V2,
+    PASSWORD_EMAIL_VERIFICATION_JOB_V3,
     decrypt_challenge_token,
 )
 from ac_platform.outbox.models import Job, JobStatus, RecoveryStatus
@@ -113,16 +117,36 @@ OUTBOX_JOB_ROUTES: Mapping[str, OutboxJobRoute] = MappingProxyType(
                 "course": frozenset({"authority-closers-free-course"}),
             },
         ),
+        PASSWORD_EMAIL_VERIFICATION_EVENT_V3: OutboxJobRoute(
+            job_kind=PASSWORD_EMAIL_VERIFICATION_JOB_V3,
+            required_payload_keys=frozenset({"challenge_id", "kind", "next"}),
+            uuid_payload_keys=frozenset({"challenge_id"}),
+            allowed_payload_values={
+                "kind": frozenset({EmailChallengeKind.VERIFICATION.value}),
+                "next": frozenset({"/sales-xray"}),
+            },
+        ),
+        PASSWORD_EMAIL_RESET_EVENT_V3: OutboxJobRoute(
+            job_kind=PASSWORD_EMAIL_RESET_JOB_V3,
+            required_payload_keys=frozenset({"challenge_id", "kind", "next"}),
+            uuid_payload_keys=frozenset({"challenge_id"}),
+            allowed_payload_values={
+                "kind": frozenset({EmailChallengeKind.PASSWORD_RESET.value}),
+                "next": frozenset({"/sales-xray"}),
+            },
+        ),
     }
 )
 
-# The v2 jobs change only the durable navigation hint payload.  Keep the
+# The v2/v3 jobs change only the durable navigation hint payload.  Keep the
 # existing low-cardinality telemetry taxonomy on the logical communication
 # route so delivery telemetry remains accepted without adding a shared schema.
 _PASSWORD_EMAIL_TELEMETRY_JOB_KINDS = MappingProxyType(
     {
         PASSWORD_EMAIL_VERIFICATION_JOB_V2: PASSWORD_EMAIL_VERIFICATION_JOB,
         PASSWORD_EMAIL_RESET_JOB_V2: PASSWORD_EMAIL_RESET_JOB,
+        PASSWORD_EMAIL_VERIFICATION_JOB_V3: PASSWORD_EMAIL_VERIFICATION_JOB,
+        PASSWORD_EMAIL_RESET_JOB_V3: PASSWORD_EMAIL_RESET_JOB,
     }
 )
 
@@ -141,6 +165,8 @@ async def resolve_password_message(
         PASSWORD_EMAIL_RESET_JOB,
         PASSWORD_EMAIL_VERIFICATION_JOB_V2,
         PASSWORD_EMAIL_RESET_JOB_V2,
+        PASSWORD_EMAIL_VERIFICATION_JOB_V3,
+        PASSWORD_EMAIL_RESET_JOB_V3,
     }:
         raise UnknownJobKindError(f"email route is not allowlisted: {job.kind}")
     route = next(
@@ -191,6 +217,8 @@ async def resolve_password_message(
         if "activity" in payload:
             context["activity"] = payload["activity"]
         context_query = "?" + urlencode(context)
+    elif job.kind in {PASSWORD_EMAIL_VERIFICATION_JOB_V3, PASSWORD_EMAIL_RESET_JOB_V3}:
+        context_query = "?" + urlencode({"next": payload["next"]})
     action_link = f"{str(settings.public_app_url).rstrip('/')}{path}{context_query}#token={token}"
     template = (
         "identity-email-verification"
@@ -346,6 +374,8 @@ def build_default_dispatcher(
             PASSWORD_EMAIL_RESET_JOB: handler,
             PASSWORD_EMAIL_VERIFICATION_JOB_V2: handler,
             PASSWORD_EMAIL_RESET_JOB_V2: handler,
+            PASSWORD_EMAIL_VERIFICATION_JOB_V3: handler,
+            PASSWORD_EMAIL_RESET_JOB_V3: handler,
         }
     )
 
@@ -506,6 +536,8 @@ class DurableWorker:
                 PASSWORD_EMAIL_RESET_JOB,
                 PASSWORD_EMAIL_VERIFICATION_JOB_V2,
                 PASSWORD_EMAIL_RESET_JOB_V2,
+                PASSWORD_EMAIL_VERIFICATION_JOB_V3,
+                PASSWORD_EMAIL_RESET_JOB_V3,
             }:
                 raise UnknownJobKindError(f"job kind is not allowlisted: {job.kind}")
             state = await RecoveryStateRepository(session).require_ready(
@@ -591,6 +623,8 @@ class DurableWorker:
             PASSWORD_EMAIL_RESET_JOB,
             PASSWORD_EMAIL_VERIFICATION_JOB_V2,
             PASSWORD_EMAIL_RESET_JOB_V2,
+            PASSWORD_EMAIL_VERIFICATION_JOB_V3,
+            PASSWORD_EMAIL_RESET_JOB_V3,
         }:
             return await self._resolve_password_message(
                 session,
@@ -991,10 +1025,14 @@ __all__ = [
     "PASSWORD_EMAIL_RESET_JOB",
     "PASSWORD_EMAIL_RESET_EVENT_V2",
     "PASSWORD_EMAIL_RESET_JOB_V2",
+    "PASSWORD_EMAIL_RESET_EVENT_V3",
+    "PASSWORD_EMAIL_RESET_JOB_V3",
     "PASSWORD_EMAIL_VERIFICATION_EVENT",
     "PASSWORD_EMAIL_VERIFICATION_JOB",
     "PASSWORD_EMAIL_VERIFICATION_EVENT_V2",
     "PASSWORD_EMAIL_VERIFICATION_JOB_V2",
+    "PASSWORD_EMAIL_VERIFICATION_EVENT_V3",
+    "PASSWORD_EMAIL_VERIFICATION_JOB_V3",
     "OUTBOX_JOB_ROUTES",
     "PreparedDispatch",
     "resolve_password_message",

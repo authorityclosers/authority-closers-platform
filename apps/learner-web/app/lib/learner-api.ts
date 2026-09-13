@@ -8,6 +8,7 @@ import {
 } from "./offline-read-cache";
 import { parseActivityIntent, type ActivityIntent } from "./activity-intent";
 import { parseCourseIntent, type CourseIntent } from "./course-intent";
+import { parseSalesAuthNext, type SalesAuthNext } from "./sales-auth-return";
 
 export type JsonRecord = Record<string, unknown>;
 
@@ -19,11 +20,13 @@ export interface PasswordRegistrationInput {
   consent: true;
   courseIntent?: CourseIntent;
   activityIntent?: ActivityIntent;
+  salesNext?: SalesAuthNext;
 }
 
 export interface PasswordEmailContext {
   courseIntent?: CourseIntent;
   activityIntent?: ActivityIntent;
+  salesNext?: SalesAuthNext;
 }
 
 function passwordEmailContextBody(
@@ -31,8 +34,10 @@ function passwordEmailContextBody(
 ): Record<string, string> {
   const course = parseCourseIntent(context?.courseIntent);
   const activity = parseActivityIntent(context?.activityIntent);
-  if (!course) return {};
-  return activity ? { course, activity } : { course };
+  const salesNext = parseSalesAuthNext(context?.salesNext);
+  if (activity) return course ? { course, activity } : {};
+  if (!course) return salesNext ? { next: salesNext } : {};
+  return { course };
 }
 
 export interface PasswordRegistrationResponse {
