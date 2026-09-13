@@ -77,3 +77,20 @@ checks. The Admin benchmark page is preparation/status, not a run launcher or mo
 training interface. See [remaining UI/calibration scope](20260913_V02_UI_AND_CALIBRATION_SCOPE.md).
 No paid call, credential purchase, production database edit, numeric AI score or
 new public media publication occurred in this UI integration.
+
+## Superseding Coach browser receipt and final independent review
+
+The clean Coach browser pass 03 corrects the synthetic upload-availability fixture
+used in pass 02. Its receipt and desktop/mobile captures are preserved in
+`v02-review-experience-20260913/coach-clean-03/`. It verifies the actual Coach page,
+outline selection, editable lesson title, draft guidance, preview/publication
+information and responsive layout. No non-GET request occurred. Its small upload
+limit is fixture data, not the deployed media policy. Earlier receipts are retained.
+
+The independent Luna reviewer rechecked integrated UI tip `5459c98`: all five
+reported invitation/auth/draft findings are resolved, with no new P1/P2 finding.
+This was a static re-review, not another full test run. Merge `a73bef5` preserves
+exactly the tested application, package, script, database and test code from that
+tip while retaining the later Sales runtime evidence. Patches `7b161b1` and
+`f3e7316` separately add the already tested video encode preset and environment
+correct OAuth probe; their focused evidence documents remain attached.
