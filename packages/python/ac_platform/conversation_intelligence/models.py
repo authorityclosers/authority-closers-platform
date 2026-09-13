@@ -13,6 +13,7 @@ from sqlalchemy import (
     ForeignKey,
     ForeignKeyConstraint,
     Integer,
+    LargeBinary,
     String,
     UniqueConstraint,
     Uuid,
@@ -418,6 +419,62 @@ class ConversationReviewAssignment(Base):
     assignment_sha256: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class ConversationReviewInvitation(Base):
+    """Immutable email invitation bound to one exact saved review run."""
+
+    __tablename__ = "conversation_review_invitations"
+    __table_args__ = (
+        recording_fk(),
+        ForeignKeyConstraint(
+            ["run_id", "tenant_id", "person_id"],
+            ["conversation_runs.id", "conversation_runs.tenant_id", "conversation_runs.person_id"],
+        ),
+        UniqueConstraint("token_hash"),
+        CheckConstraint("length(token_hash) = 32", name="token_hash_length"),
+        CheckConstraint("length(trim(invited_email)) > 3", name="invited_email_nonblank"),
+        CheckConstraint("expires_at > created_at", name="bounded_expiry"),
+    )
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    person_id: Mapped[UUID] = mapped_column(Uuid)
+    recording_id: Mapped[UUID] = mapped_column(Uuid)
+    run_id: Mapped[UUID] = mapped_column(Uuid)
+    report_id: Mapped[UUID] = mapped_column(Uuid, ForeignKey("conversation_report_drafts.id"))
+    invited_email: Mapped[str] = mapped_column(String(320))
+    token_hash: Mapped[bytes] = mapped_column(LargeBinary(length=32))
+    encrypted_token: Mapped[str] = mapped_column(String(768))
+    allowed_lenses: Mapped[list[str]] = mapped_column(JSON)
+    creator_id: Mapped[UUID] = mapped_column(Uuid, ForeignKey("persons.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class ConversationReviewInvitationRevocation(Base):
+    """Append-only cancellation decision for one pending invitation."""
+
+    __tablename__ = "conversation_review_invitation_revocations"
+    invitation_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("conversation_review_invitations.id"), primary_key=True
+    )
+    person_id: Mapped[UUID] = mapped_column(Uuid, ForeignKey("persons.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class ConversationReviewInvitationAcceptance(Base):
+    """Append-only one-use link from an invitation to its created assignment."""
+
+    __tablename__ = "conversation_review_invitation_acceptances"
+    __table_args__ = (UniqueConstraint("assignment_id"),)
+    invitation_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("conversation_review_invitations.id"), primary_key=True
+    )
+    accepted_person_id: Mapped[UUID] = mapped_column(Uuid, ForeignKey("persons.id"))
+    assignment_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("conversation_review_assignments.id")
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class ConversationReviewRevocation(Base):

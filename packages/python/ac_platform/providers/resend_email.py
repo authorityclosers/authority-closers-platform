@@ -268,6 +268,45 @@ def render_email(message: EmailMessage) -> RenderedEmail:
             ),
         )
 
+    if message.template == "sales-xray-review-invitation":
+        if message.communication_class != "verification_security":
+            raise PermanentProviderError(
+                "review invitation template has the wrong communication class"
+            )
+        link = _action_link(message.variables)
+        safe_link = html.escape(link, quote=True)
+        expires = _expiry_label(message.variables)
+        safe_expiry = html.escape(expires)
+        return RenderedEmail(
+            subject="You’re invited to review a saved call — Authority Closers",
+            text=(
+                f"Hi {first_name},\n\nYou have been invited to review a saved Authority "
+                "Closers call. Sign in or create an account with this email address, then "
+                "continue to the review workspace.\n\nOpen reviewer invitation:\n"
+                f"{link}\n\nThis invitation expires "
+                f"{expires}. The email link alone does not grant access; your verified "
+                "account and workspace membership are checked before the call opens."
+            ),
+            html=_email_layout(
+                preheader="A saved call is ready for your bounded reviewer feedback.",
+                eyebrow="Reviewer invitation",
+                heading="A saved call is ready for your review.",
+                greeting=f"Hi {safe_name},",
+                paragraphs=(
+                    "You have been invited to add source-linked sales, technical, or UX feedback "
+                    "to one saved Authority Closers call.",
+                    f"Sign in or create an account with this email address. This invitation "
+                    f"expires on <strong>{safe_expiry}</strong>.",
+                ),
+                action_label="Open reviewer invitation",
+                action_link=safe_link,
+                security_note=(
+                    "The link is only a handoff to the normal sign-in flow. Access is granted "
+                    "only after the verified account and current workspace membership match."
+                ),
+            ),
+        )
+
     raise PermanentProviderError("email template is not implemented by the Resend adapter")
 
 

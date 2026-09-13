@@ -42,6 +42,12 @@ REVIEW_ASSIGNMENT_SCHEMA: Literal["ac.sales-xray.review-assignment/1"] = (
 REVIEW_ASSIGNMENT_CREATE_SCHEMA: Literal["ac.sales-xray.review-assignment-create/1"] = (
     "ac.sales-xray.review-assignment-create/1"
 )
+REVIEW_INVITATION_CREATE_SCHEMA: Literal["ac.sales-xray.review-invitation-create/1"] = (
+    "ac.sales-xray.review-invitation-create/1"
+)
+REVIEW_INVITATION_ACCEPT_SCHEMA: Literal["ac.sales-xray.review-invitation-accept/1"] = (
+    "ac.sales-xray.review-invitation-accept/1"
+)
 REVIEW_FEEDBACK_SCHEMA: Literal["ac.sales-xray.review-feedback/1"] = (
     "ac.sales-xray.review-feedback/1"
 )
@@ -246,6 +252,49 @@ class ReviewAssignmentCreateRequest(_StrictFrozenModel):
         return self
 
 
+class ReviewInvitationCreateRequest(_StrictFrozenModel):
+    """Operations input for an exact-run reviewer email invitation."""
+
+    schema_id: Literal["ac.sales-xray.review-invitation-create/1"] = Field(
+        REVIEW_INVITATION_CREATE_SCHEMA, alias="schema"
+    )
+    run_id: JsonUUID
+    invited_email: str = Field(min_length=4, max_length=320)
+    allowed_lenses: tuple[ReviewLens, ...] = Field(min_length=1, max_length=3)
+    expires_at_epoch: StrictInt = Field(gt=0)
+
+    _json_allowed_lenses = field_validator("allowed_lenses", mode="before")(_coerce_json_list)
+
+    @field_validator("invited_email")
+    @classmethod
+    def _email(cls, value: str) -> str:
+        from ac_platform.identity.services import normalize_email
+
+        return normalize_email(value, "invited_email")
+
+    @model_validator(mode="after")
+    def validate_lenses(self) -> Self:
+        if len(self.allowed_lenses) != len(set(self.allowed_lenses)):
+            raise ValueError("invitation lenses must be unique")
+        return self
+
+
+class ReviewInvitationAcceptRequest(_StrictFrozenModel):
+    """Authenticated acceptance body; the token alone never grants access."""
+
+    schema_id: Literal["ac.sales-xray.review-invitation-accept/1"] = Field(
+        REVIEW_INVITATION_ACCEPT_SCHEMA, alias="schema"
+    )
+    token: str = Field(min_length=40, max_length=512)
+
+    @field_validator("token")
+    @classmethod
+    def _token(cls, value: str) -> str:
+        if any(character.isspace() for character in value):
+            raise ValueError("invitation token must not contain whitespace")
+        return value
+
+
 class ReviewEvidenceRef(_StrictFrozenModel):
     """A pointer to a span in the assigned checkpoint; it carries no client text."""
 
@@ -448,10 +497,14 @@ __all__ = [
     "LENS_TARGETS",
     "LENS_TO_LANE",
     "REVIEW_ASSIGNMENT_CREATE_SCHEMA",
+    "REVIEW_INVITATION_CREATE_SCHEMA",
+    "REVIEW_INVITATION_ACCEPT_SCHEMA",
     "REVIEW_ASSIGNMENT_SCHEMA",
     "REVIEW_FEEDBACK_SCHEMA",
     "ReviewAssignment",
     "ReviewAssignmentCreateRequest",
+    "ReviewInvitationCreateRequest",
+    "ReviewInvitationAcceptRequest",
     "ReviewEvidenceRef",
     "ReviewFeedbackRequest",
     "ReviewFeedbackSubmission",

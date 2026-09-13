@@ -3,15 +3,19 @@
 from __future__ import annotations
 
 import json
+import secrets
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid4
 
 from sqlalchemy import func, select
 
 from ac_platform.identity.models import Person
+from ac_platform.identity.services import normalize_email
 from ac_platform.kernel.authz import ActorContext
+from ac_platform.kernel.events import EventCategory, EventEnvelope
+from ac_platform.outbox.repository import OutboxRepository
 from ac_platform.tenancy.models import Membership, Tenant
 
 from .application import (
@@ -31,6 +35,9 @@ from .models import (
     ConversationReview,
     ConversationReviewAssignment,
     ConversationReviewFeedback,
+    ConversationReviewInvitation,
+    ConversationReviewInvitationAcceptance,
+    ConversationReviewInvitationRevocation,
     ConversationReviewRevocation,
     ConversationRun,
 )
@@ -45,10 +52,18 @@ from .review_contracts import (
     ReviewCheckpointBinding,
     ReviewFeedbackRequest,
     ReviewFeedbackSubmission,
+    ReviewInvitationAcceptRequest,
+    ReviewInvitationCreateRequest,
+    ReviewLens,
     ReviewSourceBinding,
     build_feedback_submission,
     feedback_request_fingerprint,
     validate_submission_with_review_validator,
+)
+from .review_invitations import (
+    REVIEW_INVITATION_EVENT,
+    encrypt_invitation_token,
+    hash_invitation_token,
 )
 
 
@@ -64,10 +79,17 @@ class _Evidence:
 
 
 class ConversationReviewService:
-    def __init__(self, application: ConversationApplication, *, operations_tenant_id: UUID) -> None:
+    def __init__(
+        self,
+        application: ConversationApplication,
+        *,
+        operations_tenant_id: UUID,
+        token_secret: bytes | str | None = None,
+    ) -> None:
         self.application = application
         self.database = application.database
         self.operations_tenant_id = operations_tenant_id
+        self.token_secret = token_secret
 
     async def _admin(self, actor: ActorContext) -> datetime:
         if actor.tenant_id != self.operations_tenant_id:
@@ -252,6 +274,64 @@ class ConversationReviewService:
         )
         return assignment.model_copy(update={"state": "submitted" if submitted else "assigned"})
 
+    async def _persist_assignment(
+        self,
+        *,
+        reviewer_person_id: UUID,
+        creator_id: UUID,
+        allowed_lenses: tuple[ReviewLens, ...],
+        expires_at_epoch: int,
+        evidence: _Evidence,
+        now: datetime,
+    ) -> tuple[dict[str, Any], ConversationReviewAssignment]:
+        source = evidence.recording
+        await self._member(source.tenant_id, reviewer_person_id)
+        expires = datetime.fromtimestamp(expires_at_epoch, UTC)
+        if expires > evidence.retention_until:
+            raise ConversationError(
+                "Review expiry must fit the recording permission and retention."
+            )
+        assignment = ReviewAssignment(
+            id=uuid4(),
+            tenant_id=source.tenant_id,
+            run_id=evidence.run.id,
+            run_generation=evidence.run.generation,
+            recipe_revision=evidence.run.recipe_revision,
+            source=ReviewSourceBinding(
+                tenant_id=source.tenant_id,
+                recording_id=source.id,
+                source_sha256=source.source_sha256,
+                source_revision=source.source_revision,
+                permission_id=source.permission_id,
+                provenance_ref=f"ref:conversation-permission:{source.permission_id}",
+            ),
+            checkpoint=evidence.checkpoint,
+            reviewer_person_id=reviewer_person_id,
+            allowed_lenses=allowed_lenses,
+            state="assigned",
+            created_at_epoch=int(now.timestamp()),
+            expires_at_epoch=expires_at_epoch,
+            created_by_person_id=creator_id,
+        )
+        body = assignment.model_dump(mode="json", by_alias=True)
+        row = ConversationReviewAssignment(
+            id=assignment.id,
+            tenant_id=source.tenant_id,
+            person_id=source.person_id,
+            recording_id=source.id,
+            run_id=evidence.run.id,
+            reviewer_id=reviewer_person_id,
+            creator_id=creator_id,
+            report_id=evidence.draft.id,
+            assignment=body,
+            assignment_sha256=content_hash(body),
+            created_at=now,
+            expires_at=expires,
+        )
+        self.database.add(row)
+        await self.database.flush()
+        return body, row
+
     async def create(
         self, actor: ActorContext, intent: ReviewAssignmentCreateRequest, key: str
     ) -> dict[str, Any]:
@@ -273,59 +353,237 @@ class ConversationReviewService:
             <= int((now + timedelta(days=30)).timestamp())
         ):
             raise ConversationError("Choose an expiry within the next 30 days.")
-        expires = datetime.fromtimestamp(intent.expires_at_epoch, UTC)
         evidence = await self._evidence(intent.run_id, now)
-        source = evidence.recording
-        await self._member(source.tenant_id, intent.reviewer_person_id)
-        if expires > evidence.retention_until:
-            raise ConversationError(
-                "Review expiry must fit the recording permission and retention."
-            )
-        assignment = ReviewAssignment(
-            id=uuid4(),
-            tenant_id=source.tenant_id,
-            run_id=evidence.run.id,
-            run_generation=evidence.run.generation,
-            recipe_revision=evidence.run.recipe_revision,
-            source=ReviewSourceBinding(
-                tenant_id=source.tenant_id,
-                recording_id=source.id,
-                source_sha256=source.source_sha256,
-                source_revision=source.source_revision,
-                permission_id=source.permission_id,
-                provenance_ref=f"ref:conversation-permission:{source.permission_id}",
-            ),
-            checkpoint=evidence.checkpoint,
+        body, row = await self._persist_assignment(
             reviewer_person_id=intent.reviewer_person_id,
-            allowed_lenses=intent.allowed_lenses,
-            state="assigned",
-            created_at_epoch=int(now.timestamp()),
-            expires_at_epoch=intent.expires_at_epoch,
-            created_by_person_id=actor.person_id,
-        )
-        body = assignment.model_dump(mode="json", by_alias=True)
-        row = ConversationReviewAssignment(
-            id=assignment.id,
-            tenant_id=source.tenant_id,
-            person_id=source.person_id,
-            recording_id=source.id,
-            run_id=evidence.run.id,
-            reviewer_id=intent.reviewer_person_id,
             creator_id=actor.person_id,
-            report_id=evidence.draft.id,
-            assignment=body,
-            assignment_sha256=content_hash(body),
-            created_at=now,
-            expires_at=expires,
+            allowed_lenses=intent.allowed_lenses,
+            expires_at_epoch=intent.expires_at_epoch,
+            evidence=evidence,
+            now=now,
         )
-        self.database.add(row)
-        await self.database.flush()
         await self.application._receipt(
             actor,
             key,
             "assign_conversation_review",
             payload,
             row.id,
+            now,
+            resource_type="conversation_review_assignment",
+        )
+        return body
+
+    async def _invitation_view(
+        self, row: ConversationReviewInvitation, now: datetime
+    ) -> dict[str, Any]:
+        acceptance = await self.database.get(ConversationReviewInvitationAcceptance, row.id)
+        revoked = await self.database.get(ConversationReviewInvitationRevocation, row.id)
+        if acceptance is not None:
+            state = "accepted"
+        elif revoked is not None:
+            state = "revoked"
+        elif utc(row.expires_at) <= now:
+            state = "expired"
+        else:
+            state = "pending"
+        return {
+            "id": str(row.id),
+            "run_id": str(row.run_id),
+            "invited_email": row.invited_email,
+            "allowed_lenses": list(row.allowed_lenses),
+            "created_at_epoch": int(utc(row.created_at).timestamp()),
+            "expires_at_epoch": int(utc(row.expires_at).timestamp()),
+            "state": state,
+            "assignment_id": str(acceptance.assignment_id) if acceptance else None,
+        }
+
+    async def invite(
+        self, actor: ActorContext, intent: ReviewInvitationCreateRequest, key: str
+    ) -> dict[str, Any]:
+        now = await self._admin(actor)
+        await self.database.execute(
+            select(func.pg_advisory_xact_lock(739002, actor.person_id.int % (2**31)))
+        )
+        payload = intent.model_dump(mode="json", by_alias=True)
+        replay = await self.application._replay(actor, key, "invite_conversation_review", payload)
+        if replay is not None and replay.result_id is not None:
+            row = await self.database.get(ConversationReviewInvitation, replay.result_id)
+            if row is None:
+                raise ConversationConflict("The invitation receipt is missing its resource.")
+            return await self._invitation_view(row, now)
+        if self.token_secret is None:
+            raise ConversationError("Review invitation email is not configured.")
+        if not (
+            int(now.timestamp())
+            < intent.expires_at_epoch
+            <= int((now + timedelta(days=30)).timestamp())
+        ):
+            raise ConversationError("Choose an expiry within the next 30 days.")
+        evidence = await self._evidence(intent.run_id, now)
+        expires = datetime.fromtimestamp(intent.expires_at_epoch, UTC)
+        if expires > evidence.retention_until:
+            raise ConversationError(
+                "Review expiry must fit the recording permission and retention."
+            )
+        invitation_id = uuid4()
+        token = secrets.token_urlsafe(48)
+        row = ConversationReviewInvitation(
+            id=invitation_id,
+            tenant_id=evidence.recording.tenant_id,
+            person_id=evidence.recording.person_id,
+            recording_id=evidence.recording.id,
+            run_id=evidence.run.id,
+            report_id=evidence.draft.id,
+            invited_email=normalize_email(intent.invited_email, "invited_email"),
+            token_hash=hash_invitation_token(self.token_secret, token),
+            encrypted_token=encrypt_invitation_token(self.token_secret, token, invitation_id),
+            allowed_lenses=list(intent.allowed_lenses),
+            creator_id=actor.person_id,
+            created_at=now,
+            expires_at=expires,
+        )
+        self.database.add(row)
+        await self.database.flush()
+        await OutboxRepository(self.database).enqueue(
+            EventEnvelope(
+                name=REVIEW_INVITATION_EVENT,
+                category=EventCategory.OPERATIONAL,
+                aggregate_type="conversation_review_invitation",
+                aggregate_id=row.id,
+                tenant_id=row.tenant_id,
+                payload={"invitation_id": str(row.id)},
+                occurred_at=now,
+            ),
+            dedupe_key=f"conversation-review-invitation:{row.id}",
+        )
+        await self.application._receipt(
+            actor,
+            key,
+            "invite_conversation_review",
+            payload,
+            row.id,
+            now,
+            resource_type="conversation_review_invitation",
+        )
+        return await self._invitation_view(row, now)
+
+    async def revoke_invitation(
+        self, actor: ActorContext, invitation_id: UUID, key: str
+    ) -> dict[str, Any]:
+        now = await self._admin(actor)
+        payload = {"invitation_id": str(invitation_id)}
+        replay = await self.application._replay(
+            actor, key, "revoke_conversation_review_invitation", payload
+        )
+        row = await self.database.scalar(
+            select(ConversationReviewInvitation)
+            .where(ConversationReviewInvitation.id == invitation_id)
+            .with_for_update()
+        )
+        if row is None:
+            raise ConversationNotFound("Review invitation not found.")
+        if replay is None and await self.database.get(
+            ConversationReviewInvitationRevocation, row.id
+        ) is None:
+            self.database.add(
+                ConversationReviewInvitationRevocation(
+                    invitation_id=row.id, person_id=actor.person_id, created_at=now
+                )
+            )
+            await self.database.flush()
+            await self.application._receipt(
+                actor,
+                key,
+                "revoke_conversation_review_invitation",
+                payload,
+                row.id,
+                now,
+                resource_type="conversation_review_invitation",
+            )
+        return await self._invitation_view(row, now)
+
+    async def accept_invitation(
+        self, actor: ActorContext, intent: ReviewInvitationAcceptRequest
+    ) -> dict[str, Any]:
+        now = await self.application.admit(actor)
+        if self.token_secret is None:
+            raise ConversationError("Review invitation email is not configured.")
+        token_hash = hash_invitation_token(self.token_secret, intent.token)
+        row = await self.database.scalar(
+            select(ConversationReviewInvitation)
+            .where(ConversationReviewInvitation.token_hash == token_hash)
+            .with_for_update()
+        )
+        # All invalid, expired, revoked, consumed, tenant, and email mismatch
+        # cases intentionally share this response to prevent invitation probing.
+        if row is None or row.tenant_id != actor.tenant_id or utc(row.expires_at) <= now:
+            raise ConversationNotFound("Review invitation not found.")
+        if await self.database.get(ConversationReviewInvitationRevocation, row.id) is not None:
+            raise ConversationNotFound("Review invitation not found.")
+        acceptance = await self.database.get(ConversationReviewInvitationAcceptance, row.id)
+        if acceptance is not None:
+            if acceptance.accepted_person_id != actor.person_id:
+                raise ConversationNotFound("Review invitation not found.")
+            return (
+                await self._view(await self._assignment(acceptance.assignment_id), now)
+            ).model_dump(mode="json", by_alias=True)
+        person = await self.database.scalar(
+            select(Person)
+            .where(Person.id == actor.person_id)
+            .with_for_update(read=True)
+            .execution_options(populate_existing=True)
+        )
+        if person is None or person.email is None or person.email_verified_at is None:
+            raise ConversationNotFound("Review invitation not found.")
+        try:
+            normalized_actor_email = normalize_email(person.email, "email")
+        except ValueError:
+            raise ConversationNotFound("Review invitation not found.") from None
+        if normalized_actor_email != row.invited_email:
+            raise ConversationNotFound("Review invitation not found.")
+        await self._member(row.tenant_id, actor.person_id)
+        evidence = await self._evidence(row.run_id, now, report_id=row.report_id)
+        if (
+            evidence.recording.id != row.recording_id
+            or evidence.recording.tenant_id != row.tenant_id
+            or evidence.recording.person_id != row.person_id
+            or evidence.draft.id != row.report_id
+        ):
+            raise ConversationConflict("The invitation's saved review binding differs.")
+        if not isinstance(row.allowed_lenses, list):
+            raise ConversationConflict("The invitation's lens binding differs.")
+        if not 1 <= len(row.allowed_lenses) <= 3 or any(
+            not isinstance(lens, str) for lens in row.allowed_lenses
+        ):
+            raise ConversationConflict("The invitation's lens binding differs.")
+        allowed_lenses = tuple(row.allowed_lenses)
+        if len(allowed_lenses) != len(set(allowed_lenses)) or any(
+            lens not in {"sales", "technical", "ux"} for lens in allowed_lenses
+        ):
+            raise ConversationConflict("The invitation's lens binding differs.")
+        body, assignment = await self._persist_assignment(
+            reviewer_person_id=actor.person_id,
+            creator_id=row.creator_id,
+            allowed_lenses=cast(tuple[ReviewLens, ...], allowed_lenses),
+            expires_at_epoch=int(utc(row.expires_at).timestamp()),
+            evidence=evidence,
+            now=now,
+        )
+        self.database.add(
+            ConversationReviewInvitationAcceptance(
+                invitation_id=row.id,
+                accepted_person_id=actor.person_id,
+                assignment_id=assignment.id,
+                created_at=now,
+            )
+        )
+        await self.database.flush()
+        await self.application._receipt(
+            actor,
+            f"review-invitation:{row.id}",
+            "accept_conversation_review_invitation",
+            {"invitation_id": str(row.id)},
+            assignment.id,
             now,
             resource_type="conversation_review_assignment",
         )
