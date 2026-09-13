@@ -14,6 +14,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import SessionTransactionOrigin
 
 from ac_platform.audit.service import AuditRepository
+from ac_platform.conversation_intelligence.acquisition_usage import (
+    ALLOWANCE_SECONDS,
+    acquisition_seconds,
+)
 from ac_platform.conversation_intelligence.async_io import join_thread
 from ac_platform.conversation_intelligence.checkpoints import Checkpoint, content_hash
 from ac_platform.conversation_intelligence.contracts import RecordingIntent, RunIntent
@@ -479,10 +483,24 @@ class ConversationApplication:
         )
         if budget_row is None or minute_row is None:
             raise ConversationDenied("An explicit processing entitlement is required.")
+        # Canonical admission above already holds this person's lock, shared by
+        # guest claims and account acquisition reservations. The older upload
+        # path must also count those minutes instead of issuing a second pool.
+        acquisition_used = await acquisition_seconds(
+            self.database, tenant_id=recording.tenant_id, person_id=actor.person_id
+        )
+        account = MinuteAccount.from_dict(minute_row.snapshot)
+        if acquisition_used and (
+            acquisition_used
+            + sum(item.committed_seconds for item in account.reservations)
+            + quote.entitlement_seconds
+            > ALLOWANCE_SECONDS
+        ):
+            raise ConversationDenied("Your 100 minutes are used. Contact AC for more access.")
         identifier = uuid4()
         try:
             transition = reserve(
-                MinuteAccount.from_dict(minute_row.snapshot),
+                account,
                 BudgetAccount.from_dict(budget_row.snapshot),
                 str(identifier),
                 quote,
