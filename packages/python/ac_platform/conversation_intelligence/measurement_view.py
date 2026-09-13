@@ -22,6 +22,7 @@ from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
     ConversationConflict,
 )
+from ac_platform.conversation_intelligence.checkpoints import build_checkpoint, content_hash
 from ac_platform.conversation_intelligence.inference import binding_for, verified_checkpoint
 from ac_platform.conversation_intelligence.models import (
     ConversationCheckpoint,
@@ -170,8 +171,8 @@ def _require_text(value: object, *, max_length: int = 256) -> str:
     return value
 
 
-def _require_int(value: object, *, positive: bool = False) -> int:
-    if type(value) is not int or (positive and value <= 0):
+def _require_int(value: object, *, positive: bool = False, nonnegative: bool = False) -> int:
+    if type(value) is not int or (positive and value <= 0) or (nonnegative and value < 0):
         raise _conflict()
     return value
 
@@ -192,9 +193,13 @@ def _require_number(value: object, *, nonnegative: bool = False) -> float:
 
 
 def _metric(
-    value: object, unit: Literal["dBFS", "Hz", "linear"], *, fraction: object = None
+    value: object,
+    unit: Literal["dBFS", "Hz", "linear"],
+    *,
+    fraction: object = None,
+    nonnegative: bool = False,
 ) -> NumericMeasurement:
-    number = None if value is None else _require_number(value)
+    number = None if value is None else _require_number(value, nonnegative=nonnegative)
     available_fraction = None
     if fraction is not None:
         available_fraction = _require_number(fraction, nonnegative=True)
@@ -238,7 +243,9 @@ def _series(
         start = _require_number(start_seconds, nonnegative=True)
         if start <= previous or start * 1000 > duration_ms:
             raise _conflict()
-        measured = None if value is None else _require_number(value)
+        measured = (
+            None if value is None else _require_number(value, nonnegative=measurement == "f0_hz")
+        )
         try:
             point = MeasurementPoint(start_ms=start * 1000, value=measured)
         except ValueError:
@@ -261,14 +268,24 @@ def _series(
 
 
 def _channel_view(
-    channel: dict[str, object], *, window_ms: float, hop_ms: float, duration_ms: int
+    channel: dict[str, object],
+    *,
+    frame_count: int,
+    window_ms: float,
+    hop_ms: float,
+    duration_ms: int,
 ) -> AudioAtlasChannel:
     channel_index = channel.get("channel")
     if type(channel_index) is not int or not 0 <= channel_index <= 1:
         raise _conflict()
-    usable = _require_int(channel.get("usable_frames"))
-    partial = _require_int(channel.get("partial_frames"))
-    invalid = _require_int(channel.get("invalid_frames"))
+    display_frame_count = _require_int(channel.get("frame_count"), positive=True)
+    usable = _require_int(channel.get("usable_frames"), nonnegative=True)
+    partial = _require_int(channel.get("partial_frames"), nonnegative=True)
+    invalid = _require_int(channel.get("invalid_frames"), nonnegative=True)
+    if display_frame_count != frame_count or any(
+        count > frame_count for count in (usable, partial, invalid)
+    ):
+        raise _conflict()
     try:
         result = AudioAtlasChannel(
             channel_index=channel_index,
@@ -281,8 +298,9 @@ def _channel_view(
                 channel.get("f0_median_hz"),
                 "Hz",
                 fraction=channel.get("pitch_available_fraction"),
+                nonnegative=True,
             ),
-            peak=_metric(channel.get("max_sample_peak"), "linear"),
+            peak=_metric(channel.get("max_sample_peak"), "linear", nonnegative=True),
             series=(
                 _series(channel, "dbfs", "Level", "dBFS", window_ms, hop_ms, duration_ms),
                 _series(
@@ -301,6 +319,37 @@ def _channel_view(
     return result
 
 
+def _display_views(
+    display_channels: object,
+    *,
+    source_channels: int,
+    frame_count: int,
+    window_ms: float,
+    hop_ms: float,
+    duration_ms: int,
+) -> tuple[AudioAtlasChannel, ...]:
+    if (
+        not isinstance(display_channels, list)
+        or len(display_channels) != source_channels
+        or len(display_channels) > 2
+        or any(not isinstance(channel, dict) for channel in display_channels)
+    ):
+        raise _conflict()
+    channels = tuple(
+        _channel_view(
+            channel,
+            frame_count=frame_count,
+            window_ms=window_ms,
+            hop_ms=hop_ms,
+            duration_ms=duration_ms,
+        )
+        for channel in display_channels
+    )
+    if {channel.channel_index for channel in channels} != set(range(source_channels)):
+        raise _conflict()
+    return channels
+
+
 class ConversationMeasurements:
     """Read one authorized recording's persisted C1 measurement summary."""
 
@@ -308,13 +357,47 @@ class ConversationMeasurements:
         self.application = application
         self.database = application.database
 
-    async def get(
-        self, actor: ActorContext, recording_id: UUID, *, max_plot_points: int = MAX_PLOT_POINTS
-    ) -> dict[str, object]:
-        if type(max_plot_points) is not int or not 1 <= max_plot_points <= MAX_PLOT_POINTS:
-            raise ConversationConflict("The measurement display limit is invalid.")
+    async def get(self, actor: ActorContext, recording_id: UUID) -> dict[str, object]:
         await self.application.get(actor, recording_id)
         recording = await self.application._recording(actor, recording_id)
+        binding = binding_for(recording)
+        c0_payload = {
+            "source_sha256": recording.source_sha256,
+            "source_bytes": recording.source_bytes,
+            "content_type": recording.content_type,
+            "permission_reference": str(recording.permission_id),
+        }
+        canonical_c0 = build_checkpoint(
+            binding,
+            "C0",
+            "recording-v1",
+            {},
+            (),
+            content_hash(c0_payload),
+        )
+        c0_row = await self.database.scalar(
+            select(ConversationCheckpoint)
+            .where(
+                ConversationCheckpoint.recording_id == recording.id,
+                ConversationCheckpoint.tenant_id == actor.tenant_id,
+                ConversationCheckpoint.person_id == actor.person_id,
+                ConversationCheckpoint.stage == "C0",
+                ConversationCheckpoint.cache_key == canonical_c0.cache_key,
+                ConversationCheckpoint.erased_at.is_(None),
+            )
+            .with_for_update(read=True)
+            .execution_options(populate_existing=True)
+        )
+        if c0_row is None or not isinstance(c0_row.payload, dict) or c0_row.payload != c0_payload:
+            raise _conflict()
+        try:
+            actual_c0 = verified_checkpoint(c0_row, binding)
+        except ConversationConflict:
+            raise
+        except (TypeError, ValueError, KeyError):
+            raise _conflict() from None
+        if actual_c0 != canonical_c0:
+            raise _conflict()
         row = await self.database.scalar(
             select(ConversationCheckpoint)
             .where(
@@ -332,11 +415,13 @@ class ConversationMeasurements:
         if row is None or row.feature_blob_id is None or not isinstance(row.payload, dict):
             raise _conflict()
         try:
-            checkpoint = verified_checkpoint(row, binding_for(recording))
+            checkpoint = verified_checkpoint(row, binding)
         except ConversationConflict:
             raise
         except (TypeError, ValueError, KeyError):
             raise _conflict() from None
+        if checkpoint.parents != (("C0", canonical_c0.manifest_sha256),):
+            raise _conflict()
         payload = row.payload
         acoustics = payload.get("acoustics")
         timebase = payload.get("timebase")
@@ -385,12 +470,32 @@ class ConversationMeasurements:
         decoded_rate = _require_int(acoustics.get("rate"), positive=True)
         sample_count = _require_int(acoustics.get("sample_count"), positive=True)
         duration_ms = _require_int(payload.get("media_duration_ms"), positive=True)
-        if source_channels not in (1, 2) or decoded_rate not in AUDIOATLAS_RECIPES.values():
+        expected_rate = AUDIOATLAS_RECIPES[checkpoint.revision]
+        if (
+            source_channels not in (1, 2)
+            or decoded_rate != expected_rate
+            or acoustics.get("channels") != source_channels
+        ):
             raise _conflict()
         if duration_ms != round(sample_count / decoded_rate * 1000):
             raise _conflict()
         window_samples = _require_int(acoustics.get("window_samples"), positive=True)
         hop_samples = _require_int(acoustics.get("hop_samples"), positive=True)
+        expected_window_samples = decoded_rate * 40 // 1000
+        expected_hop_samples = decoded_rate * 10 // 1000
+        expected_rows = (
+            (sample_count + expected_hop_samples - 1) // expected_hop_samples
+        ) * source_channels
+        if (
+            window_samples != expected_window_samples
+            or hop_samples != expected_hop_samples
+            or acoustics.get("header_bytes") != 40
+            or acoustics.get("row_bytes") != 66
+            or acoustics.get("rows") != expected_rows
+            or acoustics.get("uncompressed_payload_bytes") != expected_rows * 66
+            or expected_rows > 360_000
+        ):
+            raise _conflict()
         window_ms = window_samples / decoded_rate * 1000
         hop_ms = hop_samples / decoded_rate * 1000
         if window_ms != 40 or hop_ms != 10:
@@ -405,27 +510,14 @@ class ConversationMeasurements:
         if source_time_base is not None:
             source_time_base = _require_text(source_time_base, max_length=128)
         source_mapping_status = _require_text(timebase.get("source_mapping_status"), max_length=128)
-        display_channels = display.get("channels")
-        if (
-            not isinstance(display_channels, list)
-            or len(display_channels) != source_channels
-            or len(display_channels) > 2
-        ):
-            raise _conflict()
-        channels = tuple(
-            _channel_view(
-                channel,
-                window_ms=window_ms,
-                hop_ms=hop_ms,
-                duration_ms=duration_ms,
-            )
-            for channel in display_channels
-            if isinstance(channel, dict)
+        channels = _display_views(
+            display.get("channels"),
+            source_channels=source_channels,
+            frame_count=expected_rows // source_channels,
+            window_ms=window_ms,
+            hop_ms=hop_ms,
+            duration_ms=duration_ms,
         )
-        if len(channels) != source_channels or {
-            channel.channel_index for channel in channels
-        } != set(range(source_channels)):
-            raise _conflict()
         try:
             view = MeasurementView(
                 schema_=MEASUREMENT_VIEW_SCHEMA,
