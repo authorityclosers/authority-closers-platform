@@ -343,14 +343,15 @@ verification remain mandatory after mount composition. See
 repository. Mounting licensed samples does not make them Dipak instruction,
 grant official Watch completion, or activate production media.
 
-# Bounded Studio video filesystem profile (default off)
+# Bounded Studio video filesystem profile
 
-The reviewed application release also contains the disabled-by-default
+The reviewed application release contains the
 `compose.filesystem-media.yaml` companion. It is the only deployment seam for
-the source-owned Studio video profile. After the private ClamAV controller has
-proved its exact release, the canonical application installer selects this
-companion only when the immutable target environment profile contains
-`AC_MEDIA_FILESYSTEM_ENABLED=true`. The companion mounts the target's private
+the source-owned Studio video profile. This activation candidate sets
+`AC_MEDIA_FILESYSTEM_ENABLED=true` in both checked-in environment profiles;
+the canonical application installer selects this companion only after the
+private ClamAV controller has proved its exact release and the target roots
+pass validation. The companion mounts the target's private
 root (`/srv/authority-closers/volumes/media-video/staging` or
 `/srv/authority-closers/volumes/media-video/production`) into API and worker at
 `/var/lib/ac-media`, and the scanner socket directory at

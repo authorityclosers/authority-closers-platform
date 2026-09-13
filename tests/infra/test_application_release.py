@@ -157,6 +157,10 @@ def _run_compose_for_probe(
     release = tmp_path / "release"
     (release / "environments").mkdir(parents=True)
     profile = (APPLICATION / "environments" / "staging.env").read_bytes()
+    profile = profile.replace(
+        b"AC_MEDIA_FILESYSTEM_ENABLED=true\n",
+        b"AC_MEDIA_FILESYSTEM_ENABLED=false\n",
+    )
     if not practice_enabled:
         profile = profile.replace(
             b"AC_PRACTICE_PILOT_ENABLED=true\n",
@@ -204,6 +208,10 @@ services:
         rollback = tmp_path / "rollback"
         (rollback / "environments").mkdir(parents=True)
         rollback_profile = (APPLICATION / "environments" / "staging.env").read_bytes()
+        rollback_profile = rollback_profile.replace(
+            b"AC_MEDIA_FILESYSTEM_ENABLED=true\n",
+            b"AC_MEDIA_FILESYSTEM_ENABLED=false\n",
+        )
         if rollback_practice_enabled is False:
             rollback_profile = rollback_profile.replace(
                 b"AC_PRACTICE_PILOT_ENABLED=true\n",
@@ -1039,6 +1047,24 @@ def test_environment_profiles_isolate_state_hosts_and_edge_aliases() -> None:
     assert "AC_EMAIL_PROVIDER=resend" in production
     assert "AC_PRACTICE_PILOT_ENABLED=true" in staging
     assert "AC_PRACTICE_PILOT_ENABLED=false" in production
+    assert "AC_MEDIA_FILESYSTEM_ENABLED=true" in staging
+    assert (
+        "AC_MEDIA_FILESYSTEM_HOST_ROOT=/srv/authority-closers/volumes/media-video/staging"
+        in staging
+    )
+    assert (
+        "AC_MEDIA_SCANNER_HOST_ROOT=/srv/authority-closers/volumes/media-safety-socket"
+        in staging
+    )
+    assert "AC_MEDIA_FILESYSTEM_ENABLED=true" in production
+    assert (
+        "AC_MEDIA_FILESYSTEM_HOST_ROOT=/srv/authority-closers/volumes/media-video/production"
+        in production
+    )
+    assert (
+        "AC_MEDIA_SCANNER_HOST_ROOT=/srv/authority-closers/volumes/media-safety-socket"
+        in production
+    )
     assert "-u AC_PRACTICE_PILOT_ENABLED" in INSTALLER
     assert "-u AC_PRACTICE_PILOT_TENANT_ID" in INSTALLER
     secret_wrapper = INSTALLER.split("with_release_secrets() {", maxsplit=1)[1].split(

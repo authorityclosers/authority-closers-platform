@@ -62,13 +62,16 @@ count, so the explicit effective queue is four. A startup free-space check alone
 does not establish this bound. See the [disk-capacity evidence](20260913_SCANNER_DISK_CAPACITY.md)
 for remaining Linux acceptance and reboot recovery gates.
 
-The default application profiles remain disabled. Activation is a source-owned
-release change: the checked-in target profile sets
-`AC_MEDIA_FILESYSTEM_ENABLED=true` together with its exact environment root.
-The canonical application installer consumes that selector for install,
-service composition, and rollback. Do not add a manual Compose overlay; it
-would bypass target-release rollback policy. Before running that installer,
-prepare the reviewed private roots and prove ClamAV:
+This activation candidate sets `AC_MEDIA_FILESYSTEM_ENABLED=true` in both
+checked-in staging and production profiles, with their exact environment
+roots. The legacy public-film capability is disabled for staging and remains
+disabled for production so the filesystem companion cannot collide with a
+fixture overlay. This is a source-owned release selector; it does not claim
+that either environment has been deployed. The canonical application
+installer consumes the selector for install, service composition, and
+rollback. Do not add a manual Compose overlay; it would bypass target-release
+rollback policy. Before running that installer, prepare the reviewed private
+roots and prove ClamAV:
 
 ```sh
 sudo install -d -o 10001 -g 10001 -m 0700 \
