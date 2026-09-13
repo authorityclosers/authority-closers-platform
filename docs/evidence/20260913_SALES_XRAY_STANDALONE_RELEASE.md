@@ -81,3 +81,36 @@ service activation, real staging/production browser tests, canary and rollback.
 The prior private recording approval is expired; this patch does not renew it or
 grant provider permission. Numeric coaching publication remains held for the
 preserved 95 actual / 100 declared source-weight discrepancy.
+
+## Subsequent integration regressions
+
+Commit `c7c19ff95ff0eb9b0cac0b4d5972ac095c91bb55` adds the optional exact Sales Xray
+origin to the release installer's strict profile contract and clears ambient
+overrides before Compose. Six new Bash-backed tests and all 18 existing profile
+tests passed. Receipts: `0032-installer-sales-xray-profile-new-6.xml` and
+`0032-installer-sales-xray-profile-existing-18-pathfixed.xml`. Earlier Windows
+receipts retain a missing-`grep` harness failure; running with the installed Git
+Bash utilities proves the CRLF rejection without changing that gate.
+
+Full CI run `34741929166` tested source `f0e00a6c5b36525d54c19807aae6458812344888`,
+whose report test fixture retained a helper that patched `CONTROL_ACCOUNT` to a
+different email from its verified admin fixture. The corrected `4904d70` fixture
+uses the actual admission rule and removes that helper. Its report, HTTP and
+browser dependent files must be integrated together so no removed helper remains
+imported. This correction changes test setup, not production authorization.
+
+Fresh PostgreSQL checks on the corrected source passed:
+
+- All six report-store cases: `0032-report-control-ci-regression.xml`, 14.89 seconds.
+- Cookie-authenticated history/transcript/private playback:
+  `0032-report-control-http-ci-regression.xml`, one passed, 14.27 seconds.
+- A new verified-admin case with a different email:
+  `0032-report-control-admin-denial.xml`, one passed, 11.24 seconds. It preserves
+  the admin role and capability, changes only the exact control identity, proves
+  admission denial and verifies that zero report drafts were inserted. No provider
+  policy is monkeypatched. This replaces the obsolete fixture-specific seam
+  assumption with a direct negative authorization regression.
+
+The two actual browser regressions in the earlier table cover the other dependent
+flow. These receipts support the corrected candidate; the integrated release still
+requires its own passing CI and deployed acceptance.

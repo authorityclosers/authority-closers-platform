@@ -234,6 +234,35 @@ def test_source_bound_report_import_read_and_replay(
     run(exercise())
 
 
+def test_non_control_admin_cannot_import_a_private_draft(
+    postgres_harness: Any, report_fixture: ReportFixture
+) -> None:
+    async def exercise() -> None:
+        engine = create_async_engine(postgres_harness.url)
+        sessions = async_sessionmaker(engine, expire_on_commit=False)
+        try:
+            async with sessions() as database, database.begin():
+                person = await database.get(Person, report_fixture.actor.person_id)
+                assert person is not None
+                # Keep verified email, admin role and capability. Only the exact
+                # control identity changes; production admission is never patched.
+                person.email = f"other-verified-admin-{uuid4().hex}@example.test"
+            async with sessions() as database, database.begin():
+                with pytest.raises(ConversationDenied, match="verified AC control account"):
+                    await _reports(database, report_fixture).import_internal_draft(
+                        report_fixture.actor,
+                        report_fixture.prepared.run_id,
+                        report_fixture.intent,
+                        storage=report_fixture.prepared.storage,
+                        key="report-non-control-admin-denied",
+                    )
+            assert await _report_count(sessions, report_fixture) == 0
+        finally:
+            await engine.dispose()
+
+    run(exercise())
+
+
 def test_forged_native_hash_quote_and_timing_are_rejected(
     postgres_harness: Any, report_fixture: ReportFixture
 ) -> None:
