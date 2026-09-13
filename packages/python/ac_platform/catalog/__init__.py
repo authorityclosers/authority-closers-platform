@@ -2,6 +2,7 @@
 
 from ac_platform.catalog.free_course_publication import (
     AUTHORITY_CLOSERS_FREE_COURSE_SLUG,
+    FREE_COURSE_ADOPTION_ACTION,
     FREE_COURSE_PUBLICATION_ACTION,
     FreeCoursePublicationApplication,
     FreeCoursePublicationConflict,
@@ -112,6 +113,7 @@ __all__ = [
     "CatalogTransactionRequiredError",
     "CatalogValidationError",
     "DraftRequiredError",
+    "FREE_COURSE_ADOPTION_ACTION",
     "FREE_COURSE_PUBLICATION_ACTION",
     "FreeCourseMediaBindingAuthorization",
     "FreeCourseMediaPromotionApplication",

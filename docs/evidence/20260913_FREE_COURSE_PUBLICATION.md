@@ -33,8 +33,11 @@ through the existing catalog publication service, then records the global
 publication receipt `catalog.free_course_published.v1`. A replay requires fresh
 platform authority and the same source/public-tenant intent; it returns the
 original IDs without creating rows. A different command ID cannot occupy the
-canonical global slug, and an existing global course is never superseded by
-this initial-slice command.
+canonical global slug. If staging already contains the same deterministic
+global program/version/activity, use the separate `adopt-existing` command
+below. Adoption verifies the reviewed source digest and provenance, records
+`catalog.free_course_adopted.v1`, and leaves catalog rows and learner progress
+unchanged; it cannot adopt a different source identity or content.
 
 The reviewed runtime caller must resolve the authenticated Coach `ActorContext`
 and execute the application inside its own transaction, for example:
@@ -60,7 +63,8 @@ The caller commits only after checking the returned receipt. Reusing the same
 command ID is safe and returns `status="replayed"`; changing the source or
 public tenant with that ID is rejected.
 
-The publication result deliberately returns
+The publication result returns the deterministic global `video_activity_id`
+alongside the program and version IDs. It deliberately returns
 `media_status=pending_public_tenant_media_owner` until the separate media
 promotion command runs. Media rows remain tenant-owned:
 `media_assets.owner_person_id` and approved activity bindings both require an
@@ -72,9 +76,13 @@ operator and must have active membership in the configured public tenant.
 requires the publication receipt, the same operations actor, the target global
 VIDEO activity, and one current READY source asset/version in the operations
 tenant. It verifies source checksum, object identity, processed rendition
-inventory, and owner membership, then copies original and rendition objects
-through the configured private-storage port into deterministic public-tenant
-keys. It creates a new READY public asset/version and calls the existing
+inventory, and owner membership, then copies original and every object in
+each validated HLS playlist/segment graph through the configured
+private-storage port into deterministic public-tenant keys. Relative playlist
+references are preserved and the complete target graph is revalidated before
+READY. Copies are create-only; an exact existing target is reused on retry and
+cleanup deletes only objects created by that attempt. It creates a new READY
+public asset/version and calls the existing
 `MediaService.bind_activity_media` ledger through a sealed internal
 authorization. An optional `supersedes_binding_id` explicitly replaces the
 current public-tenant binding and leaves learner progress and the prior audit
@@ -108,8 +116,20 @@ printf '%s\n' "$COACH_SESSION_TOKEN" | uv run python -m ac_platform.catalog.cli 
   --reviewed-at <timezone-aware-review-timestamp>
 ```
 
-Use the returned `program_id`, `program_version_id`, and VIDEO
-`activity_id`, together with the uploaded READY `source_asset_id` and
+For staging that already has the matching deterministic global course, record
+adoption instead of attempting a second publication:
+
+```text
+printf '%s\n' "$COACH_SESSION_TOKEN" | uv run python -m ac_platform.catalog.cli adopt-existing \
+  --environment staging \
+  --source-program-id a1993f11-f43d-446a-821f-550bc40b950c \
+  --public-tenant-id c1d51741-6e0f-4ddc-8cc4-58856d0e778f \
+  --command-id <new-adoption-command-uuid> \
+  --reason "Adopt the reviewed staging Free Course without changing progress"
+```
+
+Use the returned `program_id`, `program_version_id`, and
+`video_activity_id`, together with the uploaded READY `source_asset_id` and
 `source_version_id`, for the second command. Pass the current public binding ID
 as `--supersedes-binding-id` when replacing staging media; omit it for the
 empty production tenant:
@@ -143,8 +163,13 @@ uv run mypy --config-file pyproject.toml \
 Success: no issues found in 4 source files
 ```
 
-The tests cover an idempotent publication replay, preservation of the tenant
+The tests cover an idempotent publication and adoption replay, preservation of the tenant
 source, cross-tenant actor denial, missing review evidence, draft review and
 publish, command-ID intent conflict, refusal to replace an existing global
 course, READY source checksum/rendition checks, public-tenant asset creation,
-binding, replay, and explicit supersession of an existing global binding.
+binding, replay, nested HLS playlist/segment delivery, and explicit
+supersession of an existing global binding. The PostgreSQL integration test is
+opt-in through `AC_MEDIA_DELIVERY_RENEWAL_POSTGRES_TEST_URL` (or
+`AC_TEST_DATABASE_URL`)
+and uses a disposable schema; it is skipped when no local PostgreSQL URL is
+configured.

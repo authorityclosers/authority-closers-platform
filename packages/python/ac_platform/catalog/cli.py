@@ -41,6 +41,13 @@ def _parser() -> argparse.ArgumentParser:
     publish.add_argument("--release-id")
     publish.add_argument("--reviewed-at")
 
+    adopt = commands.add_parser("adopt-existing", allow_abbrev=False)
+    _common(adopt)
+    adopt.add_argument("--source-program-id", type=UUID, required=True)
+    adopt.add_argument("--public-tenant-id", type=UUID, required=True)
+    adopt.add_argument("--command-id", type=UUID, required=True)
+    adopt.add_argument("--reason", required=True)
+
     promote = commands.add_parser("promote-media", allow_abbrev=False)
     _common(promote)
     promote.add_argument("--publication-command-id", type=UUID, required=True)
@@ -103,20 +110,29 @@ async def _execute(args: argparse.Namespace) -> dict[str, Any]:
                 ).resolve_actor(token)
             ).actor
             result: Any
-            if args.action == "publish":
-                result = await FreeCoursePublicationApplication(
+            if args.action in {"publish", "adopt-existing"}:
+                publication = FreeCoursePublicationApplication(
                     database,
                     operations_tenant_id=settings.operations_tenant_id,
                     public_tenant_id=args.public_tenant_id,
-                ).apply(
-                    actor=actor,
-                    source_program_id=args.source_program_id,
-                    command_id=args.command_id,
-                    reason=args.reason,
-                    source_ref=args.source_ref,
-                    release_id=args.release_id,
-                    reviewed_at=_reviewed_at(args.reviewed_at),
                 )
+                if args.action == "adopt-existing":
+                    result = await publication.adopt_existing(
+                        actor=actor,
+                        source_program_id=args.source_program_id,
+                        command_id=args.command_id,
+                        reason=args.reason,
+                    )
+                else:
+                    result = await publication.apply(
+                        actor=actor,
+                        source_program_id=args.source_program_id,
+                        command_id=args.command_id,
+                        reason=args.reason,
+                        source_ref=args.source_ref,
+                        release_id=args.release_id,
+                        reviewed_at=_reviewed_at(args.reviewed_at),
+                    )
             else:
                 runtime = create_default_media_runtime(settings)
                 result = await FreeCourseMediaPromotionApplication(

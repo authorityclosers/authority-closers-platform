@@ -390,7 +390,12 @@ class PrivateObjectStorage(Protocol):
     ) -> StoredObjectMetadata: ...
 
     def copy(
-        self, *, source_key: str, destination_key: str, content_type: str
+        self,
+        *,
+        source_key: str,
+        destination_key: str,
+        content_type: str,
+        create_only: bool = False,
     ) -> StoredObjectMetadata: ...
 
     def delete(self, object_key: str) -> None: ...
@@ -580,11 +585,18 @@ class InMemoryPrivateObjectStorage:
         return metadata
 
     def copy(
-        self, *, source_key: str, destination_key: str, content_type: str
+        self,
+        *,
+        source_key: str,
+        destination_key: str,
+        content_type: str,
+        create_only: bool = False,
     ) -> StoredObjectMetadata:
         item = self._objects.get(source_key)
         if item is None:
             raise MediaStorageUnavailable("The private media object is unavailable.")
+        if create_only and destination_key in self._objects:
+            raise MediaStorageUnavailable("The private media destination already exists.")
         return self.put(object_key=destination_key, body=item[0], content_type=content_type)
 
     def delete(self, object_key: str) -> None:
@@ -1135,9 +1147,16 @@ class S3CompatiblePrivateObjectStorage:
         )
 
     def copy(
-        self, *, source_key: str, destination_key: str, content_type: str
+        self,
+        *,
+        source_key: str,
+        destination_key: str,
+        content_type: str,
+        create_only: bool = False,
     ) -> StoredObjectMetadata:
         self._assert_endpoint_safe()
+        if create_only and self.head(destination_key) is not None:
+            raise MediaStorageUnavailable("The private media destination already exists.")
         result = self._client.copy_object(
             Bucket=self._bucket,
             Key=destination_key,

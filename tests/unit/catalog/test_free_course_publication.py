@@ -184,11 +184,35 @@ async def test_publication_is_idempotent_and_preserves_tenant_source(state) -> N
     assert replay.status == "replayed"
     assert replay.program_id == result.program_id
     assert result.media_status == "pending_public_tenant_media_owner"
+    assert result.video_activity_id != UUID(int=0)
     assert state.db.get(Program, source.id).tenant_id == state.operations
     global_program = state.db.get(Program, result.program_id)
     assert global_program is not None
     assert global_program.scope == CatalogScope.GLOBAL.value
     assert global_program.slug == AUTHORITY_CLOSERS_FREE_COURSE_SLUG
+    adoption = await application.adopt_existing(
+        actor=actor,
+        source_program_id=source.id,
+        command_id=uuid4(),
+        reason="Adopt the reviewed staging Free Course without changing progress",
+    )
+    adoption_replay = await application.adopt_existing(
+        actor=actor,
+        source_program_id=source.id,
+        command_id=adoption.command_id,
+        reason="Adopt the reviewed staging Free Course without changing progress",
+    )
+    assert adoption.status == "adopted"
+    assert adoption_replay.status == "replayed"
+    assert adoption.video_activity_id == result.video_activity_id
+    assert adoption.program_id == result.program_id
+    with pytest.raises(FreeCoursePublicationConflict):
+        await application.adopt_existing(
+            actor=actor,
+            source_program_id=source.id,
+            command_id=result.command_id,
+            reason="A publication command cannot be reused for adoption",
+        )
 
 
 async def test_publication_rejects_cross_tenant_actor_before_copy(state) -> None:
@@ -365,6 +389,30 @@ async def test_ready_media_promotion_copies_and_binds_without_source_mutation(st
         body=source_body,
         content_type="video/mp4",
     )
+    hls_master_key = source_prefix + "renditions/hls/master.m3u8"
+    hls_variant_key = source_prefix + "renditions/hls/variant/index.m3u8"
+    hls_segment_key = source_prefix + "renditions/hls/variant/segments/seg-000.ts"
+    storage.put(
+        object_key=hls_master_key,
+        body=(
+            b"#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=100000\n"
+            b"variant/index.m3u8\n"
+        ),
+        content_type="application/vnd.apple.mpegurl",
+    )
+    storage.put(
+        object_key=hls_variant_key,
+        body=(
+            b"#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4,\n"
+            b"segments/seg-000.ts\n#EXT-X-ENDLIST\n"
+        ),
+        content_type="application/vnd.apple.mpegurl",
+    )
+    storage.put(
+        object_key=hls_segment_key,
+        body=b"verified transport segment",
+        content_type="video/mp2t",
+    )
     state.db.add(
         MediaAsset(
             id=source_asset_id,
@@ -408,6 +456,19 @@ async def test_ready_media_promotion_copies_and_binds_without_source_mutation(st
             protocol="progressive",
             content_type="video/mp4",
             object_key=rendition_metadata.object_key,
+            width=3840,
+            height=2160,
+        )
+    )
+    state.db.add(
+        MediaRendition(
+            id=uuid4(),
+            tenant_id=state.operations,
+            asset_id=source_asset_id,
+            version_id=source_version_id,
+            protocol="hls",
+            content_type="application/vnd.apple.mpegurl",
+            object_key=hls_master_key,
             width=3840,
             height=2160,
         )
@@ -519,6 +580,12 @@ async def test_ready_media_promotion_copies_and_binds_without_source_mutation(st
     assert target_asset is not None and target_asset.owner_person_id == state.manager
     assert target_version is not None and target_version.state == MediaLifecycle.READY.value
     assert state.db.get(MediaAsset, source_asset_id).tenant_id == state.operations
+    target_prefix = (
+        f"tenants/{state.academy}/media/video/{result.asset_id}/{result.version_id}/"
+    )
+    assert storage.head(target_prefix + "renditions/hls/master.m3u8") is not None
+    assert storage.head(target_prefix + "renditions/hls/variant/index.m3u8") is not None
+    assert storage.head(target_prefix + "renditions/hls/variant/segments/seg-000.ts") is not None
     assert previous_binding.state == "superseded"
     current_binding = state.db.get(ActivityMediaBinding, result.binding_id)
     assert current_binding is not None

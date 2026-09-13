@@ -24,7 +24,6 @@ from sqlalchemy.orm import SessionTransactionOrigin
 
 from ac_platform.audit.models import AuditEvent
 from ac_platform.audit.service import AuditRepository
-from ac_platform.authorization.platform import platform_projection
 from ac_platform.authorization.policy import CapabilityDenied
 from ac_platform.authorization.studio import StudioAuthorization
 from ac_platform.catalog.content import (
@@ -47,6 +46,7 @@ from ac_platform.tenancy.models import Tenant, TenantStatus
 
 AUTHORITY_CLOSERS_FREE_COURSE_SLUG = "authority-closers-free-course"
 FREE_COURSE_PUBLICATION_ACTION = "catalog.free_course_published.v1"
+FREE_COURSE_ADOPTION_ACTION = "catalog.free_course_adopted.v1"
 _IDENTITY_NAMESPACE = UUID("a2c87674-1cb2-4c0b-8a7d-3cddc2efbe4a")
 _REQUIRED_PLATFORM_CAPABILITIES = frozenset({"platform_catalog_write", "platform_catalog_publish"})
 _RELEASE_ID = re.compile(r"^[0-9a-f]{40}$")
@@ -70,6 +70,7 @@ class FreeCoursePublicationResult:
     source_version_id: UUID
     program_id: UUID
     program_version_id: UUID
+    video_activity_id: UUID
     public_tenant_id: UUID
     media_status: str
 
@@ -95,12 +96,13 @@ def _result_from_audit(
     public_tenant_id: UUID,
     operations_tenant_id: UUID,
     actor_person_id: UUID,
+    expected_action: str,
 ) -> FreeCoursePublicationResult:
     if (
         event.id != command_id
         or event.tenant_id != operations_tenant_id
         or event.actor_person_id != actor_person_id
-        or event.action != FREE_COURSE_PUBLICATION_ACTION
+        or event.action != expected_action
         or event.resource_type != "global_program"
         or not isinstance(event.payload, dict)
     ):
@@ -111,6 +113,7 @@ def _result_from_audit(
         "source_version_id",
         "program_id",
         "program_version_id",
+        "video_activity_id",
         "public_tenant_id",
         "media_status",
     }
@@ -124,6 +127,7 @@ def _result_from_audit(
                 "source_version_id",
                 "program_id",
                 "program_version_id",
+                "video_activity_id",
                 "public_tenant_id",
             )
         }
@@ -215,6 +219,8 @@ class FreeCoursePublicationApplication:
             raise FreeCoursePublicationError("reviewed_at must be timezone-aware")
 
         try:
+            from ac_platform.authorization.platform import platform_projection
+
             platform_permissions = await platform_projection(
                 self.database,
                 actor,
@@ -238,6 +244,7 @@ class FreeCoursePublicationApplication:
                 public_tenant_id=self.public_tenant_id,
                 operations_tenant_id=self.operations_tenant_id,
                 actor_person_id=actor.person_id,
+                expected_action=FREE_COURSE_PUBLICATION_ACTION,
             )
 
         source_program = await self.database.scalar(
@@ -313,6 +320,16 @@ class FreeCoursePublicationApplication:
                         .order_by(Activity.position.asc())
                     )
                 ).all()
+            )
+        video_activities = tuple(
+            activity
+            for activities in activities_by_module.values()
+            for activity in activities
+            if activity.kind == "VIDEO"
+        )
+        if len(video_activities) != 1:
+            raise FreeCoursePublicationError(
+                "the initial Free Course requires exactly one VIDEO activity"
             )
 
         prerequisites = tuple(
@@ -525,6 +542,7 @@ class FreeCoursePublicationApplication:
             "source_version_id": str(source_version.id),
             "program_id": str(target_program.id),
             "program_version_id": str(published.id),
+            "video_activity_id": str(_stable_id("activity", video_activities[0].id)),
             "public_tenant_id": str(self.public_tenant_id),
             "media_status": media_status,
         }
@@ -549,6 +567,297 @@ class FreeCoursePublicationApplication:
             source_version_id=source_version.id,
             program_id=target_program.id,
             program_version_id=published.id,
+            video_activity_id=_stable_id("activity", video_activities[0].id),
+            public_tenant_id=self.public_tenant_id,
+            media_status=media_status,
+        )
+
+    async def adopt_existing(
+        self,
+        *,
+        actor: ActorContext,
+        source_program_id: UUID,
+        command_id: UUID,
+        reason: str,
+    ) -> FreeCoursePublicationResult:
+        """Record adoption of an already matching global Free Course.
+
+        Staging may already contain the canonical global rows.  Adoption is a
+        separate audited command: it proves the deterministic global identity
+        and content match the reviewed Coach source, then leaves every catalog
+        row and learner progress untouched.
+        """
+
+        _require_transaction(self.database)
+        if type(command_id) is not UUID or command_id.int == 0:
+            raise FreeCoursePublicationError("a non-zero command ID is required")
+        if actor.tenant_id != self.operations_tenant_id:
+            raise FreeCoursePublicationError("the actor must select the operations tenant")
+        if type(source_program_id) is not UUID or source_program_id.int == 0:
+            raise FreeCoursePublicationError("a source program ID is required")
+        if (
+            not isinstance(reason, str)
+            or not reason.strip()
+            or reason != reason.strip()
+            or len(reason) > 500
+            or any(ord(character) < 32 or ord(character) == 127 for character in reason)
+        ):
+            raise FreeCoursePublicationError("a bounded publication reason is required")
+
+        try:
+            from ac_platform.authorization.platform import platform_projection
+
+            platform_permissions = await platform_projection(
+                self.database,
+                actor,
+                operations_tenant_id=self.operations_tenant_id,
+            )
+        except CapabilityDenied as error:
+            raise FreeCoursePublicationError(str(error)) from error
+        if not platform_permissions >= _REQUIRED_PLATFORM_CAPABILITIES:
+            raise FreeCoursePublicationError(
+                "platform catalog write and publish capabilities are required"
+            )
+
+        existing = await self.database.get(AuditEvent, command_id)
+        if existing is not None:
+            return _result_from_audit(
+                existing,
+                command_id=command_id,
+                source_program_id=source_program_id,
+                public_tenant_id=self.public_tenant_id,
+                operations_tenant_id=self.operations_tenant_id,
+                actor_person_id=actor.person_id,
+                expected_action=FREE_COURSE_ADOPTION_ACTION,
+            )
+
+        source_program = await self.database.scalar(
+            select(Program)
+            .where(
+                Program.id == source_program_id,
+                Program.scope == CatalogScope.TENANT.value,
+                Program.tenant_id == self.operations_tenant_id,
+            )
+            .with_for_update()
+        )
+        if source_program is None:
+            raise FreeCoursePublicationError("the source course is unavailable")
+        try:
+            await StudioAuthorization(self.database).require(
+                actor, "catalog_publish", program_id=source_program.id
+            )
+        except CapabilityDenied as error:
+            raise FreeCoursePublicationError(
+                "the actor lacks publication authority for the source course"
+            ) from error
+
+        public_tenant = await self.database.scalar(
+            select(Tenant).where(Tenant.id == self.public_tenant_id).with_for_update(read=True)
+        )
+        if public_tenant is None or public_tenant.status != TenantStatus.ACTIVE.value:
+            raise FreeCoursePublicationError("the public learner tenant is unavailable")
+
+        source_version = await self.database.scalar(
+            select(ProgramVersion)
+            .where(
+                ProgramVersion.program_id == source_program.id,
+                ProgramVersion.scope == CatalogScope.TENANT.value,
+                ProgramVersion.tenant_id == self.operations_tenant_id,
+                ProgramVersion.status == ProgramVersionStatus.PUBLISHED.value,
+            )
+            .order_by(ProgramVersion.version_number.desc())
+            .with_for_update()
+        )
+        if source_version is None or source_version.content_seed_kind != "reviewed":
+            raise FreeCoursePublicationError(
+                "the source version must carry reviewed publication provenance"
+            )
+
+        modules = tuple(
+            (
+                await self.database.scalars(
+                    select(Module)
+                    .where(
+                        Module.program_version_id == source_version.id,
+                        Module.scope == CatalogScope.TENANT.value,
+                        Module.tenant_id == self.operations_tenant_id,
+                    )
+                    .order_by(Module.position.asc())
+                )
+            ).all()
+        )
+        if not modules:
+            raise FreeCoursePublicationError("the published source has no modules")
+        module_ids = {module.id for module in modules}
+        activities_by_module: dict[UUID, tuple[Activity, ...]] = {}
+        for module in modules:
+            activities_by_module[module.id] = tuple(
+                (
+                    await self.database.scalars(
+                        select(Activity)
+                        .where(
+                            Activity.module_id == module.id,
+                            Activity.program_version_id == source_version.id,
+                            Activity.scope == CatalogScope.TENANT.value,
+                            Activity.tenant_id == self.operations_tenant_id,
+                        )
+                        .order_by(Activity.position.asc())
+                    )
+                ).all()
+            )
+        video_activities = tuple(
+            activity
+            for activities in activities_by_module.values()
+            for activity in activities
+            if activity.kind == "VIDEO"
+        )
+        if len(video_activities) != 1:
+            raise FreeCoursePublicationError(
+                "the initial Free Course requires exactly one VIDEO activity"
+            )
+        prerequisites = tuple(
+            (
+                await self.database.scalars(
+                    select(ModulePrerequisite).where(
+                        ModulePrerequisite.program_version_id == source_version.id,
+                        ModulePrerequisite.scope == CatalogScope.TENANT.value,
+                        ModulePrerequisite.tenant_id == self.operations_tenant_id,
+                    )
+                )
+            ).all()
+        )
+        if any(
+            edge.module_id not in module_ids or edge.prerequisite_module_id not in module_ids
+            for edge in prerequisites
+        ):
+            raise FreeCoursePublicationError("the source prerequisite graph is out of scope")
+        target_modules = tuple(
+            CanonicalModuleContent(
+                position=module.position,
+                title=module.title,
+                prerequisite_positions=tuple(
+                    sorted(
+                        prerequisite_module.position
+                        for prerequisite in prerequisites
+                        if prerequisite.module_id == module.id
+                        for prerequisite_module in modules
+                        if prerequisite_module.id == prerequisite.prerequisite_module_id
+                    )
+                ),
+                activities=tuple(
+                    CanonicalActivityContent(
+                        position=activity.position,
+                        kind=activity.kind,
+                        title=activity.title,
+                        is_required=activity.is_required,
+                        prompt=activity.prompt,
+                    )
+                    for activity in activities_by_module[module.id]
+                ),
+            )
+            for module in modules
+        )
+        source_digest = canonical_catalog_content_digest(
+            program_slug=source_program.slug,
+            program_title=source_program.title,
+            modules=target_modules,
+        )
+        target_digest = canonical_catalog_content_digest(
+            program_slug=AUTHORITY_CLOSERS_FREE_COURSE_SLUG,
+            program_title=source_program.title,
+            modules=target_modules,
+        )
+        if source_version.content_digest != source_digest:
+            raise FreeCoursePublicationError(
+                "the source content digest does not match its reviewed content"
+            )
+
+        target_program_id = _stable_id("program", source_program.id)
+        target_version_id = _stable_id("version", source_version.id)
+        target_program = await self.database.scalar(
+            select(Program).where(
+                Program.id == target_program_id,
+                Program.scope == CatalogScope.GLOBAL.value,
+                Program.slug == AUTHORITY_CLOSERS_FREE_COURSE_SLUG,
+                Program.tenant_id.is_(None),
+                Program.owner_key == UUID(int=0),
+            )
+        )
+        if target_program is None or target_program.title != source_program.title:
+            raise FreeCoursePublicationConflict(
+                "the existing global Free Course does not match the reviewed source"
+            )
+        target_version = await self.database.scalar(
+            select(ProgramVersion).where(
+                ProgramVersion.id == target_version_id,
+                ProgramVersion.program_id == target_program_id,
+                ProgramVersion.scope == CatalogScope.GLOBAL.value,
+                ProgramVersion.tenant_id.is_(None),
+                ProgramVersion.owner_key == UUID(int=0),
+                ProgramVersion.status == ProgramVersionStatus.PUBLISHED.value,
+            )
+        )
+        if (
+            target_version is None
+            or target_version.content_digest != target_digest
+            or target_version.content_source_ref != source_version.content_source_ref
+            or target_version.content_reviewed_by != source_version.content_reviewed_by
+            or target_version.content_reviewed_at != source_version.content_reviewed_at
+            or target_version.release_id != source_version.release_id
+            or target_version.content_seed_kind != source_version.content_seed_kind
+        ):
+            raise FreeCoursePublicationConflict(
+                "the existing global Free Course version does not match the reviewed source"
+            )
+        target_activity_id = _stable_id("activity", video_activities[0].id)
+        target_activity = await self.database.scalar(
+            select(Activity).where(
+                Activity.id == target_activity_id,
+                Activity.program_id == target_program_id,
+                Activity.program_version_id == target_version_id,
+                Activity.scope == CatalogScope.GLOBAL.value,
+                Activity.tenant_id.is_(None),
+                Activity.owner_key == UUID(int=0),
+                Activity.kind == "VIDEO",
+            )
+        )
+        if target_activity is None:
+            raise FreeCoursePublicationConflict(
+                "the existing global Free Course video activity is unavailable"
+            )
+
+        media_status = "pending_public_tenant_media_owner"
+        payload = {
+            "source_program_id": str(source_program.id),
+            "source_version_id": str(source_version.id),
+            "program_id": str(target_program.id),
+            "program_version_id": str(target_version.id),
+            "video_activity_id": str(target_activity.id),
+            "public_tenant_id": str(self.public_tenant_id),
+            "media_status": media_status,
+        }
+        audit = await AuditRepository(self.database).append(
+            event_id=command_id,
+            tenant_id=self.operations_tenant_id,
+            actor_person_id=actor.person_id,
+            session_id=actor.session_id,
+            action=FREE_COURSE_ADOPTION_ACTION,
+            resource_type="global_program",
+            resource_id=target_program.id,
+            payload=payload,
+            reason=reason,
+            now=self.clock(),
+        )
+        if audit.id != command_id:
+            raise FreeCoursePublicationError("adoption audit receipt was not committed")
+        return FreeCoursePublicationResult(
+            status="adopted",
+            command_id=command_id,
+            source_program_id=source_program.id,
+            source_version_id=source_version.id,
+            program_id=target_program.id,
+            program_version_id=target_version.id,
+            video_activity_id=target_activity.id,
             public_tenant_id=self.public_tenant_id,
             media_status=media_status,
         )
@@ -557,6 +866,7 @@ class FreeCoursePublicationApplication:
 __all__ = [
     "AUTHORITY_CLOSERS_FREE_COURSE_SLUG",
     "FREE_COURSE_PUBLICATION_ACTION",
+    "FREE_COURSE_ADOPTION_ACTION",
     "FreeCoursePublicationApplication",
     "FreeCoursePublicationConflict",
     "FreeCoursePublicationError",

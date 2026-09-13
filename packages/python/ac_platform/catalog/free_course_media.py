@@ -26,6 +26,10 @@ from ac_platform.audit.models import AuditEvent
 from ac_platform.audit.service import AuditRepository
 from ac_platform.authorization.platform import platform_projection
 from ac_platform.authorization.policy import CapabilityDenied
+from ac_platform.catalog.free_course_publication import (
+    FREE_COURSE_ADOPTION_ACTION,
+    FREE_COURSE_PUBLICATION_ACTION,
+)
 from ac_platform.catalog.models import (
     Activity,
     ActivityKind,
@@ -48,6 +52,7 @@ from ac_platform.media.models import (
     MediaRendition,
     MediaVersion,
 )
+from ac_platform.media.processing import inspect_hls_playlist_inventory
 from ac_platform.media.service import MediaService
 from ac_platform.media.storage import PrivateObjectStorage, StoredObjectMetadata
 from ac_platform.tenancy.models import Membership, MembershipStatus, Tenant, TenantStatus
@@ -169,6 +174,18 @@ def _metadata(storage: PrivateObjectStorage, key: str) -> StoredObjectMetadata:
     return head
 
 
+def _existing_metadata(storage: PrivateObjectStorage, key: str) -> StoredObjectMetadata | None:
+    try:
+        head = storage.head(key)
+    except Exception as error:
+        raise FreeCourseMediaPromotionError("private media metadata is unavailable") from error
+    if head is None:
+        return None
+    if not _SHA256.fullmatch(head.checksum_sha256):
+        raise FreeCourseMediaPromotionError("private media bytes have no verified checksum")
+    return head
+
+
 class FreeCourseMediaPromotionApplication:
     """Promote one processed source video and bind it to one global activity."""
 
@@ -256,10 +273,11 @@ class FreeCourseMediaPromotionApplication:
         if publication is None or publication.tenant_id != self.operations_tenant_id:
             raise FreeCourseMediaPromotionError("the canonical Free Course publication is required")
         if (
-            publication.action != "catalog.free_course_published.v1"
+            publication.action not in {FREE_COURSE_PUBLICATION_ACTION, FREE_COURSE_ADOPTION_ACTION}
             or publication.actor_person_id != actor.person_id
             or not isinstance(publication.payload, dict)
             or publication.payload.get("public_tenant_id") != str(self.public_tenant_id)
+            or publication.payload.get("video_activity_id") != str(activity_id)
         ):
             raise FreeCourseMediaPromotionError(
                 "the publication receipt does not match this tenant"
@@ -406,20 +424,40 @@ class FreeCourseMediaPromotionApplication:
         source_prefix = _source_prefix(
             self.operations_tenant_id, source_asset.id, source_version.id
         )
-        objects: list[tuple[str, str, str]] = [
-            (
-                source_version.object_key,
+        object_specs: dict[str, tuple[str, str]] = {
+            source_version.object_key: (
                 _target_key(source_version.object_key, source_prefix, target_prefix),
                 source_version.content_type,
             )
-        ]
-        objects.extend(
-            (
+        }
+        for row in renditions:
+            object_specs.setdefault(
                 row.object_key,
-                _target_key(row.object_key, source_prefix, target_prefix),
-                row.content_type,
+                (_target_key(row.object_key, source_prefix, target_prefix), row.content_type),
             )
-            for row in renditions
+            if row.protocol == "hls":
+                try:
+                    graph = inspect_hls_playlist_inventory(
+                        self.service.storage,
+                        root_key=row.object_key,
+                        namespace_prefix=source_prefix.rstrip("/"),
+                    )
+                except Exception as error:
+                    raise FreeCourseMediaPromotionError(
+                        "the READY source HLS graph is unavailable or invalid"
+                    ) from error
+                for graph_key in graph:
+                    graph_metadata = _metadata(self.service.storage, graph_key)
+                    object_specs.setdefault(
+                        graph_key,
+                        (
+                            _target_key(graph_key, source_prefix, target_prefix),
+                            graph_metadata.content_type,
+                        ),
+                    )
+        objects = tuple(
+            (source_key, target_key, content_type)
+            for source_key, (target_key, content_type) in object_specs.items()
         )
         copied: list[str] = []
 
@@ -433,11 +471,21 @@ class FreeCourseMediaPromotionApplication:
             copied_metadata: dict[str, StoredObjectMetadata] = {}
             for source_key, target_key, content_type in objects:
                 source = _metadata(self.service.storage, source_key)
-                result = self.service.storage.copy(
-                    source_key=source_key,
-                    destination_key=target_key,
-                    content_type=content_type,
-                )
+                existing_target = _existing_metadata(self.service.storage, target_key)
+                if existing_target is not None:
+                    result = existing_target
+                else:
+                    result = self.service.storage.copy(
+                        source_key=source_key,
+                        destination_key=target_key,
+                        content_type=content_type,
+                        create_only=True,
+                    )
+                    # Register only a copy that returned a verified object.
+                    # If an adapter fails after creating bytes, the target is
+                    # left for a checksum-verified retry rather than risking
+                    # deletion of a concurrent attempt's object.
+                    copied.append(target_key)
                 if (
                     result.content_length != source.content_length
                     or result.checksum_sha256.lower() != source.checksum_sha256.lower()
@@ -447,7 +495,6 @@ class FreeCourseMediaPromotionApplication:
                     raise FreeCourseMediaPromotionError(
                         "the private media copy failed checksum verification"
                     )
-                copied.append(target_key)
                 copied_metadata[target_key] = result
 
             now = self.clock()
@@ -486,8 +533,9 @@ class FreeCourseMediaPromotionApplication:
             )
             database.add(target_version)
             database.flush()
-            for index, source_row in enumerate(renditions):
-                target_key = objects[index + 1][1]
+            target_keys = {source_key: target_key for source_key, target_key, _ in objects}
+            for source_row in renditions:
+                target_key = target_keys[source_row.object_key]
                 copied_row = copied_metadata[target_key]
                 database.add(
                     MediaRendition(
@@ -512,6 +560,19 @@ class FreeCourseMediaPromotionApplication:
             target_asset.state = MediaLifecycle.READY.value
             target_asset.updated_at = now
             database.flush()
+
+            for _source_key, target_key, _content_type in objects:
+                if target_key.lower().endswith(".m3u8"):
+                    try:
+                        inspect_hls_playlist_inventory(
+                            self.service.storage,
+                            root_key=target_key,
+                            namespace_prefix=target_prefix.rstrip("/"),
+                        )
+                    except Exception as error:
+                        raise FreeCourseMediaPromotionError(
+                            "the copied HLS graph is unavailable or invalid"
+                        ) from error
 
             target_actor = ActorContext(
                 person_id=media_owner_person_id,
