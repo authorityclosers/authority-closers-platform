@@ -536,12 +536,22 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
             # cancellations after their exact success status and session effects
             # have independently passed above. Other failures still fail proof.
             accepted_aborts = {"HEAD /: net::ERR_ABORTED"}
-            for path, status in (
-                ("/v1/auth/password/login", 200),
-                ("/v1/auth/logout", 204),
+            for method, path, status in (
+                ("POST", "/v1/auth/password/login", 200),
+                ("POST", "/v1/auth/logout", 204),
+                (
+                    "GET",
+                    f"/v1/conversation/recordings/{backend.account.recording_id}/measurements",
+                    401,
+                ),
             ):
-                if {"method": "POST", "path": path, "status": status} in network:
-                    accepted_aborts.add(f"POST {path}: net::ERR_ABORTED")
+                if any(
+                    item["method"] == method
+                    and item["path"] == path
+                    and item["status"] == status
+                    for item in network
+                ):
+                    accepted_aborts.add(f"{method} {path}: net::ERR_ABORTED")
             proof["navigation_cancellations"] = [
                 failure for failure in request_failures if failure in accepted_aborts
             ]
