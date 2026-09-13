@@ -388,3 +388,73 @@ class ConversationPlanStageAuthorization(Base):
     quote_fingerprint: Mapped[str] = mapped_column(String(64))
     cache_key: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class ConversationReviewAssignment(Base):
+    """Immutable, exact-report access grant to one existing learner."""
+
+    __tablename__ = "conversation_review_assignments"
+    __table_args__ = (
+        recording_fk(),
+        ForeignKeyConstraint(
+            ["run_id", "tenant_id", "person_id"],
+            ["conversation_runs.id", "conversation_runs.tenant_id", "conversation_runs.person_id"],
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "reviewer_id"], ["memberships.tenant_id", "memberships.person_id"]
+        ),
+        UniqueConstraint("id", "tenant_id", "person_id", "reviewer_id"),
+        CheckConstraint("expires_at > created_at", name="bounded_expiry"),
+    )
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    person_id: Mapped[UUID] = mapped_column(Uuid)
+    recording_id: Mapped[UUID] = mapped_column(Uuid)
+    run_id: Mapped[UUID] = mapped_column(Uuid)
+    reviewer_id: Mapped[UUID] = mapped_column(Uuid)
+    creator_id: Mapped[UUID] = mapped_column(Uuid, ForeignKey("persons.id"))
+    report_id: Mapped[UUID] = mapped_column(Uuid, ForeignKey("conversation_report_drafts.id"))
+    assignment: Mapped[dict[str, Any]] = mapped_column(JSON)
+    assignment_sha256: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class ConversationReviewRevocation(Base):
+    __tablename__ = "conversation_review_revocations"
+    assignment_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("conversation_review_assignments.id"), primary_key=True
+    )
+    person_id: Mapped[UUID] = mapped_column(Uuid, ForeignKey("persons.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class ConversationReviewFeedback(Base):
+    """Append-only feedback envelope, erasable with its source; no automatic promotion."""
+
+    __tablename__ = "conversation_review_feedback"
+    __table_args__ = (
+        recording_fk(),
+        ForeignKeyConstraint(
+            ["assignment_id", "tenant_id", "person_id", "reviewer_id"],
+            [
+                "conversation_review_assignments.id",
+                "conversation_review_assignments.tenant_id",
+                "conversation_review_assignments.person_id",
+                "conversation_review_assignments.reviewer_id",
+            ],
+        ),
+        UniqueConstraint("assignment_id", "request_key"),
+    )
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    assignment_id: Mapped[UUID] = mapped_column(Uuid)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    person_id: Mapped[UUID] = mapped_column(Uuid)
+    reviewer_id: Mapped[UUID] = mapped_column(Uuid)
+    recording_id: Mapped[UUID] = mapped_column(Uuid)
+    request_key: Mapped[str] = mapped_column(String(128))
+    request_sha256: Mapped[str] = mapped_column(String(64))
+    payload_sha256: Mapped[str] = mapped_column(String(64))
+    payload: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    erased_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

@@ -35,6 +35,7 @@ from ac_platform.conversation_intelligence.models import (
     ConversationRecording,
     ConversationReportDraft,
     ConversationReview,
+    ConversationReviewFeedback,
     ConversationRun,
 )
 from ac_platform.conversation_intelligence.signals import NATIVE_SOURCE_SHA256, _feature_metadata
@@ -834,6 +835,15 @@ class ConversationApplication:
         ).all():
             draft.payload, draft.transcript, draft.evidence_receipt = None, None, None
             draft.erased_at = now
+        for feedback in (
+            await self.database.scalars(
+                select(ConversationReviewFeedback).where(
+                    ConversationReviewFeedback.recording_id == recording.id,
+                    ConversationReviewFeedback.erased_at.is_(None),
+                )
+            )
+        ).all():
+            feedback.payload, feedback.erased_at = None, now
         for row in (
             await self.database.scalars(
                 select(ConversationCheckpoint).where(

@@ -24,6 +24,7 @@ from ac_platform.http.community import install_community_http
 from ac_platform.http.conversation import install_conversation_http
 from ac_platform.http.conversation_admin import install_conversation_admin_http
 from ac_platform.http.conversation_intake import ConversationIntakeRuntime
+from ac_platform.http.conversation_reviews import install_conversation_review_http
 from ac_platform.http.course import install_course_http
 from ac_platform.http.identity_provider import OAuthIdentityProvider, create_google_provider
 from ac_platform.http.learning import (
@@ -160,6 +161,12 @@ def create_app(
         settings=settings,
         require_actor=require_actor,
         import_storage=conversation_intake_runtime.storage if conversation_intake_runtime else None,
+    )
+    install_conversation_review_http(
+        application,
+        settings=settings,
+        require_actor=require_actor,
+        storage=resolved_conversation.storage if resolved_conversation else None,
     )
     install_community_http(application, settings=settings, require_actor=require_actor)
     install_app_updates_http(application, settings=settings, require_actor=require_actor)
