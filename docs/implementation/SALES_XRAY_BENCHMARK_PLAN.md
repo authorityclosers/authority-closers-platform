@@ -332,6 +332,66 @@ missing/ambiguous receipt; it would never retry automatically or use another pro
 to spend around a failed gate. If a CLI/API is unavailable, record `blocked` and fix
 the implementation rather than issuing direct SQL.
 
+## 2026-09-13 bounded language pilot and cost proposal
+
+The founder requested an estimate below INR 2,000 before adding Gemini or ElevenLabs
+funds. This proposal authorizes no purchase or paid inference and does not replace
+the controlled 30-case, 240-minute diagnostic set or its sealed holdout protocol.
+It is a smaller exploratory screen for selecting recipes and improving review UX.
+
+Use 36 clips: twelve situations, each represented in English, Hinglish and Marlish
+(Marathi/English code switching), with total audio capped at 180 minutes. Situations
+are discovery, price, trust, timing, decision-maker involvement, competitor comparison,
+closing, interruptions/overlap, noisy telephone audio, amounts/names, vague answers,
+and unsuccessful calls. Cross-language versions of one scenario are correlated;
+report twelve scenario groups, not 36 independent examples. Balance seller skill,
+speaker roles and recording conditions. Freeze human-corrected transcript anchors
+and expert reference facts before comparing outputs. Keep unseen full calls and
+their speakers separate; their later execution requires a separate budget line.
+
+Screen two task-capable Gemini recipes with two repeats per clip (72 complete
+reports per model). Reuse each approved Scribe transcript for all report variants.
+Cap the **whole report**, including every fact-extraction/coaching request and
+thinking tokens, at 12,000 input and 6,000 output tokens. These are planning caps,
+not a claim that a useful long-call report will always fit. Oversized or incomplete
+cases must be reported and requoted, not silently truncated or charged beyond cap.
+
+Prices observed on 2026-09-13, standard paid requests, USD:
+
+| Item | Assumed unit price | Calculation | Subtotal |
+| --- | --- | --- | --- |
+| Gemini 3.8 Flash | $0.75 input / $3.75 output per million tokens, through 2026-12-31 | 72 × (12,000 × 0.75 + 6,000 × 3.75) / 1,000,000 | $2.268 |
+| Gemini 3.1 Pro Preview | $2 input / $12 output per million tokens, prompts at most 200k | 72 × (12,000 × 2 + 6,000 × 12) / 1,000,000 | $6.912 |
+| Scribe v2 | $0.22 per audio hour, no optional add-ons | 3 × 0.22 | $0.660 |
+| Total model/transcription usage | | | **$9.840** |
+
+Official sources: [Gemini API pricing](https://ai.google.dev/gemini-api/docs/pricing)
+and [ElevenLabs API pricing](https://elevenlabs.io/pricing/api). Availability, account
+entitlement and tariff must be checked again before an executable quote. Gemini task
+adapters are not yet proven in this deployed pipeline; listing a price does not
+activate a model. No free-tier discount or batch discount is assumed.
+
+At a conservative planning exchange rate of INR 100/USD, plus an **assumed** 18%
+tax and 5% exchange/payment buffer: 9.84 × 100 × 1.18 × 1.05 = **INR 1,219.54**.
+Actual tax, exchange rate and invoice rounding depend on the billing account.
+Target INR 1,200–1,500; the proposed absolute ceiling is INR 2,000, including retries
+and failed/unknown attempts. This excludes human annotation, development, hosting,
+subscription minimums and later full-call holdouts. Prepaid funds are not identical
+to consumed API cost. Reserve the worst-case paise before dispatch, reconcile
+unknown outcomes, stop when the remainder cannot cover the next reservation, and
+do not enable automatic top-up or paid fallback.
+
+For the requested in-app review, store the real reviewer, assignment, selected
+sales/technical/UX lens, source/run/model/prompt revision, clip anchors, corrections,
+confidence and timestamps. A person may submit multiple append-only reviews;
+changing the lens grants no new access. Admin operators manage the queue and
+invitations; invited reviewers receive only their assigned-call form inside the
+Academy shell. Dipak's contextual feedback and Suyash's technical feedback remain
+attributable and distinct. Later Codex calibration reads authorized reviews on
+request and proposes versioned changes; it never rewrites original reviews or
+automatically trains a model. Reference checks reveal grounding/timing/schema
+defects, while blinded human comparison supplies usefulness and language judgments.
+
 ## Current completion boundary
 
 This plan authorizes only offline and authenticated-local synthetic benchmarking. It
