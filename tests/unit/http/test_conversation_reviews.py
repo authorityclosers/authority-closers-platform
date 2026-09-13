@@ -15,6 +15,8 @@ from ac_platform.conversation_intelligence.application import ConversationDenied
 from ac_platform.conversation_intelligence.review_contracts import (
     ReviewAssignmentCreateRequest,
     ReviewFeedbackRequest,
+    ReviewInvitationAcceptRequest,
+    ReviewInvitationCreateRequest,
 )
 from ac_platform.conversation_intelligence.storage import ObjectKey
 from ac_platform.http import conversation_reviews as review_http
@@ -51,6 +53,22 @@ class _ReviewService:
     async def revoke(self, actor: Any, assignment_id: UUID, key: str) -> dict[str, Any]:
         self.calls.calls.append(("revoke", actor.person_id, (assignment_id, key)))
         return {"id": str(assignment_id), "state": "revoked"}
+
+    async def invite(
+        self, actor: Any, intent: ReviewInvitationCreateRequest, key: str
+    ) -> dict[str, Any]:
+        self.calls.calls.append(("invite", actor.person_id, (intent, key)))
+        return {"id": str(ASSIGNMENT_ID), "state": "pending"}
+
+    async def revoke_invitation(self, actor: Any, invitation_id: UUID, key: str) -> dict[str, Any]:
+        self.calls.calls.append(("revoke_invitation", actor.person_id, (invitation_id, key)))
+        return {"id": str(invitation_id), "state": "revoked"}
+
+    async def accept_invitation(
+        self, actor: Any, intent: ReviewInvitationAcceptRequest
+    ) -> dict[str, Any]:
+        self.calls.calls.append(("accept_invitation", actor.person_id, intent))
+        return {"id": str(ASSIGNMENT_ID), "state": "assigned"}
 
     async def get(self, actor: Any, assignment_id: UUID) -> dict[str, Any]:
         self.calls.calls.append(("get", actor.person_id, assignment_id))
@@ -208,6 +226,27 @@ async def test_admin_assignment_routes_require_admin_host_and_bind_current_actor
         assert revoked.status_code == 200
         assert calls.calls[-1][0] == "revoke"
 
+        invitation = await client.post(
+            "/v1/admin/conversation/review-invitations",
+            headers={"Origin": "https://admin.test", "Idempotency-Key": "invite-1"},
+            json={
+                "run_id": str(uuid4()),
+                "invited_email": "reviewer@example.test",
+                "allowed_lenses": ["sales", "technical"],
+                "expires_at_epoch": 2_000_000_000,
+            },
+        )
+        assert invitation.status_code == 201
+        assert calls.calls[-1][0] == "invite"
+        assert calls.calls[-1][2][1] == "invite-1"
+
+        invite_revoked = await client.post(
+            f"/v1/admin/conversation/review-invitations/{ASSIGNMENT_ID}/revoke",
+            headers={"Origin": "https://admin.test", "Idempotency-Key": "invite-revoke-1"},
+        )
+        assert invite_revoked.status_code == 200
+        assert calls.calls[-1][0] == "revoke_invitation"
+
     blocked = await _request(
         application,
         "POST",
@@ -217,6 +256,16 @@ async def test_admin_assignment_routes_require_admin_host_and_bind_current_actor
     )
     assert blocked.status_code == 403
     assert all(call[0] != "create" or call[2][1] != "assign-2" for call in calls.calls)
+
+    accepted = await _request(
+        application,
+        "POST",
+        "/v1/conversation/review-invitations/accept",
+        headers={"Origin": "https://learner.test"},
+        json={"token": "t" * 48},
+    )
+    assert accepted.status_code == 201
+    assert calls.calls[-1][0] == "accept_invitation"
 
 
 @pytest.mark.asyncio

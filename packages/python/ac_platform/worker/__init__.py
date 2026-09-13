@@ -20,6 +20,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.application.asyncio_runtime import run_async
 from ac_platform.application.settings import get_settings
+from ac_platform.conversation_intelligence.models import (
+    ConversationReviewInvitation,
+    ConversationReviewInvitationAcceptance,
+    ConversationReviewInvitationRevocation,
+)
+from ac_platform.conversation_intelligence.review_invitations import (
+    REVIEW_INVITATION_EVENT,
+    REVIEW_INVITATION_JOB,
+    REVIEW_INVITATION_PATH,
+    decrypt_invitation_token,
+)
 from ac_platform.identity.models import EmailChallenge, EmailChallengeKind, Person, PersonStatus
 from ac_platform.identity.password_auth import (
     PASSWORD_EMAIL_RESET_EVENT,
@@ -85,6 +96,11 @@ ENROLLMENT_WELCOME_ROUTE = OutboxJobRoute(
 OUTBOX_JOB_ROUTES: Mapping[str, OutboxJobRoute] = MappingProxyType(
     {
         ENROLLMENT_WELCOME_EVENT: ENROLLMENT_WELCOME_ROUTE,
+        REVIEW_INVITATION_EVENT: OutboxJobRoute(
+            job_kind=REVIEW_INVITATION_JOB,
+            required_payload_keys=frozenset({"invitation_id"}),
+            uuid_payload_keys=frozenset({"invitation_id"}),
+        ),
         PASSWORD_EMAIL_VERIFICATION_EVENT: OutboxJobRoute(
             job_kind=PASSWORD_EMAIL_VERIFICATION_JOB,
             required_payload_keys=frozenset({"challenge_id", "kind"}),
@@ -239,6 +255,58 @@ async def resolve_password_message(
     )
 
 
+async def resolve_review_invitation_message(
+    session: AsyncSession,
+    settings: Any,
+    job: Job,
+    *,
+    provider_key: str,
+) -> EmailMessage:
+    """Resolve one invitation email from its canonical row and encrypted token."""
+
+    if job.kind != REVIEW_INVITATION_JOB:
+        raise UnknownJobKindError(f"email route is not allowlisted: {job.kind}")
+    payload = OUTBOX_JOB_ROUTES[REVIEW_INVITATION_EVENT].normalize_payload(job.payload)
+    invitation_id = UUID(payload["invitation_id"])
+    invitation = await session.scalar(
+        select(ConversationReviewInvitation)
+        .where(
+            ConversationReviewInvitation.id == invitation_id,
+            ConversationReviewInvitation.expires_at > func.now(),
+        )
+        .with_for_update(read=True)
+    )
+    if (
+        invitation is None
+        or await session.get(ConversationReviewInvitationRevocation, invitation.id) is not None
+        or await session.get(ConversationReviewInvitationAcceptance, invitation.id) is not None
+    ):
+        raise PermanentProviderError("review invitation is unavailable")
+    try:
+        token = decrypt_invitation_token(
+            settings.email_challenge_secret.get_secret_value(),
+            invitation.encrypted_token,
+            invitation.id,
+        )
+    except (InvalidTag, ValueError, TypeError):
+        raise PermanentProviderError("review invitation payload is unavailable") from None
+    action_link = (
+        f"{str(settings.public_app_url).rstrip('/')}{REVIEW_INVITATION_PATH}#token={token}"
+    )
+    return EmailMessage(
+        to=invitation.invited_email,
+        template="sales-xray-review-invitation",
+        template_version=1,
+        idempotency_key=provider_key,
+        variables={
+            "first_name": "there",
+            "action_link": action_link,
+            "expires_at": invitation.expires_at.isoformat(),
+        },
+        communication_class="verification_security",
+    )
+
+
 # Explicit v1 read shape for the server-side recipient resolver. Lightweight
 # SQL tables avoid importing enrollment command services into the worker while
 # still binding every signed internal identifier to canonical database rows.
@@ -370,6 +438,7 @@ def build_default_dispatcher(
     return AllowlistedDispatcher(
         {
             ENROLLMENT_WELCOME_JOB: handler,
+            REVIEW_INVITATION_JOB: handler,
             PASSWORD_EMAIL_VERIFICATION_JOB: handler,
             PASSWORD_EMAIL_RESET_JOB: handler,
             PASSWORD_EMAIL_VERIFICATION_JOB_V2: handler,
@@ -532,6 +601,7 @@ class DurableWorker:
                 raise LeaseLostError("job no longer exists")
             if job.kind not in {
                 ENROLLMENT_WELCOME_JOB,
+                REVIEW_INVITATION_JOB,
                 PASSWORD_EMAIL_VERIFICATION_JOB,
                 PASSWORD_EMAIL_RESET_JOB,
                 PASSWORD_EMAIL_VERIFICATION_JOB_V2,
@@ -628,6 +698,13 @@ class DurableWorker:
         }:
             return await self._resolve_password_message(
                 session,
+                job,
+                provider_key=provider_key,
+            )
+        if job.kind == REVIEW_INVITATION_JOB:
+            return await resolve_review_invitation_message(
+                session,
+                self._settings,
                 job,
                 provider_key=provider_key,
             )
@@ -1020,6 +1097,8 @@ __all__ = [
     "DurableWorker",
     "ENROLLMENT_WELCOME_EVENT",
     "ENROLLMENT_WELCOME_JOB",
+    "REVIEW_INVITATION_EVENT",
+    "REVIEW_INVITATION_JOB",
     "ENROLLMENT_WELCOME_ROUTE",
     "PASSWORD_EMAIL_RESET_EVENT",
     "PASSWORD_EMAIL_RESET_JOB",
@@ -1036,6 +1115,7 @@ __all__ = [
     "OUTBOX_JOB_ROUTES",
     "PreparedDispatch",
     "resolve_password_message",
+    "resolve_review_invitation_message",
     "SessionFactory",
     "UnknownJobKindError",
     "WorkerNotReadyError",

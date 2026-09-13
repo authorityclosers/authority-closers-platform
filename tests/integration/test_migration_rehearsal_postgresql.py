@@ -76,6 +76,12 @@ REVIEWS_TABLES = {
     "conversation_review_revocations",
     "conversation_review_feedback",
 }
+REVIEW_INVITATIONS_HEAD = "20260913_0035"
+REVIEW_INVITATIONS_TABLES = {
+    "conversation_review_invitations",
+    "conversation_review_invitation_revocations",
+    "conversation_review_invitation_acceptances",
+}
 DEDICATED_DATABASE_PREFIX = "ac_migration_rehearsal_"
 DEDICATED_HOST = "127.0.0.1"
 DEDICATED_PORT = 55432
@@ -656,3 +662,16 @@ def test_populated_0033_preserves_all_existing_rows_when_upgrading_to_0034(
     assert all(target_rows[table] == () for table in REVIEWS_TABLES)
     with migration_harness.engine.connect() as connection:
         assert connection.scalar(text("SELECT version_num FROM alembic_version")) == REVIEWS_HEAD
+
+    migration = _run_migration(migration_harness.environment, REVIEW_INVITATIONS_HEAD)
+    assert migration.returncode == 0, "review invitation migration failed in the isolated schema"
+    target_rows = _public_rows(migration_harness.engine)
+    assert set(target_rows) == set(source_rows) | REVIEWS_TABLES | REVIEW_INVITATIONS_TABLES
+    for table, rows in source_rows.items():
+        assert target_rows[table] == rows, f"migration changed existing rows in {table}"
+    assert all(target_rows[table] == () for table in REVIEW_INVITATIONS_TABLES)
+    with migration_harness.engine.connect() as connection:
+        assert (
+            connection.scalar(text("SELECT version_num FROM alembic_version"))
+            == REVIEW_INVITATIONS_HEAD
+        )
