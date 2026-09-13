@@ -100,6 +100,14 @@ const approvedActivityWithMedia: ActivityResponse = {
       manifest_url: null,
       progressive_url: "https://media.example.test/approved-lesson.mp4",
     },
+    provenance: {
+      label: "Technical playback test — not course instruction",
+      title: "Big Buck Bunny — Sunflower",
+      attribution:
+        "Blender Foundation 2008, Janus Bager Kristensen 2013; Big Buck Bunny, Sunflower version",
+      license: "Creative Commons Attribution 3.0",
+      license_url: "https://creativecommons.org/licenses/by/3.0/",
+    },
     playback_available: true,
   },
 };
@@ -252,6 +260,27 @@ describe("learning loop video runtime", () => {
     expect(resolvedApproved.media?.captions).toHaveLength(1);
     expect(resolvedApproved.media?.captions?.[0].src).toBe(
       "https://media.example.test/approved-captions.vtt",
+    );
+  });
+
+  it("renders the server-owned technical playback disclosure beside the player", () => {
+    const html = renderToStaticMarkup(
+      createElement(VideoViewer, {
+        activity: approvedActivityWithMedia,
+        api,
+        moduleHref: "/learn/module-1",
+      }),
+    );
+    expect(html).toContain("Technical playback test — not course instruction");
+    expect(html).toContain("Big Buck Bunny — Sunflower");
+    expect(html).toContain(
+      "Blender Foundation 2008, Janus Bager Kristensen 2013; Big Buck Bunny, Sunflower version",
+    );
+    expect(html).toContain(
+      'href="https://creativecommons.org/licenses/by/3.0/"',
+    );
+    expect(html.indexOf("momentum-video-viewer__provenance")).toBeLessThan(
+      html.indexOf("momentum-video-player"),
     );
   });
 

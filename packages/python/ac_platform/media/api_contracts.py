@@ -373,6 +373,24 @@ class MediaDeliveryResponse(StrictModel):
     progressive_url: str | None = None
 
 
+class ActivityMediaProvenanceResponse(StrictModel):
+    """Server-owned disclosure for an approved technical playback asset.
+
+    Every field is intentionally closed to the reviewed notice. Learner
+    clients cannot turn filenames, URLs, or upload metadata into an
+    attribution claim.
+    """
+
+    label: Literal["Technical playback test — not course instruction"]
+    title: Literal["Big Buck Bunny — Sunflower"]
+    attribution: Literal[
+        "Blender Foundation 2008, Janus Bager Kristensen 2013; "
+        "Big Buck Bunny, Sunflower version"
+    ]
+    license: Literal["Creative Commons Attribution 3.0"]
+    license_url: Literal["https://creativecommons.org/licenses/by/3.0/"]
+
+
 class ActivityMediaDescriptorResponse(StrictModel):
     """Server-authorized activity media metadata for learner rendering.
 
@@ -395,6 +413,7 @@ class ActivityMediaDescriptorResponse(StrictModel):
     renditions: list[RenditionResponse] = Field(default_factory=list)
     captions: list[CaptionResponse] = Field(default_factory=list)
     delivery: MediaDeliveryResponse | None = None
+    provenance: ActivityMediaProvenanceResponse | None = None
     playback_available: bool = False
 
 
@@ -430,6 +449,7 @@ __all__ = [
     "ActivityMediaBindingRequest",
     "ActivityMediaBindingResponse",
     "ActivityMediaDescriptorResponse",
+    "ActivityMediaProvenanceResponse",
     "AvatarVariantResponse",
     "CaptionCreateRequest",
     "CaptionResponse",

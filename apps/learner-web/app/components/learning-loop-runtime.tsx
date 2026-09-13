@@ -42,6 +42,7 @@ import {
 import {
   ApiError,
   type ActivityResponse,
+  type ActivityMediaProvenance,
   type LearnerApi,
   type PlaybackEventInput,
 } from "../lib/learner-api";
@@ -1227,6 +1228,26 @@ function VideoViewerHeading({
         <h2 id={`video-title-${activity.id}`}>{activity.title}</h2>
       </div>
     </div>
+  );
+}
+
+function TechnicalPlaybackDisclosure({
+  provenance,
+}: {
+  provenance: ActivityMediaProvenance;
+}) {
+  return (
+    <aside
+      className="momentum-video-viewer__provenance"
+      aria-label="Media provenance"
+    >
+      <strong>{provenance.label}</strong>
+      <span>{provenance.title}</span>
+      <span>{provenance.attribution}</span>
+      <a href={provenance.license_url} target="_blank" rel="noopener noreferrer">
+        {provenance.license}
+      </a>
+    </aside>
   );
 }
 
@@ -3304,6 +3325,10 @@ function VideoViewerSession({
       aria-labelledby={labelledBy ?? `video-title-${activity.id}`}
     >
       <VideoViewerHeading activity={activity} labelledBy={labelledBy} />
+
+      {activity.media?.provenance ? (
+        <TechnicalPlaybackDisclosure provenance={activity.media.provenance} />
+      ) : null}
 
       <div
         ref={playerRef}

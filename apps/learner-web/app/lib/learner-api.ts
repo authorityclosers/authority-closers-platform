@@ -479,7 +479,16 @@ export interface ActivityMediaDescriptor {
     manifest_url: string | null;
     progressive_url: string | null;
   } | null;
+  provenance?: ActivityMediaProvenance | null;
   playback_available: boolean;
+}
+
+export interface ActivityMediaProvenance {
+  label: "Technical playback test — not course instruction";
+  title: "Big Buck Bunny — Sunflower";
+  attribution: "Blender Foundation 2008, Janus Bager Kristensen 2013; Big Buck Bunny, Sunflower version";
+  license: "Creative Commons Attribution 3.0";
+  license_url: "https://creativecommons.org/licenses/by/3.0/";
 }
 
 export interface DraftResponse {
