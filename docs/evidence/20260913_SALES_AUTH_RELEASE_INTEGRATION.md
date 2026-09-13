@@ -17,3 +17,7 @@ Media activation source5c8b392 integrated as2358e3c; actual scanner upgrade, cle
 ## Linux CI typing correction
 
 Accepted source3fd938f6ebee7632d8c4cee153d48e237734137a after CI34731375657 exposed platform-stub errors in WinDLL and the Windows/POSIX file-lock branches. The correction adds narrowly scoped attr-defined/unused-ignore annotations and formatting only. Root inspected the full diff; the UI reviewer confirmed identical executable Python AST against48b4d71. Source full237-file mypy passes both native Windows and explicit Linux platforms; Ruff lint/format passes. Runtime process-tree ownership and filesystem fencing behavior are unchanged. Mandatory exact Linux CI will rerun before deployment.
+
+## Full Linux test corrections
+
+CI34731858764 passed formatting, lint, types, all frontend suites, scanner, privilege and migration/recovery gates; full Python tests exposed38failures and9errors with4711passed. Accepted source db5c5932cc246ca1e595b6179beca0d2c99de5ae corrects three stale test contracts: all14already-mapped conversation tables in the registry expectation; intentional codec/filesystem CI prerequisite naming and packages; and the extracted public-film shell harness's filesystem selector stub. Runtime source is unchanged. Author's focused tests45passed/3environment skips and Ruff passed; root reviewed the full diff. The Linux CI retry must exercise those platform-specific harness cases.
