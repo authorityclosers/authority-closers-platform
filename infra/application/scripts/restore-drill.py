@@ -211,6 +211,13 @@ INFERENCE_PARITY_MIGRATION_HEAD = "20260913_0031"
 INFERENCE_PARITY_CONTRACT = "ac-postgres-parity-v11"
 INFERENCE_PARITY_NEW_TABLES = ("conversation_inference_tasks",)
 INFERENCE_PARITY_TABLES = SALES_XRAY_PARITY_TABLES + INFERENCE_PARITY_NEW_TABLES
+PLANS_PARITY_MIGRATION_HEAD = "20260913_0032"
+PLANS_PARITY_CONTRACT = "ac-postgres-parity-v12"
+PLANS_PARITY_NEW_TABLES = (
+    "conversation_processing_plans",
+    "conversation_plan_stage_authorizations",
+)
+PLANS_PARITY_TABLES = INFERENCE_PARITY_TABLES + PLANS_PARITY_NEW_TABLES
 # The first migration rehearsal is deliberately an exact reviewed transition.
 # Do not infer a source/target pair from lexical revision ordering.
 MIGRATION_REHEARSAL_SOURCE_HEAD = COMMUNITY_PARITY_MIGRATION_HEAD
@@ -219,19 +226,20 @@ SALES_XRAY_REHEARSAL_SOURCE_HEAD = APP_UPDATES_PARITY_MIGRATION_HEAD
 SALES_XRAY_REHEARSAL_TARGET_HEAD = SALES_XRAY_PARITY_MIGRATION_HEAD
 INFERENCE_REHEARSAL_SOURCE_HEAD = SALES_XRAY_PARITY_MIGRATION_HEAD
 INFERENCE_REHEARSAL_TARGET_HEAD = INFERENCE_PARITY_MIGRATION_HEAD
+PLANS_REHEARSAL_SOURCE_HEAD = INFERENCE_PARITY_MIGRATION_HEAD
+PLANS_REHEARSAL_TARGET_HEAD = PLANS_PARITY_MIGRATION_HEAD
 # Production is currently at 0029. Keep a direct rehearsal contract for the
 # candidate image that upgrades through both reviewed Sales Xray migrations in
 # one isolated target; do not require an intermediate application deployment.
 DIRECT_SALES_XRAY_REHEARSAL_SOURCE_HEAD = APP_UPDATES_PARITY_MIGRATION_HEAD
 DIRECT_SALES_XRAY_REHEARSAL_TARGET_HEAD = INFERENCE_PARITY_MIGRATION_HEAD
-DIRECT_SALES_XRAY_REHEARSAL_NEW_TABLES = (
-    SALES_XRAY_PARITY_NEW_TABLES + INFERENCE_PARITY_NEW_TABLES
-)
+DIRECT_SALES_XRAY_REHEARSAL_NEW_TABLES = SALES_XRAY_PARITY_NEW_TABLES + INFERENCE_PARITY_NEW_TABLES
 MIGRATION_REHEARSAL_PAIRS = frozenset(
     {
         (MIGRATION_REHEARSAL_SOURCE_HEAD, MIGRATION_REHEARSAL_TARGET_HEAD),
         (SALES_XRAY_REHEARSAL_SOURCE_HEAD, SALES_XRAY_REHEARSAL_TARGET_HEAD),
         (INFERENCE_REHEARSAL_SOURCE_HEAD, INFERENCE_REHEARSAL_TARGET_HEAD),
+        (PLANS_REHEARSAL_SOURCE_HEAD, PLANS_REHEARSAL_TARGET_HEAD),
         (
             DIRECT_SALES_XRAY_REHEARSAL_SOURCE_HEAD,
             DIRECT_SALES_XRAY_REHEARSAL_TARGET_HEAD,
@@ -276,6 +284,7 @@ VERSIONED_PARITY_CONTRACTS = {
         INFERENCE_PARITY_CONTRACT,
         INFERENCE_PARITY_TABLES,
     ),
+    PLANS_PARITY_MIGRATION_HEAD: (PLANS_PARITY_CONTRACT, PLANS_PARITY_TABLES),
 }
 
 
@@ -1934,14 +1943,23 @@ def _assert_migration_rehearsal_transition(
                 "migration rehearsal new-table contract is not the reviewed 0030/0031 pair"
             )
     elif (source_head, target_head) == (
+        PLANS_REHEARSAL_SOURCE_HEAD,
+        PLANS_REHEARSAL_TARGET_HEAD,
+    ):
+        if source_derivations:
+            raise DrillError("Processing-plan rehearsal does not accept source derivations")
+        expected_new_counts = {table: 0 for table in PLANS_PARITY_NEW_TABLES}
+        if expected_new_tables != set(expected_new_counts):
+            raise DrillError(
+                "migration rehearsal new-table contract is not the reviewed 0031/0032 pair"
+            )
+    elif (source_head, target_head) == (
         DIRECT_SALES_XRAY_REHEARSAL_SOURCE_HEAD,
         DIRECT_SALES_XRAY_REHEARSAL_TARGET_HEAD,
     ):
         if source_derivations:
             raise DrillError("direct Sales Xray rehearsal does not accept source derivations")
-        expected_new_counts = {
-            table: 0 for table in DIRECT_SALES_XRAY_REHEARSAL_NEW_TABLES
-        }
+        expected_new_counts = {table: 0 for table in DIRECT_SALES_XRAY_REHEARSAL_NEW_TABLES}
         if expected_new_tables != set(expected_new_counts):
             raise DrillError(
                 "migration rehearsal new-table contract is not the reviewed direct 0029/0031 pair"
@@ -2445,6 +2463,7 @@ def build_parser() -> argparse.ArgumentParser:
             MIGRATION_REHEARSAL_SOURCE_HEAD,
             SALES_XRAY_REHEARSAL_SOURCE_HEAD,
             INFERENCE_REHEARSAL_SOURCE_HEAD,
+            PLANS_REHEARSAL_SOURCE_HEAD,
         ),
         help="exact prior migration head for an explicitly reviewed isolated rehearsal",
     )

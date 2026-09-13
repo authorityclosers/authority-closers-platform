@@ -49,6 +49,11 @@ SALES_XRAY_TABLES = {
 }
 INFERENCE_HEAD = "20260913_0031"
 INFERENCE_TABLES = {"conversation_inference_tasks"}
+PLANS_HEAD = "20260913_0032"
+PLANS_TABLES = {
+    "conversation_processing_plans",
+    "conversation_plan_stage_authorizations",
+}
 DEDICATED_DATABASE_PREFIX = "ac_migration_rehearsal_"
 DEDICATED_HOST = "127.0.0.1"
 DEDICATED_PORT = 55432
@@ -410,3 +415,42 @@ def test_populated_0029_directly_preserves_all_rows_when_upgrading_to_0031(
     assert all(target_rows[table] == () for table in SALES_XRAY_TABLES | INFERENCE_TABLES)
     with migration_harness.engine.connect() as connection:
         assert connection.scalar(text("SELECT version_num FROM alembic_version")) == INFERENCE_HEAD
+
+
+def test_populated_0031_preserves_all_existing_rows_when_upgrading_to_0032(
+    migration_harness: _MigrationHarness,
+) -> None:
+    _seed_populated_0027(migration_harness.engine)
+    migration = _run_migration(migration_harness.environment, TARGET_HEAD)
+    assert migration.returncode == 0, "prior-head migration failed in the isolated schema"
+    with Session(migration_harness.engine) as database:
+        memberships = database.scalars(select(Membership)).all()
+        database.add_all(
+            AppUpdateReadReceipt(
+                tenant_id=membership.tenant_id,
+                person_id=membership.person_id,
+                release_id="migration-rehearsal-plans-0029",
+            )
+            for membership in memberships
+        )
+        database.commit()
+    migration = _run_migration(migration_harness.environment, SALES_XRAY_HEAD)
+    assert migration.returncode == 0, "Sales Xray migration failed in the isolated schema"
+    migration = _run_migration(migration_harness.environment, INFERENCE_HEAD)
+    assert migration.returncode == 0, "inference migration failed in the isolated schema"
+    source_rows = _public_rows(migration_harness.engine)
+    assert set(source_rows) & INFERENCE_TABLES
+    assert not set(source_rows) & PLANS_TABLES
+    with migration_harness.engine.connect() as connection:
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == INFERENCE_HEAD
+
+    migration = _run_migration(migration_harness.environment, PLANS_HEAD)
+
+    assert migration.returncode == 0, "processing-plan migration failed in the isolated schema"
+    target_rows = _public_rows(migration_harness.engine)
+    assert set(target_rows) == set(source_rows) | PLANS_TABLES
+    for table, rows in source_rows.items():
+        assert target_rows[table] == rows, f"migration changed existing rows in {table}"
+    assert all(target_rows[table] == () for table in PLANS_TABLES)
+    with migration_harness.engine.connect() as connection:
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == PLANS_HEAD

@@ -107,6 +107,8 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "community_connection_events",
         "community_blocks",
         "community_reports",
+        "conversation_processing_plans",
+        "conversation_plan_stage_authorizations",
     }
 
     assert set(model_metadata().tables) == expected
