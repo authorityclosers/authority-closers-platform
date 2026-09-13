@@ -14,10 +14,11 @@ import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
+from ac_platform.conversation_intelligence.report_claims import require_qualitative_claims
 from ac_platform.conversation_intelligence.report_overview import (
     OVERVIEW_FORMAT,
     OVERVIEW_INSTRUCTION,
@@ -152,6 +153,11 @@ class ReportDraft(_StrictModel):
     dimensions: list[ReportDimension] = Field(min_length=8, max_length=8)
     report_sections: list[ReportSection] = Field(min_length=9, max_length=9)
     overview: DetailedOverview | None = Field(default=None, exclude_if=lambda value: value is None)
+
+    @model_validator(mode="after")
+    def qualitative_prose(self) -> Self:
+        require_qualitative_claims(self.model_dump())
+        return self
 
 
 @dataclass(frozen=True)

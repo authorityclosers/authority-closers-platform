@@ -161,3 +161,40 @@ def test_detailed_response_allocation_cannot_raise_the_owner_approved_cap() -> N
     for maximum in [True, 0, 255, 4001]:
         with pytest.raises(ValueError, match="report_stage_limit_invalid"):
             stage_completion_limit("C5", maximum)
+
+
+@pytest.mark.parametrize(
+    "claim",
+    [
+        "Score 9/10; projected revenue 50000",
+        "Your rating is ９ out of １０.",
+        "The projected annual revenue is ₹50,000.",
+        "Expected profit: 5000 INR.",
+        "स्कोर: ९/१०",
+        "अनुमानित राजस्व ५०००० है।",
+    ],
+)
+@pytest.mark.parametrize("field", ["summary", "overview"])
+def test_explicit_numeric_claims_cannot_hide_in_model_prose(claim, field):
+    transcript = _transcript()
+    payload = _payload(transcript)
+    payload["overview"] = overview_for(payload)
+    if field == "overview":
+        payload[field]["final_assessment"]["assessment"] = claim
+    else:
+        payload[field] = claim
+    with pytest.raises(ReportError):
+        parse_report_draft(payload, transcript)
+
+
+def test_source_prices_and_action_counts_are_preserved_without_inventing_revenue():
+    transcript = _transcript()
+    transcript["segments"][0]["text"] = (
+        "Buyer: Our old provider had a score 9/10 and a price ₹5000."
+    )
+    payload = _payload(transcript)
+    payload["overview"] = overview_for(payload)
+    payload["summary"] = "The buyer discusses a price of ₹5000. Ask 1 clarification question."
+    result = parse_report_draft(payload, transcript)
+    assert result.summary == payload["summary"]
+    assert result.strengths[0].evidence[0].quote == payload["strengths"][0]["evidence"][0]["quote"]

@@ -321,21 +321,19 @@ export function DipakOverview({ report, onSelectEvidence }: Props) {
                   </>
                 );
               })()}
-              {index < 2 && (
-                <div className={styles.impact}>
-                  <TrendingUp size={16} aria-hidden="true" />
-                  <div>
-                    <strong>Business impact</strong>
-                    <p>Insufficient data for a reliable estimate.</p>
-                    <small>
-                      {detail?.improvement_details
-                        .find((item) => item.finding_index === index)
-                        ?.business_impact.missing_inputs.join(" · ") ??
-                        "Lead volume, conversion history and time or revenue data are needed to calculate this."}
-                    </small>
-                  </div>
+              <div className={styles.impact}>
+                <TrendingUp size={16} aria-hidden="true" />
+                <div>
+                  <strong>Business impact</strong>
+                  <p>Insufficient data for a reliable estimate.</p>
+                  <small>
+                    {detail?.improvement_details
+                      .find((item) => item.finding_index === index)
+                      ?.business_impact.missing_inputs.join(" · ") ??
+                      "Lead volume, conversion history and time or revenue data are needed to calculate this."}
+                  </small>
                 </div>
-              )}
+              </div>
             </ReviewBlock>
           ))
         ) : (

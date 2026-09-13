@@ -183,6 +183,44 @@ it("does not relabel unselected strengths as assessed golden moments", async () 
   expect(container.querySelector('[data-review-point="08"] button')).toBeNull();
 });
 
+it("shows the impact limitations for the third detailed priority too", async () => {
+  const source = structuredClone(fixture.report);
+  source.improvements = Array.from({ length: 3 }, (_, index) => ({
+    ...structuredClone(source.improvements[0]),
+    title: `Priority ${index + 1}`,
+  }));
+  source.overview.improvement_details = Array.from(
+    { length: 3 },
+    (_, index) => ({
+      ...structuredClone(source.overview.improvement_details[0]),
+      finding_index: index,
+      business_impact: {
+        status: "insufficient_data",
+        missing_inputs: [`Missing history for priority ${index + 1}`],
+      },
+    }),
+  );
+  const value = parseJobResponse(
+    {
+      id: "synthetic-run",
+      state: "completed",
+      message: "Ready",
+      report: source,
+    },
+    {
+      sourceSha256: fixture.transcript.source_sha256,
+      durationMs: fixture.transcript.duration_ms,
+      transcript: fixture.transcript,
+    },
+  ).report!;
+  await render(value);
+  const third = container.querySelector('[data-review-point="04"]');
+  expect(third?.textContent).toContain(
+    "Insufficient data for a reliable estimate.",
+  );
+  expect(third?.textContent).toContain("Missing history for priority 3");
+});
+
 it("replays literal mixed-script evidence with its exact source span and no HTML execution", async () => {
   const value = report();
   await render(value);
