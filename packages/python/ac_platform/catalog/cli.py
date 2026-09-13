@@ -334,7 +334,7 @@ async def _execute(args: argparse.Namespace) -> dict[str, Any]:
                     approval_reference=args.approval_reference,
                     supersedes_binding_id=args.supersedes_binding_id,
                 )
-            return asdict(result)
+            return result if isinstance(result, dict) else asdict(result)
     finally:
         await engine.dispose()
 

@@ -7,6 +7,17 @@ operations tenant in Coach. Session cookies and database URLs stay in the
 private operator environment and are never placed in commands, receipts, or
 logs.
 
+## Runtime pin
+
+Run the source-owned commands from the reviewed application checkout at Git
+SHA `41d3c57` (the running application release). The prerequisite command is
+the source follow-up at `47772ce9e8c06b87a1f0693b315a325c83cdd246`, already
+compatible with schema 31; install it through the normal release path and do
+not edit container image files or add a compose overlay. Use the existing
+audited SSH stdin/session handoff. The command resolves the authenticated
+session and role projection itself; never pass a caller-supplied actor,
+cookie, database URL, or capability set on the command line.
+
 ## Frozen source manifest
 
 The read-only staging export was validated from the current global version:
@@ -120,6 +131,7 @@ guarded `add_module_prerequisite`, derives a deterministic edge ID, and writes
 one immutable audit receipt in the same transaction.
 
 ```text
+AC_ENVIRONMENT=staging AC_OPERATIONS_TENANT_ID=f5386fc3-033d-4e75-a333-7774381cb4d5 \
 python3 -m ac_platform.catalog.cli wire-prerequisite \
   --environment staging \
   --program-id <source_program_id> \
@@ -149,10 +161,29 @@ second production source. Wire the three prerequisite edges with command IDs
 `6cc5db79-425d-5605-afac-d0a19de95b13`, `f9db629e-0994-58c5-8962-d6ab166285bd`,
 and `3474fbb5-a08b-55fc-97de-8daea208dd97`.
 
-The source may remain a draft for the existing-global adoption path. The
-existing global version already carries its independently reviewed provenance;
-adoption does not rewrite that version or fabricate a review of the tenant
-draft.
+Use the same command for each edge, with the returned source version and
+module IDs, and include the production confirmation flag:
+
+```text
+AC_ENVIRONMENT=production AC_OPERATIONS_TENANT_ID=fb594dea-fdb6-444c-a36f-1d94fbc65bbf \
+python3 -m ac_platform.catalog.cli wire-prerequisite \
+  --environment production --allow-production \
+  --program-id a1993f11-f43d-446a-821f-550bc40b950c \
+  --program-version-id <source_version_id> \
+  --module-id <module_2_id> \
+  --prerequisite-module-id <module_1_id> \
+  --command-id 6cc5db79-425d-5605-afac-d0a19de95b13 \
+  --reason "Wire reviewed production Free Course prerequisite graph"
+```
+
+Replace only the module pair and command ID for M3→M2 and M4→M3. The source
+version and module IDs must come from the authenticated authoring receipts.
+
+For staging, the source may remain a draft because the existing-global
+adoption path uses the global version's independent reviewed provenance.
+Adoption does not rewrite that version or fabricate a review of the tenant
+draft. Production has no existing global course and must use the reviewed
+`publish` command below after its source review is complete.
 
 ## Media and existing-global adoption
 
@@ -196,14 +227,31 @@ python3 -m ac_platform.catalog.cli promote-media \
   --approval-reference AC-STAGING-FREE-COURSE-20260913
 ```
 
-The production equivalents use source program
-`a1993f11-f43d-446a-821f-550bc40b950c`, operations tenant
+Production has no existing global course. After the source draft is complete,
+publish it through the reviewed command `0cf4c903-c6fb-4637-a01e-9818abfd71f1`:
+
+```text
+AC_ENVIRONMENT=production AC_OPERATIONS_TENANT_ID=fb594dea-fdb6-444c-a36f-1d94fbc65bbf \
+python3 -m ac_platform.catalog.cli publish \
+  --environment production --allow-production \
+  --source-program-id a1993f11-f43d-446a-821f-550bc40b950c \
+  --public-tenant-id c1d51741-6e0f-4ddc-8cc4-58856d0e778f \
+  --command-id 0cf4c903-c6fb-4637-a01e-9818abfd71f1 \
+  --reason "Publish reviewed production Free Course source" \
+  --source-ref <actual-controlled-review-reference> \
+  --release-id a49e4f0c2f348bedb9c34820fb681a29ddc6d16b \
+  --reviewed-at 2026-08-28T18:30:00+00:00
+```
+
+Use the returned `program_id`, `program_version_id`, and
+`video_activity_id` as the production target values. The first actual
+production media promotion keeps command ID
+`3aa3729f-65c4-53b5-83a3-fbf1a9234d32`, and uses the returned
+`video_activity_id`, the READY upload IDs, operations tenant
 `fb594dea-fdb6-444c-a36f-1d94fbc65bbf`, public tenant
-`c1d51741-6e0f-4ddc-8cc4-58856d0e778f`, and the verified production media
-owner `033b7038-154a-4e5a-8a23-8d5ffeec2b4b`. Use adoption command
-`13f83b37-5934-5151-9abd-7348802cce96` and promotion command
-`3aa3729f-65c4-53b5-83a3-fbf1a9234d32` after the production draft has its
-three missing modules and the source upload is READY.
+`c1d51741-6e0f-4ddc-8cc4-58856d0e778f`, and verified media owner
+`033b7038-154a-4e5a-8a23-8d5ffeec2b4b`. Do not use the unused adoption ID
+`13f83b37-5934-5151-9abd-7348802cce96`.
 
 Promotion must use the authenticated source operator as media owner. In
 staging that is person `311f4bd2-7b8b-4f45-99f0-a2aed83bc95a`; the personal
