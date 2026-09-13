@@ -43,6 +43,10 @@ MAX_SOURCE_BYTES = 2_000_000_000
 MAX_RESPONSE_BYTES = 1 * 1024 * 1024
 REMOTE_CONTROL_TIMEOUT_SECONDS = 30.0
 REMOTE_VIDEO_TIMEOUT_SECONDS = 1800.0
+REMOTE_COMPLETION_OVERHEAD_SECONDS = 120.0
+REMOTE_COMPLETION_TIMEOUT_SECONDS = (
+    REMOTE_VIDEO_TIMEOUT_SECONDS + REMOTE_COMPLETION_OVERHEAD_SECONDS
+)
 REMOTE_EXIT_GRACE_SECONDS = 30.0
 MAX_POLL_SECONDS = 60.0
 MAX_POLL_TIMEOUT_SECONDS = 3600.0
@@ -359,6 +363,16 @@ def _run_remote(
     stdout_buffer = bytearray()
     stdout_overflow = False
     stdout_error: BaseException | None = None
+    deadline_expired = threading.Event()
+
+    def expire_process() -> None:
+        deadline_expired.set()
+        with suppress(Exception):
+            process.kill()
+
+    deadline_timer = threading.Timer(wait_timeout_seconds, expire_process)
+    deadline_timer.daemon = True
+    deadline_timer.start()
 
     def collect_stdout() -> None:
         nonlocal stdout_overflow, stdout_error
@@ -381,6 +395,15 @@ def _run_remote(
 
     reader = threading.Thread(target=collect_stdout, daemon=True)
     reader.start()
+
+    def stop_process() -> None:
+        deadline_timer.cancel()
+        with suppress(Exception):
+            process.kill()
+        with suppress(Exception):
+            process.wait(timeout=10)
+        reader.join(timeout=10)
+
     try:
         stdin.write(cookie.encode("ascii") + b"\n")
         if body:
@@ -400,32 +423,25 @@ def _run_remote(
         # Detach the closed handle from Popen's lifecycle before waiting.
         process.stdin = None
     except (BrokenPipeError, OSError) as error:
-        with suppress(Exception):
-            process.kill()
-        with suppress(Exception):
-            process.wait(timeout=10)
-        reader.join(timeout=10)
+        timed_out = deadline_expired.is_set()
+        stop_process()
+        if timed_out:
+            raise UploadOperatorError("The SSH/API command timed out.") from error
         raise UploadOperatorError(
             "The SSH/API stream closed before the upload completed."
         ) from error
     except UploadOperatorError:
-        with suppress(Exception):
-            stdin.close()
-        with suppress(Exception):
-            process.kill()
-        with suppress(Exception):
-            process.wait(timeout=10)
-        reader.join(timeout=10)
+        stop_process()
         raise
     try:
         process.wait(timeout=wait_timeout_seconds)
     except subprocess.TimeoutExpired as error:
-        with suppress(Exception):
-            process.kill()
-        with suppress(Exception):
-            process.wait(timeout=10)
-        reader.join(timeout=10)
+        stop_process()
         raise UploadOperatorError("The SSH/API command timed out.") from error
+    if deadline_expired.is_set():
+        stop_process()
+        raise UploadOperatorError("The SSH/API command timed out.")
+    deadline_timer.cancel()
     reader.join(timeout=10)
     if reader.is_alive():
         raise UploadOperatorError("The SSH API response reader did not finish.")
@@ -602,7 +618,7 @@ def complete_and_poll(
         ssh_binary=ssh_binary,
         method="POST",
         idempotency_key=key,
-        timeout_seconds=REMOTE_VIDEO_TIMEOUT_SECONDS,
+        timeout_seconds=REMOTE_COMPLETION_TIMEOUT_SECONDS,
     )
     if not isinstance(response, dict):
         raise UploadOperatorError("The completion response was not an object.")

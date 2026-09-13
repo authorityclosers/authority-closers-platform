@@ -295,6 +295,29 @@ def test_real_subprocess_timeout_is_injected_and_bounded(
         )
 
 
+def test_real_subprocess_deadline_covers_blocking_stdin_write(
+    uploader: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real_popen = uploader.subprocess.Popen
+
+    def local_process(_args, **kwargs):
+        return real_popen(
+            [sys.executable, "-c", "import time; time.sleep(1)"],
+            **kwargs,
+        )
+
+    monkeypatch.setattr(uploader.subprocess, "Popen", local_process)
+    with pytest.raises(uploader.UploadOperatorError, match="timed out"):
+        uploader._run_remote(
+            ssh_target="ac",
+            command="safe-command",
+            cookie="F" * 43,
+            stream=io.BytesIO(b"x" * (2 * 1024 * 1024)),
+            stream_bytes=2 * 1024 * 1024,
+            wait_timeout_seconds=0.05,
+        )
+
+
 def test_real_subprocess_response_is_stopped_at_bounded_limit(
     uploader: ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
