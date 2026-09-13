@@ -300,11 +300,14 @@ async def test_deployed_http_pilot_keeps_durable_contract_and_excludes_stateless
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url=origin) as client:
         sets_response = await client.get("/v1/practice/sets")
         assert sets_response.status_code == 200
-        assert [item["id"] for item in sets_response.json()["items"]] == [
+        listed_ids = [item["id"] for item in sets_response.json()["items"]]
+        assert len(listed_ids) == 11
+        assert listed_ids[-3:] == [
             "india-daily-english",
             "india-daily-hinglish",
             "india-daily-marlish",
         ]
+        assert {"match", "gaps", "dialogue"}.issubset(listed_ids)
         published = await client.get("/v1/practice/sets/india-daily-english")
         assert published.status_code == 200 and published.json()["mode"] == "published"
         assert (await client.get("/v1/practice/sets/gaps")).status_code == 200
