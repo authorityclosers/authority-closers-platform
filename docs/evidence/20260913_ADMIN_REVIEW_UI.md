@@ -135,3 +135,5 @@ SC2016 annotation explaining that behavior. Shell syntax is unchanged and passed
 On this Windows host, 17 hosted lifecycle tests passed and 16 POSIX ownership
 tests were skipped. The merged release repair requires those ownership tests
 under root in a separate Linux CI gate; the skips do not satisfy that gate.
+ShellCheck 0.11.0 subsequently passed on every tracked shell script using the
+official Windows release archive verified against its published SHA-256 digest.
