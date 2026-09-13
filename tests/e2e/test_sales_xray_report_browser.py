@@ -55,10 +55,7 @@ from tests.database.test_conversation_reporting_pipeline_postgresql import (
     enqueue,
     text_quote,
 )
-from tests.database.test_conversation_reports_postgresql import (
-    _build_fixture,
-    shared_import_for_fixture,
-)
+from tests.database.test_conversation_reports_postgresql import _build_fixture
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -198,11 +195,13 @@ def _make_live_backend(
                     )
                 )
                 if mode == "imported":
-                    await shared_import_for_fixture(
-                        database,
-                        fixture,
+                    await ConversationReports(
+                        ConversationApplication(database)
+                    ).import_internal_draft(
                         fixture.actor,
+                        prepared.run_id,
                         fixture.intent,
+                        storage=prepared.storage,
                         key="synthetic-browser-prepared-draft",
                     )
             app = FastAPI(docs_url=None, redoc_url=None)

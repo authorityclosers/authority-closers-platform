@@ -36,10 +36,7 @@ from ac_platform.identity.models import Session as IdentitySession
 from tests.database.test_conversation_intake_postgresql import policy
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
 from tests.database.test_conversation_postgresql import run, seed
-from tests.database.test_conversation_reports_postgresql import (
-    _build_fixture,
-    shared_provider_admin_context,
-)
+from tests.database.test_conversation_reports_postgresql import _build_fixture
 
 
 @pytest.fixture(scope="module")
@@ -69,10 +66,8 @@ def test_cookie_authenticated_saved_report_history_transcript_and_private_playba
             email_challenge_secret=secrets.token_urlsafe(32),
         )
         runtime = ConversationIntakeRuntime(
-            replace(
-                policy(prepared.scope_id, prepared.state.tenant_id),
-                acoustic_recipe=AUDIOATLAS_HOSTED_RECIPE,
-            ),
+            replace(policy(prepared.scope_id, prepared.state.tenant_id),
+                    acoustic_recipe=AUDIOATLAS_HOSTED_RECIPE),
             prepared.storage,
             prepared.scratch,
         )
@@ -121,17 +116,10 @@ def test_cookie_authenticated_saved_report_history_transcript_and_private_playba
                     assert (await client.get(path)).status_code == 401
                 stale_run = await client.post(
                     f"{root}/runs",
-                    headers={
-                        **cookie(token),
-                        "Origin": "http://learner.test",
-                        "Idempotency-Key": "stale-recipe-after-cutover",
-                    },
-                    json={
-                        "recording_id": str(prepared.recording_id),
-                        "source_revision": "1",
-                        "quote_id": str(prepared.quote_id),
-                        "recipe_revision": AUDIOATLAS_RECIPE,
-                    },
+                    headers={**cookie(token), "Origin": "http://learner.test",
+                             "Idempotency-Key": "stale-recipe-after-cutover"},
+                    json={"recording_id": str(prepared.recording_id), "source_revision": "1",
+                          "quote_id": str(prepared.quote_id), "recipe_revision": AUDIOATLAS_RECIPE},
                 )
                 assert stale_run.status_code == 409
                 assert "recipe changed" in stale_run.text
@@ -150,12 +138,11 @@ def test_cookie_authenticated_saved_report_history_transcript_and_private_playba
                     json=fixture.intent.model_dump(mode="json"),
                 )
                 assert blocked_origin.status_code == 403
-                with shared_provider_admin_context(fixture):
-                    imported = await client.post(
-                        f"http://admin.test{admin_path}",
-                        headers=admin_headers,
-                        json=fixture.intent.model_dump(mode="json"),
-                    )
+                imported = await client.post(
+                    f"http://admin.test{admin_path}",
+                    headers=admin_headers,
+                    json=fixture.intent.model_dump(mode="json"),
+                )
                 assert imported.status_code == 201, imported.text
                 assert imported.headers["cache-control"] == "private, no-store"
                 report = await client.get(report_path, headers=cookie(token))
