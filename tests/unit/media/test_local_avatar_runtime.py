@@ -186,6 +186,59 @@ def test_real_variants_crop_pixels_metadata_and_persistence(harness):
     assert runtime.service.get_profile_avatar(database, actor).avatar.delivery_url
 
 
+def test_avatar_copy_create_only_preserves_local_and_fallback_objects(tmp_path):
+    signer = MediaSigner(b"local-avatar-copy-tests-no-secrets-123456")
+    fallback = InMemoryPrivateObjectStorage(signer)
+    storage = LocalAvatarStorage(root=tmp_path / "avatar-objects", signer=signer, fallback=fallback)
+    prefix = "tenants/00000000-0000-0000-0000-000000000001/media/avatar"
+    person = "00000000-0000-0000-0000-000000000002"
+    source = f"{prefix}/{person}/00000000-0000-0000-0000-000000000003/original"
+    destination = f"{prefix}/{person}/00000000-0000-0000-0000-000000000004/original"
+    body = b"local-avatar-copy"
+    stored = storage.put(object_key=source, body=body, content_type="image/png")
+
+    copied = storage.copy(
+        source_key=source,
+        destination_key=destination,
+        content_type="image/png",
+    )
+    assert copied.object_key == destination
+    assert (
+        storage.copy(
+            source_key=source,
+            destination_key=destination,
+            content_type="image/png",
+        )
+        == copied
+    )
+    with pytest.raises(MediaConflict, match="destination already exists"):
+        storage.copy(
+            source_key=source,
+            destination_key=destination,
+            content_type="image/png",
+            create_only=True,
+        )
+    assert storage.read(destination) == body == storage.read(source)
+    assert stored.checksum_sha256 == copied.checksum_sha256
+
+    fallback_source, fallback_destination = "films/source", "films/destination"
+    fallback.put(object_key=fallback_source, body=body, content_type="video/mp4")
+    fallback.copy(
+        source_key=fallback_source,
+        destination_key=fallback_destination,
+        content_type="video/mp4",
+        create_only=True,
+    )
+    with pytest.raises(MediaStorageUnavailable):
+        storage.copy(
+            source_key=fallback_source,
+            destination_key=fallback_destination,
+            content_type="video/mp4",
+            create_only=True,
+        )
+    assert fallback.read(fallback_destination) == body
+
+
 def test_signed_read_requires_current_own_session_and_replacement_supersedes(harness):
     database, actor, runtime, _ = harness
     first, body = intent(harness)

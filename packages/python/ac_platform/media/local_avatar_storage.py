@@ -233,11 +233,28 @@ class LocalAvatarStorage:
             return metadata
 
     def copy(
-        self, *, source_key: str, destination_key: str, content_type: str
+        self,
+        *,
+        source_key: str,
+        destination_key: str,
+        content_type: str,
+        create_only: bool = False,
     ) -> StoredObjectMetadata:
-        return self.put(
-            object_key=destination_key, body=self.read(source_key), content_type=content_type
-        )
+        if type(create_only) is not bool:
+            raise MediaStorageUnavailable("The local avatar copy contract is invalid.")
+        if not self.owns(destination_key):
+            return self.fallback.copy(
+                source_key=source_key,
+                destination_key=destination_key,
+                content_type=content_type,
+                create_only=create_only,
+            )
+        with _LOCK:
+            if create_only and self._load(destination_key) is not None:
+                raise MediaConflict("The local avatar destination already exists.")
+            return self.put(
+                object_key=destination_key, body=self.read(source_key), content_type=content_type
+            )
 
     def delete(self, object_key: str) -> None:
         with _LOCK:
