@@ -74,3 +74,43 @@ requests one staging and one production run of the attached20m53sWhatsApp source
 ElevenLabsScribev2 plus GroqGPT-OSS120B, zero cost with no paid fallback, private
 VPS storage for one day followed by deletion. It remains pending at this receipt.
 Do not infer an approval from this document or the older proposal JSON.
+
+## Superseding observations at2026-09-13T16:18Z
+
+The complete99cdee5 application workflow34765395716 passed, including immutable
+core packaging. Artifact10320652107 was downloaded and verified with the
+source-owned bundle verifier. The application archive SHA256 is
+`a3a8984a8dd3a33dea95727856cf512519d4cd84043dd93a35823a7117634467`.
+It is preserved atD:/AC-authority-closers-release-audit/core-99cdee5-artifact.
+This supersedes the earlier packaging-running observation; it is not deployment.
+
+The standalone99cdee5 archive was verified on the VPS before Docker loading.
+Its manifest/reference is
+`sha256:d231438f99dea4e8cf1200d5936bd6d1f3db892c2684327fd8c7d47a64748529`.
+The baked release marker and verified manifest-to-configuration binding passed.
+The source-owned staging companion Compose profile was then used for an actual
+upgrade, rollback to the previous1bcb58f image, and restoration of99cdee5.
+All four observations (baseline, candidate, rollback, restored candidate) returned
+HTTP200 with their exact release identity and HTTP401 for anonymous workspaces.
+The container remained UID1000, read-only,384MiB-limited and without a host port.
+The final staging companion is99cdee5. Both core environments remained69db2257;
+no public routing, production companion or provider execution was changed.
+
+Machine-readable receipts:
+- D:/AC-authority-closers-release-audit/web-99cdee5-artifact/vps-image-preparation.json
+- D:/AC-authority-closers-release-audit/web-99cdee5-artifact/staging-companion-rollback.json
+
+The four focused learner navigation tests were rerun successfully under
+Node24.19.0, superseding the earlier unsupported-runtime limitation for those
+tests. Receipt:D:/AC-authority-closers-release-audit/learner-xray-nav-deduplicate-node24.xml.
+
+Current staging Admin browser requests returned a valid HTTP200 public provider
+catalog while the UI showed unavailable. The strict UI schema omitted the
+backend's `deployment` enum. Commit665b0d0 corrects that contract and adds the
+actual public response as a regression fixture with empty current configuration.
+Seven tests pass underNode24, including opening the model selector. The fix has
+not yet been deployed; see20260913_PROVIDER_CATALOG_LIVE_FIX.md.
+
+The report UX follow-up and dedicated database credential provisioner are still
+under independent review. No completed hosted upload/report, multilingual report
+translation, production analysis or standalone public publication is claimed.
