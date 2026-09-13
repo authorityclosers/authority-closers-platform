@@ -60,7 +60,10 @@ function idempotencyKey() {
   throw new Error("Secure review submission identity is unavailable.");
 }
 
-const lensCopy: Record<ReviewLens, Readonly<{ label: string; detail: string }>> = {
+const lensCopy: Record<
+  ReviewLens,
+  Readonly<{ label: string; detail: string }>
+> = {
   sales: { label: "Sales", detail: "Context and adjudication" },
   technical: { label: "Technical", detail: "Transcript and measurement" },
   ux: { label: "UX", detail: "Attribution and alignment" },
@@ -78,7 +81,9 @@ export function AssignedReviewForm({
     REVIEW_LENSES.includes(lens),
   );
   const [lens, setLens] = useState<ReviewLens>(firstLens ?? "sales");
-  const [clip, setClip] = useState<ReviewClip | null>(assignment.clips[0] ?? null);
+  const [clip, setClip] = useState<ReviewClip | null>(
+    assignment.clips[0] ?? null,
+  );
   const [feedback, setFeedback] = useState("");
   const [confidence, setConfidence] = useState("");
   const [submitState, setSubmitState] = useState<
@@ -89,12 +94,15 @@ export function AssignedReviewForm({
   >({ status: "idle" });
 
   const canSubmit = Boolean(
-    assignment.allowed_lenses.includes(lens) && feedback.trim() && confidence.trim(),
+    assignment.allowed_lenses.includes(lens) &&
+      feedback.trim() &&
+      confidence.trim(),
   );
 
   async function submit() {
     if (!canSubmit || submitState.status === "submitting") return;
-    const key = submitState.status === "error" ? submitState.key : idempotencyKey();
+    const key =
+      submitState.status === "error" ? submitState.key : idempotencyKey();
     const draft: ReviewProposalDraft = {
       assignment_id: assignment.assignment_id,
       recording_id: assignment.recording_id,
@@ -102,7 +110,11 @@ export function AssignedReviewForm({
       reviewer_id: assignment.reviewer.person_id,
       lens,
       clip: clip
-        ? { segment_id: clip.segment_id, start_ms: clip.start_ms, end_ms: clip.end_ms }
+        ? {
+            segment_id: clip.segment_id,
+            start_ms: clip.start_ms,
+            end_ms: clip.end_ms,
+          }
         : null,
       feedback: feedback.trim(),
       confidence: confidence.trim(),
@@ -141,11 +153,15 @@ export function AssignedReviewForm({
         </div>
         <div>
           <dt>Run revision</dt>
-          <dd><code>{assignment.run_revision}</code></dd>
+          <dd>
+            <code>{assignment.run_revision}</code>
+          </dd>
         </div>
         <div>
           <dt>Assignment</dt>
-          <dd><code>{assignment.assignment_id}</code></dd>
+          <dd>
+            <code>{assignment.assignment_id}</code>
+          </dd>
         </div>
       </dl>
 
@@ -155,7 +171,9 @@ export function AssignedReviewForm({
             <span className={styles.eyebrow}>Evidence</span>
             <h3>Listen to the exact moments</h3>
           </div>
-          <span className={styles.smallPill}>{assignment.clips.length} clips</span>
+          <span className={styles.smallPill}>
+            {assignment.clips.length} clips
+          </span>
         </div>
         {clip ? (
           <>
@@ -167,12 +185,20 @@ export function AssignedReviewForm({
               src={clip.playback_url}
               aria-label="Assigned conversation clip"
             />
-            <p className={styles.quote}>{clip.quote ?? "No transcript quote supplied."}</p>
+            <p className={styles.quote}>
+              {clip.quote ?? "No transcript quote supplied."}
+            </p>
           </>
         ) : (
-          <p className={styles.empty}>The server returned no playable clip for this assignment.</p>
+          <p className={styles.empty}>
+            The server returned no playable clip for this assignment.
+          </p>
         )}
-        <div className={styles.clipList} role="list" aria-label="Timestamped clips">
+        <div
+          className={styles.clipList}
+          role="list"
+          aria-label="Timestamped clips"
+        >
           {assignment.clips.map((candidate) => (
             <button
               type="button"
@@ -188,7 +214,10 @@ export function AssignedReviewForm({
               }}
             >
               <span>{candidate.segment_id}</span>
-              <span>{formatTimestamp(candidate.start_ms)}–{formatTimestamp(candidate.end_ms)}</span>
+              <span>
+                {formatTimestamp(candidate.start_ms)}–
+                {formatTimestamp(candidate.end_ms)}
+              </span>
             </button>
           ))}
         </div>
@@ -228,7 +257,9 @@ export function AssignedReviewForm({
             onChange={(event) => setFeedback(event.target.value)}
             placeholder="Capture the observable correction or feedback."
           />
-          <small>Draft stays in this assignment until the server accepts it.</small>
+          <small>
+            Draft stays in this assignment until the server accepts it.
+          </small>
         </label>
         <label>
           Confidence
@@ -249,13 +280,19 @@ export function AssignedReviewForm({
       {submitState.status === "saved" ? (
         <div className={styles.success} role="status">
           <strong>Proposal appended.</strong>
-          <span>Server cursor: <code>{submitState.receipt.cursor}</code></span>
+          <span>
+            Server cursor: <code>{submitState.receipt.cursor}</code>
+          </span>
         </div>
       ) : null}
       <button
         className={styles.submit}
         type="button"
-        disabled={!canSubmit || submitState.status === "submitting" || submitState.status === "saved"}
+        disabled={
+          !canSubmit ||
+          submitState.status === "submitting" ||
+          submitState.status === "saved"
+        }
         onClick={() => void submit()}
       >
         {submitState.status === "submitting"
@@ -267,8 +304,8 @@ export function AssignedReviewForm({
               : "Save append-only proposal"}
       </button>
       <p className={styles.disclaimer}>
-        Permission comes from the signed-in assignment. Lens is a review perspective,
-        never a role grant; original evidence remains immutable.
+        Permission comes from the signed-in assignment. Lens is a review
+        perspective, never a role grant; original evidence remains immutable.
       </p>
     </section>
   );

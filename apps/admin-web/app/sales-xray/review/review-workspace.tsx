@@ -48,7 +48,9 @@ function StatePanel({
       <div className={styles.queueState} role="status" aria-live="polite">
         <RefreshCw size={26} className="spin" aria-hidden="true" />
         <strong>Checking the review queue</strong>
-        <p>Reading server-owned assignments and the current append-only cursor.</p>
+        <p>
+          Reading server-owned assignments and the current append-only cursor.
+        </p>
       </div>
     );
   }
@@ -62,7 +64,11 @@ function StatePanel({
           returns an authorized response.
         </p>
         {state.retryable ? (
-          <button className="button button-secondary" type="button" onClick={onRetry}>
+          <button
+            className="button button-secondary"
+            type="button"
+            onClick={onRetry}
+          >
             <RefreshCw size={15} aria-hidden="true" /> Retry queue
           </button>
         ) : null}
@@ -141,10 +147,10 @@ export function ReviewWorkspace({
                 <Clock3 size={12} aria-hidden="true" /> Cursor bound
               </span>
             </div>
-              <p className={styles.panelIntro}>
-                The queue is paged by the server cursor. A stale cursor or changed
-                tenant context must fail closed.
-              </p>
+            <p className={styles.panelIntro}>
+              The queue is paged by the server cursor. A stale cursor or changed
+              tenant context must fail closed.
+            </p>
             {state.status === "ready" ? (
               <div className={styles.queueState} role="status">
                 <FileSearch size={28} aria-hidden="true" />
@@ -169,7 +175,9 @@ export function ReviewWorkspace({
               />
               <div className={styles.playerPlaceholder}>
                 <LockKeyhole size={20} aria-hidden="true" />
-                <span>Awaiting an authorized report selection for {assignmentId}</span>
+                <span>
+                  Awaiting an authorized report selection for {assignmentId}
+                </span>
               </div>
               <div className={styles.clipRow}>
                 <span>No clip loaded</span>
@@ -186,13 +194,18 @@ export function ReviewWorkspace({
                 <MessageSquareText size={19} aria-hidden="true" />
               </div>
               <p className={styles.panelIntro}>
-                You can prepare a draft while reviewing. Save stays disabled until
-                an assigned report and the append-only write contract are present.
+                You can prepare a draft while reviewing. Save stays disabled
+                until an assigned report and the append-only write contract are
+                present.
               </p>
               <div className={styles.disabledForm}>
                 <div>
                   <span className={styles.eyebrow}>Reviewer</span>
-                  <div className={styles.reviewerGrid} role="group" aria-label="Reviewer identity">
+                  <div
+                    className={styles.reviewerGrid}
+                    role="group"
+                    aria-label="Reviewer identity"
+                  >
                     {reviewers.map((reviewer) => (
                       <button
                         className={styles.reviewerButton}
@@ -205,15 +218,26 @@ export function ReviewWorkspace({
                         <small>{reviewer.detail}</small>
                       </button>
                     ))}
-                    <button className={styles.reviewerButton} type="button" disabled>
-                      <strong><UsersRound size={14} aria-hidden="true" /> Invite reviewer</strong>
+                    <button
+                      className={styles.reviewerButton}
+                      type="button"
+                      disabled
+                    >
+                      <strong>
+                        <UsersRound size={14} aria-hidden="true" /> Invite
+                        reviewer
+                      </strong>
                       <small>Server assignment required</small>
                     </button>
                   </div>
                 </div>
                 <div>
                   <span className={styles.eyebrow}>Review mode</span>
-                  <div className={styles.modeGrid} role="group" aria-label="Review mode">
+                  <div
+                    className={styles.modeGrid}
+                    role="group"
+                    aria-label="Review mode"
+                  >
                     {modes.map((mode) => (
                       <button
                         className={styles.modeButton}
@@ -238,8 +262,8 @@ export function ReviewWorkspace({
                       placeholder="Capture the observable correction or feedback."
                     />
                     <span className={styles.fieldHint}>
-                      Draft remains local until the server accepts an append-only
-                      review proposal.
+                      Draft remains local until the server accepts an
+                      append-only review proposal.
                     </span>
                   </label>
                   <label htmlFor="review-confidence">
@@ -251,14 +275,20 @@ export function ReviewWorkspace({
                       placeholder="e.g. high — grounded in clip 00:42–01:08"
                     />
                   </label>
-                  <button className="button button-primary" type="button" disabled>
-                    <CheckCircle2 size={15} aria-hidden="true" /> Save append-only proposal (locked)
+                  <button
+                    className="button button-primary"
+                    type="button"
+                    disabled
+                  >
+                    <CheckCircle2 size={15} aria-hidden="true" /> Save
+                    append-only proposal (locked)
                   </button>
                 </div>
               </div>
               <p className={styles.footnote}>
                 Current selection: {selectedReviewer} · {selectedMode}. The role
-                mode controls the lens only; permission remains server-authoritative.
+                mode controls the lens only; permission remains
+                server-authoritative.
               </p>
             </section>
           </div>

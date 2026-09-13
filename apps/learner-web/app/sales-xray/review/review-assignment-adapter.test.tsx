@@ -25,8 +25,12 @@ describe("Academy assigned-review adapter", () => {
       root.render(<ReviewAssignmentAdapter assignmentId="assignment-7" />),
     );
 
-    expect(container.textContent).toContain("Your review is waiting for a server assignment.");
+    expect(container.textContent).toContain(
+      "Your review is waiting for a server assignment.",
+    );
     expect(container.textContent).toContain("assignment-7");
-    expect(container.textContent).toContain("No report, identity, playback URL, or save result is asserted");
+    expect(container.textContent).toContain(
+      "No report, identity, playback URL, or save result is asserted",
+    );
   });
 });

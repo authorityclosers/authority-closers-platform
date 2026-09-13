@@ -22,7 +22,8 @@ export function reviewError(error: unknown): {
     };
   }
   return {
-    message: "The review queue could not be loaded. Retry when the service is available.",
+    message:
+      "The review queue could not be loaded. Retry when the service is available.",
     retryable: true,
   };
 }

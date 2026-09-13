@@ -9,7 +9,9 @@ describe("review API boundary", () => {
     expect(
       reviewError(
         Object.assign(
-          new Error("The review bridge contract is pending its server-owned DTO."),
+          new Error(
+            "The review bridge contract is pending its server-owned DTO.",
+          ),
           { retryable: false },
         ),
       ),

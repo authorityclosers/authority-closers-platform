@@ -46,7 +46,11 @@
   border-radius: 999px;
   color: #45627f;
   background: #e8f0f8;
-  font: 600 0.68rem/1.1 ui-monospace, SFMono-Regular, Consolas, monospace;
+  font:
+    600 0.68rem/1.1 ui-monospace,
+    SFMono-Regular,
+    Consolas,
+    monospace;
   letter-spacing: 0.08em;
   white-space: nowrap;
 }

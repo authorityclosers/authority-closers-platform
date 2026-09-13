@@ -9,7 +9,9 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ replace: vi.fn() }),
 }));
 
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+(
+  globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 let container: HTMLDivElement;
 let root: Root;
@@ -76,8 +78,12 @@ describe("assigned review workspace", () => {
 
     expect(container.textContent).toContain("Conversation review");
     expect(container.textContent).toContain("assignment-7");
-    expect(container.textContent).toContain("The review bridge contract is pending its server-owned DTO.");
-    expect(container.textContent).toContain("No report, reviewer, clip, or saved review is shown");
+    expect(container.textContent).toContain(
+      "The review bridge contract is pending its server-owned DTO.",
+    );
+    expect(container.textContent).toContain(
+      "No report, reviewer, clip, or saved review is shown",
+    );
     expect(
       [...container.querySelectorAll("button[disabled]")].some((button) =>
         button.textContent?.includes("Save append-only proposal"),

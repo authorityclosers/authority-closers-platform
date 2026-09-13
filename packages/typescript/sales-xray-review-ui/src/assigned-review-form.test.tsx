@@ -9,7 +9,9 @@ import {
   type ReviewProposalDraft,
 } from "./assigned-review-form";
 
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+(
+  globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 const assignment: ReviewAssignment = {
   assignment_id: "assignment-7",
@@ -17,7 +19,10 @@ const assignment: ReviewAssignment = {
   run_revision: "run-revision-3",
   cursor: "cursor-4",
   reviewer: { person_id: "person-7", display_name: "Suyash" },
-  report: { title: "Call report", summary: "A report grounded in the selected call." },
+  report: {
+    title: "Call report",
+    summary: "A report grounded in the selected call.",
+  },
   clips: [
     {
       segment_id: "segment-1",
@@ -30,11 +35,18 @@ const assignment: ReviewAssignment = {
   allowed_lenses: ["sales", "technical", "ux"],
 };
 
-function setValue(element: HTMLInputElement | HTMLTextAreaElement, value: string) {
-  const prototype = element instanceof HTMLTextAreaElement
-    ? HTMLTextAreaElement.prototype
-    : HTMLInputElement.prototype;
-  Object.getOwnPropertyDescriptor(prototype, "value")!.set!.call(element, value);
+function setValue(
+  element: HTMLInputElement | HTMLTextAreaElement,
+  value: string,
+) {
+  const prototype =
+    element instanceof HTMLTextAreaElement
+      ? HTMLTextAreaElement.prototype
+      : HTMLInputElement.prototype;
+  Object.getOwnPropertyDescriptor(prototype, "value")!.set!.call(
+    element,
+    value,
+  );
   element.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
@@ -61,7 +73,11 @@ describe("AssignedReviewForm", () => {
       return { submission_id: "submission-1", cursor: "cursor-5" };
     });
 
-    await act(async () => root.render(<AssignedReviewForm assignment={assignment} onSubmit={onSubmit} />));
+    await act(async () =>
+      root.render(
+        <AssignedReviewForm assignment={assignment} onSubmit={onSubmit} />,
+      ),
+    );
     const feedback = container.querySelector("textarea")!;
     const confidence = container.querySelector("input")!;
     await act(async () => {
@@ -70,7 +86,9 @@ describe("AssignedReviewForm", () => {
     });
     await act(async () =>
       [...container.querySelectorAll("button")]
-        .find((button) => button.textContent?.includes("Save append-only proposal"))
+        .find((button) =>
+          button.textContent?.includes("Save append-only proposal"),
+        )
         ?.click(),
     );
 
@@ -89,8 +107,15 @@ describe("AssignedReviewForm", () => {
     const onSubmit = vi
       .fn()
       .mockRejectedValueOnce(new Error("temporary review API failure"))
-      .mockResolvedValueOnce({ submission_id: "submission-2", cursor: "cursor-6" });
-    await act(async () => root.render(<AssignedReviewForm assignment={assignment} onSubmit={onSubmit} />));
+      .mockResolvedValueOnce({
+        submission_id: "submission-2",
+        cursor: "cursor-6",
+      });
+    await act(async () =>
+      root.render(
+        <AssignedReviewForm assignment={assignment} onSubmit={onSubmit} />,
+      ),
+    );
     const feedback = container.querySelector("textarea")!;
     const confidence = container.querySelector("input")!;
     await act(async () => {
@@ -99,7 +124,11 @@ describe("AssignedReviewForm", () => {
     });
     const submit = () =>
       [...container.querySelectorAll("button")]
-        .find((button) => /Save append-only proposal|Retry append-only proposal/.test(button.textContent ?? ""))
+        .find((button) =>
+          /Save append-only proposal|Retry append-only proposal/.test(
+            button.textContent ?? "",
+          ),
+        )
         ?.click();
     await act(async () => submit());
     expect(container.textContent).toContain("temporary review API failure");

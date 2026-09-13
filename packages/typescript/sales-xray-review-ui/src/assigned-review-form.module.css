@@ -64,7 +64,11 @@
   padding: 0.35rem 0.55rem;
   color: #246645;
   background: #e7f6ed;
-  font: 700 0.65rem/1.1 ui-monospace, SFMono-Regular, Consolas, monospace;
+  font:
+    700 0.65rem/1.1 ui-monospace,
+    SFMono-Regular,
+    Consolas,
+    monospace;
   letter-spacing: 0.06em;
 }
 

@@ -26,13 +26,18 @@ export function ReviewAssignmentAdapter({
       <div className="page-container">
         <div className={styles.page}>
           <div className={styles.breadcrumb}>Sales Xray / Assigned review</div>
-          <section className={styles.pending} aria-labelledby="review-pending-title">
+          <section
+            className={styles.pending}
+            aria-labelledby="review-pending-title"
+          >
             <span className={styles.eyebrow}>Assigned review</span>
-            <h1 id="review-pending-title">Your review is waiting for a server assignment.</h1>
+            <h1 id="review-pending-title">
+              Your review is waiting for a server assignment.
+            </h1>
             <p>
-              Assignment <code>{assignmentId}</code> will open here after AC verifies
-              your signed-in identity, report revision, private clip permissions,
-              and the append-only review cursor.
+              Assignment <code>{assignmentId}</code> will open here after AC
+              verifies your signed-in identity, report revision, private clip
+              permissions, and the append-only review cursor.
             </p>
             <dl>
               <div>
@@ -49,8 +54,8 @@ export function ReviewAssignmentAdapter({
               </div>
             </dl>
             <p className={styles.note} role="status">
-              No report, identity, playback URL, or save result is asserted until
-              the review service returns the assignment DTO.
+              No report, identity, playback URL, or save result is asserted
+              until the review service returns the assignment DTO.
             </p>
           </section>
         </div>
