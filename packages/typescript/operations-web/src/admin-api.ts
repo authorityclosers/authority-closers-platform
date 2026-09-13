@@ -641,6 +641,102 @@ export type AdminLearnerCandidate = z.infer<typeof adminLearnerCandidateSchema>;
 export type AdminLearnerLookup = z.infer<typeof adminLearnerLookupSchema>;
 export type AdminLearnerDiagnosis = z.infer<typeof adminLearnerDiagnosisSchema>;
 
+const directoryRoleSchema = z.enum([
+  "all",
+  "learner",
+  "support",
+  "admin",
+  "owner",
+]);
+const directoryStatusSchema = z.enum([
+  "all",
+  "active",
+  "inactive",
+  "suspended",
+  "unverified",
+]);
+const directoryFiltersSchema = z
+  .object({
+    query: z.string().trim().max(320).default(""),
+    role: directoryRoleSchema.default("all"),
+    status: directoryStatusSchema.default("all"),
+    page: z.number().int().min(1).max(10000).default(1),
+    page_size: z.number().int().min(1).max(50).default(25),
+  })
+  .strict();
+const directoryMemberSchema = z
+  .object({
+    person_id: z.uuid(),
+    display_name: z.string().min(1).max(240),
+    username: z.string().min(3).max(30).nullable(),
+    masked_email: z.string().min(1).max(320),
+    membership_role: z.enum(["learner", "support", "admin", "owner"]),
+    membership_status: z.enum(["active", "inactive"]),
+    account_status: z.enum(["active", "suspended"]),
+    email_verified: z.boolean(),
+    joined_at: z.iso.datetime({ offset: true }),
+    active_enrollments: z.number().int().nonnegative(),
+  })
+  .strict();
+const memberDirectorySchema = z
+  .object({
+    tenant_id: z.uuid(),
+    tenant_name: z.string().min(1).max(200),
+    members: z.array(directoryMemberSchema).max(50),
+    summary: z
+      .object({
+        total: z.number().int().nonnegative(),
+        active_learners: z.number().int().nonnegative(),
+        team: z.number().int().nonnegative(),
+        unverified: z.number().int().nonnegative(),
+      })
+      .strict(),
+    matching_count: z.number().int().nonnegative(),
+    page: z.number().int().positive(),
+    page_size: z.number().int().min(1).max(50),
+  })
+  .strict();
+export type DirectoryFilters = z.infer<typeof directoryFiltersSchema>;
+export type DirectoryMember = z.infer<typeof directoryMemberSchema>;
+export type MemberDirectory = z.infer<typeof memberDirectorySchema>;
+
+export function loadMemberDirectory({
+  tenantId,
+  filters = {},
+  fetcher = fetch,
+  origin = currentOrigin(),
+  signal,
+}: {
+  tenantId: string;
+  filters?: Partial<DirectoryFilters>;
+  fetcher?: Fetcher;
+  origin?: string;
+  signal?: AbortSignal;
+}) {
+  const expectedTenant = z.uuid().parse(tenantId);
+  const parsedFilters = directoryFiltersSchema.parse(filters);
+  return requestJson(
+    "/v1/admin/people/directory",
+    {
+      method: "POST",
+      headers: mutationHeaders({ origin, hasBody: true }),
+      body: body(parsedFilters),
+      signal,
+    },
+    memberDirectorySchema.refine(
+      (value) =>
+        value.tenant_id === expectedTenant &&
+        value.page === parsedFilters.page &&
+        value.page_size === parsedFilters.page_size &&
+        value.members.length <= value.page_size &&
+        value.matching_count <= value.summary.total &&
+        new Set(value.members.map((member) => member.person_id)).size ===
+          value.members.length,
+    ),
+    fetcher,
+  );
+}
+
 const adminLearnerQuerySchema = z
   .string()
   .trim()

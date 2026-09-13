@@ -390,7 +390,10 @@ export function isStagingAdminRequest(url: URL, method: string): boolean {
   if (pathname === "/v1/auth/logout") {
     return normalizedMethod === "POST";
   }
-  if (pathname === "/v1/admin/learners/lookup") {
+  if (
+    pathname === "/v1/admin/learners/lookup" ||
+    pathname === "/v1/admin/people/directory"
+  ) {
     return normalizedMethod === "POST";
   }
   if (

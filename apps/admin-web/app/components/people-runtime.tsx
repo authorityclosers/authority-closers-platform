@@ -1,7 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type RefObject,
+} from "react";
 import {
   AdminApiProblem,
   lookupAdminLearners,
@@ -364,157 +370,170 @@ function PeopleWorkspace({
         </section>
       )}
       {diagnosis && (
-        <section
-          className="panel people-diagnosis"
-          aria-labelledby="people-diagnosis-title"
-        >
-          <div className="people-intro">
-            <span className="section-eyebrow">Learner diagnosis</span>
-            <h2 id="people-diagnosis-title" tabIndex={-1} ref={resultHeading}>
-              {diagnosis.display_name}
-            </h2>
-            <p>
-              {diagnosis.username ? `@${diagnosis.username} · ` : ""}
-              {diagnosis.masked_email}
-            </p>
-            <p>
-              Updated <ReadTime value={diagnosis.as_of} /> ·{" "}
-              {label(diagnosis.purpose)}
-            </p>
-          </div>
-          {diagnosis.enrollments.length === 0 && (
-            <p>No course enrollments were returned for this learner.</p>
-          )}
-          {diagnosis.truncated && (
-            <p role="status">
-              This view contains a limited selection of enrollments. Other
-              enrollments may be present.
-            </p>
-          )}
-          {diagnosis.enrollments.map((enrollment) => (
-            <article className="people-course" key={enrollment.enrollment_id}>
-              <h3>{enrollment.program_title}</h3>
-              <dl className="people-facts">
-                <div>
-                  <dt>Course version</dt>
-                  <dd>{enrollment.version_number}</dd>
-                </div>
-                <div>
-                  <dt>Enrollment</dt>
-                  <dd>{label(enrollment.enrollment_status)}</dd>
-                </div>
-                <div>
-                  <dt>Access</dt>
-                  <dd>{label(enrollment.entitlement_status)}</dd>
-                </div>
-                <div>
-                  <dt>Required activities complete</dt>
-                  <dd>
-                    {enrollment.progress
-                      ? `${enrollment.progress.completed_count} of ${enrollment.progress.denominator}`
-                      : "Unavailable"}
-                  </dd>
-                </div>
-              </dl>
-              {enrollment.truncated && (
-                <p role="status">
-                  Some activity, draft or evidence records are omitted from this
-                  bounded view.
-                </p>
-              )}
-              {enrollment.progress ? (
-                <>
-                  <p className="people-next">
-                    <strong>Next activity: </strong>
-                    {enrollment.progress.next_activity_id
-                      ? (enrollment.progress.activity_states.find(
-                          (activity) =>
-                            activity.activity_id ===
-                            enrollment.progress?.next_activity_id,
-                        )?.title ?? "Not included in this view")
-                      : "No next activity returned"}
-                  </p>
-                  <div className="people-activities">
-                    {enrollment.progress.activity_states.map((activity) => {
-                      const draft = enrollment.drafts.find(
-                        (item) => item.activity_id === activity.activity_id,
-                      );
-                      const evidence = enrollment.evidence.filter(
-                        (item) => item.activity_id === activity.activity_id,
-                      );
-                      return (
-                        <details
-                          className="people-activity"
-                          key={activity.activity_id}
-                        >
-                          <summary>
-                            <span>
-                              <strong>{activity.title}</strong>
-                              <small>
-                                {label(activity.kind)} ·{" "}
-                                {activity.required ? "Required" : "Optional"}
-                              </small>
-                            </span>
-                            <span className="state-label">
-                              {label(activity.state)}
-                            </span>
-                          </summary>
-                          <div>
-                            <p>{label(activity.reason)}</p>
-                            <p>
-                              {draft ? (
-                                <>
-                                  Saved draft · revision {draft.revision} ·{" "}
-                                  <ReadTime value={draft.saved_at} />
-                                </>
-                              ) : enrollment.drafts_truncated ? (
-                                "No saved draft included in this view."
-                              ) : (
-                                "No saved draft returned."
-                              )}
-                            </p>
-                            {evidence.length ? (
-                              <ul className="people-evidence">
-                                {evidence.map((item, index) => (
-                                  <li
-                                    key={`${item.evidence_type}:${item.captured_at}:${index}`}
-                                  >
-                                    {label(item.evidence_type)}
-                                    {item.submission_status
-                                      ? ` · ${label(item.submission_status)}`
-                                      : ""}{" "}
-                                    ·{" "}
-                                    <ReadTime
-                                      value={
-                                        item.submitted_at ?? item.captured_at
-                                      }
-                                    />
-                                  </li>
-                                ))}
-                              </ul>
-                            ) : (
-                              <p>
-                                {enrollment.evidence_truncated
-                                  ? "No evidence included in this view."
-                                  : "No evidence returned."}
-                              </p>
-                            )}
-                          </div>
-                        </details>
-                      );
-                    })}
-                  </div>
-                </>
-              ) : (
-                <p>
-                  Current progress is unavailable. Review the enrollment and
-                  access status before continuing support.
-                </p>
-              )}
-            </article>
-          ))}
-        </section>
+        <LearnerDiagnosisView
+          diagnosis={diagnosis}
+          headingRef={resultHeading}
+        />
       )}
     </div>
+  );
+}
+
+export function LearnerDiagnosisView({
+  diagnosis,
+  headingRef,
+}: {
+  diagnosis: AdminLearnerDiagnosis;
+  headingRef?: RefObject<HTMLHeadingElement | null>;
+}) {
+  return (
+    <section
+      className="panel people-diagnosis"
+      aria-labelledby="people-diagnosis-title"
+    >
+      <div className="people-intro">
+        <span className="section-eyebrow">Learner diagnosis</span>
+        <h2 id="people-diagnosis-title" tabIndex={-1} ref={headingRef}>
+          {diagnosis.display_name}
+        </h2>
+        <p>
+          {diagnosis.username ? `@${diagnosis.username} · ` : ""}
+          {diagnosis.masked_email}
+        </p>
+        <p>
+          Updated <ReadTime value={diagnosis.as_of} /> ·{" "}
+          {label(diagnosis.purpose)}
+        </p>
+      </div>
+      {diagnosis.enrollments.length === 0 && (
+        <p>No course enrollments were returned for this learner.</p>
+      )}
+      {diagnosis.truncated && (
+        <p role="status">
+          This view contains a limited selection of enrollments. Other
+          enrollments may be present.
+        </p>
+      )}
+      {diagnosis.enrollments.map((enrollment) => (
+        <article className="people-course" key={enrollment.enrollment_id}>
+          <h3>{enrollment.program_title}</h3>
+          <dl className="people-facts">
+            <div>
+              <dt>Course version</dt>
+              <dd>{enrollment.version_number}</dd>
+            </div>
+            <div>
+              <dt>Enrollment</dt>
+              <dd>{label(enrollment.enrollment_status)}</dd>
+            </div>
+            <div>
+              <dt>Access</dt>
+              <dd>{label(enrollment.entitlement_status)}</dd>
+            </div>
+            <div>
+              <dt>Required activities complete</dt>
+              <dd>
+                {enrollment.progress
+                  ? `${enrollment.progress.completed_count} of ${enrollment.progress.denominator}`
+                  : "Unavailable"}
+              </dd>
+            </div>
+          </dl>
+          {enrollment.truncated && (
+            <p role="status">
+              Some activity, draft or evidence records are omitted from this
+              bounded view.
+            </p>
+          )}
+          {enrollment.progress ? (
+            <>
+              <p className="people-next">
+                <strong>Next activity: </strong>
+                {enrollment.progress.next_activity_id
+                  ? (enrollment.progress.activity_states.find(
+                      (activity) =>
+                        activity.activity_id ===
+                        enrollment.progress?.next_activity_id,
+                    )?.title ?? "Not included in this view")
+                  : "No next activity returned"}
+              </p>
+              <div className="people-activities">
+                {enrollment.progress.activity_states.map((activity) => {
+                  const draft = enrollment.drafts.find(
+                    (item) => item.activity_id === activity.activity_id,
+                  );
+                  const evidence = enrollment.evidence.filter(
+                    (item) => item.activity_id === activity.activity_id,
+                  );
+                  return (
+                    <details
+                      className="people-activity"
+                      key={activity.activity_id}
+                    >
+                      <summary>
+                        <span>
+                          <strong>{activity.title}</strong>
+                          <small>
+                            {label(activity.kind)} ·{" "}
+                            {activity.required ? "Required" : "Optional"}
+                          </small>
+                        </span>
+                        <span className="state-label">
+                          {label(activity.state)}
+                        </span>
+                      </summary>
+                      <div>
+                        <p>{label(activity.reason)}</p>
+                        <p>
+                          {draft ? (
+                            <>
+                              Saved draft · revision {draft.revision} ·{" "}
+                              <ReadTime value={draft.saved_at} />
+                            </>
+                          ) : enrollment.drafts_truncated ? (
+                            "No saved draft included in this view."
+                          ) : (
+                            "No saved draft returned."
+                          )}
+                        </p>
+                        {evidence.length ? (
+                          <ul className="people-evidence">
+                            {evidence.map((item, index) => (
+                              <li
+                                key={`${item.evidence_type}:${item.captured_at}:${index}`}
+                              >
+                                {label(item.evidence_type)}
+                                {item.submission_status
+                                  ? ` · ${label(item.submission_status)}`
+                                  : ""}{" "}
+                                ·{" "}
+                                <ReadTime
+                                  value={item.submitted_at ?? item.captured_at}
+                                />
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p>
+                            {enrollment.evidence_truncated
+                              ? "No evidence included in this view."
+                              : "No evidence returned."}
+                          </p>
+                        )}
+                      </div>
+                    </details>
+                  );
+                })}
+              </div>
+            </>
+          ) : (
+            <p>
+              Current progress is unavailable. Review the enrollment and access
+              status before continuing support.
+            </p>
+          )}
+        </article>
+      ))}
+    </section>
   );
 }

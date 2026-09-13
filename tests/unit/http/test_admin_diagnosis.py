@@ -26,6 +26,105 @@ LEARNER_ID = uuid4()
 NOW = datetime(2026, 9, 13, 12, tzinfo=UTC)
 
 
+def _directory_result():
+    from ac_platform.learning.admin_directory import (
+        DirectoryMember,
+        DirectorySummary,
+        MemberDirectory,
+    )
+
+    return MemberDirectory(
+        tenant_id=TENANT_ID,
+        tenant_name="Academy",
+        page=1,
+        page_size=25,
+        matching_count=1,
+        summary=DirectorySummary(1, 0, 1, 0),
+        members=(
+            DirectoryMember(
+                LEARNER_ID,
+                "Owner",
+                None,
+                "o***@example.test",
+                "owner",
+                "active",
+                "active",
+                True,
+                NOW,
+                0,
+            ),
+        ),
+    )
+
+
+def test_directory_loads_without_exact_lookup_and_audits_without_search_pii(monkeypatch):
+    client, _db = _harness(monkeypatch)
+    calls = []
+
+    def listing(database, **kwargs):
+        calls.append(kwargs)
+        return _directory_result()
+
+    monkeypatch.setattr(diagnosis_http, "list_members", listing)
+    response = client.post(
+        "/v1/admin/people/directory",
+        json={"query": "Owner"},
+        headers={"Origin": "https://admin.authorityclosers.test"},
+    )
+    assert response.status_code == 200
+    assert response.json()["members"][0]["membership_role"] == "owner"
+    assert "no-store" in response.headers["Cache-Control"]
+    assert calls[0]["tenant_id"] == TENANT_ID
+    assert "Owner" not in str(FakeAuditRepository.events)
+    assert FakeAuditRepository.events[0]["action"] == "audit.admin.people.directory.v1"
+
+
+@pytest.mark.parametrize(
+    "body", [{"tenant_id": str(uuid4())}, {"page_size": 51}, {"role": "superuser"}, {"page": 0}]
+)
+def test_directory_rejects_client_scope_and_unbounded_reads(monkeypatch, body):
+    client, db = _harness(monkeypatch)
+    assert client.post("/v1/admin/people/directory", json=body).status_code == 422
+    assert db.run_sync_calls == 0
+
+
+def test_directory_does_not_deliver_private_rows_when_audit_commit_fails(monkeypatch):
+    client, _db = _harness(monkeypatch, fail_after_yield=True)
+    monkeypatch.setattr(diagnosis_http, "list_members", lambda *_args, **_kw: _directory_result())
+    with pytest.raises(RuntimeError, match="transaction commit failed"):
+        client.post(
+            "/v1/admin/people/directory",
+            json={},
+            headers={"Origin": "https://admin.authorityclosers.test"},
+        )
+
+
+def test_directory_denies_without_permission_or_from_other_surface(monkeypatch):
+    client, db = _harness(monkeypatch)
+
+    async def deny(*args, **kwargs):
+        raise AdminAuthorizationDenied("Permission unavailable")
+
+    monkeypatch.setattr(diagnosis_http, "_require_named_admin", deny)
+    assert (
+        client.post(
+            "/v1/admin/people/directory",
+            json={},
+            headers={"Origin": "https://admin.authorityclosers.test"},
+        ).status_code
+        == 403
+    )
+    assert db.run_sync_calls == 0
+    assert (
+        client.post(
+            "/v1/admin/people/directory",
+            json={},
+            headers={"Origin": "https://app.authorityclosers.test"},
+        ).status_code
+        == 403
+    )
+
+
 class FakeDatabase:
     def __init__(self) -> None:
         self.run_sync_calls = 0
