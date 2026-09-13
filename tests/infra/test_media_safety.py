@@ -268,6 +268,42 @@ def test_compose_healthcheck_targets_exact_ipv4_scanner(safety_module: ModuleTyp
     assert safety_module.expected_health_test(SAFETY) == safety_module.HEALTH_TEST
 
 
+def test_socket_root_clears_parent_setgid_and_keeps_exact_fixed_contract(
+    safety_module: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    socket_root = tmp_path / "media-safety-socket"
+    socket_root.mkdir(mode=0o755)
+    monkeypatch.setattr(safety_module, "SOCKET_ROOT", socket_root)
+    monkeypatch.setattr(safety_module.os, "chown", lambda *_args: None, raising=False)
+    real_lstat = Path.lstat
+    mode = 0o2755
+    chmod_calls: list[tuple[Path, int, bool]] = []
+
+    def owned_lstat(path: Path, **kwargs: object) -> object:
+        if path == socket_root:
+            return SimpleNamespace(
+                st_mode=stat.S_IFDIR | mode,
+                st_uid=100,
+                st_gid=100,
+            )
+        return real_lstat(path, **kwargs)
+
+    def safe_chmod(path: Path, requested: int, *, follow_symlinks: bool = True) -> None:
+        nonlocal mode
+        chmod_calls.append((path, requested, follow_symlinks))
+        mode = requested
+
+    monkeypatch.setattr(Path, "lstat", owned_lstat)
+    monkeypatch.setattr(safety_module.os, "chmod", safe_chmod)
+
+    safety_module.ensure_socket_root()
+
+    assert chmod_calls == [(socket_root, 0o755, False)]
+    assert mode == 0o755
+
+
 def test_scanner_stream_temp_is_a_private_disk_mount(safety_module: ModuleType) -> None:
     compose = (SAFETY / "compose.yaml").read_text(encoding="utf-8")
     clamd = (SAFETY / "clamd.conf").read_text(encoding="utf-8")

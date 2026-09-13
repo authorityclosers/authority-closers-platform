@@ -340,7 +340,28 @@ def ensure_socket_root() -> None:
         os.chown(SOCKET_ROOT, 100, 100)
     info = SOCKET_ROOT.lstat()
     require(
-        stat.S_ISDIR(info.st_mode) and info.st_uid == 100 and not info.st_mode & 0o022,
+        stat.S_ISDIR(info.st_mode)
+        and info.st_uid == 100
+        and info.st_gid == 100
+        and not info.st_mode & 0o022,
+        "Untrusted scanner socket directory",
+    )
+    mode = stat.S_IMODE(info.st_mode)
+    require(
+        mode == 0o755 or mode & 0o777 == 0o755,
+        "Untrusted scanner socket directory",
+    )
+    if mode != 0o755:
+        # A parent setgid bit can survive directory creation and makes the
+        # application installer reject an otherwise safe fixed root. Clear
+        # only special bits after the type/owner/non-writable checks above.
+        os.chmod(SOCKET_ROOT, 0o755, follow_symlinks=False)  # noqa: S103 - fixed socket root mode
+    info = SOCKET_ROOT.lstat()
+    require(
+        stat.S_ISDIR(info.st_mode)
+        and info.st_uid == 100
+        and info.st_gid == 100
+        and stat.S_IMODE(info.st_mode) == 0o755,
         "Untrusted scanner socket directory",
     )
 

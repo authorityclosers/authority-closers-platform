@@ -395,6 +395,15 @@ def test_installer_requires_canonical_prepared_filesystem_roots() -> None:
     assert "10001:10001:700" in INSTALLER
     assert "stat -c '%u:%g:%a' -- \"$media_scanner_host_root\"" in INSTALLER
     assert "100:100:755" in INSTALLER
+    assert 'stat -c \'%u:%g\' -- "$media_scanner_host_root"' in INSTALLER
+    assert 'scanner_root_mode="$(stat -c \'%a\' -- "$media_scanner_host_root")"' in INSTALLER
+    assert 'chmod g-s -- "$media_scanner_host_root"' in INSTALLER
+    assert INSTALLER.index("stat -c '%u:%g' -- \"$media_scanner_host_root\"") < INSTALLER.index(
+        'chmod g-s -- "$media_scanner_host_root"'
+    )
+    assert INSTALLER.index("chmod g-s -- \"$media_scanner_host_root\"") < INSTALLER.index(
+        'stat -c \'%u:%g:%a\' -- "$media_scanner_host_root"'
+    )
     assert '"$media_scanner_host_root/clamd.sock"' in INSTALLER
 
 

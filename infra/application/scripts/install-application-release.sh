@@ -512,6 +512,7 @@ filesystem_media_compose_file_for() {
 
 validate_filesystem_media_activation() {
   [[ "$media_filesystem_enabled" == true ]] || return 0
+  local scanner_root_mode
   [[ -f "$release_dir/compose.filesystem-media.yaml" &&
      ! -L "$release_dir/compose.filesystem-media.yaml" ]] || {
     printf 'Filesystem media is enabled but its reviewed Compose companion is missing.\n' >&2
@@ -537,6 +538,14 @@ validate_filesystem_media_activation() {
     printf 'ClamAV scanner socket root is not a prepared private directory.\n' >&2
     return 1
   }
+  [[ "$(stat -c '%u:%g' -- "$media_scanner_host_root")" == 100:100 ]] || {
+    printf 'ClamAV scanner socket root ownership is not canonical.\n' >&2
+    return 1
+  }
+  scanner_root_mode="$(stat -c '%a' -- "$media_scanner_host_root")"
+  if [[ "$scanner_root_mode" == 2755 ]]; then
+    chmod g-s -- "$media_scanner_host_root"
+  fi
   [[ "$(stat -c '%u:%g:%a' -- "$media_scanner_host_root")" == 100:100:755 ]] || {
     printf 'ClamAV scanner socket root ownership or mode is not canonical.\n' >&2
     return 1
