@@ -153,8 +153,7 @@ def test_compose_profile_cannot_be_overridden_by_ambient_sales_xray_url(tmp_path
     capture = tmp_path / "captured-url"
     fake_docker = fake_bin / "docker"
     fake_docker.write_text(
-        "#!/usr/bin/env bash\n"
-        "printf '%s' \"${AC_SALES_XRAY_APP_URL-unset}\" > \"$AC_CAPTURE\"\n",
+        '#!/usr/bin/env bash\nprintf \'%s\' "${AC_SALES_XRAY_APP_URL-unset}" > "$AC_CAPTURE"\n',
         encoding="utf-8",
     )
     fake_docker.chmod(0o755)

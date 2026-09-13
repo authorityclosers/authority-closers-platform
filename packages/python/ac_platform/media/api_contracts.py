@@ -384,8 +384,7 @@ class ActivityMediaProvenanceResponse(StrictModel):
     label: Literal["Technical playback test — not course instruction"]
     title: Literal["Big Buck Bunny — Sunflower"]
     attribution: Literal[
-        "Blender Foundation 2008, Janus Bager Kristensen 2013; "
-        "Big Buck Bunny, Sunflower version"
+        "Blender Foundation 2008, Janus Bager Kristensen 2013; Big Buck Bunny, Sunflower version"
     ]
     license: Literal["Creative Commons Attribution 3.0"]
     license_url: Literal["https://creativecommons.org/licenses/by/3.0/"]
