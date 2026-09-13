@@ -409,7 +409,7 @@ def test_new_preflight_checks_candidate_and_rollback_before_writer_stop():
         invocation = re.escape(f'preflight "${target}" "$target_environment"')
         assert re.search(prefix + r"\s+\\\n\s+" + invocation, installer)
         assert installer.index(f'preflight "${target}" "$target_environment"') < installer.index(
-            'compose_for "$writer_release" stop'
+            'stop_application_services_with_hosted_drain "$writer_release" false'
         )
 
 
@@ -440,6 +440,9 @@ def test_dispatch_uses_target_policy_scrubs_flags_and_rejects_legacy_overlap(
     binary_path = binary.as_posix()
     if os.name == "nt":
         binary_path = "/" + binary_path[0].lower() + binary_path[2:]
+    hosted_loader = "sales_xray_hosted_inputs=()\n" + _installer_function(
+        "load_sales_xray_hosted_inputs", "\n\nsales_xray_hosted_enabled() {"
+    )
     function = _installer_function("compose_for", '\n\ncompose_for "$release_dir" config --quiet')
     filesystem_selector = "filesystem_media_compose_file_for() {\n  return 0\n}\n"
     practice_scope = _installer_function(
@@ -455,6 +458,7 @@ compose_project=test-public-films
 with_release_secrets() {{ "$@"; }}
 {practice_scope}
 {filesystem_selector}
+{hosted_loader}
 python3() {{
   [[ "$2" == compose-file && "$4" == "$target_environment" ]]
   if [[ "$1" == "$release_dir/scripts/public-films.py" ]]; then

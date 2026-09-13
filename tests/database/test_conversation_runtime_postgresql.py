@@ -104,6 +104,7 @@ def test_composed_runner_advances_accepted_plan_once_to_private_c6(
             settings = Settings(
                 _env_file=None,
                 environment="test",
+                operations_tenant_id=setup.prepared.state.tenant_id,
                 sales_xray_enabled=True,
                 sales_xray_approval_path=str(approval_path),
                 sales_xray_approval_sha256=hashlib.sha256(approval_raw).hexdigest(),

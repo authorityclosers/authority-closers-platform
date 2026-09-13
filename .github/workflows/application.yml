@@ -90,6 +90,21 @@ jobs:
         run: python -m pip install --disable-pip-version-check uv==0.12.7
       - name: Install locked dependencies
         run: pnpm install --frozen-lockfile && uv sync --frozen
+      - name: Prove root-owned hosted activation and rollback inputs
+        run: >-
+          sudo env AC_REQUIRE_HOSTED_ACTIVATION_ROOT_TEST=1
+          "$PWD/.venv/bin/python" -m pytest
+          tests/infra/test_sales_xray_hosted_lifecycle.py
+          -o cache_dir=/run/ac-hosted-activation-pytest-cache
+          --junitxml="${{ runner.temp }}/hosted-activation-root.xml"
+      - name: Retain hosted activation test receipt
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: hosted-activation-root-${{ github.sha }}
+          path: ${{ runner.temp }}/hosted-activation-root.xml
+          if-no-files-found: error
+          retention-days: 14
       - name: "PRE-VALIDATION: Build Sales Xray static preview"
         env:
           AC_SALES_XRAY_STATIC_PREVIEW: "1"
