@@ -771,6 +771,34 @@ def test_processing_plan_transition_preserves_0031_and_requires_empty_tables() -
         )
 
 
+def test_community_connections_transition_preserves_0032_and_requires_empty_tables() -> None:
+    source_head = restore_drill.COMMUNITY_CONNECTIONS_REHEARSAL_SOURCE_HEAD
+    target_head = restore_drill.COMMUNITY_CONNECTIONS_REHEARSAL_TARGET_HEAD
+    source_counts = {table: 3 for table in restore_drill.parity_tables_for_head(source_head)}
+    target_counts = dict(source_counts)
+    target_counts.update(
+        {table: 0 for table in restore_drill.COMMUNITY_CONNECTIONS_PARITY_NEW_TABLES}
+    )
+
+    assert restore_drill._assert_migration_rehearsal_transition(
+        source_counts,
+        target_counts,
+        {},
+        source_head=source_head,
+        target_head=target_head,
+    ) == {table: 0 for table in restore_drill.COMMUNITY_CONNECTIONS_PARITY_NEW_TABLES}
+
+    target_counts[restore_drill.COMMUNITY_CONNECTIONS_PARITY_NEW_TABLES[0]] = 1
+    with pytest.raises(restore_drill.DrillError, match="new-table row counts"):
+        restore_drill._assert_migration_rehearsal_transition(
+            source_counts,
+            target_counts,
+            {},
+            source_head=source_head,
+            target_head=target_head,
+        )
+
+
 def test_direct_sales_xray_transition_preserves_0029_and_requires_all_new_tables_empty() -> None:
     source_head = restore_drill.DIRECT_SALES_XRAY_REHEARSAL_SOURCE_HEAD
     target_head = restore_drill.DIRECT_SALES_XRAY_REHEARSAL_TARGET_HEAD

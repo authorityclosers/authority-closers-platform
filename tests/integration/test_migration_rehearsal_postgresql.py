@@ -8,6 +8,7 @@ import re
 import subprocess
 import sys
 from collections.abc import Iterator
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 
@@ -20,7 +21,14 @@ from sqlalchemy.schema import CreateSchema, DropSchema
 
 from ac_platform.app_updates.models import AppUpdateReadReceipt
 from ac_platform.community.models import AcademyPublicProfile
+from ac_platform.conversation_intelligence.models import (
+    ConversationBudgetAccount,
+    ConversationPermission,
+    ConversationQuote,
+    ConversationRecording,
+)
 from ac_platform.identity.models import Person
+from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.tenancy.models import Membership, Tenant
 
 ROOT = Path(__file__).parents[2]
@@ -53,6 +61,14 @@ PLANS_HEAD = "20260913_0032"
 PLANS_TABLES = {
     "conversation_processing_plans",
     "conversation_plan_stage_authorizations",
+}
+COMMUNITY_CONNECTIONS_HEAD = "20260913_0033"
+COMMUNITY_CONNECTIONS_TABLES = {
+    "community_discovery_preferences",
+    "community_connections",
+    "community_connection_events",
+    "community_blocks",
+    "community_reports",
 }
 DEDICATED_DATABASE_PREFIX = "ac_migration_rehearsal_"
 DEDICATED_HOST = "127.0.0.1"
@@ -283,6 +299,109 @@ def _public_rows(engine: Engine) -> dict[str, tuple[str, ...]]:
         }
 
 
+def _seed_populated_0032(engine: Engine) -> None:
+    """Add representative Sales 0032 rows before the community migration."""
+
+    metadata = MetaData()
+    plans = Table("conversation_processing_plans", metadata, autoload_with=engine)
+    authorizations = Table("conversation_plan_stage_authorizations", metadata, autoload_with=engine)
+    with Session(engine) as database:
+        tenant_id = database.scalar(select(Tenant.id).order_by(Tenant.slug))
+        person_id = database.scalar(select(Person.id).order_by(Person.email))
+        assert tenant_id is not None and person_id is not None
+        permission_id, recording_id, scope_id, quote_id, session_id = (uuid4() for _ in range(5))
+        now = datetime.now(UTC)
+        database.add_all(
+            [
+                IdentitySession(
+                    id=session_id,
+                    person_id=person_id,
+                    token_hash=b"r" * 32,
+                    created_at=now,
+                    expires_at=now + timedelta(days=1),
+                    selected_tenant_id=tenant_id,
+                    revision=0,
+                ),
+                ConversationPermission(
+                    id=permission_id,
+                    tenant_id=tenant_id,
+                    person_id=person_id,
+                    source_sha256="d" * 64,
+                    provider="local",
+                    permission_reference="migration-rehearsal-permission",
+                    retention_reference="migration-rehearsal-retention",
+                    created_at=now,
+                    expires_at=now + timedelta(hours=1),
+                    retention_until=now + timedelta(days=30),
+                ),
+                ConversationRecording(
+                    id=recording_id,
+                    tenant_id=tenant_id,
+                    person_id=person_id,
+                    permission_id=permission_id,
+                    request_key="migration-rehearsal-recording",
+                    intent_sha256="e" * 64,
+                    source_sha256="f" * 64,
+                    source_bytes=1,
+                    content_type="audio/wav",
+                    source_revision=1,
+                    generation=1,
+                    state="ready",
+                    created_at=now,
+                ),
+                ConversationBudgetAccount(
+                    scope_id=scope_id,
+                    snapshot={"currency": "INR", "remaining": 100},
+                    revision=1,
+                ),
+            ]
+        )
+        database.flush()
+        database.add(
+            ConversationQuote(
+                id=quote_id,
+                tenant_id=tenant_id,
+                person_id=person_id,
+                recording_id=recording_id,
+                budget_scope_id=scope_id,
+                quote={"amount": 1, "currency": "INR"},
+                execution_permission={"allowed": False},
+            )
+        )
+        database.flush()
+        plan_id = uuid4()
+        database.execute(
+            plans.insert().values(
+                id=plan_id,
+                tenant_id=tenant_id,
+                person_id=person_id,
+                recording_id=recording_id,
+                session_id=session_id,
+                generation=1,
+                plan_sha256="a" * 64,
+                manifest={"source": "migration-rehearsal"},
+                acceptance_command_id=None,
+                state="quoted",
+                progress={"stage": "C0"},
+                next_check_at=now + timedelta(hours=1),
+                created_at=now,
+                expires_at=now + timedelta(days=1),
+            )
+        )
+        database.execute(
+            authorizations.insert().values(
+                quote_id=quote_id,
+                plan_id=plan_id,
+                tenant_id=tenant_id,
+                person_id=person_id,
+                quote_fingerprint="b" * 64,
+                cache_key="c" * 64,
+                created_at=now,
+            )
+        )
+        database.commit()
+
+
 def test_populated_0027_dump_path_upgrades_only_to_candidate_0029(
     migration_harness: _MigrationHarness,
 ) -> None:
@@ -454,3 +573,42 @@ def test_populated_0031_preserves_all_existing_rows_when_upgrading_to_0032(
     assert all(target_rows[table] == () for table in PLANS_TABLES)
     with migration_harness.engine.connect() as connection:
         assert connection.scalar(text("SELECT version_num FROM alembic_version")) == PLANS_HEAD
+
+
+def test_populated_0032_preserves_all_existing_rows_when_upgrading_to_0033(
+    migration_harness: _MigrationHarness,
+) -> None:
+    """The community migration adds empty tables without rewriting Sales plan history."""
+
+    _seed_populated_0027(migration_harness.engine)
+    for target, label in (
+        (TARGET_HEAD, "prior-head"),
+        (SALES_XRAY_HEAD, "Sales Xray"),
+        (INFERENCE_HEAD, "inference"),
+        (PLANS_HEAD, "processing-plan"),
+    ):
+        migration = _run_migration(migration_harness.environment, target)
+        assert migration.returncode == 0, f"{label} migration failed in the isolated schema"
+    _seed_populated_0032(migration_harness.engine)
+    source_rows = _public_rows(migration_harness.engine)
+    assert set(source_rows) & PLANS_TABLES
+    assert all(source_rows[table] for table in PLANS_TABLES)
+    assert not set(source_rows) & COMMUNITY_CONNECTIONS_TABLES
+    with migration_harness.engine.connect() as connection:
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == PLANS_HEAD
+
+    migration = _run_migration(migration_harness.environment, COMMUNITY_CONNECTIONS_HEAD)
+
+    assert migration.returncode == 0, (
+        "community connections migration failed in the isolated schema"
+    )
+    target_rows = _public_rows(migration_harness.engine)
+    assert set(target_rows) == set(source_rows) | COMMUNITY_CONNECTIONS_TABLES
+    for table, rows in source_rows.items():
+        assert target_rows[table] == rows, f"migration changed existing rows in {table}"
+    assert all(target_rows[table] == () for table in COMMUNITY_CONNECTIONS_TABLES)
+    with migration_harness.engine.connect() as connection:
+        assert (
+            connection.scalar(text("SELECT version_num FROM alembic_version"))
+            == COMMUNITY_CONNECTIONS_HEAD
+        )

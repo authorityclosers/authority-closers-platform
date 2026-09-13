@@ -174,8 +174,4 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_table("community_reports")
-    op.drop_table("community_blocks")
-    op.drop_table("community_connection_events")
-    op.drop_table("community_connections")
-    op.drop_table("community_discovery_preferences")
+    raise RuntimeError("Community connection history is forward-only; use the verified restore path")

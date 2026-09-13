@@ -218,6 +218,16 @@ PLANS_PARITY_NEW_TABLES = (
     "conversation_plan_stage_authorizations",
 )
 PLANS_PARITY_TABLES = INFERENCE_PARITY_TABLES + PLANS_PARITY_NEW_TABLES
+COMMUNITY_CONNECTIONS_PARITY_MIGRATION_HEAD = "20260913_0033"
+COMMUNITY_CONNECTIONS_PARITY_CONTRACT = "ac-postgres-parity-v13"
+COMMUNITY_CONNECTIONS_PARITY_NEW_TABLES = (
+    "community_discovery_preferences",
+    "community_connections",
+    "community_connection_events",
+    "community_blocks",
+    "community_reports",
+)
+COMMUNITY_CONNECTIONS_PARITY_TABLES = PLANS_PARITY_TABLES + COMMUNITY_CONNECTIONS_PARITY_NEW_TABLES
 # The first migration rehearsal is deliberately an exact reviewed transition.
 # Do not infer a source/target pair from lexical revision ordering.
 MIGRATION_REHEARSAL_SOURCE_HEAD = COMMUNITY_PARITY_MIGRATION_HEAD
@@ -228,6 +238,8 @@ INFERENCE_REHEARSAL_SOURCE_HEAD = SALES_XRAY_PARITY_MIGRATION_HEAD
 INFERENCE_REHEARSAL_TARGET_HEAD = INFERENCE_PARITY_MIGRATION_HEAD
 PLANS_REHEARSAL_SOURCE_HEAD = INFERENCE_PARITY_MIGRATION_HEAD
 PLANS_REHEARSAL_TARGET_HEAD = PLANS_PARITY_MIGRATION_HEAD
+COMMUNITY_CONNECTIONS_REHEARSAL_SOURCE_HEAD = PLANS_PARITY_MIGRATION_HEAD
+COMMUNITY_CONNECTIONS_REHEARSAL_TARGET_HEAD = COMMUNITY_CONNECTIONS_PARITY_MIGRATION_HEAD
 # Production is currently at 0029. Keep a direct rehearsal contract for the
 # candidate image that upgrades through both reviewed Sales Xray migrations in
 # one isolated target; do not require an intermediate application deployment.
@@ -240,6 +252,10 @@ MIGRATION_REHEARSAL_PAIRS = frozenset(
         (SALES_XRAY_REHEARSAL_SOURCE_HEAD, SALES_XRAY_REHEARSAL_TARGET_HEAD),
         (INFERENCE_REHEARSAL_SOURCE_HEAD, INFERENCE_REHEARSAL_TARGET_HEAD),
         (PLANS_REHEARSAL_SOURCE_HEAD, PLANS_REHEARSAL_TARGET_HEAD),
+        (
+            COMMUNITY_CONNECTIONS_REHEARSAL_SOURCE_HEAD,
+            COMMUNITY_CONNECTIONS_REHEARSAL_TARGET_HEAD,
+        ),
         (
             DIRECT_SALES_XRAY_REHEARSAL_SOURCE_HEAD,
             DIRECT_SALES_XRAY_REHEARSAL_TARGET_HEAD,
@@ -285,6 +301,10 @@ VERSIONED_PARITY_CONTRACTS = {
         INFERENCE_PARITY_TABLES,
     ),
     PLANS_PARITY_MIGRATION_HEAD: (PLANS_PARITY_CONTRACT, PLANS_PARITY_TABLES),
+    COMMUNITY_CONNECTIONS_PARITY_MIGRATION_HEAD: (
+        COMMUNITY_CONNECTIONS_PARITY_CONTRACT,
+        COMMUNITY_CONNECTIONS_PARITY_TABLES,
+    ),
 }
 
 
@@ -1952,6 +1972,19 @@ def _assert_migration_rehearsal_transition(
         if expected_new_tables != set(expected_new_counts):
             raise DrillError(
                 "migration rehearsal new-table contract is not the reviewed 0031/0032 pair"
+            )
+    elif (source_head, target_head) == (
+        COMMUNITY_CONNECTIONS_REHEARSAL_SOURCE_HEAD,
+        COMMUNITY_CONNECTIONS_REHEARSAL_TARGET_HEAD,
+    ):
+        if source_derivations:
+            raise DrillError("Community connections rehearsal does not accept source derivations")
+        expected_new_counts = {
+            table: 0 for table in COMMUNITY_CONNECTIONS_PARITY_NEW_TABLES
+        }
+        if expected_new_tables != set(expected_new_counts):
+            raise DrillError(
+                "migration rehearsal new-table contract is not the reviewed 0032/0033 pair"
             )
     elif (source_head, target_head) == (
         DIRECT_SALES_XRAY_REHEARSAL_SOURCE_HEAD,

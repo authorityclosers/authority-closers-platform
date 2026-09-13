@@ -38,6 +38,7 @@ APP_UPDATES = "20260910_0029"
 SALES_XRAY = "20260913_0030"
 INFERENCE = "20260913_0031"
 PLANS = "20260913_0032"
+COMMUNITY_CONNECTIONS = "20260913_0033"
 HEADS = (
     LEGACY,
     CAPABILITIES,
@@ -54,6 +55,7 @@ HEADS = (
     SALES_XRAY,
     INFERENCE,
     PLANS,
+    COMMUNITY_CONNECTIONS,
 )
 VERSIONED_HEADS = HEADS[1:]
 TABLELESS_VERSIONED_HEADS = (REVISION, MEDIA_LIBRARY, COURSE_CREATION)
@@ -97,6 +99,13 @@ NEW_TABLES = {
     PLANS: (
         "conversation_processing_plans",
         "conversation_plan_stage_authorizations",
+    ),
+    COMMUNITY_CONNECTIONS: (
+        "community_discovery_preferences",
+        "community_connections",
+        "community_connection_events",
+        "community_blocks",
+        "community_reports",
     ),
 }
 ROOT = Path(__file__).parents[2]
@@ -159,7 +168,7 @@ def test_three_separately_packaged_helpers_have_identical_versioned_contracts() 
             assert module.parity_tables_for_head(head) == backup.PARITY_TABLES
 
 
-@pytest.mark.parametrize("head", ["", "20000101_0001", "20260913_0033", "20260907_0019;bad"])
+@pytest.mark.parametrize("head", ["", "20000101_0001", "20260913_0034", "20260907_0019;bad"])
 def test_unknown_or_unsafe_heads_never_fall_back_to_legacy(head: str) -> None:
     for module in (backup, proof, drill):
         with pytest.raises(RuntimeError, match="no reviewed"):
@@ -497,7 +506,7 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
             and node.func.attr == "create_table"
         }
         assert created == set()
-    expected_counts = (39, 41, 50, 52, 53, 53, 53, 53, 54, 55, 57, 58, 71, 72, 74)
+    expected_counts = (39, 41, 50, 52, 53, 53, 53, 53, 54, 55, 57, 58, 71, 72, 74, 79)
     expected_contracts = (
         None,
         "ac-postgres-parity-v2",
@@ -514,6 +523,7 @@ def test_versioned_contracts_match_all_new_migration_tables_exactly() -> None:
         "ac-postgres-parity-v10",
         "ac-postgres-parity-v11",
         "ac-postgres-parity-v12",
+        "ac-postgres-parity-v13",
     )
     for module in (backup, proof, drill):
         assert module.VERSIONED_PARITY_CONTRACTS == backup.VERSIONED_PARITY_CONTRACTS
