@@ -83,8 +83,11 @@ const payload: ProviderControlsPayload = {
     },
     created_at: "2026-09-13T00:00:00Z",
     execution_activated: false,
+    activation: null,
+    activation_options: [],
   },
   max_paid_paise: 0,
+  approved_budget_cap_paise: null,
   execution_activated: false,
   message: "Provider settings loaded.",
 };

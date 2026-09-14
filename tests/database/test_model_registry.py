@@ -107,6 +107,7 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "conversation_review_invitation_revocations",
         "conversation_review_invitation_acceptances",
         "conversation_provider_configurations",
+        "conversation_provider_activations",
         "conversation_report_drafts",
         "conversation_inference_tasks",
         "community_discovery_preferences",

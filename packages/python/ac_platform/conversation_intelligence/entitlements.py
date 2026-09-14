@@ -142,6 +142,7 @@ class Quote(Snapshot):
     max_cost_paise: int
     created_at_epoch: int
     expires_at_epoch: int
+    provider_configuration_sha256: str | None = None
 
     _decoders: ClassVar[dict[str, Callable[[Any], Any]]] = {"source": _source}
 
@@ -167,6 +168,11 @@ class Quote(Snapshot):
             ),
         )
         require_sha256(self.input_sha256, "input sha256")
+        if self.provider_configuration_sha256 is not None:
+            require_sha256(
+                self.provider_configuration_sha256,
+                "provider configuration sha256",
+            )
         _integer(self.entitlement_seconds, "entitlement seconds")
         _integer(self.max_cost_paise, "max cost paise")
         _integer(self.created_at_epoch, "quote creation epoch")

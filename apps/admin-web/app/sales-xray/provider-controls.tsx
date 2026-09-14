@@ -128,7 +128,38 @@ const currentSchema = z
     configuration_sha256: z.string().regex(SHA256),
     configuration: registrySchema,
     created_at: z.string().min(1),
-    execution_activated: z.literal(false),
+    execution_activated: z.boolean().default(false),
+    activation: z
+      .object({
+        id: z.string().min(1),
+        sequence: z.number().int().positive(),
+        revision: z.number().int().positive(),
+        configuration_sha256: z.string().regex(SHA256),
+        created_at: z.string().min(1),
+      })
+      .nullable()
+      .default(null),
+    activation_options: z
+      .array(
+        z
+          .object({
+            id: z.string().min(1),
+            revision: z.number().int().positive(),
+            configuration_sha256: z.string().regex(SHA256),
+            routes: z.array(
+              z
+                .object({
+                  task: z.string().min(1),
+                  provider: z.string().min(1),
+                  model: z.string().min(1),
+                  max_cost_paise: z.number().int().nonnegative(),
+                })
+                .strict(),
+            ),
+          })
+          .strict(),
+      )
+      .default([]),
   })
   .strict();
 
@@ -139,7 +170,13 @@ const responseSchema = z
     configuration_template: registrySchema,
     current: currentSchema.nullable(),
     max_paid_paise: z.literal(0),
-    execution_activated: z.literal(false),
+    approved_budget_cap_paise: z
+      .number()
+      .int()
+      .nonnegative()
+      .nullable()
+      .default(null),
+    execution_activated: z.boolean().default(false),
     message: z.string().min(1),
   })
   .strict();
@@ -691,9 +728,15 @@ export function ProviderControlsPanel() {
   const [saveState, setSaveState] = useState<
     "idle" | "saving" | "saved" | "conflict"
   >("idle");
+  const [activationState, setActivationState] = useState<
+    "idle" | "activating" | "activated" | "error"
+  >("idle");
   const [message, setMessage] = useState("");
   const requestRef = useRef<AbortController | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
+  const [activationRevision, setActivationRevision] = useState<number | null>(
+    null,
+  );
 
   useEffect(() => {
     const controller = new AbortController();
@@ -714,6 +757,11 @@ export function ProviderControlsPanel() {
                 routes: [],
                 revision: payload.configuration_template.revision,
               },
+        );
+        setActivationRevision(
+          payload.current?.activation?.revision ??
+            payload.current?.revision ??
+            null,
         );
         setSaveState("idle");
         setMessage("");
@@ -751,6 +799,7 @@ export function ProviderControlsPanel() {
   const current = state.status === "ready" ? state.current : null;
   const catalog = state.status === "ready" ? state.payload.catalog : [];
   const tasks = state.status === "ready" ? state.payload.tasks : [];
+  const activationOptions = current?.activation_options ?? [];
   function addProvider() {
     if (state.status !== "ready") return;
     setDraft((previous) => ({
@@ -868,8 +917,9 @@ export function ProviderControlsPanel() {
       );
       setDraft(draftFromConfiguration(saved.configuration));
       setSaveState("saved");
+      setActivationState("idle");
       setMessage(
-        "Saved as a new immutable revision. This save does not start provider calls.",
+        "Saved as a new immutable revision. Activate an approved revision for new plans.",
       );
     } catch (error: unknown) {
       if (error instanceof Error && error.message === "http_409") {
@@ -899,6 +949,59 @@ export function ProviderControlsPanel() {
           "The revision was not saved. Try again without changing the current revision.",
         );
       }
+    }
+  }
+
+  async function activate() {
+    if (
+      state.status !== "ready" ||
+      !current ||
+      activationState === "activating"
+    )
+      return;
+    const options = current.activation_options;
+    const target = options.find((item) => item.revision === activationRevision);
+    if (!target) {
+      setActivationState("error");
+      setMessage(
+        "This revision is not in the pinned approval. Save an approved provider/model route before activating.",
+      );
+      return;
+    }
+    setActivationState("activating");
+    setMessage("");
+    try {
+      const value = await requestJson(
+        "/v1/admin/conversation/providers/activate",
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "idempotency-key": newIdempotencyKey(),
+          },
+          body: JSON.stringify({
+            expected_revision: current.revision,
+            target_revision: target.revision,
+          }),
+        },
+      );
+      const activated = saveResponseSchema.parse(value);
+      setState((previous) =>
+        previous.status === "ready"
+          ? { ...previous, current: activated }
+          : previous,
+      );
+      setActivationState("activated");
+      setMessage(
+        `Revision #${target.revision} is active for new plans. Existing plans keep their saved provider route.`,
+      );
+    } catch (error: unknown) {
+      setActivationState("error");
+      setMessage(
+        error instanceof Error && error.message === "http_409"
+          ? "Provider settings changed. Reload before activating."
+          : "This revision could not be activated. The server kept the prior selection.",
+      );
     }
   }
 
@@ -956,11 +1059,12 @@ export function ProviderControlsPanel() {
     <div className={styles.page}>
       <div className={styles.notice} role="note">
         <div>
-          <h2>Provider settings are saved for review.</h2>
+          <h2>Provider settings and next-plan activation.</h2>
           <p>
             {state.payload.message} Choose providers and map analysis tasks
-            here; this page records settings only and never accepts credentials
-            or starts a provider call.
+            here, then activate only a server-approved saved revision for new
+            plans. This page never accepts credentials or starts a provider
+            call.
           </p>
         </div>
         <span className={styles.noticeCode}>NO PROVIDER CALLS</span>
@@ -968,9 +1072,13 @@ export function ProviderControlsPanel() {
 
       <div className={styles.summaryGrid} aria-label="Provider control status">
         <div className={styles.summaryCard}>
-          <span>Spend limit</span>
-          <strong>₹0</strong>
-          <small>fixed in this workspace</small>
+          <span>Approved cap</span>
+          <strong>
+            {state.payload.approved_budget_cap_paise == null
+              ? "Unavailable"
+              : `₹${(state.payload.approved_budget_cap_paise / 100).toFixed(2)}`}
+          </strong>
+          <small>release-approved ceiling, not current spend</small>
         </div>
         <div className={styles.summaryCard}>
           <span>Provider calls</span>
@@ -1012,6 +1120,76 @@ export function ProviderControlsPanel() {
           ) : null}
         </div>
       ) : null}
+
+      <section
+        className={styles.section}
+        aria-labelledby="provider-activation-title"
+      >
+        <div className={styles.sectionHeader}>
+          <div>
+            <span className={styles.eyebrow}>Next-plan activation</span>
+            <h2 id="provider-activation-title">
+              Choose the approved route for new plans.
+            </h2>
+            <p>
+              Activation is limited to saved revisions already covered by the
+              pinned approval. It changes future plan quotes; underway plans
+              keep their provider, model, recipe and approval references.
+            </p>
+          </div>
+          <ShieldCheck size={20} aria-hidden="true" />
+        </div>
+        {activationOptions.length === 0 ? (
+          <div className={styles.empty}>
+            <p>
+              No saved revision is currently eligible. A catalog entry alone
+              cannot be activated until its adapter, credentials, privacy,
+              pricing and release approval all match.
+            </p>
+          </div>
+        ) : (
+          <div className={styles.fieldRow}>
+            <label className={styles.field}>
+              <span className={styles.fieldLabel}>Approved revision</span>
+              <select
+                aria-label="Approved provider revision"
+                value={activationRevision ?? activationOptions[0]?.revision}
+                onChange={(event) =>
+                  setActivationRevision(Number(event.target.value))
+                }
+              >
+                {activationOptions.map((option) => (
+                  <option value={option.revision} key={option.revision}>
+                    Revision #{option.revision} ·{" "}
+                    {option.routes
+                      .map((route) => `${route.provider}/${route.model}`)
+                      .join(" · ")}
+                  </option>
+                ))}
+              </select>
+              <small>
+                Active now:{" "}
+                {current?.activation
+                  ? `revision #${current.activation.revision}`
+                  : "the saved default"}
+              </small>
+            </label>
+            <div className={styles.buttonRow}>
+              <button
+                className="button button-primary"
+                type="button"
+                onClick={() => void activate()}
+                disabled={activationState === "activating"}
+              >
+                <ShieldCheck size={15} aria-hidden="true" />
+                {activationState === "activating"
+                  ? "Activating…"
+                  : "Activate for new plans"}
+              </button>
+            </div>
+          </div>
+        )}
+      </section>
 
       <section
         className={styles.section}

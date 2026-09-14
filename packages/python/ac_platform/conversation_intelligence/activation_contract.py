@@ -434,8 +434,19 @@ class HostedApprovalBundle(_StrictFrozenModel):
         elif self.budget_cap_paise != 0 or self.paid_approval_ref is not None:
             raise ValueError("free_bundle_cannot_bind_paid_budget")
 
+        # One source/stage may have several finite, release-approved routes.
+        # The configuration digest is part of the key so an Admin activation
+        # can select one of those alternatives without making the stage a
+        # wildcard. Existing bundles with one route per stage serialize
+        # byte-for-byte as before.
         stage_keys = [
-            (approval.tenant_id, approval.person_id, approval.source_sha256, approval.stage)
+            (
+                approval.tenant_id,
+                approval.person_id,
+                approval.source_sha256,
+                approval.stage,
+                approval.configuration_sha256,
+            )
             for approval in self.stages
         ]
         if len(stage_keys) != len(set(stage_keys)):

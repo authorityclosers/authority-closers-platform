@@ -226,6 +226,20 @@ def test_loader_rejects_duplicate_ids_recipients_and_stage_scope() -> None:
         load_hosted_approval_bundle(duplicate_scope_payload)
 
 
+def test_loader_allows_same_source_stage_for_a_distinct_approved_configuration() -> None:
+    alternative = _stage(
+        approval_id=UUID("60000000-0000-4000-8000-000000000010"),
+    )
+    alternative = alternative.model_copy(update={"configuration_sha256": "d" * 64})
+
+    loaded = load_hosted_approval_bundle(_bundle(stages=(_stage(), alternative)).to_json())
+
+    assert {stage.configuration_sha256 for stage in loaded.stages} == {
+        "b" * 64,
+        "d" * 64,
+    }
+
+
 def test_loader_rejects_stage_expiry_outside_bundle_and_unknown_paid_fields() -> None:
     expired_payload = json.loads(_bundle().to_json())
     expired_payload["stages"][0]["expires_at_epoch"] = 2_001

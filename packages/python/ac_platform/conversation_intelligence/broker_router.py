@@ -217,6 +217,10 @@ class FixedProviderRouter:
                             quote.provider_model,
                             quote.recipe_revision,
                         )
+                        and (
+                            quote.provider_configuration_sha256 is None
+                            or item.configuration_sha256 == quote.provider_configuration_sha256
+                        )
                     )
                     if len(by_route) == 1:
                         return by_route[0]
@@ -248,6 +252,10 @@ class FixedProviderRouter:
                 and item.provider_id == quote.provider_id
                 and item.model_id == quote.provider_model
                 and item.recipe_revision == quote.recipe_revision
+                and (
+                    quote.provider_configuration_sha256 is None
+                    or item.configuration_sha256 == quote.provider_configuration_sha256
+                )
             )
         )
         if len(candidates) != 1:

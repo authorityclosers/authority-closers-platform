@@ -269,6 +269,34 @@ class ConversationProviderConfiguration(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+class ConversationProviderActivation(Base):
+    """Append-only selection of one approved configuration for new plans.
+
+    A plan stores the route it was quoted with.  Later activations therefore
+    affect only plans quoted after this row; they never rewrite an existing
+    quote, reservation, or report lineage.
+    """
+
+    __tablename__ = "conversation_provider_activations"
+    __table_args__ = (
+        member_fk(),
+        UniqueConstraint("tenant_id", "sequence"),
+        CheckConstraint("sequence >= 1", name="positive_sequence"),
+        CheckConstraint("configuration_revision >= 1", name="positive_configuration_revision"),
+    )
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    person_id: Mapped[UUID] = mapped_column(Uuid)
+    session_id: Mapped[UUID] = mapped_column(Uuid, ForeignKey("sessions.id"))
+    configuration_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("conversation_provider_configurations.id")
+    )
+    configuration_revision: Mapped[int] = mapped_column(Integer)
+    configuration_sha256: Mapped[str] = mapped_column(String(64))
+    sequence: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class ConversationReportDraft(Base):
     """Internal draft, never an official score or model-promotion decision."""
 

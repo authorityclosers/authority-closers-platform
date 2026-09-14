@@ -34,6 +34,7 @@ const payload = {
   },
   current: null,
   max_paid_paise: 0,
+  approved_budget_cap_paise: null,
   execution_activated: false,
   message: "Provider settings loaded.",
 } satisfies ProviderControlsPayload;

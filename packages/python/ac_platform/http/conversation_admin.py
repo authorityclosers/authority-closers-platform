@@ -14,6 +14,7 @@ from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
     ConversationError,
 )
+from ac_platform.conversation_intelligence.hosted_runtime import load_pinned_approval
 from ac_platform.conversation_intelligence.provider_admin import ConversationProviderAdmin
 from ac_platform.conversation_intelligence.provider_registry import (
     TASK_CONTRACTS,
@@ -38,6 +39,12 @@ class ProviderConfigurationIntent(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     expected_revision: int = Field(ge=0, lt=2_147_483_647)
     configuration: dict[str, Any]
+
+
+class ProviderActivationIntent(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    expected_revision: int = Field(ge=0, lt=2_147_483_647)
+    target_revision: int = Field(ge=1, lt=2_147_483_647)
 
 
 def install_conversation_admin_http(
@@ -74,7 +81,15 @@ def install_conversation_admin_http(
         surface(request, response)
         service = ConversationProviderAdmin(ConversationApplication(auth.database))
         try:
-            current = await service.current(auth.resolved.actor)
+            bundle = None
+            if settings.sales_xray_enabled and settings.sales_xray_approval_path:
+                try:
+                    bundle = load_pinned_approval(settings)
+                except ValueError:
+                    # The settings surface remains readable while activation
+                    # stays unavailable until the release approval is present.
+                    bundle = None
+            current = await service.current(auth.resolved.actor, bundle=bundle)
         except ConversationError as error:
             raise HTTPException(error.status, str(error)) from None
         return {
@@ -88,9 +103,11 @@ def install_conversation_admin_http(
             ).as_dict(),
             "current": current,
             "max_paid_paise": 0,
-            "execution_activated": False,
+            "approved_budget_cap_paise": None if bundle is None else bundle.budget_cap_paise,
+            "execution_activated": bool(current and current.get("activation")),
             "message": (
-                "Settings are saved as revisions. Provider tests and activation are separate."
+                "Settings are saved as revisions. Activate a pinned-approved revision "
+                "for new plans; provider calls remain worker-owned."
             ),
         }
 
@@ -137,11 +154,47 @@ def install_conversation_admin_http(
         surface(request, response)
         require_safe_origin(request, settings)
         try:
-            return await ConversationProviderAdmin(ConversationApplication(auth.database)).save(
+            service = ConversationProviderAdmin(ConversationApplication(auth.database))
+            saved = await service.save(
                 auth.resolved.actor,
                 intent.configuration,
                 expected_revision=intent.expected_revision,
                 key=key,
+            )
+            bundle = None
+            if settings.sales_xray_enabled and settings.sales_xray_approval_path:
+                try:
+                    bundle = load_pinned_approval(settings)
+                except ValueError:
+                    bundle = None
+            current = await service.current(auth.resolved.actor, bundle=bundle)
+            return current or saved
+        except ConversationError as error:
+            raise HTTPException(error.status, str(error)) from None
+
+    @router.post("/providers/activate", status_code=200)
+    async def activate_providers(
+        intent: ProviderActivationIntent,
+        request: Request,
+        response: Response,
+        key: Annotated[str, Header(alias="Idempotency-Key", min_length=1, max_length=128)],
+        auth: AuthenticatedTransaction = dependency,
+    ) -> dict[str, Any]:
+        surface(request, response)
+        require_safe_origin(request, settings)
+        if not settings.sales_xray_enabled:
+            raise HTTPException(503, "Provider activation is not enabled in this release.")
+        try:
+            bundle = load_pinned_approval(settings)
+        except ValueError:
+            raise HTTPException(503, "The pinned provider approval is unavailable.") from None
+        try:
+            return await ConversationProviderAdmin(ConversationApplication(auth.database)).activate(
+                auth.resolved.actor,
+                target_revision=intent.target_revision,
+                expected_revision=intent.expected_revision,
+                key=key,
+                bundle=bundle,
             )
         except ConversationError as error:
             raise HTTPException(error.status, str(error)) from None

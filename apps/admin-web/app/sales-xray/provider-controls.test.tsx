@@ -188,11 +188,78 @@ describe("provider control contract", () => {
     expect(host.textContent).toContain("Local Ollama");
     expect(host.textContent).toContain("planned_no_transport");
     expect(host.textContent).toContain("Groq open weights");
-    expect(host.textContent).toContain("₹0");
+    expect(host.textContent).toContain("Unavailable");
     expect(host.textContent).toContain("catalog metadata only");
     expect(host.textContent).not.toContain("execution_activated false");
     expect(host.textContent).not.toContain("API key");
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("activates only a server-listed approved revision for future plans", async () => {
+    const current = {
+      id: "registry-proof",
+      revision: 4,
+      configuration_sha256: "a".repeat(64),
+      configuration: template,
+      created_at: "2026-09-14T00:00:00Z",
+      execution_activated: false,
+      activation: null,
+      activation_options: [
+        {
+          id: "approved-revision",
+          revision: 4,
+          configuration_sha256: "a".repeat(64),
+          routes: [
+            {
+              task: "facts",
+              provider: "gemini",
+              model: "gemini-3.8-flash",
+              max_cost_paise: 500,
+            },
+          ],
+        },
+      ],
+    };
+    const activated = {
+      ...current,
+      execution_activated: true,
+      activation: {
+        id: "activation-receipt",
+        sequence: 1,
+        revision: 4,
+        configuration_sha256: "a".repeat(64),
+        created_at: "2026-09-14T00:01:00Z",
+      },
+    };
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(payload(current)))
+      .mockResolvedValueOnce(jsonResponse(activated));
+
+    await renderPanel();
+    const activate = [...host.querySelectorAll("button")].find((button) =>
+      button.textContent?.includes("Activate for new plans"),
+    );
+    expect(activate).toBeInstanceOf(HTMLButtonElement);
+
+    await act(async () => {
+      (activate as HTMLButtonElement).click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const postCall = fetchMock.mock.calls.find(
+      ([url, init]) =>
+        url === "/v1/admin/conversation/providers/activate" &&
+        init?.method === "POST",
+    );
+    expect(postCall?.[1]?.headers).toEqual(
+      expect.objectContaining({ "idempotency-key": expect.any(String) }),
+    );
+    expect(JSON.parse(postCall?.[1]?.body as string)).toEqual({
+      expected_revision: 4,
+      target_revision: 4,
+    });
+    expect(host.textContent).toContain("active for new plans");
   });
 
   it("builds a multi-task configuration with zero paid spend and reference-only settings", () => {

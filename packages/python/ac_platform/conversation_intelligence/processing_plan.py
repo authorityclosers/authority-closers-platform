@@ -369,6 +369,7 @@ class ConversationProcessingPlans:
                     actor,
                     source_sha256=recording.source_sha256,
                     stage=stage,
+                    configuration_sha256=c2.configuration_sha256,
                 )
                 for stage in ("C2", "C4", "C5")
             }
@@ -412,6 +413,7 @@ class ConversationProcessingPlans:
                 model=item.model_id,
                 recipe=recipe,
                 profile_revision=str(profile["revision"]) if stage == "C5" else None,
+                configuration_sha256=c2.configuration_sha256,
             )
         c4, c5 = approvals["C4"], approvals["C5"]
         # C1 has already charged the measured source audio. The remaining
@@ -539,7 +541,19 @@ class ConversationProcessingPlans:
             else await ReportingPipeline(self.inference).plan(recording, request)
         )
         require_derived_input(value, stage)
-        await self.authority.approval(self.app, actor, recording, stage, utc(self.app.clock()))
+        selected_configuration_sha256 = next(
+            item.configuration_sha256
+            for item in value.stages
+            if item.stage == stage.checkpoint.stage
+        )
+        await self.authority.approval(
+            self.app,
+            actor,
+            recording,
+            stage,
+            utc(self.app.clock()),
+            configuration_sha256=selected_configuration_sha256,
+        )
         existing = await self.db.scalar(
             select(ConversationInferenceTask).where(
                 ConversationInferenceTask.recording_id == row.recording_id,

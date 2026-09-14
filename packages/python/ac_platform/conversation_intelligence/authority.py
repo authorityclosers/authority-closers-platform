@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid4
 
 from sqlalchemy import func, select
@@ -45,6 +45,7 @@ from ac_platform.conversation_intelligence.models import (
     ConversationBudgetAccount,
     ConversationInferenceTask,
     ConversationMinuteAccount,
+    ConversationProviderActivation,
     ConversationProviderConfiguration,
     ConversationQuote,
     ConversationQuoteAcceptance,
@@ -307,9 +308,16 @@ class ConversationAuthority:
         recording: ConversationRecording,
         plan: ServicePlan,
         now: datetime,
+        configuration_sha256: str | None = None,
     ) -> tuple[HostedApprovalBundle, StageApproval]:
         bundle = self.current(now)
         self.recipient(bundle, actor)
+        configuration = await self._provider_configuration(
+            app,
+            configuration_sha256=configuration_sha256,
+        )
+        if configuration is None:
+            raise ConversationDenied("The approved provider configuration is unavailable.")
         if isinstance(actor, ProcessingActor):
             # Selecting the public template still requires the canonical exact
             # recording permission created by the intake consent command.
@@ -319,6 +327,7 @@ class ConversationAuthority:
             actor,
             source_sha256=recording.source_sha256,
             stage=plan.checkpoint.stage,
+            configuration_sha256=configuration.configuration_sha256,
         )
         if approval is None or approval.expires_at_epoch <= int(now.timestamp()):
             raise ConversationDenied("This recording and processing stage need current approval.")
@@ -346,8 +355,70 @@ class ConversationAuthority:
             model=plan.prepared.model,
             recipe=plan.recipe_revision,
             profile_revision=plan.prepared.profile_revision,
+            configuration_sha256=configuration.configuration_sha256,
         )
         return bundle, approval
+
+    async def _provider_configuration(
+        self,
+        app: ConversationApplication,
+        *,
+        configuration_sha256: str | None = None,
+    ) -> ConversationProviderConfiguration | None:
+        """Resolve the immutable route selected for a new or existing plan."""
+
+        control_tenant_id = self.operations_tenant_id
+        await lock_provider_configuration(app.database, control_tenant_id, shared=True)
+        if configuration_sha256 is not None:
+            value = await app.database.scalar(
+                select(ConversationProviderConfiguration)
+                .where(
+                    ConversationProviderConfiguration.tenant_id == control_tenant_id,
+                    ConversationProviderConfiguration.configuration_sha256 == configuration_sha256,
+                )
+                .order_by(ConversationProviderConfiguration.revision.desc())
+                .limit(1)
+                .with_for_update(read=True)
+                .execution_options(populate_existing=True)
+            )
+            return value
+        activation = await app.database.scalar(
+            select(ConversationProviderActivation)
+            .where(ConversationProviderActivation.tenant_id == control_tenant_id)
+            .order_by(ConversationProviderActivation.sequence.desc())
+            .limit(1)
+            .with_for_update(read=True)
+            .execution_options(populate_existing=True)
+        )
+        if activation is not None:
+            selected = cast(
+                ConversationProviderConfiguration | None,
+                await app.database.scalar(
+                    select(ConversationProviderConfiguration)
+                    .where(
+                        ConversationProviderConfiguration.id == activation.configuration_id,
+                        ConversationProviderConfiguration.tenant_id == control_tenant_id,
+                        ConversationProviderConfiguration.configuration_sha256
+                        == activation.configuration_sha256,
+                        ConversationProviderConfiguration.revision
+                        == activation.configuration_revision,
+                    )
+                    .with_for_update(read=True)
+                    .execution_options(populate_existing=True)
+                ),
+            )
+            if selected is not None:
+                return selected
+            raise ConversationDenied("The active provider configuration is unavailable.")
+        value = await app.database.scalar(
+            select(ConversationProviderConfiguration)
+            .where(ConversationProviderConfiguration.tenant_id == control_tenant_id)
+            .order_by(ConversationProviderConfiguration.revision.desc())
+            .limit(1)
+            .with_for_update(read=True)
+            .execution_options(populate_existing=True)
+        )
+        return cast(ConversationProviderConfiguration | None, value)
 
     @staticmethod
     def stage_approval(
@@ -356,6 +427,7 @@ class ConversationAuthority:
         *,
         source_sha256: str,
         stage: str,
+        configuration_sha256: str | None = None,
     ) -> StageApproval | None:
         """Resolve one static or exact-source acquisition approval.
 
@@ -369,23 +441,38 @@ class ConversationAuthority:
             if policy is None or not policy.matches_actor(actor):
                 return None
             try:
-                return policy.derive_stage(
+                derived = policy.derive_stage(
                     tenant_id=actor.tenant_id,
                     person_id=actor.person_id,
                     source_sha256=source_sha256,
                     stage=stage,  # type: ignore[arg-type]
                 )
+                if configuration_sha256 is not None and (
+                    derived.configuration_sha256 != configuration_sha256
+                ):
+                    return None
+                return derived
             except ValueError:
                 return None
-        return next(
-            (
-                item
-                for item in bundle.stages
-                if (item.tenant_id, item.person_id, item.source_sha256, item.stage)
-                == (actor.tenant_id, actor.person_id, source_sha256, stage)
-            ),
-            None,
+        candidates = tuple(
+            item
+            for item in bundle.stages
+            if (
+                item.tenant_id,
+                item.person_id,
+                item.source_sha256,
+                item.stage,
+                item.configuration_sha256 if configuration_sha256 is not None else None,
+            )
+            == (
+                actor.tenant_id,
+                actor.person_id,
+                source_sha256,
+                stage,
+                configuration_sha256 if configuration_sha256 is not None else None,
+            )
         )
+        return candidates[0] if len(candidates) == 1 else None
 
     async def validate_route(
         self,
@@ -399,20 +486,17 @@ class ConversationAuthority:
         model: str,
         recipe: str,
         profile_revision: str | None,
+        configuration_sha256: str | None = None,
     ) -> None:
         """Resolve a pinned future stage without inventing its as-yet unknown input."""
         assert actor.tenant_id is not None
         control_tenant_id = self.operations_tenant_id
-        await lock_provider_configuration(app.database, control_tenant_id, shared=True)
-        latest = await app.database.scalar(
-            select(ConversationProviderConfiguration)
-            .where(ConversationProviderConfiguration.tenant_id == control_tenant_id)
-            .order_by(ConversationProviderConfiguration.revision.desc())
-            .limit(1)
-            .with_for_update(read=True)
-            .execution_options(populate_existing=True)
+        selected_digest = configuration_sha256 or approval.configuration_sha256
+        selected = await self._provider_configuration(
+            app,
+            configuration_sha256=selected_digest,
         )
-        if latest is None or latest.configuration_sha256 != approval.configuration_sha256:
+        if selected is None or selected.configuration_sha256 != approval.configuration_sha256:
             raise ConversationDenied("The current provider configuration is not approved.")
         # A persisted configuration cannot retain authority after its control
         # owner loses the verified identity or active operations membership.
@@ -420,7 +504,7 @@ class ConversationAuthority:
         # signing out normally does not erase a valid saved configuration.
         controller = await app.database.scalar(
             select(Person)
-            .where(Person.id == latest.person_id)
+            .where(Person.id == selected.person_id)
             .with_for_update(read=True)
             .execution_options(populate_existing=True)
         )
@@ -428,7 +512,7 @@ class ConversationAuthority:
             select(Membership)
             .where(
                 Membership.tenant_id == control_tenant_id,
-                Membership.person_id == latest.person_id,
+                Membership.person_id == selected.person_id,
             )
             .with_for_update(read=True)
             .execution_options(populate_existing=True)
@@ -453,7 +537,7 @@ class ConversationAuthority:
         ):
             raise ConversationDenied("The provider control authorization is no longer active.")
         try:
-            config = parse_registry_config(latest.configuration)
+            config = parse_registry_config(selected.configuration)
             if config.digest != approval.configuration_sha256:
                 raise ValueError("configuration_changed")
             route = next(item for item in config.routes if item.task == task)
@@ -523,7 +607,20 @@ class ConversationAuthority:
         permission: ExecutionPermission,
         now: datetime,
     ) -> StageApproval:
-        bundle, approval = await self.approval(app, actor, recording, plan, now)
+        configuration_sha256 = quote.provider_configuration_sha256
+        bundle = self.current(now)
+        if configuration_sha256 is None:
+            configuration_sha256 = self._configuration_from_permission(
+                bundle, actor, recording.source_sha256, plan.checkpoint.stage, permission
+            )
+        bundle, approval = await self.approval(
+            app,
+            actor,
+            recording,
+            plan,
+            now,
+            configuration_sha256=configuration_sha256,
+        )
         # User minutes are charged once by the local C1 audio inspection. Hosted
         # provider stages use their own request/token/budget approvals and must
         # never charge the same source audio again.
@@ -531,6 +628,7 @@ class ConversationAuthority:
         if (
             row.budget_scope_id != bundle.budget_scope_id
             or quote.max_cost_paise != approval.max_cost_paise
+            or quote.provider_configuration_sha256 not in {None, approval.configuration_sha256}
             or quote.entitlement_seconds != seconds
             or permission.authorization_ref != self.authorization_ref(bundle, approval)
             or quote.expires_at_epoch > min(bundle.expires_at_epoch, approval.expires_at_epoch)
@@ -569,6 +667,47 @@ class ConversationAuthority:
             raise ConversationDenied("This recording's approved provider allowance is used.")
         return approval
 
+    def _configuration_from_permission(
+        self,
+        bundle: HostedApprovalBundle,
+        actor: ConversationActor,
+        source_sha256: str,
+        stage: str,
+        permission: ExecutionPermission,
+    ) -> str | None:
+        prefix, separator, remainder = permission.authorization_ref.partition(":")
+        if prefix != "hosted-stage-v1" or not separator:
+            return None
+        approval_id, separator, bundle_digest = remainder.partition(":")
+        if not separator or not approval_id or not bundle_digest:
+            return None
+        if bundle_digest != bundle.digest:
+            return None
+        try:
+            approval_uuid = UUID(approval_id)
+        except ValueError:
+            return None
+        candidate = self.stage_approval(
+            bundle,
+            actor,
+            source_sha256=source_sha256,
+            stage=stage,
+        )
+        if candidate is not None and candidate.id == approval_uuid:
+            return candidate.configuration_sha256
+        if isinstance(actor, ProcessingActor) and bundle.acquisition_policy is not None:
+            try:
+                derived = bundle.acquisition_policy.derive_stage(
+                    tenant_id=actor.tenant_id,
+                    person_id=actor.person_id,
+                    source_sha256=source_sha256,
+                    stage=stage,  # type: ignore[arg-type]
+                )
+            except ValueError:
+                return None
+            return derived.configuration_sha256 if derived.id == approval_uuid else None
+        return None
+
     async def issue(
         self,
         app: ConversationApplication,
@@ -593,6 +732,7 @@ class ConversationAuthority:
             "cache_key": plan.checkpoint.cache_key,
             "authority_sha256": bundle.digest,
             "approval_id": str(approval.id),
+            "configuration_sha256": approval.configuration_sha256,
         }
         replay = await app._replay(actor, key, "hosted_provider_quote", intent)
         if replay is not None and replay.result_id is not None:
@@ -626,6 +766,7 @@ class ConversationAuthority:
                 approval.max_cost_paise,
                 int(now.timestamp()),
                 min(int(now.timestamp()) + 900, bundle.expires_at_epoch, approval.expires_at_epoch),
+                approval.configuration_sha256,
             )
             permission = ExecutionPermission(
                 self.authorization_ref(bundle, approval),

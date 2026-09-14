@@ -104,6 +104,29 @@ class PinnedApprovalLoader:
             raise ValueError("hosted_approval_unavailable") from None
 
 
+def load_pinned_approval(settings: HostedConversationSettings) -> HostedApprovalBundle:
+    """Read the exact non-secret approval used by the hosted authority.
+
+    Admin activation uses this same loader so a browser request cannot supply
+    its own approval choices or bypass the deployment's hash pin.
+    """
+
+    if not all(
+        (
+            settings.sales_xray_approval_path,
+            settings.sales_xray_approval_sha256,
+            settings.operations_tenant_id,
+        )
+    ) or not isinstance(settings.operations_tenant_id, UUID):
+        raise ValueError("hosted_approval_unavailable")
+    return PinnedApprovalLoader(
+        Path(settings.sales_xray_approval_path or ""),
+        settings.sales_xray_approval_sha256 or "",
+        settings.environment,
+        settings.operations_tenant_id,
+    )()
+
+
 def compose_hosted_intake(settings: HostedConversationSettings) -> ConversationIntakeRuntime | None:
     # Late import keeps the pure authority layer independent of the HTTP graph.
     from ac_platform.http.conversation_intake import ConversationIntakeRuntime
