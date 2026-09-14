@@ -9,7 +9,7 @@ import json
 import re
 from collections.abc import AsyncIterator, Callable, Mapping
 from dataclasses import dataclass, replace
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Annotated, Literal, cast
 from urllib.parse import urlencode, urlsplit
 from uuid import UUID
@@ -22,6 +22,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ac_platform.application.settings import Settings
+from ac_platform.audit.models import AuditEvent
 from ac_platform.audit.service import AuditRepository
 from ac_platform.http.auth_transactions import (
     AUTH_TRANSACTION_MAX_AGE_SECONDS,
@@ -42,7 +43,7 @@ from ac_platform.identity.application import (
     AsyncIdentityApplication,
     ResolvedActorContext,
 )
-from ac_platform.identity.models import IdentityCommandIdempotency
+from ac_platform.identity.models import IdentityCommandIdempotency, Person, PersonStatus
 from ac_platform.identity.onboarding import (
     LearnerOnboardingService,
     OnboardingConcurrencyError,
@@ -163,6 +164,18 @@ class AdminSurfaceRequired(DomainError):
     status = 403
 
 
+class LearnerConsentRenewalUnavailable(DomainError):
+    code = "learner_consent_renewal_unavailable"
+    title = "Learner consent renewal is unavailable"
+    status = 503
+
+
+class LearnerConsentRenewalDenied(DomainError):
+    code = "learner_consent_renewal_denied"
+    title = "Learner consent renewal is not available"
+    status = 403
+
+
 @dataclass(slots=True)
 class AuthenticatedTransaction:
     database: AsyncSession
@@ -184,6 +197,32 @@ class MeResponse(BaseModel):
     selected_tenant_id: UUID | None
     membership_role: str | None
     permissions: list[str]
+
+
+class LearnerConsentDocumentResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    version: str
+    acknowledgement: str
+    terms_path: str = "/terms"
+    privacy_path: str = "/privacy"
+
+
+class LearnerConsentResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["current", "renewal_required", "consent_required"]
+    current_version: str
+    recorded_version: str | None
+    consented_at: datetime | None
+    document: LearnerConsentDocumentResponse
+    replayed: bool = False
+
+
+class LearnerConsentRenewalRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    accepted: Literal[True]
 
 
 class GoogleLinkResponse(BaseModel):
@@ -1664,6 +1703,152 @@ def install_identity_http(
         )
         _set_onboarding_response_headers(response, snapshot)
         return _onboarding_response(snapshot)
+
+    def _learner_consent_document(version: str) -> LearnerConsentDocumentResponse:
+        return LearnerConsentDocumentResponse(
+            version=version,
+            acknowledgement=(
+                "I confirm that I am 18 or older and accept the current Authority Closers "
+                "Terms and Privacy notice for my learner account."
+            ),
+        )
+
+    async def _learner_consent_response(
+        auth: AuthenticatedTransaction,
+        *,
+        response: Response,
+        replayed: bool = False,
+    ) -> LearnerConsentResponse:
+        version = (settings.learner_consent_version or "").strip()
+        if not version:
+            raise LearnerConsentRenewalUnavailable(
+                "The current learner consent document is not configured."
+            )
+        person = await auth.database.scalar(
+            select(Person).where(Person.id == auth.resolved.actor.person_id)
+        )
+        if person is None:
+            raise LearnerConsentRenewalDenied("The authenticated learner account is unavailable.")
+        recorded = person.consent_version
+        current = recorded == version and person.consented_at is not None
+        response.headers["cache-control"] = "no-store"
+        return LearnerConsentResponse(
+            status=(
+                "current" if current else ("renewal_required" if recorded else "consent_required")
+            ),
+            current_version=version,
+            recorded_version=recorded,
+            consented_at=person.consented_at,
+            document=_learner_consent_document(version),
+            replayed=replayed,
+        )
+
+    @router.get("/me/consent", response_model=LearnerConsentResponse)
+    async def get_learner_consent(
+        response: Response,
+        auth: AuthenticatedTransaction = actor_dependency,
+    ) -> LearnerConsentResponse:
+        return await _learner_consent_response(auth, response=response)
+
+    @router.post("/me/consent/renew", response_model=LearnerConsentResponse)
+    async def renew_learner_consent(
+        request: Request,
+        response: Response,
+        body: LearnerConsentRenewalRequest,
+        auth: AuthenticatedTransaction = actor_dependency,
+    ) -> LearnerConsentResponse:
+        require_safe_origin(request, settings)
+        version = (settings.learner_consent_version or "").strip()
+        if not version:
+            raise LearnerConsentRenewalUnavailable(
+                "The current learner consent document is not configured."
+            )
+        actor = auth.resolved.actor
+        person = await auth.database.scalar(
+            select(Person).where(Person.id == actor.person_id).with_for_update()
+        )
+        if (
+            person is None
+            or person.status != PersonStatus.ACTIVE.value
+            or person.email_verified_at is None
+        ):
+            raise LearnerConsentRenewalDenied(
+                "Only an active, email-verified learner can renew consent."
+            )
+
+        # The audit chain is the append-only consent history.  A person row is
+        # only the current projection; earlier versions remain attributable and
+        # verifiable in the chain and are never overwritten.
+        tenant_id = actor.tenant_id or settings.public_learner_tenant_id
+        if tenant_id is None:
+            raise LearnerConsentRenewalUnavailable(
+                "A learner tenant is required to record consent safely."
+            )
+        action = "identity.learner_consent_accepted.v1"
+        prior_events = list(
+            (
+                await auth.database.scalars(
+                    select(AuditEvent)
+                    .where(
+                        AuditEvent.actor_person_id == actor.person_id,
+                        AuditEvent.action == action,
+                        AuditEvent.resource_type == "person_consent",
+                        AuditEvent.resource_id == str(actor.person_id),
+                    )
+                    .order_by(AuditEvent.occurred_at.desc())
+                )
+            ).all()
+        )
+        existing = next(
+            (
+                event
+                for event in prior_events
+                if isinstance(event.payload, dict)
+                and event.payload.get("consent_version") == version
+            ),
+            None,
+        )
+        if existing is not None:
+            # A retried acceptance is a read of the original durable decision.
+            # Do not append a second history entry or refresh its timestamp.
+            if person.consent_version != version or person.consented_at is None:
+                person.consent_version = version
+                person.consented_at = existing.occurred_at
+                person.revision += 1
+            return await _learner_consent_response(
+                auth,
+                response=response,
+                replayed=True,
+            )
+
+        now = datetime.now(UTC)
+        previous_version = person.consent_version
+        previous_consented_at = person.consented_at
+        person.consent_version = version
+        person.consented_at = now
+        person.revision += 1
+        await AuditRepository(auth.database).append(
+            tenant_id=tenant_id,
+            actor_person_id=actor.person_id,
+            session_id=actor.session_id,
+            action=action,
+            resource_type="person_consent",
+            resource_id=actor.person_id,
+            payload={
+                "consent_version": version,
+                "previous_consent_version": previous_version,
+                "previous_consented_at": (
+                    previous_consented_at.isoformat() if previous_consented_at else None
+                ),
+                "explicit_acceptance": True,
+                "age_attestation": "18_plus_learner_declaration",
+                "terms_path": "/terms",
+                "privacy_path": "/privacy",
+            },
+            reason="Learner accepted the current published Terms and Privacy notice.",
+            now=now,
+        )
+        return await _learner_consent_response(auth, response=response)
 
     @router.get("/auth/google/start", name="google_auth_start")
     async def google_auth_start(

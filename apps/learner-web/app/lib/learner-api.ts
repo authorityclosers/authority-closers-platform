@@ -295,6 +295,22 @@ export interface FreeEnrollmentResponse {
   replayed: boolean;
 }
 
+export interface LearnerConsentDocumentResponse {
+  version: string;
+  acknowledgement: string;
+  terms_path: "/terms";
+  privacy_path: "/privacy";
+}
+
+export interface LearnerConsentResponse {
+  status: "current" | "renewal_required" | "consent_required";
+  current_version: string;
+  recorded_version: string | null;
+  consented_at: string | null;
+  document: LearnerConsentDocumentResponse;
+  replayed: boolean;
+}
+
 export interface LearningActivityResponse {
   id: string;
   module_id: string;
@@ -1189,6 +1205,17 @@ export function createLearnerApi(
         ...options,
         cache: "no-store",
       }),
+    consent: (options: LearnerReadOptions = {}) =>
+      request<LearnerConsentResponse>("/v1/me/consent", {
+        ...options,
+        cache: "no-store",
+      }),
+    renewConsent: () =>
+      logicalJsonMutation<LearnerConsentResponse>(
+        "learner-consent-renewal",
+        "/v1/me/consent/renew",
+        { accepted: true },
+      ),
     listPrograms: (limit = 50, options: LearnerReadOptions = {}) =>
       request<ProgramCollectionResponse>(`/v1/programs?limit=${limit}`, {
         ...options,

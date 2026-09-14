@@ -16,7 +16,8 @@ type CourseIntentRoute =
   | typeof ROUTES.sessionExpired
   | typeof ROUTES.forgotPassword
   | typeof ROUTES.verifyEmail
-  | typeof ROUTES.resetPassword;
+  | typeof ROUTES.resetPassword
+  | typeof ROUTES.consentRenewal;
 
 export function courseIntentHref(
   route: CourseIntentRoute,

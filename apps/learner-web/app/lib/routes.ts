@@ -9,6 +9,7 @@ export const ROUTES = {
   forgotPassword: "/forgot-password",
   verifyEmail: "/verify-email",
   resetPassword: "/reset-password",
+  consentRenewal: "/consent/renewal",
   callback: "/auth/callback",
   sessionExpired: "/session-expired",
   onboarding: "/onboarding",

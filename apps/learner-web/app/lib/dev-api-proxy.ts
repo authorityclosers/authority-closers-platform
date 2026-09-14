@@ -581,6 +581,12 @@ export function isStagingAuthenticatedLearnerRequest(
   if (pathname === "/v1/me/app-updates") {
     return normalizedMethod === "GET" && hasNoQuery(url);
   }
+  if (pathname === "/v1/me/consent") {
+    return normalizedMethod === "GET" && hasNoQuery(url);
+  }
+  if (pathname === "/v1/me/consent/renew") {
+    return normalizedMethod === "POST" && hasNoQuery(url);
+  }
   if (
     /^\/v1\/me\/app-updates\/[a-z0-9]+(?:-[a-z0-9]+)*\/read$/.test(pathname)
   ) {

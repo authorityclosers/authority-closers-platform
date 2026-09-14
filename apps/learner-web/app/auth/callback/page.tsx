@@ -64,10 +64,9 @@ const callbackResults: Record<
     eyebrow: "Account review required",
     title: "Your consent record needs an update.",
     detail:
-      "We kept your existing identity and learning data unchanged. Contact Authority Closers support so the reviewed consent update can be completed safely.",
-    actionHref:
-      "mailto:admin@authorityclosers.com?subject=Authority%20Closers%20learner%20consent%20update",
-    actionLabel: "Contact support",
+      "We kept your existing identity and learning data unchanged. Sign in to review the current published consent document and return to your course.",
+    actionHref: ROUTES.consentRenewal,
+    actionLabel: "Review current consent",
     icon: CircleAlert,
   },
   provider_rejected: {
@@ -137,7 +136,11 @@ export default async function CallbackPage({
           courseIntent,
           salesNext,
         )
-      : recovery?.actionHref;
+      : recovery?.actionHref === ROUTES.consentRenewal
+        ? courseIntent
+          ? `${ROUTES.consentRenewal}?course=${encodeURIComponent(courseIntent)}`
+          : ROUTES.consentRenewal
+        : recovery?.actionHref;
   const retryParameters = new URLSearchParams();
   if (result) retryParameters.set("result", result);
   if (courseIntent) retryParameters.set("course", courseIntent);
