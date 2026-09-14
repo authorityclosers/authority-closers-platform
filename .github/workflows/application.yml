@@ -6,6 +6,12 @@ on:
       - main
   pull_request:
   workflow_dispatch:
+    inputs:
+      recover_immutable_release:
+        description: "Package the already-published 0847 release by exact registry digest"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -16,6 +22,7 @@ concurrency:
 
 jobs:
   academy-capacity-simulation:
+    if: github.event_name != 'workflow_dispatch' || inputs.recover_immutable_release != true
     runs-on: windows-2022
     timeout-minutes: 15
     steps:
@@ -27,6 +34,7 @@ jobs:
         run: ./scripts/Test-AcademyCapacitySimulation.ps1
 
   validate:
+    if: github.event_name != 'workflow_dispatch' || inputs.recover_immutable_release != true
     runs-on: ubuntu-latest
     timeout-minutes: 30
     services:
@@ -287,7 +295,7 @@ jobs:
           --evidence-dir "${{ runner.temp }}/registration-browser-${{ github.sha }}"
 
   package-release-images:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && inputs.recover_immutable_release != true
     needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -638,3 +646,229 @@ jobs:
           fi
           printf 'Verified artifact %s; final repository pool is %s bytes.\n' \
             "$current_artifact_id" "$final_bytes"
+
+  recover-existing-immutable-release:
+    if: github.event_name == 'workflow_dispatch' && inputs.recover_immutable_release == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      actions: write
+      contents: read
+      packages: read
+    env:
+      # These are fixed to the release whose original publication proof is being
+      # recovered. They are not workflow inputs, so a dispatch cannot substitute
+      # an arbitrary registry image or release.
+      RELEASE_SHA: 0847db5d3ca1ed825b68c226713d0f52d11683b1
+      ORIGINAL_RUN_ID: "34817997207"
+      API_REGISTRY_REF: ghcr.io/authorityclosers/authority-closers-api@sha256:5e9326288e109e04880cb72cfe22ee22159fc8b602d1c458c16cfa8309da2bbf
+      LEARNER_REGISTRY_REF: ghcr.io/authorityclosers/authority-closers-learner-web@sha256:12be7777f4ce46d09e411ef14603628e08a1831974c2a61c43f5d85eb744a9af
+      ADMIN_REGISTRY_REF: ghcr.io/authorityclosers/authority-closers-admin-web@sha256:d52c2f5fa7ada872575d8cfba94d6196b43ed998ba307b643578be5643b989fc
+      COACH_REGISTRY_REF: ghcr.io/authorityclosers/authority-closers-coach-web@sha256:56fce8247ace1648975d711e92248b7bb5af7b758c7964284ea92689819cf9ef
+    steps:
+      - name: Checkout recovery workflow source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+          path: recovery-source
+          fetch-depth: 0
+      - name: Checkout exact application source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+          ref: ${{ env.RELEASE_SHA }}
+          path: release-source
+          fetch-depth: 0
+      - name: Validate recovery workflow boundary
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python3 recovery-source/scripts/verify-immutable-release-recovery.py
+          recovery-source/.github/workflows/application.yml
+      - name: Verify original validation and publication proof
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          run_json="$RUNNER_TEMP/original-run.json"
+          jobs_json="$RUNNER_TEMP/original-jobs.json"
+          gh api \
+            "/repos/${GITHUB_REPOSITORY}/actions/runs/${ORIGINAL_RUN_ID}/attempts/1" \
+            > "$run_json"
+          jq -e \
+            --argjson run_id "$ORIGINAL_RUN_ID" --arg sha "$RELEASE_SHA" \
+            '.id == $run_id and .run_attempt == 1 and .head_sha == $sha
+             and .status == "completed" and .event == "workflow_dispatch"
+             and .path == ".github/workflows/application.yml"
+             and .conclusion == "failure"' \
+            "$run_json" > /dev/null
+          gh api --paginate \
+            "/repos/${GITHUB_REPOSITORY}/actions/runs/${ORIGINAL_RUN_ID}/attempts/1/jobs?per_page=100" \
+            > "$jobs_json"
+          jq -e '
+            .jobs | map({key: .name, value: .}) | from_entries as $jobs
+            | ($jobs["package-release-images"].steps
+               | map({key: .name, value: .conclusion}) | from_entries) as $steps
+            | $jobs.validate.conclusion == "success"
+              and $steps["Publish immutable SHA tags"] == "success"
+              and $steps["Create transport archives and reviewed manifest"] == "success"
+              and $steps["Admit release artifact under the pooled ceiling"] == "failure"
+          ' "$jobs_json" > /dev/null
+      - name: Pull exact published images without pushing or rebuilding
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          pull_and_bind() {
+            ref="$1"
+            local_image="$2"
+            [[ "$ref" =~ ^ghcr\.io/authorityclosers/(authority-closers-api|authority-closers-learner-web|authority-closers-admin-web|authority-closers-coach-web)@sha256:[0-9a-f]{64}$ ]] || {
+              printf 'Unexpected registry reference.\n' >&2; exit 1;
+            }
+            docker pull "$ref"
+            docker image inspect "$ref" \
+              | jq -e --arg ref "$ref" '.[0].RepoDigests | index($ref) != null' > /dev/null
+            docker tag "$ref" "$local_image"
+          }
+          pull_and_bind "$API_REGISTRY_REF" "ghcr.io/authorityclosers/authority-closers-api:${RELEASE_SHA}"
+          pull_and_bind "$LEARNER_REGISTRY_REF" "ghcr.io/authorityclosers/authority-closers-learner-web:${RELEASE_SHA}"
+          pull_and_bind "$ADMIN_REGISTRY_REF" "ghcr.io/authorityclosers/authority-closers-admin-web:${RELEASE_SHA}"
+          pull_and_bind "$COACH_REGISTRY_REF" "ghcr.io/authorityclosers/authority-closers-coach-web:${RELEASE_SHA}"
+      - name: Assemble and verify canonical package-only transport
+        run: |
+          set -euo pipefail
+          artifact_dir="$RUNNER_TEMP/ac-application-recovery-${RELEASE_SHA}"
+          bundle_dir="$artifact_dir/bundle"
+          proof_dir="$artifact_dir/proof"
+          transport_tar="$RUNNER_TEMP/ac-application-recovery-${RELEASE_SHA}.tar"
+          transport_index="$RUNNER_TEMP/ac-application-recovery-${RELEASE_SHA}-index.json"
+          mkdir -p "$bundle_dir" "$proof_dir"
+          docker save --output "$transport_tar" \
+            "ghcr.io/authorityclosers/authority-closers-api:${RELEASE_SHA}" \
+            "ghcr.io/authorityclosers/authority-closers-learner-web:${RELEASE_SHA}" \
+            "ghcr.io/authorityclosers/authority-closers-admin-web:${RELEASE_SHA}" \
+            "ghcr.io/authorityclosers/authority-closers-coach-web:${RELEASE_SHA}"
+          tar --extract --to-stdout --file "$transport_tar" index.json > "$transport_index"
+          transport_digest_for() {
+            image="$1"
+            mapfile -t matches < <(
+              jq --raw-output --arg image "$image" \
+                '.manifests[] | select(.annotations["io.containerd.image.name"] == $image) | .digest' \
+                "$transport_index"
+            )
+            [ "${#matches[@]}" -eq 1 ] && [[ "${matches[0]}" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+              printf 'Transport index binding failed for %s.\n' "$image" >&2; exit 1;
+            }
+            printf '%s\n' "${matches[0]}"
+          }
+          verify_transport_config() {
+            transport_digest="$1"
+            expected_config_digest="$2"
+            manifest_path="blobs/sha256/${transport_digest#sha256:}"
+            actual_transport_digest="sha256:$(tar --extract --to-stdout --file "$transport_tar" "$manifest_path" | sha256sum | cut -d' ' -f1)"
+            [ "$actual_transport_digest" = "$transport_digest" ] || { printf 'Transport manifest hash failed.\n' >&2; exit 1; }
+            transported_config_digest="$(tar --extract --to-stdout --file "$transport_tar" "$manifest_path" | jq --raw-output '.config.digest')"
+            [ "$transported_config_digest" = "$expected_config_digest" ] || { printf 'Transport config binding failed.\n' >&2; exit 1; }
+          }
+          API_IMAGE="ghcr.io/authorityclosers/authority-closers-api:${RELEASE_SHA}"
+          LEARNER_IMAGE="ghcr.io/authorityclosers/authority-closers-learner-web:${RELEASE_SHA}"
+          ADMIN_IMAGE="ghcr.io/authorityclosers/authority-closers-admin-web:${RELEASE_SHA}"
+          COACH_IMAGE="ghcr.io/authorityclosers/authority-closers-coach-web:${RELEASE_SHA}"
+          api_id="$(docker image inspect --format '{{.Id}}' "$API_IMAGE")"
+          learner_id="$(docker image inspect --format '{{.Id}}' "$LEARNER_IMAGE")"
+          admin_id="$(docker image inspect --format '{{.Id}}' "$ADMIN_IMAGE")"
+          coach_id="$(docker image inspect --format '{{.Id}}' "$COACH_IMAGE")"
+          api_release_id="$(docker run --rm --network none --entrypoint /bin/sh "$API_IMAGE" -c 'cat /app/.ac-release-id')"
+          [ "$api_release_id" = "$RELEASE_SHA" ] || { printf 'API release marker mismatch.\n' >&2; exit 1; }
+          mapfile -t migration_heads < <(docker run --rm --network none --entrypoint alembic "$API_IMAGE" heads | awk '$2 == "(head)" { print $1 }')
+          [ "${#migration_heads[@]}" -eq 1 ] && [[ "${migration_heads[0]}" =~ ^[0-9]{8}_[0-9]{4}$ ]] || { printf 'Migration head proof failed.\n' >&2; exit 1; }
+          api_transport_digest="$(transport_digest_for "$API_IMAGE")"
+          learner_transport_digest="$(transport_digest_for "$LEARNER_IMAGE")"
+          admin_transport_digest="$(transport_digest_for "$ADMIN_IMAGE")"
+          coach_transport_digest="$(transport_digest_for "$COACH_IMAGE")"
+          verify_transport_config "$api_transport_digest" "$api_id"
+          verify_transport_config "$learner_transport_digest" "$learner_id"
+          verify_transport_config "$admin_transport_digest" "$admin_id"
+          verify_transport_config "$coach_transport_digest" "$coach_id"
+          gzip -9 < "$transport_tar" > "$bundle_dir/application-images.tar.gz"
+          {
+            printf 'AC_RELEASE_ID=%s\n' "$RELEASE_SHA"
+            printf 'AC_API_IMAGE=%s\n' "$api_transport_digest"
+            printf 'AC_API_REGISTRY_DIGEST=%s\n' "$API_REGISTRY_REF"
+            printf 'AC_API_TRANSPORT_DIGEST=%s\n' "$api_transport_digest"
+            printf 'AC_LEARNER_IMAGE=%s\n' "$learner_transport_digest"
+            printf 'AC_LEARNER_REGISTRY_DIGEST=%s\n' "$LEARNER_REGISTRY_REF"
+            printf 'AC_LEARNER_TRANSPORT_DIGEST=%s\n' "$learner_transport_digest"
+            printf 'AC_MIGRATION_HEAD=%s\n' "${migration_heads[0]}"
+            printf 'AC_ADMIN_IMAGE=%s\n' "$admin_transport_digest"
+            printf 'AC_ADMIN_REGISTRY_DIGEST=%s\n' "$ADMIN_REGISTRY_REF"
+            printf 'AC_ADMIN_TRANSPORT_DIGEST=%s\n' "$admin_transport_digest"
+            printf 'AC_COACH_IMAGE=%s\n' "$coach_transport_digest"
+            printf 'AC_COACH_REGISTRY_DIGEST=%s\n' "$COACH_REGISTRY_REF"
+            printf 'AC_COACH_TRANSPORT_DIGEST=%s\n' "$coach_transport_digest"
+          } > "$bundle_dir/release-images.env"
+          (cd "$bundle_dir" && sha256sum application-images.tar.gz release-images.env > SHA256SUMS)
+          python3 release-source/infra/application/scripts/prepare-release-inputs.py verify-bundle "$bundle_dir" "$RELEASE_SHA" > "$RUNNER_TEMP/bundle-proof.txt"
+          git -C release-source archive --format=tar --output="$proof_dir/ac-application-${RELEASE_SHA}.tar" "$RELEASE_SHA" -- infra/application
+          archive_sha256="$(sha256sum "$proof_dir/ac-application-${RELEASE_SHA}.tar" | cut -d' ' -f1)"
+          python3 release-source/infra/application/scripts/verify-release-archive.py "$proof_dir/ac-application-${RELEASE_SHA}.tar" "$archive_sha256" "$RELEASE_SHA"
+          bundle_sha256="$(sha256sum "$bundle_dir/application-images.tar.gz" | cut -d' ' -f1)"
+          jq -n \
+            --arg workflow_sha "$GITHUB_SHA" --arg recovery_run "$GITHUB_RUN_ID" \
+            --arg release_sha "$RELEASE_SHA" --arg original_run "$ORIGINAL_RUN_ID" \
+            --arg bundle_sha256 "$bundle_sha256" --arg archive_sha256 "$archive_sha256" \
+            --arg migration_head "${migration_heads[0]}" --arg api_transport "$api_transport_digest" \
+            --arg learner_transport "$learner_transport_digest" --arg admin_transport "$admin_transport_digest" \
+            --arg coach_transport "$coach_transport_digest" \
+            --argjson original_run_proof "$(cat "$RUNNER_TEMP/original-run.json")" \
+            --argjson original_jobs_proof "$(cat "$RUNNER_TEMP/original-jobs.json")" \
+            '{kind:"immutable_registry_recovery",package_only:true,activation_attempted:false,
+              workflow_source_sha:$workflow_sha,recovery_run_id:($recovery_run|tonumber),
+              application_release_sha:$release_sha,original_run_id:($original_run|tonumber),
+              original_run:$original_run_proof,original_jobs:$original_jobs_proof,
+              transport_digests:{api:$api_transport,learner:$learner_transport,admin:$admin_transport,coach:$coach_transport},
+              migration_head:$migration_head,image_bundle_sha256:$bundle_sha256,source_archive_sha256:$archive_sha256,
+              database_writes:0,runtime_changes:0,provider_calls:0}' \
+            > "$proof_dir/recovery-proof.json"
+      - name: Admit recovery artifact under pooled ceiling
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          artifact_dir="$RUNNER_TEMP/ac-application-recovery-${RELEASE_SHA}"
+          candidate_bytes="$(du --bytes --summarize "$artifact_dir" | cut -f1)"
+          max_artifact_bytes=450000000
+          max_artifact_pool_bytes=450000000
+          [ "$candidate_bytes" -le "$max_artifact_bytes" ] || { printf 'Recovery artifact exceeds 450000000 bytes.\n' >&2; exit 1; }
+          list_repository_artifacts() {
+            gh api --paginate "/repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" | jq --slurp '[.[].artifacts[]]'
+          }
+          artifacts_before="$RUNNER_TEMP/recovery-artifacts-before.json"
+          list_repository_artifacts > "$artifacts_before"
+          retained_bytes="$(jq '[.[].size_in_bytes] | add // 0' "$artifacts_before")"
+          [[ "$retained_bytes" =~ ^[0-9]+$ ]] || { printf 'Artifact pool could not be proven.\n' >&2; exit 1; }
+          projected=$((retained_bytes + candidate_bytes))
+          [ "$projected" -le "$max_artifact_pool_bytes" ] || { printf 'Projected pool %s exceeds 450000000 bytes.\n' "$projected" >&2; exit 1; }
+          printf 'Recovery artifact is %s bytes; projected pool is %s bytes.\n' "$candidate_bytes" "$projected"
+      - name: Upload verified recovery bundle and proof
+        id: upload_recovery
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ac-application-recovery-0847db5d3ca1ed825b68c226713d0f52d11683b1
+          path: ${{ runner.temp }}/ac-application-recovery-0847db5d3ca1ed825b68c226713d0f52d11683b1
+          if-no-files-found: error
+          retention-days: 1
+      - name: Prove uploaded recovery artifact identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+          UPLOADED_ARTIFACT_ID: ${{ steps.upload_recovery.outputs.artifact-id }}
+        run: |
+          set -euo pipefail
+          [[ "$UPLOADED_ARTIFACT_ID" =~ ^[0-9]+$ ]] || { printf 'Uploaded artifact identity malformed.\n' >&2; exit 1; }
+          gh api "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${UPLOADED_ARTIFACT_ID}" > "$RUNNER_TEMP/uploaded-recovery.json"
+          jq -e --argjson artifact_id "$UPLOADED_ARTIFACT_ID" \
+            --arg name "ac-application-recovery-0847db5d3ca1ed825b68c226713d0f52d11683b1" \
+            --argjson run_id "$GITHUB_RUN_ID" \
+            '.id == $artifact_id and .name == $name and .workflow_run.id == $run_id and .expired == false and .size_in_bytes > 0' \
+            "$RUNNER_TEMP/uploaded-recovery.json" > /dev/null
