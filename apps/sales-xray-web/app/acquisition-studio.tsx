@@ -1038,7 +1038,7 @@ export function AcquisitionStudio({
                       className="icon-button"
                       aria-label="Remove selected call"
                       disabled={!!busy}
-                      onClick={reset}
+                      onClick={() => reset()}
                     >
                       <X size={18} />
                     </button>
@@ -1509,7 +1509,7 @@ export function AcquisitionStudio({
                 type="button"
                 className="secondary-button"
                 disabled={!!busy}
-                onClick={reset}
+                onClick={() => reset()}
               >
                 Analyse another call <ArrowRight size={16} />
               </button>
