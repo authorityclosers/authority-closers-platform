@@ -67,9 +67,15 @@ def test_durable_plan_output_allocation_fits_supported_routes_without_losing_inp
         system, user = [message["content"] for message in body["messages"]]
         assert body["max_completion_tokens"] == 3_200
     submitted = json.loads(user.split("\n", 1)[1])
-    assert submitted["observations"] == [
-        item.model_dump(mode="json") for item in packet.observations
-    ]
+    context = submitted["source_context"]
+    segments = {row[0]: dict(zip(context["columns"], row, strict=True)) for row in context["rows"]}
+    assert list(segments.values()) == transcript["segments"]
+    for original, compact in zip(packet.observations, submitted["observations"], strict=True):
+        assert original.statement == compact["statement"]
+        for evidence, reference in zip(original.evidence, compact["evidence"], strict=True):
+            row = segments[reference["segment_id"]]
+            assert row["text"][reference["quote_start"] : reference["quote_end"]] == evidence.quote
+            assert (row["start_ms"], row["end_ms"]) == (evidence.start_ms, evidence.end_ms)
     assert submitted["covered_segment_ids"] == packet.covered_segment_ids
     assert submitted["uncertainties"] == packet.uncertainties
     assert json.loads(system.rsplit("Profile:\n", 1)[1]) == reports._prompt_profile(profile)

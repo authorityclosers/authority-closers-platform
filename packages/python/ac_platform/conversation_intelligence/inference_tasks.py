@@ -31,16 +31,19 @@ from ac_platform.conversation_intelligence.providers import (
 )
 from ac_platform.conversation_intelligence.report_overview import OVERVIEW_MARKER
 from ac_platform.conversation_intelligence.reports import (
+    COACHING_CONTEXT_MARKER,
     GROQ_MODEL,
     FactPacket,
     ReportError,
     TranscriptChunk,
     build_fact_groq_prompts,
     build_report_groq_prompt,
+    coaching_source_context,
     extract_style_independent_facts,
     load_report_profile,
     parse_fact_packet,
     parse_groq_response,
+    validate_coaching_context,
 )
 
 TaskName = Literal["asr", "facts", "coaching"]
@@ -217,6 +220,13 @@ def _validate_text_payload_metadata(
         marker = "Profile:\n"
         if not isinstance(system_content, str) or marker not in system_content:
             _fail("task_payload_metadata_mismatch")
+        if COACHING_CONTEXT_MARKER in system_content or "source_context" in user_payload:
+            if COACHING_CONTEXT_MARKER not in system_content:
+                _fail("task_payload_metadata_mismatch")
+            try:
+                validate_coaching_context(user_payload)
+            except ReportError:
+                _fail("task_payload_source_context_mismatch")
         profile_json = system_content.rsplit(marker, 1)[1]
         try:
             embedded_profile = json.loads(profile_json)
@@ -776,6 +786,9 @@ def _validated_text_input(
             or tuple(prompt_segment_ids) != task_input.covered_segment_ids
         ):
             _fail("task_prompt_chunk_mismatch")
+    elif "source_context" in user_payload:
+        if user_payload["source_context"] != coaching_source_context(transcript):
+            _fail("task_prompt_source_context_mismatch")
     return validated
 
 

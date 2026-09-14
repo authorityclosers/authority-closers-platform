@@ -120,7 +120,7 @@ def test_complete_input_reconstructs_with_new_hash_but_unchanged_facts_and_profi
         validate_coaching_result(result(new, incomplete), new, transcript)
 
 
-@pytest.mark.parametrize("maximum,limit", [(3200, 48000), (4000, 48000), (8000, 64000)])
+@pytest.mark.parametrize("maximum,limit", [(3200, 48000), (4000, 48000), (8000, 96000)])
 def test_input_envelope_rejects_one_byte_over_each_exact_bound(maximum, limit):
     kwargs = dict(model="gemini-3.8-flash", task="coaching", maximum=maximum)
     _require_prompt_budget("s", "x" * (limit - maximum - 129), **kwargs)

@@ -215,18 +215,16 @@ def normalize_overview(
 
 
 OVERVIEW_INSTRUCTION = (
-    " Follow the owner's fourteen-part overview template. Link existing report findings; "
-    "do not invent or duplicate findings to fill slots. Separate what happened, why it matters "
-    "and replacement behavior. Golden moments need useful source-backed strengths; fewer is valid. "
-    "Prospect interpretations and causal effects are hypotheses, not observed psychology. "
-    "Unsupported diagnosis, outcome or chronological before/change/after sequence is null. "
-    "A follow-up window is not a booked appointment or closed sale. ONE focus and ONE drill "
-    "link improvement 0 with an observable practice target. No conversion, lead-volume, financial "
-    "or historical inputs are supplied: business impact is insufficient_data with named missing "
-    "inputs; progress is null. No invented closer name, level or ethics verdict; ethics concerns "
-    "are source-linked observations for human review. Omit server-derived source_label, "
-    "source_sha256, transcript_revision and report_sections. Dimensions use only dimension_id, "
-    "status and observation; the server supplies labels and principle citations. "
+    " Use fourteen parts; no invented/duplicate findings. Separate event, impact, next action. "
+    "Golden moments need evidenced "
+    "strengths. Interpretations/causal effects are hypotheses. "
+    "Unsupported diagnosis/outcome/change "
+    "is null; before/change/after must be chronological. A follow-up window is not a booking/sale. "
+    "ONE focus/drill links improvement 0 with an observable target. Business impact is "
+    "insufficient_data with named missing inputs; progress is null. No invented closer name, "
+    "level or ethics verdict; ethics notes need evidence and human review. Omit server-derived "
+    "source_label, source_sha256, transcript_revision, report_sections, "
+    "dimension labels/citations. "
 )
 
 # Compact semantic contract in the judge input; the Pydantic model above is the
