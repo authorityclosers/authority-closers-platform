@@ -7,11 +7,14 @@ import {
   CircleUserRound,
   FolderOpen,
   LogIn,
+  PanelLeftClose,
+  PanelLeftOpen,
   ShieldCheck,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { BrandMark } from "@ac/ui";
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { AccountNavigation } from "./account-navigation";
 import styles from "./acquisition-shell.module.css";
@@ -27,23 +30,69 @@ export function AcquisitionShell({
   homeHref?: string;
   active?: "analyse" | "calls";
 }) {
+  const [collapsed, setCollapsed] = useState(false);
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const hasToggled = useRef(false);
   const accountHref = authenticated ? "/calls" : "/login";
   const accountLabel = authenticated ? "Account & saved calls" : "Profile & account";
+  const breadcrumbLabel = active === "calls" ? "Saved calls" : "Analyse a call";
+
+  useEffect(() => {
+    if (!hasToggled.current) return;
+    toggleRef.current?.focus();
+  }, [collapsed]);
+
   return (
-    <div className={styles.shell} data-authenticated={authenticated}>
+    <div
+      className={`${styles.shell} ${collapsed ? styles.collapsed : ""}`}
+      data-authenticated={authenticated}
+      data-sidebar-collapsed={collapsed}
+    >
       <a className={styles.skip} href="#main-content">
         Skip to workspace
       </a>
-      <aside className={styles.sidebar} aria-label="Sales Xray navigation">
-        <Link className={styles.brand} href={homeHref} aria-label="Sales Xray home">
-          <span className={styles.brandMark} aria-hidden="true">
-            <BrandMark />
-          </span>
-          <span>
-            <strong>Sales Xray</strong>
-            <small>BY AUTHORITY CLOSERS</small>
-          </span>
-        </Link>
+      <aside
+        id="sales-xray-sidebar"
+        className={styles.sidebar}
+        aria-label="Sales Xray navigation"
+      >
+        <div className={styles.sidebarTop}>
+          <Link className={styles.brand} href={homeHref} aria-label="Sales Xray home">
+            <span className={styles.brandMark} aria-hidden="true">
+              <BrandMark />
+            </span>
+            <span>
+              <strong>Sales Xray</strong>
+              <small>BY AUTHORITY CLOSERS</small>
+            </span>
+          </Link>
+          <button
+            ref={toggleRef}
+            type="button"
+            className={styles.sidebarToggle}
+            aria-label={
+              collapsed
+                ? "Expand Sales Xray navigation"
+                : "Collapse Sales Xray navigation"
+            }
+            aria-controls="sales-xray-sidebar"
+            aria-expanded={!collapsed}
+            title={collapsed ? "Expand navigation" : "Collapse navigation"}
+            onClick={() => {
+              hasToggled.current = true;
+              setCollapsed((value) => !value);
+            }}
+          >
+            {collapsed ? (
+              <PanelLeftOpen size={17} aria-hidden="true" />
+            ) : (
+              <PanelLeftClose size={17} aria-hidden="true" />
+            )}
+            <span className={styles.toggleText}>
+              {collapsed ? "Expand" : "Collapse"}
+            </span>
+          </button>
+        </div>
         <p className={styles.workspaceLabel}>CONVERSATION STUDIO</p>
         <nav className={styles.nav} aria-label="Workspace">
           <Link
@@ -68,6 +117,15 @@ export function AcquisitionShell({
           </Link>
         </nav>
         <div className={styles.sidebarNote}>
+          <Image
+            className={styles.dipakArt}
+            src="/media/dipak-learning-hero-v1.webp"
+            alt="Dipak learning artwork"
+            width={640}
+            height={360}
+            sizes="208px"
+            loading="lazy"
+          />
           <span className={styles.noteIcon} aria-hidden="true">
             <BookOpen size={18} />
           </span>
@@ -110,7 +168,7 @@ export function AcquisitionShell({
           <AccountNavigation compact />
         </header>
         <div className={styles.breadcrumb} aria-label="Current location">
-          Sales Xray <ChevronRight size={13} aria-hidden="true" /> <span>Analyse a call</span>
+          Sales Xray <ChevronRight size={13} aria-hidden="true" /> <span>{breadcrumbLabel}</span>
         </div>
         <main id="main-content" className={styles.main}>
           {children}

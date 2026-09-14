@@ -83,6 +83,9 @@ it("loads every server listed state without auto claiming or processing", async 
   expect(
     host.querySelector('a[href="/calls"][aria-current="page"]'),
   ).not.toBeNull();
+  expect(host.querySelector('[aria-label="Current location"]')?.textContent).toContain(
+    "Saved calls",
+  );
   expect(host.textContent).toContain("Analysis in progress");
   expect(host.textContent).toContain("Report ready");
   expect(fetchMock).toHaveBeenCalledOnce();

@@ -233,6 +233,24 @@ it("the actual page requires both consents, then shows the fourteen-point report
   expect(container.querySelector('a[href="/calls"]')).not.toBeNull();
   expect(container.textContent).toContain("Account & saved calls");
   expect(container.querySelectorAll("main")).toHaveLength(1);
+  const sidebarToggle = container.querySelector<HTMLButtonElement>(
+    '[aria-label="Collapse Sales Xray navigation"]',
+  );
+  expect(sidebarToggle).not.toBeNull();
+  await act(async () => sidebarToggle!.click());
+  await flush();
+  expect(
+    container.querySelector('[aria-label="Expand Sales Xray navigation"]'),
+  ).not.toBeNull();
+  expect(document.activeElement).toBe(sidebarToggle);
+  await act(async () =>
+    container
+      .querySelector<HTMLButtonElement>(
+        '[aria-label="Expand Sales Xray navigation"]',
+      )!
+      .click(),
+  );
+  await flush();
   await select();
   expect(button("Upload my call").disabled).toBe(true);
   await consent();

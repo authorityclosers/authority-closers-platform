@@ -40,6 +40,42 @@
   border-right: 1px solid var(--shell-border);
   background: color-mix(in srgb, var(--shell-surface) 92%, var(--shell-canvas));
 }
+.sidebarTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.45rem;
+  min-width: 0;
+}
+.sidebarToggle {
+  display: inline-flex;
+  width: 2.15rem;
+  height: 2.15rem;
+  flex: 0 0 2.15rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--shell-border);
+  border-radius: 0.65rem;
+  background: var(--shell-surface);
+  color: var(--shell-muted);
+  cursor: pointer;
+}
+.sidebarToggle:hover {
+  border-color: #b8c9e4;
+  color: var(--shell-action);
+}
+.sidebarToggle:focus-visible {
+  outline: 3px solid #aebff6;
+  outline-offset: 2px;
+}
+.toggleText {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
 .brand,
 .mobileBrand {
   display: inline-flex;
@@ -80,6 +116,15 @@
 .brandMark svg {
   width: 1.75rem;
   height: 1.75rem;
+}
+.dipakArt {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border: 1px solid #cfe1db;
+  border-radius: 0.65rem;
 }
 .workspaceLabel {
   margin: 0 0 -0.65rem;
@@ -195,6 +240,36 @@
 }
 .sidebarAccount :global(.account-nav-link),
 .sidebarAccount :global(.account-nav-signout) {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 2rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--shell-action);
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+.sidebarAccount :global(.account-nav-signout) {
+  cursor: pointer;
+}
+.sidebarAccount :global(.account-nav-link:hover),
+.sidebarAccount :global(.account-nav-signout:hover:not(:disabled)) {
+  color: #1f3ca8;
+}
+.sidebarAccount :global(.account-nav-link:focus-visible),
+.sidebarAccount :global(.account-nav-signout:focus-visible),
+.mobileHeader :global(.account-nav-link:focus-visible),
+.mobileHeader :global(.account-nav-signout:focus-visible) {
+  outline: 3px solid #aebff6;
+  outline-offset: 3px;
+  border-radius: 0.3rem;
+}
+.sidebarAccount :global(.account-nav-link),
+.sidebarAccount :global(.account-nav-signout) {
   min-height: 2rem;
   font-size: 0.7rem;
 }
@@ -241,6 +316,41 @@
 .bottomNav {
   display: none;
 }
+.collapsed {
+  grid-template-columns: 84px minmax(0, 1fr);
+}
+.collapsed .sidebar {
+  align-items: center;
+  padding-inline: 0.6rem;
+}
+.collapsed .sidebarTop {
+  width: 100%;
+  display: grid;
+  justify-items: center;
+  gap: 0.7rem;
+}
+.collapsed .brand > span:last-child,
+.collapsed .workspaceLabel,
+.collapsed .sidebarNote,
+.collapsed .sidebarAccount,
+.collapsed .sidebarFooter {
+  display: none;
+}
+.collapsed .nav {
+  width: 100%;
+}
+.collapsed .navLink {
+  justify-content: center;
+  padding-inline: 0.4rem;
+}
+.collapsed .navLink span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
 @media (max-width: 900px) {
   .shell {
     grid-template-columns: 84px minmax(0, 1fr);
@@ -248,6 +358,9 @@
   .sidebar {
     align-items: center;
     padding-inline: 0.6rem;
+  }
+  .sidebarToggle {
+    display: none;
   }
   .brand {
     justify-content: center;
@@ -321,8 +434,26 @@
   }
   .mobileHeader :global(.account-nav-link),
   .mobileHeader :global(.account-nav-signout) {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
     min-height: 2.25rem;
+    padding: 0.35rem 0.45rem;
+    border: 0;
+    border-radius: 0.45rem;
+    background: transparent;
+    color: var(--shell-action);
     font-size: 0.7rem;
+    font-weight: 700;
+    text-decoration: none;
+  }
+  .mobileHeader :global(.account-nav-signout) {
+    cursor: pointer;
+  }
+  .mobileHeader :global(.account-nav-link:hover),
+  .mobileHeader :global(.account-nav-signout:hover:not(:disabled)) {
+    background: #edf2ff;
+    color: #1f3ca8;
   }
   .mobileHeader :global(.account-nav-signout) {
     font-size: 0;
