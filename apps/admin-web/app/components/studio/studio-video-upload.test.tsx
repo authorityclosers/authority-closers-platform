@@ -223,6 +223,11 @@ it("drops one file through the same admitted upload and rejects multiple selecti
   Object.defineProperty(drop, "dataTransfer", { value: { files: [file()] } });
   await act(async () => {
     dropzone.dispatchEvent(drop);
+    await vi.waitFor(() => {
+      expect(studioUploadSession(scope, program).getSnapshot().stage).toBe(
+        "processing",
+      );
+    });
   });
   expect(drop.defaultPrevented).toBe(true);
   expect(container.textContent).toContain("Your upload is saved");
