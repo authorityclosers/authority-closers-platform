@@ -14,7 +14,6 @@ from ac_platform.conversation_intelligence.activation_contract import (
     StageApproval,
     load_hosted_approval_bundle,
 )
-from ac_platform.conversation_intelligence.limits import MAX_AUDIO_BYTES
 
 TENANT_ID = UUID("10000000-0000-4000-8000-000000000001")
 PERSON_ID = UUID("20000000-0000-4000-8000-000000000002")
@@ -22,6 +21,7 @@ APPROVER_ID = UUID("30000000-0000-4000-8000-000000000004")
 BUDGET_SCOPE_ID = UUID("40000000-0000-4000-8000-000000000005")
 DEFAULT_ALLOWANCE_ID = UUID("50000000-0000-4000-8000-000000000006")
 DEFAULT_STAGE_ID = UUID("60000000-0000-4000-8000-000000000007")
+LEGACY_DESCRIPTOR_MAX_BYTES = 128 * 1024 * 1024
 
 
 def _allowance(
@@ -38,7 +38,7 @@ def _allowance(
         granted_by=APPROVER_ID,
         reason="Approved internal testing allowance",
         max_recordings=4,
-        max_source_bytes=MAX_AUDIO_BYTES,
+        max_source_bytes=LEGACY_DESCRIPTOR_MAX_BYTES,
         max_stored_source_bytes=536_870_912,
     )
 
@@ -85,7 +85,7 @@ def _stage(
         price_evidence_sha256="c" * 64,
         max_cost_paise=max_cost_paise,
         max_source_duration_ms=14_400_000,
-        max_input_bytes=MAX_AUDIO_BYTES,
+        max_input_bytes=LEGACY_DESCRIPTOR_MAX_BYTES,
         max_completion_tokens=max_completion_tokens,
         profile_sha256=profile_sha256,
     )
@@ -132,6 +132,15 @@ def test_bundle_round_trips_canonical_json_and_current_window() -> None:
     assert loaded.to_json() == bundle.to_json()
     assert loaded.digest == bundle.digest
     assert loaded.current(1_500, "test") is loaded
+
+
+def test_legacy_128_mib_descriptor_remains_loadable() -> None:
+    bundle = _bundle(allowances=(_allowance(),), stages=(_stage(),))
+
+    loaded = load_hosted_approval_bundle(bundle.to_json())
+
+    assert loaded.allowances[0].max_source_bytes == LEGACY_DESCRIPTOR_MAX_BYTES
+    assert loaded.stages[0].max_input_bytes == LEGACY_DESCRIPTOR_MAX_BYTES
 
 
 @pytest.mark.parametrize(
@@ -348,7 +357,7 @@ def test_strict_bounds_reject_boolean_and_oversized_values_without_leaking_input
     assert "True" not in str(error.value)
 
     oversized = json.loads(_bundle().to_json())
-    oversized["stages"][0]["max_input_bytes"] = MAX_AUDIO_BYTES + 1
+    oversized["stages"][0]["max_input_bytes"] = LEGACY_DESCRIPTOR_MAX_BYTES + 1
     with pytest.raises(ActivationContractError, match="hosted_approval_invalid"):
         load_hosted_approval_bundle(oversized)
 

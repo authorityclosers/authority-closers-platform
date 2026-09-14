@@ -116,3 +116,19 @@ The release coordinator selected the existing learner and learner-staging
 identity; this handoff does not require a new public hostname or a demo container.
 Provider-specific worker packaging and volumes are still required. A standalone
 client remains in scope, but a proposed hostname is not a verified deployment.
+
+## 2026-09-14 upload-size compatibility addendum
+
+The guest acquisition path now uses one 32 MiB audio limit (`ca1acf2`) across
+the server upload policy, intake intents, native upload preflight, request
+`Content-Length` admission, provider dispatch, and the mounted Acquisition
+Studio client. A file over that limit is rejected before native/provider work;
+the provider limit is not widened to match the historical descriptor size.
+
+Approval descriptors retain their historical 128 MiB `max_source_bytes` and
+`max_input_bytes` schema bounds so already persisted manifests remain readable.
+That compatibility applies only to descriptor parsing. It does not authorize a
+guest upload above 32 MiB: the current admission and provider paths enforce the
+lower bound. The regression suite loads a 128 MiB legacy descriptor and separately
+proves an over-32 MiB source is rejected before native/provider dispatch. No
+existing approval artifact is rewritten by this change.

@@ -34,6 +34,7 @@ PROCESSING_PERSON_ID = UUID("20000000-0000-4000-8000-000000000002")
 CONTROL_PERSON_ID = UUID("30000000-0000-4000-8000-000000000003")
 POLICY_ID = UUID("40000000-0000-4000-8000-000000000004")
 SOURCE_SHA = "a" * 64
+LEGACY_DESCRIPTOR_MAX_BYTES = 128 * 1024 * 1024
 
 
 def _template(stage: str) -> AcquisitionStagePolicy:
@@ -135,6 +136,21 @@ def test_policy_derives_exact_source_and_principal_bound_stage() -> None:
             source_sha256=SOURCE_SHA,
             stage="C2",
         )
+
+
+def test_legacy_128_mib_provider_policy_remains_readable() -> None:
+    legacy_stages = tuple(
+        _template(stage).model_copy(update={"max_input_bytes": LEGACY_DESCRIPTOR_MAX_BYTES})
+        for stage in ("C2", "C4", "C5")
+    )
+
+    policy = _policy(
+        max_source_bytes=LEGACY_DESCRIPTOR_MAX_BYTES,
+        stages=legacy_stages,
+    )
+
+    assert policy.max_source_bytes == LEGACY_DESCRIPTOR_MAX_BYTES
+    assert all(item.max_input_bytes == LEGACY_DESCRIPTOR_MAX_BYTES for item in policy.stages)
 
 
 def test_only_matching_processing_actor_can_select_policy() -> None:
