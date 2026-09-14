@@ -12,13 +12,19 @@ from uuid import UUID, uuid4
 from sqlalchemy import func, select
 
 from ac_platform.audit.service import AuditRepository
-from ac_platform.identity.models import Person, Session
+from ac_platform.identity.models import PasswordCredential, Person, ProviderIdentity, Session
 from ac_platform.identity.services import normalize_email
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.kernel.events import EventCategory, EventEnvelope
 from ac_platform.outbox.repository import OutboxRepository
 from ac_platform.tenancy.models import Membership, Tenant, TenantStatus
 
+from .acquisition_models import (
+    ConversationAcquisitionSettlement,
+    ConversationAcquisitionUsage,
+    ConversationVisitor,
+    ConversationVisitorClaim,
+)
 from .application import (
     ConversationApplication,
     ConversationConflict,
@@ -28,6 +34,11 @@ from .application import (
     utc,
 )
 from .checkpoints import content_hash
+from .guest_models import (
+    ConversationGuestSubmission,
+    ConversationProcessingLease,
+    ConversationProcessingPrincipal,
+)
 from .inference import ConversationInference
 from .models import (
     ConversationPermission,
@@ -183,6 +194,191 @@ class ConversationReviewService:
         ):
             raise ConversationDenied("A current verified AC workspace member is required.")
 
+    async def _guest_source_owner(
+        self, recording: ConversationRecording, guest: ConversationGuestSubmission
+    ) -> None:
+        """Admit a retained guest source for review without reopening processing.
+
+        Guest processing principals are intentionally non-login identities, so the
+        ordinary verified-membership check cannot authorize their reports.  This
+        read path rechecks the immutable guest link, principal, source reservation,
+        and ownership evidence.  It deliberately does not require the short-lived
+        processing lease or visitor window to still be current; the exact
+        ConversationPermission retention check below controls retained report
+        access.  No lease is renewed and no processing work is admitted here.
+        """
+
+        if (
+            guest.tenant_id != recording.tenant_id
+            or guest.person_id != recording.person_id
+            or guest.recording_id != recording.id
+            or guest.source_sha256 != recording.source_sha256
+        ):
+            raise ConversationDenied("The guest recording's source owner is unavailable.")
+
+        lease = await self.database.scalar(
+            select(ConversationProcessingLease)
+            .where(
+                ConversationProcessingLease.id == guest.processing_lease_id,
+                ConversationProcessingLease.tenant_id == recording.tenant_id,
+                ConversationProcessingLease.person_id == recording.person_id,
+                ConversationProcessingLease.usage_id == guest.usage_id,
+            )
+            .with_for_update(read=True)
+            .execution_options(populate_existing=True)
+        )
+        principal = None
+        if lease is not None:
+            principal = await self.database.scalar(
+                select(ConversationProcessingPrincipal)
+                .where(
+                    ConversationProcessingPrincipal.id == lease.principal_id,
+                    ConversationProcessingPrincipal.tenant_id == recording.tenant_id,
+                    ConversationProcessingPrincipal.person_id == recording.person_id,
+                )
+                .with_for_update(read=True)
+                .execution_options(populate_existing=True)
+            )
+        person = await self.database.scalar(
+            select(Person)
+            .where(Person.id == recording.person_id)
+            .with_for_update(read=True)
+            .execution_options(populate_existing=True)
+        )
+        tenant = await self.database.scalar(
+            select(Tenant)
+            .where(Tenant.id == recording.tenant_id)
+            .with_for_update(read=True)
+            .execution_options(populate_existing=True)
+        )
+        member = await self.database.scalar(
+            select(Membership)
+            .where(
+                Membership.tenant_id == recording.tenant_id,
+                Membership.person_id == recording.person_id,
+            )
+            .with_for_update(read=True)
+            .execution_options(populate_existing=True)
+        )
+        if (
+            lease is None
+            or lease.revoked_at is not None
+            or principal is None
+            or principal.revoked_at is not None
+            or (principal.tenant_id, principal.person_id)
+            != (recording.tenant_id, recording.person_id)
+            or person is None
+            or person.status != "active"
+            or person.email is not None
+            or person.email_verified_at is not None
+            or tenant is None
+            or tenant.status != "active"
+            or member is None
+            or member.role != "processing"
+            or member.status != "active"
+            or member.ended_at is not None
+        ):
+            raise ConversationDenied("The guest recording's source owner is unavailable.")
+
+        for model in (PasswordCredential, ProviderIdentity, Session):
+            if (
+                await self.database.scalar(
+                    select(model.person_id).where(model.person_id == recording.person_id).limit(1)
+                )
+                is not None
+            ):
+                raise ConversationDenied("The guest recording's source owner is unavailable.")
+
+        usage = await self.database.scalar(
+            select(ConversationAcquisitionUsage)
+            .where(
+                ConversationAcquisitionUsage.id == guest.usage_id,
+                ConversationAcquisitionUsage.tenant_id == recording.tenant_id,
+                ConversationAcquisitionUsage.submission_id == guest.submission_id,
+            )
+            .with_for_update(read=True)
+            .execution_options(populate_existing=True)
+        )
+        settlement = await self.database.scalar(
+            select(ConversationAcquisitionSettlement)
+            .where(ConversationAcquisitionSettlement.usage_id == guest.usage_id)
+            .with_for_update(read=True)
+            .execution_options(populate_existing=True)
+        )
+        if (
+            usage is None
+            or usage.visitor_id is None
+            or usage.person_id is not None
+            or usage.source_sha256 != recording.source_sha256
+            or (settlement is not None and settlement.kind == "no_work_performed")
+        ):
+            raise ConversationDenied("The guest recording's source owner is unavailable.")
+
+        visitor = await self.database.scalar(
+            select(ConversationVisitor)
+            .where(
+                ConversationVisitor.id == usage.visitor_id,
+                ConversationVisitor.tenant_id == recording.tenant_id,
+            )
+            .with_for_update(read=True)
+            .execution_options(populate_existing=True)
+        )
+        if visitor is None or visitor.revoked_at is not None:
+            raise ConversationDenied("The guest recording's source owner is unavailable.")
+        claim = await self.database.scalar(
+            select(ConversationVisitorClaim)
+            .where(
+                ConversationVisitorClaim.visitor_id == visitor.id,
+                ConversationVisitorClaim.tenant_id == recording.tenant_id,
+            )
+            .with_for_update(read=True)
+            .execution_options(populate_existing=True)
+        )
+        if claim is None:
+            return
+        owner = await self.database.scalar(
+            select(Person)
+            .where(Person.id == claim.person_id)
+            .with_for_update(read=True)
+            .execution_options(populate_existing=True)
+        )
+        owner_member = await self.database.scalar(
+            select(Membership)
+            .where(
+                Membership.tenant_id == recording.tenant_id,
+                Membership.person_id == claim.person_id,
+            )
+            .with_for_update(read=True)
+            .execution_options(populate_existing=True)
+        )
+        if (
+            owner is None
+            or owner.status != "active"
+            or owner_member is None
+            or owner_member.status != "active"
+            or owner_member.ended_at is not None
+            or owner_member.role == "processing"
+        ):
+            raise ConversationDenied("The guest recording's source owner is unavailable.")
+
+    async def _recording_owner(self, recording: ConversationRecording) -> None:
+        """Select the canonical owner admission path for a recording."""
+
+        guest = await self.database.scalar(
+            select(ConversationGuestSubmission)
+            .where(
+                ConversationGuestSubmission.recording_id == recording.id,
+                ConversationGuestSubmission.tenant_id == recording.tenant_id,
+                ConversationGuestSubmission.person_id == recording.person_id,
+            )
+            .with_for_update(read=True)
+            .execution_options(populate_existing=True)
+        )
+        if guest is None:
+            await self._member(recording.tenant_id, recording.person_id)
+            return
+        await self._guest_source_owner(recording, guest)
+
     async def _evidence(
         self, run_id: UUID, now: datetime, *, report_id: UUID | None = None
     ) -> _Evidence:
@@ -211,7 +407,7 @@ class ConversationReviewService:
             or recording.generation != run.generation
         ):
             raise ConversationConflict("The review call is no longer available.")
-        await self._member(recording.tenant_id, recording.person_id)
+        await self._recording_owner(recording)
         permission = await self.database.scalar(
             select(ConversationPermission)
             .where(
