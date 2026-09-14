@@ -45,6 +45,16 @@ COACHING_VOICE_INSTRUCTION = (
     "or infer voice identity. When attribution is unclear, say so. Missing skill "
     "evidence is not poor performance. "
 )
+REPORT_STRUCTURE_INSTRUCTION = (
+    "ROOT_TYPES: report-root-types-v1. summary and verdict must be JSON strings, never objects. "
+    "strengths, missed_opportunities, improvements, objection_analysis and closing_analysis "
+    "must each be a JSON array of {title,explanation,evidence} findings. Use [] when no "
+    "evidence-backed finding exists; never return an object or an empty-evidence placeholder. "
+    "Copy evidence objects directly from the supplied observations: preserve segment_id, "
+    "quote, start_ms and end_ms exactly, including every script character, space and "
+    "punctuation. Reuse the identical object when citing a span again. Never transliterate, "
+    "translate or rewrite quotes. "
+)
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _FORBIDDEN_NUMERIC_KEY = re.compile(
     r"(?:score|grade|rating|points?|numeric|percent|percentage|rank|overall_score)",
@@ -1072,6 +1082,7 @@ def build_report_groq_prompt(
         "objection_analysis, closing_analysis, verdict, review_status, "
         + output_fields
         + COACHING_VOICE_INSTRUCTION
+        + REPORT_STRUCTURE_INSTRUCTION
         + "Every finding requires title, explanation and an "
         "evidence array with exact quote, segment_id, start_ms and end_ms. Do not score, grade, "
         "rank or publish an official result. Set review_status to "

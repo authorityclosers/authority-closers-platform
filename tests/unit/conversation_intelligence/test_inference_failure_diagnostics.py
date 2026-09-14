@@ -19,6 +19,14 @@ from ac_platform.conversation_intelligence.storage import StorageError
     ("error", "expected"),
     [
         (
+            InferenceTaskError("report_findings_invalid"),
+            "conversation_report_findings_invalid",
+        ),
+        (
+            InferenceTaskError("report_findings_invalid: private response"),
+            "conversation_provider_result_validation_failed",
+        ),
+        (
             InferenceTaskError("report_evidence_quote_mismatch"),
             "conversation_report_evidence_quote_mismatch",
         ),
