@@ -307,38 +307,41 @@ class ConversationReviewService:
         )
         if (
             usage is None
-            or usage.visitor_id is None
-            or usage.person_id is not None
+            or (usage.visitor_id is None and usage.person_id is None)
+            or (usage.visitor_id is not None and usage.person_id is not None)
             or usage.source_sha256 != recording.source_sha256
             or (settlement is not None and settlement.kind == "no_work_performed")
         ):
             raise ConversationDenied("The guest recording's source owner is unavailable.")
 
-        visitor = await self.database.scalar(
-            select(ConversationVisitor)
-            .where(
-                ConversationVisitor.id == usage.visitor_id,
-                ConversationVisitor.tenant_id == recording.tenant_id,
+        owner_id = usage.person_id
+        if usage.visitor_id is not None:
+            visitor = await self.database.scalar(
+                select(ConversationVisitor)
+                .where(
+                    ConversationVisitor.id == usage.visitor_id,
+                    ConversationVisitor.tenant_id == recording.tenant_id,
+                )
+                .with_for_update(read=True)
+                .execution_options(populate_existing=True)
             )
-            .with_for_update(read=True)
-            .execution_options(populate_existing=True)
-        )
-        if visitor is None or visitor.revoked_at is not None:
-            raise ConversationDenied("The guest recording's source owner is unavailable.")
-        claim = await self.database.scalar(
-            select(ConversationVisitorClaim)
-            .where(
-                ConversationVisitorClaim.visitor_id == visitor.id,
-                ConversationVisitorClaim.tenant_id == recording.tenant_id,
+            if visitor is None or visitor.revoked_at is not None:
+                raise ConversationDenied("The guest recording's source owner is unavailable.")
+            claim = await self.database.scalar(
+                select(ConversationVisitorClaim)
+                .where(
+                    ConversationVisitorClaim.visitor_id == visitor.id,
+                    ConversationVisitorClaim.tenant_id == recording.tenant_id,
+                )
+                .with_for_update(read=True)
+                .execution_options(populate_existing=True)
             )
-            .with_for_update(read=True)
-            .execution_options(populate_existing=True)
-        )
-        if claim is None:
+            owner_id = None if claim is None else claim.person_id
+        if owner_id is None:
             return
         owner = await self.database.scalar(
             select(Person)
-            .where(Person.id == claim.person_id)
+            .where(Person.id == owner_id)
             .with_for_update(read=True)
             .execution_options(populate_existing=True)
         )
@@ -346,7 +349,7 @@ class ConversationReviewService:
             select(Membership)
             .where(
                 Membership.tenant_id == recording.tenant_id,
-                Membership.person_id == claim.person_id,
+                Membership.person_id == owner_id,
             )
             .with_for_update(read=True)
             .execution_options(populate_existing=True)
