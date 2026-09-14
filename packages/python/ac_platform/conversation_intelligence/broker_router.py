@@ -201,6 +201,7 @@ class FixedProviderRouter:
                             person_id=person_id,
                             source_sha256=quote.source.source_sha256,
                             stage=stage,
+                            configuration_sha256=quote.provider_configuration_sha256,
                         )
                         for stage in ("C2", "C4", "C5")
                     )
@@ -230,6 +231,7 @@ class FixedProviderRouter:
                         person_id=person_id,
                         source_sha256=quote.source.source_sha256,
                         stage=stage,
+                        configuration_sha256=quote.provider_configuration_sha256,
                     )
                     if reservation.permission.authorization_ref == (
                         f"hosted-stage-v1:{candidate.id}:{bundle.digest}"

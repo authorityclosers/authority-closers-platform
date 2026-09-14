@@ -95,7 +95,8 @@ class ConversationAuthority:
                     bundle.acquisition_policy is not None
                     and any(
                         item.zero_cost_basis == "synthetic"
-                        for item in bundle.acquisition_policy.stages
+                        for stages in bundle.acquisition_policy.stage_sets()
+                        for item in stages
                     )
                 )
             ):
@@ -446,11 +447,8 @@ class ConversationAuthority:
                     person_id=actor.person_id,
                     source_sha256=source_sha256,
                     stage=stage,  # type: ignore[arg-type]
+                    configuration_sha256=configuration_sha256,
                 )
-                if configuration_sha256 is not None and (
-                    derived.configuration_sha256 != configuration_sha256
-                ):
-                    return None
                 return derived
             except ValueError:
                 return None
@@ -687,25 +685,37 @@ class ConversationAuthority:
             approval_uuid = UUID(approval_id)
         except ValueError:
             return None
-        candidate = self.stage_approval(
-            bundle,
-            actor,
-            source_sha256=source_sha256,
-            stage=stage,
+        # Older exact-source quotes may omit the configuration digest. Resolve
+        # their immutable approval id directly before asking current selection
+        # to choose a route; switching future activation must not rewrite them.
+        candidates = tuple(
+            item
+            for item in bundle.stages
+            if (
+                item.id == approval_uuid
+                and item.tenant_id == actor.tenant_id
+                and item.person_id == actor.person_id
+                and item.source_sha256 == source_sha256
+                and item.stage == stage
+            )
         )
-        if candidate is not None and candidate.id == approval_uuid:
-            return candidate.configuration_sha256
+        if len(candidates) == 1:
+            return candidates[0].configuration_sha256
         if isinstance(actor, ProcessingActor) and bundle.acquisition_policy is not None:
-            try:
-                derived = bundle.acquisition_policy.derive_stage(
-                    tenant_id=actor.tenant_id,
-                    person_id=actor.person_id,
-                    source_sha256=source_sha256,
-                    stage=stage,  # type: ignore[arg-type]
-                )
-            except ValueError:
-                return None
-            return derived.configuration_sha256 if derived.id == approval_uuid else None
+            policy = bundle.acquisition_policy
+            for configuration_sha256 in policy.configuration_digests():
+                try:
+                    derived = policy.derive_stage(
+                        tenant_id=actor.tenant_id,
+                        person_id=actor.person_id,
+                        source_sha256=source_sha256,
+                        stage=stage,  # type: ignore[arg-type]
+                        configuration_sha256=configuration_sha256,
+                    )
+                except ValueError:
+                    continue
+                if derived.id == approval_uuid:
+                    return derived.configuration_sha256
         return None
 
     async def issue(

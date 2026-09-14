@@ -33,9 +33,27 @@ unavailable to activation until a new pinned policy contains their exact
 configuration digest, route recipe, credential/privacy/pricing references and
 cost bounds. This leaf does not synthesize that approval or call a provider.
 
+The acquisition contract now also supports a finite `profiles` list. Each
+profile is a complete C2/C4/C5 route set with its own configuration digest and
+the same tenant, source, privacy, retention, professional, credential, pricing,
+budget and expiry checks. An alternate profile is selected only from the exact
+configuration digest carried by a new quote; processing actors and broker
+authorization fail closed when that digest is missing or ambiguous. Derived
+approval IDs remain unchanged for the existing default route, while alternate
+profiles receive disjoint IDs. Empty `profiles` are omitted from canonical JSON,
+so existing approval bundle bytes remain unchanged. Existing quote and
+reservation snapshots without the optional configuration field also retain
+their original fingerprints and decode successfully.
+
+The provider activation cap is checked against the complete plan formula:
+`C2.max_cost + C4.max_cost * C4.max_requests + C5.max_cost`. This keeps a
+revision with a valid route mapping from being offered when its approved retry
+fan-out exceeds the shared project cap.
+
 Validation evidence from the isolated worktree:
 
-- Python focused provider/approval/router/plan tests: `101 passed`.
+- Python focused provider/approval/router/plan tests: `101 passed`, plus the
+  profile, activation-cap and legacy-snapshot regressions in this follow-up.
 - Admin provider, control-center and benchmark UI tests: `13 passed`.
 - `uv run ruff check` on the changed Python source and tests: passed.
 - `uv run mypy packages/python`: `Success: no issues found in 284 source files`.

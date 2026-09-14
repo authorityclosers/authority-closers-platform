@@ -134,7 +134,8 @@ class ConversationProviderAdmin:
             return ()
         return tuple(
             item
-            for item in policy.stages
+            for stages in policy.stage_sets()
+            for item in stages
             if (
                 item.configuration_sha256,
                 item.stage,
@@ -161,6 +162,7 @@ class ConversationProviderAdmin:
             if {route.task for route in config.routes} < required:
                 raise ValueError
             dispatches: list[Any] = []
+            projected_cost_paise = 0
             for route in config.routes:
                 stage = cls._route_stage(route.task)
                 if stage is None:
@@ -202,10 +204,14 @@ class ConversationProviderAdmin:
                     ):
                         continue
                     dispatches.append(dispatch)
+                    # C4 may be retried/chunked up to its approved request
+                    # count; the project cap must cover the whole plan, not
+                    # only one representative dispatch per stage.
+                    projected_cost_paise += dispatch.max_cost_paise * candidate.max_requests
                     break
                 else:
                     raise ValueError
-            if sum(item.max_cost_paise for item in dispatches) > bundle.budget_cap_paise:
+            if projected_cost_paise > bundle.budget_cap_paise:
                 raise ValueError
             if any(item.max_cost_paise > 0 for item in dispatches) and (
                 not config.policy.allow_paid

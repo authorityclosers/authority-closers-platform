@@ -146,6 +146,23 @@ class Quote(Snapshot):
 
     _decoders: ClassVar[dict[str, Callable[[Any], Any]]] = {"source": _source}
 
+    def as_dict(self) -> dict[str, Any]:
+        value = super().as_dict()
+        # The field was added after snapshot /1. Omitting an unset value keeps
+        # legacy quote fingerprints and permission bindings byte-for-byte.
+        if self.provider_configuration_sha256 is None:
+            value.pop("provider_configuration_sha256", None)
+        return value
+
+    @classmethod
+    def from_dict(cls, value: Any) -> Self:
+        # Existing reservations have no configuration identity. Decode them
+        # as the immutable legacy route and let authority recover its digest
+        # from the approval id before any current activation is considered.
+        if isinstance(value, dict) and "provider_configuration_sha256" not in value:
+            value = {**value, "provider_configuration_sha256": None}
+        return super().from_dict(value)
+
     def __post_init__(self) -> None:
         if not isinstance(self.source, SourceBinding):
             raise ValueError("quote requires immutable source binding")

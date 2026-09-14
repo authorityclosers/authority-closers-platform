@@ -281,6 +281,30 @@ class AcquisitionStagePolicy(_StrictFrozenModel):
         return self
 
 
+class AcquisitionProviderProfile(_StrictFrozenModel):
+    """One finite, release-approved route set for future source processing."""
+
+    schema_id: Literal["ac.sales-xray.acquisition-provider-profile/1"] = Field(
+        default="ac.sales-xray.acquisition-provider-profile/1", alias="schema"
+    )
+    profile_id: str = Field(min_length=1, max_length=128)
+    stages: tuple[AcquisitionStagePolicy, ...] = Field(
+        min_length=MAX_ACQUISITION_POLICY_STAGES, max_length=MAX_ACQUISITION_POLICY_STAGES
+    )
+
+    _profile_id = field_validator("profile_id")(_validate_identifier)
+
+    @model_validator(mode="after")
+    def validate_profile(self) -> Self:
+        if tuple(item.stage for item in self.stages) != ("C2", "C4", "C5"):
+            raise ValueError("acquisition_profile_stages_invalid")
+        if len({item.stage for item in self.stages}) != len(self.stages):
+            raise ValueError("duplicate_acquisition_profile_stage")
+        if len({item.configuration_sha256 for item in self.stages}) != 1:
+            raise ValueError("acquisition_profile_configuration_mismatch")
+        return self
+
+
 class AcquisitionProviderPolicy(_StrictFrozenModel):
     """An exact processing principal's bounded public acquisition template."""
 
@@ -296,6 +320,7 @@ class AcquisitionProviderPolicy(_StrictFrozenModel):
     stages: tuple[AcquisitionStagePolicy, ...] = Field(
         min_length=MAX_ACQUISITION_POLICY_STAGES, max_length=MAX_ACQUISITION_POLICY_STAGES
     )
+    profiles: tuple[AcquisitionProviderProfile, ...] = Field(default=(), max_length=8)
 
     _authorization_ref = field_validator("authorization_ref")(_validate_reference)
 
@@ -307,11 +332,47 @@ class AcquisitionProviderPolicy(_StrictFrozenModel):
             raise ValueError("acquisition_policy_stages_invalid")
         if len({item.stage for item in self.stages}) != len(self.stages):
             raise ValueError("duplicate_acquisition_policy_stage")
-        if self.max_source_bytes > self.stages[0].max_input_bytes:
+        profile_ids = [profile.profile_id for profile in self.profiles]
+        if len(profile_ids) != len(set(profile_ids)):
+            raise ValueError("duplicate_acquisition_profile_id")
+        profile_digests = [
+            next(iter({item.configuration_sha256 for item in profile.stages}))
+            for profile in self.profiles
+        ]
+        base_digests = {item.configuration_sha256 for item in self.stages}
+        if len(set(profile_digests)) != len(profile_digests) or any(
+            digest in base_digests for digest in profile_digests
+        ):
+            raise ValueError("duplicate_acquisition_profile_configuration")
+        if any(
+            self.max_source_bytes > item.max_input_bytes
+            for stages in self.stage_sets()
+            for item in stages
+        ):
             raise ValueError("acquisition_source_bytes_exceed_stage_cap")
-        if any(item.expires_at_epoch > self.expires_at_epoch for item in self.stages):
+        if any(
+            item.expires_at_epoch > self.expires_at_epoch
+            for stages in self.stage_sets()
+            for item in stages
+        ):
             raise ValueError("acquisition_stage_expiry_outside_policy")
         return self
+
+    def stage_sets(self) -> tuple[tuple[AcquisitionStagePolicy, ...], ...]:
+        """Return the default route followed by each finite alternative."""
+
+        return (self.stages, *(profile.stages for profile in self.profiles))
+
+    def configuration_digests(self) -> tuple[str, ...]:
+        """Return configuration identities in stable release order."""
+
+        return tuple(
+            dict.fromkeys(
+                item.configuration_sha256
+                for stages in self.stage_sets()
+                for item in stages
+            )
+        )
 
     def matches_actor(self, actor: Any) -> bool:
         """Return true only for the release's processing principal identity."""
@@ -331,6 +392,7 @@ class AcquisitionProviderPolicy(_StrictFrozenModel):
         person_id: UUID,
         source_sha256: str,
         stage: Literal["C2", "C4", "C5"],
+        configuration_sha256: str | None = None,
     ) -> StageApproval:
         """Bind a template to one exact source and deterministic approval id."""
 
@@ -340,16 +402,29 @@ class AcquisitionProviderPolicy(_StrictFrozenModel):
             or re.fullmatch(_DIGEST, source_sha256) is None
         ):
             raise ValueError("acquisition_policy_scope_mismatch")
-        template = next((item for item in self.stages if item.stage == stage), None)
-        if template is None:
-            raise ValueError("acquisition_policy_stage_unavailable")
+        candidates = [
+            item
+            for stages in self.stage_sets()
+            for item in stages
+            if item.stage == stage
+            and (
+                configuration_sha256 is None
+                or item.configuration_sha256 == configuration_sha256
+            )
+        ]
+        if len(candidates) != 1:
+            raise ValueError("acquisition_policy_configuration_required")
+        template = candidates[0]
         # UUID5 makes the approval stable across retries while binding policy,
         # principal and source.  The source hash is the immutable source key;
         # the plan separately retains source revision and the lease binding.
-        approval_id = uuid5(
-            self.id,
-            f"{self.tenant_id}:{self.processing_person_id}:{source_sha256}:{stage}",
-        )
+        # Preserve the /1 identifier for the default route. Alternatives need
+        # a disjoint id so two pinned models cannot share an authorization ref.
+        identity = f"{self.tenant_id}:{self.processing_person_id}:{source_sha256}:{stage}"
+        base_template = next(item for item in self.stages if item.stage == stage)
+        if template is not base_template:
+            identity += f":{template.configuration_sha256}"
+        approval_id = uuid5(self.id, identity)
         return StageApproval(
             id=approval_id,
             tenant_id=tenant_id,
@@ -359,7 +434,13 @@ class AcquisitionProviderPolicy(_StrictFrozenModel):
         )
 
     def provider_references(self) -> tuple[tuple[str, str], ...]:
-        return tuple((item.provider_id, item.credential_ref) for item in self.stages)
+        return tuple(
+            dict.fromkeys(
+                (item.provider_id, item.credential_ref)
+                for stages in self.stage_sets()
+                for item in stages
+            )
+        )
 
 
 class HostedApprovalBundle(_StrictFrozenModel):
@@ -419,7 +500,9 @@ class HostedApprovalBundle(_StrictFrozenModel):
             if approval.zero_cost_basis == "paid_pricing_evidence"
         ]
         policy_has_paid_stages = policy is not None and any(
-            item.zero_cost_basis == "paid_pricing_evidence" for item in policy.stages
+            item.zero_cost_basis == "paid_pricing_evidence"
+            for stages in policy.stage_sets()
+            for item in stages
         )
         if paid_stages or policy_has_paid_stages:
             if self.budget_cap_paise <= 0:
@@ -428,7 +511,11 @@ class HostedApprovalBundle(_StrictFrozenModel):
                 raise ValueError("paid_approval_reference_required")
             if any(approval.max_cost_paise > self.budget_cap_paise for approval in paid_stages) or (
                 policy is not None
-                and any(item.max_cost_paise > self.budget_cap_paise for item in policy.stages)
+                and any(
+                    item.max_cost_paise > self.budget_cap_paise
+                    for stages in policy.stage_sets()
+                    for item in stages
+                )
             ):
                 raise ValueError("paid_stage_cost_exceeds_project_cap")
         elif self.budget_cap_paise != 0 or self.paid_approval_ref is not None:
@@ -465,7 +552,11 @@ class HostedApprovalBundle(_StrictFrozenModel):
                 or policy.max_stored_source_bytes > self.max_stored_source_bytes
             ):
                 raise ValueError("acquisition_policy_expiry_or_capacity_invalid")
-            if any(item.expires_at_epoch <= self.issued_at_epoch for item in policy.stages):
+            if any(
+                item.expires_at_epoch <= self.issued_at_epoch
+                for stages in policy.stage_sets()
+                for item in stages
+            ):
                 raise ValueError("acquisition_stage_expiry_outside_bundle")
             if policy.id in approval_ids:
                 raise ValueError("duplicate_approval_id")
@@ -488,6 +579,10 @@ class HostedApprovalBundle(_StrictFrozenModel):
         if self.acquisition_policy is None:
             # Existing /1 artifacts retain byte-for-byte canonical form.
             value.pop("acquisition_policy", None)
+        elif not self.acquisition_policy.profiles:
+            # The optional field is omitted when empty so an existing /1
+            # bundle keeps its exact canonical bytes and digest.
+            value["acquisition_policy"].pop("profiles", None)
         for stage in value["stages"]:
             if stage.get("max_cost_paise") == 0:
                 stage.pop("max_cost_paise", None)
@@ -591,6 +686,7 @@ __all__ = [
     "ActivationContractError",
     "ACQUISITION_POLICY_SCHEMA",
     "AcquisitionProviderPolicy",
+    "AcquisitionProviderProfile",
     "AcquisitionStagePolicy",
     "AllowanceApproval",
     "HOSTED_APPROVAL_SCHEMA",

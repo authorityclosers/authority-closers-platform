@@ -9,6 +9,7 @@ import pytest
 from ac_platform.conversation_intelligence.activation_contract import (
     ACQUISITION_POLICY_SCHEMA,
     AcquisitionProviderPolicy,
+    AcquisitionProviderProfile,
     AcquisitionStagePolicy,
     HostedApprovalBundle,
 )
@@ -85,6 +86,28 @@ def _policy(**updates: object) -> AcquisitionProviderPolicy:
     return AcquisitionProviderPolicy(**values)
 
 
+def _gemini_profile() -> AcquisitionProviderProfile:
+    configuration_sha256 = "e" * 64
+    stages = (
+        _template("C2").model_copy(update={"configuration_sha256": configuration_sha256}),
+        _template("C4").model_copy(
+            update={
+                "configuration_sha256": configuration_sha256,
+                "provider_id": "gemini",
+                "model_id": "gemini-3.1-pro-preview",
+            }
+        ),
+        _template("C5").model_copy(
+            update={
+                "configuration_sha256": configuration_sha256,
+                "provider_id": "gemini",
+                "model_id": "gemini-3.1-pro-preview",
+            }
+        ),
+    )
+    return AcquisitionProviderProfile(profile_id="gemini-31-pro", stages=stages)
+
+
 def _bundle(policy: AcquisitionProviderPolicy | None = None) -> HostedApprovalBundle:
     return HostedApprovalBundle(
         schema="ac.sales-xray.hosted-approval/1",
@@ -151,6 +174,75 @@ def test_legacy_128_mib_provider_policy_remains_readable() -> None:
 
     assert policy.max_source_bytes == LEGACY_DESCRIPTOR_MAX_BYTES
     assert all(item.max_input_bytes == LEGACY_DESCRIPTOR_MAX_BYTES for item in policy.stages)
+
+
+def test_alternate_profile_requires_configuration_and_keeps_legacy_ids() -> None:
+    policy = _policy(profiles=(_gemini_profile(),))
+    default = policy.derive_stage(
+        tenant_id=TENANT_ID,
+        person_id=PROCESSING_PERSON_ID,
+        source_sha256=SOURCE_SHA,
+        stage="C4",
+        configuration_sha256="b" * 64,
+    )
+    alternate = policy.derive_stage(
+        tenant_id=TENANT_ID,
+        person_id=PROCESSING_PERSON_ID,
+        source_sha256=SOURCE_SHA,
+        stage="C4",
+        configuration_sha256="e" * 64,
+    )
+    assert default.id == _policy().derive_stage(
+        tenant_id=TENANT_ID,
+        person_id=PROCESSING_PERSON_ID,
+        source_sha256=SOURCE_SHA,
+        stage="C4",
+    ).id
+    assert alternate.id != default.id
+    assert alternate.provider_id == "gemini"
+    assert alternate.model_id == "gemini-3.1-pro-preview"
+    with pytest.raises(ValueError, match="acquisition_policy_configuration_required"):
+        policy.derive_stage(
+            tenant_id=TENANT_ID,
+            person_id=PROCESSING_PERSON_ID,
+            source_sha256=SOURCE_SHA,
+            stage="C4",
+        )
+
+
+def test_legacy_permission_recovers_default_digest_after_alternate_is_pinned() -> None:
+    policy = _policy(profiles=(_gemini_profile(),))
+    bundle = _bundle(policy)
+    authority = ConversationAuthority(
+        lambda: bundle, environment="test", operations_tenant_id=TENANT_ID
+    )
+    actor = ProcessingActor(PROCESSING_PERSON_ID, TENANT_ID, uuid4())
+    approval = policy.derive_stage(
+        tenant_id=TENANT_ID,
+        person_id=PROCESSING_PERSON_ID,
+        source_sha256=SOURCE_SHA,
+        stage="C4",
+        configuration_sha256="b" * 64,
+    )
+    permission = ExecutionPermission(
+        authorization_ref=f"hosted-stage-v1:{approval.id}:{bundle.digest}",
+        quote_fingerprint="f" * 64,
+        approved_by=str(PROCESSING_PERSON_ID),
+        expires_at_epoch=1_600,
+    )
+    assert (
+        authority._configuration_from_permission(
+            bundle, actor, SOURCE_SHA, "C4", permission
+        )
+        == "b" * 64
+    )
+
+
+def test_empty_profiles_are_omitted_from_legacy_canonical_bundle() -> None:
+    bundle = _bundle(_policy())
+    value = bundle.as_dict()["acquisition_policy"]
+    assert "profiles" not in value
+    assert HostedApprovalBundle.model_validate_json(bundle.to_json()) == bundle
 
 
 def test_only_matching_processing_actor_can_select_policy() -> None:
@@ -267,3 +359,53 @@ def test_router_recomputes_policy_stage_from_exact_source_binding() -> None:
     resolved = FixedProviderRouter._stage(reservation, bundle)
     assert resolved.id == approval_id
     assert resolved.source_sha256 == SOURCE_SHA
+
+
+def test_router_selects_the_pinned_alternate_profile_by_quote_digest() -> None:
+    policy = _policy(profiles=(_gemini_profile(),))
+    bundle = _bundle(policy)
+    template = policy.profiles[0].stages[0]
+    quote = Quote(
+        quote_id="quote-acquisition-profile-v1",
+        source=SourceBinding(str(TENANT_ID), str(uuid4()), SOURCE_SHA, "1"),
+        account_id=str(PROCESSING_PERSON_ID),
+        budget_scope_id=str(bundle.budget_scope_id),
+        provider_id=template.provider_id,
+        provider_model=template.model_id,
+        recipe_revision=template.recipe_revision,
+        operation="transcribe_scribe_v2",
+        input_sha256=SOURCE_SHA,
+        privacy_revision=template.privacy_revision,
+        permission_ref=template.permission_ref,
+        provider_terms_ref=template.provider_terms_ref,
+        retention_ref=template.retention_ref,
+        professional_gate_ref=template.professional_gate_ref,
+        pricing_ref=template.pricing_ref,
+        entitlement_seconds=0,
+        max_cost_paise=0,
+        created_at_epoch=1_100,
+        expires_at_epoch=1_600,
+        provider_configuration_sha256=template.configuration_sha256,
+    )
+    approval = policy.derive_stage(
+        tenant_id=TENANT_ID,
+        person_id=PROCESSING_PERSON_ID,
+        source_sha256=SOURCE_SHA,
+        stage="C2",
+        configuration_sha256=template.configuration_sha256,
+    )
+    reservation = Reservation(
+        reservation_id="reservation-acquisition-profile-v1",
+        quote=quote,
+        permission=ExecutionPermission(
+            authorization_ref=f"hosted-stage-v1:{approval.id}:{bundle.digest}",
+            quote_fingerprint=quote.fingerprint,
+            approved_by=str(PROCESSING_PERSON_ID),
+            expires_at_epoch=1_600,
+        ),
+        state="in_flight",
+        attempt_id="attempt-acquisition-profile-v1",
+    )
+    resolved = FixedProviderRouter._stage(reservation, bundle)
+    assert resolved.id == approval.id
+    assert resolved.configuration_sha256 == template.configuration_sha256

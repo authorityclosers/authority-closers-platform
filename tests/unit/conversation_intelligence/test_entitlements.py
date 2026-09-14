@@ -375,6 +375,19 @@ def test_json_snapshots_roundtrip_and_reject_extra_fields_boolean_units_and_coun
         BudgetAccount.from_dict(counterfeit)
 
 
+def test_legacy_quote_and_reservation_snapshots_keep_fingerprint_and_decode():
+    held = reserved()
+    legacy_quote = held.reservation.quote.as_dict()
+    assert "provider_configuration_sha256" not in legacy_quote
+    decoded_quote = Quote.from_dict(legacy_quote)
+    assert decoded_quote.provider_configuration_sha256 is None
+    assert decoded_quote.fingerprint == held.reservation.quote.fingerprint
+
+    legacy_reservation = held.reservation.as_dict()
+    assert "provider_configuration_sha256" not in legacy_reservation["quote"]
+    assert type(held.reservation).from_dict(legacy_reservation) == held.reservation
+
+
 def test_same_quote_new_source_revision_and_provider_receipt_cannot_cross_bind():
     started = dispatched()
     wrong = settlement(started, provider_id="unapproved-provider")

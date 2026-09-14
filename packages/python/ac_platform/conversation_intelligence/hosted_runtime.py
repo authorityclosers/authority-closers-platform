@@ -94,7 +94,8 @@ class PinnedApprovalLoader:
                     bundle.acquisition_policy is not None
                     and any(
                         item.zero_cost_basis == "synthetic"
-                        for item in bundle.acquisition_policy.stages
+                        for stages in bundle.acquisition_policy.stage_sets()
+                        for item in stages
                     )
                 )
             ):
