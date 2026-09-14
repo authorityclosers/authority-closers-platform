@@ -438,6 +438,32 @@
 .callActions button {
   margin-right: 10px;
 }
+.privacyActions {
+  color: var(--muted);
+  font-size: 11px;
+}
+.privacyActions summary {
+  display: inline-block;
+  cursor: pointer;
+  color: var(--muted);
+  font-weight: 650;
+}
+.privacyActions > div {
+  max-width: 52ch;
+  margin-top: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--canvas) 55%, var(--surface));
+}
+.privacyActions p {
+  margin: 0 0 10px;
+  line-height: 1.55;
+}
+.privacyActions a {
+  color: var(--action);
+  font-weight: 650;
+}
 .withReport {
   grid-template-columns: 1fr;
 }

@@ -784,9 +784,9 @@ it("requires explicit deletion and waits for server acceptance", async () => {
   accepted = true;
   localStorage.setItem("ac.xray.submission.v1", submissionId);
   await mount();
-  await click("Delete this call");
+  await click("Request deletion");
   expect(calls.some((call) => call.init.method === "DELETE")).toBe(false);
-  await click("Delete recording and report");
+  await click("Request recording deletion");
   expect(localStorage.getItem("ac.xray.submission.v1")).toBeNull();
   expect(container.textContent).toContain("Deletion requested");
 });
@@ -801,9 +801,9 @@ it("keeps an explicit deletion-only recovery when a saved call is unavailable", 
   ).toBeNull();
   expect(container.textContent).toContain("Saved call unavailable");
   expect(container.textContent).not.toContain(envelope.report.content.summary);
-  await click("Delete this call");
+  await click("Request deletion");
   expect(calls.some((call) => call.init.method === "DELETE")).toBe(false);
-  await click("Delete recording and report");
+  await click("Request recording deletion");
   expect(
     calls.some(
       (call) =>
@@ -821,8 +821,8 @@ it("can forget a saved selector when owner-authorized deletion is denied", async
   deletionDenied = true;
   localStorage.setItem("ac.xray.submission.v1", submissionId);
   await mount();
-  await click("Delete this call");
-  await click("Delete recording and report");
+  await click("Request deletion");
+  await click("Request recording deletion");
   expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
   expect(button("Forget this saved call on this device")).toBeDefined();
   await click("Forget this saved call on this device");

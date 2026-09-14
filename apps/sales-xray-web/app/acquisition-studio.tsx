@@ -1283,39 +1283,51 @@ export function AcquisitionStudio({
             )}
             {(submission || deletionOnlyId) && (
               <div className={styles.callActions}>
-                {!deleteConfirm ? (
-                  <button
-                    className="text-button"
-                    type="button"
-                    disabled={!!busy}
-                    onClick={() => setDeleteConfirm(true)}
-                  >
-                    Delete this call
-                  </button>
-                ) : (
+                <details className={styles.privacyActions}>
+                  <summary>Privacy &amp; support</summary>
                   <div>
                     <p>
-                      Remove this recording and its report? This cannot be
-                      undone.
+                      Need this call removed?{" "}
+                      <a href="mailto:admin@authorityclosers.com?subject=Sales%20Xray%20deletion%20request">
+                        Email the AC team
+                      </a>{" "}
+                      or request deletion here.
                     </p>
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      disabled={!!busy}
-                      onClick={() => void erase()}
-                    >
-                      Delete recording and report
-                    </button>
-                    <button
-                      type="button"
-                      className="text-button"
-                      disabled={!!busy}
-                      onClick={() => setDeleteConfirm(false)}
-                    >
-                      Keep call
-                    </button>
+                    {!deleteConfirm ? (
+                      <button
+                        className="text-button"
+                        type="button"
+                        disabled={!!busy}
+                        onClick={() => setDeleteConfirm(true)}
+                      >
+                        Request deletion
+                      </button>
+                    ) : (
+                      <>
+                        <p>
+                          Remove this recording and its report? This cannot be
+                          undone.
+                        </p>
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          disabled={!!busy}
+                          onClick={() => void erase()}
+                        >
+                          Request recording deletion
+                        </button>
+                        <button
+                          type="button"
+                          className="text-button"
+                          disabled={!!busy}
+                          onClick={() => setDeleteConfirm(false)}
+                        >
+                          Keep call
+                        </button>
+                      </>
+                    )}
                   </div>
-                )}
+                </details>
               </div>
             )}
           </section>
@@ -1467,7 +1479,7 @@ export function AcquisitionStudio({
                 <div>
                   <h2>Keep your report with your AC account</h2>
                   <p>
-                    Your overview is free. Sign in to keep your calls together.
+                    Sign in to keep this call and any future reviews together.
                   </p>
                 </div>
                 <Link href="/login" className="primary-button">
