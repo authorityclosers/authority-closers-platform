@@ -110,25 +110,27 @@ def _canonical_json(value: Mapping[str, Any], *, max_bytes: int) -> bytes:
 
 
 def _text_prompt_view(
-    body: Mapping[str, Any], *, provider: str, model: str, maximum: int
+    body: Mapping[str, Any], *, provider: str, model: str, maximum: int, task: str
 ) -> Mapping[str, Any]:
     if provider == "groq":
         return body
     if provider != "gemini":
         _fail("text_input_invalid")
     try:
-        return gemini_prompt_view(body, model=model, maximum=maximum)
+        return gemini_prompt_view(body, model=model, maximum=maximum, task=task)
     except GeminiTaskError as exc:
         raise InferenceTaskError(str(exc)) from None
 
 
-def _text_provider_body(prompt: Mapping[str, Any], provider: str) -> Mapping[str, Any]:
+def _text_provider_body(
+    prompt: Mapping[str, Any], provider: str, *, task: str
+) -> Mapping[str, Any]:
     if provider == "groq":
         return prompt
     if provider != "gemini":
         _fail("text_input_invalid")
     try:
-        return prepare_gemini_body(prompt)
+        return prepare_gemini_body(prompt, task=task)
     except GeminiTaskError as exc:
         raise InferenceTaskError(str(exc)) from None
 
@@ -342,6 +344,7 @@ class PreparedTaskInput:
                     provider=self.provider,
                     model=self.model,
                     maximum=self.max_completion_tokens,
+                    task=self.task,
                 ),
                 task=self.task,
                 model=self.model,
@@ -724,6 +727,7 @@ def _validated_text_input(
         provider=task_input.provider,
         model=task_input.model,
         maximum=task_input.max_completion_tokens,
+        task=task,
     )
     if body.get("model") != task_input.model:
         _fail("task_model_mismatch")
@@ -796,7 +800,7 @@ def prepare_fact_inputs(
     prepared: list[PreparedTaskInput] = []
     for prompt in prompts:
         payload = _canonical_json(
-            _text_provider_body(prompt, provider), max_bytes=_MAX_TEXT_PAYLOAD_BYTES
+            _text_provider_body(prompt, provider, task="facts"), max_bytes=_MAX_TEXT_PAYLOAD_BYTES
         )
         user_content = prompt["messages"][1]["content"]
         if not isinstance(user_content, str):
@@ -922,11 +926,12 @@ def prepare_coaching_input(
             profile=resolved_profile,
             max_completion_tokens=max_completion_tokens,
             model=model,
+            provider=provider,
         )
     except ReportError as exc:
         raise InferenceTaskError(str(exc)) from None
     payload = _canonical_json(
-        _text_provider_body(prompt, provider), max_bytes=_MAX_TEXT_PAYLOAD_BYTES
+        _text_provider_body(prompt, provider, task="coaching"), max_bytes=_MAX_TEXT_PAYLOAD_BYTES
     )
     return PreparedTaskInput(
         task="coaching",
@@ -979,6 +984,7 @@ def validate_coaching_result(
         provider=task_input.provider,
         model=task_input.model,
         maximum=task_input.max_completion_tokens,
+        task="coaching",
     )
     if OVERVIEW_MARKER in prompt["messages"][0]["content"] and draft.overview is None:
         _fail("report_overview_missing")
