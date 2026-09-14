@@ -121,15 +121,43 @@ describe("Sales Xray control center", () => {
     await render();
 
     expect(host.textContent).toContain("#4");
-    expect(host.textContent).toContain("settings only · no provider calls");
-    expect(host.textContent).toContain(
-      "calibration metadata, not model training",
-    );
+    expect(host.textContent).toContain("Setup approval pending");
+    expect(host.textContent).toContain("Approved budget ceilingNot available");
+    expect(host.textContent).toContain("do not train the provider model");
     expect(host.querySelector('a[href="/sales-xray/settings"]')).toBeTruthy();
     expect(host.querySelector('a[href="/sales-xray/review"]')).toBeTruthy();
     expect(host.querySelector('a[href="/sales-xray/benchmark"]')).toBeTruthy();
     expect(host.textContent).not.toContain("execution_activated false");
     expect(host.textContent).not.toContain("Start benchmark");
+    expect(host.textContent).not.toContain("₹0 spend ceiling");
+  });
+
+  it("keeps the active revision distinct from a later saved revision and shows the real cap", async () => {
+    vi.mocked(loadProviderControls).mockResolvedValue({
+      ...payload,
+      approved_budget_cap_paise: 90000,
+      current: {
+        ...payload.current!,
+        execution_activated: true,
+        activation: {
+          id: "activation-id",
+          sequence: 1,
+          revision: 2,
+          configuration_sha256: "2".repeat(64),
+          created_at: "2026-09-14T00:00:00Z",
+        },
+      },
+    });
+
+    await render();
+
+    expect(host.textContent).toContain("Selected revision #2");
+    expect(host.textContent).toContain("Latest saved revision#4");
+    expect(host.textContent).toContain("₹900");
+    expect(host.textContent).toContain("not spend or remaining balance");
+    expect(
+      host.querySelector('a[href="/sales-xray/review#recordings-title"]'),
+    ).toBeTruthy();
   });
 
   it("fails closed when the provider status adapter denies access", async () => {

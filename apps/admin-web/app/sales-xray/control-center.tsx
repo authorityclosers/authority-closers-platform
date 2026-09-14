@@ -116,21 +116,38 @@ export function ControlCenterPanel() {
   const plannedProviders = state.payload.catalog.length - implementedProviders;
   const configuredRoutes = current?.configuration.routes.length ?? 0;
   const configuredProviders = current?.configuration.providers.length ?? 0;
+  const activation = current?.activation;
+  const approvedChoices = current?.activation_options.length ?? 0;
+  const budgetCeiling = state.payload.approved_budget_cap_paise;
 
   return (
     <div className={styles.page}>
       <SalesXrayNavigation active="overview" />
       <section className={styles.statusPanel} role="status">
         <div>
-          <h2>Your Sales Xray setup is ready to manage.</h2>
+          <h2>Your calls, coaching and provider settings.</h2>
           <p>
-            Review provider settings, map analysis revisions, and hand work to a
-            human reviewer. Saving settings creates a reviewable revision; this
-            workspace does not accept credentials or start provider calls.
+            Open a recording, review its report, or choose the approved setup
+            for future analyses. Each call keeps its own processing history.
           </p>
+          <div className={styles.buttonRow}>
+            <Link className="button button-primary" href="/sales-xray/review">
+              Open call inventory
+            </Link>
+            <Link
+              className="button button-secondary"
+              href="/sales-xray/settings"
+            >
+              Providers and models
+            </Link>
+          </div>
         </div>
         <span className={styles.statusValue}>
-          settings only · no provider calls
+          {activation
+            ? `Selected revision #${activation.revision}`
+            : approvedChoices > 0
+              ? "Approved setup available"
+              : "Setup approval pending"}
         </span>
       </section>
 
@@ -139,55 +156,67 @@ export function ControlCenterPanel() {
         aria-label="Sales Xray control status"
       >
         <div className={styles.summaryCard}>
-          <span>Current provider revision</span>
+          <span>Latest saved revision</span>
           <strong>{current ? `#${current.revision}` : "None"}</strong>
           <small>{current ? current.created_at : "No saved revision"}</small>
         </div>
         <div className={styles.summaryCard}>
-          <span>Configured bindings</span>
+          <span>Saved provider models</span>
           <strong>{configuredProviders}</strong>
-          <small>references only</small>
+          <small>in the latest saved revision</small>
         </div>
         <div className={styles.summaryCard}>
-          <span>Analysis routes</span>
-          <strong>{configuredRoutes}</strong>
-          <small>task / recipe / profile / prompt revisions</small>
+          <span>Selected for future plans</span>
+          <strong>
+            {activation ? `#${activation.revision}` : "Release default"}
+          </strong>
+          <small>{configuredRoutes} routes in the saved configuration</small>
         </div>
         <div className={styles.summaryCard}>
-          <span>Provider catalog</span>
-          <strong>{implementedProviders} available entries</strong>
-          <small>{plannedProviders} planned entries · ₹0 spend ceiling</small>
+          <span>Approved budget ceiling</span>
+          <strong>
+            {budgetCeiling == null
+              ? "Not available"
+              : new Intl.NumberFormat("en-IN", {
+                  style: "currency",
+                  currency: "INR",
+                  maximumFractionDigits: 2,
+                }).format(budgetCeiling / 100)}
+          </strong>
+          <small>
+            Shared processing limit · not spend or remaining balance
+          </small>
         </div>
       </div>
 
       <div className={styles.capabilityGrid}>
         <article className={styles.capabilityCard}>
           <span className={styles.eyebrow}>Provider configuration</span>
-          <h2>Manage provider settings</h2>
+          <h2>Choose your analysis setup</h2>
           <p>
-            Choose catalog providers, add the references your review requires,
-            and save a current revision.
+            Save model and task settings, then select an approved revision for
+            new plans. Calls already in progress keep their original setup.
           </p>
           <Link href="/sales-xray/settings">Open provider settings →</Link>
         </article>
         <article className={styles.capabilityCard}>
-          <span className={styles.eyebrow}>Analysis parameters</span>
-          <h2>Use revision identifiers safely</h2>
+          <span className={styles.eyebrow}>Reports and usage</span>
+          <h2>See every retained call</h2>
           <p>
-            Recipe, profile, and prompt revisions choose a future approved
-            configuration. They are calibration metadata, not model training
-            controls.
+            Find learner and guest recordings, check processing status and
+            inspect usage. Estimates and reserved amounts remain separate from
+            confirmed provider charges.
           </p>
-          <Link href="/sales-xray/settings#task-routes-title">
-            Open analysis routes →
+          <Link href="/sales-xray/review#recordings-title">
+            Browse calls and costs →
           </Link>
         </article>
         <article className={styles.capabilityCard}>
           <span className={styles.eyebrow}>Reviewer entrypoint</span>
-          <h2>Assign and revoke human review</h2>
+          <h2>Bring your team into the review</h2>
           <p>
-            Use the reviewer queue to assign people, set the review scope, and
-            safely revoke a handoff when plans change.
+            Choose a saved report, invite a reviewer and collect feedback from
+            sales, development or user-experience perspectives.
           </p>
           <Link href="/sales-xray/review">Open reviewer queue →</Link>
         </article>
@@ -203,17 +232,21 @@ export function ControlCenterPanel() {
       </div>
 
       <section className={styles.gapPanel}>
-        <span className={styles.eyebrow}>Safe operating boundary</span>
-        <h2>What this workspace can and cannot do</h2>
+        <span className={styles.eyebrow}>Configuration details</span>
+        <h2>Clear settings, traceable changes</h2>
         <ul>
-          <li>Can load and save provider settings as reviewable revisions.</li>
           <li>
-            Can select task routing and revision identifiers; it cannot change
-            model weights or train a provider.
+            {implementedProviders} implemented catalog entries and{" "}
+            {plannedProviders} planned entries. Only approved configurations can
+            be selected for processing.
           </li>
           <li>
-            Cannot accept credentials, call an external provider, or
-            auto-purchase credits.
+            Recipe, profile and prompt revisions select analysis behavior. They
+            do not train the provider model.
+          </li>
+          <li>
+            Secrets stay on the server. Selecting a configuration does not start
+            a paid run or buy credits.
           </li>
           <li>
             Test runs are not available from Admin yet; configure providers and
