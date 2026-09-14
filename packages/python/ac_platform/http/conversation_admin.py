@@ -10,6 +10,10 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ac_platform.application.settings import Settings
 from ac_platform.conversation_intelligence.admin_recordings import AdminConversationRecordings
+from ac_platform.conversation_intelligence.analysis_settings import AnalysisSettings
+from ac_platform.conversation_intelligence.analysis_settings_admin import (
+    ConversationAnalysisSettingsAdmin,
+)
 from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
     ConversationError,
@@ -45,6 +49,12 @@ class ProviderActivationIntent(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     expected_revision: int = Field(ge=0, lt=2_147_483_647)
     target_revision: int = Field(ge=1, lt=2_147_483_647)
+
+
+class AnalysisSettingsIntent(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    expected_revision: int = Field(ge=0, lt=2_147_483_647)
+    settings: AnalysisSettings
 
 
 def install_conversation_admin_http(
@@ -139,6 +149,50 @@ def install_conversation_admin_http(
                 limit=limit,
                 cursor=cursor,
                 search=search,
+            )
+        except ConversationError as error:
+            raise HTTPException(error.status, str(error)) from None
+
+    @router.get("/analysis-settings")
+    async def analysis_settings(
+        request: Request,
+        response: Response,
+        auth: AuthenticatedTransaction = dependency,
+    ) -> dict[str, Any]:
+        surface(request, response)
+        operations_tenant_id = settings.operations_tenant_id
+        if operations_tenant_id is None:
+            raise HTTPException(503, "Analysis settings are not configured.")
+        try:
+            return await ConversationAnalysisSettingsAdmin(
+                ConversationApplication(auth.database),
+                operations_tenant_id=operations_tenant_id,
+            ).current(auth.resolved.actor)
+        except ConversationError as error:
+            raise HTTPException(error.status, str(error)) from None
+
+    @router.post("/analysis-settings", status_code=201)
+    async def save_analysis_settings(
+        intent: AnalysisSettingsIntent,
+        request: Request,
+        response: Response,
+        key: Annotated[str, Header(alias="Idempotency-Key", min_length=1, max_length=128)],
+        auth: AuthenticatedTransaction = dependency,
+    ) -> dict[str, Any]:
+        surface(request, response)
+        require_safe_origin(request, settings)
+        operations_tenant_id = settings.operations_tenant_id
+        if operations_tenant_id is None:
+            raise HTTPException(503, "Analysis settings are not configured.")
+        try:
+            return await ConversationAnalysisSettingsAdmin(
+                ConversationApplication(auth.database),
+                operations_tenant_id=operations_tenant_id,
+            ).save(
+                auth.resolved.actor,
+                intent.settings,
+                expected_revision=intent.expected_revision,
+                key=key,
             )
         except ConversationError as error:
             raise HTTPException(error.status, str(error)) from None

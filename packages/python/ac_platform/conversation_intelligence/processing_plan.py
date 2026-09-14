@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ac_platform.conversation_intelligence.activation_contract import StageApproval
+from ac_platform.conversation_intelligence.analysis_settings import latest_analysis_settings
 from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
     ConversationConflict,
@@ -99,6 +100,8 @@ class PlanManifest(BaseModel):
     expires_at_epoch: int = Field(strict=True, gt=0)
     max_cost_paise: int = Field(default=0, strict=True, ge=0, le=2_147_483_647)
     max_entitlement_seconds: int = Field(strict=True, ge=0, le=86400)
+    analysis_settings_revision: int | None = Field(default=None, strict=True, ge=1)
+    output_profile: Literal["standard", "detailed"] = "detailed"
 
     @model_validator(mode="after")
     def bounded(self) -> PlanManifest:
@@ -138,6 +141,10 @@ class PlanManifest(BaseModel):
             value.pop("processing_lease_id", None)
         if self.continuation_grant_id is None:
             value.pop("continuation_grant_id", None)
+        if self.analysis_settings_revision is None:
+            value.pop("analysis_settings_revision", None)
+        if self.output_profile == "detailed":
+            value.pop("output_profile", None)
         return value
 
 
@@ -336,6 +343,7 @@ def require_derived_input(value: PlanManifest, plan: ServicePlan) -> None:
             plan.checkpoint.stage == "C5"
             and content_hash(plan.profile) != content_hash(value.profile)
         )
+        or (plan.checkpoint.stage == "C5" and plan.request.output_profile != value.output_profile)
     ):
         raise ConversationDenied("The derived request exceeds the accepted processing plan.")
 
@@ -518,7 +526,26 @@ class ConversationProcessingPlans:
                 profile_revision=str(profile["revision"]) if stage == "C5" else None,
                 configuration_sha256=c2.configuration_sha256,
             )
+        settings_row, analysis_settings = await latest_analysis_settings(
+            self.db, self.authority.operations_tenant_id
+        )
         c4, c5 = approvals["C4"], approvals["C5"]
+        if settings_row is not None:
+            c4 = c4.model_copy(
+                update={
+                    "max_requests": min(c4.max_requests, analysis_settings.c4_max_requests),
+                    "max_completion_tokens": min(
+                        c4.max_completion_tokens, analysis_settings.c4_max_completion_tokens
+                    ),
+                }
+            )
+            c5 = c5.model_copy(
+                update={
+                    "max_completion_tokens": min(
+                        c5.max_completion_tokens, analysis_settings.c5_max_completion_tokens
+                    ),
+                }
+            )
         # C1 has already charged the measured source audio. The remaining
         # provider plan needs zero additional user minutes, even when the last
         # authorized call consumed the account's entire allowance.
@@ -572,6 +599,8 @@ class ConversationProcessingPlans:
                 ),
                 max_entitlement_seconds=maximum_seconds,
                 max_cost_paise=maximum_cost,
+                analysis_settings_revision=None if settings_row is None else settings_row.revision,
+                output_profile=analysis_settings.c5_output_profile,
             )
         except ValueError:
             raise ConversationDenied("The complete processing plan is not approved.") from None
@@ -775,6 +804,7 @@ class ConversationProcessingPlans:
                             provider=c5.provider_id,
                             model=c5.model_id,
                         ),
+                        output_profile=value.output_profile,
                         profile=value.profile,
                     ),
                 )

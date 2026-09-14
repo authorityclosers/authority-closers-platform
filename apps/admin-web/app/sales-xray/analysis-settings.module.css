@@ -1,0 +1,127 @@
+.panel {
+  display: grid;
+  gap: 1rem;
+  padding: 1.5rem;
+  border: 1px solid #d8e0e9;
+  border-radius: 1rem;
+  background: #fff;
+  color: #1c2a39;
+}
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.header h2 {
+  margin: 0.4rem 0 0;
+  font-size: 1.35rem;
+}
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  color: #526579;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.copy,
+.hint {
+  margin: 0;
+  color: #526579;
+  line-height: 1.55;
+}
+.hint {
+  font-size: 0.86rem;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+.field {
+  display: grid;
+  gap: 0.4rem;
+}
+.field span {
+  font-weight: 650;
+}
+.field input,
+.field select {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #bac7d8;
+  border-radius: 0.55rem;
+  padding: 0.72rem 0.8rem;
+  background: #fff;
+  color: #1c2a39;
+  font: inherit;
+}
+.field small {
+  color: #526579;
+  line-height: 1.4;
+}
+.iconButton,
+.primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 1px solid #bac7d8;
+  border-radius: 0.55rem;
+  padding: 0.7rem 0.9rem;
+  cursor: pointer;
+  background: #fff;
+  color: #203c65;
+  font: inherit;
+}
+.iconButton:focus-visible,
+.primary:focus-visible,
+.field input:focus-visible,
+.field select:focus-visible {
+  outline: 3px solid #9eaefa;
+  outline-offset: 3px;
+}
+.iconButton:disabled,
+.primary:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+.primary {
+  background: #203c65;
+  color: #fff;
+}
+.actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+}
+.actions > span {
+  color: #526579;
+  font-size: 0.86rem;
+}
+.error,
+.success {
+  margin: 0;
+  padding: 0.8rem 1rem;
+  border-left: 3px solid;
+}
+.error {
+  border-color: #b42318;
+  background: #fff1f0;
+  color: #7a271a;
+}
+.success {
+  border-color: #087443;
+  background: #edfcf2;
+  color: #095c37;
+}
+@media (max-width: 720px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}

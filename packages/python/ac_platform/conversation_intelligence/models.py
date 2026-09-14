@@ -297,6 +297,39 @@ class ConversationProviderActivation(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+class ConversationAnalysisSettings(Base):
+    """Append-only owner limits intersected into future processing plans."""
+
+    __tablename__ = "conversation_analysis_settings"
+    __table_args__ = (
+        member_fk(),
+        UniqueConstraint("tenant_id", "revision"),
+        CheckConstraint("revision >= 1", name="positive_revision"),
+        CheckConstraint(
+            "c4_max_requests >= 1 AND c4_max_requests <= 64", name="bounded_c4_requests"
+        ),
+        CheckConstraint(
+            "c4_max_completion_tokens >= 256 AND c4_max_completion_tokens <= 4000",
+            name="bounded_c4_tokens",
+        ),
+        CheckConstraint(
+            "c5_max_completion_tokens >= 256 AND c5_max_completion_tokens <= 8000",
+            name="bounded_c5_tokens",
+        ),
+        CheckConstraint("c5_output_profile IN ('standard','detailed')", name="known_c5_profile"),
+    )
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    person_id: Mapped[UUID] = mapped_column(Uuid)
+    session_id: Mapped[UUID] = mapped_column(Uuid, ForeignKey("sessions.id"))
+    revision: Mapped[int] = mapped_column(Integer)
+    c4_max_requests: Mapped[int] = mapped_column(Integer)
+    c4_max_completion_tokens: Mapped[int] = mapped_column(Integer)
+    c5_max_completion_tokens: Mapped[int] = mapped_column(Integer)
+    c5_output_profile: Mapped[str] = mapped_column(String(16))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class ConversationReportDraft(Base):
     """Internal draft, never an official score or model-promotion decision."""
 

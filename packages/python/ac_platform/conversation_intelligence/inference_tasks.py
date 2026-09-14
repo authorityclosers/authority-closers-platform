@@ -457,7 +457,7 @@ class PreparedTaskInput:
         if expected_payload_sha != hashlib.sha256(payload).hexdigest():
             _fail("task_payload_digest_mismatch")
         covered_value = value.get("covered_segment_ids")
-        if not isinstance(covered_value, (list, tuple)):
+        if not isinstance(covered_value, list | tuple):
             _fail("task_reconstruction_invalid")
         try:
             prepared = cls(
@@ -911,6 +911,7 @@ def prepare_coaching_input(
     profile: Mapping[str, Any] | None = None,
     model: str = GROQ_MODEL,
     max_completion_tokens: int = 1_800,
+    output_profile: Literal["standard", "detailed"] = "detailed",
 ) -> PreparedTaskInput:
     """Prepare the single C5 profile-aware judge request from complete C4 facts."""
 
@@ -929,6 +930,7 @@ def prepare_coaching_input(
             max_completion_tokens=max_completion_tokens,
             model=model,
             provider=provider,
+            detailed_overview=output_profile == "detailed",
         )
     except ReportError as exc:
         raise InferenceTaskError(str(exc)) from None

@@ -9,6 +9,7 @@ import { newIdempotencyKey } from "@ac/operations-web/api";
 import { AdminShell } from "../components/admin-shell";
 import { SalesXrayNavigation } from "./sales-xray-navigation";
 import { ExecutionControlsPanel } from "./execution-controls";
+import { AnalysisSettingsPanel } from "./analysis-settings";
 import styles from "./provider-controls.module.css";
 
 const TASK_NAMES = [
@@ -1695,6 +1696,7 @@ export function ProviderControls() {
       <div className={styles.page}>
         <SalesXrayNavigation active="settings" />
         <ExecutionControlsPanel />
+        <AnalysisSettingsPanel />
         <ProviderControlsPanel />
       </div>
     </AdminShell>

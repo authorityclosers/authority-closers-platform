@@ -34,6 +34,7 @@ from ac_platform.conversation_intelligence.entitlements import (
 )
 from ac_platform.conversation_intelligence.inference_tasks import InferenceTaskError
 from ac_platform.conversation_intelligence.models import (
+    ConversationAnalysisSettings,
     ConversationBudgetAccount,
     ConversationCheckpoint,
     ConversationCommand,
@@ -71,6 +72,41 @@ async def _quote(setup: Any, key: str) -> dict[str, Any]:
     async with setup.sessions() as database, database.begin():
         service = ConversationProcessingPlans(_application(setup, database), setup.authority)
         return await service.quote(setup.actor, setup.prepared.recording_id, key=key)
+
+
+def test_admin_analysis_settings_bound_new_plan_only(postgres_harness: Any, tmp_path: Any) -> None:
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            async with setup.sessions() as database, database.begin():
+                database.add(
+                    ConversationAnalysisSettings(
+                        id=uuid4(),
+                        tenant_id=setup.actor.tenant_id,
+                        person_id=setup.actor.person_id,
+                        session_id=setup.actor.session_id,
+                        revision=1,
+                        c4_max_requests=1,
+                        c4_max_completion_tokens=512,
+                        c5_max_completion_tokens=512,
+                        c5_output_profile="standard",
+                        created_at=setup.prepared.state.now,
+                    )
+                )
+            quote = await _quote(setup, "analysis-settings-plan")
+            async with setup.sessions() as database:
+                row = await database.get(ConversationProcessingPlan, UUID(quote["id"]))
+                assert row is not None and row.manifest is not None
+                stages = row.manifest["stages"]
+                assert stages[1]["max_requests"] == 1
+                assert stages[1]["max_completion_tokens"] == 512
+                assert stages[2]["max_completion_tokens"] == 512
+                assert row.manifest["output_profile"] == "standard"
+                assert row.manifest["analysis_settings_revision"] == 1
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
 
 
 async def _accept(setup: Any, quote: dict[str, Any], key: str) -> dict[str, Any]:
