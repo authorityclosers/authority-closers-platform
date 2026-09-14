@@ -142,3 +142,43 @@ it("does not label an available report ready while review eligibility is blocked
     container.remove();
   }
 });
+
+it("shows a saved upload with completed audio checks as report pending", async () => {
+  vi.mocked(loadAdminRecordings).mockResolvedValue({
+    items: [
+      {
+        ...recording,
+        status: "completed",
+        latest_run: { ...recording.latest_run, provider_stages: [] },
+        processing_plan: null,
+        report: {
+          available: false,
+          id: null,
+          run_id: null,
+          review_eligible: false,
+          invite_eligible: false,
+        },
+      },
+    ],
+    next_cursor: null,
+  });
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  const onSelectRun = vi.fn();
+  try {
+    await act(async () => {
+      root.render(<RecordingsInventory onSelectRun={onSelectRun} />);
+    });
+    await vi.waitFor(() =>
+      expect(container.textContent).toContain("Report pending"),
+    );
+    expect(container.textContent).toContain("Audio checks complete");
+    expect(container.textContent).not.toContain("Ready for review");
+    expect(container.textContent).not.toContain("Use for review / invite");
+    expect(onSelectRun).not.toHaveBeenCalled();
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+  }
+});

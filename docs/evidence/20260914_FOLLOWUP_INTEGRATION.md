@@ -24,3 +24,11 @@ Full combined CI, immutable image publication, browser verification and deployme
 Initial activation leaf45cf1d4 is integrated asf069a1f for combined work, not approved for deployment. Independent review found legacy Quote snapshot/fingerprint compatibility and complete-plan C4 budget fan-out defects; the author is correcting both and implementing finite approved alternative model profiles.
 
 The control center now links directly to the recording inventory and provider settings. It distinguishes the latest saved revision from the selected future-plan revision and reads the approved budget ceiling from the API instead of hard-coding a zero spend ceiling. Missing approval remains unavailable, not zero. Three focused UI tests and Admin TypeScript passed; no live result is asserted for these UI changes.
+
+## Subsequent combined verification
+
+- Integrated profile and legacy snapshot corrections from ca12d5b, followed by136fcca: a save-only draft no longer changes the release-approved default, and the full-plan ceiling counts C2 once, C4 fan-out and C5 once. Root checked the actual default and pinned-route call sites. Root focused activation/policy/entitlement/hosted checks passed77 after integration; receipt `D:/AC-authority-closers-release-audit/activation-20260914/activation-caf94aa-root.xml`.
+- Integrated peer plan403 UI correction0d6df6: safe approval or allowance copy, sign-in offered for401, saved audio retained and no automatic paid retry. Root combined Sales UI checks passed146 across17 files; receipt `D:/AC-authority-closers-release-audit/activation-20260914/followup-a9c91a1-sales-ui.xml`.
+- Actual staging0847 Admin browser inventory showed the newly uploaded retained call while its report remained unavailable. The source checks were labelled Completed. This follow-up now labels that case Report pending / Audio checks complete, reserving the success state for an available report. Two mounted inventory tests and Admin TypeScript passed. This label correction is local, not yet deployed.
+
+Migration0039 backup/restore parity and a fully cost-bounded alternative Gemini profile remain in progress before the combined release freeze. A complete real staging report and production acceptance are still outstanding.

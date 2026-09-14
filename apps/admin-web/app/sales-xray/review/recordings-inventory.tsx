@@ -78,6 +78,24 @@ function statusLabel(value: AdminRecording["status"]): string {
   return value.replaceAll("_", " ");
 }
 
+function recordingStatus(recording: AdminRecording): string {
+  if (recording.status === "completed" && !recording.report.available) {
+    return "Report pending";
+  }
+  return statusLabel(recording.status);
+}
+
+function latestRunStatus(recording: AdminRecording): string {
+  const run = recording.latest_run;
+  if (!run) return "Not started";
+  if (run.state === "completed" && !recording.report.available) {
+    return run.provider_stages.length
+      ? "Processing step complete"
+      : "Audio checks complete";
+  }
+  return statusLabel(run.state);
+}
+
 function InventoryRow({
   recording,
   onSelectRun,
@@ -103,9 +121,9 @@ function InventoryRow({
           </p>
         </div>
         <span
-          className={`${styles.pill} ${recording.status === "completed" ? styles.pillSuccess : styles.pillPending}`}
+          className={`${styles.pill} ${recording.status === "completed" && recording.report.available ? styles.pillSuccess : styles.pillPending}`}
         >
-          {statusLabel(recording.status)}
+          {recordingStatus(recording)}
         </span>
       </div>
       <dl className={styles.assignmentFacts}>
@@ -115,11 +133,7 @@ function InventoryRow({
         </div>
         <div>
           <dt>Latest run</dt>
-          <dd>
-            {recording.latest_run
-              ? statusLabel(recording.latest_run.state)
-              : "Not started"}
-          </dd>
+          <dd>{latestRunStatus(recording)}</dd>
         </div>
         <div>
           <dt>Cost basis</dt>
