@@ -262,7 +262,9 @@ def install_studio_media_http(
             program_id: UUID, upload_id: UUID, request: Request
         ) -> Response:
             try:
-                await byte_transport.accept(request, program_id=program_id, upload_id=upload_id)
+                result = await byte_transport.accept(
+                    request, program_id=program_id, upload_id=upload_id
+                )
             except DomainError as error:
                 rejected = problem_response(
                     request=request,
@@ -280,7 +282,7 @@ def install_studio_media_http(
                 status_code=204,
                 headers={
                     "cache-control": "no-store",
-                    "x-ac-upload-bytes": request.headers["content-length"],
+                    "x-ac-upload-bytes": str(result.uploaded_bytes),
                     "x-ac-upload-sha256": request.headers["x-content-sha256"],
                 },
             )
