@@ -36,14 +36,19 @@ PRO_PRICING_REF = "ref:pricing/gemini-31-pro-preview-20260914"
 PRO_INPUT_USD_PER_MILLION = 2
 PRO_OUTPUT_USD_PER_MILLION = 12
 PLANNING_USD_TO_INR = 100
+# The native adapter currently admits facts prompts when
+# ceil(input_bytes / 3) + output_tokens + 128 <= 8,000. Keep that transport
+# gate as the actual byte limit, but use one token per UTF-8 byte for the
+# financial bound below. The latter is deliberately conservative accounting,
+# not a claim about the provider tokenizer.
 PRO_C4_MAX_OUTPUT_TOKENS = 1_400
 PRO_C4_PROMPT_LIMIT_TOKENS = 8_000
 PROMPT_OVERHEAD_TOKENS = 128
 PRO_C4_MAX_INPUT_BYTES = (
     PRO_C4_PROMPT_LIMIT_TOKENS - PRO_C4_MAX_OUTPUT_TOKENS - PROMPT_OVERHEAD_TOKENS
 ) * 3
-PRO_C4_INPUT_TOKENS = math.ceil(PRO_C4_MAX_INPUT_BYTES / 3)
-PRO_C4_MAX_COST_PAISE = 300
+PRO_C4_SAFE_BILLING_INPUT_TOKENS = PRO_C4_MAX_INPUT_BYTES
+PRO_C4_MAX_COST_PAISE = 700
 
 
 def sha256_file(path: Path) -> str:
@@ -54,9 +59,8 @@ def pro_c4_cost_bound_paise() -> int:
     """Return the conservative rounded-up Pro C4 bound at the source caps."""
 
     numerator = (
-        PRO_C4_INPUT_TOKENS * PRO_INPUT_USD_PER_MILLION
-        + PRO_C4_MAX_OUTPUT_TOKENS * PRO_OUTPUT_USD_PER_MILLION
-    )
+        PRO_C4_SAFE_BILLING_INPUT_TOKENS + PROMPT_OVERHEAD_TOKENS
+    ) * PRO_INPUT_USD_PER_MILLION + PRO_C4_MAX_OUTPUT_TOKENS * PRO_OUTPUT_USD_PER_MILLION
     exact_paise = numerator * PLANNING_USD_TO_INR * 100 / 1_000_000
     return math.ceil(exact_paise)
 
@@ -136,6 +140,9 @@ def build_alternate_profile(
                 "model_id": PRO_MODEL_ID if item.stage == "C4" else item.model_id,
                 "max_completion_tokens": (
                     PRO_C4_MAX_OUTPUT_TOKENS if item.stage == "C4" else item.max_completion_tokens
+                ),
+                "max_input_bytes": (
+                    PRO_C4_MAX_INPUT_BYTES if item.stage == "C4" else item.max_input_bytes
                 ),
                 "max_cost_paise": max_cost_paise if item.stage == "C4" else item.max_cost_paise,
             }
@@ -269,7 +276,8 @@ def prepare(args: argparse.Namespace) -> dict[str, Any]:
             "output_usd_per_million": PRO_OUTPUT_USD_PER_MILLION,
             "planning_usd_to_inr": PLANNING_USD_TO_INR,
             "max_input_bytes": PRO_C4_MAX_INPUT_BYTES,
-            "max_input_tokens": PRO_C4_INPUT_TOKENS,
+            "safe_billing_input_tokens": PRO_C4_SAFE_BILLING_INPUT_TOKENS,
+            "system_prefix_overhead_tokens": PROMPT_OVERHEAD_TOKENS,
             "max_output_tokens": PRO_C4_MAX_OUTPUT_TOKENS,
             "computed_cost_paise": pro_c4_cost_bound_paise(),
             "quoted_max_cost_paise": PRO_C4_MAX_COST_PAISE,

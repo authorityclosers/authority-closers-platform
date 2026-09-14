@@ -12,11 +12,12 @@
   "planning_usd_to_inr": 100,
   "planning_rate_is_not_billing_rate": true,
   "max_input_bytes": 19416,
-  "max_input_tokens": 6472,
+  "safe_billing_input_tokens": 19416,
   "max_output_tokens": 1400,
-  "computed_max_cost_paise": 298,
-  "quoted_max_cost_paise": 300,
+  "system_prefix_overhead_tokens": 128,
+  "computed_max_cost_paise": 559,
+  "quoted_max_cost_paise": 700,
   "provider_calls_performed": false,
   "account_funding_or_quota_verified": false,
-  "purpose": "Source-backed planning bound for the finite Pro C4 profile; does not prove account funding, quota, or provider availability."
+  "purpose": "Source-backed planning bound for the finite Pro C4 profile. Billing reserves conservatively treat each admitted UTF-8 input byte as one token and add the adapter's fixed 128-token system overhead; this is not a provider tokenizer claim. It does not prove account funding, quota, or provider availability."
 }
