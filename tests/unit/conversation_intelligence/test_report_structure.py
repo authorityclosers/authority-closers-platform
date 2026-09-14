@@ -22,6 +22,60 @@ from tests.unit.conversation_intelligence.test_gemini_tasks import (
 from tests.unit.conversation_intelligence.test_reports import _payload, _transcript
 
 
+@pytest.mark.parametrize("count", [1, 3])
+@pytest.mark.parametrize(
+    ("provider", "model"),
+    [
+        ("groq", "openai/gpt-oss-120b"),
+        ("gemini", "gemini-3.1-pro-preview"),
+        ("gemini", "gemini-3.8-flash"),
+    ],
+)
+def test_durable_plan_output_allocation_fits_supported_routes_without_losing_input(
+    count: int, provider: str, model: str
+) -> None:
+    """The durable plan uses 3200 output tokens, unlike the older 1800-token tests."""
+    transcript = _transcript(count=count)
+    packet = reports.parse_fact_packet(
+        {
+            "overview": "A literal greeting is present.",
+            "observations": [
+                {"fact": "The speaker greeted the buyer.", "segment_id": segment["id"]}
+                for segment in transcript["segments"]
+            ],
+            "uncertainties": ["The speaker labels have not been verified."],
+        },
+        transcript,
+    )
+    profile = reports.load_report_profile()
+    before = deepcopy((transcript, packet.model_dump(mode="json"), profile))
+    task = prepare_coaching_input(
+        transcript,
+        [packet],
+        profile=profile,
+        provider=provider,
+        model=model,
+        max_completion_tokens=3_200,
+    )
+    assert type(task).from_dict(task.as_dict(), payload=task.payload) == task
+    body = task.as_provider_body()
+    if provider == "gemini":
+        system = body["systemInstruction"]["parts"][0]["text"]
+        user = body["contents"][0]["parts"][0]["text"]
+        assert body["generationConfig"]["maxOutputTokens"] == 3_200
+    else:
+        system, user = [message["content"] for message in body["messages"]]
+        assert body["max_completion_tokens"] == 3_200
+    submitted = json.loads(user.split("\n", 1)[1])
+    assert submitted["observations"] == [
+        item.model_dump(mode="json") for item in packet.observations
+    ]
+    assert submitted["covered_segment_ids"] == packet.covered_segment_ids
+    assert submitted["uncertainties"] == packet.uncertainties
+    assert json.loads(system.rsplit("Profile:\n", 1)[1]) == reports._prompt_profile(profile)
+    assert (transcript, packet.model_dump(mode="json"), profile) == before
+
+
 @pytest.mark.parametrize(
     ("provider", "model"),
     [("gemini", "gemini-3.8-flash"), ("groq", "openai/gpt-oss-120b")],

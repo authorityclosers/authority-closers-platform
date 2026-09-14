@@ -209,25 +209,18 @@ def normalize_overview(
 
 
 OVERVIEW_INSTRUCTION = (
-    " Also return overview with version dipak-14-point-v1, following the supplied schema. "
-    "Use concise, plain sales language and preserve the source's script. "
-    "This is the owner's fourteen-part qualitative template. Finding/evidence indices "
-    "are zero-based references to your main report arrays; do not duplicate or invent "
-    "findings to fill slots. Distinguish what happened, why it matters and the replacement "
-    "behavior. Golden moments must be genuinely useful source-backed strengths (at most "
-    "three; fewer is valid). Interpretations and causal explanations are hypotheses, "
-    "never observed psychology or traits. Use null when a diagnosis, outcome or first "
-    "before/change/after sequence is unsupported. A follow-up window is not a booked "
-    "appointment or closed sale. ONE next-call focus and ONE drill refer to improvement "
-    "index 0; give a concrete observable practice target, not a performance grade. "
-    "No historical conversion, lead-volume or financial inputs are supplied: business "
-    "impact is insufficient_data with named missing inputs, and progress is null. "
-    "Do not invent a closer name, level, ethics verdict or overall score. "
-    "Keep any ethics concern as a source-linked observation for human review. "
-    "Do not repeat server-derived source_label, source_sha256, transcript_revision "
-    "or report_sections. For dimensions use only dimension_id, status and a short "
-    "observation; the server supplies labels and principle citations. "
-    "A new report format does not require new transcription. "
+    " Follow the owner's fourteen-part overview template. Link existing report findings; "
+    "do not invent or duplicate findings to fill slots. Separate what happened, why it matters "
+    "and replacement behavior. Golden moments need useful source-backed strengths; fewer is valid. "
+    "Prospect interpretations and causal effects are hypotheses, not observed psychology. "
+    "Unsupported diagnosis, outcome or chronological before/change/after sequence is null. "
+    "A follow-up window is not a booked appointment or closed sale. ONE focus and ONE drill "
+    "link improvement 0 with an observable practice target. No conversion, lead-volume, financial "
+    "or historical inputs are supplied: business impact is insufficient_data with named missing "
+    "inputs; progress is null. No invented closer name, level or ethics verdict; ethics concerns "
+    "are source-linked observations for human review. Omit server-derived source_label, "
+    "source_sha256, transcript_revision and report_sections. Dimensions use only dimension_id, "
+    "status and observation; the server supplies labels and principle citations. "
 )
 
 # Compact semantic contract in the judge input; the Pydantic model above is the

@@ -37,13 +37,11 @@ MAX_PROFILE_PROMPT_CHARS = 16_000
 _MAX_EVIDENCE_QUOTE_CHARS = 2_000
 REVIEW_STATUS = "draft_not_dipak_adjudicated"
 COACHING_VOICE_INSTRUCTION = (
-    "REPORT_VOICE: direct-coaching-v1. Write coaching prose directly to the person "
-    "practicing the closer role, using you/your and short, plain sentences. "
-    "For example: 'You checked who makes the decision.' Do not narrate that person "
-    "as 'the seller' or 'the closer', and do not speak as Dipak. Preserve verbatim "
-    "source quotes and speaker labels; never personalize prospect/customer statements "
-    "or infer voice identity. When attribution is unclear, say so. Missing skill "
-    "evidence is not poor performance. "
+    "REPORT_VOICE: direct-coaching-v1. Coach the person practicing the closer role "
+    "using you/your in short, plain sentences; not 'the seller' or 'the closer'. "
+    "Do not speak as Dipak. Preserve verbatim source quotes and speaker labels; "
+    "never personalize prospect/customer statements or infer voice identity. "
+    "State unclear attribution. Missing skill evidence is not poor performance. "
 )
 REPORT_STRUCTURE_INSTRUCTION = (
     "ROOT_TYPES: report-root-types-v2. summary and verdict must be JSON strings, never objects. "
@@ -53,9 +51,8 @@ REPORT_STRUCTURE_INSTRUCTION = (
     "Each dimension assessment is an object with dimension_id, status and observation. "
     "Use exact profile dimension IDs. status must be observed, insufficient_evidence, "
     "not_applicable, conflicted or unknown; sufficient_evidence is not a valid status. "
-    "Copy evidence objects directly from the supplied observations: preserve segment_id, "
-    "quote, start_ms and end_ms exactly, including every script character, space and "
-    "punctuation. Reuse the identical object when citing a span again. Never transliterate, "
+    "Copy supplied evidence objects exactly: segment_id, quote, start_ms, end_ms, every "
+    "script character, space and punctuation. Reuse identical objects. Never transliterate, "
     "translate or rewrite quotes. "
 )
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
@@ -1079,24 +1076,20 @@ def build_report_groq_prompt(
         else "source_label, dimensions and report_sections. "
     )
     system = (
-        "You are the profile-aware qualitative Sales Xray judge. Return one JSON object only. "
-        "Use the supplied style-independent facts and their exact evidence to produce the "
-        "requested draft fields: summary, strengths, missed_opportunities, improvements, "
-        "objection_analysis, closing_analysis, verdict, review_status, "
+        "Return one source-bound qualitative Sales Xray draft JSON object using the supplied "
+        "facts and profile. Required fields: summary, strengths, missed_opportunities, "
+        "improvements, objection_analysis, closing_analysis, verdict, review_status, "
         + output_fields
         + COACHING_VOICE_INSTRUCTION
         + REPORT_STRUCTURE_INSTRUCTION
-        + "Every finding requires title, explanation and an "
-        "evidence array with exact quote, segment_id, start_ms and end_ms. Do not score, grade, "
-        "rank or publish an official result. Set review_status to "
+        + "Set review_status to "
         f"{REVIEW_STATUS!r}. Source label and transcript provenance are server-derived. "
-        "Use missingness labels when appropriate; keep improvements to at most three. "
-        "Never infer fixed traits, motive, identity or stable tonality. Keep the subject of "
-        "each statement exact: a customer asking for credit is not the seller's loan or event "
-        "budget. Distinguish a price category being mentioned from an exact price or reaction; "
-        "a single quote cannot prove a global absence; use insufficient_evidence unless the "
-        "source supports the absence. Preserve exact relative dates "
-        "such as tomorrow versus today. Profile:\n"
+        "Do not score, grade, rank, publish official results or infer fixed traits, motives "
+        "or stable tonality. "
+        "At most three strengths and three improvements. Match statement subjects: customer "
+        "credit is not the prospect's loan or event budget. A price category is not an exact "
+        "price or objection. A quote cannot prove global absence; use insufficient_evidence "
+        "unless absence is supported. Preserve relative dates: tomorrow is not today. Profile:\n"
         + json.dumps(prompt_profile, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     )
     if type(detailed_overview) is not bool:
@@ -1106,12 +1099,10 @@ def build_report_groq_prompt(
             "\n"
             + OVERVIEW_MARKER
             + OVERVIEW_INSTRUCTION
-            + " All overview keys are required. Use literal null only where the shape allows "
-            "null and [] for an empty array; never return the shape descriptions as strings. "
-            "Use exactly the listed kind, purpose, status and interpretation_kind values. "
-            "Finding/evidence references are zero-based integer indices into the corresponding "
-            "arrays; include one strength/improvement detail per finding. progress must be null. "
-            + "\nRequired overview shape (all keys required; evidence uses exact source spans):\n"
+            + " All overview keys are required. Use null/[] only as allowed, not shape-description "
+            "strings. Use exact listed enums. References are zero-based integer indices; one "
+            "strength/improvement detail per finding. progress must be null. "
+            + "\nRequired overview shape:\n"
             + json.dumps(OVERVIEW_FORMAT, ensure_ascii=False, separators=(",", ":"))
         )
         # The broker validates the trailing Profile JSON against the approved
