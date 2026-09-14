@@ -117,6 +117,8 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "community_reports",
         "conversation_processing_plans",
         "conversation_plan_stage_authorizations",
+        "conversation_processing_continuations",
+        "conversation_execution_controls",
         "conversation_visitors",
         "conversation_visitor_claims",
         "conversation_acquisition_usage",
