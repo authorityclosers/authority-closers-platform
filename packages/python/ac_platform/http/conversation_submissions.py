@@ -226,9 +226,7 @@ def install_submission_http(
     dependency = Depends(current_owner, scope="function")
     streaming_dependency = Depends(current_owner, scope="request")
 
-    async def progress_with_deadlock_retry(
-        submission_id: UUID, owner: _Owner
-    ) -> dict[str, Any]:
+    async def progress_with_deadlock_retry(submission_id: UUID, owner: _Owner) -> dict[str, Any]:
         """Retry one complete progress read after a PostgreSQL deadlock rollback."""
 
         try:
