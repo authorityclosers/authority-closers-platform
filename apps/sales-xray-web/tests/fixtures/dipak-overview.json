@@ -89,17 +89,11 @@
         "citations": [
           {
             "doc": "Doc-1",
-            "sections": [
-              "§8–§10",
-              "§52",
-              "§54–§56"
-            ]
+            "sections": ["§8–§10", "§52", "§54–§56"]
           },
           {
             "doc": "Doc-5",
-            "sections": [
-              "§6"
-            ]
+            "sections": ["§6"]
           }
         ]
       },
@@ -111,24 +105,15 @@
         "citations": [
           {
             "doc": "Doc-1",
-            "sections": [
-              "§4–§7",
-              "§11–§16"
-            ]
+            "sections": ["§4–§7", "§11–§16"]
           },
           {
             "doc": "Doc-3",
-            "sections": [
-              "§5–§11",
-              "§16",
-              "§45–§52"
-            ]
+            "sections": ["§5–§11", "§16", "§45–§52"]
           },
           {
             "doc": "Doc-5",
-            "sections": [
-              "§7–§10"
-            ]
+            "sections": ["§7–§10"]
           }
         ]
       },
@@ -140,16 +125,11 @@
         "citations": [
           {
             "doc": "Doc-3",
-            "sections": [
-              "§17–§18",
-              "§44"
-            ]
+            "sections": ["§17–§18", "§44"]
           },
           {
             "doc": "Doc-5",
-            "sections": [
-              "§11–§13"
-            ]
+            "sections": ["§11–§13"]
           }
         ]
       },
@@ -161,16 +141,11 @@
         "citations": [
           {
             "doc": "Doc-3",
-            "sections": [
-              "§7–§15",
-              "§19"
-            ]
+            "sections": ["§7–§15", "§19"]
           },
           {
             "doc": "Doc-5",
-            "sections": [
-              "§14–§17"
-            ]
+            "sections": ["§14–§17"]
           }
         ]
       },
@@ -182,15 +157,11 @@
         "citations": [
           {
             "doc": "Doc-3",
-            "sections": [
-              "§20–§26"
-            ]
+            "sections": ["§20–§26"]
           },
           {
             "doc": "Doc-5",
-            "sections": [
-              "§18–§21"
-            ]
+            "sections": ["§18–§21"]
           }
         ]
       },
@@ -202,17 +173,11 @@
         "citations": [
           {
             "doc": "Doc-4",
-            "sections": [
-              "§3–§6",
-              "§8–§18",
-              "§40–§70"
-            ]
+            "sections": ["§3–§6", "§8–§18", "§40–§70"]
           },
           {
             "doc": "Doc-5",
-            "sections": [
-              "§22–§28"
-            ]
+            "sections": ["§22–§28"]
           }
         ]
       },
@@ -224,17 +189,11 @@
         "citations": [
           {
             "doc": "Doc-3",
-            "sections": [
-              "§34–§42",
-              "§48–§52"
-            ]
+            "sections": ["§34–§42", "§48–§52"]
           },
           {
             "doc": "Doc-5",
-            "sections": [
-              "§29–§32",
-              "§39–§42"
-            ]
+            "sections": ["§29–§32", "§39–§42"]
           }
         ]
       },
@@ -246,18 +205,11 @@
         "citations": [
           {
             "doc": "Doc-2",
-            "sections": [
-              "§1–§5",
-              "§9–§16",
-              "§31–§55"
-            ]
+            "sections": ["§1–§5", "§9–§16", "§31–§55"]
           },
           {
             "doc": "Doc-5",
-            "sections": [
-              "§33–§37",
-              "§63–§66"
-            ]
+            "sections": ["§33–§37", "§63–§66"]
           }
         ]
       }
@@ -270,9 +222,7 @@
         "citations": [
           {
             "doc": "Doc-5",
-            "sections": [
-              "§53"
-            ]
+            "sections": ["§53"]
           }
         ]
       },
@@ -283,9 +233,7 @@
         "citations": [
           {
             "doc": "Doc-5",
-            "sections": [
-              "§53"
-            ]
+            "sections": ["§53"]
           }
         ]
       },
@@ -296,9 +244,7 @@
         "citations": [
           {
             "doc": "Doc-5",
-            "sections": [
-              "§53"
-            ]
+            "sections": ["§53"]
           }
         ]
       },
@@ -309,9 +255,7 @@
         "citations": [
           {
             "doc": "Doc-5",
-            "sections": [
-              "§53"
-            ]
+            "sections": ["§53"]
           }
         ]
       },
@@ -322,9 +266,7 @@
         "citations": [
           {
             "doc": "Doc-5",
-            "sections": [
-              "§53"
-            ]
+            "sections": ["§53"]
           }
         ]
       },
@@ -335,9 +277,7 @@
         "citations": [
           {
             "doc": "Doc-5",
-            "sections": [
-              "§53"
-            ]
+            "sections": ["§53"]
           }
         ]
       },
@@ -348,9 +288,7 @@
         "citations": [
           {
             "doc": "Doc-5",
-            "sections": [
-              "§53"
-            ]
+            "sections": ["§53"]
           }
         ]
       },
@@ -361,9 +299,7 @@
         "citations": [
           {
             "doc": "Doc-5",
-            "sections": [
-              "§53"
-            ]
+            "sections": ["§53"]
           }
         ]
       },
@@ -374,9 +310,7 @@
         "citations": [
           {
             "doc": "Doc-5",
-            "sections": [
-              "§53"
-            ]
+            "sections": ["§53"]
           }
         ]
       }
@@ -430,10 +364,7 @@
           "replacement_behavior": "Ask one question about the stated barrier.",
           "business_impact": {
             "status": "insufficient_data",
-            "missing_inputs": [
-              "Comparable conversion history",
-              "Lead volume"
-            ]
+            "missing_inputs": ["Comparable conversion history", "Lead volume"]
           }
         }
       ],
