@@ -1,5 +1,10 @@
 import { AcquisitionStudio } from "./acquisition-studio";
+import { StandaloneStudio } from "./standalone-studio";
 
 export default function Page() {
-  return <AcquisitionStudio />;
+  return (
+    <StandaloneStudio>
+      <AcquisitionStudio />
+    </StandaloneStudio>
+  );
 }

@@ -111,7 +111,9 @@ it("never auto-selects a sole workspace and posts only a listed tenant on explic
   fetchMock.mockResolvedValueOnce(response(choices));
   await mount();
   expect(container.querySelector('[data-testid="call-studio"]')).toBeNull();
-  const button = container.querySelector<HTMLButtonElement>("button");
+  const button = container.querySelector<HTMLButtonElement>(
+    `button[data-tenant-id="${firstTenantId}"]`,
+  );
   expect(button?.textContent).toContain("Only Synthetic Academy");
   expect(fetchMock).toHaveBeenCalledOnce();
 

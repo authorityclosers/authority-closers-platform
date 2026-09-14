@@ -23,6 +23,7 @@ import { FindingEvidence } from "./finding-evidence";
 import { ReportFactors } from "./report-factors";
 import { ReportTranscript } from "./report-transcript";
 import { REPORT_SECTION_COPY } from "./report-section-copy";
+import { AccountNavigation } from "./account-navigation";
 import {
   parseJobResponse,
   parseJobStatus,
@@ -1241,6 +1242,7 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
               <small>AUTHORITY CLOSERS</small>
             </span>
           </Link>
+          <AccountNavigation />
         </header>
       )}
       <Main id="main" className="studio-main">

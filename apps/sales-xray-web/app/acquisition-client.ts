@@ -25,6 +25,17 @@ export type UploadPolicy = {
   retention_days: number;
 };
 export type Submission = { id: string; recordingId: string; sha: string };
+export type LibrarySubmission = {
+  id: string;
+  createdAt: string;
+  durationSeconds: number;
+  state: string;
+  hasReport: boolean;
+};
+export type SubmissionLibraryPage = {
+  submissions: LibrarySubmission[];
+  nextCursor: string | null;
+};
 export type Progress = {
   state: string;
   local_state: string | null;
@@ -153,6 +164,74 @@ export function parseSubmission(value: unknown): Submission {
     id: item.submission_id,
     recordingId: item.recording_id,
     sha: item.source_sha256,
+  };
+}
+
+function iso8601(value: unknown): value is string {
+  if (
+    typeof value !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/.test(
+      value,
+    )
+  )
+    return false;
+  return Number.isFinite(Date.parse(value));
+}
+
+export function parseSubmissionLibraryPage(
+  value: unknown,
+): SubmissionLibraryPage {
+  const item = record(value);
+  if (
+    Object.keys(item).some(
+      (key) => !["submissions", "next_cursor"].includes(key),
+    ) ||
+    !Array.isArray(item.submissions) ||
+    item.submissions.length > 20 ||
+    (item.next_cursor !== null &&
+      (typeof item.next_cursor !== "string" || !UUID.test(item.next_cursor)))
+  )
+    throw new ReportContractError("acquisition_library");
+
+  const ids = new Set<string>();
+  const submissions: LibrarySubmission[] = [];
+  for (const value of item.submissions) {
+    const submission = record(value);
+    if (
+      Object.keys(submission).some(
+        (key) =>
+          ![
+            "submission_id",
+            "created_at",
+            "duration_seconds",
+            "state",
+            "has_report",
+          ].includes(key),
+      ) ||
+      typeof submission.submission_id !== "string" ||
+      !UUID.test(submission.submission_id) ||
+      ids.has(submission.submission_id) ||
+      !iso8601(submission.created_at) ||
+      !Number.isSafeInteger(submission.duration_seconds) ||
+      (submission.duration_seconds as number) <= 0 ||
+      typeof submission.state !== "string" ||
+      submission.state.length === 0 ||
+      submission.state.length > 128 ||
+      typeof submission.has_report !== "boolean"
+    )
+      throw new ReportContractError("acquisition_library_submission");
+    ids.add(submission.submission_id);
+    submissions.push({
+      id: submission.submission_id,
+      createdAt: submission.created_at,
+      durationSeconds: submission.duration_seconds as number,
+      state: submission.state,
+      hasReport: submission.has_report,
+    });
+  }
+  return {
+    submissions,
+    nextCursor: item.next_cursor as string | null,
   };
 }
 export function parseProgress(

@@ -16,12 +16,13 @@ import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import httpx
 import pytest
 import uvicorn
 from playwright.async_api import async_playwright, expect
+from sqlalchemy import select
 
 from ac_platform.conversation_intelligence import signals
 from ac_platform.conversation_intelligence.acquisition_challenge import UploadChallenge
@@ -29,6 +30,9 @@ from ac_platform.conversation_intelligence.broker_router import FixedProviderRou
 from ac_platform.conversation_intelligence.inference_worker import ConversationInferenceWorker
 from ac_platform.conversation_intelligence.native_runtime import SocketNativeRuntime
 from ac_platform.conversation_intelligence.processing_plan import ProcessingPlanScheduler
+from ac_platform.identity.models import PasswordCredential, Person
+from ac_platform.identity.password_auth import hash_password
+from ac_platform.tenancy.models import Membership, Tenant
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
 from tests.database.test_conversation_postgresql import run
 from tests.database.test_conversation_processing_plan_postgresql import _make_due
@@ -68,6 +72,24 @@ def test_compiled_guest_upload_report_reload_claim_and_deletion(
         import ac_platform.http.app as app_module
 
         setup = await _setup(postgres_harness, tmp_path, gemini=True)
+        password = "Synthetic-library-" + uuid4().hex + "!"
+        async with setup.sessions() as database, database.begin():
+            email = await database.scalar(
+                select(Person.email).where(Person.id == setup.state.person_id)
+            )
+            database.add(
+                PasswordCredential(
+                    person_id=setup.state.person_id, password_hash=hash_password(password)
+                )
+            )
+            second_tenant = uuid4()
+            database.add(
+                Tenant(id=second_tenant, slug=second_tenant.hex, name="Synthetic second workspace")
+            )
+            await database.flush()
+            database.add(
+                Membership(tenant_id=second_tenant, person_id=setup.state.person_id, role="learner")
+            )
         server: uvicorn.Server | None = None
         serving = None
         web = None
@@ -190,16 +212,18 @@ def test_compiled_guest_upload_report_reload_claim_and_deletion(
                     page = await context.new_page()
                     network = []
                     errors = []
-                    page.on(
-                        "response",
-                        lambda response: (
+
+                    def record_response(response):
+                        if response.url.startswith(ORIGIN + "/v1/"):
                             network.append(
-                                {"path": response.url.split(ORIGIN)[-1], "status": response.status}
+                                {
+                                    "path": response.url.split(ORIGIN)[-1],
+                                    "method": response.request.method,
+                                    "status": response.status,
+                                }
                             )
-                            if response.url.startswith(ORIGIN + PREFIX)
-                            else None
-                        ),
-                    )
+
+                    page.on("response", record_response)
                     page.on("pageerror", lambda error: errors.append(type(error).__name__))
                     await page.route(
                         "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit",
@@ -289,20 +313,23 @@ def test_compiled_guest_upload_report_reload_claim_and_deletion(
                         "document.documentElement.scrollWidth <= window.innerWidth"
                     )
                     await page.pdf(path=str(receipt / "report-print.pdf"), print_background=True)
-                    # Real current account cookie; the UI must offer a claim, not
-                    # silently turn the guest credential into an account session.
-                    await context.add_cookies(
-                        [
-                            {
-                                "name": "ac_session",
-                                "value": setup.token,
-                                "url": ORIGIN,
-                                "httpOnly": True,
-                                "sameSite": "Lax",
-                            }
-                        ]
-                    )
-                    await page.reload(wait_until="domcontentloaded")
+
+                    async def sign_in(target):
+                        await target.goto(ORIGIN + "/login", wait_until="domcontentloaded")
+                        await target.get_by_label("Email address").fill(email)
+                        await target.get_by_label("Password").fill(password)
+                        await target.get_by_role("button", name="Sign in", exact=True).click()
+                        await expect(
+                            target.get_by_role("heading", name="Choose your Sales Xray workspace.")
+                        ).to_be_visible()
+                        await expect(target.locator("button[data-tenant-id]")).to_have_count(2)
+                        await target.get_by_role(
+                            "button", name="Disposable Sales Xray tenant", exact=True
+                        ).click()
+
+                    # Use the actual password UI and server workspace chooser.
+                    # Signing in must still require explicit claim of this guest call.
+                    await sign_in(page)
                     await expect(
                         page.get_by_role("button", name="Save to my account", exact=True)
                     ).to_be_visible()
@@ -310,6 +337,88 @@ def test_compiled_guest_upload_report_reload_claim_and_deletion(
                     await expect(
                         page.get_by_role("region", name="Sales call report")
                     ).to_be_visible(timeout=20000)
+                    fresh = await browser.new_context(viewport={"width": 1440, "height": 1000})
+                    library_page = await fresh.new_page()
+                    library_page.on("response", record_response)
+                    library_page.on("pageerror", lambda error: errors.append(type(error).__name__))
+                    await sign_in(library_page)
+                    assert (
+                        await library_page.evaluate("localStorage.getItem('ac.xray.submission.v1')")
+                        is None
+                    )
+                    await library_page.get_by_role("link", name="Saved calls", exact=True).click()
+                    await expect(
+                        library_page.get_by_role("heading", name="Saved calls", exact=True)
+                    ).to_be_visible()
+                    await expect(
+                        library_page.locator(f'button[data-submission-id="{submission_id}"]')
+                    ).to_be_visible()
+                    await library_page.screenshot(
+                        path=str(receipt / "account-library-desktop.png"), full_page=True
+                    )
+                    listing = await fresh.request.get(ORIGIN + PREFIX + "/submissions")
+                    assert listing.status == 200
+                    assert [
+                        row["submission_id"] for row in (await listing.json())["submissions"]
+                    ] == [submission_id]
+                    await library_page.set_viewport_size({"width": 320, "height": 844})
+                    assert await library_page.evaluate(
+                        "document.documentElement.scrollWidth <= window.innerWidth"
+                    )
+                    await library_page.screenshot(
+                        path=str(receipt / "account-library-mobile.png"), full_page=True
+                    )
+                    await library_page.set_viewport_size({"width": 1440, "height": 1000})
+                    saved_call = library_page.locator(
+                        f'button[data-submission-id="{submission_id}"]'
+                    )
+                    await saved_call.focus()
+                    await saved_call.press("Enter")
+                    await expect(
+                        library_page.get_by_role("region", name="Sales call report")
+                    ).to_be_visible(timeout=20000)
+                    await library_page.get_by_role("tab", name="Transcript & moments").click()
+                    player = library_page.locator("audio")
+                    await expect(player).to_be_visible()
+                    await library_page.wait_for_function(
+                        "document.querySelector('audio')?.readyState >= 1"
+                    )
+                    assert await player.evaluate("audio => audio.duration") == pytest.approx(
+                        1, abs=0.02
+                    )
+                    await player.evaluate("audio => audio.play()")
+                    await library_page.wait_for_function(
+                        "document.querySelector('audio').currentTime > 0"
+                    )
+                    await library_page.screenshot(
+                        path=str(receipt / "account-library-report-playback.png"), full_page=True
+                    )
+                    assert broker.calls == 3
+                    async with library_page.expect_response(
+                        lambda response: (
+                            response.url.endswith("/v1/auth/logout")
+                            and response.request.method == "POST"
+                        )
+                    ) as logout:
+                        await library_page.get_by_role(
+                            "button", name="Sign out", exact=True
+                        ).click()
+                    assert (await logout.value).status == 204
+                    await expect(
+                        library_page.get_by_role("heading", name="Start with your sales call")
+                    ).to_be_visible()
+                    assert (
+                        await library_page.evaluate("localStorage.getItem('ac.xray.submission.v1')")
+                        is None
+                    )
+                    assert (await fresh.request.get(ORIGIN + PREFIX + "/submissions")).status == 401
+                    for suffix in ("report", "source"):
+                        assert (
+                            await fresh.request.get(
+                                ORIGIN + PREFIX + f"/submissions/{submission_id}/{suffix}"
+                            )
+                        ).status == 401
+                    await fresh.close()
                     stranger = await browser.new_context()
                     denied = await stranger.request.get(
                         ORIGIN + PREFIX + f"/submissions/{submission_id}/report"
@@ -346,6 +455,10 @@ def test_compiled_guest_upload_report_reload_claim_and_deletion(
                                     "390px reflow",
                                     "print",
                                     "explicit account claim",
+                                    "actual password login and two-workspace chooser",
+                                    "new browser context discovers claimed call in account library",
+                                    "library row opens retained report and actual audio plays",
+                                    "rendered Sign out button returns204 and private endpoints401",
                                     "stranger denied",
                                     "deletion accepted",
                                 ],

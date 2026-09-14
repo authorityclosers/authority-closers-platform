@@ -24,6 +24,7 @@ from starlette.requests import ClientDisconnect
 from starlette.responses import StreamingResponse
 
 from ac_platform.application.settings import Settings
+from ac_platform.conversation_intelligence.acquisition_library import account_library
 from ac_platform.conversation_intelligence.acquisition_processing import (
     AcquisitionProcessing,
     upload_policy,
@@ -140,11 +141,14 @@ def install_submission_http(
     def fail(status: int, message: str) -> HTTPException:
         return HTTPException(status, message, headers=_PRIVATE)
 
-    def guard(request: Request, response: Response, *, write: bool = False) -> None:
+    def guard(
+        request: Request, response: Response, *, write: bool = False, library: bool = False
+    ) -> None:
         response.headers.update(_PRIVATE)
         if request.url.hostname != hostname:
             raise fail(404, "Upload entry not found.")
-        if request.query_params:
+        queries = request.query_params.multi_items()
+        if queries and not (library and len(queries) == 1 and queries[0][0] == "before"):
             raise fail(422, "Upload access comes from your current session.")
         if write:
             try:
@@ -180,6 +184,21 @@ def install_submission_http(
 
     dependency = Depends(current_owner, scope="function")
     streaming_dependency = Depends(current_owner, scope="request")
+
+    @router.get("/submissions")
+    async def saved_calls(
+        request: Request, response: Response, before: UUID | None = None
+    ) -> dict[str, Any]:
+        guard(request, response, library=True)
+        try:
+            async with asynccontextmanager(require_actor)(request) as auth:
+                return await account_library(
+                    ownership(auth.database), auth.resolved.actor, before=before
+                )
+        except ConversationError as error:
+            raise fail(error.status, str(error)) from None
+        except DomainError:
+            raise fail(401, "Sign in to see your saved calls.") from None
 
     @router.get("/upload-policy")
     async def policy(request: Request, response: Response) -> dict[str, Any]:

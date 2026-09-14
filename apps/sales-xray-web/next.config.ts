@@ -39,6 +39,20 @@ const config: NextConfig = {
                   source: "/v1/conversation/:path*",
                   destination: `${apiOrigin}/v1/conversation/:path*`,
                 },
+                // The standalone document uses the same canonical identity
+                // endpoints as the hosted reverse proxy. Keep this list exact;
+                // the browser cannot choose an upstream or forward arbitrary APIs.
+                ...[
+                  "/v1/me/workspaces",
+                  "/v1/context",
+                  "/v1/auth/password/login",
+                  "/v1/auth/logout",
+                  "/v1/auth/google/start",
+                  "/v1/auth/google/callback",
+                ].map((source) => ({
+                  source,
+                  destination: `${apiOrigin}${source}`,
+                })),
               ]
             : [];
         },

@@ -1,0 +1,41 @@
+
+ RUN  v4.1.11 D:/Projects/authority-closers-xray-account-library/apps/sales-xray-web
+
+ ✓ app/upload-check.test.tsx (1 test) 145ms
+ ✓ app/report-explorer.test.tsx (3 tests) 330ms
+ ✓ app/report-transcript.test.tsx (4 tests) 566ms
+ ✓ app/recording-measurements.test.tsx (3 tests) 562ms
+ ✓ app/dipak-overview.test.tsx (8 tests) 1197ms
+   ✓ presents the supplied priorities and one focus without generating scores, estimates or history  331ms
+ ✓ app/standalone-studio.test.tsx (4 tests) 372ms
+ ✓ app/calls-library.test.tsx (5 tests) 700ms
+   ✓ loads every server listed state without auto claiming or processing  424ms
+ ✓ app/login/login-form.test.tsx (5 tests) 864ms
+   ✓ posts only email and password with same-origin credentials, then opens home  465ms
+ ✓ app/workbench.test.tsx (5 tests) 1653ms
+   ✓ renders literal Unicode evidence, with no HTML execution or numeric score  646ms
+   ✓ keeps unsubmitted review lanes distinct and requires evidence before preparing a proposal  419ms
+ ✓ app/acquisition-studio.test.tsx (7 tests) 2640ms
+   ✓ the actual page requires both consents, then shows the fourteen-point report  1169ms
+   ✓ login return offers an explicit claim before reading the saved report  312ms
+   ✓ requires explicit deletion and waits for server acceptance  612ms
+ ✓ app/overview-contract.test.ts (12 tests) 46ms
+ ✓ app/report-contract.test.ts (6 tests) 18ms
+ ✓ app/acquisition-client.test.ts (9 tests) 25ms
+ ✓ app/measurement-contract.test.ts (16 tests) 31ms
+ ✓ app/acquisition-library.test.ts (8 tests) 10ms
+ ✓ app/styles.integration.test.ts (2 tests) 6ms
+ ✓ app/call-studio.test.tsx (24 tests) 5318ms
+     ✓ uses the embedded variant for the LMS mount without its standalone header  334ms
+     ✓ polls for the report, renders evidence, and seeks the local audio  731ms
+     ✓ shows source-derived report measurements in an English shell  589ms
+     ✓ preserves mixed-script source text and report findings without translating the shell  374ms
+     ✓ polls report status before transcript and continues when the report arrives later  351ms
+     ✓ shows held plans honestly and requires a fresh quote to resume  324ms
+
+ Test Files  17 passed (17)
+      Tests  122 passed (122)
+   Start at  07:16:48
+   Duration  15.95s (transform 13.88s, setup 0ms, import 31.61s, tests 14.48s, environment 82.25s)
+
+JUNIT report written to D:/AC-authority-closers-release-audit/sales-xray-account-library-ui-final-20260914.junit.xml
