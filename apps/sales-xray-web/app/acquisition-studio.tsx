@@ -664,7 +664,7 @@ export function AcquisitionStudio({
     });
   }
 
-  function reset() {
+  function reset(options?: { preserveSavedSubmission?: boolean }) {
     if (inFlight.current) return;
     audio.current?.pause();
     if (previewUrl.current) URL.revokeObjectURL(previewUrl.current);
@@ -687,8 +687,12 @@ export function AcquisitionStudio({
     chosenId.current = "";
     requestedPlan.current = "";
     quoteKey.current = "";
-    rememberSubmission(null);
+    if (!options?.preserveSavedSubmission) rememberSubmission(null);
     if (input.current) input.current.value = "";
+  }
+
+  function startAnotherCall() {
+    reset({ preserveSavedSubmission: true });
   }
 
   function forgetSavedCall() {
@@ -1311,6 +1315,17 @@ export function AcquisitionStudio({
                   <p className={styles.coachingCopy} aria-live="polite">
                     {coachingCopy[coachingIndex]}
                   </p>
+                  {processingNeedsAttention && (
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      disabled={!!busy}
+                      onClick={startAnotherCall}
+                    >
+                      <ArrowRight size={16} aria-hidden="true" />
+                      Analyse another call
+                    </button>
+                  )}
                   {canReviewHeldPlan && (
                     <div>
                       <p>
@@ -1453,6 +1468,17 @@ export function AcquisitionStudio({
                   onClick={() => void freshPlan()}
                 >
                   Request a fresh plan
+                </button>
+              )}
+              {submission && (!progress || (plan && !plan.accepted)) && (
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={!!busy}
+                  onClick={startAnotherCall}
+                >
+                  <ArrowRight size={16} aria-hidden="true" />
+                  Analyse another call
                 </button>
               )}
               {error instanceof AcquisitionError && error.status === 401 && (

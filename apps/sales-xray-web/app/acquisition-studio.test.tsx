@@ -726,6 +726,29 @@ it.each(["failed", "cancelled"])(
   },
 );
 
+it("lets a guest analyse another call after a failed call without clearing its resume pointer", async () => {
+  existing = true;
+  localStorage.setItem("ac.xray.submission.v1", submissionId);
+  progressOverride = {
+    ...progress,
+    state: "failed",
+    local_state: "failed",
+    has_report: false,
+    stages: [],
+  };
+  await mount();
+
+  expect(button("Analyse another call")).toBeDefined();
+  await click("Analyse another call");
+
+  expect(
+    container.querySelector<HTMLInputElement>('input[type="file"]')?.disabled,
+  ).toBe(false);
+  expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
+  expect(container.querySelector("audio")).toBeNull();
+  expect(calls.filter(({ init }) => init.method === "PUT")).toHaveLength(0);
+});
+
 it("keeps an uncertain transcription honest about missing completed work", async () => {
   existing = true;
   localStorage.setItem("ac.xray.submission.v1", submissionId);
