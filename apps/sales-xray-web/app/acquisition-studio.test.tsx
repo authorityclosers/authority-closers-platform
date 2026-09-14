@@ -38,6 +38,8 @@ let existing: boolean,
 let reportBody: unknown;
 let progressOverride: unknown;
 let planFailure: { status: number; body: unknown } | null;
+let quoteFailure: { status: number; body: unknown } | null;
+let analysisPaused: boolean;
 const response = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value), {
     status,
@@ -99,6 +101,8 @@ beforeEach(() => {
   reportBody = envelope;
   progressOverride = undefined;
   planFailure = null;
+  quoteFailure = null;
+  analysisPaused = false;
   localStorage.clear();
   container = document.createElement("div");
   document.body.append(container);
@@ -121,6 +125,8 @@ beforeEach(() => {
           workspaces: [{ tenant_id: "tenant-1", name: "Synthetic Academy" }],
         });
       if (path.endsWith("/entry")) return response(entry);
+      if (path.endsWith("/availability"))
+        return response({ paused: analysisPaused });
       if (path.endsWith("/upload-policy")) return response(policy);
       if (path.endsWith("/session")) {
         if (init.method === "POST") {
@@ -151,7 +157,10 @@ beforeEach(() => {
               },
               202,
             );
-      if (path.endsWith("/plan/quote")) return response(plan, 201);
+      if (path.endsWith("/plan/quote"))
+        return quoteFailure
+          ? response(quoteFailure.body, quoteFailure.status)
+          : response(plan, 201);
       if (path.endsWith("/plan")) {
         if (planFailure) return response(planFailure.body, planFailure.status);
         accepted = true;
@@ -470,8 +479,143 @@ it("shows saved completed work when an uncertain stage pauses processing", async
     "Not started",
   );
   expect(container.textContent).not.toContain("fresh plan");
+  expect(container.textContent).not.toContain("Review a new analysis plan");
   expect(container.textContent).not.toContain("Upload the recording again");
   expect(container.querySelector('[data-paused="true"]')).not.toBeNull();
+});
+
+function reloadHeldCall() {
+  existing = true;
+  localStorage.setItem("ac.xray.submission.v1", submissionId);
+  progressOverride = {
+    ...progress,
+    state: "held",
+    local_state: "completed",
+    has_report: false,
+    stages: [
+      { stage: "C2", state: "completed" },
+      { stage: "C4", state: "uncertain" },
+    ],
+  };
+}
+
+it("lets a reloaded held call request one quote, then requires explicit approval", async () => {
+  reloadHeldCall();
+  await mount();
+  expect(container.querySelector('[role="alert"]')).toBeNull();
+  expect(container.querySelector('[data-stage="C2"] small')?.textContent).toBe(
+    "Complete",
+  );
+  await act(async () => vi.advanceTimersByTimeAsync(12000));
+  await flush();
+  expect(calls.filter(({ init }) => init.method === "POST")).toHaveLength(0);
+  const review = button("Review a new analysis plan");
+  await act(async () => {
+    review.click();
+    review.click();
+  });
+  await flush();
+  const quotes = calls.filter(({ path }) => path.endsWith("/plan/quote"));
+  expect(quotes).toHaveLength(1);
+  expect(quotes[0].path).toBe(
+    `/v1/conversation/acquisition/submissions/${submissionId}/plan/quote`,
+  );
+  expect(quotes[0].init.method).toBe("POST");
+  expect(quotes[0].init.body).toBeUndefined();
+  expect(container.textContent).toContain(plan.cost_label);
+  expect(container.textContent).toContain(plan.stages[0].privacy_notice);
+  expect(button("Analyse my call").disabled).toBe(true);
+  await click("Analyse my call");
+  expect(calls.filter(({ path }) => path.endsWith("/plan"))).toHaveLength(0);
+  expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
+  expect(container.querySelector("audio")?.getAttribute("src")).toContain(
+    `/submissions/${submissionId}/source`,
+  );
+  await consent();
+  await click("Analyse my call");
+  const starts = calls.filter(({ path }) => path.endsWith("/plan"));
+  expect(starts).toHaveLength(1);
+  expect(starts[0].path).toBe(
+    `/v1/conversation/acquisition/submissions/${submissionId}/plan`,
+  );
+  expect(JSON.parse(String(starts[0].init.body))).toEqual({
+    plan_id: plan.id,
+    plan_fingerprint: plan.plan_fingerprint,
+    privacy_revision: plan.privacy_revision,
+    accepted: true,
+  });
+  expect(calls.filter(({ init }) => init.method === "PUT")).toHaveLength(0);
+  expect(
+    calls.filter(
+      ({ path, init }) => path.endsWith("/session") && init.method === "POST",
+    ),
+  ).toHaveLength(0);
+});
+
+it("keeps a reloaded held call and its allowance when a new quote is denied", async () => {
+  reloadHeldCall();
+  quoteFailure = { status: 409, body: { detail: "private-provider-context" } };
+  await mount();
+  const allowanceBefore = [...container.querySelectorAll("span")].find(
+    (element) => element.textContent?.includes("Remaining analysis time"),
+  )?.textContent;
+  expect(allowanceBefore).toBe("Remaining analysis time · 100m 00s");
+  await click("Review a new analysis plan");
+  const alert = container.querySelector('[role="alert"]');
+  expect(alert).not.toBeNull();
+  expect(alert?.textContent).not.toContain("private-provider-context");
+  expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
+  expect(container.querySelector("audio")?.getAttribute("src")).toContain(
+    `/submissions/${submissionId}/source`,
+  );
+  expect(container.textContent).toContain(allowanceBefore);
+  expect(calls.filter(({ path }) => path.endsWith("/plan/quote"))).toHaveLength(
+    1,
+  );
+  expect(calls.filter(({ path }) => path.endsWith("/plan"))).toHaveLength(0);
+  expect(calls.filter(({ init }) => init.method === "PUT")).toHaveLength(0);
+});
+
+it("disables recovery for a reloaded held call while analysis is paused", async () => {
+  reloadHeldCall();
+  analysisPaused = true;
+  await mount();
+  expect(button("Review a new analysis plan").disabled).toBe(true);
+  await click("Review a new analysis plan");
+  expect(calls.filter(({ init }) => init.method === "POST")).toHaveLength(0);
+});
+
+it.each([
+  {
+    reason: "a later uncertain transcription",
+    state: "held",
+    stages: [
+      { stage: "C2", state: "completed" },
+      { stage: "C2", state: "uncertain" },
+    ],
+  },
+  { reason: "no completed transcription", state: "held", stages: [] },
+  {
+    reason: "processing that is still active",
+    state: "active",
+    stages: [
+      { stage: "C2", state: "completed" },
+      { stage: "C4", state: "running" },
+    ],
+  },
+])("does not offer held recovery with $reason", async ({ state, stages }) => {
+  reloadHeldCall();
+  progressOverride = {
+    ...progress,
+    state,
+    local_state: "completed",
+    has_report: false,
+    automatic_progression: true,
+    stages,
+  };
+  await mount();
+  expect(container.textContent).not.toContain("Review a new analysis plan");
+  expect(calls.filter(({ init }) => init.method === "POST")).toHaveLength(0);
 });
 
 it.each(["failed", "cancelled"])(
@@ -520,6 +664,7 @@ it("keeps an uncertain transcription honest about missing completed work", async
   expect(container.textContent).not.toContain(
     "The completed transcript stays attached",
   );
+  expect(container.textContent).not.toContain("Review a new analysis plan");
   expect(
     calls.some(
       (call) => call.path.endsWith("/plan") && call.init.method === "POST",

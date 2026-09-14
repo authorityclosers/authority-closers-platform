@@ -553,7 +553,7 @@ export function AcquisitionStudio({
   }
 
   async function freshPlan() {
-    if (!submission) return;
+    if (!submission || analysisPaused) return;
     const bound = submission;
     await operation("Checking available analysis…", async (signal) => {
       quoteKey.current = `report-plan:${crypto.randomUUID()}`;
@@ -699,6 +699,11 @@ export function AcquisitionStudio({
   const hasSavedAnalysis = progress?.stages.some(
     (stage) => stage.stage === "C4" && stage.state === "completed",
   );
+  const canReviewHeldPlan =
+    !error &&
+    progress?.state === "held" &&
+    progress.local_state === "completed" &&
+    latestStage(progress, "C2")?.state === "completed";
   const source = submission
     ? `${ACQUISITION}${submissionPath(submission.id)}/source`
     : audioUrl;
@@ -1046,7 +1051,7 @@ export function AcquisitionStudio({
                   <button
                     className="text-button"
                     type="button"
-                    disabled={!!busy}
+                    disabled={!!busy || analysisPaused}
                     onClick={() => void freshPlan()}
                   >
                     Refresh expired plan
@@ -1156,6 +1161,27 @@ export function AcquisitionStudio({
                   <p className={styles.coachingCopy} aria-live="polite">
                     {coachingCopy[coachingIndex]}
                   </p>
+                  {canReviewHeldPlan && (
+                    <div>
+                      <p>
+                        Your saved transcript stays attached. Nothing starts
+                        until you approve the new provider plan and cost limit.
+                      </p>
+                      <button
+                        className="secondary-button"
+                        type="button"
+                        disabled={!!busy || analysisPaused}
+                        onClick={() => void freshPlan()}
+                      >
+                        {busy ? (
+                          <LoaderCircle className="spin" size={17} />
+                        ) : (
+                          <FileText size={17} />
+                        )}
+                        {busy || "Review a new analysis plan"}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -1260,7 +1286,7 @@ export function AcquisitionStudio({
                 <button
                   type="button"
                   className="secondary-button"
-                  disabled={!!busy}
+                  disabled={!!busy || analysisPaused}
                   onClick={() => void freshPlan()}
                 >
                   Request a fresh plan
