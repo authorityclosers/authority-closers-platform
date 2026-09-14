@@ -56,6 +56,7 @@ from ac_platform.conversation_intelligence.storage import (
 )
 from ac_platform.conversation_intelligence.worker import _FencedExecutor
 from ac_platform.http.auth import (
+    AuthenticatedTransaction,
     RequireActor,
     _InvalidRawCookie,
     _session_cookie,
@@ -144,9 +145,13 @@ def install_submission_http(
 
     def guard(
         request: Request, response: Response, *, write: bool = False, library: bool = False
-    ) -> None:
+    ) -> str:
         response.headers.update(_PRIVATE)
-        if request.url.hostname != hostname:
+        if request.url.hostname == hostname:
+            host = "sales"
+        elif request.url.hostname == settings.public_app_url.host:
+            host = "learner"
+        else:
             raise fail(404, "Upload entry not found.")
         queries = request.query_params.multi_items()
         if queries and not (library and len(queries) == 1 and queries[0][0] == "before"):
@@ -156,6 +161,7 @@ def install_submission_http(
                 require_safe_origin(request, settings)
             except DomainError:
                 raise fail(403, "Use this Sales Xray page to continue.") from None
+        return host
 
     def ownership(database: AsyncSession) -> GuestOwnership:
         service = factory(database)
@@ -163,8 +169,35 @@ def install_submission_http(
             raise RuntimeError("Acquisition must use the configured public Academy.")
         return GuestOwnership(service)
 
+    def surface(request: Request) -> str | None:
+        if request.url.hostname == hostname:
+            return "sales"
+        if request.url.hostname == settings.public_app_url.host:
+            return "learner"
+        return None
+
+    @asynccontextmanager
+    async def learner_account(request: Request) -> AsyncIterator[AuthenticatedTransaction]:
+        try:
+            async with asynccontextmanager(require_actor)(request) as auth:
+                if auth.resolved.actor.tenant_id != settings.public_learner_tenant_id:
+                    raise fail(
+                        403,
+                        "The public Academy account is required for this upload workspace.",
+                    )
+                yield auth
+        except DomainError:
+            raise fail(
+                401,
+                "Sign in to the public Academy to use this upload workspace.",
+            ) from None
+
     async def current_owner(request: Request) -> AsyncIterator[_Owner]:
-        guard(request, Response(), write=request.method not in {"GET", "HEAD"})
+        host = guard(request, Response(), write=request.method not in {"GET", "HEAD"})
+        if host == "learner":
+            async with learner_account(request) as auth:
+                yield _Owner(ownership(auth.database), None, auth.resolved.actor)
+            return
         try:
             current = _single_raw_cookie(request, name=cookie_name, pattern=_TOKEN, required=False)
             account = _session_cookie(request, settings, required=False)
@@ -190,9 +223,14 @@ def install_submission_http(
     async def saved_calls(
         request: Request, response: Response, before: UUID | None = None
     ) -> dict[str, Any]:
-        guard(request, response, library=True)
+        host = guard(request, response, library=True)
         try:
-            async with asynccontextmanager(require_actor)(request) as auth:
+            context = (
+                learner_account(request)
+                if host == "learner"
+                else asynccontextmanager(require_actor)(request)
+            )
+            async with context as auth:
                 return await account_library(
                     ownership(auth.database), auth.resolved.actor, before=before
                 )
@@ -203,7 +241,10 @@ def install_submission_http(
 
     @router.get("/upload-policy")
     async def policy(request: Request, response: Response) -> dict[str, Any]:
-        guard(request, response)
+        host = guard(request, response)
+        if host == "learner":
+            async with learner_account(request):
+                pass
         return upload_policy(runtime.policy)
 
     @router.put("/submissions/{submission_id}/source", status_code=202)

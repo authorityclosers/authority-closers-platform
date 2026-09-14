@@ -10,11 +10,11 @@ from __future__ import annotations
 import asyncio
 import json
 import re
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response
+from fastapi import APIRouter, FastAPI, HTTPException, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ac_platform.application.settings import Settings
@@ -56,7 +56,6 @@ def install_acquisition_http(
         raise ValueError("The public Academy and exact Sales Xray challenge host are required.")
     router = APIRouter(prefix="/v1/conversation/acquisition", tags=["conversation-acquisition"])
     cookie_name = "__Host-ac_xray_guest" if settings.secure_cookies else "ac_xray_guest"
-    identity_dependency = Depends(require_actor, scope="function")
 
     def service(database: AsyncSession) -> AcquisitionSessions:
         app = factory(database)
@@ -67,9 +66,17 @@ def install_acquisition_http(
     def fail(status: int, message: str) -> HTTPException:
         return HTTPException(status, message, headers=_PRIVATE)
 
-    def admit(request: Request, response: Response, *, mutation: bool = False) -> None:
+    def surface(request: Request) -> str | None:
+        if request.url.hostname == challenge.hostname:
+            return "sales"
+        if request.url.hostname == settings.public_app_url.host:
+            return "learner"
+        return None
+
+    def admit(request: Request, response: Response, *, mutation: bool = False) -> str:
         response.headers.update(_PRIVATE)
-        if request.url.hostname != challenge.hostname:
+        host = surface(request)
+        if host is None:
             raise fail(404, "Upload entry not found.")
         if request.query_params:
             raise fail(422, "Upload access comes from your current session.")
@@ -78,6 +85,23 @@ def install_acquisition_http(
                 require_safe_origin(request, settings)
             except DomainError:
                 raise fail(403, "Use this Sales Xray page to continue.") from None
+        return host
+
+    @asynccontextmanager
+    async def learner_account(request: Request) -> AsyncIterator[AuthenticatedTransaction]:
+        try:
+            async with asynccontextmanager(require_actor)(request) as auth:
+                if auth.resolved.actor.tenant_id != settings.public_learner_tenant_id:
+                    raise fail(
+                        403,
+                        "The public Academy account is required for this upload workspace.",
+                    )
+                yield auth
+        except DomainError:
+            raise fail(
+                401,
+                "Sign in to the public Academy to use this upload workspace.",
+            ) from None
 
     def token(request: Request, *, required: bool = True) -> str | None:
         try:
@@ -93,7 +117,8 @@ def install_acquisition_http(
 
     @router.post("/session", status_code=201)
     async def start_session(request: Request, response: Response) -> Any:
-        admit(request, response, mutation=True)
+        if admit(request, response, mutation=True) != "sales":
+            raise fail(404, "Upload entry not found.")
         # Parse a small, explicitly selected field ourselves. FastAPI's default
         # request-validation errors may include the input challenge token.
         if request.headers.get("content-type", "").split(";", 1)[0] != "application/json":
@@ -141,7 +166,13 @@ def install_acquisition_http(
 
     @router.get("/session")
     async def read_session(request: Request, response: Response) -> Any:
-        admit(request, response)
+        host = admit(request, response)
+        if host == "learner":
+            async with learner_account(request) as auth:
+                allowance = await result(
+                    service(auth.database).allowance(actor=auth.resolved.actor)
+                )
+            return {"state": "account", "allowance": allowance}
         # The account cookie is optional for this read, but if it is present
         # it must be resolved before considering the guest cookie.  An invalid
         # account cannot silently fall back to a guest bearer.
@@ -174,15 +205,16 @@ def install_acquisition_http(
     async def claim_session(
         request: Request,
         response: Response,
-        auth: AuthenticatedTransaction = identity_dependency,
     ) -> Any:
-        admit(request, response, mutation=True)
-        current = token(request)
-        if current is None:
-            raise fail(401, "This upload session is unavailable.")
-        app = service(auth.database)
-        identifier = await result(app.claim(current, auth.resolved.actor))
-        allowance = await result(app.allowance(actor=auth.resolved.actor))
+        if admit(request, response, mutation=True) != "sales":
+            raise fail(404, "Upload entry not found.")
+        async with asynccontextmanager(require_actor)(request) as auth:
+            current = token(request)
+            if current is None:
+                raise fail(401, "This upload session is unavailable.")
+            app = service(auth.database)
+            identifier = await result(app.claim(current, auth.resolved.actor))
+            allowance = await result(app.allowance(actor=auth.resolved.actor))
         response.delete_cookie(
             cookie_name, httponly=True, secure=settings.secure_cookies, samesite="lax", path="/"
         )

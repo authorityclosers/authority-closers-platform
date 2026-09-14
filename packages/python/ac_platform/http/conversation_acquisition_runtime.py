@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 import re
 import stat
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -21,10 +23,11 @@ from ac_platform.conversation_intelligence.acquisition_sessions import Acquisiti
 from ac_platform.conversation_intelligence.acquisition_source import NativeUploadPreflight
 from ac_platform.conversation_intelligence.acquisition_usage import ALLOWANCE_SECONDS
 from ac_platform.conversation_intelligence.native_runtime import SocketNativeRuntime
-from ac_platform.http.auth import RequireActor
+from ac_platform.http.auth import AuthenticatedTransaction, RequireActor
 from ac_platform.http.conversation_acquisition import install_acquisition_http
 from ac_platform.http.conversation_intake import ConversationIntakeRuntime
 from ac_platform.http.conversation_submissions import install_submission_http
+from ac_platform.kernel.errors import DomainError
 
 
 def _challenge_secret(path: Path) -> SecretStr:
@@ -115,24 +118,56 @@ def install_acquisition_runtime(
     require_actor: RequireActor,
     runtime: AcquisitionRuntime | None,
 ) -> None:
+    sales_host = settings.sales_xray_app_url.host if settings.sales_xray_app_url else None
+    learner_host = settings.public_app_url.host
+
+    def surface(request: Request) -> str | None:
+        if request.url.hostname == sales_host:
+            return "sales"
+        if request.url.hostname == learner_host:
+            return "learner"
+        return None
+
+    @asynccontextmanager
+    async def learner_account(request: Request) -> AsyncIterator[AuthenticatedTransaction]:
+        try:
+            async with asynccontextmanager(require_actor)(request) as auth:
+                if auth.resolved.actor.tenant_id != settings.public_learner_tenant_id:
+                    raise HTTPException(
+                        403,
+                        "The public Academy account is required for this upload workspace.",
+                    )
+                yield auth
+        except DomainError:
+            raise HTTPException(
+                401,
+                "Sign in to the public Academy to use this upload workspace.",
+                headers={"Cache-Control": "private, no-store", "Vary": "Cookie"},
+            ) from None
+
     @application.get("/v1/conversation/acquisition/entry")
     async def entry(request: Request, response: Response) -> dict[str, object]:
         response.headers.update({"Cache-Control": "private, no-store", "Vary": "Cookie"})
-        if (
-            settings.sales_xray_app_url is None
-            or request.url.hostname != settings.sales_xray_app_url.host
-            or request.query_params
-        ):
+        host = surface(request)
+        if host is None or request.query_params:
             raise HTTPException(
                 404, "Upload entry not found.", headers={"Cache-Control": "no-store"}
             )
-        return {
+        if host == "learner":
+            async with learner_account(request):
+                pass
+        value: dict[str, object] = {
             "enabled": runtime is not None,
             "site_key": runtime.site_key if runtime else None,
             "challenge_action": UPLOAD_ACTION if runtime else None,
             "policy_revision": runtime.policy_revision if runtime else None,
             "allowance_seconds": ALLOWANCE_SECONDS if runtime else None,
         }
+        if host == "learner" and runtime is not None:
+            # The learner mount uses the existing account session. It never
+            # receives the guest challenge or a guest bearer cookie.
+            value.update({"site_key": None, "challenge_action": None, "auth_mode": "account"})
+        return value
 
     if runtime is None:
         return
