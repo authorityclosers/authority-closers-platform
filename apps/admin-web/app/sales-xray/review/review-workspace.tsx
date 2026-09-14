@@ -257,9 +257,12 @@ function AssignmentSummary({
         </details>
       ) : null}
       <div className={styles.assignmentActions}>
-        <span className={styles.mutedAction}>
-          Dedicated reviewer sign-in is being configured.
-        </span>
+        <Link
+          className="button button-secondary"
+          href={`/reviewer/review/${encodeURIComponent(assignment.id)}`}
+        >
+          Open reviewer workspace
+        </Link>
         {assignment.state !== "revoked" && assignment.state !== "expired" ? (
           <button
             className={`button ${styles.buttonDanger}`}
@@ -522,8 +525,9 @@ export function ReviewWorkspace({
           <div>
             <h2>Review feedback and manage existing access.</h2>
             <p>
-              Inspect saved feedback and revoke existing access. New invitations
-              are paused until dedicated reviewer sign-in is ready.
+              Inspect saved feedback and revoke existing access. Invitations
+              open a dedicated reviewer mailbox session; Admin never enters the
+              reviewer workspace on someone else&apos;s behalf.
             </p>
           </div>
           <span className={styles.noticeCode}>Private review access</span>
@@ -659,7 +663,7 @@ export function ReviewWorkspace({
                 body={
                   assignmentsAvailable
                     ? "Assign an existing authorized reviewer."
-                    : "New assignments are paused until dedicated reviewer sign-in is ready."
+                    : "Assignment creation is unavailable until the reviewer service is ready."
                 }
               />
               <form
@@ -794,7 +798,7 @@ export function ReviewWorkspace({
                     <Plus size={15} aria-hidden="true" />
                   )}
                   {!assignmentsAvailable
-                    ? "Reviewer sign-in setup pending"
+                    ? "Assignment creation unavailable"
                     : isCreating
                       ? "Creating assignment…"
                       : "Create assignment"}

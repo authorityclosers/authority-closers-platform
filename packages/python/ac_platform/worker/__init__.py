@@ -47,6 +47,7 @@ from ac_platform.identity.password_auth import (
     PASSWORD_EMAIL_VERIFICATION_JOB_V3,
     decrypt_challenge_token,
 )
+from ac_platform.identity.reviewer_auth import REVIEWER_AUTH_EVENT, REVIEWER_AUTH_JOB
 from ac_platform.outbox.models import Job, JobStatus, RecoveryStatus
 from ac_platform.outbox.policy import ReconciliationRequiredError
 from ac_platform.outbox.repository import (
@@ -67,6 +68,7 @@ from ac_platform.providers import (
     create_email_provider_from_settings,
 )
 from ac_platform.telemetry import InMemoryTelemetrySink, TelemetryCategory, TelemetryRecorder
+from ac_platform.worker.reviewer_email import resolve_reviewer_auth_message
 
 ENROLLMENT_WELCOME_EVENT = "enrollment.welcome.requested.v1"
 ENROLLMENT_WELCOME_JOB = "email.enrollment_welcome.v1"
@@ -96,6 +98,11 @@ ENROLLMENT_WELCOME_ROUTE = OutboxJobRoute(
 OUTBOX_JOB_ROUTES: Mapping[str, OutboxJobRoute] = MappingProxyType(
     {
         ENROLLMENT_WELCOME_EVENT: ENROLLMENT_WELCOME_ROUTE,
+        REVIEWER_AUTH_EVENT: OutboxJobRoute(
+            job_kind=REVIEWER_AUTH_JOB,
+            required_payload_keys=frozenset({"challenge_id"}),
+            uuid_payload_keys=frozenset({"challenge_id"}),
+        ),
         REVIEW_INVITATION_EVENT: OutboxJobRoute(
             job_kind=REVIEW_INVITATION_JOB,
             required_payload_keys=frozenset({"invitation_id"}),
@@ -290,9 +297,7 @@ async def resolve_review_invitation_message(
         )
     except (InvalidTag, ValueError, TypeError):
         raise PermanentProviderError("review invitation payload is unavailable") from None
-    action_link = (
-        f"{str(settings.public_app_url).rstrip('/')}{REVIEW_INVITATION_PATH}#token={token}"
-    )
+    action_link = f"{str(settings.admin_app_url).rstrip('/')}{REVIEW_INVITATION_PATH}#token={token}"
     return EmailMessage(
         to=invitation.invited_email,
         template="sales-xray-review-invitation",
@@ -438,6 +443,7 @@ def build_default_dispatcher(
     return AllowlistedDispatcher(
         {
             ENROLLMENT_WELCOME_JOB: handler,
+            REVIEWER_AUTH_JOB: handler,
             REVIEW_INVITATION_JOB: handler,
             PASSWORD_EMAIL_VERIFICATION_JOB: handler,
             PASSWORD_EMAIL_RESET_JOB: handler,
@@ -601,6 +607,7 @@ class DurableWorker:
                 raise LeaseLostError("job no longer exists")
             if job.kind not in {
                 ENROLLMENT_WELCOME_JOB,
+                REVIEWER_AUTH_JOB,
                 REVIEW_INVITATION_JOB,
                 PASSWORD_EMAIL_VERIFICATION_JOB,
                 PASSWORD_EMAIL_RESET_JOB,
@@ -703,6 +710,13 @@ class DurableWorker:
             )
         if job.kind == REVIEW_INVITATION_JOB:
             return await resolve_review_invitation_message(
+                session,
+                self._settings,
+                job,
+                provider_key=provider_key,
+            )
+        if job.kind == REVIEWER_AUTH_JOB:
+            return await resolve_reviewer_auth_message(
                 session,
                 self._settings,
                 job,

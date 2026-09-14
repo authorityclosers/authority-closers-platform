@@ -406,7 +406,7 @@ class ConversationPlanStageAuthorization(Base):
 
 
 class ConversationReviewAssignment(Base):
-    """Immutable, exact-report access grant to one existing learner."""
+    """Immutable, exact-report reviewer grant independent of learner membership."""
 
     __tablename__ = "conversation_review_assignments"
     __table_args__ = (
@@ -415,9 +415,7 @@ class ConversationReviewAssignment(Base):
             ["run_id", "tenant_id", "person_id"],
             ["conversation_runs.id", "conversation_runs.tenant_id", "conversation_runs.person_id"],
         ),
-        ForeignKeyConstraint(
-            ["tenant_id", "reviewer_id"], ["memberships.tenant_id", "memberships.person_id"]
-        ),
+        ForeignKeyConstraint(["reviewer_id"], ["persons.id"]),
         UniqueConstraint("id", "tenant_id", "person_id", "reviewer_id"),
         CheckConstraint("expires_at > created_at", name="bounded_expiry"),
     )

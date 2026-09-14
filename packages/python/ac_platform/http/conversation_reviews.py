@@ -8,6 +8,8 @@ bounded request DTOs and private source playback to HTTP.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
+from datetime import datetime
 from typing import Annotated, Any, NoReturn
 from uuid import UUID
 
@@ -40,6 +42,7 @@ from ac_platform.http.auth import (
     require_safe_origin,
 )
 from ac_platform.http.conversation_playback import _PrivateAudioResponse, byte_range
+from ac_platform.http.reviewer_auth import RequireReviewer, ReviewerTransaction, reviewer_scope
 from ac_platform.telemetry.redaction import sanitize_error
 
 _DIGEST = re.compile(r"^[0-9a-f]{64}$")
@@ -65,16 +68,22 @@ def install_conversation_review_http(
     *,
     settings: Settings,
     require_actor: RequireActor,
+    require_reviewer: RequireReviewer | None = None,
     storage: PrivateLocalRecordingStorage | None = None,
+    clock: Callable[[], datetime] | None = None,
 ) -> None:
     """Install admin assignment management and reviewer feedback routes."""
 
-    def review_service(auth: AuthenticatedTransaction) -> ConversationReviewService:
+    def review_service(
+        auth: AuthenticatedTransaction | ReviewerTransaction,
+    ) -> ConversationReviewService:
         operations_tenant_id = settings.operations_tenant_id
         if operations_tenant_id is None:
             raise HTTPException(503, "Conversation review is not configured.")
         service = ConversationReviewService(
-            ConversationApplication(auth.database),
+            ConversationApplication(auth.database, clock=clock)
+            if clock is not None
+            else ConversationApplication(auth.database),
             operations_tenant_id=operations_tenant_id,
         )
         # Keep cryptographic email delivery configuration at the HTTP composition
@@ -83,9 +92,14 @@ def install_conversation_review_http(
         return service
 
     function_dependency = Depends(require_actor, scope="function")
-    request_dependency = Depends(require_actor, scope="request")
+    reviewer_dependency = Depends(
+        require_reviewer or _reviewer_capability_unavailable, scope="function"
+    )
+    reviewer_request_dependency = Depends(
+        require_reviewer or _reviewer_capability_unavailable, scope="request"
+    )
     admin = APIRouter(prefix="/v1/admin/conversation", tags=["conversation-review-admin"])
-    learner = APIRouter(prefix="/v1/conversation", tags=["conversation-review"])
+    reviewer = APIRouter(prefix="/v1/reviewer", tags=["conversation-review"])
 
     def admin_scope(request: Request, response: Response, *, write: bool = False) -> None:
         require_admin_surface(request, settings)
@@ -95,12 +109,11 @@ def install_conversation_review_http(
         if write:
             require_safe_origin(request, settings)
 
-    def learner_scope(request: Request, response: Response, *, write: bool = False) -> None:
+    def review_scope(request: Request, response: Response, *, write: bool = False) -> None:
+        reviewer_scope(request, settings, write=write)
         _private(response)
         if request.query_params:
             raise HTTPException(422, "Review scope comes from your current AC session.")
-        if write:
-            require_safe_origin(request, settings)
 
     async def reviewer_write_hold(auth: AuthenticatedTransaction) -> NoReturn:
         try:
@@ -154,7 +167,12 @@ def install_conversation_review_http(
         auth: AuthenticatedTransaction = function_dependency,
     ) -> Any:
         admin_scope(request, response, write=True)
-        await reviewer_write_hold(auth)
+        if require_reviewer is None:
+            await reviewer_write_hold(auth)
+        try:
+            return await review_service(auth).create(auth.resolved.actor, intent, key)
+        except ConversationError as error:
+            raise _raise_conversation(error) from None
 
     @admin.post("/review-invitations", status_code=201)
     async def create_invitation(
@@ -165,7 +183,12 @@ def install_conversation_review_http(
         auth: AuthenticatedTransaction = function_dependency,
     ) -> Any:
         admin_scope(request, response, write=True)
-        await reviewer_write_hold(auth)
+        if require_reviewer is None:
+            await reviewer_write_hold(auth)
+        try:
+            return await review_service(auth).invite(auth.resolved.actor, intent, key)
+        except ConversationError as error:
+            raise _raise_conversation(error) from None
 
     @admin.post("/review-invitations/{invitation_id}/revoke")
     async def revoke_invitation(
@@ -197,71 +220,90 @@ def install_conversation_review_http(
         except ConversationError as error:
             raise _raise_conversation(error) from None
 
-    @learner.get("/review-assignments/{assignment_id}")
+    @reviewer.get("/review-assignments")
+    async def assigned_reviews(
+        request: Request,
+        response: Response,
+        limit: Annotated[int, Query(ge=1, le=50)] = 50,
+        auth: ReviewerTransaction = reviewer_dependency,
+    ) -> Any:
+        reviewer_scope(request, settings)
+        _private(response)
+        if request.query_params and (
+            set(request.query_params) != {"limit"}
+            or len(request.query_params.getlist("limit")) != 1
+        ):
+            raise HTTPException(422, "Review scope accepts only one bounded limit.")
+        try:
+            return await review_service(auth).reviewer_assignments(auth.actor, limit=limit)
+        except ConversationError as error:
+            raise _raise_conversation(error) from None
+
+    @reviewer.get("/review-assignments/{assignment_id}")
     async def get_assignment(
         assignment_id: UUID,
         request: Request,
         response: Response,
-        auth: AuthenticatedTransaction = function_dependency,
+        auth: ReviewerTransaction = reviewer_dependency,
     ) -> Any:
-        learner_scope(request, response)
+        review_scope(request, response)
         try:
-            return await review_service(auth).get(auth.resolved.actor, assignment_id)
+            return await review_service(auth).get(auth.actor, assignment_id)
         except ConversationError as error:
             raise _raise_conversation(error) from None
 
-    @learner.post("/review-invitations/accept", status_code=201)
+    @reviewer.post("/review-invitations/accept", status_code=201)
     async def accept_invitation(
         intent: ReviewInvitationAcceptRequest,
         request: Request,
         response: Response,
-        auth: AuthenticatedTransaction = function_dependency,
+        auth: ReviewerTransaction = reviewer_dependency,
     ) -> Any:
-        learner_scope(request, response, write=True)
+        review_scope(request, response, write=True)
         try:
-            return await review_service(auth).accept_invitation(auth.resolved.actor, intent)
+            return await review_service(auth).accept_invitation(auth.actor, intent)
         except ConversationError as error:
             raise _raise_conversation(error) from None
 
-    @learner.get("/review-assignments/{assignment_id}/submissions")
+    @reviewer.get("/review-assignments/{assignment_id}/submissions")
     async def list_submissions(
         assignment_id: UUID,
         request: Request,
         response: Response,
-        auth: AuthenticatedTransaction = function_dependency,
+        auth: ReviewerTransaction = reviewer_dependency,
     ) -> Any:
-        learner_scope(request, response)
+        review_scope(request, response)
         try:
-            return await review_service(auth).submissions(auth.resolved.actor, assignment_id)
+            return await review_service(auth).submissions(auth.actor, assignment_id)
         except ConversationError as error:
             raise _raise_conversation(error) from None
 
-    @learner.post("/review-assignments/{assignment_id}/submissions", status_code=201)
+    @reviewer.post("/review-assignments/{assignment_id}/submissions", status_code=201)
     async def submit_submission(
         assignment_id: UUID,
         intent: ReviewFeedbackRequest,
         request: Request,
         response: Response,
-        auth: AuthenticatedTransaction = function_dependency,
+        auth: ReviewerTransaction = reviewer_dependency,
     ) -> Any:
-        learner_scope(request, response, write=True)
+        review_scope(request, response, write=True)
         try:
-            return await review_service(auth).submit(auth.resolved.actor, assignment_id, intent)
+            return await review_service(auth).submit(auth.actor, assignment_id, intent)
         except ConversationError as error:
             raise _raise_conversation(error) from None
 
-    @learner.get("/review-assignments/{assignment_id}/source")
+    @reviewer.get("/review-assignments/{assignment_id}/source")
     async def source(
         assignment_id: UUID,
         request: Request,
         response: Response,
-        auth: AuthenticatedTransaction = request_dependency,
+        auth: ReviewerTransaction = reviewer_request_dependency,
     ) -> StreamingResponse:
-        learner_scope(request, response)
+        review_scope(request, response)
         if storage is None:
             raise HTTPException(503, "Private conversation storage is not configured.")
         try:
-            recording = await review_service(auth).playback(auth.resolved.actor, assignment_id)
+            recording = await review_service(auth).playback(auth.actor, assignment_id)
         except ConversationError as error:
             raise _raise_conversation(error) from None
         try:
@@ -323,11 +365,10 @@ def install_conversation_review_http(
         )
 
     app.include_router(admin)
-    # The legacy learner-mounted review routes are intentionally dormant. They
-    # authorize the generic learner session dependency and cannot enforce the
-    # reviewer-only audience required by the current access contract. Keep the
-    # handlers available as implementation material for the dedicated reviewer
-    # resolver, but do not expose them until that server-owned gate exists.
+    if require_reviewer is not None:
+        app.include_router(reviewer)
+    # The legacy /v1/conversation review routes remain absent. Generic learner
+    # sessions are never an admission dependency for the reviewer workspace.
 
 
 __all__ = ["install_conversation_review_http"]

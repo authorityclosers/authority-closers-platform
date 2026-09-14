@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from pydantic import ValidationError
@@ -64,7 +64,7 @@ from ac_platform.conversation_intelligence.review_invitations import (
     decrypt_invitation_token,
 )
 from ac_platform.conversation_intelligence.review_service import ConversationReviewService
-from ac_platform.identity.models import Person
+from ac_platform.identity.models import Person, Session
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.outbox.models import OutboxEvent
 from tests.database.test_conversation_inference_postgresql import _provider_quote
@@ -196,11 +196,25 @@ async def _build_report_case(postgres_harness: Any, scratch_root: Path) -> Revie
         other_reviewer = await seed(engine, tenant_id=prepared.state.tenant_id, role="learner")
         foreign = await seed(engine, role="learner")
         operations = await seed(engine, role="owner")
+        reviewer_actors: list[ActorContext] = []
         async with sessions() as database, database.begin():
             for identity in (reviewer, other_reviewer, foreign):
                 learner_person = await database.get(Person, identity.person_id)
                 assert learner_person is not None
                 learner_person.email = f"reviewer-{identity.person_id.hex}@example.test"
+                account_session = await database.get(Session, identity.session_id)
+                assert account_session is not None
+                reviewer_session = Session(
+                    id=uuid4(),
+                    person_id=identity.person_id,
+                    token_hash=hashlib.sha256(uuid4().bytes).digest(),
+                    created_at=account_session.created_at,
+                    expires_at=account_session.expires_at,
+                    selected_tenant_id=None,
+                    audience="reviewer",
+                )
+                database.add(reviewer_session)
+                reviewer_actors.append(ActorContext(identity.person_id, reviewer_session.id, None))
             admin_person = await database.get(Person, operations.person_id)
             assert admin_person is not None
             admin_person.email = CONTROL_ACCOUNT
@@ -225,9 +239,7 @@ async def _build_report_case(postgres_harness: Any, scratch_root: Path) -> Revie
                 operations.tenant_id,
                 frozenset({"admin_surface"}),
             ),
-            reviewer.actor,
-            other_reviewer.actor,
-            foreign.actor,
+            *reviewer_actors,
             operations.tenant_id,
             report_run_id,
             c2_id,
@@ -450,7 +462,7 @@ def test_unassigned_cross_tenant_and_spoofed_reviewer_are_denied(
             service = _service(database, review_case)
             with pytest.raises(ConversationNotFound):
                 await service.get(review_case.other_reviewer_actor, assignment.id)
-            with pytest.raises(ConversationNotFound):
+            with pytest.raises(ConversationDenied):
                 await service.get(review_case.source_actor, assignment.id)
             with pytest.raises(ConversationNotFound):
                 await service.get(review_case.foreign_actor, assignment.id)

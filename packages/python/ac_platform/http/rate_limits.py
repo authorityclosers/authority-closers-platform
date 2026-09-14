@@ -31,6 +31,20 @@ class RateLimitRule:
 
 DEFAULT_RATE_LIMIT_RULES = (
     RateLimitRule(
+        name="reviewer-sign-in-request",
+        method="POST",
+        path=re.compile(r"^/v1/reviewer/auth/request$"),
+        capacity=5,
+        refill_seconds=900,
+    ),
+    RateLimitRule(
+        name="reviewer-sign-in-verify",
+        method="POST",
+        path=re.compile(r"^/v1/reviewer/auth/verify$"),
+        capacity=20,
+        refill_seconds=600,
+    ),
+    RateLimitRule(
         name="password-register",
         method="POST",
         path=re.compile(r"^/v1/auth/password/register$"),

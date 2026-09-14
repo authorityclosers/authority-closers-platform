@@ -23,7 +23,6 @@ def test_default_identity_rate_limits_cover_every_public_password_command() -> N
         for rule in DEFAULT_RATE_LIMIT_RULES
         if rule.name.startswith("password-")
     }
-
     assert covered == {
         ("POST", r"^/v1/auth/password/register$"),
         ("POST", r"^/v1/auth/password/login$"),
@@ -32,6 +31,34 @@ def test_default_identity_rate_limits_cover_every_public_password_command() -> N
         ("POST", r"^/v1/auth/password/verify$"),
         ("POST", r"^/v1/auth/password/reset$"),
     }
+
+
+async def test_reviewer_mailbox_and_verification_are_rate_limited_per_client() -> None:
+    app = FastAPI()
+
+    async def accepted() -> PlainTextResponse:
+        return PlainTextResponse("accepted")
+
+    for path in ("/v1/reviewer/auth/request", "/v1/reviewer/auth/verify"):
+        app.add_api_route(path, accepted, methods=["POST"])
+    limited = RateLimitMiddleware(
+        app,
+        rules=DEFAULT_RATE_LIMIT_RULES,
+        limiter=InMemoryTokenBucketLimiter(clock=lambda: 0.0),
+    )
+    async with AsyncClient(
+        transport=ASGITransport(app=limited, client=("8.8.8.8", 1000)), base_url="http://test"
+    ) as client:
+        for path, limit in (("/v1/reviewer/auth/request", 5), ("/v1/reviewer/auth/verify", 20)):
+            for _ in range(limit):
+                assert (await client.post(path)).status_code == 200
+            rejected = await client.post(path)
+            assert rejected.status_code == 429
+            assert int(rejected.headers["retry-after"]) > 0
+    async with AsyncClient(
+        transport=ASGITransport(app=limited, client=("1.1.1.1", 1001)), base_url="http://test"
+    ) as second:
+        assert (await second.post("/v1/reviewer/auth/request")).status_code == 200
 
 
 def _rule() -> RateLimitRule:

@@ -17,7 +17,7 @@ from ac_platform.identity.password_auth import (
 
 REVIEW_INVITATION_EVENT = "conversation.review_invitation.requested.v1"
 REVIEW_INVITATION_JOB = "email.conversation_review_invitation.v1"
-REVIEW_INVITATION_PATH = "/sales-xray/review/invite"
+REVIEW_INVITATION_PATH = "/reviewer/invite"
 
 
 def hash_invitation_token(secret: bytes | str, token: str) -> bytes:

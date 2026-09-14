@@ -295,6 +295,12 @@ async def test_resend_adapter_sends_bounded_template_with_provider_idempotency()
             "You’re invited to review a saved call — Authority Closers",
             "Open reviewer invitation",
         ),
+        (
+            "reviewer-sign-in",
+            "verification_security",
+            "Sign in to your reviewer workspace — Authority Closers",
+            "Open reviewer workspace",
+        ),
     ],
 )
 def test_transactional_email_family_renders_branded_responsive_html_and_text(

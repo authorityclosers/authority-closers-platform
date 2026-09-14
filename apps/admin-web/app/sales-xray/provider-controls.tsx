@@ -105,7 +105,7 @@ const routeSchema = z
 const policySchema = z
   .object({
     schema: z.string().min(1),
-    allow_paid: z.literal(false),
+    allow_paid: z.boolean(),
     auto_purchase: z.literal(false),
     paid_approval_ref: z.string().regex(EXTERNAL_REFERENCE).nullable(),
   })
@@ -240,15 +240,21 @@ export function buildConfiguration(
     schema: template.schema,
     revision: `admin-draft-r${expectedRevision + 1}`,
     policy: {
-      schema: template.policy.schema,
-      allow_paid: false,
+      ...template.policy,
       auto_purchase: false,
-      paid_approval_ref: null,
     },
     providers: draft.providers.map((provider) => ({
       ...provider,
       schema: PROVIDER_CONFIG_SCHEMA,
-      max_cost_paise: 0,
+      // This editor has no budget controls. Preserve only a cap already present
+      // for this provider in the server's current revision, including model edits.
+      max_cost_paise: template.providers.some(
+        (saved) =>
+          saved.provider_id === provider.provider_id &&
+          saved.max_cost_paise === provider.max_cost_paise,
+      )
+        ? provider.max_cost_paise
+        : 0,
     })),
     routes: draft.routes.map((route) => ({ ...route, schema: ROUTE_SCHEMA })),
   };
@@ -433,6 +439,7 @@ function ProviderEditor({
                 model_id: nextModel?.model_id ?? "",
                 endpoint: nextModel?.endpoint ?? null,
                 endpoint_sha256: null,
+                max_cost_paise: 0,
               });
             }}
           >
@@ -807,6 +814,20 @@ export function ProviderControlsPanel() {
     }
     if (draft.routes.some((route) => !keys.has(bindingKey(route))))
       return "Every task route must use a configured provider model.";
+    if (state.status === "ready") {
+      const preserved = buildConfiguration(
+        draft,
+        state.current?.configuration ?? state.payload.configuration_template,
+        state.current?.revision ?? 0,
+      );
+      if (
+        preserved.policy.allow_paid &&
+        !preserved.providers.some(
+          (provider) => (provider.max_cost_paise ?? 0) > 0,
+        )
+      )
+        return "Keep at least one provider with its saved paid cap. Update the approved policy before removing the final paid provider.";
+    }
     return null;
   }
 
@@ -824,7 +845,7 @@ export function ProviderControlsPanel() {
     try {
       const configuration = await prepareConfiguration(
         draft,
-        state.payload.configuration_template,
+        state.current?.configuration ?? state.payload.configuration_template,
         catalog,
         expectedRevision,
       );

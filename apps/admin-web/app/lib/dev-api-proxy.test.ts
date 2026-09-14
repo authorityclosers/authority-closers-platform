@@ -46,6 +46,15 @@ it("admits only the bounded Admin directory POST without client scope", () => {
   ).toBe(false);
 });
 
+it("admits the dedicated reviewer API while rejecting scope selectors", () => {
+  const assignment = "44444444-4444-4444-8444-444444444444";
+  expect(isStagingAdminRequest(new URL("http://admin.localhost:3101/v1/reviewer/me"), "GET")).toBe(true);
+  expect(isStagingAdminRequest(new URL("http://admin.localhost:3101/v1/reviewer/auth/request"), "POST")).toBe(true);
+  expect(isStagingAdminRequest(new URL(`http://admin.localhost:3101/v1/reviewer/review-assignments/${assignment}/submissions`), "POST")).toBe(true);
+  expect(isStagingAdminRequest(new URL("http://admin.localhost:3101/v1/reviewer/review-assignments?tenant_id=other"), "GET")).toBe(false);
+  expect(isStagingAdminRequest(new URL(`http://admin.localhost:3101/v1/reviewer/review-assignments/${assignment}?include=transcript`), "GET")).toBe(false);
+});
+
 describe("course-scoped video upload admission proxy", () => {
   const prefix = `/v1/admin/studio/programs/${TARGET_ID}/video-uploads`;
   it("admits only exact create and status methods on Admin and Coach", () => {
@@ -422,6 +431,66 @@ describe("admin bridge route allowlist", () => {
 });
 
 describe("authenticated staging admin bridge", () => {
+  it("forwards only the dedicated reviewer cookie and returns a validated host-only cookie", async () => {
+    const reviewerToken = "r".repeat(43);
+    const reviewerState = "q".repeat(43);
+    const fetcher = vi
+      .fn<DevAdminFetch>()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: "ok" }), {
+          status: 200,
+          headers: {
+            "content-type": "application/json",
+              "set-cookie": `__Host-ac_reviewer_session=${reviewerToken}; Max-Age=28800; Path=/; HttpOnly; SameSite=Lax; Secure, __Host-ac_reviewer_state=${reviewerState}; Max-Age=900; Path=/; HttpOnly; SameSite=Lax; Secure`,
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          person_id: ADMIN_PERSON,
+          email: "reviewer@example.test",
+          display_name: "Reviewer",
+          expires_at_epoch: 1_800_000_000,
+        }),
+      );
+    const verified = await proxyDevelopmentAdminApi(
+      request("/v1/reviewer/auth/verify", {
+        method: "POST",
+        headers: {
+          origin: "http://localhost:3001",
+          "content-type": "application/json",
+          cookie: `__Host-ac_session=${"a".repeat(43)}; __Host-ac_reviewer_state=${reviewerState}`,
+        },
+        body: JSON.stringify({ token: "v".repeat(43) }),
+      }),
+      fetcher,
+      bridgeEnvironment,
+      "development",
+    );
+    expect(verified.status).toBe(200);
+    expect(verified.headers.get("set-cookie")).toContain(
+      `__Host-ac_reviewer_session=${reviewerToken}`,
+    );
+    const verifyHeaders = new Headers(fetcher.mock.calls[0][1]?.headers);
+    expect(verifyHeaders.get("cookie")).toBe(`CF_Authorization=${ACCESS_JWT}; __Host-ac_reviewer_state=${reviewerState}`);
+
+    const me = await proxyDevelopmentAdminApi(
+      request("/v1/reviewer/me", {
+        headers: {
+          cookie: `__Host-ac_session=${"a".repeat(43)}; __Host-ac_reviewer_session=${reviewerToken}; __Host-ac_reviewer_state=${reviewerState}`,
+        },
+      }),
+      fetcher,
+      bridgeEnvironment,
+      "development",
+    );
+    expect(me.status).toBe(200);
+    const meHeaders = new Headers(fetcher.mock.calls[1][1]?.headers);
+    expect(meHeaders.get("cookie")).toBe(
+      `CF_Authorization=${ACCESS_JWT}; __Host-ac_reviewer_session=${reviewerToken}; __Host-ac_reviewer_state=${reviewerState}`,
+    );
+  });
+
   it("proves Cloudflare Access transport without creating a product session", async () => {
     const fetcher = vi
       .fn<DevAdminFetch>()

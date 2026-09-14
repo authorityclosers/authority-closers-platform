@@ -12,6 +12,7 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "persons",
         "password_credentials",
         "email_challenges",
+        "reviewer_auth_challenges",
         "provider_identities",
         "sessions",
         "deletion_requests",

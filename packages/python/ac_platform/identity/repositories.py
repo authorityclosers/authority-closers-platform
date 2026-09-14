@@ -98,6 +98,7 @@ def _session_snapshot(row: SessionRow) -> StoredSession:
         revocation_reason=row.revocation_reason,
         user_agent=row.user_agent,
         ip_address=row.ip_address,
+        audience=row.audience,
         selected_tenant_id=row.selected_tenant_id,
         revision=row.revision,
     )
@@ -372,6 +373,7 @@ class SqlAlchemyIdentityStore(IdentityStore):
                             revocation_reason=session.revocation_reason,
                             user_agent=session.user_agent,
                             ip_address=session.ip_address,
+                            audience=session.audience,
                             selected_tenant_id=session.selected_tenant_id,
                             revision=session.revision,
                         )
@@ -390,6 +392,7 @@ class SqlAlchemyIdentityStore(IdentityStore):
             or bytes(row.token_hash) != session.token_hash
             or _as_utc(row.created_at) != _as_utc(session.created_at)
             or _as_utc(row.expires_at) != _as_utc(session.expires_at)
+            or row.audience != session.audience
         ):
             raise IdentityServiceError("session identity and lifetime are immutable")
         statement = (
@@ -929,6 +932,7 @@ class AsyncSqlAlchemyIdentityRepository:
                             revocation_reason=session.revocation_reason,
                             user_agent=session.user_agent,
                             ip_address=session.ip_address,
+                            audience=session.audience,
                             selected_tenant_id=session.selected_tenant_id,
                             revision=session.revision,
                         )
@@ -946,6 +950,7 @@ class AsyncSqlAlchemyIdentityRepository:
             or bytes(row.token_hash) != session.token_hash
             or _as_utc(row.created_at) != _as_utc(session.created_at)
             or _as_utc(row.expires_at) != _as_utc(session.expires_at)
+            or row.audience != session.audience
         ):
             raise IdentityServiceError("session identity and lifetime are immutable")
         try:
@@ -961,6 +966,7 @@ class AsyncSqlAlchemyIdentityRepository:
                             revocation_reason=session.revocation_reason,
                             user_agent=session.user_agent,
                             ip_address=session.ip_address,
+                            audience=session.audience,
                             selected_tenant_id=session.selected_tenant_id,
                             revision=session.revision,
                         )

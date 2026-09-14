@@ -7,6 +7,7 @@ import liveCatalogFixture from "./provider-catalog.fixture.json";
 import {
   buildConfiguration,
   prepareConfiguration,
+  parseProviderControlsPayload,
   ProviderControlsPanel,
   type RegistryConfiguration,
 } from "./provider-controls";
@@ -279,6 +280,89 @@ describe("provider control contract", () => {
     );
   });
 
+  it("preserves saved paid approvals and caps on model edits without authorizing a new cap", () => {
+    const providerDefaults = {
+      schema: "ac.sales_xray.provider_config/1",
+      endpoint: null,
+      endpoint_sha256: null,
+      credential_ref: null,
+      provider_terms_ref: null,
+      privacy_ref: null,
+      pricing_ref: null,
+      free_allowance_ref: null,
+      permission_ref: null,
+      endpoint_approval_ref: null,
+      local_endpoint_approval_ref: null,
+    };
+    const approved: RegistryConfiguration = {
+      ...template,
+      policy: {
+        ...template.policy,
+        allow_paid: true,
+        paid_approval_ref: "ref:approval/bounded-review",
+      },
+      providers: [
+        {
+          ...providerDefaults,
+          provider_id: "elevenlabs",
+          model_id: "scribe",
+          max_cost_paise: 1100,
+        },
+        {
+          ...providerDefaults,
+          provider_id: "google",
+          model_id: "gemini",
+          max_cost_paise: 500,
+        },
+      ],
+    };
+    const current = {
+      id: "registry-proof",
+      revision: 4,
+      configuration_sha256: "a".repeat(64),
+      configuration: approved,
+      created_at: "2026-09-14T00:00:00Z",
+      execution_activated: false,
+    };
+    expect(
+      parseProviderControlsPayload(payload(current)).current?.configuration
+        .policy,
+    ).toEqual(approved.policy);
+    const draft = {
+      revision: approved.revision,
+      providers: approved.providers.map((provider) => ({
+        ...provider,
+        model_id: `${provider.model_id}-edited`,
+      })),
+      routes: [],
+    };
+    const result = buildConfiguration(draft, approved, 4);
+    expect(result.policy).toEqual(approved.policy);
+    expect(result.providers.map((provider) => provider.max_cost_paise)).toEqual(
+      [1100, 500],
+    );
+    const enlarged = buildConfiguration(
+      {
+        ...draft,
+        providers: [{ ...draft.providers[0]!, max_cost_paise: 9999 }],
+      },
+      approved,
+      4,
+    );
+    expect(enlarged.providers[0]?.max_cost_paise).toBe(0);
+    const newProvider = buildConfiguration(
+      {
+        ...draft,
+        providers: [
+          { ...draft.providers[0]!, provider_id: "unapproved-provider" },
+        ],
+      },
+      approved,
+      4,
+    );
+    expect(newProvider.providers[0]?.max_cost_paise).toBe(0);
+  });
+
   it("keeps a stale revision visible after a 409 so the operator must reload", async () => {
     fetchMock
       .mockResolvedValueOnce(jsonResponse(payload()))
@@ -308,5 +392,101 @@ describe("provider control contract", () => {
     expect(JSON.parse(postCall?.[1]?.body as string)).toEqual(
       expect.objectContaining({ expected_revision: 0 }),
     );
+  });
+
+  it("saves a model edit against the current paid revision instead of the empty template", async () => {
+    const approved: RegistryConfiguration = {
+      ...template,
+      policy: {
+        ...template.policy,
+        allow_paid: true,
+        paid_approval_ref: "ref:approval/existing-budget",
+      },
+      providers: [
+        {
+          schema: "ac.sales_xray.provider_config/1",
+          provider_id: "groq",
+          model_id: "openai/gpt-oss-120b",
+          endpoint: null,
+          endpoint_sha256: null,
+          credential_ref: null,
+          provider_terms_ref: null,
+          privacy_ref: null,
+          pricing_ref: null,
+          free_allowance_ref: null,
+          permission_ref: null,
+          endpoint_approval_ref: null,
+          local_endpoint_approval_ref: null,
+          max_cost_paise: 500,
+        },
+      ],
+      routes: [],
+    };
+    const current = {
+      id: "registry-proof",
+      revision: 4,
+      configuration_sha256: "a".repeat(64),
+      configuration: approved,
+      created_at: "2026-09-14T00:00:00Z",
+      execution_activated: false,
+    };
+    const nextCatalog = catalog.map((entry) =>
+      entry.provider_id === "groq"
+        ? {
+            ...entry,
+            models: [
+              ...entry.models,
+              { ...entry.models[0]!, model_id: "replacement-model" },
+            ],
+          }
+        : entry,
+    );
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse({ ...payload(current), catalog: nextCatalog }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ ...current, revision: 5 }));
+    await renderPanel();
+    const model = host.querySelector(
+      'select[aria-label="Model 1"]',
+    ) as HTMLSelectElement;
+    await act(async () => {
+      model.value = "replacement-model";
+      model.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await act(async () => {
+      [...host.querySelectorAll("button")]
+        .find((button) => button.textContent?.includes("Save settings"))!
+        .click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    const request = fetchMock.mock.calls.find(
+      ([, init]) => init?.method === "POST",
+    );
+    expect(request).toBeDefined();
+    const saved = JSON.parse(request![1].body as string);
+    expect(saved.expected_revision).toBe(4);
+    expect(saved.configuration.policy).toEqual(approved.policy);
+    expect(saved.configuration.providers[0]).toMatchObject({
+      model_id: "replacement-model",
+      max_cost_paise: 500,
+    });
+    await act(async () => {
+      [...host.querySelectorAll("button")]
+        .find((button) => button.textContent?.includes("Remove"))!
+        .click();
+    });
+    await act(async () => {
+      [...host.querySelectorAll("button")]
+        .find((button) => button.textContent?.includes("Save settings"))!
+        .click();
+    });
+    expect(host.textContent).toContain(
+      "Keep at least one provider with its saved paid cap",
+    );
+    expect(
+      fetchMock.mock.calls.filter(([, init]) => init?.method === "POST"),
+    ).toHaveLength(1);
   });
 });

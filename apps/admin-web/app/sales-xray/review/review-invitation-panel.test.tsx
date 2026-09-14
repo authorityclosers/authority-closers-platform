@@ -23,7 +23,7 @@ function value(input: HTMLInputElement, text: string) {
   input.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
-it("does not send invitations before dedicated reviewer admission is available", async () => {
+it("enables invitations through the dedicated reviewer admission flow", async () => {
   const send = vi.mocked(createReviewInvitation);
   send.mockReset();
   const container = document.createElement("div");
@@ -34,14 +34,12 @@ it("does not send invitations before dedicated reviewer admission is available",
       root.render(<ReviewInvitationPanel initialRunId={runId} />),
     );
     const button = [...container.querySelectorAll("button")].find((item) =>
-      item.textContent?.includes("Reviewer sign-in setup pending"),
+      item.textContent?.includes("Send invitation"),
     )!;
-    expect(button.disabled).toBe(true);
+    expect(button.disabled).toBe(false);
     await act(async () => button.click());
     expect(send).not.toHaveBeenCalled();
-    expect(container.textContent).toContain(
-      "You can still revoke an existing invitation below.",
-    );
+    expect(container.textContent).toContain("Enter the invited email address.");
   } finally {
     await act(async () => root.unmount());
     container.remove();

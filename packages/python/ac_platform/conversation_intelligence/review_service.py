@@ -1,22 +1,23 @@
-"""Exact-report learner grants and append-only, source-bound review proposals."""
+"""Independent exact-report reviewer grants and append-only review proposals."""
 
 from __future__ import annotations
 
 import json
 import secrets
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 from uuid import UUID, uuid4
 
 from sqlalchemy import func, select
 
-from ac_platform.identity.models import Person
+from ac_platform.audit.service import AuditRepository
+from ac_platform.identity.models import Person, Session
 from ac_platform.identity.services import normalize_email
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.kernel.events import EventCategory, EventEnvelope
 from ac_platform.outbox.repository import OutboxRepository
-from ac_platform.tenancy.models import Membership, Tenant
+from ac_platform.tenancy.models import Membership, Tenant, TenantStatus
 
 from .application import (
     ConversationApplication,
@@ -96,6 +97,60 @@ class ConversationReviewService:
             raise ConversationDenied("Use the AC operations workspace.")
         await ConversationProviderAdmin(self.application).admit(actor)
         return utc(self.application.clock())
+
+    async def _reviewer(self, actor: ActorContext) -> datetime:
+        """Recheck the canonical reviewer session, never learner membership."""
+
+        now = utc(self.application.clock())
+        session = await self.database.scalar(
+            select(Session)
+            .where(Session.id == actor.session_id, Session.person_id == actor.person_id)
+            .with_for_update(read=True)
+            .execution_options(populate_existing=True)
+        )
+        if (
+            session is None
+            or session.audience != "reviewer"
+            or session.selected_tenant_id is not None
+            or session.revoked_at is not None
+            or utc(session.expires_at) <= now
+        ):
+            raise ConversationDenied("Sign in to the reviewer workspace to continue.")
+        await self._reviewer_person(actor.person_id)
+        return now
+
+    async def _reviewer_person(self, person_id: UUID) -> None:
+        person = await self.database.scalar(
+            select(Person)
+            .where(Person.id == person_id)
+            .with_for_update(read=True)
+            .execution_options(populate_existing=True)
+        )
+        if person is None or person.status != "active" or person.email_verified_at is None:
+            raise ConversationDenied("A current verified reviewer identity is required.")
+
+    async def _review_audit(
+        self,
+        actor: ActorContext,
+        *,
+        tenant_id: UUID,
+        action: str,
+        resource_type: str,
+        resource_id: UUID,
+        intent: dict[str, Any],
+        now: datetime,
+    ) -> None:
+        # Acceptance and feedback rows already provide unique, durable retry
+        # receipts. Do not create a learner-scoped ConversationCommand or loosen
+        # its membership FK to accommodate a reviewer without learner access.
+        await AuditRepository(self.database).append_for_actor(
+            replace(actor, tenant_id=tenant_id),
+            action=f"conversation.{action}",
+            resource_type=resource_type,
+            resource_id=resource_id,
+            payload={"intent_sha256": content_hash(intent)},
+            now=now,
+        )
 
     async def _member(self, tenant_id: UUID, person_id: UUID) -> None:
         person = await self.database.scalar(
@@ -285,7 +340,7 @@ class ConversationReviewService:
         now: datetime,
     ) -> tuple[dict[str, Any], ConversationReviewAssignment]:
         source = evidence.recording
-        await self._member(source.tenant_id, reviewer_person_id)
+        await self._reviewer_person(reviewer_person_id)
         expires = datetime.fromtimestamp(expires_at_epoch, UTC)
         if expires > evidence.retention_until:
             raise ConversationError(
@@ -506,7 +561,7 @@ class ConversationReviewService:
     async def accept_invitation(
         self, actor: ActorContext, intent: ReviewInvitationAcceptRequest
     ) -> dict[str, Any]:
-        now = await self.application.admit(actor)
+        now = await self._reviewer(actor)
         if self.token_secret is None:
             raise ConversationError("Review invitation email is not configured.")
         try:
@@ -522,7 +577,7 @@ class ConversationReviewService:
         )
         # All invalid, expired, revoked, consumed, tenant, and email mismatch
         # cases intentionally share this response to prevent invitation probing.
-        if row is None or row.tenant_id != actor.tenant_id or utc(row.expires_at) <= now:
+        if row is None or utc(row.expires_at) <= now:
             raise ConversationNotFound("Review invitation not found.")
         if await self.database.get(ConversationReviewInvitationRevocation, row.id) is not None:
             raise ConversationNotFound("Review invitation not found.")
@@ -543,11 +598,12 @@ class ConversationReviewService:
             raise ConversationNotFound("Review invitation not found.")
         try:
             normalized_actor_email = normalize_email(person.email, "email")
+            normalized_invited_email = normalize_email(row.invited_email, "invited_email")
         except ValueError:
             raise ConversationNotFound("Review invitation not found.") from None
-        if normalized_actor_email != row.invited_email:
+        if normalized_actor_email.casefold() != normalized_invited_email.casefold():
             raise ConversationNotFound("Review invitation not found.")
-        await self._member(row.tenant_id, actor.person_id)
+        await self._reviewer_person(actor.person_id)
         evidence = await self._evidence(row.run_id, now, report_id=row.report_id)
         if (
             evidence.recording.id != row.recording_id
@@ -584,16 +640,41 @@ class ConversationReviewService:
             )
         )
         await self.database.flush()
-        await self.application._receipt(
+        await self._review_audit(
             actor,
-            f"review-invitation:{row.id}",
-            "accept_conversation_review_invitation",
-            {"invitation_id": str(row.id)},
-            assignment.id,
-            now,
+            tenant_id=row.tenant_id,
+            action="accept_conversation_review_invitation",
+            intent={"invitation_id": str(row.id)},
+            resource_id=assignment.id,
+            now=now,
             resource_type="conversation_review_assignment",
         )
         return body
+
+    async def reviewer_assignments(self, actor: ActorContext, limit: int = 50) -> dict[str, Any]:
+        now = await self._reviewer(actor)
+        if type(limit) is not int or not 1 <= limit <= 50:
+            raise ConversationError("Choose at most 50 assignments.")
+        rows = (
+            await self.database.scalars(
+                select(ConversationReviewAssignment)
+                .join(Tenant, Tenant.id == ConversationReviewAssignment.tenant_id)
+                .where(ConversationReviewAssignment.reviewer_id == actor.person_id)
+                .where(Tenant.status == TenantStatus.ACTIVE.value)
+                .order_by(
+                    ConversationReviewAssignment.created_at.desc(),
+                    ConversationReviewAssignment.id.desc(),
+                )
+                .limit(limit + 1)
+            )
+        ).all()
+        return {
+            "items": [
+                (await self._view(row, now)).model_dump(mode="json", by_alias=True)
+                for row in rows[:limit]
+            ],
+            "truncated": len(rows) > limit,
+        }
 
     async def list_assignments(self, actor: ActorContext, limit: int = 50) -> dict[str, Any]:
         now = await self._admin(actor)
@@ -645,9 +726,11 @@ class ConversationReviewService:
     async def _admit(
         self, actor: ActorContext, identifier: UUID
     ) -> tuple[ConversationReviewAssignment, ReviewAssignment, _Evidence, datetime]:
-        now = await self.application.admit(actor)
+        now = await self._reviewer(actor)
         row = await self._assignment(identifier)
-        if row.tenant_id != actor.tenant_id or row.reviewer_id != actor.person_id:
+        if row.reviewer_id != actor.person_id or (
+            actor.tenant_id is not None and actor.tenant_id != row.tenant_id
+        ):
             raise ConversationNotFound("Review assignment not found.")
         assignment = await self._view(row, now)
         if not assignment.is_submittable(int(now.timestamp())):
@@ -677,7 +760,7 @@ class ConversationReviewService:
                 }
                 for segment in evidence.transcript["segments"]
             ],
-            "audio_source_url": f"/v1/conversation/review-assignments/{assignment_id}/source",
+            "audio_source_url": f"/v1/reviewer/review-assignments/{assignment_id}/source",
         }
 
     @staticmethod
@@ -806,13 +889,13 @@ class ConversationReviewService:
         )
         await self.database.flush()
         # The envelope is erasable; the audit contains only immutable fingerprints.
-        await self.application._receipt(
+        await self._review_audit(
             actor,
-            f"review:{submission.id}",
-            "submit_conversation_review",
-            {"assignment_id": str(row.id), "feedback_sha256": content_hash(body)},
-            submission.id,
-            now,
+            tenant_id=row.tenant_id,
+            action="submit_conversation_review",
+            intent={"assignment_id": str(row.id), "feedback_sha256": content_hash(body)},
+            resource_id=submission.id,
+            now=now,
             resource_type="conversation_review_feedback",
         )
         return body

@@ -21,10 +21,10 @@ const lensLabels: Record<ReviewMode, string> = {
   ux: "Experience reviewer",
 };
 
-// New invitations stay unavailable until the dedicated reviewer session/claim
-// flow replaces the retired Academy handoff. This is a capability hold, never
-// an assertion that a queued email grants reviewer access.
-export const REVIEWER_INVITATIONS_AVAILABLE = false;
+// Invitations use the dedicated reviewer mailbox/session flow. The server
+// still derives the reviewer assignment, source and tenant from the selected
+// run and invitation; this flag only enables the Admin authoring control.
+export const REVIEWER_INVITATIONS_AVAILABLE = true;
 
 type Mutation =
   | { status: "idle" }
@@ -184,11 +184,7 @@ export function ReviewInvitationPanel({
       <div className={styles.heading}>
         <span className={styles.eyebrow}>Grow your review team</span>
         <h2 id="review-invitation-title">Invite a reviewer</h2>
-        <p>
-          {invitationsAvailable
-            ? "Choose a saved analysis, add their email, and select what you would like them to review."
-            : "New invitations are paused while dedicated reviewer sign-in is configured. You can still revoke an existing invitation below."}
-        </p>
+        <p>Choose a saved analysis, add their email, and select what you would like them to review.</p>
       </div>
       <div className={styles.form}>
         <label>
@@ -266,7 +262,7 @@ export function ReviewInvitationPanel({
         >
           <Mail size={15} aria-hidden="true" />
           {!invitationsAvailable
-            ? "Reviewer sign-in setup pending"
+            ? "Reviewer access unavailable"
             : busy
               ? "Sending invitation…"
               : "Send invitation"}

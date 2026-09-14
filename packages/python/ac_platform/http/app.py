@@ -47,6 +47,7 @@ from ac_platform.http.problem import problem_response, register_problem_handlers
 from ac_platform.http.rate_limits import RateLimitMiddleware
 from ac_platform.http.request_context import request_context_middleware
 from ac_platform.http.request_limits import RequestBodyLimitMiddleware
+from ac_platform.http.reviewer_auth import install_reviewer_identity_http
 from ac_platform.http.studio_media import install_studio_media_http
 from ac_platform.http.studio_video_bytes import StudioVideoByteTransport
 from ac_platform.http.surfaces import CoachSurfaceMiddleware
@@ -183,6 +184,11 @@ def create_app(
         application,
         settings=settings,
         require_actor=require_actor,
+        require_reviewer=install_reviewer_identity_http(
+            application,
+            settings=settings,
+            sessions=session_factory,
+        ),
         storage=resolved_conversation.storage if resolved_conversation else None,
     )
     install_community_http(application, settings=settings, require_actor=require_actor)

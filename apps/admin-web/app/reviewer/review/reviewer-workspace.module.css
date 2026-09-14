@@ -1,0 +1,62 @@
+.main { min-height: calc(100vh - 4.5rem); }
+.container { width: min(1240px, 100%); margin: 0 auto; padding: 2rem clamp(1rem, 4vw, 3.5rem) 5rem; }
+.breadcrumb { margin-bottom: 2rem; color: var(--muted); font: 600 0.68rem/1.4 var(--font-mono), monospace; letter-spacing: 0.05em; text-transform: uppercase; }
+.assignmentHeader { display: flex; align-items: end; justify-content: space-between; gap: 2rem; margin-bottom: 1.5rem; }
+.assignmentHeader h1 { max-width: 42rem; margin: 0.35rem 0 0.65rem; font-size: clamp(2rem, 5vw, 4rem); letter-spacing: -0.065em; line-height: 0.98; }
+.assignmentHeader p { max-width: 44rem; margin: 0; color: var(--muted); line-height: 1.65; }
+.eyebrow { display: block; color: var(--quiet); font: 700 0.65rem/1.3 var(--font-mono), monospace; letter-spacing: 0.1em; text-transform: uppercase; }
+.assignmentFacts { display: grid; grid-template-columns: repeat(3, minmax(7rem, 1fr)); min-width: min(100%, 25rem); margin: 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.assignmentFacts div { padding: 0.65rem 0.75rem; border-right: 1px solid var(--line); }
+.assignmentFacts div:last-child { border-right: 0; }
+.assignmentFacts dt { color: var(--quiet); font: 600 0.63rem/1.3 var(--font-mono), monospace; text-transform: uppercase; }
+.assignmentFacts dd { margin: 0.35rem 0 0; color: var(--text); font-size: 0.76rem; font-weight: 700; overflow-wrap: anywhere; }
+.transcript,
+.history { display: grid; gap: 1rem; margin-top: 1.5rem; padding: 1.25rem; border: 1px solid var(--line); border-radius: 1rem; background: var(--panel); box-shadow: var(--shadow); }
+.transcriptHeading,
+.sectionHeading { display: flex; align-items: start; justify-content: space-between; gap: 1rem; }
+.transcript > *,
+.transcriptHeading > * { min-width: 0; }
+.transcriptHeading { flex-wrap: wrap; }
+.transcript h2,
+.history h2 { margin: 0.35rem 0 0; font-size: 1.25rem; letter-spacing: -0.03em; }
+.metaPill { display: inline-flex; align-items: center; border-radius: 999px; padding: 0.35rem 0.6rem; background: var(--panel-soft); color: var(--signal); font: 700 0.64rem/1 var(--font-mono), monospace; white-space: nowrap; }
+.transcriptSearch { display: grid; gap: 0.4rem; max-width: 28rem; color: var(--muted); font-size: 0.75rem; font-weight: 700; }
+.transcriptSearch input { width: 100%; min-height: 2.6rem; border: 1px solid var(--line-strong); border-radius: 0.5rem; padding: 0.65rem; background: var(--input); color: var(--text); }
+.transcriptList { min-width: 0; max-height: 30rem; overflow: auto; border-top: 1px solid var(--line); }
+.transcriptRow { display: grid; min-width: 0; grid-template-columns: 8rem minmax(0, 1fr); gap: 1rem; padding: 0.9rem 0; border-bottom: 1px solid var(--line); }
+.transcriptMeta { display: grid; align-content: start; gap: 0.25rem; color: var(--signal); font-size: 0.7rem; font-weight: 750; }
+.transcriptMeta time { color: var(--quiet); font: 0.68rem/1 var(--font-mono), monospace; }
+.transcriptRow p { min-width: 0; margin: 0; color: var(--text); line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.integrityNote { min-width: 0; margin: 0; color: var(--quiet); font: 0.66rem/1.5 var(--font-mono), monospace; overflow-wrap: anywhere; }
+.secondaryButton,
+.primaryButton { border-radius: 0.55rem; padding: 0.65rem 0.85rem; cursor: pointer; font-size: 0.74rem; font-weight: 750; }
+.secondaryButton { border: 1px solid var(--line-strong); background: transparent; color: var(--text); }
+.secondaryButton:hover { border-color: var(--signal); color: var(--signal); }
+.primaryButton { border: 1px solid var(--signal); background: var(--signal); color: var(--signal-ink); }
+.stateCard { display: grid; gap: 0.85rem; max-width: 38rem; padding: clamp(1.5rem, 5vw, 3rem); border: 1px solid var(--line); border-radius: 1rem; background: var(--panel); box-shadow: var(--shadow); }
+.stateCard h1 { margin: 0; font-size: clamp(2rem, 6vw, 3.5rem); letter-spacing: -0.06em; }
+.stateCard p { margin: 0; color: var(--muted); line-height: 1.6; }
+.error { color: var(--danger) !important; }
+.historyItem { display: grid; gap: 0.6rem; padding: 1rem 0; border-top: 1px solid var(--line); }
+.historyItem p { margin: 0; line-height: 1.6; white-space: pre-wrap; }
+.historyItem small { color: var(--quiet); font: 0.67rem/1.5 var(--font-mono), monospace; }
+.historyItemHeading { display: flex; flex-wrap: wrap; gap: 0.4rem 0.7rem; align-items: baseline; }
+.historyItemHeading span { color: var(--quiet); font-size: 0.74rem; }
+.correction { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; margin: 0; }
+.correction div { padding: 0.7rem; border-radius: 0.55rem; background: var(--panel-soft); }
+.correction dt { color: var(--quiet); font: 600 0.62rem/1.3 var(--font-mono), monospace; text-transform: uppercase; }
+.correction dd { margin: 0.35rem 0 0; font-size: 0.78rem; line-height: 1.5; }
+.empty { margin: 0; color: var(--muted); }
+
+@media (max-width: 820px) {
+  .assignmentHeader { align-items: stretch; flex-direction: column; }
+  .assignmentFacts { min-width: 0; }
+}
+@media (max-width: 560px) {
+  .container { padding-top: 1.25rem; }
+  .assignmentFacts { grid-template-columns: 1fr; }
+  .assignmentFacts div { border-right: 0; border-bottom: 1px solid var(--line); }
+  .assignmentFacts div:last-child { border-bottom: 0; }
+  .transcriptRow { grid-template-columns: 1fr; gap: 0.35rem; }
+  .correction { grid-template-columns: 1fr; }
+}
