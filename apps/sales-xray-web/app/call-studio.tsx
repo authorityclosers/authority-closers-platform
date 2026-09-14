@@ -113,17 +113,9 @@ const DISPLAY_COPY = {
   uploadStep: "Upload your call",
   analyzeStep: "Analyze",
   reportStep: "Read your report",
-  sourceMoments: "Source moments",
-  evidenceFindings: "Evidence-backed findings",
-  dimensionsObserved: "Dimensions observed",
-  recommendedNextSteps: "Recommended next steps",
-  recommendedNextStepsDetail: "Improvements grounded in this call",
   sourceMomentsHeading: "Moments from your call",
   sourceMomentsIntro: "Listen to the moments behind each finding.",
   playMoment: "Play source moment",
-  practiceFocus: "One move to practise next",
-  practiceFocusIntro:
-    "Use the clearest improvement as a small rehearsal before your next call.",
   printReport: "Print / save PDF",
   playbackUnavailable:
     "This moment is linked, but source playback is unavailable. Verify the authorized recording to listen.",
@@ -1124,19 +1116,6 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
   }
   const report = job?.report;
   const reportMoments = evidenceMoments(report);
-  const reportFindingsWithEvidence = report
-    ? [
-        ...report.strengths,
-        ...report.missed_opportunities,
-        ...report.improvements,
-        ...report.objection_analysis,
-        ...report.closing_analysis,
-      ].filter((finding) => finding.evidence.length > 0).length
-    : 0;
-  const observedDimensions = report
-    ? report.dimensions.filter((dimension) => dimension.status === "observed")
-        .length
-    : 0;
   const durationLabel = activeTranscript
     ? time(activeTranscript.duration_ms)
     : duration
@@ -1684,7 +1663,8 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
                     Objection & Decision Intelligence · Evaluation Engine
                   </p>
                   <small>
-                    AI feedback is a draft. Dipak has not reviewed this report.
+                    Source-linked feedback stays tied to this call and its
+                    authorized workspace.
                   </small>
                 </div>
               </div>
@@ -1779,9 +1759,6 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
             </p>
             <h1 lang="en">{sections.title}</h1>
             <p className="studio-report-summary">{job.report.summary}</p>
-            <span className="pill" lang="en">
-              {sections.draft}
-            </span>
             <div className="studio-report-actions">
               <button
                 className="secondary-button"
@@ -1791,44 +1768,6 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
                 <Printer size={16} aria-hidden="true" />
                 {copy.printReport}
               </button>
-            </div>
-            <div
-              className="studio-report-metrics"
-              aria-label="Report measurements"
-              role="list"
-              lang="en"
-            >
-              <div className="studio-report-metric" role="listitem">
-                <span>{copy.sourceMoments}</span>
-                <strong>
-                  {report ? reportMoments.length : "Not available"}
-                </strong>
-                <small>Unique timestamped spans</small>
-              </div>
-              <div className="studio-report-metric" role="listitem">
-                <span>{copy.evidenceFindings}</span>
-                <strong>
-                  {report ? reportFindingsWithEvidence : "Not available"}
-                </strong>
-                <small>Findings linked to the source</small>
-              </div>
-              <div className="studio-report-metric" role="listitem">
-                <span>{copy.dimensionsObserved}</span>
-                <strong>
-                  {job.report.dimensions.length
-                    ? `${observedDimensions}/${job.report.dimensions.length}`
-                    : "Not available"}
-                </strong>
-                <small>
-                  Observed: {observedDimensions} of{" "}
-                  {job.report.dimensions.length}
-                </small>
-              </div>
-              <div className="studio-report-metric" role="listitem">
-                <span>{copy.recommendedNextSteps}</span>
-                <strong>{job.report.improvements.length}</strong>
-                <small>{copy.recommendedNextStepsDetail}</small>
-              </div>
             </div>
             <ReportExplorer
               key={job.id}
@@ -1993,6 +1932,10 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
               <summary lang="en">{sections.details}</summary>
               <p lang="en">
                 {sections.detailNote}
+                {` Source: ${job.report.source_label}.`}
+                {job.report.review_status === "draft_not_dipak_adjudicated"
+                  ? " Review status: draft; Dipak has not adjudicated this report."
+                  : " Review status is recorded in the report."}
                 {activeTranscript
                   ? ` Duration: ${time(activeTranscript.duration_ms)}.`
                   : ""}

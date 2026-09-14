@@ -190,19 +190,22 @@ def run() -> int:
             }
             entry["idempotency_key_present"] = True
             entry["body_shape"] = sorted(body)
-            fulfill(route, {
-                "id": "quote-1",
-                "recording_id": "recording-1",
-                "source_revision": "source-1",
-                "recipe_revision": "dipak-report-v1",
-                "cost_label": "No charge in this test workspace",
-                "privacy_summary": "Synthetic review data stays within the approved workspace.",
-                "providers": ["synthetic-review"],
-                "expires_at": "2099-01-01T00:00:00Z",
-                "quote_fingerprint": "f" * 64,
-                "privacy_revision": "privacy-1",
-                "output_kind": "measurements",
-            })
+            fulfill(
+                route,
+                {
+                    "id": "quote-1",
+                    "recording_id": "recording-1",
+                    "source_revision": "source-1",
+                    "recipe_revision": "dipak-report-v1",
+                    "cost_label": "No charge in this test workspace",
+                    "privacy_summary": "Synthetic review data stays within the approved workspace.",
+                    "providers": ["synthetic-review"],
+                    "expires_at": "2099-01-01T00:00:00Z",
+                    "quote_fingerprint": "f" * 64,
+                    "privacy_revision": "privacy-1",
+                    "output_kind": "measurements",
+                },
+            )
             return
         if path.endswith("/quotes/quote-1/approve") and method == "POST":
             assert path == "/v1/conversation/quotes/quote-1/approve"
@@ -316,9 +319,7 @@ def run() -> int:
             page = context.new_page()
             page.on(
                 "request",
-                lambda request: all_requests.append(
-                    {"method": request.method, "url": request.url}
-                ),
+                lambda request: all_requests.append({"method": request.method, "url": request.url}),
             )
             page.route("**/*", guard_non_local)
             page.route("**/v1/conversation/**", handle_api)
@@ -339,9 +340,9 @@ def run() -> int:
                 expect(
                     page.get_by_text("Selecting a file does not upload it.", exact=False)
                 ).to_be_visible()
-                expect(
-                    page.get_by_role("button", name="Continue to analysis")
-                ).to_be_enabled(timeout=5000)
+                expect(page.get_by_role("button", name="Continue to analysis")).to_be_enabled(
+                    timeout=5000
+                )
                 stage = "source_changed"
                 page.get_by_label("Choose sales call audio", exact=True).set_input_files(
                     {"name": "replacement.wav", "mimeType": "audio/wav", "buffer": audio}
@@ -385,7 +386,10 @@ def run() -> int:
                 expect(report_region).to_be_visible(timeout=5000)
                 expect(report_region).to_contain_text("The prospect asked for a clear next step.")
                 expect(report_region).to_contain_text("Name the objection earlier")
-                expect(report_region).to_contain_text("AI draft · Dipak has not reviewed this")
+                expect(report_region).not_to_contain_text("AI draft · Dipak has not reviewed this")
+                expect(report_region).to_contain_text(
+                    "Review status: draft; Dipak has not adjudicated this report."
+                )
                 expect(report_region).not_to_contain_text("draft_not_dipak_adjudicated")
                 report_region.get_by_role("button", name="00:01–00:02").first.click()
                 current_time = page.locator("audio").evaluate("element => element.currentTime")

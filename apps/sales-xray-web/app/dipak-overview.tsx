@@ -4,7 +4,6 @@ import { useId, useEffect, useRef, type ReactNode } from "react";
 import { ArrowUpRight, Gem, Play, Target, TrendingUp } from "lucide-react";
 import type { Finding, ReportEvidence, SalesReport } from "./report-contract";
 import { FindingEvidence } from "./finding-evidence";
-import { getReportUiCopy } from "./report-ui-copy";
 import styles from "./dipak-overview.module.css";
 
 type Props = {
@@ -19,18 +18,34 @@ const time = (ms: number) =>
     .toString()
     .padStart(2, "0")}`;
 
+function SkillMark() {
+  return (
+    <svg className={styles.skillMark} viewBox="0 0 72 72" aria-hidden="true">
+      <path d="M10 55.5 24 41l10 8 18-24 10 9" />
+      <path d="M48 25h14v14" />
+      <circle cx="10" cy="55.5" r="3" />
+      <circle cx="24" cy="41" r="3" />
+      <circle cx="34" cy="49" r="3" />
+      <circle cx="52" cy="25" r="3" />
+      <circle cx="62" cy="34" r="3" />
+    </svg>
+  );
+}
+
 function ReviewBlock({
   number,
   title,
   description,
   children,
   tone = "neutral",
+  expanded = false,
 }: {
   number: string;
   title: string;
   description?: string;
   children: ReactNode;
   tone?: "neutral" | "positive" | "priority";
+  expanded?: boolean;
 }) {
   const header = (
     <>
@@ -41,7 +56,7 @@ function ReviewBlock({
       </div>
     </>
   );
-  if (!["01", "02", "08", "11"].includes(number)) {
+  if (!expanded && !["01", "02", "08", "11"].includes(number)) {
     return (
       <details
         className={`${styles.block} ${styles.fold}`}
@@ -110,6 +125,10 @@ export function DipakOverview({ report, onSelectEvidence }: Props) {
   const primary = report.improvements[0];
   const detail = report.overview;
   const priorities = report.improvements.slice(0, 3);
+  const supportedDimensions = report.dimensions.filter(
+    (dimension) =>
+      dimension.status === "observed" && Boolean(dimension.observation.trim()),
+  );
   const savedStrengths = report.strengths
     .filter((finding) => finding.evidence.length > 0)
     .slice(0, 3);
@@ -254,6 +273,39 @@ export function DipakOverview({ report, onSelectEvidence }: Props) {
         </div>
       )}
 
+      {supportedDimensions.length > 0 && (
+        <ReviewBlock
+          number="10"
+          title="Your sales skills"
+          description="Qualitative observations supported by this call."
+          tone="positive"
+          expanded
+        >
+          <div className={styles.skillLead} data-skill-summary>
+            <div className={styles.skillLeadIntro}>
+              <span className={styles.skillMarkWrap} aria-hidden="true">
+                <SkillMark />
+              </span>
+              <div>
+                <p className={styles.eyebrow}>WHAT THIS CALL SHOWED</p>
+                <p>
+                  A small set of supported observations to carry into your next
+                  conversation. Use them as a starting point for practice.
+                </p>
+              </div>
+            </div>
+            <div className={styles.skillGrid}>
+              {supportedDimensions.map((dimension) => (
+                <article key={dimension.dimension_id}>
+                  <strong>{dimension.label}</strong>
+                  <p>{dimension.observation}</p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </ReviewBlock>
+      )}
+
       <ReviewBlock
         number="01"
         title="What you’re already good at"
@@ -387,7 +439,7 @@ export function DipakOverview({ report, onSelectEvidence }: Props) {
               <article className={styles.finding} key={index}>
                 <h4>{finding.title}</h4>
                 {sourceNote(missed.prospect_signal, "What the prospect said")}
-                {sourceNote(missed.closer_response, "How the closer responded")}
+                {sourceNote(missed.closer_response, "How you responded")}
                 <p>
                   <strong>Explore next:</strong> {missed.follow_up}
                 </p>
@@ -488,33 +540,25 @@ export function DipakOverview({ report, onSelectEvidence }: Props) {
         )}
       </ReviewBlock>
 
-      <ReviewBlock
-        number="10"
-        title="Authority Closers skill review"
-        description="Evidence-based observations across the sales skills."
-      >
-        <div className={styles.skillGrid}>
-          {report.dimensions.map((dimension) => (
-            <div key={dimension.dimension_id}>
-              <strong>{dimension.label}</strong>
-              <span>
-                {getReportUiCopy("en").factorStatus[dimension.status] ??
-                  "Not assessed"}
-              </span>
-              <p>{dimension.observation}</p>
+      {detail?.ethics_notes.length ? (
+        <section
+          className={styles.ethicsBlock}
+          aria-label="Ethics observations"
+        >
+          <div className={styles.ethicsHeading}>
+            <p className={styles.eyebrow}>HUMAN REVIEW NOTE</p>
+            <h3>Ethics observations</h3>
+            <p>
+              Source-linked notes for a human reviewer; no verdict is assigned.
+            </p>
+          </div>
+          {detail.ethics_notes.map((note, index) => (
+            <div key={index}>
+              {sourceNote(note, "Ethics observation · for human review")}
             </div>
           ))}
-        </div>
-        {detail?.ethics_notes.map((note, index) => (
-          <div key={index}>
-            {sourceNote(note, "Ethics observation · for human review")}
-          </div>
-        ))}
-        <p className={styles.empty}>
-          An overall score, closer level and ethics verdict are not approved for
-          this draft.
-        </p>
-      </ReviewBlock>
+        </section>
+      ) : null}
 
       <div id={focusId} className={styles.anchor}>
         <ReviewBlock

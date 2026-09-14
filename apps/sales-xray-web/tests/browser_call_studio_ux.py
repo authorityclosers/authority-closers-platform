@@ -327,8 +327,11 @@ def main() -> None:
         assert report.is_visible()
         page.locator("audio").evaluate("el => el.load()")
         page.wait_for_timeout(500)
-        assert "Source moments" in report.inner_text()
-        assert "Recommended next steps" in report.inner_text()
+        assert "Source moments" not in report.inner_text()
+        assert "Evidence-backed findings" not in report.inner_text()
+        assert "Dimensions observed" not in report.inner_text()
+        assert "Recommended next steps" not in report.inner_text()
+        assert report.locator(".studio-report-metric").count() == 0
         assert "Internal testing" not in page.locator("body").inner_text()
         assert "Advanced: checkpoints" not in page.locator("body").inner_text()
         assert page.locator(".studio-moment").count() == 2
@@ -339,6 +342,7 @@ def main() -> None:
         assert overview.is_visible()
         assert overview.locator('[data-review-point="01"]').is_visible()
         assert overview.locator('[data-review-point="02"]').is_visible()
+        assert overview.locator('[data-review-point="10"]').count() == 0
         assert overview.locator('[data-review-point="13"]').count() == 0
         fold = overview.locator('[data-review-point="05"]')
         assert not fold.evaluate("el => el.open")
@@ -438,7 +442,8 @@ def main() -> None:
         assert not page.get_by_role("combobox", name="Audio channel", exact=True).is_visible()
         assert not page.get_by_role("tablist").is_visible()
         assert report.is_visible()
-        assert "AI draft · Dipak has not reviewed this" in report.inner_text()
+        assert "AI draft · Dipak has not reviewed this" not in report.inner_text()
+        assert "Review status: draft; Dipak has not adjudicated this report." in report.inner_text()
         page.screenshot(
             path=str(AUDIT_DIR / "report-print-layout.png"), full_page=True, animations="disabled"
         )

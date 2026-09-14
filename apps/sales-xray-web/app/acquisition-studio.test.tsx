@@ -2,6 +2,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import Page from "./page";
+import { remainingAllowanceLabel } from "./acquisition-studio";
 import {
   allowance,
   entry,
@@ -30,6 +31,7 @@ let existing: boolean,
   accepted: boolean,
   claimed: boolean,
   failedUpload: boolean,
+  sessionUnauthorized: boolean,
   lookupUnavailable: boolean,
   deletionDenied: boolean;
 let reportBody: unknown;
@@ -87,6 +89,7 @@ beforeEach(() => {
   accepted = false;
   claimed = false;
   failedUpload = false;
+  sessionUnauthorized = false;
   lookupUnavailable = false;
   deletionDenied = false;
   reportBody = envelope;
@@ -118,6 +121,7 @@ beforeEach(() => {
           existing = true;
           return response({ state: "guest", allowance }, 201);
         }
+        if (sessionUnauthorized) return response({}, 401);
         return existing
           ? response({
               state: claimed ? "claim_required" : "guest",
@@ -198,6 +202,22 @@ it("the actual page requires both consents, then shows the fourteen-point report
     container.querySelector('[aria-label="Sales call report"]'),
   ).not.toBeNull();
   expect(container.textContent).toContain(envelope.report.content.summary);
+  expect(container.textContent).toContain("Remaining analysis time · 99m 55s");
+  expect(container.textContent).not.toContain("free audio minutes");
+  expect(container.textContent).not.toContain(
+    "AI draft · not yet reviewed by Dipak",
+  );
+  expect(container.querySelectorAll(".studio-report-metric")).toHaveLength(0);
+  expect(container.textContent).not.toContain("Call length");
+  expect(container.textContent).toContain(
+    "Review status: draft; Dipak has not adjudicated this report.",
+  );
+  expect(container.textContent).toContain(`Source: ${envelope.source_label}.`);
+  const details = container.querySelector<HTMLDetailsElement>(
+    ".studio-report-details",
+  );
+  expect(details).not.toBeNull();
+  expect(details?.open).toBe(false);
   expect(container.querySelectorAll('[role="tab"]')).toHaveLength(3);
   expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
   for (const call of calls) {
@@ -206,6 +226,36 @@ it("the actual page requires both consents, then shows the fourteen-point report
   }
   await click("Transcript & moments");
   expect(container.textContent).toContain("कल timing discuss करूया.");
+});
+
+it("shows the advertised trial allowance for a clean visitor", async () => {
+  await mount();
+  expect(container.textContent).toContain("Up to 100m trial allowance");
+  expect(container.textContent).not.toContain("unavailable until your session");
+});
+
+it("does not treat the advertised trial allowance as confirmed for a saved selector after 401", async () => {
+  sessionUnauthorized = true;
+  localStorage.setItem("ac.xray.submission.v1", submissionId);
+  await mount();
+  expect(container.textContent).toContain(
+    "Remaining analysis time · unavailable until your session is confirmed",
+  );
+  expect(container.textContent).not.toContain("Up to 100m trial allowance");
+});
+
+it.each([
+  [0, "Remaining analysis time · 0m 00s · exhausted"],
+  [45, "Remaining analysis time · 0m 45s"],
+])("formats a confirmed %s-second allowance", (seconds, expected) => {
+  const confirmed = {
+    allowance_seconds: allowance.allowance_seconds,
+    committed_seconds: allowance.allowance_seconds - seconds,
+    available_seconds: seconds,
+  };
+  expect(
+    remainingAllowanceLabel(confirmed, allowance.allowance_seconds, false),
+  ).toBe(expected);
 });
 
 it("retry keeps the same submission and source instead of a second charge", async () => {

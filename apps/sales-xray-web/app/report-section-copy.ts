@@ -3,7 +3,6 @@ import type { MeasurementLanguage } from "./measurement-copy";
 type SectionCopy = {
   heading: string;
   title: string;
-  draft: string;
   strengths: string;
   missed: string;
   improvements: string;
@@ -20,7 +19,6 @@ export const REPORT_SECTION_COPY: Record<MeasurementLanguage, SectionCopy> = {
   en: {
     heading: "YOUR SALES CALL REPORT",
     title: "What to take into your next call.",
-    draft: "AI draft · Dipak has not reviewed this",
     strengths: "What went well",
     missed: "What to improve",
     improvements: "What to say next",
@@ -36,7 +34,6 @@ export const REPORT_SECTION_COPY: Record<MeasurementLanguage, SectionCopy> = {
   hi: {
     heading: "आपकी बिक्री कॉल की रिपोर्ट",
     title: "अगली कॉल में क्या अपनाएँ।",
-    draft: "AI का मसौदा · दीपक ने अभी इसकी समीक्षा नहीं की है",
     strengths: "क्या अच्छा रहा",
     missed: "कहाँ सुधार करना है",
     improvements: "आगे क्या कहें",
@@ -52,7 +49,6 @@ export const REPORT_SECTION_COPY: Record<MeasurementLanguage, SectionCopy> = {
   mr: {
     heading: "तुमच्या विक्री कॉलचा अहवाल",
     title: "पुढच्या कॉलमध्ये काय वापराल.",
-    draft: "AI चा मसुदा · दीपक यांनी अजून याचे परीक्षण केलेले नाही",
     strengths: "काय चांगले झाले",
     missed: "कुठे सुधारणा करावी",
     improvements: "पुढे काय बोलावे",
@@ -68,7 +64,6 @@ export const REPORT_SECTION_COPY: Record<MeasurementLanguage, SectionCopy> = {
   "en-hi-mixed": {
     heading: "YOUR SALES CALL REPORT · आपकी कॉल की रिपोर्ट",
     title: "Your next call · अगली कॉल में क्या अपनाएँ।",
-    draft: "AI draft · दीपक ने अभी review नहीं किया है",
     strengths: "What went well · क्या अच्छा रहा",
     missed: "What to improve · कहाँ सुधार करें",
     improvements: "What to say next · आगे क्या कहें",

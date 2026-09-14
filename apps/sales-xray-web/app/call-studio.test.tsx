@@ -521,9 +521,16 @@ describe("CallStudio", () => {
     );
     expect(container.textContent).toContain("Name the objection earlier");
     expect(container.textContent).toContain("Questions and concerns");
-    expect(container.textContent).toContain(
+    expect(container.textContent).not.toContain(
       "AI draft · Dipak has not reviewed this",
     );
+    expect(container.textContent).toContain(
+      "Review status: draft; Dipak has not adjudicated this report.",
+    );
+    expect(
+      container.querySelector<HTMLDetailsElement>(".studio-report-details")
+        ?.open,
+    ).toBe(false);
     expect(container.textContent).not.toContain("draft_not_dipak_adjudicated");
     expect(container.textContent).not.toContain("Source SHA-256");
     expect(container.textContent).not.toContain("weights total 95");
@@ -540,7 +547,7 @@ describe("CallStudio", () => {
     expect(audio?.currentTime).toBe(1.5);
   });
 
-  it("shows source-derived report measurements in an English shell", async () => {
+  it("keeps source exploration available without technical report measurement cards", async () => {
     vi.useFakeTimers();
     await render();
     const file = await selectAudio("language-mode.wav");
@@ -553,15 +560,14 @@ describe("CallStudio", () => {
     await act(async () => vi.advanceTimersByTimeAsync(2500));
     await flush();
 
-    expect(container.textContent).toContain("Source moments");
-    expect(container.textContent).toContain("Evidence-backed findings");
-    expect(container.textContent).toContain("Recommended next steps");
+    expect(container.textContent).not.toContain("Source moments");
+    expect(container.textContent).not.toContain("Evidence-backed findings");
+    expect(container.textContent).not.toContain("Recommended next steps");
     const reportMetrics = container.querySelectorAll(".studio-report-metric");
-    expect(reportMetrics).toHaveLength(4);
-    expect(reportMetrics[3]?.querySelector("strong")?.textContent).toBe("1");
+    expect(reportMetrics).toHaveLength(0);
     expect(container.textContent).not.toContain("No approved score");
     expect(container.textContent).not.toContain("source 95 / declared 100");
-    expect(container.textContent).toContain("Dimensions observed");
+    expect(container.textContent).not.toContain("Dimensions observed");
     const factors = container.querySelector('[aria-label="Sales factors"]');
     expect(factors?.querySelectorAll("details")).toHaveLength(8);
     expect(factors?.textContent).toContain("Dimension 1");
@@ -575,7 +581,8 @@ describe("CallStudio", () => {
     expect(factorRows.every((detail) => detail.open)).toBe(true);
     await act(async () => window.dispatchEvent(new Event("afterprint")));
     expect(factorRows.filter((detail) => detail.open)).toEqual([factorRows[0]]);
-    expect(container.textContent).toContain("Observed: 0 of 8");
+    expect(container.textContent).not.toContain("Observed: 0 of 8");
+    expect(container.querySelector('[data-review-point="10"]')).toBeNull();
     expect(container.textContent).toContain("Moments from your call");
     expect(container.querySelectorAll(".studio-moment")).toHaveLength(2);
 

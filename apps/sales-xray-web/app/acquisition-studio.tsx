@@ -68,10 +68,30 @@ const message = (error: unknown) =>
     ? error.message
     : "This result could not be verified. Try again; your completed work stays saved.";
 
+export function remainingAllowanceLabel(
+  allowance: Allowance | null,
+  advertisedSeconds: number | null,
+  unknown: boolean,
+): string {
+  if (allowance) {
+    const minutes = Math.floor(allowance.available_seconds / 60);
+    const remainder = String(allowance.available_seconds % 60).padStart(2, "0");
+    return allowance.available_seconds === 0
+      ? `Remaining analysis time · ${minutes}m ${remainder}s · exhausted`
+      : `Remaining analysis time · ${minutes}m ${remainder}s`;
+  }
+  if (unknown)
+    return "Remaining analysis time · unavailable until your session is confirmed";
+  if (advertisedSeconds !== null)
+    return `Up to ${Math.floor(advertisedSeconds / 60)}m trial allowance`;
+  return "Remaining analysis time · checking…";
+}
+
 export function AcquisitionStudio() {
   const [entry, setEntry] = useState<Entry | null>(null);
   const [policy, setPolicy] = useState<UploadPolicy | null>(null);
   const [allowance, setAllowance] = useState<Allowance | null>(null);
+  const [allowanceUnknown, setAllowanceUnknown] = useState(false);
   const [session, setSession] = useState(false);
   const [claimAvailable, setClaimAvailable] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -126,6 +146,7 @@ export function AcquisitionStudio() {
         const terms = parsePolicy(
           await acquisition("/upload-policy", { signal }),
         );
+        const saved = savedSubmissionId();
         let current: Record<string, unknown> | null = null;
         try {
           current = record(await acquisition("/session", { signal }));
@@ -138,6 +159,7 @@ export function AcquisitionStudio() {
         setSession(current !== null);
         if (current) {
           setAllowance(parseAllowance(current.allowance));
+          setAllowanceUnknown(false);
           setClaimAvailable(
             current.claim_available === true ||
               current.state === "claim_required",
@@ -148,7 +170,7 @@ export function AcquisitionStudio() {
           )
             return;
         }
-        const saved = savedSubmissionId();
+        setAllowanceUnknown(saved !== null);
         if (saved) {
           try {
             const loaded = await acquisition(submissionPath(saved), { signal });
@@ -356,6 +378,7 @@ export function AcquisitionStudio() {
           if (signal.aborted) return;
           setSession(true);
           setAllowance(parseAllowance(issued.allowance));
+          setAllowanceUnknown(false);
         } finally {
           if (!signal.aborted) {
             setToken("");
@@ -393,6 +416,7 @@ export function AcquisitionStudio() {
         throw new Error("uploaded_source_mismatch");
       if (signal.aborted) return;
       setAllowance(parseAllowance(raw.allowance));
+      setAllowanceUnknown(false);
       setSubmission(bound);
       setConsent(false);
     });
@@ -490,6 +514,7 @@ export function AcquisitionStudio() {
       if (claimed.state !== "claimed") throw new Error("claim_unconfirmed");
       if (!signal.aborted) {
         setAllowance(parseAllowance(claimed.allowance));
+        setAllowanceUnknown(false);
         setClaimAvailable(false);
         setSession(true);
         setResult(null);
@@ -548,11 +573,6 @@ export function AcquisitionStudio() {
   const currentStage = progress?.stages.findLast(
     (stage) => stage.state !== "completed",
   );
-  const count = allowance
-    ? Math.floor(allowance.available_seconds / 60)
-    : entry?.allowance_seconds
-      ? Math.floor(entry.allowance_seconds / 60)
-      : null;
   const source = submission
     ? `${ACQUISITION}${submissionPath(submission.id)}/source`
     : audioUrl;
@@ -755,13 +775,15 @@ export function AcquisitionStudio() {
               disabled={!policy || !!busy || !!submission || !!deletionOnlyId}
               onChange={(event) => choose(event.target.files?.[0])}
             />
-            {!submission && !deletionOnlyId && policy && (
+            {!deletionOnlyId && policy && (
               <div className={styles.allowance}>
                 <ShieldCheck size={16} />
                 <span>
-                  {count === null
-                    ? "Private call analysis"
-                    : `${count} free audio minutes ${allowance ? "remaining" : "to get started"}`}
+                  {remainingAllowanceLabel(
+                    allowance,
+                    entry?.allowance_seconds ?? null,
+                    allowanceUnknown,
+                  )}
                 </span>
               </div>
             )}
@@ -1040,7 +1062,6 @@ export function AcquisitionStudio() {
             <p className="eyebrow">YOUR SALES CALL REPORT</p>
             <h1>What to keep. What to change.</h1>
             <p className="studio-report-summary">{report.summary}</p>
-            <span className="pill">AI draft · not yet reviewed by Dipak</span>
             <div className="studio-report-actions">
               <button
                 type="button"
@@ -1057,27 +1078,6 @@ export function AcquisitionStudio() {
               >
                 Analyse another call <ArrowRight size={16} />
               </button>
-            </div>
-            <div
-              className="studio-report-metrics"
-              role="list"
-              aria-label="Report measurements"
-            >
-              <div className="studio-report-metric" role="listitem">
-                <span>Call length</span>
-                <strong>{time(result.transcript.duration_ms)}</strong>
-                <small>Source recording clock</small>
-              </div>
-              <div className="studio-report-metric" role="listitem">
-                <span>Transcript segments</span>
-                <strong>{result.transcript.segments.length}</strong>
-                <small>Original words and script</small>
-              </div>
-              <div className="studio-report-metric" role="listitem">
-                <span>Next improvements</span>
-                <strong>{report.improvements.length}</strong>
-                <small>A focused practice plan</small>
-              </div>
             </div>
             <ReportExplorer
               label="Explore your sales report"
@@ -1133,6 +1133,17 @@ export function AcquisitionStudio() {
                 </Link>
               </aside>
             )}
+            <details className="studio-report-details">
+              <summary lang="en">Report details</summary>
+              <p lang="en">
+                This draft uses evidence from the authorized recording. Speaker
+                labels remain unverified.{` Source: ${report.source_label}.`}
+                {report.review_status === "draft_not_dipak_adjudicated"
+                  ? " Review status: draft; Dipak has not adjudicated this report."
+                  : " Review status is recorded in the report."}
+                {` Duration: ${time(result.transcript.duration_ms)}.`}
+              </p>
+            </details>
           </section>
         )}
       </main>

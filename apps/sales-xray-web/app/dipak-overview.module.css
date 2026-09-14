@@ -1,14 +1,21 @@
 .overview {
   --positive: #19695a;
   --priority: #9c4c18;
+  --positive-soft: #eef7f3;
+  --priority-soft: #fff5eb;
+  --ink-soft: #455a6b;
+  --line-strong: #c8d4df;
   color: var(--ink, #203243);
 }
 .intro {
+  position: relative;
   display: flex;
   align-items: end;
   justify-content: space-between;
   gap: 24px;
-  margin: 8px 0 28px;
+  margin: 8px 0 30px;
+  padding: 4px 0 22px;
+  border-bottom: 1px solid var(--border, #dae2ee);
 }
 .eyebrow {
   font-size: 10px;
@@ -24,6 +31,15 @@
   line-height: 1.25;
   margin: 0;
   letter-spacing: -0.025em;
+}
+.intro::after {
+  position: absolute;
+  right: 6px;
+  bottom: -1px;
+  width: 92px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #83b7aa);
+  content: "";
 }
 .shortcuts {
   display: flex;
@@ -47,6 +63,19 @@
   padding: 24px;
   margin: 0 0 20px;
   min-width: 0;
+  background: color-mix(
+    in srgb,
+    var(--surface, #fff) 92%,
+    var(--canvas, #f5f7fb)
+  );
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+.block:hover {
+  border-color: var(--line-strong);
+  box-shadow: 0 12px 28px rgba(32, 50, 67, 0.06);
 }
 .block[data-tone="positive"] {
   border-top: 3px solid #74b7a6;
@@ -85,6 +114,10 @@
   font-size: 17px;
   line-height: 1.4;
   margin: 3px 0 0;
+}
+.blockHeading h3,
+.groupHeading h3 {
+  text-wrap: balance;
 }
 .blockHeading p {
   color: var(--muted, #617085);
@@ -130,6 +163,72 @@
   background: var(--canvas, #f5f7fb);
   padding: 20px;
   border-radius: 12px;
+}
+.ethicsBlock {
+  margin: 0 0 20px;
+  padding: 20px 24px 4px;
+  border: 1px solid #d8dfe8;
+  border-left: 3px solid #8e9bad;
+  border-radius: 10px;
+  background: #fafbfd;
+}
+.ethicsHeading {
+  margin-bottom: 18px;
+}
+.ethicsHeading h3 {
+  margin: 0 0 5px;
+  font-size: 17px;
+}
+.ethicsHeading p:last-child {
+  margin: 0;
+  color: var(--muted, #617085);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.skillLead {
+  display: grid;
+  gap: 20px;
+}
+.skillLeadIntro {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid #cfe3dc;
+  border-radius: 10px;
+  background: linear-gradient(115deg, var(--positive-soft), #f8fbfa 68%);
+}
+.skillLeadIntro p:last-child {
+  max-width: 680px;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.skillMarkWrap {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border: 1px solid #a8cfc3;
+  border-radius: 16px 16px 16px 4px;
+  background: #fff;
+  color: var(--positive);
+}
+.skillMark {
+  width: 42px;
+  height: 42px;
+  overflow: visible;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.2;
+}
+.skillMark circle {
+  fill: currentColor;
+  stroke: none;
 }
 .sourceNote {
   min-width: 0;
@@ -266,10 +365,17 @@
   background: var(--canvas, #f5f7fb);
   cursor: pointer;
   color: inherit;
-  transition: background 140ms ease;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    transform 140ms ease,
+    box-shadow 140ms ease;
 }
 .rewatch > button:hover {
   background: #edf2fa;
+  border-color: #b8c7df;
+  box-shadow: 0 7px 18px rgba(32, 50, 67, 0.07);
+  transform: translateY(-1px);
 }
 .play {
   display: grid;
@@ -311,24 +417,28 @@
 }
 .skillGrid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
   gap: 12px;
 }
-.skillGrid > div {
+.skillGrid > article {
   padding: 14px;
+  border: 1px solid var(--border, #dae2ee);
+  border-radius: 9px;
   background: var(--canvas, #f5f7fb);
-  border-radius: 8px;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease;
+}
+.skillGrid > article:hover {
+  border-color: #a9c7bd;
+  background: #f4faf7;
+  transform: translateY(-1px);
 }
 .skillGrid strong {
   display: block;
   font-size: 12px;
   line-height: 1.6;
-}
-.skillGrid span {
-  display: inline-block;
-  color: var(--muted, #617085);
-  margin-top: 6px;
-  font-size: 10px;
 }
 .skillGrid p {
   font-size: 12px;
@@ -374,6 +484,38 @@
 .overview button:focus-visible {
   outline: 2px solid var(--action, #3150c8);
   outline-offset: 4px;
+  box-shadow: 0 0 0 5px rgba(49, 80, 200, 0.12);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .block {
+    animation: overview-rise 360ms ease both;
+  }
+  .block:nth-of-type(2n) {
+    animation-delay: 45ms;
+  }
+  .fold[open] .foldContent {
+    animation: fold-in 190ms ease both;
+  }
+}
+@keyframes overview-rise {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes fold-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 @media (max-width: 760px) {
   .intro {
@@ -396,19 +538,22 @@
     border-top: 1px solid var(--border, #dae2ee);
     padding: 18px 0 0;
   }
+  .skillLeadIntro {
+    align-items: start;
+  }
 }
 @media (max-width: 480px) {
   .block {
     padding: 17px 14px;
+  }
+  .ethicsBlock {
+    padding: 17px 14px 1px;
   }
   .blockHeading {
     gap: 10px;
   }
   .blockHeading h3 {
     font-size: 15px;
-  }
-  .skillGrid {
-    grid-template-columns: 1fr;
   }
   .rewatch > button {
     flex-wrap: wrap;
@@ -425,8 +570,12 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  .block,
+  .skillGrid > article,
   .rewatch > button {
     transition: none;
+    animation: none;
+    transform: none;
   }
 }
 @media print {
@@ -449,7 +598,7 @@
     margin-top: 14px;
   }
   .rewatch > button,
-  .skillGrid > div {
+  .skillGrid > article {
     break-inside: avoid;
   }
   .timestamp {

@@ -167,6 +167,37 @@
 .withReport {
   grid-template-columns: 1fr;
 }
+.withReport .upload {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(260px, 0.8fr);
+  gap: 4px 20px;
+  align-items: center;
+  padding: 18px 24px;
+  text-align: left;
+}
+.withReport .upload :global(.studio-file) {
+  grid-column: 1;
+}
+.withReport .upload audio {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  margin: 0;
+}
+.withReport .upload > :global(.small-text) {
+  grid-column: 1;
+  margin: 0;
+}
+.withReport .upload .allowance {
+  grid-column: 1;
+  justify-content: flex-start;
+  margin-top: 10px;
+  padding-top: 10px;
+}
+.withReport .upload .callActions {
+  grid-column: 1 / -1;
+  margin-top: 10px;
+  padding-top: 10px;
+}
 .report {
   margin-top: 24px;
 }
@@ -203,6 +234,25 @@
   .claim > :last-child {
     width: 100%;
     justify-content: center;
+  }
+  .withReport .upload {
+    grid-template-columns: 1fr;
+    gap: 4px;
+    padding: 18px;
+  }
+  .withReport .upload audio {
+    grid-column: auto;
+    grid-row: auto;
+    margin: 9px 0;
+  }
+  .withReport .upload > :global(.small-text),
+  .withReport .upload .allowance,
+  .withReport .upload .callActions {
+    grid-column: auto;
+  }
+  .withReport .upload .allowance {
+    margin-top: 8px;
+    padding-top: 8px;
   }
 }
 @media print {

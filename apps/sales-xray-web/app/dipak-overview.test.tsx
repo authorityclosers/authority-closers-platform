@@ -88,7 +88,6 @@ it("presents the supplied priorities and one focus without generating scores, es
     "07",
     "08",
     "09",
-    "10",
     "11",
     "12",
     "14",
@@ -139,15 +138,19 @@ it("presents each distinct detailed field, its uncertainty and its stored next-c
     overview.missed_details[0].follow_up,
     overview.prospect_interpretations[0].possible_concern,
     overview.conversation_change!.possible_effect,
-    overview.ethics_notes[0].text,
     overview.next_call_focus!.target,
     overview.practice!.success_condition,
     overview.final_assessment.assessment,
   ]) {
     expect(container.textContent).toContain(content);
   }
+  expect(container.textContent).toContain(overview.ethics_notes[0].text);
   expect(container.textContent).toContain("Possible concern · inference");
   expect(container.textContent).toContain("Possible effect · inference");
+  expect(container.querySelector('[data-review-point="10"]')).toBeNull();
+  expect(
+    container.querySelector('[aria-label="Ethics observations"]'),
+  ).not.toBeNull();
   expect(container.querySelector('[data-review-point="13"]')).toBeNull();
   const clips = container.querySelectorAll<HTMLButtonElement>(
     '[data-review-point="08"] button',
@@ -273,6 +276,38 @@ it("does not pad an empty report with template examples or invented improvements
   ).toContain("has not been identified");
   expect(container.querySelector('[data-review-point="12"] ol')).toBeNull();
   expect(container.textContent).not.toContain("I need to think");
+  expect(container.querySelector("[data-skill-summary]")).toBeNull();
+  expect(container.querySelector('[data-review-point="10"]')).toBeNull();
+});
+
+it("leads with supported qualitative skills and never renders a score", async () => {
+  const value = report();
+  value.dimensions = [
+    {
+      dimension_id: "discovery",
+      label: "Discovery",
+      status: "observed",
+      observation: "You asked a clear question before presenting the offer.",
+      citations: [{ doc: "Doc-1", sections: ["Discovery"] }],
+    },
+    {
+      dimension_id: "closing",
+      label: "Closing",
+      status: "unknown",
+      observation: "No supported observation was returned.",
+      citations: [{ doc: "Doc-1", sections: ["Closing"] }],
+    },
+  ];
+  await render(value);
+  const summary = container.querySelector("[data-skill-summary]");
+  expect(summary).not.toBeNull();
+  expect(summary?.textContent).toContain("Discovery");
+  expect(summary?.textContent).toContain(
+    "You asked a clear question before presenting the offer.",
+  );
+  expect(summary?.textContent).not.toContain("Closing");
+  expect(container.textContent).not.toMatch(/\b(?:score|radar|\d+%)\b/i);
+  expect(container.querySelector('[data-review-point="10"]')).not.toBeNull();
 });
 
 it("prints every review point and nested quote then restores both disclosure states", async () => {

@@ -422,7 +422,17 @@ def _exercise_browser(backend: BrowserBackend, evidence: Path) -> None:
                 )
             expect(
                 page.get_by_text("AI draft · Dipak has not reviewed this", exact=True)
+            ).to_have_count(0)
+            details = page.get_by_text("Report details", exact=True)
+            details.click()
+            expect(
+                page.get_by_text(
+                    "Review status: draft; Dipak has not adjudicated this report.",
+                    exact=False,
+                )
             ).to_be_visible()
+            details.click()
+            checks.append("Review provenance remains available in collapsed Report details.")
             page.wait_for_function("document.querySelector('audio')?.readyState >= 1")
             assert page.locator("audio").get_attribute("src") == (
                 f"/v1/conversation/recordings/{backend.recording_id}/source"

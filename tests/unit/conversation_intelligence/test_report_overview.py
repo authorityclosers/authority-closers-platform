@@ -9,6 +9,7 @@ import pytest
 
 from ac_platform.conversation_intelligence.checkpoints import canonical
 from ac_platform.conversation_intelligence.inference_tasks import (
+    prepare_coaching_input,
     prepare_fact_inputs,
     prepare_scribe_input,
 )
@@ -140,6 +141,63 @@ def test_new_template_changes_only_coaching_input_and_preserves_token_ceiling() 
     assert new["max_completion_tokens"] == old["max_completion_tokens"]
     assert prepare_scribe_input(transcript["source_sha256"], 1000) == c2
     assert prepare_fact_inputs(transcript) == c4
+
+
+@pytest.mark.parametrize(
+    ("provider", "model"),
+    [("groq", "openai/gpt-oss-120b"), ("gemini", "gemini-3.8-flash")],
+)
+def test_direct_coaching_voice_changes_c5_binding_without_retranscription(
+    monkeypatch: pytest.MonkeyPatch, provider: str, model: str
+) -> None:
+    from ac_platform.conversation_intelligence import reports
+
+    transcript = _transcript()
+    original_transcript = deepcopy(transcript)
+    c2 = prepare_scribe_input(transcript["source_sha256"], 1000)
+    c4 = prepare_fact_inputs(transcript)
+    packet = parse_fact_packet(
+        {
+            "overview": "The buyer asks about price.",
+            "observations": [
+                {"fact": "The buyer asks about price.", "segment_id": "s1", "quote": "price"}
+            ],
+            "uncertainties": [],
+        },
+        transcript,
+    )
+    before_facts = packet.model_dump(mode="json")
+    with monkeypatch.context() as old_voice:
+        old_voice.setattr(reports, "COACHING_VOICE_INSTRUCTION", "")
+        previous = prepare_coaching_input(transcript, [packet], provider=provider, model=model)
+    current = prepare_coaching_input(transcript, [packet], provider=provider, model=model)
+    assert previous.input_sha256 != current.input_sha256
+    assert previous.profile_revision == current.profile_revision
+    assert previous.transcript_revision == current.transcript_revision
+    assert previous.max_completion_tokens == current.max_completion_tokens
+    assert b"REPORT_VOICE: direct-coaching-v1" in current.payload
+    assert b"using you/your" in current.payload
+    assert b"Preserve verbatim source quotes and speaker labels" in current.payload
+    assert b"never personalize prospect/customer statements" in current.payload
+    assert transcript == original_transcript
+    assert packet.model_dump(mode="json") == before_facts
+    assert prepare_scribe_input(transcript["source_sha256"], 1000) == c2
+    assert prepare_fact_inputs(transcript) == c4
+
+
+def test_direct_voice_preserves_broker_trailing_profile_and_legacy_format() -> None:
+    transcript = _transcript()
+    packet = parse_fact_packet(
+        {"overview": "Synthetic fact.", "observations": [], "uncertainties": []},
+        transcript,
+    )
+    for detailed in (True, False):
+        request = build_report_groq_prompt(transcript, [packet], detailed_overview=detailed)
+        system = request["messages"][0]["content"]
+        assert "REPORT_VOICE: direct-coaching-v1" in system
+        profile = json.loads(system.rsplit("Profile:\n", 1)[1])
+        assert profile["revision"]
+        assert "REPORT_VOICE" not in request["messages"][1]["content"]
 
 
 def test_shared_browser_fixture_passes_the_authoritative_backend_parser() -> None:

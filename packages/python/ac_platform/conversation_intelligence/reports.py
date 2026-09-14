@@ -36,6 +36,15 @@ DEFAULT_INPUT_CHARS = 16_000
 MAX_PROFILE_PROMPT_CHARS = 16_000
 _MAX_EVIDENCE_QUOTE_CHARS = 2_000
 REVIEW_STATUS = "draft_not_dipak_adjudicated"
+COACHING_VOICE_INSTRUCTION = (
+    "REPORT_VOICE: direct-coaching-v1. Write coaching prose directly to the person "
+    "practicing the closer role, using you/your and short, plain sentences. "
+    "For example: 'You checked who makes the decision.' Do not narrate that person "
+    "as 'the seller' or 'the closer', and do not speak as Dipak. Preserve verbatim "
+    "source quotes and speaker labels; never personalize prospect/customer statements "
+    "or infer voice identity. When attribution is unclear, say so. Missing skill "
+    "evidence is not poor performance. "
+)
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _FORBIDDEN_NUMERIC_KEY = re.compile(
     r"(?:score|grade|rating|points?|numeric|percent|percentage|rank|overall_score)",
@@ -1062,6 +1071,7 @@ def build_report_groq_prompt(
         "requested draft fields: summary, strengths, missed_opportunities, improvements, "
         "objection_analysis, closing_analysis, verdict, review_status, "
         + output_fields
+        + COACHING_VOICE_INSTRUCTION
         + "Every finding requires title, explanation and an "
         "evidence array with exact quote, segment_id, start_ms and end_ms. Do not score, grade, "
         "rank or publish an official result. Set review_status to "
