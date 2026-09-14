@@ -61,3 +61,9 @@ provider from the intake transaction: a separate exact plan acceptance still
 supplies its fingerprint, expiry, privacy revision and budget checks. Focused
 upload-policy regression and Ruff passed. The matching UI must carry consent
 only for its current selected submission, never a restored or different file.
+
+The standalone runtime omitted its public directory, explaining the broken
+Dipak artwork despite the asset being present in source. The Docker runtime now
+copies public assets. The image workflow requests the real WebP over HTTP and
+compares its bytes with the bundled file after starting the built container;
+this check must pass on the next exact-SHA image before deployment.

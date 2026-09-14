@@ -50,6 +50,9 @@ COPY --from=build --chown=node:node /workspace/apps/sales-xray-web/.next/standal
 COPY --from=build --chown=node:node \
     /workspace/apps/sales-xray-web/.next/static \
     ./apps/sales-xray-web/.next/static
+COPY --from=build --chown=node:node \
+    /workspace/apps/sales-xray-web/public \
+    ./apps/sales-xray-web/public
 
 RUN test -n "$AC_RELEASE_ID" && \
     printf '%s\n' "$AC_RELEASE_ID" > /app/.ac-release-id && \
