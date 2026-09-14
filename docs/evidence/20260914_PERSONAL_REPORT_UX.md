@@ -71,6 +71,15 @@ is not a grade or an approved assessment of a person's fixed traits.
 
 ## Campaign controls follow-up
 
+Final visual verification found the legacy `.studio-report article` rule overriding
+skill-card spacing in CallStudio. The overview now scopes its card padding and
+width explicitly. The optimized build passed again (`build-card-spacing-final.log`);
+the real built browser reports 14px padding and no inherited maximum width
+(`skill-spacing-browser.json`, `supported-skill-spacing-final.png`). This was a
+CSS-only follow-up to the integrated 133-test UI run and 17-test layout follow-up.
+Use the viewport screenshots for visual review: this in-app browser's full-page
+captures showed repeated paint regions despite single matching DOM nodes.
+
 The owner also requested visible remaining minutes and a cost analysis for
 100 students within INR10,000. Quota/identity/abuse enforcement is being checked
 separately against current source and runtime evidence. This note does not change
