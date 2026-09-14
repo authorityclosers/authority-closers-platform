@@ -225,6 +225,48 @@ mount capacity/options/ownership, and a supervised stop/restart with successful
 worker reconnection. The earlier native receipt proves native execution; it does
 not claim this newly rendered supervisor was installed or restart-tested.
 
+The source-owned installer for this release is
+`infra/application/scripts/install-sales-xray-native.py`. It consumes the exact
+source-rendered `native-units.json`; it does not accept hand-authored unit text.
+Execute the byte-verified immutable operator artifact for this leaf from
+`operator-inputs/native-installer-reviewed`; do not copy this script into or
+modify the frozen application release directory.
+The installer also verifies the fixed empty system group
+`ac-sales-xray-native` at GID `10001`, creating it through its pinned group
+operator only when the group is absent. A different name or GID, or any group
+member, blocks activation. Dry-run reports a missing group without creating it.
+After the enabled activation descriptor and its digest have been reviewed, run
+the following on the host for a dry verification, then repeat with `--start`
+for the actual environment. Replace only the descriptor path, its SHA-256 and
+the receipt filename with the reviewed values:
+
+```text
+sudo /usr/bin/python3 /srv/authority-closers/application/operator-inputs/native-installer-reviewed/install-sales-xray-native.py \
+  --environment staging \
+  --native-units /srv/authority-closers/application/operator-inputs/staging/native-units.json \
+  --native-units-sha256 <reviewed-native-units-sha256> \
+  --native-image-config-id sha256:75e3b01d100534ce667a97822ab34216b09553f820b60bd1753816f7f57ef9 \
+  --receipt /srv/authority-closers/application/deployments/staging/native-unit-install-reviewed.json \
+  --dry-run
+
+sudo /usr/bin/python3 /srv/authority-closers/application/operator-inputs/native-installer-reviewed/install-sales-xray-native.py \
+  --environment staging \
+  --native-units /srv/authority-closers/application/operator-inputs/staging/native-units.json \
+  --native-units-sha256 <reviewed-native-units-sha256> \
+  --native-image-config-id sha256:75e3b01d100534ce667a97822ab34216b09553f820b60bd1753816f7f57ef9 \
+  --receipt /srv/authority-closers/application/deployments/staging/native-unit-install-reviewed.json \
+  --start
+```
+
+Use `production` and its separately reviewed descriptor/receipt for production.
+The installer holds the shared application deployment lock, verifies the
+renderer SHA and exact helper/image bindings, validates the staged units with
+`systemd-analyze`, and atomically publishes root-owned mode-0644 unit files.
+It starts the output mount before the helper, records active/enabled state and
+fragment paths, and keeps prior unit bytes in a versioned rollback directory.
+Any failure after publication restores those bytes and the prior systemd state;
+the receipt contains hashes and status only.
+
 ## Coordinated API/worker activation and rollback
 
 The canonical application installer owns activation, update and rollback. Its
