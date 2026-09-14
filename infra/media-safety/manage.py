@@ -51,6 +51,10 @@ LEGACY_HEALTH_TEST = ["CMD", "clamdcheck.sh"]
 # It may be validated only as a named transition source or emergency rollback
 # target; it can never mint a new readiness proof under this controller.
 LEGACY_HEALTH_RELEASES = frozenset({"3eb24da05caced66f15dcfe58ffc086014da8b0d"})
+# This deployed release has the current IPv4 health and shared socket/temp
+# policy, but predates the image-socket bridge. It is a valid transition source
+# and must not be treated as the older legacy-health release.
+PRE_WRAPPER_RELEASES = frozenset({"5c8b39249176b8030e7cca1d678c20ea7cb956ea"})
 LEGACY_FILES = FILES - {ENTRYPOINT_FILE}
 HEALTH_TIMEOUT_SECONDS = 7 * 60
 HEALTH_POLL_SECONDS = 2
@@ -98,7 +102,7 @@ def sha(data: bytes) -> str:
 def release_files(release: str) -> set[str]:
     """Return the exact archive shape for a current or named legacy release."""
 
-    return LEGACY_FILES if release in LEGACY_HEALTH_RELEASES else FILES
+    return LEGACY_FILES if release in (LEGACY_HEALTH_RELEASES | PRE_WRAPPER_RELEASES) else FILES
 
 
 def archive_files(raw: bytes, release: str, checksum: str) -> dict[str, bytes]:
@@ -199,11 +203,12 @@ def validate_container(
 ) -> None:
     require(value["Config"]["Image"] == IMAGE, "Unexpected scanner image")
     legacy_entrypoint = allow_legacy_health and release in LEGACY_HEALTH_RELEASES
+    image_entrypoint = legacy_entrypoint or release in PRE_WRAPPER_RELEASES
     require(
         value["Config"]["Entrypoint"]
         == (
             ["/init-unprivileged"]
-            if legacy_entrypoint
+            if image_entrypoint
             else ["/bin/sh", ENTRYPOINT_DESTINATION]
         )
         and not value["Config"]["Cmd"],
@@ -288,7 +293,7 @@ def validate_container(
         if socket_required
         else LEGACY_BIND_DESTINATIONS
     )
-    if legacy_entrypoint:
+    if image_entrypoint:
         expected_mounts = expected_mounts - {ENTRYPOINT_DESTINATION}
     require(
         set(mounts) == expected_mounts,
@@ -321,7 +326,7 @@ def validate_container(
                 == sha((installed / name).read_bytes()),
                 "Running config mismatch",
             )
-    if not legacy_entrypoint:
+    if not image_entrypoint:
         entrypoint_mount = mounts[ENTRYPOINT_DESTINATION]
         require(
             entrypoint_mount.get("Type") == "bind"

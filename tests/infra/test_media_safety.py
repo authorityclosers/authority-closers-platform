@@ -191,6 +191,21 @@ def test_archive_accepts_named_legacy_release_without_socket_bridge(
     )
 
 
+def test_archive_accepts_deployed_pre_wrapper_release_with_current_policy(
+    safety_module: ModuleType,
+) -> None:
+    release = next(iter(safety_module.PRE_WRAPPER_RELEASES))
+    entries = [
+        (f"{PREFIX}{name}", (SAFETY / name).read_bytes(), "file")
+        for name in sorted(safety_module.LEGACY_FILES)
+    ]
+    raw = _archive(safety_module, entries, comment=release)
+
+    assert set(safety_module.archive_files(raw, release, hashlib.sha256(raw).hexdigest())) == (
+        safety_module.LEGACY_FILES
+    )
+
+
 @pytest.mark.parametrize(
     "member_name",
     (
@@ -505,6 +520,36 @@ def test_only_named_legacy_release_can_be_a_transition_source(
             installed,
             allow_legacy_health=True,
         )
+
+
+def test_deployed_pre_wrapper_release_keeps_current_health_contract(
+    safety_module: ModuleType,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    installed = _installed(tmp_path)
+    compose = installed / "compose.yaml"
+    compose.write_text(
+        compose.read_text(encoding="utf-8").replace(
+            "      - ./entrypoint.sh:/usr/local/bin/ac-media-safety-entrypoint:ro\n", ""
+        ),
+        encoding="utf-8",
+    )
+    container = _container(safety_module, installed)
+    container["Mounts"] = [
+        item
+        for item in container["Mounts"]
+        if item["Destination"] != safety_module.ENTRYPOINT_DESTINATION
+    ]
+    container["Config"]["Entrypoint"] = ["/init-unprivileged"]
+    release = next(iter(safety_module.PRE_WRAPPER_RELEASES))
+    container["Config"]["Labels"]["ac.release"] = release
+    monkeypatch.setattr(safety_module, "run", _hash_command(safety_module, installed))
+
+    safety_module.validate_container(container, release, installed)
+    container["Config"]["Healthcheck"]["Test"] = safety_module.LEGACY_HEALTH_TEST
+    with pytest.raises(ValueError, match="health"):
+        safety_module.validate_container(container, release, installed)
 
 
 def test_socket_only_scanner_release_remains_rollback_compatible(
