@@ -49,15 +49,21 @@ Never list all recordings for the shared processing principal.
 
 Read admission checks the current actual owner and source retention separately
 from execution. An expired processing lease does not erase an owned report or
-grant a new execution. A processing plan that was explicitly accepted before
-that lease expired may finish its exact source-bound stages until the plan's
-own bounded expiry; this continuation keeps the original lease and acceptance
-as immutable evidence and still checks revocation, deletion, retention, owner,
-provider and budget gates. Revoked recording consent and deleted recordings
-remain unavailable. After a genuine account claims a visitor, the old guest
-bearer alone cannot reopen it. A current claiming account can reopen retained
-results without the old cookie. Processing actors cannot claim accounts or
-visitors.
+silently grant a new execution. A processing plan that was explicitly accepted
+before that lease expired may finish its exact source-bound stages until the
+plan's own bounded expiry; this continuation keeps the original lease and
+acceptance as immutable evidence and still checks revocation, deletion,
+retention, owner, provider and budget gates. If a held plan needs a fresh
+quote, the current owner may use the existing quote action to append one
+bounded continuation grant. That grant binds the original tenant,
+submission, recording, source hash/revision/generation, usage and lease plus
+the authenticated account or visitor owner. It does not edit the lease,
+reopen acquisition minutes, reset request limits or dispatch a provider;
+the normal exact plan quote and acceptance remain required. Revoked recording
+consent and deleted recordings remain unavailable. After a genuine account
+claims a visitor, the old guest bearer alone cannot reopen it. A current
+claiming account can reopen retained results without the old cookie. Processing
+actors cannot claim accounts or visitors.
 
 `GuestOwnership.request_deletion(submission_id, token=..., actor=..., key=...)`
 authorizes the current actual owner and enqueues canonical erasure even when the
@@ -75,8 +81,9 @@ owner request and canonical erasure audit.
   credentials, and checks current principal, lease and actual-owner status.
 - Canonical command keys include the lease identifier. Two guests using the
   same request key cannot replay each other's recording, quote or run.
-- Ownership links are append-only. Principal and lease bounds cannot be edited;
-  revocation is one-way. Existing audit history and usage are preserved.
+- Ownership links and continuation grants are append-only. Principal and lease
+  bounds cannot be edited; revocation is one-way. Existing audit history and
+  usage are preserved.
 - Acquisition mutations serialize on the tenant transaction lock. Guest workers
   serialize on the individual processing lease and share the service-person
   read lock; a provider call does not take the tenant acquisition lock. They do

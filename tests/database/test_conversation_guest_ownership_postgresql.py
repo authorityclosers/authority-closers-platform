@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
@@ -36,10 +36,12 @@ from ac_platform.conversation_intelligence.application import (
     ConversationNotFound,
 )
 from ac_platform.conversation_intelligence.authority import ConversationAuthority
+from ac_platform.conversation_intelligence.checkpoints import content_hash
 from ac_platform.conversation_intelligence.contracts import QuoteAcceptance, RunIntent
 from ac_platform.conversation_intelligence.entitlements import BudgetAccount, MinuteAccount
 from ac_platform.conversation_intelligence.guest_models import (
     ConversationGuestSubmission,
+    ConversationProcessingContinuation,
     ConversationProcessingLease,
     ConversationProcessingPrincipal,
 )
@@ -60,6 +62,12 @@ from ac_platform.conversation_intelligence.models import (
     ConversationRun,
 )
 from ac_platform.conversation_intelligence.processing_actor import ProcessingActor
+from ac_platform.conversation_intelligence.processing_plan import (
+    PlanManifest,
+    acceptance_intent,
+    maximum_plan_cost,
+)
+from ac_platform.conversation_intelligence.reports import load_report_profile
 from ac_platform.conversation_intelligence.storage import PrivateLocalRecordingStorage
 from ac_platform.identity.models import PasswordCredential, ProviderIdentity
 from ac_platform.identity.models import Session as IdentitySession
@@ -813,6 +821,38 @@ def test_accepted_processing_plan_continues_after_original_lease_expiry(
                 )
                 view = await intake.prepare(actor, intent, key="plan-continuation-intake")
                 recording_id = UUID(view["recording_id"])
+                profile = load_report_profile()
+                bundle = authority_bundle(
+                    state,
+                    intent.source_sha256,
+                    "a" * 64,
+                    now_epoch=int(state.now.timestamp()),
+                    funded=True,
+                    text_cost_paise=25_000,
+                )
+                stages = tuple(
+                    item.model_copy(update={"person_id": actor.person_id}) for item in bundle.stages
+                )
+                manifest = PlanManifest(
+                    schema_id="ac.sales-xray.processing-plan/1",
+                    recording_id=recording_id,
+                    tenant_id=actor.tenant_id,
+                    person_id=actor.person_id,
+                    session_id=None,
+                    processing_lease_id=actor.processing_lease_id,
+                    generation=1,
+                    source_sha256=intent.source_sha256,
+                    source_revision=1,
+                    authority_sha256=bundle.digest,
+                    transcription_cache_key="c" * 64,
+                    duration_ms=4_000,
+                    stages=stages,
+                    profile=profile,
+                    created_at_epoch=int(state.now.timestamp()),
+                    expires_at_epoch=int(state.now.timestamp()) + 1_800,
+                    max_cost_paise=maximum_plan_cost(stages),
+                    max_entitlement_seconds=0,
+                )
                 plan_id = uuid4()
                 plan = ConversationProcessingPlan(
                     id=plan_id,
@@ -821,17 +861,17 @@ def test_accepted_processing_plan_continues_after_original_lease_expiry(
                     recording_id=recording_id,
                     processing_lease_id=actor.processing_lease_id,
                     generation=1,
-                    plan_sha256="a" * 64,
-                    manifest={},
+                    plan_sha256=content_hash(manifest.as_dict()),
+                    manifest=manifest.as_dict(),
                     state="quoted",
                     progress={},
                     created_at=state.now,
-                    expires_at=state.now + timedelta(hours=1),
+                    expires_at=datetime.fromtimestamp(manifest.expires_at_epoch, UTC),
                     next_check_at=state.now,
                 )
                 database.add(plan)
                 await database.flush()
-                intent_payload = {"plan_id": str(plan_id), "accepted": True}
+                intent_payload = acceptance_intent(plan)
                 application = ConversationApplication(database, clock=lambda: state.now)
                 await application._receipt(
                     actor,
@@ -851,9 +891,52 @@ def test_accepted_processing_plan_continues_after_original_lease_expiry(
                 plan.acceptance_command_id = command.id
                 plan.state = "active"
                 await database.flush()
+                malformed_id = uuid4()
+                malformed = ConversationProcessingPlan(
+                    id=malformed_id,
+                    tenant_id=actor.tenant_id,
+                    person_id=actor.person_id,
+                    recording_id=recording_id,
+                    processing_lease_id=actor.processing_lease_id,
+                    generation=1,
+                    plan_sha256="a" * 64,
+                    manifest={},
+                    state="quoted",
+                    progress={},
+                    created_at=state.now + timedelta(seconds=1),
+                    expires_at=state.now + timedelta(hours=1),
+                    next_check_at=state.now,
+                )
+                database.add(malformed)
+                await database.flush()
+                malformed_intent = acceptance_intent(malformed)
+                await application._receipt(
+                    actor,
+                    "malformed-plan-continuation-accept",
+                    "processing_plan_accepted",
+                    malformed_intent,
+                    malformed.id,
+                    state.now,
+                )
+                malformed_command = await application._replay(
+                    actor,
+                    "malformed-plan-continuation-accept",
+                    "processing_plan_accepted",
+                    malformed_intent,
+                )
+                assert malformed_command is not None
+                malformed.acceptance_command_id = malformed_command.id
+                malformed.state = "active"
+                await database.flush()
 
-            state.now += timedelta(minutes=6)
+            object.__setattr__(state, "now", state.now + timedelta(minutes=6))
             async with AsyncSession(engine) as database, database.begin():
+                with pytest.raises(ConversationDenied):
+                    await admit_processing_actor(database, actor, state.now)
+                malformed = await database.get(ConversationProcessingPlan, malformed_id)
+                assert malformed is not None
+                malformed.state = "held"
+                await database.flush()
                 usage = await admit_processing_actor(database, actor, state.now)
                 assert usage.submission_id == measured.submission_id
                 with pytest.raises(ConversationDenied):
@@ -877,6 +960,115 @@ def test_accepted_processing_plan_continues_after_original_lease_expiry(
                 await database.flush()
                 with pytest.raises(ConversationDenied):
                     await admit_processing_actor(database, actor, state.now)
+        finally:
+            await engine.dispose()
+
+    run(exercise())
+
+
+def test_owner_can_append_bounded_fresh_plan_continuation_without_resetting_usage(
+    postgres_harness: Any,
+) -> None:
+    """A held saved call can request one exact fresh-plan authority."""
+
+    async def exercise() -> None:
+        engine = create_async_engine(postgres_harness.url)
+        try:
+            state = await seed(engine)
+            scope_id = await seed_budget(engine)
+            await _provision(engine, state)
+            guest, measured, intent, usage_id = await _guest(
+                engine, state, duration_seconds=4, marker="fresh-plan-continuation"
+            )
+            actor = await _processing_actor(
+                engine, state, measured.submission_id, guest.token, lifetime=timedelta(minutes=5)
+            )
+            async with AsyncSession(engine) as database, database.begin():
+                intake = ConversationIntake(
+                    ConversationApplication(database, clock=lambda: state.now),
+                    policy(scope_id, state.tenant_id),
+                )
+                view = await intake.prepare(actor, intent, key="fresh-plan-intake")
+                recording_id = UUID(view["recording_id"])
+                lease = await database.get(ConversationProcessingLease, actor.processing_lease_id)
+                assert lease is not None
+                original_expiry = lease.expires_at
+                original_usage = await database.get(ConversationAcquisitionUsage, usage_id)
+                assert original_usage is not None
+                original_reserved = original_usage.reserved_seconds
+
+            object.__setattr__(state, "now", state.now + timedelta(minutes=6))
+            async with AsyncSession(engine) as database, database.begin():
+                ownership = GuestOwnership(
+                    AcquisitionSessions(
+                        database,
+                        tenant_id=state.tenant_id,
+                        policy_revision="guest-processing-v1",
+                        clock=lambda: state.now,
+                    )
+                )
+                grant_id = await ownership.ensure_processing_continuation(
+                    measured.submission_id,
+                    token=guest.token,
+                    key="fresh-plan-request",
+                )
+                replay_id = await ownership.ensure_processing_continuation(
+                    measured.submission_id,
+                    token=guest.token,
+                    key="fresh-plan-request",
+                )
+                assert grant_id == replay_id
+                grant = await database.get(ConversationProcessingContinuation, grant_id)
+                assert grant is not None
+                assert grant.recording_id == recording_id
+                assert grant.processing_lease_id == actor.processing_lease_id
+                assert grant.usage_id == usage_id
+                assert grant.owner_visitor_id == guest.visitor_id
+                assert grant.owner_person_id is None
+                assert grant.expires_at <= state.now + timedelta(hours=1)
+                assert grant.expires_at > state.now + timedelta(minutes=59)
+                lease = await database.get(ConversationProcessingLease, actor.processing_lease_id)
+                usage = await database.get(ConversationAcquisitionUsage, usage_id)
+                assert lease is not None and lease.expires_at == original_expiry
+                assert usage is not None and usage.reserved_seconds == original_reserved
+                assert await admit_processing_actor(database, actor, state.now)
+
+            async with AsyncSession(engine) as database, database.begin():
+                other, _, _, _ = await _guest(
+                    engine, state, duration_seconds=3, marker="fresh-plan-wrong-owner"
+                )
+                # The current upload owner is the only principal allowed to
+                # mint the grant; another visitor cannot reuse this submission.
+                ownership = GuestOwnership(
+                    AcquisitionSessions(
+                        database,
+                        tenant_id=state.tenant_id,
+                        policy_revision="guest-processing-v1",
+                        clock=lambda: state.now,
+                    )
+                )
+                with pytest.raises((ConversationDenied, ConversationNotFound)):
+                    await ownership.ensure_processing_continuation(
+                        measured.submission_id,
+                        token=other.token,
+                        key="fresh-plan-wrong-owner",
+                    )
+
+            object.__setattr__(state, "now", state.now + timedelta(minutes=61))
+            async with AsyncSession(engine) as database, database.begin():
+                with pytest.raises(ConversationDenied):
+                    await admit_processing_actor(database, actor, state.now)
+                assert (
+                    await database.scalar(
+                        select(func.count())
+                        .select_from(ConversationProcessingContinuation)
+                        .where(
+                            ConversationProcessingContinuation.processing_lease_id
+                            == actor.processing_lease_id
+                        )
+                    )
+                    == 1
+                )
         finally:
             await engine.dispose()
 

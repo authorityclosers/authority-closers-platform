@@ -425,10 +425,18 @@ def install_submission_http(
         if runtime.authority is None:
             raise fail(409, "Your recording is private. Provider analysis is not enabled yet.")
         scope = await owner.ownership.require_submission_owner(submission_id, **owner.arguments)
+        continuation_grant_id = await owner.ownership.ensure_processing_continuation(
+            submission_id, key=key, **owner.arguments
+        )
         actor = await owner.ownership.resolve_processing_actor(submission_id, **owner.arguments)
         return await ConversationProcessingPlans(
             ConversationApplication(owner.ownership.database), runtime.authority
-        ).quote(actor, scope.recording_id, key=key)
+        ).quote(
+            actor,
+            scope.recording_id,
+            key=key,
+            continuation_grant_id=continuation_grant_id,
+        )
 
     @router.post("/submissions/{submission_id}/plan", status_code=202)
     async def accept_plan(
@@ -456,6 +464,9 @@ def install_submission_http(
         if runtime.authority is None:
             raise fail(409, "Provider analysis is not enabled for this upload yet.")
         scope = await owner.ownership.require_submission_owner(submission_id, **owner.arguments)
+        await owner.ownership.ensure_processing_continuation(
+            submission_id, key=key, **owner.arguments
+        )
         actor = await owner.ownership.resolve_processing_actor(submission_id, **owner.arguments)
         return await ConversationProcessingPlans(
             ConversationApplication(owner.ownership.database), runtime.authority

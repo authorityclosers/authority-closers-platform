@@ -33,9 +33,11 @@ from ac_platform.conversation_intelligence.application import (
     ConversationNotFound,
     utc,
 )
+from ac_platform.conversation_intelligence.checkpoints import content_hash
 from ac_platform.conversation_intelligence.entitlements import MinuteAccount
 from ac_platform.conversation_intelligence.guest_models import (
     ConversationGuestSubmission,
+    ConversationProcessingContinuation,
     ConversationProcessingLease,
     ConversationProcessingPrincipal,
 )
@@ -227,6 +229,194 @@ class GuestOwnership:
         await admit_processing_actor(self.database, resolved, now)
         return resolved
 
+    async def ensure_processing_continuation(
+        self,
+        submission_id: UUID,
+        *,
+        key: str,
+        token: str | None = None,
+        actor: ActorContext | None = None,
+    ) -> UUID | None:
+        """Append one short owner grant when a saved call's lease has expired.
+
+        The original lease and acquisition usage remain immutable.  This is
+        only an owner-authenticated renewal of the right to quote and accept
+        one exact saved source; the existing plan/budget/request gates still
+        run before any provider work.
+        """
+        if not isinstance(key, str) or re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", key) is None:
+            raise ConversationError("A valid Idempotency-Key is required.")
+        usage, now, claimed = await self._owned_usage(
+            submission_id, token=token, actor=actor, mutation=False
+        )
+        if usage.visitor_id is not None:
+            await self.sessions.fence_visitor(usage.visitor_id, shared=False)
+            usage, now, claimed = await self._owned_usage(
+                submission_id, token=token, actor=actor, mutation=True
+            )
+        else:
+            usage, now, claimed = await self._owned_usage(
+                submission_id, token=token, actor=actor, mutation=True
+            )
+        link = await self.database.get(ConversationGuestSubmission, (self.tenant_id, submission_id))
+        if link is None or link.usage_id != usage.id or link.source_sha256 != usage.source_sha256:
+            raise ConversationNotFound("This upload is unavailable.")
+        lease = await self.database.scalar(
+            select(ConversationProcessingLease)
+            .where(
+                ConversationProcessingLease.id == link.processing_lease_id,
+                ConversationProcessingLease.tenant_id == self.tenant_id,
+                ConversationProcessingLease.person_id == link.person_id,
+                ConversationProcessingLease.usage_id == usage.id,
+            )
+            .with_for_update()
+        )
+        if lease is None or utc(lease.expires_at) > now:
+            return None
+        if lease.revoked_at is not None:
+            raise ConversationDenied("This upload's processing lease has been revoked.")
+
+        # An accepted active plan already has its own bounded continuation
+        # authority. Do not mint a second recovery grant for it.
+        active = await self.database.scalar(
+            select(ConversationProcessingPlan)
+            .where(
+                ConversationProcessingPlan.processing_lease_id == lease.id,
+                ConversationProcessingPlan.tenant_id == self.tenant_id,
+                ConversationProcessingPlan.person_id == lease.person_id,
+                ConversationProcessingPlan.state == "active",
+                ConversationProcessingPlan.erased_at.is_(None),
+                ConversationProcessingPlan.expires_at > now,
+            )
+            .order_by(ConversationProcessingPlan.created_at.desc())
+            .limit(1)
+        )
+        if active is not None and active.acceptance_command_id is not None:
+            acceptance = await self.database.get(ConversationCommand, active.acceptance_command_id)
+            if (
+                acceptance is not None
+                and acceptance.tenant_id == self.tenant_id
+                and acceptance.person_id == lease.person_id
+                and acceptance.action == "processing_plan_accepted"
+                and acceptance.result_id == active.id
+                and utc(acceptance.created_at) < utc(lease.expires_at)
+            ):
+                return None
+
+        recording = await self.database.get(ConversationRecording, link.recording_id)
+        permission = (
+            None
+            if recording is None
+            else await self.database.get(ConversationPermission, recording.permission_id)
+        )
+        if (
+            recording is None
+            or recording.tenant_id != self.tenant_id
+            or recording.person_id != link.person_id
+            or recording.source_sha256 != link.source_sha256
+            or recording.state in {"deleted", "deleting"}
+            or permission is None
+            or permission.revoked_at is not None
+            or utc(permission.expires_at) <= now
+            or utc(permission.retention_until) <= now
+        ):
+            raise ConversationNotFound("This upload is unavailable.")
+
+        claim = (
+            None
+            if usage.visitor_id is None
+            else await self.database.get(ConversationVisitorClaim, usage.visitor_id)
+        )
+        owner_person_id = (
+            usage.person_id
+            if usage.visitor_id is None
+            else (claim.person_id if claim is not None else None)
+        )
+        owner_visitor_id = (
+            usage.visitor_id if usage.visitor_id is not None and claim is None else None
+        )
+        if owner_person_id is None and owner_visitor_id is None:
+            raise ConversationDenied("A current upload owner is required.")
+        expires_at = min(
+            now + timedelta(hours=1),
+            utc(permission.expires_at),
+            utc(permission.retention_until),
+        )
+        if owner_visitor_id is not None:
+            visitor = await self.database.get(ConversationVisitor, owner_visitor_id)
+            if visitor is None or visitor.revoked_at is not None:
+                raise ConversationDenied("This upload session has been revoked.")
+            expires_at = min(expires_at, utc(visitor.expires_at))
+        if expires_at <= now:
+            raise ConversationDenied("This saved call is no longer retained.")
+
+        intent = {
+            "tenant_id": str(self.tenant_id),
+            "submission_id": str(submission_id),
+            "recording_id": str(recording.id),
+            "processing_lease_id": str(lease.id),
+            "usage_id": str(usage.id),
+            "owner_person_id": str(owner_person_id) if owner_person_id is not None else None,
+            "owner_visitor_id": str(owner_visitor_id) if owner_visitor_id is not None else None,
+            "source_sha256": recording.source_sha256,
+            "source_revision": recording.source_revision,
+            "generation": recording.generation,
+        }
+        processing_actor = ProcessingActor(lease.person_id, self.tenant_id, lease.id)
+        internal_key = (
+            f"continuation:{submission_id.hex}:{hashlib.sha256(key.encode('ascii')).hexdigest()}"
+        )
+        application = ConversationApplication(self.database, clock=self.clock)
+        replay = await application._replay(
+            processing_actor, internal_key, "processing_continuation_granted", intent
+        )
+        if replay is not None and replay.result_id is not None:
+            return replay.result_id
+        existing = await self.database.scalar(
+            select(ConversationProcessingContinuation)
+            .where(
+                ConversationProcessingContinuation.processing_lease_id == lease.id,
+                ConversationProcessingContinuation.source_sha256 == recording.source_sha256,
+                ConversationProcessingContinuation.source_revision == recording.source_revision,
+                ConversationProcessingContinuation.generation == recording.generation,
+                ConversationProcessingContinuation.owner_person_id == owner_person_id,
+                ConversationProcessingContinuation.owner_visitor_id == owner_visitor_id,
+                ConversationProcessingContinuation.expires_at > now,
+            )
+            .order_by(ConversationProcessingContinuation.created_at.desc())
+            .limit(1)
+        )
+        if existing is not None:
+            return existing.id
+        grant = ConversationProcessingContinuation(
+            id=uuid4(),
+            tenant_id=self.tenant_id,
+            person_id=lease.person_id,
+            submission_id=submission_id,
+            recording_id=recording.id,
+            processing_lease_id=lease.id,
+            usage_id=usage.id,
+            owner_person_id=owner_person_id,
+            owner_visitor_id=owner_visitor_id,
+            source_sha256=recording.source_sha256,
+            source_revision=recording.source_revision,
+            generation=recording.generation,
+            created_at=now,
+            expires_at=expires_at,
+        )
+        self.database.add(grant)
+        await self.database.flush()
+        await application._receipt(
+            processing_actor,
+            internal_key,
+            "processing_continuation_granted",
+            intent,
+            grant.id,
+            now,
+            resource_type="conversation_processing_continuation",
+        )
+        return grant.id
+
     async def require_submission_owner(
         self, submission_id: UUID, *, token: str | None = None, actor: ActorContext | None = None
     ) -> SubmissionScope:
@@ -372,6 +562,7 @@ async def admit_processing_actor(
         Membership, (actor.tenant_id, actor.person_id), populate_existing=True
     )
     continuation_plan = None
+    continuation_grant = None
     if lease is not None and utc(lease.expires_at) <= now:
         # A processing lease is an execution fence by default.  An accepted
         # plan is the one bounded exception: it may finish its already approved
@@ -398,19 +589,83 @@ async def admit_processing_actor(
                     ConversationCommand, continuation_plan.acceptance_command_id
                 )
             )
+            try:
+                from ac_platform.conversation_intelligence.processing_plan import (
+                    acceptance_intent,
+                    manifest_for,
+                )
+
+                manifest_for(continuation_plan)
+                acceptance_digest = content_hash(acceptance_intent(continuation_plan))
+            except (ConversationError, KeyError, TypeError, ValueError):
+                acceptance_digest = None
             if (
                 acceptance is None
+                or acceptance_digest is None
                 or acceptance.tenant_id != actor.tenant_id
                 or acceptance.person_id != actor.person_id
                 or acceptance.action != "processing_plan_accepted"
                 or acceptance.result_id != continuation_plan.id
+                or acceptance.intent_sha256 != acceptance_digest
                 or utc(acceptance.created_at) >= utc(lease.expires_at)
             ):
                 continuation_plan = None
+            if continuation_plan is not None:
+                try:
+                    link = await database.scalar(
+                        select(ConversationGuestSubmission).where(
+                            ConversationGuestSubmission.tenant_id == actor.tenant_id,
+                            ConversationGuestSubmission.person_id == actor.person_id,
+                            ConversationGuestSubmission.processing_lease_id
+                            == actor.processing_lease_id,
+                        )
+                    )
+                    recording = (
+                        None
+                        if link is None
+                        else await database.get(ConversationRecording, link.recording_id)
+                    )
+                    from ac_platform.conversation_intelligence.processing_plan import (
+                        manifest_for,
+                    )
+
+                    manifest = manifest_for(continuation_plan)
+                except (ConversationError, KeyError, TypeError, ValueError):
+                    continuation_plan = None
+                else:
+                    if (
+                        link is None
+                        or recording is None
+                        or link.recording_id != continuation_plan.recording_id
+                        or link.source_sha256 != recording.source_sha256
+                        or manifest.recording_id != recording.id
+                        or manifest.source_sha256 != recording.source_sha256
+                        or manifest.source_revision != recording.source_revision
+                        or manifest.generation != recording.generation
+                    ):
+                        continuation_plan = None
+        if continuation_plan is None:
+            continuation_grant = await database.scalar(
+                select(ConversationProcessingContinuation)
+                .where(
+                    ConversationProcessingContinuation.processing_lease_id
+                    == actor.processing_lease_id,
+                    ConversationProcessingContinuation.tenant_id == actor.tenant_id,
+                    ConversationProcessingContinuation.person_id == actor.person_id,
+                    ConversationProcessingContinuation.created_at >= lease.expires_at,
+                    ConversationProcessingContinuation.expires_at > now,
+                )
+                .order_by(ConversationProcessingContinuation.created_at.desc())
+                .limit(1)
+            )
     if (
         lease is None
         or lease.revoked_at is not None
-        or (utc(lease.expires_at) <= now and continuation_plan is None)
+        or (
+            utc(lease.expires_at) <= now
+            and continuation_plan is None
+            and continuation_grant is None
+        )
         or principal is None
         or principal.revoked_at is not None
         or (principal.tenant_id, principal.person_id) != (actor.tenant_id, actor.person_id)
@@ -440,6 +695,50 @@ async def admit_processing_actor(
         or (settlement is not None and settlement.kind == "no_work_performed")
     ):
         raise ConversationDenied("A reserved source is required for processing.")
+    if continuation_plan is not None:
+        link = await database.scalar(
+            select(ConversationGuestSubmission).where(
+                ConversationGuestSubmission.tenant_id == actor.tenant_id,
+                ConversationGuestSubmission.submission_id == usage.submission_id,
+            )
+        )
+        if (
+            link is None
+            or link.person_id != actor.person_id
+            or link.processing_lease_id != actor.processing_lease_id
+            or link.usage_id != usage.id
+            or link.source_sha256 != usage.source_sha256
+            or link.recording_id != continuation_plan.recording_id
+        ):
+            continuation_plan = None
+    if continuation_grant is not None:
+        link = await database.scalar(
+            select(ConversationGuestSubmission).where(
+                ConversationGuestSubmission.tenant_id == actor.tenant_id,
+                ConversationGuestSubmission.submission_id == usage.submission_id,
+            )
+        )
+        continuation_grant = (
+            continuation_grant
+            if link is not None
+            and link.recording_id == continuation_grant.recording_id
+            and link.processing_lease_id == actor.processing_lease_id
+            and link.usage_id == usage.id
+            and link.source_sha256 == continuation_grant.source_sha256
+            and usage.source_sha256 == continuation_grant.source_sha256
+            else None
+        )
+        if continuation_grant is not None:
+            recording = await database.get(ConversationRecording, link.recording_id)
+            continuation_grant = (
+                continuation_grant
+                if recording is not None
+                and recording.state not in {"deleted", "deleting"}
+                and recording.source_sha256 == continuation_grant.source_sha256
+                and recording.source_revision == continuation_grant.source_revision
+                and recording.generation == continuation_grant.generation
+                else None
+            )
     if usage.visitor_id is not None:
         visitor = await database.get(ConversationVisitor, usage.visitor_id, populate_existing=True)
         if visitor is None or visitor.revoked_at is not None:
@@ -448,8 +747,20 @@ async def admit_processing_actor(
         owner_id = claim.person_id if claim is not None else None
         if claim is None and utc(visitor.expires_at) <= now and continuation_plan is None:
             raise ConversationDenied("This upload session has expired.")
+        if continuation_grant is not None:
+            expected_owner = claim.person_id if claim is not None else None
+            if (
+                continuation_grant.owner_person_id != expected_owner
+                or continuation_grant.owner_visitor_id
+                != (usage.visitor_id if claim is None else None)
+            ):
+                continuation_grant = None
     else:
         owner_id = usage.person_id
+        if continuation_grant is not None and continuation_grant.owner_person_id != owner_id:
+            continuation_grant = None
+    if utc(lease.expires_at) <= now and continuation_plan is None and continuation_grant is None:
+        raise ConversationDenied("A current non-login processing lease is required.")
     if owner_id is not None:
         # Do not take a human Person lock while holding the acquisition lock:
         # account requests acquire those in the opposite order. Read current

@@ -83,6 +83,7 @@ class PlanManifest(BaseModel):
     person_id: UUID
     session_id: UUID | None
     processing_lease_id: UUID | None = None
+    continuation_grant_id: UUID | None = None
     generation: int = Field(strict=True, ge=1)
     source_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
     source_revision: int = Field(strict=True, ge=1)
@@ -134,6 +135,8 @@ class PlanManifest(BaseModel):
         value = self.model_dump(mode="json")
         if self.processing_lease_id is None:
             value.pop("processing_lease_id", None)
+        if self.continuation_grant_id is None:
+            value.pop("continuation_grant_id", None)
         return value
 
 
@@ -224,7 +227,86 @@ async def require_plan_consent(
         or command.intent_sha256 != content_hash(acceptance_intent(row))
     ):
         raise ConversationDenied("This processing plan needs current owner approval.")
+    await validate_continuation_grant(app, actor, recording, value, now)
     return value
+
+
+async def validate_continuation_grant(
+    app: ConversationApplication,
+    actor: ConversationActor,
+    recording: ConversationRecording,
+    value: PlanManifest,
+    now: datetime,
+) -> None:
+    """Verify a fresh-plan manifest remains bound to its owner grant."""
+    if value.continuation_grant_id is None:
+        return
+    if not isinstance(actor, ProcessingActor) or actor.processing_lease_id is None:
+        raise ConversationDenied("This continuation plan requires its processing lease.")
+    from ac_platform.conversation_intelligence.acquisition_models import (
+        ConversationAcquisitionUsage,
+        ConversationVisitorClaim,
+    )
+    from ac_platform.conversation_intelligence.guest_models import (
+        ConversationGuestSubmission,
+        ConversationProcessingContinuation,
+    )
+
+    grant = await app.database.get(ConversationProcessingContinuation, value.continuation_grant_id)
+    usage = (
+        None
+        if grant is None
+        else await app.database.get(ConversationAcquisitionUsage, grant.usage_id)
+    )
+    link = (
+        None
+        if grant is None
+        else await app.database.get(
+            ConversationGuestSubmission, (grant.tenant_id, grant.submission_id)
+        )
+    )
+    claim = (
+        None
+        if usage is None or usage.visitor_id is None
+        else await app.database.get(ConversationVisitorClaim, usage.visitor_id)
+    )
+    expected_owner_person_id = (
+        usage.person_id
+        if usage is not None and usage.visitor_id is None
+        else claim.person_id
+        if claim is not None
+        else None
+    )
+    expected_owner_visitor_id = (
+        usage.visitor_id
+        if usage is not None and usage.visitor_id is not None and claim is None
+        else None
+    )
+    if (
+        grant is None
+        or utc(grant.expires_at) <= now
+        or grant.tenant_id != actor.tenant_id
+        or grant.person_id != actor.person_id
+        or grant.processing_lease_id != actor.processing_lease_id
+        or grant.recording_id != recording.id
+        or usage is None
+        or usage.tenant_id != actor.tenant_id
+        or usage.source_sha256 != recording.source_sha256
+        or link is None
+        or link.tenant_id != actor.tenant_id
+        or link.person_id != actor.person_id
+        or link.recording_id != recording.id
+        or link.processing_lease_id != actor.processing_lease_id
+        or link.usage_id != usage.id
+        or link.source_sha256 != recording.source_sha256
+        or grant.owner_person_id != expected_owner_person_id
+        or grant.owner_visitor_id != expected_owner_visitor_id
+        or grant.source_sha256 != recording.source_sha256
+        or grant.source_revision != recording.source_revision
+        or grant.generation != recording.generation
+        or value.expires_at_epoch > int(utc(grant.expires_at).timestamp())
+    ):
+        raise ConversationDenied("This continuation plan is no longer authorized.")
 
 
 def require_derived_input(value: PlanManifest, plan: ServicePlan) -> None:
@@ -338,11 +420,26 @@ class ConversationProcessingPlans:
         return self.view(await self._row(actor, recording_id))
 
     async def quote(
-        self, actor: ConversationActor, recording_id: UUID, *, key: str
+        self,
+        actor: ConversationActor,
+        recording_id: UUID,
+        *,
+        key: str,
+        continuation_grant_id: UUID | None = None,
     ) -> dict[str, Any]:
         now = await self.app.admit(actor)
         await self.app.get(actor, recording_id)
         recording = await self.app._recording(actor, recording_id)
+        continuation_expires_at: datetime | None = None
+        if continuation_grant_id is not None:
+            from ac_platform.conversation_intelligence.guest_models import (
+                ConversationProcessingContinuation,
+            )
+
+            grant = await self.db.get(ConversationProcessingContinuation, continuation_grant_id)
+            if grant is None:
+                raise ConversationDenied("This continuation grant is unavailable.")
+            continuation_expires_at = utc(grant.expires_at)
         source = await self.inference.plan_transcription(recording)
         bundle, c2 = await self.authority.approval(self.app, actor, recording, source, now)
         command = {
@@ -447,6 +544,7 @@ class ConversationProcessingPlans:
                 tenant_id=recording.tenant_id,
                 person_id=recording.person_id,
                 **actor_columns(actor),
+                continuation_grant_id=continuation_grant_id,
                 generation=recording.generation,
                 source_sha256=recording.source_sha256,
                 source_revision=recording.source_revision,
@@ -460,12 +558,18 @@ class ConversationProcessingPlans:
                     int(now.timestamp()) + 3600,
                     bundle.expires_at_epoch,
                     *(item.expires_at_epoch for item in approvals.values()),
+                    *(
+                        [int(continuation_expires_at.timestamp())]
+                        if continuation_expires_at is not None
+                        else []
+                    ),
                 ),
                 max_entitlement_seconds=maximum_seconds,
                 max_cost_paise=maximum_cost,
             )
         except ValueError:
             raise ConversationDenied("The complete processing plan is not approved.") from None
+        await validate_continuation_grant(self.app, actor, recording, value, now)
         row = ConversationProcessingPlan(
             id=uuid4(),
             tenant_id=recording.tenant_id,
@@ -492,6 +596,8 @@ class ConversationProcessingPlans:
         now = await self.app.admit(actor)
         row = await self._row(actor, recording_id, payload.plan_id)
         value = manifest_for(row)
+        recording = await self.app._recording(actor, recording_id)
+        await validate_continuation_grant(self.app, actor, recording, value, now)
         bundle = await self.authority.admit(self.app, actor)
         if (
             payload.accepted is not True
