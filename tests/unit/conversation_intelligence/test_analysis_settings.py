@@ -46,6 +46,8 @@ def test_settings_view_exposes_defaults_without_inventing_a_revision() -> None:
     assert view["created_at"] is None
     assert view["settings"] == DEFAULT_ANALYSIS_SETTINGS.model_dump()
     assert view["bounds"]["c5_output_profile"]["values"] == ["standard", "detailed"]
+    assert "starting values only" in view["message"]
+    assert "pinned provider approval" in view["message"]
 
 
 def test_standard_output_is_a_c5_only_stage_option() -> None:

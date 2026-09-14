@@ -57,6 +57,9 @@ it("loads the bounded controls and saves a real future-plan revision", async () 
   });
   vi.stubGlobal("fetch", fetcher);
   await act(async () => root.render(createElement(AnalysisSettingsPanel)));
+  expect(host.textContent).toContain(
+    "Until you save an Admin revision, new plans remain governed",
+  );
   const profile = host.querySelector<HTMLSelectElement>(
     '[aria-label="C5 output profile"]',
   );

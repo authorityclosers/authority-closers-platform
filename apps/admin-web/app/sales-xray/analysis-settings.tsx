@@ -167,7 +167,8 @@ export function AnalysisSettingsPanel() {
       </p>
       {state?.revision === 0 && (
         <p className={styles.hint}>
-          Release defaults are active until you save an Admin revision.
+          Starting values are shown. Until you save an Admin revision, new plans
+          remain governed by the pinned provider approval and route ceiling.
         </p>
       )}
       {!state && !error && <p role="status">Loading analysis limits…</p>}

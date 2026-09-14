@@ -70,15 +70,24 @@ def settings_view(
     row: ConversationAnalysisSettings | None,
     settings: AnalysisSettings,
 ) -> dict[str, object]:
+    message = (
+        (
+            "No Admin analysis-settings revision is saved. The values shown are starting "
+            "values only; new plans remain governed by the pinned provider approval and "
+            "route ceiling until a revision is saved. Accepted plans stay frozen."
+        )
+        if row is None
+        else (
+            "These limits apply to new plans. The server still intersects them with "
+            "the pinned provider approval and route ceiling; accepted plans stay frozen."
+        )
+    )
     return {
         "revision": 0 if row is None else row.revision,
         "settings": settings.model_dump(mode="json"),
         "bounds": ANALYSIS_SETTINGS_BOUNDS,
         "created_at": None if row is None else row.created_at.isoformat(),
-        "message": (
-            "These limits apply to new plans. The server still intersects them with "
-            "the pinned provider approval and route ceiling; accepted plans stay frozen."
-        ),
+        "message": message,
     }
 
 
