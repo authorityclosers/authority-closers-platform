@@ -182,7 +182,8 @@ def project_report(report: ReportDraft, *, access: ReportAccess) -> dict[str, An
         if account
         else {
             "title": "Unlock remaining insights with a free account"
-            if any(item["hidden_count"] for item in preview["sections"].values())
+            if preview is not None
+            and any(item["hidden_count"] for item in preview["sections"].values())
             else "Keep your report with your AC account",
             "description": "Sign in to see your full report and return to your saved calls.",
             "action": "Continue with a free account",
