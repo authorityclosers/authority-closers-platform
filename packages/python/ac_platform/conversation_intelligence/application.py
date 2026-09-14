@@ -583,7 +583,7 @@ class ConversationApplication:
             + quote.entitlement_seconds
             > ALLOWANCE_SECONDS
         ):
-            raise ConversationDenied("Your 100 minutes are used. Contact AC for more access.")
+            raise ConversationDenied("Your 60 trial minutes are used. Contact AC for more access.")
         identifier = uuid4()
         try:
             transition = reserve(

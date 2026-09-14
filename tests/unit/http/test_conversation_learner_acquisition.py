@@ -60,9 +60,9 @@ class _Service:
         if actor is not None:
             self.allowance_actors.append(actor)
         return {
-            "allowance_seconds": 6000,
+            "allowance_seconds": 3600,
             "committed_seconds": 17,
-            "available_seconds": 5983,
+            "available_seconds": 3583,
         }
 
 
@@ -129,9 +129,9 @@ async def test_learner_mount_requires_public_account_and_keeps_guest_challenge_o
         if actor is not None:
             allowance_actors.append(actor)
         return {
-            "allowance_seconds": 6000,
+            "allowance_seconds": 3600,
             "committed_seconds": 17,
-            "available_seconds": 5983,
+            "available_seconds": 3583,
         }
 
     monkeypatch.setattr(AcquisitionSessions, "allowance", allowance)
@@ -181,7 +181,7 @@ async def test_learner_mount_requires_public_account_and_keeps_guest_challenge_o
             "site_key": None,
             "challenge_action": None,
             "policy_revision": "learner-account-v1",
-            "allowance_seconds": 6000,
+            "allowance_seconds": 3600,
             "auth_mode": "account",
         }
 
@@ -211,9 +211,9 @@ async def test_learner_mount_requires_public_account_and_keeps_guest_challenge_o
         assert account_session.json() == {
             "state": "account",
             "allowance": {
-                "allowance_seconds": 6000,
+                "allowance_seconds": 3600,
                 "committed_seconds": 17,
-                "available_seconds": 5983,
+                "available_seconds": 3583,
             },
         }
 

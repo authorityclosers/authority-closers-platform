@@ -20,7 +20,7 @@ from ac_platform.conversation_intelligence.acquisition_models import (
 from ac_platform.conversation_intelligence.entitlements import MinuteAccount
 from ac_platform.conversation_intelligence.models import ConversationMinuteAccount
 
-ALLOWANCE_SECONDS = 6000
+ALLOWANCE_SECONDS = 3600
 
 
 async def acquisition_seconds(

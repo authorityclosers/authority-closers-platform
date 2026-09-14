@@ -1,4 +1,4 @@
-"""Opaque guest sessions and the 100-minute, claim-preserving admission ledger.
+"""Opaque guest sessions and the 60-minute, claim-preserving admission ledger.
 
 Only server composition calls reserve/settle after validating a source-duration
 receipt. Browser duration, IP address and device fingerprint are not authority.
@@ -64,7 +64,9 @@ class MeasuredSource:
         if (
             type(self.submission_id) is not UUID
             or type(self.duration_ms) is not int
-            or not 1 <= self.duration_ms <= ALLOWANCE_SECONDS * 1000
+            # Retain readability/replay of sources admitted under the former
+            # 100-minute trial. New reservations use the current shared quota.
+            or not 1 <= self.duration_ms <= 6_000 * 1000
             or _DIGEST.fullmatch(self.source_sha256) is None
             or _DIGEST.fullmatch(self.duration_evidence_sha256) is None
         ):
@@ -282,7 +284,7 @@ class AcquisitionSessions:
                 raise ConversationConflict("This upload belongs to a different source receipt.")
             return previous.id
         if await self._used(visitor_id, person_id) + source.seconds > ALLOWANCE_SECONDS:
-            raise ConversationDenied("Your 100 minutes are used. Contact AC for more access.")
+            raise ConversationDenied("Your 60 trial minutes are used. Contact AC for more access.")
         identifier = uuid4()
         self.database.add(
             ConversationAcquisitionUsage(

@@ -89,10 +89,10 @@ def test_existing_run_usage_is_preserved_when_guest_claims_account(postgres_harn
             guest = await issue(engine, state)
             async with AsyncSession(engine) as db, db.begin():
                 app = service(db, state)
-                await app.reserve(source(5800), token=guest.token)
+                await app.reserve(source(3400), token=guest.token)
                 await app.claim(guest.token, state.actor)
                 assert (await app.allowance(actor=state.actor))["available_seconds"] == 80
-                with pytest.raises(ConversationDenied, match="100 minutes"):
+                with pytest.raises(ConversationDenied, match="60 trial minutes"):
                     await app.reserve(source(81), actor=state.actor)
                 last = await app.reserve(source(80), actor=state.actor)
                 assert (await app.allowance(actor=state.actor))["available_seconds"] == 0
@@ -115,12 +115,12 @@ def test_existing_upload_cannot_bypass_claimed_guest_minutes(postgres_harness):
             guest = await issue(engine, state)
             async with AsyncSession(engine) as db, db.begin():
                 app = service(db, state)
-                await app.reserve(source(5900), token=guest.token)
+                await app.reserve(source(3500), token=guest.token)
                 await app.claim(guest.token, state.actor)
             async with AsyncSession(engine) as db, db.begin():
                 # The existing fixture has 180 untouched seconds and would
                 # accept this 120-second job without the combined allowance.
-                with pytest.raises(ConversationDenied, match="100 minutes"):
+                with pytest.raises(ConversationDenied, match="60 trial minutes"):
                     await application(db, state).request_run(
                         state.actor, intent, key="must-not-enqueue"
                     )
@@ -142,7 +142,7 @@ def test_existing_and_acquisition_uploads_cannot_race_two_pools(postgres_harness
             guest = await issue(engine, state)
             async with AsyncSession(engine) as db, db.begin():
                 app = service(db, state)
-                await app.reserve(source(5800), token=guest.token)
+                await app.reserve(source(3400), token=guest.token)
                 await app.claim(guest.token, state.actor)
 
             async def existing_upload():
@@ -190,7 +190,45 @@ def test_forward_migration_matches_registry_and_guests_are_not_people(postgres_h
                 assert await db.scalar(select(func.count()).select_from(Person)) == people_before
                 assert (await service(db, state).allowance(token=guest.token))[
                     "available_seconds"
-                ] == 6000
+                ] == 3600
+        finally:
+            await engine.dispose()
+
+    run(exercise())
+
+
+def test_reduced_trial_preserves_historical_usage_and_same_source_replay(
+    postgres_harness, monkeypatch
+):
+    async def exercise():
+        engine = create_async_engine(postgres_harness.url)
+        try:
+            state = await seed(engine)
+            guest = await issue(engine, state)
+            original_source = source(4000)
+            async with AsyncSession(engine) as db, db.begin():
+                app = service(db, state)
+                with monkeypatch.context() as historical:
+                    historical.setattr(
+                        "ac_platform.conversation_intelligence.acquisition_sessions.ALLOWANCE_SECONDS",
+                        6000,
+                    )
+                    original_usage = await app.reserve(original_source, token=guest.token)
+            async with AsyncSession(engine) as db, db.begin():
+                app = service(db, state)
+                assert await app.allowance(token=guest.token) == {
+                    "allowance_seconds": 3600,
+                    "committed_seconds": 4000,
+                    "available_seconds": 0,
+                }
+                assert await app.reserve(original_source, token=guest.token) == original_usage
+                await app.claim(guest.token, state.actor)
+                assert await app.reserve(original_source, actor=state.actor) == original_usage
+                assert (await app.allowance(actor=state.actor))["committed_seconds"] == 4000
+                with pytest.raises(ConversationDenied, match="60 trial minutes"):
+                    await app.reserve(source(1), actor=state.actor)
+                await app.settle(original_usage, charged_seconds=4000, receipt_sha256="d" * 64)
+                assert (await app.allowance(actor=state.actor))["available_seconds"] == 0
         finally:
             await engine.dispose()
 
@@ -213,19 +251,19 @@ def test_claim_preserves_guest_and_account_usage_and_replay(postgres_harness):
                 assert await app.reserve(guest_source, actor=state.actor) == guest_usage
                 allowance = await app.allowance(actor=state.actor)
                 assert allowance["committed_seconds"] == 3000
-                assert allowance["available_seconds"] == 3000
+                assert allowance["available_seconds"] == 600
                 assert await app.allowance(token=guest.token, actor=state.actor) == allowance
                 with pytest.raises(ConversationDenied):
                     await app.allowance(token=guest.token)
-                with pytest.raises(ConversationDenied, match="100 minutes"):
-                    await app.reserve(source(3001), actor=state.actor)
-            # A different browser and a policy revision never grant another 100 minutes.
+                with pytest.raises(ConversationDenied, match="60 trial minutes"):
+                    await app.reserve(source(601), actor=state.actor)
+            # A different browser and a policy revision never grant another 60 minutes.
             second = await issue(engine, state)
             async with AsyncSession(engine) as db, db.begin():
                 app = service(db, state, revision="acquisition-v2")
                 await app.reserve(source(120), token=second.token)
                 await app.claim(second.token, state.actor)
-                assert (await app.allowance(actor=state.actor))["available_seconds"] == 2880
+                assert (await app.allowance(actor=state.actor))["available_seconds"] == 480
         finally:
             await engine.dispose()
 
@@ -241,7 +279,7 @@ def test_concurrent_tabs_cannot_overbook_guest_allowance(postgres_harness):
 
             async def reserve():
                 async with AsyncSession(engine) as db, db.begin():
-                    return await service(db, state).reserve(source(4000), token=guest.token)
+                    return await service(db, state).reserve(source(2400), token=guest.token)
 
             results = await asyncio.gather(reserve(), reserve(), return_exceptions=True)
             assert sum(isinstance(item, ConversationDenied) for item in results) == 1
@@ -249,7 +287,7 @@ def test_concurrent_tabs_cannot_overbook_guest_allowance(postgres_harness):
             async with AsyncSession(engine) as db, db.begin():
                 assert (await service(db, state).allowance(token=guest.token))[
                     "available_seconds"
-                ] == 2000
+                ] == 1200
         finally:
             await engine.dispose()
 
@@ -367,7 +405,7 @@ def test_token_expiry_revocation_tenant_and_identity_checks(postgres_harness):
                 # Password registration doesn't need to interrupt its existing guest preview.
                 assert (await service(db, state).allowance(token=guest.token))[
                     "available_seconds"
-                ] == 6000
+                ] == 3600
                 await service(db, state).revoke(guest.token)
                 with pytest.raises(ConversationDenied):
                     await service(db, state).allowance(token=guest.token)

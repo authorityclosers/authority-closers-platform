@@ -174,6 +174,19 @@ describe("acquisition source-bound presentation", () => {
     );
     expect(savedSubmissionId()).toBeNull();
   });
+  it("keeps historical consumption visible when the server reduces the trial to sixty minutes", () => {
+    expect(
+      parseAllowance({
+        allowance_seconds: 3600,
+        committed_seconds: 4000,
+        available_seconds: 0,
+      }),
+    ).toEqual({
+      allowance_seconds: 3600,
+      committed_seconds: 4000,
+      available_seconds: 0,
+    });
+  });
   it("accepts the authenticated learner entry without enabling a guest challenge", () => {
     const accountEntry = {
       ...entry,
