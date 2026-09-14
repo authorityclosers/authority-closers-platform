@@ -40,8 +40,10 @@ from ac_platform.conversation_intelligence.guest_models import (
     ConversationProcessingPrincipal,
 )
 from ac_platform.conversation_intelligence.models import (
+    ConversationCommand,
     ConversationMinuteAccount,
     ConversationPermission,
+    ConversationProcessingPlan,
     ConversationRecording,
 )
 from ac_platform.conversation_intelligence.processing_actor import ProcessingActor
@@ -369,10 +371,46 @@ async def admit_processing_actor(
     member = await database.get(
         Membership, (actor.tenant_id, actor.person_id), populate_existing=True
     )
+    continuation_plan = None
+    if lease is not None and utc(lease.expires_at) <= now:
+        # A processing lease is an execution fence by default.  An accepted
+        # plan is the one bounded exception: it may finish its already approved
+        # immutable work after the bearer window closes.  The lease itself and
+        # its original expiry remain append-only evidence.
+        continuation_plan = await database.scalar(
+            select(ConversationProcessingPlan)
+            .where(
+                ConversationProcessingPlan.processing_lease_id == actor.processing_lease_id,
+                ConversationProcessingPlan.tenant_id == actor.tenant_id,
+                ConversationProcessingPlan.person_id == actor.person_id,
+                ConversationProcessingPlan.state == "active",
+                ConversationProcessingPlan.erased_at.is_(None),
+                ConversationProcessingPlan.expires_at > now,
+            )
+            .order_by(ConversationProcessingPlan.created_at.desc())
+            .limit(1)
+        )
+        if continuation_plan is not None:
+            acceptance = (
+                None
+                if continuation_plan.acceptance_command_id is None
+                else await database.get(
+                    ConversationCommand, continuation_plan.acceptance_command_id
+                )
+            )
+            if (
+                acceptance is None
+                or acceptance.tenant_id != actor.tenant_id
+                or acceptance.person_id != actor.person_id
+                or acceptance.action != "processing_plan_accepted"
+                or acceptance.result_id != continuation_plan.id
+                or utc(acceptance.created_at) >= utc(lease.expires_at)
+            ):
+                continuation_plan = None
     if (
         lease is None
         or lease.revoked_at is not None
-        or utc(lease.expires_at) <= now
+        or (utc(lease.expires_at) <= now and continuation_plan is None)
         or principal is None
         or principal.revoked_at is not None
         or (principal.tenant_id, principal.person_id) != (actor.tenant_id, actor.person_id)
@@ -408,7 +446,7 @@ async def admit_processing_actor(
             raise ConversationDenied("This upload session has been revoked.")
         claim = await database.get(ConversationVisitorClaim, usage.visitor_id)
         owner_id = claim.person_id if claim is not None else None
-        if claim is None and utc(visitor.expires_at) <= now:
+        if claim is None and utc(visitor.expires_at) <= now and continuation_plan is None:
             raise ConversationDenied("This upload session has expired.")
     else:
         owner_id = usage.person_id

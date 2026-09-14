@@ -54,6 +54,7 @@ from ac_platform.conversation_intelligence.models import (
     ConversationCommand,
     ConversationMinuteAccount,
     ConversationPermission,
+    ConversationProcessingPlan,
     ConversationQuoteAcceptance,
     ConversationRecording,
     ConversationRun,
@@ -782,6 +783,100 @@ def test_processing_lease_fence_preserves_claimed_owner_scope(
                             clock=lambda: state.now,
                         )
                     ).require_submission_owner(measured.submission_id, token=guest.token)
+        finally:
+            await engine.dispose()
+
+    run(exercise())
+
+
+def test_accepted_processing_plan_continues_after_original_lease_expiry(
+    postgres_harness: Any,
+) -> None:
+    """An accepted plan may finish bounded work after its bearer lease closes."""
+
+    async def exercise() -> None:
+        engine = create_async_engine(postgres_harness.url)
+        try:
+            state = await seed(engine)
+            scope_id = await seed_budget(engine)
+            await _provision(engine, state)
+            guest, measured, intent, _ = await _guest(
+                engine, state, duration_seconds=4, marker="plan-continuation"
+            )
+            actor = await _processing_actor(
+                engine, state, measured.submission_id, guest.token, lifetime=timedelta(minutes=5)
+            )
+            async with AsyncSession(engine) as database, database.begin():
+                intake = ConversationIntake(
+                    ConversationApplication(database, clock=lambda: state.now),
+                    policy(scope_id, state.tenant_id),
+                )
+                view = await intake.prepare(actor, intent, key="plan-continuation-intake")
+                recording_id = UUID(view["recording_id"])
+                plan_id = uuid4()
+                plan = ConversationProcessingPlan(
+                    id=plan_id,
+                    tenant_id=actor.tenant_id,
+                    person_id=actor.person_id,
+                    recording_id=recording_id,
+                    processing_lease_id=actor.processing_lease_id,
+                    generation=1,
+                    plan_sha256="a" * 64,
+                    manifest={},
+                    state="quoted",
+                    progress={},
+                    created_at=state.now,
+                    expires_at=state.now + timedelta(hours=1),
+                    next_check_at=state.now,
+                )
+                database.add(plan)
+                await database.flush()
+                intent_payload = {"plan_id": str(plan_id), "accepted": True}
+                application = ConversationApplication(database, clock=lambda: state.now)
+                await application._receipt(
+                    actor,
+                    "plan-continuation-accept",
+                    "processing_plan_accepted",
+                    intent_payload,
+                    plan_id,
+                    state.now,
+                )
+                command = await application._replay(
+                    actor,
+                    "plan-continuation-accept",
+                    "processing_plan_accepted",
+                    intent_payload,
+                )
+                assert command is not None
+                plan.acceptance_command_id = command.id
+                plan.state = "active"
+                await database.flush()
+
+            state.now += timedelta(minutes=6)
+            async with AsyncSession(engine) as database, database.begin():
+                usage = await admit_processing_actor(database, actor, state.now)
+                assert usage.submission_id == measured.submission_id
+                with pytest.raises(ConversationDenied):
+                    await admit_processing_actor(
+                        database,
+                        ProcessingActor(actor.person_id, actor.tenant_id, uuid4()),
+                        state.now,
+                    )
+
+                plan = await database.get(ConversationProcessingPlan, plan_id)
+                assert plan is not None
+                plan.state = "held"
+                await database.flush()
+                with pytest.raises(ConversationDenied):
+                    await admit_processing_actor(database, actor, state.now)
+
+            async with AsyncSession(engine) as database, database.begin():
+                lease = await database.get(ConversationProcessingLease, actor.processing_lease_id)
+                assert lease is not None
+                lease.revoked_at = state.now
+                await database.flush()
+                with pytest.raises(ConversationDenied):
+                    await admit_processing_actor(database, actor, state.now)
         finally:
             await engine.dispose()
 

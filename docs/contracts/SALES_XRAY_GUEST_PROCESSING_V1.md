@@ -49,10 +49,15 @@ Never list all recordings for the shared processing principal.
 
 Read admission checks the current actual owner and source retention separately
 from execution. An expired processing lease does not erase an owned report or
-grant another execution. Revoked recording consent and deleted recordings remain
-unavailable. After a genuine account claims a visitor, the old guest bearer alone
-cannot reopen it. A current claiming account can reopen retained results without
-the old cookie. Processing actors cannot claim accounts or visitors.
+grant a new execution. A processing plan that was explicitly accepted before
+that lease expired may finish its exact source-bound stages until the plan's
+own bounded expiry; this continuation keeps the original lease and acceptance
+as immutable evidence and still checks revocation, deletion, retention, owner,
+provider and budget gates. Revoked recording consent and deleted recordings
+remain unavailable. After a genuine account claims a visitor, the old guest
+bearer alone cannot reopen it. A current claiming account can reopen retained
+results without the old cookie. Processing actors cannot claim accounts or
+visitors.
 
 `GuestOwnership.request_deletion(submission_id, token=..., actor=..., key=...)`
 authorizes the current actual owner and enqueues canonical erasure even when the
