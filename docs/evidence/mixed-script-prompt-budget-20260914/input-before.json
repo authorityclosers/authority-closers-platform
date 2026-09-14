@@ -1,0 +1,48 @@
+{
+  "schema": "ac.sales-xray.offline-input-bound-receipt/1",
+  "source_head": "11cf7ea42d55af33cdd63e17959403789cd8e7e1",
+  "source_file_sha256": {
+    "reports.py": "19998b853db4cdfb82a65357175d611bdf08b30c0c2a988eeecd04791df2075c",
+    "inference_tasks.py": "85fd1838d07d995be148dcd1fe994ed3416df2e3052c45644d4476e232445127",
+    "gemini_tasks.py": "7283bbe8c1808ee5a38accc90c19c02f854c3a89271f8bc1f12df8b4f1b07c63",
+    "broker_router.py": "f0dd21652270f4850d16e7c1ab08257d8614d7fdb98af1c9c81c8baf785677c3"
+  },
+  "transcript_segments": 144,
+  "retained_observations": 16,
+  "input_hashes_before": {
+    "transcript.json": "a9fdaa6d12508c74f52232b5d82ccb4a82b59cc6d7f4bb54cf3cf00c221e00e6",
+    "facts-validated.json": "1cb3febfd3381bb1d8fbf6d5ee90e1b2044b1efea8bedcec8c41d3448db1d2eb"
+  },
+  "input_hashes_after": {
+    "transcript.json": "a9fdaa6d12508c74f52232b5d82ccb4a82b59cc6d7f4bb54cf3cf00c221e00e6",
+    "facts-validated.json": "1cb3febfd3381bb1d8fbf6d5ee90e1b2044b1efea8bedcec8c41d3448db1d2eb"
+  },
+  "legacy_fact_mapping": "in_memory_only_literal_evidence_revalidated_not_new_checkpoint",
+  "checks": [
+    {
+      "stage": "C4",
+      "prepared": false,
+      "max_output_tokens": 1400,
+      "code": "report_prompt_budget_exceeded"
+    },
+    {
+      "stage": "C5",
+      "prepared": false,
+      "max_output_tokens": 1800,
+      "code": "report_prompt_budget_exceeded"
+    }
+  ],
+  "ascii_request_hashes": [
+    "2c99ebb0c16868579705a8884badfee54db45124216f8903a32de43d9d804994"
+  ],
+  "existing_c5_content_sha256": {
+    "system": "a699a5177ba395ca54a7064be9949c3054276bee110e5f9105c33745c914948e",
+    "user": "a25c0e4246142342ed06d094e6301e7a7861e55bc6ac9a53a73cb95283062d72",
+    "profile": "341a2816a98ba2ec06394925d91d36df222b458e4d17034534f5a937d3d817b8"
+  },
+  "external_provider_calls": 0,
+  "new_transcription_calls": 0,
+  "actual_provider_token_counts": null,
+  "cost_paise": 0,
+  "source_inputs_modified": false
+}

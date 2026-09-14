@@ -1,0 +1,64 @@
+{
+  "schema": "ac.sales-xray.mixed-script-release-proof/1",
+  "source_base": "c6fb8a8fa73fcc7056abd4b3f217fcc76d430d2b",
+  "tested_source_sha256": {
+    "reports.py": "06872b1797cee18b1e00d66be4027f402de96c14866e4e27734d0e5f1f116269",
+    "inference_tasks.py": "c0196d38edc4073b3feb314ad316b6af7240d2fd2a8a82895db6837e6e0d8f1b",
+    "gemini_tasks.py": "998a4512541243515051c1ae5012ac797263f10eddcdc061c73aecd8d8d9aafe",
+    "broker_router.py": "5211ee046d88b63d2a4783c535bec061a979ba6f348a5447cb6de7cca155f4eb"
+  },
+  "tests": {
+    "passed": 118,
+    "failed": 0,
+    "skipped": 0
+  },
+  "red_regression": {
+    "failed_before": 8,
+    "reason": "report_prompt_budget_exceeded"
+  },
+  "retained_call": {
+    "segments": 144,
+    "observations": 16,
+    "C4_requests": 4,
+    "C4_output_cap": 1400,
+    "C5_requests": 1,
+    "C5_output_cap": 1800,
+    "C5_input_utf8_bytes": 18398,
+    "C5_byte_allowance_including_output_and_frame": 20326,
+    "C5_byte_allowance_limit": 32000
+  },
+  "unchanged": [
+    "native transcript content and order",
+    "native input files",
+    "existing ASCII request bytes",
+    "C5 system instructions",
+    "C5 facts JSON",
+    "embedded profile JSON",
+    "C2 transcription recipe",
+    "C4 output cap 1400",
+    "C5 output cap 1800",
+    "per-stage Gemini reservation 500 paise"
+  ],
+  "external_provider_calls": 0,
+  "new_report_generated": false,
+  "pricing_check": {
+    "source_url": "https://ai.google.dev/gemini-api/docs/latest-model",
+    "model": "gemini-3.8-flash",
+    "rates_valid_through": "2026-12-31",
+    "usd_per_million_input": "0.75",
+    "usd_per_million_output": "3.75",
+    "inr_per_usd_planning_assumption": "100",
+    "conservative_input_allowance": 32000,
+    "output_cap": 1800,
+    "pre_tax_ceiling_inr": "3.075",
+    "approved_reservation_inr": "5.00",
+    "actual_provider_cost": null
+  },
+  "hashes": {
+    "before.junit.xml": "087d800b15977879be42d864556bcf2c8688bdb91380951a2ef481361ff7c00a",
+    "input-after.json": "91ae66b889b23f22678f46c3eb62d750e65922cd53b944fbca4ad45f55d6d13e",
+    "input-before.json": "d5df38b8cfe3f2d23274ab186df877a7fbd50da3886303379a00b77872573829",
+    "tests.junit.xml": "b01cb60eb5195866b843e386b62e04fad440982e6a67551068d39812bc1b2a9e",
+    "tests.log": "f9949afe62009d041753404231b53fed21f21ccc1da313893e3832c5569c8d8a"
+  }
+}

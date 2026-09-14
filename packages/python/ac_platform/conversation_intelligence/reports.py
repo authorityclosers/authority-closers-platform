@@ -18,6 +18,7 @@ from typing import Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
+from ac_platform.conversation_intelligence.gemini_tasks import GeminiTaskError, prepare_gemini_body
 from ac_platform.conversation_intelligence.report_claims import require_qualitative_claims
 from ac_platform.conversation_intelligence.report_overview import (
     OVERVIEW_FORMAT,
@@ -317,25 +318,37 @@ def _serialized_segments(segments: list[dict[str, Any]]) -> str:
 
 
 def plan_transcript_chunks(
-    transcript: Mapping[str, Any], *, max_input_chars: int = DEFAULT_INPUT_CHARS
+    transcript: Mapping[str, Any],
+    *,
+    max_input_chars: int = DEFAULT_INPUT_CHARS,
+    max_input_bytes: int | None = None,
 ) -> tuple[TranscriptChunk, ...]:
-    """Pack complete segments under a character ceiling without truncating text."""
+    """Pack whole native segments under independent character and UTF-8 ceilings."""
 
     if type(max_input_chars) is not int or max_input_chars <= 0:
         raise ReportError("report_input_budget_invalid")
+    if max_input_bytes is not None and (type(max_input_bytes) is not int or max_input_bytes <= 0):
+        raise ReportError("report_input_budget_invalid")
+
+    def fits(segments: list[dict[str, Any]]) -> bool:
+        serialized = _serialized_segments(segments)
+        return len(serialized) <= max_input_chars and (
+            max_input_bytes is None or len(serialized.encode("utf-8")) <= max_input_bytes
+        )
+
     validated = _validated_transcript(transcript)
     chunks: list[list[dict[str, Any]]] = []
     current: list[dict[str, Any]] = []
     for segment in validated["segments"]:
         candidate = [*current, segment]
-        if len(_serialized_segments(candidate)) <= max_input_chars:
+        if fits(candidate):
             current = candidate
             continue
         if not current:
             raise ReportError("report_segment_exceeds_prompt_budget")
         chunks.append(current)
         current = [segment]
-        if len(_serialized_segments(current)) > max_input_chars:
+        if not fits(current):
             raise ReportError("report_segment_exceeds_prompt_budget")
     if current:
         chunks.append(current)
@@ -358,6 +371,23 @@ def _estimate_tokens(value: str) -> int:
     # UTF-8 bytes are a safer fallback than character count for non-ASCII calls.
     # The private runner may replace this bound with its exact o200k tokenizer count.
     return max(1, math.ceil(len(value.encode("utf-8")) / 3))
+
+
+def _fact_user_payload(
+    transcript: Mapping[str, Any],
+    segments: list[dict[str, Any]],
+    ordinal: int,
+    total: int,
+) -> dict[str, Any]:
+    return {
+        "schema": "ac.sales-xray.native-scribe-input/1",
+        "source_sha256": transcript["source_sha256"],
+        "transcript_revision": transcript["revision"],
+        "timebase_id": transcript["timebase_id"],
+        "chunk_index": ordinal,
+        "chunk_count": total,
+        "segments": segments,
+    }
 
 
 def build_fact_groq_prompts(
@@ -396,18 +426,29 @@ def build_fact_groq_prompts(
     if available_input_tokens < 256:
         raise ReportError("report_prompt_budget_exhausted")
     budget_chars = min(max_input_chars, max(1, available_input_tokens * 3 - 768))
-    chunks = plan_transcript_chunks(transcript, max_input_chars=budget_chars)
+    # The character ceiling alone undercounts Hindi/Marathi UTF-8. Reserve the
+    # actual source envelope at the largest possible chunk index, plus 256 bytes
+    # for the bounded native text adapter wrapper and rounding. Never split or
+    # rewrite a provider segment to make it fit.
+    count = len(validated["segments"])
+    envelope = json.dumps(
+        _fact_user_payload(validated, [], count, count),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    envelope_bytes = len(envelope.encode("utf-8")) - len(_serialized_segments([]))
+    budget_bytes = available_input_tokens * 3 - envelope_bytes - 256
+    if budget_bytes <= 0:
+        raise ReportError("report_prompt_budget_exhausted")
+    chunks = plan_transcript_chunks(
+        transcript, max_input_chars=budget_chars, max_input_bytes=budget_bytes
+    )
     prompts: list[dict[str, Any]] = []
     for chunk in chunks:
-        user_payload = {
-            "schema": "ac.sales-xray.native-scribe-input/1",
-            "source_sha256": validated["source_sha256"],
-            "transcript_revision": validated["revision"],
-            "timebase_id": validated["timebase_id"],
-            "chunk_index": chunk.ordinal,
-            "chunk_count": chunk.total,
-            "segments": list(chunk.segments),
-        }
+        user_payload = _fact_user_payload(
+            validated, list(chunk.segments), chunk.ordinal, chunk.total
+        )
         user = json.dumps(user_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         if system_tokens + _estimate_tokens(user) + max_completion_tokens + 128 > MAX_TPM_TOKENS:
             raise ReportError("report_prompt_budget_exceeded")
@@ -983,6 +1024,7 @@ def build_report_groq_prompt(
     max_completion_tokens: int = MAX_COMPLETION_TOKENS,
     model: str = GROQ_MODEL,
     detailed_overview: bool = True,
+    provider: str = "groq",
 ) -> dict[str, Any]:
     """Build the one profile-aware judge request from complete fact coverage."""
 
@@ -990,6 +1032,8 @@ def build_report_groq_prompt(
         raise ReportError("report_output_budget_invalid")
     if not isinstance(model, str) or not model.strip() or len(model) > 128:
         raise ReportError("report_model_invalid")
+    if provider not in {"groq", "gemini"}:
+        raise ReportError("report_provider_invalid")
     validated = _validated_transcript(transcript)
     merged = merge_fact_packets(fact_packets, validated)
     resolved_profile = load_report_profile() if profile is None else dict(profile)
@@ -1045,13 +1089,13 @@ def build_report_groq_prompt(
         sort_keys=True,
         separators=(",", ":"),
     )
-    if (
+    if provider == "groq" and (
         _estimate_tokens(system) + _estimate_tokens(facts) + max_completion_tokens + 128
         > MAX_TPM_TOKENS
     ):
         raise ReportError("report_prompt_budget_exceeded")
     user = "Validated full-call fact packet; preserve evidence literals:\n" + facts
-    return {
+    prompt = {
         "model": model,
         "temperature": 0,
         "max_completion_tokens": max_completion_tokens,
@@ -1061,6 +1105,13 @@ def build_report_groq_prompt(
             {"role": "user", "content": user},
         ],
     }
+    if provider == "gemini":
+        try:
+            # Use the same native envelope check as reconstruction and the broker.
+            prepare_gemini_body(prompt, task="coaching")
+        except GeminiTaskError as exc:
+            raise ReportError(str(exc)) from None
+    return prompt
 
 
 build_groq_report_prompt = build_report_groq_prompt

@@ -298,7 +298,12 @@ class FixedProviderRouter:
                 maximum = body["generationConfig"]["maxOutputTokens"]
                 if type(maximum) is not int or maximum > approval.max_completion_tokens:
                     raise ValueError
-                gemini_prompt_view(body, model=approval.model_id, maximum=maximum)
+                gemini_prompt_view(
+                    body,
+                    model=approval.model_id,
+                    maximum=maximum,
+                    task="coaching" if approval.stage == "C5" else "facts",
+                )
             except (KeyError, TypeError, ValueError):
                 raise ProviderRouterError("broker_router_payload_mismatch") from None
         if not (

@@ -16,6 +16,7 @@ from ac_platform.conversation_intelligence.checkpoints import canonical
 GEMINI_TASK_MODELS = frozenset({"gemini-3.8-flash", "gemini-3.1-pro-preview"})
 _MARKER = "AC_TASK_ADAPTER: gemini-json-v1\nMODEL: "
 _MAX_RESPONSE_BYTES = 4 * 1024 * 1024
+GEMINI_FLASH_COACHING_TOTAL_LIMIT = 32_000
 
 
 class GeminiTaskError(ValueError):
@@ -35,7 +36,24 @@ def _config(maximum: int) -> dict[str, Any]:
     }
 
 
-def prepare_gemini_body(prompt: Mapping[str, Any]) -> dict[str, Any]:
+def _require_prompt_budget(system: str, user: str, *, model: str, task: str, maximum: int) -> None:
+    if task not in {"facts", "coaching"}:
+        raise GeminiTaskError("task_prompt_invalid")
+    input_bytes = len((system + user).encode("utf-8"))
+    if model == "gemini-3.8-flash" and task == "coaching":
+        # One input byte per token is a conservative allowance, not an actual
+        # provider token count. This bounds the full report input without using
+        # Groq's historical TPM limit or increasing the approved output cap.
+        used = input_bytes + maximum + 128
+        limit = GEMINI_FLASH_COACHING_TOTAL_LIMIT
+    else:
+        used = math.ceil(input_bytes / 3) + maximum + 128
+        limit = 8_000
+    if used > limit:
+        raise GeminiTaskError("report_prompt_budget_exceeded")
+
+
+def prepare_gemini_body(prompt: Mapping[str, Any], *, task: str = "facts") -> dict[str, Any]:
     """Reuse the versioned source/profile prompt with Gemini's native envelope."""
     model = prompt.get("model")
     if not isinstance(model, str) or model not in GEMINI_TASK_MODELS:
@@ -53,13 +71,7 @@ def prepare_gemini_body(prompt: Mapping[str, Any]) -> dict[str, Any]:
     config = _config(prompt["max_completion_tokens"])
     system = _MARKER + model + "\n" + messages[0]["content"]
     user = messages[1]["content"]
-    # Retain the existing conservative input+output limit after adding the
-    # native wrapper. Counting bytes avoids undercounting mixed-script text.
-    if (
-        math.ceil(len((system + user).encode("utf-8")) / 3) + config["maxOutputTokens"] + 128
-        > 8_000
-    ):
-        raise GeminiTaskError("report_prompt_budget_exceeded")
+    _require_prompt_budget(system, user, model=model, task=task, maximum=config["maxOutputTokens"])
     return {
         "systemInstruction": {"parts": [{"text": system}]},
         "contents": [{"role": "user", "parts": [{"text": user}]}],
@@ -67,7 +79,9 @@ def prepare_gemini_body(prompt: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def gemini_prompt_view(body: Mapping[str, Any], *, model: str, maximum: int) -> dict[str, Any]:
+def gemini_prompt_view(
+    body: Mapping[str, Any], *, model: str, maximum: int, task: str = "facts"
+) -> dict[str, Any]:
     """A detached validation view, never stored as the actual provider request."""
     if model not in GEMINI_TASK_MODELS:
         raise GeminiTaskError("task_model_not_supported")
@@ -95,6 +109,7 @@ def gemini_prompt_view(body: Mapping[str, Any], *, model: str, maximum: int) -> 
             raise ValueError
     except (KeyError, IndexError, TypeError, ValueError):
         raise GeminiTaskError("task_payload_metadata_mismatch") from None
+    _require_prompt_budget(texts[0], texts[1], model=model, task=task, maximum=maximum)
     return {
         "model": model,
         "max_completion_tokens": maximum,
