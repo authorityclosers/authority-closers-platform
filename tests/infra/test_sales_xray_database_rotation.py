@@ -29,10 +29,17 @@ MIGRATOR_URL = f"postgresql+psycopg://ac_migrator:{MIGRATOR_PASSWORD}@postgres/a
 
 
 class FakeStore:
-    def __init__(self, values: dict[tuple[str, str], str], *, fail_url_once: bool = False) -> None:
+    def __init__(
+        self,
+        values: dict[tuple[str, str], str],
+        *,
+        fail_url_once: bool = False,
+        apply_then_raise_key: str | None = None,
+    ) -> None:
         self.values = values
         self.calls: list[tuple[str, str, str]] = []
         self.fail_url_once = fail_url_once
+        self.apply_then_raise_key = apply_then_raise_key
 
     def get(self, key: str, environment: str) -> str:
         return self.values[(key, environment)]
@@ -43,12 +50,16 @@ class FakeStore:
             self.fail_url_once = False
             raise rotation.RotationError("synthetic store failure")
         self.values[(key, environment)] = value
+        if key == self.apply_then_raise_key:
+            self.apply_then_raise_key = None
+            raise RuntimeError("synthetic applied store failure")
 
 
 class FakeDatabase:
-    def __init__(self) -> None:
+    def __init__(self, *, apply_then_raise: bool = False) -> None:
         self.altered: list[str] = []
         self.verified: list[str] = []
+        self.apply_then_raise = apply_then_raise
         self.snapshots = [
             {"role": "ac_runtime", "table_grants": ["same"], "database_create": False},
             {"role": "ac_runtime", "table_grants": ["same"], "database_create": False},
@@ -64,6 +75,8 @@ class FakeDatabase:
     def alter_runtime_password(self, owner: rotation.DatabaseProfile, password: str) -> None:
         assert owner.username == "ac_owner"
         self.altered.append(password)
+        if self.apply_then_raise and len(self.altered) == 1:
+            raise RuntimeError("synthetic applied database failure")
 
 
 def _store(
@@ -137,6 +150,90 @@ def test_rotation_rolls_database_and_file_back_when_store_update_fails(tmp_path:
     assert database.altered[-1] == OLD_PASSWORD
 
 
+def test_rotation_marks_database_attempt_before_applied_write_failure(tmp_path: Path) -> None:
+    path = tmp_path / "database-url"
+    path.write_text(RUNTIME_URL, encoding="utf-8")
+    database = FakeDatabase(apply_then_raise=True)
+
+    with pytest.raises(rotation.RotationError) as error:
+        rotation.rotate_staging(
+            _store(),
+            database,
+            database_file=path,
+            require_file_owner=False,
+        )
+
+    assert error.value.rollback == {
+        "store": "not-attempted",
+        "file": "not-attempted",
+        "database": "verified",
+    }
+    assert len(database.altered) == 2
+    assert database.altered[-1] == OLD_PASSWORD
+    assert path.read_text(encoding="utf-8") == RUNTIME_URL
+
+
+def test_rotation_verifies_store_rollback_when_patch_applies_then_raises(tmp_path: Path) -> None:
+    path = tmp_path / "database-url"
+    path.write_text(RUNTIME_URL, encoding="utf-8")
+    store = _store()
+    store.apply_then_raise_key = "AC_DB_RUNTIME_PASSWORD"
+    database = FakeDatabase()
+
+    with pytest.raises(rotation.RotationError) as error:
+        rotation.rotate_staging(
+            store,
+            database,
+            database_file=path,
+            require_file_owner=False,
+        )
+
+    assert error.value.rollback == {
+        "store": "verified",
+        "file": "verified",
+        "database": "verified",
+    }
+    assert store.values[("AC_DB_RUNTIME_PASSWORD", "staging")] == OLD_PASSWORD
+    assert store.values[("AC_DATABASE_URL", "staging")] == RUNTIME_URL
+    assert path.read_text(encoding="utf-8") == RUNTIME_URL
+    assert database.altered[-1] == OLD_PASSWORD
+
+
+def test_rotation_verifies_file_rollback_when_replace_applies_then_raises(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    path = tmp_path / "database-url"
+    path.write_text(RUNTIME_URL, encoding="utf-8")
+    real_replace = rotation._replace_private_file
+    calls = 0
+
+    def apply_then_raise(*args: Any, **kwargs: Any) -> None:
+        nonlocal calls
+        calls += 1
+        real_replace(*args, **kwargs)
+        if calls == 1:
+            raise RuntimeError("synthetic applied file failure")
+
+    monkeypatch.setattr(rotation, "_replace_private_file", apply_then_raise)
+    database = FakeDatabase()
+
+    with pytest.raises(rotation.RotationError) as error:
+        rotation.rotate_staging(
+            _store(),
+            database,
+            database_file=path,
+            require_file_owner=False,
+        )
+
+    assert error.value.rollback == {
+        "store": "not-attempted",
+        "file": "verified",
+        "database": "verified",
+    }
+    assert path.read_text(encoding="utf-8") == RUNTIME_URL
+    assert database.altered[-1] == OLD_PASSWORD
+
+
 @pytest.mark.parametrize(
     "value, expected_user",
     [
@@ -206,4 +303,19 @@ def test_psql_password_change_uses_stdin_not_argv(
         new_password,
     )
     assert new_password not in " ".join(captured["command"])
-    assert new_password.encode("utf-8") in captured["input"]
+    assert new_password.encode("utf-8") not in captured["input"]
+    assert b"SCRAM-SHA-256$" in captured["input"]
+    assert b"SET LOCAL log_statement = 'none';" in captured["input"]
+    assert captured["input"].startswith(OWNER_PASSWORD.encode("utf-8") + b"\n")
+
+
+@pytest.mark.parametrize(
+    "rollback, expected",
+    [
+        (None, "not-started"),
+        ({"database": "verified", "file": "not-attempted", "store": "verified"}, "verified"),
+        ({"database": "uncertain", "file": "verified", "store": "verified"}, "uncertain"),
+    ],
+)
+def test_rollback_summary_is_non_secret(rollback: dict[str, str] | None, expected: str) -> None:
+    assert rotation._rollback_summary(rollback) == expected

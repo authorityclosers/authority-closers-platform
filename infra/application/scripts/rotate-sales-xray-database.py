@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import base64
 import contextlib
+import hashlib
 import hmac
 import json
 import os
@@ -57,7 +58,11 @@ MAX_DATABASE_URL_BYTES = 4096
 
 
 class RotationError(Exception):
-    """A content-free operator failure."""
+    """A content-free operator failure with non-secret reconciliation status."""
+
+    def __init__(self, message: str, *, rollback: dict[str, str] | None = None) -> None:
+        super().__init__(message)
+        self.rollback = rollback
 
 
 @dataclass(frozen=True)
@@ -161,6 +166,23 @@ def _new_password() -> str:
     # urlsafe characters avoid SQL quoting and URL escaping hazards.  The
     # value is never written to a file or included in a command argument.
     return base64.urlsafe_b64encode(secrets.token_bytes(32)).decode("ascii").rstrip("=")
+
+
+def _scram_verifier(password: str) -> str:
+    """Build a PostgreSQL SCRAM verifier without putting the cleartext in SQL."""
+
+    _validate_password(password)
+    iterations = 4096
+    salt = secrets.token_bytes(16)
+    salted = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
+    client_key = hmac.new(salted, b"Client Key", hashlib.sha256).digest()
+    stored_key = hashlib.sha256(client_key).digest()
+    server_key = hmac.new(salted, b"Server Key", hashlib.sha256).digest()
+
+    def encode(value: bytes) -> str:
+        return base64.b64encode(value).decode("ascii")
+
+    return f"SCRAM-SHA-256${iterations}:{encode(salt)}${encode(stored_key)}:{encode(server_key)}"
 
 
 def _check_private_parent(path: Path, *, require_owner: bool) -> None:
@@ -466,15 +488,23 @@ class PsqlDatabase:
         return snapshot
 
     def alter_runtime_password(self, owner: DatabaseProfile, password: str) -> None:
-        _validate_password(password)
-        escaped = password.replace("'", "''")
+        verifier = _scram_verifier(password).replace("'", "''")
         script = (
             "IFS= read -r owner_password || exit 1; "
             'PGPASSWORD="$owner_password" psql -h 127.0.0.1 '
             "-U ac_owner -d ac_platform --no-psqlrc --quiet "
             "--set ON_ERROR_STOP=1"
         )
-        self._run(script, stdin=f"{owner.password}\nALTER ROLE ac_runtime PASSWORD '{escaped}';\n")
+        # The cleartext never enters SQL.  The owner password is consumed by
+        # the shell's stdin read; only a verifier is sent to PostgreSQL.  The
+        # local setting prevents statement logging from recording the ALTER.
+        sql = (
+            "BEGIN;\n"
+            "SET LOCAL log_statement = 'none';\n"
+            f"ALTER ROLE ac_runtime PASSWORD '{verifier}';\n"
+            "COMMIT;\n"
+        )
+        self._run(script, stdin=f"{owner.password}\n{sql}")
 
 
 _PRIVILEGE_SNAPSHOT_SQL = """
@@ -547,47 +577,80 @@ def _rotate_staging_unlocked(
     before = database.privilege_snapshot(owner)
     new_password = _new_password()
     new_url = render_database_url(runtime, new_password)
-    db_changed = file_changed = store_changed = False
+    attempted = {"database": False, "file": False, "store": False}
     try:
+        attempted["database"] = True
         database.alter_runtime_password(owner, new_password)
-        db_changed = True
         database.verify_runtime(DatabaseProfile(**{**runtime.__dict__, "password": new_password}))
         after = database.privilege_snapshot(owner)
         if after != before:
             raise _refuse()
+        attempted["file"] = True
         _replace_private_file(
             database_file,
             old_file,
             new_url.encode("utf-8"),
             require_owner=require_file_owner,
         )
-        file_changed = True
+        attempted["store"] = True
         store.set("AC_DB_RUNTIME_PASSWORD", new_password, STAGING_ENVIRONMENT)
-        store_changed = True
         store.set("AC_DATABASE_URL", new_url, STAGING_ENVIRONMENT)
         if store.get("AC_DB_RUNTIME_PASSWORD", STAGING_ENVIRONMENT) != new_password:
             raise _refuse()
         if store.get("AC_DATABASE_URL", STAGING_ENVIRONMENT) != new_url:
             raise _refuse()
     except BaseException:
-        # Roll back in memory-backed dependencies without ever printing values.
-        if store_changed:
-            with contextlib.suppress(Exception):
+        # Marking before each call matters: a provider or filesystem write can
+        # commit and then fail while returning/readback, leaving no normal
+        # return point at which to set a post-write flag.
+        rollback = {
+            "store": "not-attempted",
+            "file": "not-attempted",
+            "database": "not-attempted",
+        }
+        if attempted["store"]:
+            try:
                 store.set("AC_DATABASE_URL", runtime_url, STAGING_ENVIRONMENT)
                 store.set("AC_DB_RUNTIME_PASSWORD", old_runtime_password, STAGING_ENVIRONMENT)
-        if file_changed:
-            with contextlib.suppress(Exception):
-                _replace_private_file(
-                    database_file,
-                    new_url.encode("utf-8"),
-                    old_file,
-                    require_owner=require_file_owner,
-                )
-        if db_changed:
-            with contextlib.suppress(Exception):
+                if (
+                    store.get("AC_DATABASE_URL", STAGING_ENVIRONMENT) == runtime_url
+                    and store.get("AC_DB_RUNTIME_PASSWORD", STAGING_ENVIRONMENT)
+                    == old_runtime_password
+                ):
+                    rollback["store"] = "verified"
+                else:
+                    rollback["store"] = "uncertain"
+            except Exception:
+                rollback["store"] = "uncertain"
+        if attempted["file"]:
+            try:
+                current_file = _private_file_read(database_file, require_owner=require_file_owner)
+                if current_file != old_file:
+                    if current_file != new_url.encode("utf-8"):
+                        rollback["file"] = "uncertain"
+                    else:
+                        _replace_private_file(
+                            database_file,
+                            current_file,
+                            old_file,
+                            require_owner=require_file_owner,
+                        )
+                if _private_file_read(database_file, require_owner=require_file_owner) == old_file:
+                    rollback["file"] = "verified"
+                elif rollback["file"] != "uncertain":
+                    rollback["file"] = "uncertain"
+            except Exception:
+                rollback["file"] = "uncertain"
+        if attempted["database"]:
+            try:
                 database.alter_runtime_password(owner, old_runtime_password)
                 database.verify_runtime(runtime)
-        raise _refuse() from None
+                rollback["database"] = "verified"
+            except Exception:
+                rollback["database"] = "uncertain"
+        raise RotationError(
+            "Sales Xray database credential rotation refused.", rollback=rollback
+        ) from None
     return {
         "schema": "ac.sales-xray.database-credential-rotation/1",
         "status": "rotated",
@@ -620,6 +683,16 @@ def rotate_staging(
         )
 
 
+def _rollback_summary(rollback: dict[str, str] | None) -> str:
+    if rollback is None:
+        return "not-started"
+    if any(status == "uncertain" for status in rollback.values()):
+        return "uncertain"
+    if all(status in {"verified", "not-attempted"} for status in rollback.values()):
+        return "verified"
+    return "uncertain"
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -642,8 +715,18 @@ def main(argv: list[str] | None = None) -> int:
             database,
             compare_production=not args.skip_production_compare,
         )
-    except (KeyError, RotationError, OSError, ValueError):
-        print("FAIL Sales Xray staging database credential rotation refused.", file=sys.stderr)
+    except RotationError as error:
+        print(
+            "FAIL Sales Xray staging database credential rotation refused; "
+            f"rollback={_rollback_summary(error.rollback)}.",
+            file=sys.stderr,
+        )
+        return 2
+    except (KeyError, OSError, ValueError):
+        print(
+            "FAIL Sales Xray staging database credential rotation refused; rollback=not-started.",
+            file=sys.stderr,
+        )
         return 2
     print(
         "PASS Sales Xray staging database credential rotated; restart and candidate "
