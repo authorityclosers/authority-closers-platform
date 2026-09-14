@@ -357,16 +357,46 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
         try:
             with page.expect_response(
                 lambda response: (
-                    urlsplit(response.url).path == "/v1/conversation/acquisition/availability"
+                    urlsplit(response.url).path == "/v1/conversation/acquisition/entry"
                     and response.status == 200
                 )
-            ) as availability_response:
+            ) as entry_response:
                 page.goto(backend.origin, wait_until="networkidle")
-            availability = availability_response.value
-            assert availability.json() == {"paused": False}
-            assert availability.header_value("cache-control") == "no-store"
-            checks.append("real-public-availability-boolean-no-store")
+            entry = entry_response.value.json()
+            assert entry == {
+                "enabled": False,
+                "site_key": None,
+                "challenge_action": None,
+                "policy_revision": None,
+                "allowance_seconds": None,
+            }
+            proof["acquisition_entry"] = entry
             expect(page.get_by_role("link", name="Sign in with AC")).to_be_visible()
+            # This fixture exercises the account-only fallback. Its disabled
+            # entry response unmounts AcquisitionStudio's availability widget,
+            # legitimately cancelling that transient read. Verify the real API
+            # from the settled browser page, independently of response ordering.
+            availability = page.evaluate(
+                """
+                async () => {
+                  const response = await fetch('/v1/conversation/acquisition/availability', {
+                    credentials: 'same-origin', cache: 'no-store', redirect: 'error',
+                  });
+                  return {
+                    status: response.status,
+                    body: await response.json(),
+                    cache_control: response.headers.get('cache-control'),
+                  };
+                }
+                """
+            )
+            assert availability == {
+                "status": 200,
+                "body": {"paused": False},
+                "cache_control": "no-store",
+            }
+            proof["public_availability_probe"] = availability
+            checks.append("real-public-availability-boolean-no-store")
             expect(page.locator(".recording-history-item")).to_have_count(0)
             assert not any(item["path"] == "/v1/conversation/recordings" for item in network)
             page.screenshot(path=str(evidence / "anonymous-home.png"), full_page=True)
@@ -684,8 +714,22 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
             proof["navigation_cancellations"] = [
                 failure for failure in request_failures if failure in accepted_aborts
             ]
+            # Only this optional widget read may abort when the independently
+            # verified disabled entry selects CallStudio. Every completed read
+            # must still succeed, and the explicit real-browser probe above
+            # must prove the exact response contract before accepting an abort.
+            availability_path = "/v1/conversation/acquisition/availability"
+            assert all(
+                item["status"] == 200 for item in network if item["path"] == availability_path
+            )
+            unmount_aborts = {f"GET {availability_path}: net::ERR_ABORTED"}
+            proof["component_unmount_cancellations"] = [
+                failure for failure in request_failures if failure in unmount_aborts
+            ]
             unexpected_failures = [
-                failure for failure in request_failures if failure not in accepted_aborts
+                failure
+                for failure in request_failures
+                if failure not in accepted_aborts and failure not in unmount_aborts
             ]
             proof["unexpected_request_failures"] = unexpected_failures
             assert not unexpected_failures
