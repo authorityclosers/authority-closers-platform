@@ -212,6 +212,22 @@ type ImportedProfile = {
   savedRevision?: number;
 };
 
+function preferredActivationRevision(
+  current: ProviderView | null,
+): number | null {
+  if (!current) return null;
+  const activeRevision = current.activation?.revision;
+  if (
+    activeRevision !== undefined &&
+    current.activation_options.some(
+      (option) => option.revision === activeRevision,
+    )
+  ) {
+    return activeRevision;
+  }
+  return current.activation_options[0]?.revision ?? null;
+}
+
 function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) {
     return `[${value.map((item) => canonicalJson(item)).join(",")}]`;
@@ -983,16 +999,7 @@ export function ProviderControlsPanel() {
                 revision: payload.configuration_template.revision,
               },
         );
-        setActivationRevision(
-          payload.current?.activation_options.find(
-            (option) =>
-              option.revision === payload.current?.activation?.revision,
-          )?.revision ??
-            payload.current?.activation_options[0]?.revision ??
-            payload.current?.activation?.revision ??
-            payload.current?.revision ??
-            null,
-        );
+        setActivationRevision(preferredActivationRevision(payload.current));
         setSaveState("idle");
         setMessage("");
       })
@@ -1137,6 +1144,7 @@ export function ProviderControlsPanel() {
           ? { ...previous, current: saved }
           : previous,
       );
+      setActivationRevision(preferredActivationRevision(saved));
       setDraft(draftFromConfiguration(saved.configuration));
       setSaveState("saved");
       setActivationState("idle");

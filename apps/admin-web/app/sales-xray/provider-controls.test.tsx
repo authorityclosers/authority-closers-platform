@@ -518,6 +518,73 @@ describe("provider control contract", () => {
     expect(host.textContent).toContain("active for new plans");
   });
 
+  it("selects the first approved revision when the active revision is absent", async () => {
+    const current = {
+      id: "registry-proof",
+      revision: 5,
+      configuration_sha256: "a".repeat(64),
+      configuration: template,
+      created_at: "2026-09-14T00:00:00Z",
+      execution_activated: true,
+      activation: {
+        id: "active-revision",
+        sequence: 1,
+        revision: 1,
+        configuration_sha256: "b".repeat(64),
+        created_at: "2026-09-14T00:00:00Z",
+      },
+      activation_options: [
+        {
+          id: "approved-revision-2",
+          revision: 2,
+          configuration_sha256: "c".repeat(64),
+          routes: [
+            {
+              task: "facts",
+              provider: "gemini",
+              model: "gemini-3.8-flash",
+              max_cost_paise: 500,
+            },
+          ],
+        },
+      ],
+    };
+    const activated = {
+      ...current,
+      activation: {
+        ...current.activation,
+        revision: 2,
+        configuration_sha256: "c".repeat(64),
+      },
+    };
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(payload(current)))
+      .mockResolvedValueOnce(jsonResponse(activated));
+
+    await renderPanel();
+    const activate = [...host.querySelectorAll("button")].find((button) =>
+      button.textContent?.includes("Activate for new plans"),
+    );
+    expect(activate).toBeInstanceOf(HTMLButtonElement);
+
+    await act(async () => {
+      (activate as HTMLButtonElement).click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const postCall = fetchMock.mock.calls.find(
+      ([url, init]) =>
+        url === "/v1/admin/conversation/providers/activate" &&
+        init?.method === "POST",
+    );
+    expect(JSON.parse(postCall?.[1]?.body as string)).toEqual({
+      expected_revision: 5,
+      target_revision: 2,
+    });
+    expect(host.textContent).toContain("active for new plans");
+  });
+
   it("builds a multi-task configuration with zero paid spend and reference-only settings", () => {
     const configuration = buildConfiguration(
       {
