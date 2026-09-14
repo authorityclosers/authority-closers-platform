@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import importlib.util
+import stat
 import subprocess
 import sys
 from contextlib import contextmanager
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -344,6 +346,21 @@ def test_private_parent_allows_source_owned_acops_group_without_write_bits(
     monkeypatch.setattr(rotation.os, "name", "posix")
     monkeypatch.setattr(rotation, "grp", FakeGroup)
     assert rotation._allowed_parent_group_ids() == {rotation.ROOT_GID, 1234}
+
+
+@pytest.mark.parametrize(
+    "cursor, mode, gid, expected",
+    [
+        (Path("/run/lock"), stat.S_IFDIR | stat.S_ISVTX | 0o777, 0, True),
+        (Path("/run/lock"), stat.S_IFDIR | 0o755, 0, False),
+        (Path("/run/other"), stat.S_IFDIR | 0o750, 0, True),
+        (Path("/run/other"), stat.S_IFDIR | 0o770, 0, False),
+        (Path("/run/other"), stat.S_IFLNK | 0o777, 0, False),
+    ],
+)
+def test_private_parent_trust_boundary(cursor: Path, mode: int, gid: int, expected: bool) -> None:
+    info = SimpleNamespace(st_uid=rotation.ROOT_UID, st_gid=gid, st_mode=mode)
+    assert rotation._is_trusted_parent(cursor, info) is expected
 
 
 @pytest.mark.parametrize(

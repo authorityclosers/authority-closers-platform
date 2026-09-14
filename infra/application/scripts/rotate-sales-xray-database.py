@@ -200,6 +200,17 @@ def _allowed_parent_group_ids() -> set[int]:
     return allowed
 
 
+def _is_trusted_parent(cursor: Path, info: os.stat_result) -> bool:
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != ROOT_UID:
+        return False
+    # /run/lock is the host's root-owned sticky system lock parent.  Its
+    # standard 1777 mode is safe for this boundary because the child
+    # authority-closers directory is root-owned and independently checked.
+    if cursor == Path("/run/lock"):
+        return stat.S_IMODE(info.st_mode) == 0o1777
+    return info.st_gid in _allowed_parent_group_ids() and not stat.S_IMODE(info.st_mode) & 0o022
+
+
 def _check_private_parent(path: Path, *, require_owner: bool) -> None:
     if not path.is_absolute() or ".." in path.parts:
         raise _refuse()
@@ -211,11 +222,7 @@ def _check_private_parent(path: Path, *, require_owner: bool) -> None:
             raise _refuse() from None
         if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
             raise _refuse()
-        if require_owner and (
-            info.st_uid != ROOT_UID
-            or info.st_gid not in _allowed_parent_group_ids()
-            or stat.S_IMODE(info.st_mode) & 0o022
-        ):
+        if require_owner and not _is_trusted_parent(cursor, info):
             raise _refuse()
         if cursor.parent == cursor:
             return
