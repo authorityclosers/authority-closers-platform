@@ -315,12 +315,12 @@ def test_entrypoint_bridges_image_socket_wait_to_shared_socket(
     assert "rm -f /run/ac-media-safety/clamd.sock" in wrapper
     assert "rm -f /tmp/clamd.sock" in wrapper
     assert "ln -s /run/ac-media-safety/clamd.sock /tmp/clamd.sock" in wrapper
-    assert "exec /init-unprivileged \"$@\"" in wrapper
+    assert 'exec /init-unprivileged "$@"' in wrapper
     assert 'entrypoint: ["/bin/sh", "/usr/local/bin/ac-media-safety-entrypoint"]' in compose
     assert "./entrypoint.sh:/usr/local/bin/ac-media-safety-entrypoint:ro" in compose
-    assert "LocalSocket /run/ac-media-safety/clamd.sock" in (
-        SAFETY / "clamd.conf"
-    ).read_text(encoding="utf-8")
+    assert "LocalSocket /run/ac-media-safety/clamd.sock" in (SAFETY / "clamd.conf").read_text(
+        encoding="utf-8"
+    )
 
 
 def test_socket_root_clears_parent_setgid_and_keeps_exact_fixed_contract(

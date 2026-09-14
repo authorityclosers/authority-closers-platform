@@ -263,6 +263,12 @@ PROCESSING_OWNERSHIP_PARITY_NEW_TABLES = (
 PROCESSING_OWNERSHIP_PARITY_TABLES = (
     ACQUISITION_PARITY_TABLES + PROCESSING_OWNERSHIP_PARITY_NEW_TABLES
 )
+REVIEWER_IDENTITY_PARITY_MIGRATION_HEAD = "20260914_0038"
+REVIEWER_IDENTITY_PARITY_CONTRACT = "ac-postgres-parity-v18"
+REVIEWER_IDENTITY_PARITY_NEW_TABLES = ("reviewer_auth_challenges",)
+REVIEWER_IDENTITY_PARITY_TABLES = (
+    PROCESSING_OWNERSHIP_PARITY_TABLES + REVIEWER_IDENTITY_PARITY_NEW_TABLES
+)
 # The first migration rehearsal is deliberately an exact reviewed transition.
 # Do not infer a source/target pair from lexical revision ordering.
 MIGRATION_REHEARSAL_SOURCE_HEAD = COMMUNITY_PARITY_MIGRATION_HEAD
@@ -283,6 +289,8 @@ ACQUISITION_REHEARSAL_SOURCE_HEAD = REVIEW_INVITATIONS_PARITY_MIGRATION_HEAD
 ACQUISITION_REHEARSAL_TARGET_HEAD = ACQUISITION_PARITY_MIGRATION_HEAD
 PROCESSING_OWNERSHIP_REHEARSAL_SOURCE_HEAD = ACQUISITION_PARITY_MIGRATION_HEAD
 PROCESSING_OWNERSHIP_REHEARSAL_TARGET_HEAD = PROCESSING_OWNERSHIP_PARITY_MIGRATION_HEAD
+REVIEWER_IDENTITY_REHEARSAL_SOURCE_HEAD = PROCESSING_OWNERSHIP_PARITY_MIGRATION_HEAD
+REVIEWER_IDENTITY_REHEARSAL_TARGET_HEAD = REVIEWER_IDENTITY_PARITY_MIGRATION_HEAD
 # Production is currently at 0029. Keep a direct rehearsal contract for the
 # candidate image that upgrades through both reviewed Sales Xray migrations in
 # one isolated target; do not require an intermediate application deployment.
@@ -308,6 +316,10 @@ MIGRATION_REHEARSAL_PAIRS = frozenset(
         (
             PROCESSING_OWNERSHIP_REHEARSAL_SOURCE_HEAD,
             PROCESSING_OWNERSHIP_REHEARSAL_TARGET_HEAD,
+        ),
+        (
+            REVIEWER_IDENTITY_REHEARSAL_SOURCE_HEAD,
+            REVIEWER_IDENTITY_REHEARSAL_TARGET_HEAD,
         ),
         (
             DIRECT_SALES_XRAY_REHEARSAL_SOURCE_HEAD,
@@ -370,6 +382,10 @@ VERSIONED_PARITY_CONTRACTS = {
     PROCESSING_OWNERSHIP_PARITY_MIGRATION_HEAD: (
         PROCESSING_OWNERSHIP_PARITY_CONTRACT,
         PROCESSING_OWNERSHIP_PARITY_TABLES,
+    ),
+    REVIEWER_IDENTITY_PARITY_MIGRATION_HEAD: (
+        REVIEWER_IDENTITY_PARITY_CONTRACT,
+        REVIEWER_IDENTITY_PARITY_TABLES,
     ),
 }
 
@@ -2088,6 +2104,17 @@ def _assert_migration_rehearsal_transition(
                 "migration rehearsal does not match the reviewed processing ownership tables"
             )
     elif (source_head, target_head) == (
+        REVIEWER_IDENTITY_REHEARSAL_SOURCE_HEAD,
+        REVIEWER_IDENTITY_REHEARSAL_TARGET_HEAD,
+    ):
+        if source_derivations:
+            raise DrillError("reviewer identity rehearsal does not accept derivations")
+        expected_new_counts = {table: 0 for table in REVIEWER_IDENTITY_PARITY_NEW_TABLES}
+        if expected_new_tables != set(expected_new_counts):
+            raise DrillError(
+                "migration rehearsal does not match the reviewed reviewer identity table"
+            )
+    elif (source_head, target_head) == (
         DIRECT_SALES_XRAY_REHEARSAL_SOURCE_HEAD,
         DIRECT_SALES_XRAY_REHEARSAL_TARGET_HEAD,
     ):
@@ -2603,6 +2630,7 @@ def build_parser() -> argparse.ArgumentParser:
             REVIEW_INVITATIONS_REHEARSAL_SOURCE_HEAD,
             ACQUISITION_REHEARSAL_SOURCE_HEAD,
             PROCESSING_OWNERSHIP_REHEARSAL_SOURCE_HEAD,
+            REVIEWER_IDENTITY_REHEARSAL_SOURCE_HEAD,
         ),
         help="exact prior migration head for an explicitly reviewed isolated rehearsal",
     )

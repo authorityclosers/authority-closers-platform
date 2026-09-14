@@ -16,7 +16,12 @@ export function requestReviewerNavigation(navigate: () => void): boolean {
 }
 
 export function registerReviewerNavigationGuard(dirty: boolean): () => void {
-  if (!dirty || typeof window === "undefined" || typeof document === "undefined") return () => undefined;
+  if (
+    !dirty ||
+    typeof window === "undefined" ||
+    typeof document === "undefined"
+  )
+    return () => undefined;
   activeCleanup?.();
   let accepted = false;
   let resetTimer: ReturnType<typeof setTimeout> | null = null;
@@ -25,14 +30,31 @@ export function registerReviewerNavigationGuard(dirty: boolean): () => void {
     const result = window.confirm(REVIEWER_NAVIGATION_CONFIRMATION);
     if (result) {
       accepted = true;
-      resetTimer = setTimeout(() => { accepted = false; resetTimer = null; }, 0);
+      resetTimer = setTimeout(() => {
+        accepted = false;
+        resetTimer = null;
+      }, 0);
     }
     return result;
   };
   const onClick = (event: MouseEvent) => {
-    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-    const target = event.target instanceof Element ? event.target.closest("a[href]") : null;
-    if (!(target instanceof HTMLAnchorElement) || target.target === "_blank" || target.origin !== window.location.origin) return;
+    if (
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    )
+      return;
+    const target =
+      event.target instanceof Element ? event.target.closest("a[href]") : null;
+    if (
+      !(target instanceof HTMLAnchorElement) ||
+      target.target === "_blank" ||
+      target.origin !== window.location.origin
+    )
+      return;
     if (target.href === window.location.href || confirmLeave()) return;
     event.preventDefault();
     event.stopPropagation();
@@ -41,7 +63,10 @@ export function registerReviewerNavigationGuard(dirty: boolean): () => void {
     if (confirmLeave()) return;
     window.history.pushState(null, "", window.location.href);
   };
-  const onBeforeUnload = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+  const onBeforeUnload = (event: BeforeUnloadEvent) => {
+    event.preventDefault();
+    event.returnValue = "";
+  };
   const onImperative = (raw: Event) => {
     if (confirmLeave()) return;
     raw.preventDefault();

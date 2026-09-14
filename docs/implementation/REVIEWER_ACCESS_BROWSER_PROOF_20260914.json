@@ -7,20 +7,12 @@
   "browser_substitution_denied": true,
   "dirty_navigation_guard": true,
   "feedback_count": 3,
-  "lenses": [
-    "sales",
-    "technical",
-    "ux"
-  ],
+  "lenses": ["sales", "technical", "ux"],
   "admin_saved_feedback_visible": true,
   "revocation_denies_source": true,
   "source_range_status": 206,
   "audio_element_played": true,
-  "widths_without_overflow": [
-    1440,
-    390,
-    320
-  ],
+  "widths_without_overflow": [1440, 390, 320],
   "page_errors": [],
   "source_sha256": {
     "apps/admin-web/app/lib/reviewer-server-auth.ts": "a65750a2b0f2d3806979564da8d319d7ffacb7e9cb4f10d79f8271a5f7a5896e",

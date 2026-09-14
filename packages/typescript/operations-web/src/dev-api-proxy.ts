@@ -323,15 +323,32 @@ export function isStagingAdminRequest(url: URL, method: string): boolean {
     const path = reviewer[1];
     if (path === "review-assignments") {
       const entries = [...url.searchParams.entries()];
-      return normalizedMethod === "GET" && (entries.length === 0 || (entries.length === 1 && entries[0][0] === "limit" && /^(?:[1-9]|[1-4][0-9]|50)$/.test(entries[0][1])));
+      return (
+        normalizedMethod === "GET" &&
+        (entries.length === 0 ||
+          (entries.length === 1 &&
+            entries[0][0] === "limit" &&
+            /^(?:[1-9]|[1-4][0-9]|50)$/.test(entries[0][1])))
+      );
     }
     if (url.search !== "") return false;
-    if (["auth/request", "auth/verify", "auth/logout", "review-invitations/accept"].includes(path)) return normalizedMethod === "POST";
+    if (
+      [
+        "auth/request",
+        "auth/verify",
+        "auth/logout",
+        "review-invitations/accept",
+      ].includes(path)
+    )
+      return normalizedMethod === "POST";
     if (path === "me") return normalizedMethod === "GET";
-    const assignment = /^review-assignments\/([^/]+)(?:\/(source|submissions))?$/.exec(path);
+    const assignment =
+      /^review-assignments\/([^/]+)(?:\/(source|submissions))?$/.exec(path);
     if (!assignment || !isUuid(assignment[1])) return false;
     if (!assignment[2]) return normalizedMethod === "GET";
-    return assignment[2] === "source" ? normalizedMethod === "GET" : ["GET", "POST"].includes(normalizedMethod);
+    return assignment[2] === "source"
+      ? normalizedMethod === "GET"
+      : ["GET", "POST"].includes(normalizedMethod);
   }
   const diagnosis = /^\/v1\/admin\/learners\/([^/]+)\/diagnosis$/.exec(
     url.pathname,
@@ -527,16 +544,28 @@ function reviewerSetCookiesFrom(headers: string[]): string[] {
     const segments = raw.split(";");
     const pair = segments.shift()?.trim() ?? "";
     const separator = pair.indexOf("=");
-    if (separator < 1 || !REVIEWER_COOKIE_NAMES.includes(pair.slice(0, separator) as (typeof REVIEWER_COOKIE_NAMES)[number])) return [];
+    if (
+      separator < 1 ||
+      !REVIEWER_COOKIE_NAMES.includes(
+        pair.slice(0, separator) as (typeof REVIEWER_COOKIE_NAMES)[number],
+      )
+    )
+      return [];
     const name = pair.slice(0, separator);
     const value = pair.slice(separator + 1);
     const attributes = segments.map((item) => item.trim().toLowerCase());
-    const required = ["secure", "httponly", "samesite=lax", "path=/"].every((item) => attributes.includes(item));
-    if (!required || attributes.some((item) => item.startsWith("domain="))) return [];
-    const clearing = attributes.some((item) => item === "max-age=0") && value === "";
+    const required = ["secure", "httponly", "samesite=lax", "path=/"].every(
+      (item) => attributes.includes(item),
+    );
+    if (!required || attributes.some((item) => item.startsWith("domain=")))
+      return [];
+    const clearing =
+      attributes.some((item) => item === "max-age=0") && value === "";
     if (!clearing && !SESSION_VALUE_PATTERN.test(value)) return [];
     const maxAge = name.endsWith("_state") ? "900" : "28800";
-    return [`${name}=${value}; Max-Age=${clearing ? "0" : maxAge}; Path=/; HttpOnly; SameSite=Lax; Secure`];
+    return [
+      `${name}=${value}; Max-Age=${clearing ? "0" : maxAge}; Path=/; HttpOnly; SameSite=Lax; Secure`,
+    ];
   });
 }
 
@@ -570,7 +599,10 @@ function localSessionFrom(request: Request): string | null {
   return values[0];
 }
 
-function hasForbiddenBrowserCredential(request: Request, reviewerSurface = false): boolean {
+function hasForbiddenBrowserCredential(
+  request: Request,
+  reviewerSurface = false,
+): boolean {
   const cookies = cookieValues(request);
   return (
     (!reviewerSurface && cookies.has(STAGING_SESSION_COOKIE_NAME)) ||

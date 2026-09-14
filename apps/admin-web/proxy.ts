@@ -78,7 +78,11 @@ export async function proxy(request: NextRequest) {
   // validates the dedicated session. Learner and Admin session cookies never
   // satisfy this branch.
   if (REVIEWER_PUBLIC_PATH.test(request.nextUrl.pathname)) {
-    if (REVIEWER_AUTH_PATH.test(request.nextUrl.pathname) || request.nextUrl.pathname === "/reviewer") return NextResponse.next();
+    if (
+      REVIEWER_AUTH_PATH.test(request.nextUrl.pathname) ||
+      request.nextUrl.pathname === "/reviewer"
+    )
+      return NextResponse.next();
     if (runtime === "production") {
       const reviewerContext = await resolveReviewerServerContext({
         cookieHeader: request.headers.get("cookie"),
@@ -87,7 +91,8 @@ export async function proxy(request: NextRequest) {
         adminAppUrl: process.env.AC_ADMIN_APP_URL,
         production: true,
       });
-      if (!reviewerContext) return sameOriginRedirect(request, "/reviewer/login");
+      if (!reviewerContext)
+        return sameOriginRedirect(request, "/reviewer/login");
     }
     return NextResponse.next();
   }

@@ -2,7 +2,9 @@ import { request as httpRequest } from "node:http";
 import { z } from "zod";
 
 const identity = z.object({
-  person_id: z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
+  person_id: z
+    .string()
+    .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
   email: z.string().email().max(320),
   display_name: z.string().nullable(),
   expires_at_epoch: z.number().int().positive(),
@@ -20,7 +22,9 @@ const OPAQUE_SESSION_PATTERN = /^[A-Za-z0-9_-]{43,512}$/;
 const REVIEWER_SERVER_REQUEST_TIMEOUT_MS = 3_000;
 const REVIEWER_SERVER_RESPONSE_LIMIT_BYTES = 16 * 1024;
 
-function configuredAdminHost(rawAdminAppUrl: string | undefined): string | null {
+function configuredAdminHost(
+  rawAdminAppUrl: string | undefined,
+): string | null {
   if (!rawAdminAppUrl) return null;
   try {
     const parsed = new URL(rawAdminAppUrl);
@@ -31,34 +35,57 @@ function configuredAdminHost(rawAdminAppUrl: string | undefined): string | null 
       parsed.password ||
       parsed.search ||
       parsed.hash
-    ) return null;
+    )
+      return null;
     return parsed.host;
   } catch {
     return null;
   }
 }
 
-function reviewerCookie(rawCookieHeader: string | null, production: boolean): string | null {
+function reviewerCookie(
+  rawCookieHeader: string | null,
+  production: boolean,
+): string | null {
   if (!rawCookieHeader) return null;
-  const expected = production ? "__Host-ac_reviewer_session" : "ac_reviewer_session";
+  const expected = production
+    ? "__Host-ac_reviewer_session"
+    : "ac_reviewer_session";
   const values = rawCookieHeader.split(";").flatMap((segment) => {
     const separator = segment.indexOf("=");
-    if (separator < 1 || segment.slice(0, separator).trim() !== expected) return [];
+    if (separator < 1 || segment.slice(0, separator).trim() !== expected)
+      return [];
     const value = segment.slice(separator + 1).trim();
     return OPAQUE_SESSION_PATTERN.test(value) ? [value] : [];
   });
   return values.length === 1 ? `${expected}=${values[0]}` : null;
 }
 
-function reviewerMeUrl(rawBaseUrl: string | undefined, apiHost: string | undefined): URL | null {
-  if (!rawBaseUrl || !apiHost || !TRUSTED_INTERNAL_API_HOSTS.has(apiHost)) return null;
+function reviewerMeUrl(
+  rawBaseUrl: string | undefined,
+  apiHost: string | undefined,
+): URL | null {
+  if (!rawBaseUrl || !apiHost || !TRUSTED_INTERNAL_API_HOSTS.has(apiHost))
+    return null;
   const approvedOrigin = `http://${apiHost}:8000`;
   if (rawBaseUrl !== approvedOrigin) return null;
   try {
     const parsed = new URL(rawBaseUrl);
-    if (parsed.protocol !== "http:" || parsed.hostname !== apiHost || parsed.port !== "8000" || parsed.username || parsed.password || parsed.search || parsed.hash || parsed.pathname !== "/") return null;
+    if (
+      parsed.protocol !== "http:" ||
+      parsed.hostname !== apiHost ||
+      parsed.port !== "8000" ||
+      parsed.username ||
+      parsed.password ||
+      parsed.search ||
+      parsed.hash ||
+      parsed.pathname !== "/"
+    )
+      return null;
     return new URL("/v1/reviewer/me", parsed);
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -69,7 +96,11 @@ function reviewerMeUrl(rawBaseUrl: string | undefined, apiHost: string | undefin
  * fetch implementation rewrites Host to the internal loopback destination,
  * while the API authorizes reviewer traffic by the canonical Admin host.
  */
-export function requestReviewerServerIdentity(url: URL, adminHost: string, cookie: string): Promise<Response> {
+export function requestReviewerServerIdentity(
+  url: URL,
+  adminHost: string,
+  cookie: string,
+): Promise<Response> {
   return new Promise((resolve, reject) => {
     let settled = false;
     const settleReject = (error: unknown) => {
@@ -106,7 +137,9 @@ export function requestReviewerServerIdentity(url: URL, adminHost: string, cooki
           size += value.length;
           if (size > REVIEWER_SERVER_RESPONSE_LIMIT_BYTES) {
             response.destroy();
-            settleReject(new Error("reviewer identity response exceeded the size limit"));
+            settleReject(
+              new Error("reviewer identity response exceeded the size limit"),
+            );
             return;
           }
           chunks.push(value);
@@ -117,12 +150,19 @@ export function requestReviewerServerIdentity(url: URL, adminHost: string, cooki
             if (value === undefined) continue;
             headers.set(name, Array.isArray(value) ? value.join(", ") : value);
           }
-          settleResolve(new Response(Buffer.concat(chunks), { status: response.statusCode ?? 500, headers }));
+          settleResolve(
+            new Response(Buffer.concat(chunks), {
+              status: response.statusCode ?? 500,
+              headers,
+            }),
+          );
         });
         response.on("error", settleReject);
       },
     );
-    request.once("timeout", () => request.destroy(new Error("reviewer identity request timed out")));
+    request.once("timeout", () =>
+      request.destroy(new Error("reviewer identity request timed out")),
+    );
     request.once("error", settleReject);
     request.end();
   });
@@ -170,6 +210,14 @@ export async function resolveReviewerServerContext({
       : await requestReviewerServerIdentity(url, adminHost, cookie);
     if (response.status !== 200) return null;
     const value = identity.parse(await response.json());
-    return { source: "verified-server-reviewer-session", authenticated: true, actorId: value.person_id, email: value.email, expiresAtEpoch: value.expires_at_epoch };
-  } catch { return null; }
+    return {
+      source: "verified-server-reviewer-session",
+      authenticated: true,
+      actorId: value.person_id,
+      email: value.email,
+      expiresAtEpoch: value.expires_at_epoch,
+    };
+  } catch {
+    return null;
+  }
 }

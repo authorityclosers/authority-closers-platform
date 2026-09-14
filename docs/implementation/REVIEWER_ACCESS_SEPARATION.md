@@ -72,8 +72,7 @@ Reviewer API routes are under `/v1/reviewer`; they accept only the configured
 Admin host and mutations require that host's exact Origin. The production page
 guard uses the internal API transport with a canonical Admin Host. Review source
 access checks the exact report, source, checkpoint, recipient, tenant, assignment
-expiry/revocation and retention permission. Legacy learner reviewer routes stay
-404. Admin detail reads retain their own operations authority and never assume
+expiry/revocation and retention permission. Legacy learner reviewer routes stay 404. Admin detail reads retain their own operations authority and never assume
 the reviewer's identity.
 
 Reviewer submissions use durable immutable feedback records and canonical audit

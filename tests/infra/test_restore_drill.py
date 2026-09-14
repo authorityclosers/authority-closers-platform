@@ -653,9 +653,15 @@ def test_processing_plan_rehearsal_config_accepts_populated_0031_to_0032(
     assert config.source_migration_head == restore_drill.PLANS_REHEARSAL_SOURCE_HEAD
 
 
-def test_processing_ownership_rehearsal_config_accepts_0036_to_0037(
+@pytest.mark.parametrize(
+    ("source_head", "target_head"),
+    (("20260914_0036", "20260914_0037"), ("20260914_0037", "20260914_0038")),
+)
+def test_processing_and_reviewer_rehearsal_accepts_exact_adjacent_heads(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    source_head: str,
+    target_head: str,
 ) -> None:
     monkeypatch.setattr(
         restore_drill,
@@ -663,13 +669,13 @@ def test_processing_ownership_rehearsal_config_accepts_0036_to_0037(
         lambda _root: (
             "source",
             CURRENT_RELEASE_ID,
-            restore_drill.PROCESSING_OWNERSHIP_REHEARSAL_TARGET_HEAD,
+            target_head,
         ),
     )
     backup, metadata, _captured_at = _write_backup_pair(
         tmp_path,
         release_id="f" * 40,
-        migration_head=restore_drill.PROCESSING_OWNERSHIP_REHEARSAL_SOURCE_HEAD,
+        migration_head=source_head,
     )
     args = restore_drill.build_parser().parse_args(
         [
@@ -686,20 +692,16 @@ def test_processing_ownership_rehearsal_config_accepts_0036_to_0037(
             "--source-application-image",
             "sha256:" + "f" * 64,
             "--source-migration-head",
-            restore_drill.PROCESSING_OWNERSHIP_REHEARSAL_SOURCE_HEAD,
+            source_head,
         ]
     )
 
     config = restore_drill._config_from_args(args)
 
     assert config.backup_release_id == "f" * 40
-    assert config.expected_migration_head == (
-        restore_drill.PROCESSING_OWNERSHIP_REHEARSAL_TARGET_HEAD
-    )
+    assert config.expected_migration_head == target_head
     assert config.source_application_image == "sha256:" + "f" * 64
-    assert config.source_migration_head == (
-        restore_drill.PROCESSING_OWNERSHIP_REHEARSAL_SOURCE_HEAD
-    )
+    assert config.source_migration_head == source_head
 
 
 def test_processing_ownership_parity_contract_tracks_0037_tables() -> None:
@@ -935,6 +937,7 @@ def test_review_assignment_transition_preserves_0033_and_requires_empty_tables()
                 "conversation_guest_submissions",
             ),
         ),
+        ("20260914_0037", "20260914_0038", ("reviewer_auth_challenges",)),
     ),
 )
 def test_invitation_and_guest_migrations_preserve_existing_history(

@@ -184,7 +184,10 @@ export function ReviewInvitationPanel({
       <div className={styles.heading}>
         <span className={styles.eyebrow}>Grow your review team</span>
         <h2 id="review-invitation-title">Invite a reviewer</h2>
-        <p>Choose a saved analysis, add their email, and select what you would like them to review.</p>
+        <p>
+          Choose a saved analysis, add their email, and select what you would
+          like them to review.
+        </p>
       </div>
       <div className={styles.form}>
         <label>

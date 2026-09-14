@@ -48,11 +48,42 @@ it("admits only the bounded Admin directory POST without client scope", () => {
 
 it("admits the dedicated reviewer API while rejecting scope selectors", () => {
   const assignment = "44444444-4444-4444-8444-444444444444";
-  expect(isStagingAdminRequest(new URL("http://admin.localhost:3101/v1/reviewer/me"), "GET")).toBe(true);
-  expect(isStagingAdminRequest(new URL("http://admin.localhost:3101/v1/reviewer/auth/request"), "POST")).toBe(true);
-  expect(isStagingAdminRequest(new URL(`http://admin.localhost:3101/v1/reviewer/review-assignments/${assignment}/submissions`), "POST")).toBe(true);
-  expect(isStagingAdminRequest(new URL("http://admin.localhost:3101/v1/reviewer/review-assignments?tenant_id=other"), "GET")).toBe(false);
-  expect(isStagingAdminRequest(new URL(`http://admin.localhost:3101/v1/reviewer/review-assignments/${assignment}?include=transcript`), "GET")).toBe(false);
+  expect(
+    isStagingAdminRequest(
+      new URL("http://admin.localhost:3101/v1/reviewer/me"),
+      "GET",
+    ),
+  ).toBe(true);
+  expect(
+    isStagingAdminRequest(
+      new URL("http://admin.localhost:3101/v1/reviewer/auth/request"),
+      "POST",
+    ),
+  ).toBe(true);
+  expect(
+    isStagingAdminRequest(
+      new URL(
+        `http://admin.localhost:3101/v1/reviewer/review-assignments/${assignment}/submissions`,
+      ),
+      "POST",
+    ),
+  ).toBe(true);
+  expect(
+    isStagingAdminRequest(
+      new URL(
+        "http://admin.localhost:3101/v1/reviewer/review-assignments?tenant_id=other",
+      ),
+      "GET",
+    ),
+  ).toBe(false);
+  expect(
+    isStagingAdminRequest(
+      new URL(
+        `http://admin.localhost:3101/v1/reviewer/review-assignments/${assignment}?include=transcript`,
+      ),
+      "GET",
+    ),
+  ).toBe(false);
 });
 
 describe("course-scoped video upload admission proxy", () => {
@@ -441,7 +472,7 @@ describe("authenticated staging admin bridge", () => {
           status: 200,
           headers: {
             "content-type": "application/json",
-              "set-cookie": `__Host-ac_reviewer_session=${reviewerToken}; Max-Age=28800; Path=/; HttpOnly; SameSite=Lax; Secure, __Host-ac_reviewer_state=${reviewerState}; Max-Age=900; Path=/; HttpOnly; SameSite=Lax; Secure`,
+            "set-cookie": `__Host-ac_reviewer_session=${reviewerToken}; Max-Age=28800; Path=/; HttpOnly; SameSite=Lax; Secure, __Host-ac_reviewer_state=${reviewerState}; Max-Age=900; Path=/; HttpOnly; SameSite=Lax; Secure`,
           },
         }),
       )
@@ -472,7 +503,9 @@ describe("authenticated staging admin bridge", () => {
       `__Host-ac_reviewer_session=${reviewerToken}`,
     );
     const verifyHeaders = new Headers(fetcher.mock.calls[0][1]?.headers);
-    expect(verifyHeaders.get("cookie")).toBe(`CF_Authorization=${ACCESS_JWT}; __Host-ac_reviewer_state=${reviewerState}`);
+    expect(verifyHeaders.get("cookie")).toBe(
+      `CF_Authorization=${ACCESS_JWT}; __Host-ac_reviewer_state=${reviewerState}`,
+    );
 
     const me = await proxyDevelopmentAdminApi(
       request("/v1/reviewer/me", {

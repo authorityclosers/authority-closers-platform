@@ -21,19 +21,19 @@ The Python command uses the repository's configured environment and
 `PYTHONPATH=packages/python`. PostgreSQL tests require the repository's disposable
 loopback test URL; they migrate random schemas and never use production data.
 
-| Check | Result |
-| --- | --- |
-| Identity, generic auth routes/transactions, review HTTP, worker, provider and model registry tests | 239 passed |
-| Security rate-limit suite, including real request/verification bucket exhaustion | 12 passed |
-| Combined reviewer PostgreSQL HTTP/service/deactivation and populated migration metadata | 11 passed |
-| Expanded HTTP proof for new, learner, and Admin-plus-learner personas, plus uninvited request | 4 passed |
-| Full Admin UI suite | 809 passed |
-| Provider cap preservation, model edit, new/enlarged cap rejection and final paid provider removal | 9 passed |
-| Scoped Python mypy (identity and reviewer HTTP/service/worker) | 14 files passed |
-| Admin lint and typecheck | passed |
-| Changed Python Ruff lint and formatting | 29 files passed |
-| Fresh Admin production build | passed |
-| Actual production browser journey with PostgreSQL and durable mail jobs | 1 passed |
+| Check                                                                                              | Result          |
+| -------------------------------------------------------------------------------------------------- | --------------- |
+| Identity, generic auth routes/transactions, review HTTP, worker, provider and model registry tests | 239 passed      |
+| Security rate-limit suite, including real request/verification bucket exhaustion                   | 12 passed       |
+| Combined reviewer PostgreSQL HTTP/service/deactivation and populated migration metadata            | 11 passed       |
+| Expanded HTTP proof for new, learner, and Admin-plus-learner personas, plus uninvited request      | 4 passed        |
+| Full Admin UI suite                                                                                | 809 passed      |
+| Provider cap preservation, model edit, new/enlarged cap rejection and final paid provider removal  | 9 passed        |
+| Scoped Python mypy (identity and reviewer HTTP/service/worker)                                     | 14 files passed |
+| Admin lint and typecheck                                                                           | passed          |
+| Changed Python Ruff lint and formatting                                                            | 29 files passed |
+| Fresh Admin production build                                                                       | passed          |
+| Actual production browser journey with PostgreSQL and durable mail jobs                            | 1 passed        |
 
 The expanded HTTP proof additionally checks mixed-case mailbox input, real durable
 invitation and sign-in email jobs, wrong-browser and missing-nonce denial without
