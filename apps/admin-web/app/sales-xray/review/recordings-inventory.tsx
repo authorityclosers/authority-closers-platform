@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { CircleAlert, FileAudio, LoaderCircle, Search } from "lucide-react";
 
 import { SectionHeading } from "../../components/ops-primitives";
@@ -201,13 +202,21 @@ function InventoryRow({
       ) : null}
       <div className={styles.assignmentActions}>
         {canUseForReview ? (
-          <button
-            className="button button-secondary"
-            type="button"
-            onClick={() => onSelectRun(recording.report.run_id as string)}
-          >
-            Use for review / invite
-          </button>
+          <>
+            <Link
+              className="button button-primary"
+              href={`/sales-xray/review/report/${encodeURIComponent(recording.report.run_id as string)}`}
+            >
+              Open report
+            </Link>
+            <button
+              className="button button-secondary"
+              type="button"
+              onClick={() => onSelectRun(recording.report.run_id as string)}
+            >
+              Use for review / invite
+            </button>
+          </>
         ) : (
           <span className={styles.panelIntro}>
             Review and invite actions unlock after a verified report is saved.

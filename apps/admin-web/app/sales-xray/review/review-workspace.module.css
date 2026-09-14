@@ -145,6 +145,154 @@
   line-height: 1.5;
 }
 
+.reportHero {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: start;
+  margin-top: 1.25rem;
+  padding: 1.1rem 1.2rem;
+  border: 1px solid #c9d8ea;
+  border-radius: 0.85rem;
+  background: linear-gradient(135deg, #f3f8fe, #fff);
+}
+
+.reportHero h2,
+.reportHero p {
+  margin: 0;
+}
+
+.reportHero h2 {
+  margin-top: 0.35rem;
+  color: #13233a;
+  font-size: 1.2rem;
+  line-height: 1.35;
+}
+
+.reportHero p {
+  margin-top: 0.5rem;
+  color: #4d617b;
+  line-height: 1.55;
+}
+
+.reportGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1.25rem;
+}
+
+.reportSection {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid #d9e3ef;
+  border-radius: 0.75rem;
+  background: #fbfdff;
+}
+
+.reportSection h3 {
+  margin: 0;
+  color: #1c314c;
+  font-size: 0.98rem;
+}
+
+.reportFindings {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.reportFinding {
+  padding: 0.85rem;
+  border: 1px solid #e1e9f2;
+  border-radius: 0.6rem;
+  background: #fff;
+}
+
+.reportFinding h4,
+.reportFinding p {
+  margin: 0;
+}
+
+.reportFinding h4 {
+  color: #1b3551;
+  font-size: 0.9rem;
+}
+
+.reportFinding p {
+  margin-top: 0.35rem;
+  color: #4d617b;
+  font-size: 0.87rem;
+  line-height: 1.5;
+}
+
+.reportFinding blockquote {
+  margin: 0.65rem 0 0;
+  padding-left: 0.75rem;
+  border-left: 3px solid #b7cce5;
+  color: #304b68;
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.reportFinding cite {
+  display: block;
+  margin-top: 0.25rem;
+  color: #7186a0;
+  font-size: 0.72rem;
+  font-style: normal;
+}
+
+.reportDimensions {
+  display: grid;
+  gap: 0.7rem;
+  margin-top: 0.75rem;
+}
+
+.reportDimension {
+  padding: 0.8rem;
+  border-top: 1px solid #e1e9f2;
+}
+
+.reportDimension:first-child {
+  border-top: 0;
+}
+
+.reportDimension > div {
+  display: flex;
+  gap: 0.65rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.reportDimension h4,
+.reportDimension p {
+  margin: 0;
+}
+
+.reportDimension h4 {
+  color: #1b3551;
+  font-size: 0.88rem;
+}
+
+.reportDimension p {
+  margin-top: 0.35rem;
+  color: #4d617b;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+@media (max-width: 760px) {
+  .reportHero,
+  .reportGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .reportHero .noticeCode {
+    justify-self: start;
+  }
+}
+
 .searchRow {
   display: flex;
   gap: 0.65rem;

@@ -182,3 +182,39 @@ it("shows a saved upload with completed audio checks as report pending", async (
     container.remove();
   }
 });
+
+it("offers the authorized admin a direct report read while keeping invite separate", async () => {
+  vi.mocked(loadAdminRecordings).mockResolvedValue({
+    items: [
+      {
+        ...recording,
+        report: {
+          ...recording.report,
+          review_eligible: true,
+          invite_eligible: true,
+        },
+      },
+    ],
+    next_cursor: null,
+  });
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  try {
+    await act(async () => {
+      root.render(<RecordingsInventory onSelectRun={vi.fn()} />);
+    });
+    await vi.waitFor(() =>
+      expect(
+        container.querySelector(
+          'a[href="/sales-xray/review/report/33333333-3333-4333-8333-333333333333"]',
+        ),
+      ).not.toBeNull(),
+    );
+    expect(container.textContent).toContain("Open report");
+    expect(container.textContent).toContain("Use for review / invite");
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+  }
+});

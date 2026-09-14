@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ac_platform.application.settings import Settings
 from ac_platform.conversation_intelligence.admin_recordings import AdminConversationRecordings
+from ac_platform.conversation_intelligence.admin_reports import AdminConversationReports
 from ac_platform.conversation_intelligence.analysis_settings import AnalysisSettings
 from ac_platform.conversation_intelligence.analysis_settings_admin import (
     ConversationAnalysisSettingsAdmin,
@@ -150,6 +151,33 @@ def install_conversation_admin_http(
                 cursor=cursor,
                 search=search,
             )
+        except ConversationError as error:
+            raise HTTPException(error.status, str(error)) from None
+
+    @router.get("/runs/{run_id}/report")
+    async def admin_report(
+        run_id: UUID,
+        request: Request,
+        response: Response,
+        auth: AuthenticatedTransaction = dependency,
+    ) -> dict[str, Any]:
+        """Open a retained report for an authorized operations reviewer."""
+
+        surface(request, response)
+        operations_tenant_id = settings.operations_tenant_id
+        if operations_tenant_id is None:
+            raise HTTPException(503, "Conversation reports are not configured.")
+        try:
+            recording_tenant_ids = (
+                (settings.public_learner_tenant_id,)
+                if settings.public_learner_tenant_id is not None
+                else ()
+            )
+            return await AdminConversationReports(
+                ConversationApplication(auth.database),
+                operations_tenant_id,
+                recording_tenant_ids=recording_tenant_ids,
+            ).get(auth.resolved.actor, run_id)
         except ConversationError as error:
             raise HTTPException(error.status, str(error)) from None
 
