@@ -716,6 +716,20 @@ def test_processing_ownership_parity_contract_tracks_0037_tables() -> None:
     ) in restore_drill.MIGRATION_REHEARSAL_PAIRS
 
 
+def test_provider_activation_parity_contract_tracks_0039_table() -> None:
+    assert restore_drill.parity_contract_for_head("20260914_0039") == (
+        "ac-postgres-parity-v19"
+    )
+    assert restore_drill.parity_tables_for_head("20260914_0039") == (
+        restore_drill.REVIEWER_IDENTITY_PARITY_TABLES
+        + ("conversation_provider_activations",)
+    )
+    assert (
+        restore_drill.PROVIDER_ACTIVATION_REHEARSAL_SOURCE_HEAD,
+        restore_drill.PROVIDER_ACTIVATION_REHEARSAL_TARGET_HEAD,
+    ) in restore_drill.MIGRATION_REHEARSAL_PAIRS
+
+
 def test_processing_ownership_migration_command_targets_only_0037() -> None:
     target = restore_drill._target_for("0123456789ab")
     command = restore_drill._migration_command(
@@ -938,6 +952,7 @@ def test_review_assignment_transition_preserves_0033_and_requires_empty_tables()
             ),
         ),
         ("20260914_0037", "20260914_0038", ("reviewer_auth_challenges",)),
+        ("20260914_0038", "20260914_0039", ("conversation_provider_activations",)),
     ),
 )
 def test_invitation_and_guest_migrations_preserve_existing_history(
