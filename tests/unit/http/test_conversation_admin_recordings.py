@@ -336,7 +336,12 @@ async def test_admin_recordings_http_maps_public_guest_rows_and_paginates(
         "reservation_state": "settled",
         "actual_state": "settled",
         "usage_estimate_paise": None,
-        "usage_estimate_state": "rate_unavailable",
+        "usage_estimate_state": "usage_unavailable",
+        "usage_estimate_basis": None,
+        "usage_estimate_currency": None,
+        "usage_estimate_fx_usd_to_inr": None,
+        "usage_estimate_source_date": None,
+        "usage_estimate_is_billing_rate": None,
     }
     assert body["next_cursor"]
 

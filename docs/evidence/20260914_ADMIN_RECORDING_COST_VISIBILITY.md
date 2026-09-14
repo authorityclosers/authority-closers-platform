@@ -12,15 +12,32 @@ The cost payload keeps four separate facts:
   reservations.
 - `actual_paise` is populated only from canonical settlement receipts.
 - `usage_estimate_paise` is populated only when an approved source-backed
-  per-unit rate is available.
+  per-unit rate and matching usage units are available.
 
-The current canonical receipt stores token or provider usage counters and a
-`pricing_ref`, but no persisted unit-rate snapshot.  The accepted pricing
-evidence is an approval reference and quote ceiling, not a token price table.
-Therefore this leaf returns `usage_estimate_paise: null` with
-`usage_estimate_state: "rate_unavailable"` when usage is recorded.  The UI
-labels that state as “Unavailable · no approved rate” and keeps the pending
-provider reconciliation state separate from both the quote and settlement.
+The release's immutable pricing evidence supplies two matching snapshots:
+
+- ElevenLabs `scribe_v2`: `$0.22/hour`, applied to native measured duration.
+- Gemini `gemini-3.8-flash`: `$0.75/1M` input and `$3.75/1M` output tokens,
+applied to the provider receipt's input/output counters.
+
+The source artifacts are `pricing-evidence-elevenlabs-v6.json`
+(`294beecdac8d241c8fdee210eb8802e05f54a8369a748d90a0c823a10bae6448`) and
+`pricing-evidence-gemini-v6.json`
+(`d2be76be50be45b17b66aa528eeff86806705bf9e90dce36772c715e3c312fde`) under
+`D:\AC-authority-closers-release-audit\activation-20260914\enabled-v4-params-final-c437c17`.
+
+Both snapshots use the release's explicit planning conversion of INR100/USD,
+source date `2026-09-14`, and preserve their pricing reference and evidence
+hash in the API.  Paise are rounded upward to the next integer for a
+conservative display estimate.  Each snapshot is marked
+`is_billing_rate: false`; no provider invoice or settlement is inferred.  A
+stage with missing units or an unknown model remains unavailable, and a
+recording with only some stage estimates is labelled `partial`.
+
+The snapshots are operator-bound to release
+`0847db5d3ca1ed825b68c226713d0f52d11683b1`; the API carries that release SHA
+alongside each evidence hash so a later release cannot silently present a
+different rate as the current estimate.
 
 The implementation reads existing `jobs.provider_receipt` rows through the
 tenant-scoped inference task IDs.  It does not call providers, alter budgets,

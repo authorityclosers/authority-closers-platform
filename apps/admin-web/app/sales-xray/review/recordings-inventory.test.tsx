@@ -56,6 +56,27 @@ const recording = {
         usage: { total_tokens: 120 },
         receipt_state: "recorded" as const,
         cost_state: "reconciliation_required" as const,
+        usage_estimate_paise: 2,
+        usage_estimate_state: "available" as const,
+        usage_estimate_basis:
+          "provider_input_and_output_tokens_x_approved_token_rates",
+        pricing_snapshot: {
+          schema: "ac.sales-xray.pricing-snapshot/1" as const,
+          release_sha: "0847db5d3ca1ed825b68c226713d0f52d11683b1",
+          provider: "gemini",
+          model: "gemini-3.8-flash",
+          currency: "INR" as const,
+          usd_to_inr: 100,
+          source_date: "2026-09-14",
+          pricing_ref: "ref:pricing/gemini-38-intro-20260914",
+          evidence_sha256: "b".repeat(64),
+          source_url: "https://ai.google.dev/gemini-api/docs/latest-model",
+          rate_basis: "per_million_tokens" as const,
+          usd_per_hour: null,
+          input_usd_per_million_tokens: 0.75,
+          output_usd_per_million_tokens: 3.75,
+          is_billing_rate: false as const,
+        },
       },
     ],
   },
@@ -78,8 +99,13 @@ const recording = {
     actual_paise: null,
     reservation_state: "reserved" as const,
     actual_state: "not_settled" as const,
-    usage_estimate_paise: null,
-    usage_estimate_state: "rate_unavailable" as const,
+    usage_estimate_paise: 2,
+    usage_estimate_state: "available" as const,
+    usage_estimate_basis: "provider_usage_x_approved_planning_rates",
+    usage_estimate_currency: "INR" as const,
+    usage_estimate_fx_usd_to_inr: 100,
+    usage_estimate_source_date: "2026-09-14",
+    usage_estimate_is_billing_rate: false as const,
   },
 };
 
@@ -107,7 +133,9 @@ it("does not label an available report ready while review eligibility is blocked
     expect(container.textContent).toContain("gemini / gemini-3.8-flash");
     expect(container.textContent).toContain("120 tokens");
     expect(container.textContent).toContain("charge pending reconciliation");
-    expect(container.textContent).toContain("Unavailable · no approved rate");
+    expect(container.textContent).toContain(
+      "₹0.02 · planning @ ₹100/USD · source 2026-09-14",
+    );
     expect(container.textContent).not.toContain("Ready for review");
   } finally {
     await act(async () => root.unmount());

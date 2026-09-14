@@ -4,6 +4,7 @@ const uuidSchema = z
   .uuid()
   .refine((value) => value === value.toLowerCase(), "UUID must be lowercase.");
 const digestSchema = z.string().regex(/^[0-9a-f]{64}$/);
+const releaseShaSchema = z.string().regex(/^[0-9a-f]{40}$/);
 
 const ownerSchema = z
   .object({
@@ -20,6 +21,26 @@ const providerUsageSchema = z.record(
   z.string().min(1),
   z.number().int().nonnegative(),
 );
+
+const pricingSnapshotSchema = z
+  .object({
+    schema: z.literal("ac.sales-xray.pricing-snapshot/1"),
+    release_sha: releaseShaSchema,
+    provider: z.string().min(1),
+    model: z.string().min(1),
+    currency: z.literal("INR"),
+    usd_to_inr: z.number().positive(),
+    source_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    pricing_ref: z.string().min(1),
+    evidence_sha256: digestSchema,
+    source_url: z.string().url(),
+    rate_basis: z.enum(["per_hour", "per_million_tokens"]),
+    usd_per_hour: z.number().nonnegative().nullable(),
+    input_usd_per_million_tokens: z.number().nonnegative().nullable(),
+    output_usd_per_million_tokens: z.number().nonnegative().nullable(),
+    is_billing_rate: z.literal(false),
+  })
+  .strict();
 
 const providerStageSchema = z
   .object({
@@ -39,6 +60,14 @@ const providerStageSchema = z
     usage: providerUsageSchema.nullable(),
     receipt_state: z.enum(["recorded", "not_recorded"]),
     cost_state: z.enum(["reconciliation_required", "settled", "not_settled"]),
+    usage_estimate_paise: z.number().int().nonnegative().nullable(),
+    usage_estimate_state: z.enum([
+      "available",
+      "rate_unavailable",
+      "usage_unavailable",
+    ]),
+    usage_estimate_basis: z.string().min(1).nullable(),
+    pricing_snapshot: pricingSnapshotSchema.nullable(),
   })
   .strict();
 
@@ -139,9 +168,18 @@ const recordingSchema = z
         usage_estimate_state: z.enum([
           "available",
           "rate_unavailable",
+          "partial",
           "usage_unavailable",
           "not_applicable",
         ]),
+        usage_estimate_basis: z.string().min(1).nullable(),
+        usage_estimate_currency: z.literal("INR").nullable(),
+        usage_estimate_fx_usd_to_inr: z.number().positive().nullable(),
+        usage_estimate_source_date: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .nullable(),
+        usage_estimate_is_billing_rate: z.literal(false).nullable(),
       })
       .strict(),
   })

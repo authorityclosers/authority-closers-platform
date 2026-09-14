@@ -59,8 +59,16 @@ function formatUsage(usage: Record<string, number> | null): string {
 function formatUsageEstimate(
   state: AdminRecording["cost"]["usage_estimate_state"],
   value: number | null,
+  fxRate: number | null,
+  sourceDate: string | null,
 ): string {
-  if (value !== null) return formatCost(value);
+  if (value !== null) {
+    const qualifier =
+      fxRate !== null && sourceDate !== null
+        ? ` · planning @ ₹${fxRate}/USD · source ${sourceDate}`
+        : "";
+    return `${state === "partial" ? "Partial · " : ""}${formatCost(value)}${qualifier}`;
+  }
   if (state === "rate_unavailable") return "Unavailable · no approved rate";
   if (state === "usage_unavailable") return "Unavailable · no usage receipt";
   return "—";
@@ -135,6 +143,8 @@ function InventoryRow({
             {formatUsageEstimate(
               recording.cost.usage_estimate_state,
               recording.cost.usage_estimate_paise,
+              recording.cost.usage_estimate_fx_usd_to_inr,
+              recording.cost.usage_estimate_source_date,
             )}
           </dd>
         </div>
@@ -166,6 +176,11 @@ function InventoryRow({
               {stage.cost_state === "reconciliation_required"
                 ? " · charge pending reconciliation"
                 : ""}
+              {stage.usage_estimate_paise !== null
+                ? ` · estimate ${formatCost(stage.usage_estimate_paise)} @ ₹${stage.pricing_snapshot?.usd_to_inr ?? "?"}/USD · source ${stage.pricing_snapshot?.source_date ?? "unknown"}`
+                : stage.usage_estimate_state === "rate_unavailable"
+                  ? " · estimate unavailable: no approved rate"
+                  : ""}
             </span>
           ))}
         </div>

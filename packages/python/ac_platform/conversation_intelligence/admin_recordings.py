@@ -22,6 +22,7 @@ from ac_platform.conversation_intelligence.acquisition_models import (
     ConversationAcquisitionUsage,
     ConversationVisitorClaim,
 )
+from ac_platform.conversation_intelligence.admin_pricing import estimate_provider_usage
 from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
     ConversationConflict,
@@ -62,6 +63,8 @@ _PROVIDER_USAGE_KEYS = frozenset(
         "prompt_tokens",
         "completion_tokens",
         "total_tokens",
+        "input_tokens",
+        "output_tokens",
     }
 )
 
@@ -134,6 +137,8 @@ def _safe_provider_usage(value: Any) -> dict[str, int] | None:
 def _provider_stage_view(
     task: ConversationInferenceTask,
     job: Job | None,
+    *,
+    duration_ms: int | None = None,
 ) -> dict[str, Any]:
     """Expose receipt metadata without treating usage as a provider invoice."""
 
@@ -149,18 +154,31 @@ def _provider_stage_view(
             "usage": None,
             "receipt_state": "not_recorded",
             "cost_state": "not_settled",
+            "usage_estimate_paise": None,
+            "usage_estimate_state": "usage_unavailable",
+            "usage_estimate_basis": None,
+            "pricing_snapshot": None,
         }
 
     provider = receipt.get("provider")
     model = receipt.get("model")
     request_id = receipt.get("provider_request_id")
     cost_state = receipt.get("cost_state")
+    safe_provider = provider if isinstance(provider, str) and provider else None
+    safe_model = model if isinstance(model, str) and model else None
+    safe_usage = _safe_provider_usage(receipt.get("usage"))
+    usage_estimate = estimate_provider_usage(
+        safe_provider,
+        safe_model,
+        safe_usage,
+        duration_ms=duration_ms if task.stage == "C2" else None,
+    )
     return {
         "stage": task.stage,
         "run_id": str(task.run_id),
         "state": task.state,
-        "provider": provider if isinstance(provider, str) and provider else None,
-        "model": model if isinstance(model, str) and model else None,
+        "provider": safe_provider,
+        "model": safe_model,
         "request_id": request_id if isinstance(request_id, str) and request_id else None,
         "usage": _safe_provider_usage(receipt.get("usage")),
         "receipt_state": "recorded",
@@ -169,6 +187,10 @@ def _provider_stage_view(
             if isinstance(cost_state, str) and cost_state in {"reconciliation_required", "settled"}
             else "not_settled"
         ),
+        "usage_estimate_paise": usage_estimate["paise"],
+        "usage_estimate_state": usage_estimate["state"],
+        "usage_estimate_basis": usage_estimate["basis"],
+        "pricing_snapshot": usage_estimate["pricing_snapshot"],
     }
 
 
@@ -325,7 +347,43 @@ def _cost_view(
     else:
         state = next(iter(states))
     provider_stage_values = list(provider_stages or ())
-    has_provider_usage = any(stage.get("usage") is not None for stage in provider_stage_values)
+    available_stage_values = [
+        stage["usage_estimate_paise"]
+        for stage in provider_stage_values
+        if stage.get("usage_estimate_state") == "available"
+        and type(stage.get("usage_estimate_paise")) is int
+    ]
+    estimate_states = {stage.get("usage_estimate_state") for stage in provider_stage_values}
+    if provider_stage_values and len(available_stage_values) == len(provider_stage_values):
+        usage_estimate_state = "available"
+        usage_estimate_paise = sum(available_stage_values)
+    elif available_stage_values:
+        usage_estimate_state = "partial"
+        usage_estimate_paise = sum(available_stage_values)
+    elif "rate_unavailable" in estimate_states:
+        usage_estimate_state = "rate_unavailable"
+        usage_estimate_paise = None
+    elif provider_stage_values:
+        usage_estimate_state = "usage_unavailable"
+        usage_estimate_paise = None
+    else:
+        usage_estimate_state = "not_applicable"
+        usage_estimate_paise = None
+    snapshots = [
+        stage["pricing_snapshot"]
+        for stage in provider_stage_values
+        if isinstance(stage.get("pricing_snapshot"), Mapping)
+    ]
+    snapshot_dates = {snapshot.get("source_date") for snapshot in snapshots}
+    snapshot_fx = {snapshot.get("usd_to_inr") for snapshot in snapshots}
+    usage_snapshot = (
+        snapshots[0]
+        if available_stage_values
+        and snapshots
+        and len(snapshot_dates) == 1
+        and len(snapshot_fx) == 1
+        else None
+    )
     return {
         "currency": "INR",
         "scope": scope,
@@ -340,17 +398,24 @@ def _cost_view(
             if state == "reconciliation_required"
             else "not_settled"
         ),
-        # The canonical receipt stores usage counters but does not store a
-        # source-backed per-unit rate.  Keep this separate from the quote
-        # ceiling and settlement so the admin surface cannot imply an invoice.
-        "usage_estimate_paise": None,
-        "usage_estimate_state": (
-            "rate_unavailable"
-            if has_provider_usage
-            else "usage_unavailable"
-            if provider_stage_values
-            else "not_applicable"
+        # The canonical receipt stores usage counters but not the rate.  The
+        # immutable release snapshot supplies a planning rate when units match;
+        # keep that estimate separate from quote ceiling and settlement.
+        "usage_estimate_paise": usage_estimate_paise,
+        "usage_estimate_state": usage_estimate_state,
+        "usage_estimate_basis": (
+            "provider_usage_x_approved_planning_rates" if available_stage_values else None
         ),
+        "usage_estimate_currency": (
+            usage_snapshot.get("currency") if usage_snapshot is not None else None
+        ),
+        "usage_estimate_fx_usd_to_inr": (
+            usage_snapshot.get("usd_to_inr") if usage_snapshot is not None else None
+        ),
+        "usage_estimate_source_date": (
+            usage_snapshot.get("source_date") if usage_snapshot is not None else None
+        ),
+        "usage_estimate_is_billing_rate": False if available_stage_values else None,
     }
 
 
@@ -700,10 +765,16 @@ class AdminConversationRecordings:
                 if plan_is_complete
                 else {candidate.quote_id for candidate in recording_tasks}
             )
+            checkpoint = latest_checkpoints.get(recording.id)
+            duration_ms = _safe_duration(None if checkpoint is None else checkpoint.payload)
+            duration_source = "native_measurement" if duration_ms is not None else None
+            if duration_ms is None and usage_row is not None:
+                duration_source = "acquisition_allowance"
             provider_stages = [
                 _provider_stage_view(
                     candidate,
                     jobs_by_id.get(getattr(candidate, "job_id", None)),
+                    duration_ms=duration_ms,
                 )
                 for candidate in sorted(
                     cost_tasks,
@@ -717,11 +788,6 @@ class AdminConversationRecordings:
                 and report_run.generation == recording.generation
                 and recording.state == "ready"
             )
-            checkpoint = latest_checkpoints.get(recording.id)
-            duration_ms = _safe_duration(None if checkpoint is None else checkpoint.payload)
-            duration_source = "native_measurement" if duration_ms is not None else None
-            if duration_ms is None and usage_row is not None:
-                duration_source = "acquisition_allowance"
             items.append(
                 {
                     "id": str(recording.id),
