@@ -192,12 +192,17 @@ def test_alternate_profile_requires_configuration_and_keeps_legacy_ids() -> None
         stage="C4",
         configuration_sha256="e" * 64,
     )
-    assert default.id == _policy().derive_stage(
-        tenant_id=TENANT_ID,
-        person_id=PROCESSING_PERSON_ID,
-        source_sha256=SOURCE_SHA,
-        stage="C4",
-    ).id
+    assert (
+        default.id
+        == _policy()
+        .derive_stage(
+            tenant_id=TENANT_ID,
+            person_id=PROCESSING_PERSON_ID,
+            source_sha256=SOURCE_SHA,
+            stage="C4",
+        )
+        .id
+    )
     assert alternate.id != default.id
     assert alternate.provider_id == "gemini"
     assert alternate.model_id == "gemini-3.1-pro-preview"
@@ -231,9 +236,7 @@ def test_legacy_permission_recovers_default_digest_after_alternate_is_pinned() -
         expires_at_epoch=1_600,
     )
     assert (
-        authority._configuration_from_permission(
-            bundle, actor, SOURCE_SHA, "C4", permission
-        )
+        authority._configuration_from_permission(bundle, actor, SOURCE_SHA, "C4", permission)
         == "b" * 64
     )
 
@@ -243,6 +246,43 @@ def test_empty_profiles_are_omitted_from_legacy_canonical_bundle() -> None:
     value = bundle.as_dict()["acquisition_policy"]
     assert "profiles" not in value
     assert HostedApprovalBundle.model_validate_json(bundle.to_json()) == bundle
+
+
+def test_unactivated_processing_default_stays_on_the_release_policy() -> None:
+    bundle = _bundle(_policy())
+    actor = ProcessingActor(PROCESSING_PERSON_ID, TENANT_ID, uuid4())
+    authority = ConversationAuthority(
+        lambda: bundle, environment="test", operations_tenant_id=TENANT_ID
+    )
+
+    assert (
+        authority._approved_default_configuration_sha256(
+            bundle,
+            actor,
+            source_sha256=SOURCE_SHA,
+            stage="C2",
+        )
+        == "b" * 64
+    )
+
+
+@pytest.mark.asyncio
+async def test_unactivated_saved_draft_is_not_an_implicit_provider_route() -> None:
+    class _Application:
+        def __init__(self) -> None:
+            self.database = MagicMock()
+            self.database.execute = AsyncMock(return_value=None)
+            self.database.scalar = AsyncMock(side_effect=[None, object()])
+
+    authority = ConversationAuthority(
+        lambda: _bundle(_policy()), environment="test", operations_tenant_id=TENANT_ID
+    )
+
+    app = _Application()
+    assert await authority._provider_configuration(app) is None
+    # Only the activation lookup is allowed. The newest saved configuration
+    # must never become an implicit route when no activation exists.
+    assert app.database.scalar.await_count == 1
 
 
 def test_only_matching_processing_actor_can_select_policy() -> None:

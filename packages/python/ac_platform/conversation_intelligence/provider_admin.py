@@ -162,7 +162,8 @@ class ConversationProviderAdmin:
             if {route.task for route in config.routes} < required:
                 raise ValueError
             dispatches: list[Any] = []
-            projected_cost_paise = 0
+            stage_costs: dict[str, int] = {}
+            stage_max_requests: dict[str, int] = {}
             for route in config.routes:
                 stage = cls._route_stage(route.task)
                 if stage is None:
@@ -204,13 +205,19 @@ class ConversationProviderAdmin:
                     ):
                         continue
                     dispatches.append(dispatch)
-                    # C4 may be retried/chunked up to its approved request
-                    # count; the project cap must cover the whole plan, not
-                    # only one representative dispatch per stage.
-                    projected_cost_paise += dispatch.max_cost_paise * candidate.max_requests
+                    stage_costs[stage] = dispatch.max_cost_paise
+                    stage_max_requests[stage] = candidate.max_requests
                     break
                 else:
                     raise ValueError
+            # C2 transcription and C5 coaching run once. C4 is the only
+            # stage whose approved request count fans out for chunk/retry
+            # work. The cap therefore covers one C2, all approved C4
+            # requests, and one C5; multiplying every stage by max_requests
+            # would reject valid configurations and misstate the budget.
+            projected_cost_paise = (
+                stage_costs["C2"] + stage_costs["C4"] * stage_max_requests["C4"] + stage_costs["C5"]
+            )
             if projected_cost_paise > bundle.budget_cap_paise:
                 raise ValueError
             if any(item.max_cost_paise > 0 for item in dispatches) and (

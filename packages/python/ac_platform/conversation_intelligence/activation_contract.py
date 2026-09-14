@@ -368,9 +368,7 @@ class AcquisitionProviderPolicy(_StrictFrozenModel):
 
         return tuple(
             dict.fromkeys(
-                item.configuration_sha256
-                for stages in self.stage_sets()
-                for item in stages
+                item.configuration_sha256 for stages in self.stage_sets() for item in stages
             )
         )
 
@@ -407,10 +405,7 @@ class AcquisitionProviderPolicy(_StrictFrozenModel):
             for stages in self.stage_sets()
             for item in stages
             if item.stage == stage
-            and (
-                configuration_sha256 is None
-                or item.configuration_sha256 == configuration_sha256
-            )
+            and (configuration_sha256 is None or item.configuration_sha256 == configuration_sha256)
         ]
         if len(candidates) != 1:
             raise ValueError("acquisition_policy_configuration_required")

@@ -313,9 +313,16 @@ class ConversationAuthority:
     ) -> tuple[HostedApprovalBundle, StageApproval]:
         bundle = self.current(now)
         self.recipient(bundle, actor)
+        approved_default_configuration_sha256 = self._approved_default_configuration_sha256(
+            bundle,
+            actor,
+            source_sha256=recording.source_sha256,
+            stage=plan.checkpoint.stage,
+        )
         configuration = await self._provider_configuration(
             app,
             configuration_sha256=configuration_sha256,
+            default_configuration_sha256=approved_default_configuration_sha256,
         )
         if configuration is None:
             raise ConversationDenied("The approved provider configuration is unavailable.")
@@ -365,6 +372,7 @@ class ConversationAuthority:
         app: ConversationApplication,
         *,
         configuration_sha256: str | None = None,
+        default_configuration_sha256: str | None = None,
     ) -> ConversationProviderConfiguration | None:
         """Resolve the immutable route selected for a new or existing plan."""
 
@@ -411,15 +419,60 @@ class ConversationAuthority:
             if selected is not None:
                 return selected
             raise ConversationDenied("The active provider configuration is unavailable.")
+        if default_configuration_sha256 is None:
+            # A saved draft is not an activation. Without an exact digest
+            # supplied by the release approval, fail closed instead of letting
+            # the newest Admin row become an implicit provider route.
+            return None
         value = await app.database.scalar(
             select(ConversationProviderConfiguration)
-            .where(ConversationProviderConfiguration.tenant_id == control_tenant_id)
+            .where(
+                ConversationProviderConfiguration.tenant_id == control_tenant_id,
+                ConversationProviderConfiguration.configuration_sha256
+                == default_configuration_sha256,
+            )
             .order_by(ConversationProviderConfiguration.revision.desc())
             .limit(1)
             .with_for_update(read=True)
             .execution_options(populate_existing=True)
         )
         return cast(ConversationProviderConfiguration | None, value)
+
+    @staticmethod
+    def _approved_default_configuration_sha256(
+        bundle: HostedApprovalBundle,
+        actor: ConversationActor,
+        *,
+        source_sha256: str,
+        stage: str,
+    ) -> str | None:
+        """Return only the release-pinned default route digest.
+
+        An unactivated saved configuration is deliberately not a default. The
+        acquisition policy's base stages are the default for a processing
+        lease; ordinary actors must have one unambiguous exact-source stage.
+        """
+
+        if isinstance(actor, ProcessingActor):
+            policy = bundle.acquisition_policy
+            if policy is None or not policy.matches_actor(actor):
+                return None
+            candidates = tuple(
+                item.configuration_sha256 for item in policy.stages if item.stage == stage
+            )
+        else:
+            candidates = tuple(
+                item.configuration_sha256
+                for item in bundle.stages
+                if (
+                    item.tenant_id,
+                    item.person_id,
+                    item.source_sha256,
+                    item.stage,
+                )
+                == (actor.tenant_id, actor.person_id, source_sha256, stage)
+            )
+        return candidates[0] if len(candidates) == 1 else None
 
     @staticmethod
     def stage_approval(

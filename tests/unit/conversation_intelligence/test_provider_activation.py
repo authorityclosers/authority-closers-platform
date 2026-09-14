@@ -143,9 +143,7 @@ def test_pinned_alternate_gemini_profile_is_a_real_activation_option() -> None:
         if route["provider_id"] == "gemini":
             route["model_id"] = "gemini-3.1-pro-preview"
     alternate_config = parse_registry_config(alternate_value)
-    bundle = _approved_bundle(
-        base_config, funded=True, text_provider="gemini", text_cost_paise=40
-    )
+    bundle = _approved_bundle(base_config, funded=True, text_provider="gemini", text_cost_paise=40)
     policy = bundle.acquisition_policy
     assert policy is not None
     profile = AcquisitionProviderProfile(
@@ -155,9 +153,7 @@ def test_pinned_alternate_gemini_profile_is_a_real_activation_option() -> None:
                 update={
                     "configuration_sha256": alternate_config.digest,
                     "model_id": (
-                        "gemini-3.1-pro-preview"
-                        if stage.stage in {"C4", "C5"}
-                        else stage.model_id
+                        "gemini-3.1-pro-preview" if stage.stage in {"C4", "C5"} else stage.model_id
                     ),
                 }
             )
@@ -170,9 +166,7 @@ def test_pinned_alternate_gemini_profile_is_a_real_activation_option() -> None:
         }
     )
 
-    dispatches = ConversationProviderAdmin._approved_configuration(
-        _row(alternate_config), pinned
-    )
+    dispatches = ConversationProviderAdmin._approved_configuration(_row(alternate_config), pinned)
     assert [(item.provider_id, item.model_id) for item in dispatches] == [
         ("elevenlabs", "scribe_v2"),
         ("gemini", "gemini-3.1-pro-preview"),
@@ -233,3 +227,36 @@ def test_activation_cap_covers_approved_c4_request_count() -> None:
     )
     with pytest.raises(ConversationDenied, match="pinned activation approval"):
         ConversationProviderAdmin._approved_configuration(_row(config), bounded)
+
+
+def test_activation_cap_counts_c2_and_c5_once() -> None:
+    config = _registry_config("approved-cap-stage-count-v1", funded=True, text_cost_paise=40)
+    config = replace(
+        config,
+        providers=tuple(
+            replace(provider, max_cost_paise=10 if provider.provider_id == "elevenlabs" else 40)
+            for provider in config.providers
+        ),
+    )
+    bundle = _approved_bundle(config, funded=True, text_cost_paise=40)
+    policy = bundle.acquisition_policy
+    assert policy is not None
+    stages = tuple(
+        stage.model_copy(
+            update={
+                "max_cost_paise": 10 if stage.stage == "C2" else 40,
+                "max_requests": (2 if stage.stage == "C2" else 3 if stage.stage == "C4" else 9),
+            }
+        )
+        for stage in policy.stages
+    )
+    bounded = bundle.model_copy(
+        update={
+            "budget_cap_paise": 170,
+            "acquisition_policy": policy.model_copy(update={"stages": stages}),
+        }
+    )
+
+    dispatches = ConversationProviderAdmin._approved_configuration(_row(config), bounded)
+
+    assert len(dispatches) == 3
