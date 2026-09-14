@@ -32,6 +32,10 @@ from ac_platform.conversation_intelligence.acquisition_sessions import (
     MeasuredSource,
 )
 from ac_platform.conversation_intelligence.acquisition_source import NativeUploadPreflight
+from ac_platform.conversation_intelligence.activation_contract import (
+    AcquisitionProviderPolicy,
+    AcquisitionStagePolicy,
+)
 from ac_platform.conversation_intelligence.application import ConversationApplication
 from ac_platform.conversation_intelligence.authority import ConversationAuthority
 from ac_platform.conversation_intelligence.broker_router import FixedProviderRouter, ProviderRoute
@@ -145,12 +149,31 @@ async def _setup(postgres: Any, tmp_path: Path, *, gemini: bool = False) -> Simp
             now_epoch=int(state.now.timestamp()),
             text_provider="gemini",
         )
+        acquisition_stages = tuple(
+            AcquisitionStagePolicy.model_validate(
+                {
+                    **item.model_dump(exclude={"id", "tenant_id", "person_id", "source_sha256"}),
+                    "max_completion_tokens": {"C2": 0, "C4": 1_400, "C5": 1_800}[item.stage],
+                }
+            )
+            for item in bundle.stages
+        )
         bundle = bundle.model_copy(
             update={
                 "budget_owner_id": state.person_id,
-                "allowances": tuple(
-                    item.model_copy(update={"granted_by": state.person_id})
-                    for item in bundle.allowances
+                "allowances": (),
+                "stages": (),
+                "acquisition_policy": AcquisitionProviderPolicy(
+                    schema="ac.sales-xray.acquisition-provider-policy/1",
+                    id=uuid4(),
+                    tenant_id=state.tenant_id,
+                    processing_person_id=principal,
+                    authorization_ref="ref:approval:synthetic-guest-processing",
+                    expires_at_epoch=bundle.expires_at_epoch,
+                    max_recordings=64,
+                    max_source_bytes=134_217_728,
+                    max_stored_source_bytes=8_589_934_592,
+                    stages=acquisition_stages,
                 ),
             }
         )

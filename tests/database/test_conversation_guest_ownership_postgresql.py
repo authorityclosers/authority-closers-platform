@@ -408,16 +408,16 @@ def test_guest_processing_principal_is_non_login_and_intake_binds_each_submissio
             async with AsyncSession(engine) as database, database.begin():
                 leases = (
                     await database.scalars(
-                        select(ConversationProcessingLease).order_by(
-                            ConversationProcessingLease.created_at
-                        )
+                        select(ConversationProcessingLease)
+                        .where(ConversationProcessingLease.tenant_id == state.tenant_id)
+                        .order_by(ConversationProcessingLease.created_at)
                     )
                 ).all()
                 usages = (
                     await database.scalars(
-                        select(ConversationAcquisitionUsage).order_by(
-                            ConversationAcquisitionUsage.created_at
-                        )
+                        select(ConversationAcquisitionUsage)
+                        .where(ConversationAcquisitionUsage.tenant_id == state.tenant_id)
+                        .order_by(ConversationAcquisitionUsage.created_at)
                     )
                 ).all()
                 assert {lease.usage_id for lease in leases} == {
