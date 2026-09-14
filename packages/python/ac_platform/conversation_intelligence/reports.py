@@ -18,6 +18,7 @@ from typing import Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
+from ac_platform.conversation_intelligence.completion_limits import completion_ceiling
 from ac_platform.conversation_intelligence.gemini_tasks import GeminiTaskError, prepare_gemini_body
 from ac_platform.conversation_intelligence.report_claims import require_qualitative_claims
 from ac_platform.conversation_intelligence.report_overview import (
@@ -1060,7 +1061,9 @@ def build_report_groq_prompt(
 ) -> dict[str, Any]:
     """Build the one profile-aware judge request from complete fact coverage."""
 
-    if type(max_completion_tokens) is not int or not 256 <= max_completion_tokens <= 4_000:
+    if type(
+        max_completion_tokens
+    ) is not int or not 256 <= max_completion_tokens <= completion_ceiling(provider, model, "C5"):
         raise ReportError("report_output_budget_invalid")
     if not isinstance(model, str) or not model.strip() or len(model) > 128:
         raise ReportError("report_model_invalid")

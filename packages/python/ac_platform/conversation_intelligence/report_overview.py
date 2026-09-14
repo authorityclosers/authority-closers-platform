@@ -11,17 +11,23 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from ac_platform.conversation_intelligence.completion_limits import completion_ceiling
+
 OVERVIEW_VERSION = "dipak-14-point-v1"
 OVERVIEW_MARKER = "REPORT_FORMAT: dipak-14-point-v1"
 TEMPLATE_SHA256 = "4fad19ce3234848c9f992190f9f498184bb8be6996664a9e7cb6dc133aa3a0eb"
 
 
-def stage_completion_limit(stage: str, approved_maximum: int) -> int:
+def stage_completion_limit(
+    stage: str, approved_maximum: int, *, provider: str = "", model: str = ""
+) -> int:
     """Allocate a larger C5 response only within the exact approved output cap."""
     if stage not in {"C4", "C5"} or type(approved_maximum) is not int:
         raise ValueError("report_stage_limit_invalid")
-    if not 256 <= approved_maximum <= 4_000:
+    if not 256 <= approved_maximum <= completion_ceiling(provider, model, stage):
         raise ValueError("report_stage_limit_invalid")
+    if approved_maximum > 4_000:
+        return approved_maximum
     return min(3_200 if stage == "C5" else 1_400, approved_maximum)
 
 

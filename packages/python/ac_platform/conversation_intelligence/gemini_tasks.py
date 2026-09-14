@@ -12,19 +12,22 @@ from collections.abc import Mapping
 from typing import Any
 
 from ac_platform.conversation_intelligence.checkpoints import canonical
+from ac_platform.conversation_intelligence.completion_limits import completion_ceiling
 
 GEMINI_TASK_MODELS = frozenset({"gemini-3.8-flash", "gemini-3.1-pro-preview"})
 _MARKER = "AC_TASK_ADAPTER: gemini-json-v1\nMODEL: "
 _MAX_RESPONSE_BYTES = 4 * 1024 * 1024
 GEMINI_FLASH_COACHING_TOTAL_LIMIT = 48_000
+GEMINI_FLASH_EXTENDED_COACHING_TOTAL_LIMIT = 64_000
 
 
 class GeminiTaskError(ValueError):
     """Content-free adapter failure."""
 
 
-def _config(maximum: int) -> dict[str, Any]:
-    if type(maximum) is not int or not 256 <= maximum <= 4_000:
+def _config(maximum: int, *, model: str = "", task: str = "facts") -> dict[str, Any]:
+    ceiling = completion_ceiling("gemini", model, "C5" if task == "coaching" else "C4")
+    if type(maximum) is not int or not 256 <= maximum <= ceiling:
         raise GeminiTaskError("invalid_max_completion_tokens")
     # A total output cap also bounds thinking. LOW leaves room for the report;
     # exhaustion is rejected, never retried with a larger automatic allowance.
@@ -44,12 +47,16 @@ def _require_prompt_budget(system: str, user: str, *, model: str, task: str, max
         # One input byte per token is a conservative allowance, not an actual
         # provider token count. This bounds the full report input without using
         # Groq's historical TPM limit or increasing the approved output cap.
-        # The 48k envelope admits the complete retained 20-minute call. At the
+        # The 64k envelope admits the complete retained 20-minute call. At the
         # frozen $0.75/$3.75 per-million input/output rates and INR100/USD,
-        # even the maximum 4000 output allocation stays below the existing
-        # INR5 C5 reservation on this conservative byte-as-token basis.
+        # maximum 8000 output allocation, this is 720 paise on the conservative
+        # byte-as-token basis, within the fresh INR10 C5 approval requirement.
         used = input_bytes + maximum + 128
-        limit = GEMINI_FLASH_COACHING_TOTAL_LIMIT
+        limit = (
+            GEMINI_FLASH_EXTENDED_COACHING_TOTAL_LIMIT
+            if maximum > 4_000
+            else GEMINI_FLASH_COACHING_TOTAL_LIMIT
+        )
     else:
         used = math.ceil(input_bytes / 3) + maximum + 128
         limit = 8_000
@@ -72,7 +79,7 @@ def prepare_gemini_body(prompt: Mapping[str, Any], *, task: str = "facts") -> di
         or not all(isinstance(item.get("content"), str) for item in messages)
     ):
         raise GeminiTaskError("task_prompt_invalid")
-    config = _config(prompt["max_completion_tokens"])
+    config = _config(prompt["max_completion_tokens"], model=model, task=task)
     system = _MARKER + model + "\n" + messages[0]["content"]
     user = messages[1]["content"]
     _require_prompt_budget(system, user, model=model, task=task, maximum=config["maxOutputTokens"])
@@ -92,7 +99,9 @@ def gemini_prompt_view(
     try:
         if set(body) != {"systemInstruction", "contents", "generationConfig"}:
             raise ValueError
-        if canonical(body["generationConfig"]) != canonical(_config(maximum)):
+        if canonical(body["generationConfig"]) != canonical(
+            _config(maximum, model=model, task=task)
+        ):
             raise ValueError
         instruction = body["systemInstruction"]
         contents = body["contents"]

@@ -27,6 +27,9 @@ from pydantic import (
 )
 
 from ac_platform.conversation_intelligence.checkpoints import canonical
+from ac_platform.conversation_intelligence.completion_limits import (
+    require_approval_completion_bound,
+)
 
 HOSTED_APPROVAL_SCHEMA: Literal["ac.sales-xray.hosted-approval/1"] = (
     "ac.sales-xray.hosted-approval/1"
@@ -148,7 +151,7 @@ class StageApproval(_StrictFrozenModel):
     max_cost_paise: StrictInt = Field(default=0, ge=0, le=2_147_483_647)
     max_source_duration_ms: StrictInt = Field(ge=1, le=14_400_000)
     max_input_bytes: StrictInt = Field(ge=1, le=134_217_728)
-    max_completion_tokens: StrictInt = Field(ge=0, le=4_000)
+    max_completion_tokens: StrictInt = Field(ge=0, le=8_000)
     profile_sha256: str | None = Field(default=None, pattern=_DIGEST)
 
     _permission_ref = field_validator(
@@ -170,6 +173,14 @@ class StageApproval(_StrictFrozenModel):
 
     @model_validator(mode="after")
     def validate_stage_bounds(self) -> Self:
+        require_approval_completion_bound(
+            self.provider_id,
+            self.model_id,
+            self.stage,
+            self.max_completion_tokens,
+            self.zero_cost_basis,
+            self.max_cost_paise,
+        )
         if self.zero_cost_basis == "paid_pricing_evidence":
             if self.max_cost_paise <= 0:
                 raise ValueError("paid_stage_cost_required")
@@ -233,7 +244,7 @@ class AcquisitionStagePolicy(_StrictFrozenModel):
     max_cost_paise: StrictInt = Field(default=0, ge=0, le=2_147_483_647)
     max_source_duration_ms: StrictInt = Field(ge=1, le=14_400_000)
     max_input_bytes: StrictInt = Field(ge=1, le=134_217_728)
-    max_completion_tokens: StrictInt = Field(ge=0, le=4_000)
+    max_completion_tokens: StrictInt = Field(ge=0, le=8_000)
     profile_sha256: str | None = Field(default=None, pattern=_DIGEST)
 
     _permission_ref = field_validator(
@@ -257,6 +268,14 @@ class AcquisitionStagePolicy(_StrictFrozenModel):
     def validate_stage_bounds(self) -> Self:
         # Keep this in lockstep with StageApproval.  A public template may
         # never widen a bound merely because its source is not known yet.
+        require_approval_completion_bound(
+            self.provider_id,
+            self.model_id,
+            self.stage,
+            self.max_completion_tokens,
+            self.zero_cost_basis,
+            self.max_cost_paise,
+        )
         if self.zero_cost_basis == "paid_pricing_evidence":
             if self.max_cost_paise <= 0 or self.free_allowance_ref is not None:
                 raise ValueError("paid_stage_template_invalid")

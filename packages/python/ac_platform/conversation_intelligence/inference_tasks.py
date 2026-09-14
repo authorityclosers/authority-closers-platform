@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal, NoReturn, cast
 
 from ac_platform.conversation_intelligence.checkpoints import canonical
+from ac_platform.conversation_intelligence.completion_limits import completion_ceiling
 from ac_platform.conversation_intelligence.gemini_tasks import (
     GeminiTaskError,
     decode_gemini_object,
@@ -327,9 +328,10 @@ class PreparedTaskInput:
                 _fail("text_input_invalid")
             if self.operation != _TEXT_OPERATION or not self.transcript_revision:
                 _fail("text_input_invalid")
-            if (
-                type(self.max_completion_tokens) is not int
-                or not 256 <= self.max_completion_tokens <= 4_000
+            if type(
+                self.max_completion_tokens
+            ) is not int or not 256 <= self.max_completion_tokens <= completion_ceiling(
+                self.provider, self.model, "C5" if self.task == "coaching" else "C4"
             ):
                 _fail("invalid_max_completion_tokens")
             if self.input_sha256 != self.payload_sha256:

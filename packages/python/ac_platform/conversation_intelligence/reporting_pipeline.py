@@ -22,6 +22,7 @@ from ac_platform.conversation_intelligence.checkpoints import (
     content_hash,
     require_sha256,
 )
+from ac_platform.conversation_intelligence.completion_limits import completion_ceiling
 from ac_platform.conversation_intelligence.entitlements import Quote
 from ac_platform.conversation_intelligence.inference_tasks import (
     PreparedTaskInput,
@@ -67,11 +68,13 @@ class StageRequest(BaseModel):
     )
     model: str = Field(default=GROQ_MODEL, min_length=1, max_length=128)
     max_input_chars: int = Field(default=16_000, strict=True, ge=512, le=32_000)
-    max_completion_tokens: int = Field(default=1_400, strict=True, ge=256, le=4_000)
+    max_completion_tokens: int = Field(default=1_400, strict=True, ge=256, le=8_000)
     profile: dict[str, Any] | None = Field(default=None, repr=False)
 
     @model_validator(mode="after")
     def stage_shape(self) -> StageRequest:
+        if self.max_completion_tokens > completion_ceiling(self.provider, self.model, self.stage):
+            raise ValueError("Stage output exceeds the provider route limit.")
         if self.stage == "C4" and (self.fact_checkpoint_ids or self.profile is not None):
             raise ValueError("Facts cannot take coaching configuration.")
         if self.stage == "C5" and (not self.fact_checkpoint_ids or self.chunk_index != 1):

@@ -325,7 +325,12 @@ def require_derived_input(value: PlanManifest, plan: ServicePlan) -> None:
         or plan.request.model != approval.model_id
         or plan.request.max_input_chars != value.max_input_chars
         or plan.request.max_completion_tokens
-        != stage_completion_limit(plan.checkpoint.stage, approval.max_completion_tokens)
+        != stage_completion_limit(
+            plan.checkpoint.stage,
+            approval.max_completion_tokens,
+            provider=approval.provider_id,
+            model=approval.model_id,
+        )
         or (plan.checkpoint.stage == "C4" and plan.request.chunk_index > approval.max_requests)
         or (
             plan.checkpoint.stage == "C5"
@@ -729,7 +734,9 @@ class ConversationProcessingPlans:
                 provider=c4.provider_id,
                 model=c4.model_id,
                 max_input_chars=value.max_input_chars,
-                max_completion_tokens=stage_completion_limit("C4", c4.max_completion_tokens),
+                max_completion_tokens=stage_completion_limit(
+                    "C4", c4.max_completion_tokens, provider=c4.provider_id, model=c4.model_id
+                ),
             )
             recording = await self.app._recording(actor, row.recording_id)
             first_plan = await ReportingPipeline(self.inference).plan(recording, first_request)
@@ -763,7 +770,10 @@ class ConversationProcessingPlans:
                         model=c5.model_id,
                         max_input_chars=value.max_input_chars,
                         max_completion_tokens=stage_completion_limit(
-                            "C5", c5.max_completion_tokens
+                            "C5",
+                            c5.max_completion_tokens,
+                            provider=c5.provider_id,
+                            model=c5.model_id,
                         ),
                         profile=value.profile,
                     ),
