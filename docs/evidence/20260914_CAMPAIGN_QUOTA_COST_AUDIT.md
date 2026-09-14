@@ -42,17 +42,26 @@ The target permits an average INR100 per student. It is not yet a measured resul
 The bounded activation packet is INR100 staging plus INR900 production; it is
 separate from a funded campaign budget and does not authorize automatic purchases.
 
-The current conservative processing-plan envelope is INR11 for C2, up to
-16 C4 requests at INR5 each, and INR5 for C5: at most INR96 per plan. These are
-reservation ceilings, not measured provider charges, and do not cover arbitrary
-retries or repeated plans. One such plan for each of 100 students reserves at most
-INR9,600, leaving INR400. This calculation must not be advertised as the cost of
-every student's entire 100-minute entitlement.
+The original staging processing-plan envelope is INR11 for C2, up to
+16 C4 requests at INR5 each, and INR5 for C5: at most INR96 per plan. A fresh
+inspection of the exact activation parameters found production instead permits
+64 C4 requests and INR336 per plan. The earlier INR96 calculation was incorrectly
+described without restricting it to staging. These are reservation ceilings,
+not measured provider charges, and do not cover arbitrary retries or repeated
+plans. The release continuation proposes narrowing staging to 11 C4 requests,
+INR71 per plan, while retaining existing uncertain holds and production settings.
+
+For one plan per student, 100 students reserve at most INR9,600 under the original
+staging envelope, but INR33,600 under the production envelope. Neither calculation
+establishes actual invoiced cost or the cost of the entire 100-minute entitlement.
+Filtered parameter receipts with hashes are at
+`D:/AC-authority-closers-release-audit/personal-report-20260914/activation-plan-ceilings.json`.
 
 One hundred students using 100 minutes each is 10,000 source minutes (166h40m).
 The 30-minute upload cap means a fully used allowance can span at least four calls;
 many short calls can incur still more per-plan overhead. Four maximally reserved
-plans per student would reserve INR38,400. Actual charges can be far lower, but
+plans per student would reserve INR134,400 under the production envelope
+(INR38,400 under the original staging envelope). Actual charges can be far lower, but
 only observed input/output usage, provider billing and reconciled reservations can
 establish that. No campaign-wide INR10,000 enforcement was verified by this audit.
 
