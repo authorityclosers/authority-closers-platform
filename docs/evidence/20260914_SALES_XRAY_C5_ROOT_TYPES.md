@@ -57,3 +57,42 @@ Private source/response content was not copied into repository fixtures.
 The C4 review also records proposals about missing turnover-unit/trend
 uncertainty and a compressed margin qualifier. These are not approved labels,
 automatic retraining, or claims that the final report is ready.
+
+## Complete contract audit and environment resolution
+
+A complete offline pass subsequently identified all eight observed violations:
+the three root-type errors, the one source-quote error, and four dimension
+statuses set to `sufficient_evidence`, which is outside the canonical enum.
+The actual overview object passed its Pydantic shape validation. After isolating
+only those eight defects in a discarded diagnostic copy, the entire strict
+parser passed. That copy is not a valid recovery, approved label or saved report;
+the actual unchanged provider response still fails validation.
+
+The final `report-root-types-v2` instructions enumerate the five allowed
+dimension statuses, dimension item fields, and overview mandatory/null/array
+and reference-index requirements. Existing overview instructions enumerate
+outcome kinds, rewatch purposes, inference kinds and business-impact missingness.
+`report_dimension_status_invalid` is also a narrowly allowlisted operational
+code; suffixes containing private text still use the generic failure code.
+
+Final replay receipt: `peer-c5-complete-contract-audit-20260914.json`, SHA-256
+`ad1741efd60636dc253f9d12db98d01f484510fc0c09be000e4eec8e6be64ecb`.
+It reproduced the actual fc7 C5 input, retained the same C4 input, profile and
+transcript, and prepared the amended input at 18930 bytes with the same 3200-token
+output cap. It records every invalid field and all fourteen evidence checks
+without placing private quotes in repository fixtures.
+
+The remaining local preflight failure was `signal_native_build_required`.
+The existing matching native build was reused only after checking its binary
+hash and the exact preserved native source hash, in ignored build paths.
+The one preflight test then passed. Final full command:
+
+`python -m pytest -q tests/unit/conversation_intelligence
+--basetemp=D:/AC-authority-closers-release-audit/peer-c5-complete-shape-temp-20260914`
+
+Result: **833 passed, 1 skipped, 1 warning in 22.90 seconds**. The skip is POSIX
+ownership unavailable on Windows; the warning is a Starlette/httpx deprecation.
+Receipts are `peer-c5-complete-shape-20260914.log` and its `.xml` sibling.
+Ruff lint, formatting and diff checks passed. Earlier failures remain recorded;
+no runtime guard or parser acceptance rule was weakened. Linux CI and a new
+approved provider result are still required for release completion.

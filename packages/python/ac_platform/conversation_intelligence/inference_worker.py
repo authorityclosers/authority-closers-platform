@@ -91,6 +91,7 @@ _VALIDATION_FAILURES = frozenset(
         "fact_evidence_outside_chunk",
         "report_json_invalid",
         "report_findings_invalid",
+        "report_dimension_status_invalid",
         "report_overview_missing",
         "fact_packet_invalid",
         "provider_result_route_mismatch",

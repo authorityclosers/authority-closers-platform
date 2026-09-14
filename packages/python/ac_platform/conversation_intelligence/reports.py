@@ -46,10 +46,13 @@ COACHING_VOICE_INSTRUCTION = (
     "evidence is not poor performance. "
 )
 REPORT_STRUCTURE_INSTRUCTION = (
-    "ROOT_TYPES: report-root-types-v1. summary and verdict must be JSON strings, never objects. "
+    "ROOT_TYPES: report-root-types-v2. summary and verdict must be JSON strings, never objects. "
     "strengths, missed_opportunities, improvements, objection_analysis and closing_analysis "
     "must each be a JSON array of {title,explanation,evidence} findings. Use [] when no "
     "evidence-backed finding exists; never return an object or an empty-evidence placeholder. "
+    "Each dimension assessment is an object with dimension_id, status and observation. "
+    "Use exact profile dimension IDs. status must be observed, insufficient_evidence, "
+    "not_applicable, conflicted or unknown; sufficient_evidence is not a valid status. "
     "Copy evidence objects directly from the supplied observations: preserve segment_id, "
     "quote, start_ms and end_ms exactly, including every script character, space and "
     "punctuation. Reuse the identical object when citing a span again. Never transliterate, "
@@ -1071,7 +1074,7 @@ def build_report_groq_prompt(
     resolved_profile = load_report_profile() if profile is None else dict(profile)
     prompt_profile = _prompt_profile(resolved_profile)
     output_fields = (
-        "dimension_assessments and overview. "
+        "dimension_assessments (a JSON array) and overview (a JSON object). "
         if detailed_overview
         else "source_label, dimensions and report_sections. "
     )
@@ -1103,6 +1106,11 @@ def build_report_groq_prompt(
             "\n"
             + OVERVIEW_MARKER
             + OVERVIEW_INSTRUCTION
+            + " All overview keys are required. Use literal null only where the shape allows "
+            "null and [] for an empty array; never return the shape descriptions as strings. "
+            "Use exactly the listed kind, purpose, status and interpretation_kind values. "
+            "Finding/evidence references are zero-based integer indices into the corresponding "
+            "arrays; include one strength/improvement detail per finding. progress must be null. "
             + "\nRequired overview shape (all keys required; evidence uses exact source spans):\n"
             + json.dumps(OVERVIEW_FORMAT, ensure_ascii=False, separators=(",", ":"))
         )

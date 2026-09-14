@@ -52,10 +52,13 @@ def test_root_structure_changes_only_c5_input_not_transcript_facts_or_budget(
         if provider == "gemini"
         else body["messages"][0]["content"]
     )
-    assert "ROOT_TYPES: report-root-types-v1" in system
+    assert "ROOT_TYPES: report-root-types-v2" in system
     assert "summary and verdict must be JSON strings" in system
     assert "must each be a JSON array" in system
     assert "Use [] when no evidence-backed finding exists" in system
+    assert "status must be observed, insufficient_evidence" in system
+    assert "not_applicable, conflicted or unknown" in system
+    assert "All overview keys are required" in system
     assert "Never transliterate, translate or rewrite quotes" in system
     assert json.loads(system.rsplit("Profile:\n", 1)[1])["revision"] == current.profile_revision
     assert transcript == original
@@ -130,3 +133,19 @@ def test_native_coaching_does_not_repair_a_transliterated_quote() -> None:
     assert draft["overview"]["improvement_details"][0]["what_happened"]["evidence"][0]["quote"] == (
         "पुढील कॉल कधी आहे?"
     )
+
+
+@pytest.mark.parametrize(
+    "status", ["observed", "insufficient_evidence", "not_applicable", "conflicted", "unknown"]
+)
+def test_dimension_status_contract_accepts_only_canonical_missingness(status: str) -> None:
+    transcript, task, draft = coaching_case()
+    dimension = reports.load_report_profile()["dimensions"][0]
+    draft["dimension_assessments"] = [
+        {"dimension_id": dimension["id"], "status": status, "observation": "A bounded observation."}
+    ]
+    output = validate_coaching_result(result(task, envelope(draft)), task, transcript)
+    assert output.data()["dimensions"][0]["status"] == status
+    draft["dimension_assessments"][0]["status"] = "sufficient_evidence"
+    with pytest.raises(InferenceTaskError, match="report_dimension_status_invalid"):
+        validate_coaching_result(result(task, envelope(draft)), task, transcript)
