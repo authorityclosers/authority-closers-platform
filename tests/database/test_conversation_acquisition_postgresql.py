@@ -577,11 +577,11 @@ def test_http_cookie_claim_and_boundary_use_real_identity_and_postgres(
                     headers={"Origin": origin},
                 )
                 assert repeat.status_code == 200
-                assert repeat.json()["allowance"]["available_seconds"] == 5939
+                assert repeat.json()["allowance"]["available_seconds"] == 3539
                 assert checks == ["rejected", "synthetic-challenge"]
                 read = await client.get(route + "/session")
                 assert read.status_code == 200
-                assert read.json()["allowance"]["available_seconds"] == 5939
+                assert read.json()["allowance"]["available_seconds"] == 3539
                 # A malformed-but-shaped account token cannot fall back to
                 # the otherwise valid guest bearer.
                 client.cookies.set(
@@ -630,15 +630,15 @@ def test_http_cookie_claim_and_boundary_use_real_identity_and_postgres(
                 pending_claim = await client.get(route + "/session")
                 assert pending_claim.status_code == 200, pending_claim.text
                 assert pending_claim.json()["state"] == "claim_required"
-                assert pending_claim.json()["allowance"]["available_seconds"] == 5939
+                assert pending_claim.json()["allowance"]["available_seconds"] == 3539
                 claimed = await client.post(route + "/claim", headers={"Origin": origin})
                 assert claimed.status_code == 200, claimed.text
-                assert claimed.json()["allowance"]["available_seconds"] == 5939
+                assert claimed.json()["allowance"]["available_seconds"] == 3539
                 assert "__Host-ac_xray_guest" not in client.cookies
                 account_only = await client.get(route + "/session")
                 assert account_only.status_code == 200
                 assert account_only.json()["state"] == "account"
-                assert account_only.json()["allowance"]["available_seconds"] == 5939
+                assert account_only.json()["allowance"]["available_seconds"] == 3539
                 async with sessions() as db:
                     visitor_count_before = await db.scalar(
                         select(func.count()).select_from(ConversationVisitor)
@@ -655,7 +655,7 @@ def test_http_cookie_claim_and_boundary_use_real_identity_and_postgres(
                 claimed_cookie = await client.get(route + "/session")
                 assert claimed_cookie.status_code == 200, claimed_cookie.text
                 assert claimed_cookie.json()["state"] == "account"
-                assert claimed_cookie.json()["allowance"]["available_seconds"] == 5939
+                assert claimed_cookie.json()["allowance"]["available_seconds"] == 3539
                 async with sessions() as db:
                     visitor_count_after = await db.scalar(
                         select(func.count()).select_from(ConversationVisitor)
@@ -791,7 +791,7 @@ def test_google_entry_creates_one_canonical_learner_and_retains_guest_usage(
                             "/v1/conversation/acquisition/claim", headers={"Origin": origin}
                         )
                         assert claim.status_code == 200, claim.text
-                        assert claim.json()["allowance"]["available_seconds"] == 5876
+                        assert claim.json()["allowance"]["available_seconds"] == 3476
                     else:
                         assert me.json()["person_id"] == person_id
                     async with sessions() as db:

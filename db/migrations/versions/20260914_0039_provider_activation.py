@@ -25,31 +25,33 @@ def upgrade() -> None:
         sa.Column("configuration_sha256", sa.String(64), nullable=False),
         sa.Column("sequence", sa.Integer(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.PrimaryKeyConstraint("id", name="pk_conversation_provider_activations"),
+        sa.PrimaryKeyConstraint("id", name=op.f("pk_conversation_provider_activations")),
         sa.ForeignKeyConstraint(
             ["tenant_id", "person_id"],
             ["memberships.tenant_id", "memberships.person_id"],
-            name="fk_conversation_provider_activations_tenant_id_memberships",
+            name=op.f("fk_conversation_provider_activations_tenant_id_memberships"),
         ),
         sa.ForeignKeyConstraint(
             ["session_id"],
             ["sessions.id"],
-            name="fk_conversation_provider_activations_session_id_sessions",
+            name=op.f("fk_conversation_provider_activations_session_id_sessions"),
         ),
         sa.ForeignKeyConstraint(
             ["configuration_id"],
             ["conversation_provider_configurations.id"],
-            name="fk_conversation_provider_activations_configuration_id_configs",
+            name=op.f(
+                "fk_conversation_provider_activations_configuration_id_conversation_provider_configurations"
+            ),
         ),
         sa.UniqueConstraint(
-            "tenant_id", "sequence", name="uq_conversation_provider_activations_tenant_sequence"
+            "tenant_id", "sequence", name=op.f("uq_conversation_provider_activations_tenant_id")
         ),
         sa.CheckConstraint(
-            "sequence >= 1", name="ck_conversation_provider_activations_positive_sequence"
+            "sequence >= 1", name=op.f("ck_conversation_provider_activations_positive_sequence")
         ),
         sa.CheckConstraint(
             "configuration_revision >= 1",
-            name="ck_conversation_provider_activations_positive_configuration_revision",
+            name=op.f("ck_conversation_provider_activations_positive_config_revision"),
         ),
     )
     op.execute(

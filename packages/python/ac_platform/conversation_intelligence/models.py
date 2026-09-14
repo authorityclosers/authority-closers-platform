@@ -282,7 +282,7 @@ class ConversationProviderActivation(Base):
         member_fk(),
         UniqueConstraint("tenant_id", "sequence"),
         CheckConstraint("sequence >= 1", name="positive_sequence"),
-        CheckConstraint("configuration_revision >= 1", name="positive_configuration_revision"),
+        CheckConstraint("configuration_revision >= 1", name="positive_config_revision"),
     )
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
     tenant_id: Mapped[UUID] = mapped_column(Uuid)
