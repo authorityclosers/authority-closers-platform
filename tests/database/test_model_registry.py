@@ -126,6 +126,7 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "conversation_processing_principals",
         "conversation_processing_leases",
         "conversation_guest_submissions",
+        "conversation_analysis_settings",
     }
 
     assert set(model_metadata().tables) == expected
