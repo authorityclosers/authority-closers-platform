@@ -44,6 +44,7 @@ let existing: boolean,
 let reportBody: unknown;
 let progressOverride: unknown;
 let planFailure: { status: number; body: unknown } | null;
+let planFailureOnce: boolean;
 let quoteFailure: { status: number; body: unknown } | null;
 let analysisPaused: boolean;
 const response = (value: unknown, status = 200) =>
@@ -108,6 +109,7 @@ beforeEach(() => {
   reportBody = envelope;
   progressOverride = undefined;
   planFailure = null;
+  planFailureOnce = false;
   quoteFailure = null;
   analysisPaused = false;
   localStorage.clear();
@@ -169,7 +171,14 @@ beforeEach(() => {
           ? response(quoteFailure.body, quoteFailure.status)
           : response(plan, 201);
       if (path.endsWith("/plan")) {
-        if (planFailure) return response(planFailure.body, planFailure.status);
+        if (planFailure) {
+          const failure = planFailure;
+          if (planFailureOnce) {
+            planFailure = null;
+            planFailureOnce = false;
+          }
+          return response(failure.body, failure.status);
+        }
         accepted = true;
         return response(
           { ...plan, accepted: true, state: "active", current_stage: "C2" },
@@ -268,6 +277,14 @@ it("uses one upload consent, auto-accepts the same call's quote, then shows the 
   );
   await flush();
   await select();
+  expect(
+    container.querySelector('a[href="https://app.authorityclosers.com/terms"]'),
+  ).not.toBeNull();
+  expect(
+    container.querySelector(
+      'a[href="https://app.authorityclosers.com/privacy"]',
+    ),
+  ).not.toBeNull();
   expect(button("Upload my call").disabled).toBe(true);
   await consent();
   expect(button("Upload my call").disabled).toBe(true);
@@ -373,6 +390,27 @@ it.each([
     expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
   },
 );
+
+it("refreshes one stale plan into an explicit review without retrying acceptance", async () => {
+  planFailure = {
+    status: 403,
+    body: { detail: "Approve the current displayed processing plan." },
+  };
+  planFailureOnce = true;
+  await mount();
+  await select();
+  await consent();
+  await click("Complete upload check");
+  await click("Upload my call");
+
+  expect(container.querySelector('[role="alert"]')).toBeNull();
+  expect(container.textContent).toContain("Ready to continue");
+  expect(button("Continue analysis").disabled).toBe(false);
+  expect(calls.filter(({ path }) => path.endsWith("/plan/quote"))).toHaveLength(
+    2,
+  );
+  expect(calls.filter(({ path }) => path.endsWith("/plan"))).toHaveLength(1);
+});
 
 it("shows the advertised trial allowance for a clean visitor", async () => {
   await mount();

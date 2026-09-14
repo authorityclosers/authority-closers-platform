@@ -51,7 +51,11 @@ export type Progress = {
 export class AcquisitionError extends Error {
   constructor(
     readonly status: number,
-    reason?: "provider_allowance_used" | "plan_permission" | "execution_paused",
+    readonly reason?:
+      | "provider_allowance_used"
+      | "plan_permission"
+      | "plan_stale"
+      | "execution_paused",
   ) {
     super(
       reason === "execution_paused"
@@ -61,9 +65,11 @@ export class AcquisitionError extends Error {
           : status === 403
             ? reason === "provider_allowance_used"
               ? "This call’s approved analysis allowance has been used. Your recording is saved. Ask the AC team to review its approval before requesting a fresh plan."
-              : reason === "plan_permission"
-                ? "Analysis approval is unavailable for this call. Your recording is saved. Ask the AC team to check its approval and allowance before requesting a fresh plan."
-                : "This action is not available with your current access. Ask the AC team to check your permission."
+              : reason === "plan_stale"
+                ? "This call’s plan changed while it was being prepared. We fetched a fresh plan for you to review."
+                : reason === "plan_permission"
+                  ? "Analysis approval is unavailable for this call. Your recording is saved. Ask the AC team to check its approval and allowance before requesting a fresh plan."
+                  : "This action is not available with your current access. Ask the AC team to check your permission."
             : status === 404
               ? "This call is unavailable in your current session. It may have expired or been deleted."
               : status === 429
@@ -109,9 +115,19 @@ export async function acquisition(
         !Array.isArray(body) &&
         "detail" in body &&
         body.detail === "This recording's approved provider allowance is used.";
+      const planStale =
+        body !== null &&
+        typeof body === "object" &&
+        !Array.isArray(body) &&
+        "detail" in body &&
+        body.detail === "Approve the current displayed processing plan.";
       throw new AcquisitionError(
         response.status,
-        allowanceUsed ? "provider_allowance_used" : "plan_permission",
+        allowanceUsed
+          ? "provider_allowance_used"
+          : planStale
+            ? "plan_stale"
+            : "plan_permission",
       );
     }
     throw new AcquisitionError(response.status);

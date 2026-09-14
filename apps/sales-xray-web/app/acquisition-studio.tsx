@@ -186,6 +186,7 @@ export function AcquisitionStudio({
   const chosenId = useRef("");
   const quoteKey = useRef("");
   const requestedPlan = useRef("");
+  const stalePlanRefresh = useRef<string | null>(null);
   const previewUrl = useRef("");
   const onToken = useCallback((value: string) => setToken(value), []);
 
@@ -301,17 +302,37 @@ export function AcquisitionStudio({
     };
   }, [plan]);
 
-  async function getPlan(bound: Submission, signal: AbortSignal) {
-    if (!quoteKey.current) quoteKey.current = `report-plan:${bound.id}`;
-    return parseProcessingPlan(
-      await acquisition(`${submissionPath(bound.id)}/plan/quote`, {
-        method: "POST",
-        signal,
-        headers: { "Idempotency-Key": quoteKey.current },
-      }),
-      bound.recordingId,
-    );
-  }
+  const getPlan = useCallback(
+    async (bound: Submission, signal: AbortSignal) => {
+      if (!quoteKey.current) quoteKey.current = `report-plan:${bound.id}`;
+      return parseProcessingPlan(
+        await acquisition(`${submissionPath(bound.id)}/plan/quote`, {
+          method: "POST",
+          signal,
+          headers: { "Idempotency-Key": quoteKey.current },
+        }),
+        bound.recordingId,
+      );
+    },
+    [],
+  );
+
+  const refreshStalePlan = useCallback(
+    async (bound: Submission, signal: AbortSignal) => {
+      if (stalePlanRefresh.current === bound.id) return false;
+      stalePlanRefresh.current = bound.id;
+      quoteKey.current = `report-plan:${crypto.randomUUID()}`;
+      const next = await getPlan(bound, signal);
+      if (signal.aborted) return true;
+      setPlan(next);
+      setPlanExpired(next.expires_at_epoch * 1000 <= Date.now());
+      setPlanRequiresAction(true);
+      setError("");
+      setPollAttempt((n) => n + 1);
+      return true;
+    },
+    [getPlan],
+  );
 
   const acceptPlanRequest = useCallback(
     async (bound: Submission, shown: ProcessingPlan, signal: AbortSignal) => {
@@ -419,8 +440,18 @@ export function AcquisitionStudio({
               try {
                 await acceptPlanRequest(bound, approved, abort.signal);
               } catch (error) {
-                setPlanRequiresAction(true);
-                throw error;
+                if (
+                  error instanceof AcquisitionError &&
+                  error.reason === "plan_stale"
+                ) {
+                  if (!(await refreshStalePlan(bound, abort.signal))) {
+                    setPlanRequiresAction(true);
+                    throw error;
+                  }
+                } else {
+                  setPlanRequiresAction(true);
+                  throw error;
+                }
               }
             } else {
               setPlanRequiresAction(true);
@@ -450,6 +481,8 @@ export function AcquisitionStudio({
   }, [
     analysisPaused,
     acceptPlanRequest,
+    getPlan,
+    refreshStalePlan,
     consentedSubmissionId,
     planRequiresAction,
     submission,
@@ -601,9 +634,19 @@ export function AcquisitionStudio({
     }
     const bound = submission;
     const shown = plan;
-    await operation("Starting your report…", (signal) =>
-      acceptPlanRequest(bound, shown, signal),
-    );
+    await operation("Starting your report…", async (signal) => {
+      try {
+        await acceptPlanRequest(bound, shown, signal);
+      } catch (error) {
+        if (
+          error instanceof AcquisitionError &&
+          error.reason === "plan_stale"
+        ) {
+          if (await refreshStalePlan(bound, signal)) return;
+        }
+        throw error;
+      }
+    });
   }
 
   async function freshPlan() {
@@ -635,6 +678,7 @@ export function AcquisitionStudio({
     setConsent(false);
     setConsentedSubmissionId(null);
     setPlanRequiresAction(false);
+    stalePlanRefresh.current = null;
     setMoment(null);
     setPlaybackMessage("");
     setError("");
@@ -834,7 +878,7 @@ export function AcquisitionStudio({
           </aside>
         )}
         <div
-          className={`${styles.layout} ${report ? styles.withReport : submission ? styles.withProcessing : ""}`}
+          className={`${styles.layout} ${report ? styles.withReport : submission ? styles.withProcessing : busy && !submission ? styles.withBusy : ""}`}
         >
           <section
             className={`panel studio-upload ${styles.upload} ${dragActive ? styles.dragging : ""}`}
@@ -908,7 +952,7 @@ export function AcquisitionStudio({
                   <div data-state="not-started">
                     <span aria-hidden="true">2</span>
                     <p>
-                      Private analysis
+                      Transcript
                       <small>Starts after the check</small>
                     </p>
                   </div>
@@ -1071,45 +1115,54 @@ export function AcquisitionStudio({
                       "Approved service providers may process this recording to prepare the transcript and coaching report. The recording and report remain private for the retention period above."}
                   </p>
                 </details>
-                <label>
+                <label className={styles.consentLabel}>
                   <input
                     type="checkbox"
                     checked={consent}
                     disabled={!!busy}
                     onChange={(event) => setConsent(event.target.checked)}
                   />
-                  I have permission to analyse this call and understand that it
-                  will be processed privately and retained for the period above.
+                  <span>
+                    I agree to the{" "}
+                    <a href="https://app.authorityclosers.com/terms">Terms</a>{" "}
+                    and{" "}
+                    <a href="https://app.authorityclosers.com/privacy">
+                      Privacy Policy
+                    </a>
+                    .
+                  </span>
                 </label>
-                {!embedded &&
-                  !session &&
-                  entry?.site_key &&
-                  entry.challenge_action && (
-                    <UploadCheck
-                      key={checkKey}
-                      siteKey={entry.site_key}
-                      action={entry.challenge_action}
-                      onToken={onToken}
-                    />
-                  )}
-                <button
-                  type="button"
-                  className="primary-button studio-wide"
-                  disabled={
-                    !consent ||
-                    (!session && !token) ||
-                    !!busy ||
-                    allowance?.available_seconds === 0
-                  }
-                  onClick={() => void upload()}
-                >
-                  {busy ? (
-                    <LoaderCircle className="spin" size={17} />
-                  ) : (
-                    <Upload size={17} />
-                  )}
-                  {busy || "Upload my call"}
-                </button>
+                <div className={styles.uploadActions}>
+                  {!embedded &&
+                    !session &&
+                    entry?.site_key &&
+                    entry.challenge_action && (
+                      <UploadCheck
+                        key={checkKey}
+                        siteKey={entry.site_key}
+                        action={entry.challenge_action}
+                        onToken={onToken}
+                      />
+                    )}
+                  <button
+                    type="button"
+                    className="primary-button studio-wide"
+                    disabled={
+                      !consent ||
+                      (!session && !token) ||
+                      !!busy ||
+                      allowance?.available_seconds === 0
+                    }
+                    onClick={() => void upload()}
+                  >
+                    {busy ? (
+                      <LoaderCircle className="spin" size={17} />
+                    ) : (
+                      <Upload size={17} />
+                    )}
+                    {busy || "Upload my call"}
+                  </button>
+                </div>
               </div>
             )}
             {submission && !report && plan && !plan.accepted && (
