@@ -4,8 +4,7 @@ import { AudioLines, ArrowRight, LoaderCircle, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
-import { BrandMark } from "@ac/ui";
-import { AccountNavigation } from "./account-navigation";
+import { AcquisitionShell } from "./acquisition-shell";
 import {
   acquisition,
   parseSubmissionLibraryPage,
@@ -62,7 +61,7 @@ export function CallsLibrary({
   studioHref?: "/" | "/sales-xray";
 }) {
   const embedded = variant === "embedded";
-  const Main = embedded ? "div" : "main";
+  const Main = "div";
   const access = useWorkspaceAccess();
   const [submissions, setSubmissions] = useState<LibrarySubmission[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -213,30 +212,13 @@ export function CallsLibrary({
     window.location.assign(studioHref);
   }
 
-  return (
+  const content = (
     <div
       className="xray-app simple-app calls-library-app"
       data-theme="light"
       data-variant={variant}
     >
-      {!embedded && (
-        <header className="studio-header calls-library-header">
-          <Link href={studioHref} aria-label="Sales Xray home">
-            <span className="studio-mark">
-              <BrandMark />
-            </span>
-            <span>
-              Dipak’s <strong>Sales Xray</strong>
-              <small>AUTHORITY CLOSERS</small>
-            </span>
-          </Link>
-          <AccountNavigation />
-        </header>
-      )}
-      <Main
-        id={embedded ? undefined : "main"}
-        className="studio-main calls-library-main"
-      >
+      <Main className="studio-main calls-library-main">
         <div className="calls-library-intro">
           <p className="eyebrow">YOUR AC ACCOUNT</p>
           <h1>Saved calls</h1>
@@ -363,5 +345,15 @@ export function CallsLibrary({
         )}
       </Main>
     </div>
+  );
+  if (embedded) return content;
+  return (
+    <AcquisitionShell
+      authenticated={access?.authenticated === true}
+      homeHref={studioHref}
+      active="calls"
+    >
+      {content}
+    </AcquisitionShell>
   );
 }

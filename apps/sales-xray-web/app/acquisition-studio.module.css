@@ -1,6 +1,9 @@
 .app {
   min-height: 100vh;
 }
+.app[data-variant="standalone"] {
+  min-height: auto;
+}
 .header {
   justify-content: space-between;
   gap: 18px;
@@ -19,6 +22,52 @@
 }
 .upload {
   min-width: 0;
+  position: relative;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    background-color 160ms ease;
+}
+.upload.dragging {
+  border-color: var(--action);
+  background: color-mix(in srgb, var(--action) 5%, var(--surface));
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--action) 13%, transparent);
+}
+.stepHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: -4px 0 22px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+.stepNumber {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  place-items: center;
+  border-radius: 9px;
+  background: #edf2ff;
+  color: var(--action);
+  font: 700 11px/1 ui-monospace, monospace;
+}
+.stepHeader > span:last-child {
+  display: grid;
+  gap: 3px;
+}
+.stepHeader strong {
+  font-size: 13px;
+}
+.stepHeader small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.dropHint {
+  margin: 11px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
 }
 .upload h2 {
   overflow-wrap: anywhere;
@@ -261,6 +310,16 @@
   font-size: 11px;
   line-height: 1.55;
 }
+.coachingCopy {
+  margin: 16px 0 0;
+  padding: 12px 14px;
+  border-left: 3px solid var(--mint);
+  border-radius: 0 8px 8px 0;
+  background: color-mix(in srgb, var(--mint) 7%, var(--surface));
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.6;
+}
 @keyframes signal-orbit {
   to {
     transform: rotate(360deg);
@@ -425,6 +484,9 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  .upload {
+    transition: none;
+  }
   .signalOrbit {
     animation: none;
   }

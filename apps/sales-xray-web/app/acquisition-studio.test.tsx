@@ -227,6 +227,12 @@ afterEach(async () => {
 
 it("the actual page requires both consents, then shows the fourteen-point report", async () => {
   await mount();
+  expect(
+    container.querySelector('[aria-label="Sales Xray navigation"]'),
+  ).not.toBeNull();
+  expect(container.querySelector('a[href="/calls"]')).not.toBeNull();
+  expect(container.textContent).toContain("Account & saved calls");
+  expect(container.querySelectorAll("main")).toHaveLength(1);
   await select();
   expect(button("Upload my call").disabled).toBe(true);
   await consent();
@@ -242,6 +248,14 @@ it("the actual page requires both consents, then shows the fourteen-point report
   expect(
     container.querySelector('[aria-label="Sales call report"]'),
   ).not.toBeNull();
+  expect(container.querySelectorAll("main")).toHaveLength(1);
+  expect(container.querySelector(".studio-steps")?.textContent).toContain(
+    "Report ready",
+  );
+  expect(
+    container.querySelector('[aria-label="Current analysis step"] strong')
+      ?.textContent,
+  ).toBe("Report ready");
   expect(container.textContent).toContain(envelope.report.content.summary);
   expect(container.textContent).toContain("Remaining analysis time · 99m 55s");
   expect(container.textContent).not.toContain("free audio minutes");

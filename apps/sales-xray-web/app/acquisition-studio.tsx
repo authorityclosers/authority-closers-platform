@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { BrandMark } from "@ac/ui";
 import {
   AudioLines,
   ArrowRight,
@@ -21,7 +20,7 @@ import {
   type ProcessingPlan,
   type CallStudioVariant,
 } from "./call-studio";
-import { AccountNavigation } from "./account-navigation";
+import { AcquisitionShell } from "./acquisition-shell";
 import { DipakOverview } from "./dipak-overview";
 import { ReportExplorer } from "./report-explorer";
 import { ReportFactors } from "./report-factors";
@@ -56,6 +55,7 @@ import {
   type UploadPolicy,
 } from "./acquisition-client";
 import { UploadCheck } from "./upload-check";
+import { useWorkspaceAccess } from "./workspace-access";
 import styles from "./acquisition-studio.module.css";
 
 type Result = { report: SalesReport; transcript: Transcript; claimed: boolean };
@@ -66,6 +66,11 @@ const stageNames: Record<string, string> = {
 };
 const processingStages = ["C2", "C4", "C5"] as const;
 type ProcessingStage = (typeof processingStages)[number];
+const coachingCopy = [
+  "While you wait: note one moment where you want the buyer to feel more understood.",
+  "A useful review connects one specific moment to one practical next step.",
+  "You can leave this page. Return from Saved calls while your private work is retained.",
+] as const;
 
 function latestStage(progress: Progress | null, stage: ProcessingStage) {
   return progress?.stages.findLast((row) => row.stage === stage) ?? null;
@@ -133,7 +138,8 @@ export function AcquisitionStudio({
   homeHref?: string;
 }) {
   const embedded = variant === "embedded";
-  const Main = embedded ? "div" : "main";
+  // The standalone shell owns the page landmark; embedded mounts inherit one.
+  const access = useWorkspaceAccess();
   const [entry, setEntry] = useState<Entry | null>(null);
   const [policy, setPolicy] = useState<UploadPolicy | null>(null);
   const [allowance, setAllowance] = useState<Allowance | null>(null);
@@ -160,6 +166,8 @@ export function AcquisitionStudio({
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleted, setDeleted] = useState(false);
   const [deletionOnlyId, setDeletionOnlyId] = useState<string | null>(null);
+  const [dragActive, setDragActive] = useState(false);
+  const [coachingIndex, setCoachingIndex] = useState(0);
   const input = useRef<HTMLInputElement>(null);
   const audio = useRef<HTMLAudioElement>(null);
   const controller = useRef<AbortController | null>(null);
@@ -170,6 +178,13 @@ export function AcquisitionStudio({
   const requestedPlan = useRef("");
   const previewUrl = useRef("");
   const onToken = useCallback((value: string) => setToken(value), []);
+
+  const progressStageKey = progress?.stages
+    .map((stage) => `${stage.stage}:${stage.state}`)
+    .join("|");
+  const hasUncertainStage = progress?.stages.some(
+    (stage) => stage.state === "uncertain",
+  );
 
   useEffect(() => {
     active.current = true;
@@ -370,6 +385,22 @@ export function AcquisitionStudio({
       if (timer) clearTimeout(timer);
     };
   }, [submission, result, pollAttempt]);
+
+  useEffect(() => {
+    if (
+      !submission ||
+      result ||
+      progress?.state === "held" ||
+      hasUncertainStage
+    ) {
+      return;
+    }
+    const timer = window.setInterval(
+      () => setCoachingIndex((index) => (index + 1) % coachingCopy.length),
+      7000,
+    );
+    return () => window.clearInterval(timer);
+  }, [hasUncertainStage, progress?.state, progressStageKey, result, submission]);
 
   function choose(next: File | undefined) {
     if (!next || inFlight.current || submission) return;
@@ -619,9 +650,21 @@ export function AcquisitionStudio({
       );
   }
 
-  if (entry && !entry.enabled)
-    return <CallStudio variant={variant} homeHref={homeHref} />;
+  if (entry && !entry.enabled) {
+    const fallback = <CallStudio variant="embedded" homeHref={homeHref} />;
+    return embedded ? (
+      fallback
+    ) : (
+      <AcquisitionShell
+        authenticated={access?.authenticated === true}
+        homeHref={homeHref}
+      >
+        {fallback}
+      </AcquisitionShell>
+    );
+  }
   const report = result?.report;
+  const reportReady = Boolean(report);
   const currentStage =
     progress?.stages.findLast((stage) => stage.state === "running") ??
     progress?.stages.find(
@@ -652,29 +695,20 @@ export function AcquisitionStudio({
     ? `${ACQUISITION}${submissionPath(submission.id)}/source`
     : audioUrl;
 
-  return (
+  const content = (
     <div
       className={`xray-app simple-app ${styles.app}`}
       data-theme="light"
       data-variant={variant}
+      data-stage={report ? "report" : submission ? "processing" : "upload"}
     >
-      {!embedded && (
-        <header className={`studio-header ${styles.header}`}>
-          <Link href={homeHref} aria-label="Sales Xray home">
-            <span className="studio-mark">
-              <BrandMark />
-            </span>
-            <span>
-              Dipak’s <strong>Sales Xray</strong>
-              <small>AUTHORITY CLOSERS</small>
-            </span>
-          </Link>
-          <AccountNavigation />
-        </header>
-      )}
-      <Main id={embedded ? undefined : "main"} className="studio-main">
+      <div className="studio-main">
         <nav className="studio-steps" aria-label="Analysis steps">
-          {["Your call", "Your analysis", "Your next step"].map(
+          {[
+            "Your call",
+            "Your analysis",
+            reportReady ? "Report ready" : "Your next step",
+          ].map(
             (label, index) => (
               <span
                 key={label}
@@ -694,13 +728,10 @@ export function AcquisitionStudio({
         {!submission && !report && (
           <div className="studio-intro">
             <p className="eyebrow">YOUR NEXT CALL CAN BE BETTER</p>
-            <h1>
-              One call. Clear feedback.
-              <br />A better next conversation.
-            </h1>
+            <h1>Make your next call clearer.</h1>
             <p>
-              See what worked, find the moments you missed, and leave with a
-              focused practice plan based on Dipak’s sales principles.
+              Upload one call, keep the moments that matter, and leave with one
+              practical next step based on Dipak’s sales principles.
             </p>
           </div>
         )}
@@ -740,9 +771,47 @@ export function AcquisitionStudio({
           className={`${styles.layout} ${report ? styles.withReport : submission ? styles.withProcessing : ""}`}
         >
           <section
-            className={`panel studio-upload ${styles.upload}`}
+            className={`panel studio-upload ${styles.upload} ${dragActive ? styles.dragging : ""}`}
             aria-label="Your call"
+            onDragEnter={(event) => {
+              event.preventDefault();
+              if (!busy && !submission && !deletionOnlyId) setDragActive(true);
+            }}
+            onDragOver={(event) => event.preventDefault()}
+            onDragLeave={(event) => {
+              if (
+                !event.currentTarget.contains(event.relatedTarget as Node)
+              )
+                setDragActive(false);
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              setDragActive(false);
+              if (!busy && !submission && !deletionOnlyId)
+                choose(event.dataTransfer.files?.[0]);
+            }}
           >
+            <div className={styles.stepHeader} aria-label="Current analysis step">
+              <span className={styles.stepNumber}>
+                {reportReady ? "03" : submission ? "02" : "01"}
+              </span>
+              <span>
+                <strong>
+                  {reportReady
+                    ? "Report ready"
+                    : submission
+                      ? "Your analysis"
+                      : "Your call"}
+                </strong>
+                <small>
+                  {reportReady
+                    ? "Explore your saved analysis"
+                    : submission
+                      ? "Saved work, processing privately"
+                      : "Select a recording to begin"}
+                </small>
+              </span>
+            </div>
             {deletionOnlyId && !file && !submission ? (
               <>
                 <span className="studio-upload-icon">
@@ -781,6 +850,9 @@ export function AcquisitionStudio({
                 >
                   <Upload size={18} /> Choose audio file
                 </label>
+                <p className={styles.dropHint}>
+                  Or drop an audio file here
+                </p>
                 <p className="muted">
                   MP3, MPEG, WAV, M4A, OGG or FLAC
                   <br />
@@ -1075,6 +1147,9 @@ export function AcquisitionStudio({
                         : "Listen back for one moment you want to practise next."}
                     </li>
                   </ul>
+                  <p className={styles.coachingCopy} aria-live="polite">
+                    {coachingCopy[coachingIndex]}
+                  </p>
                 </div>
               </div>
             )}
@@ -1285,7 +1360,17 @@ export function AcquisitionStudio({
             </details>
           </section>
         )}
-      </Main>
+      </div>
     </div>
+  );
+
+  if (embedded) return content;
+  return (
+    <AcquisitionShell
+      authenticated={access?.authenticated === true}
+      homeHref={homeHref}
+    >
+      {content}
+    </AcquisitionShell>
   );
 }

@@ -79,6 +79,10 @@ it("loads every server listed state without auto claiming or processing", async 
   await act(async () => renderLibrary());
   await flush();
   expect(host.querySelectorAll(".calls-library-item")).toHaveLength(2);
+  expect(host.querySelectorAll("main")).toHaveLength(1);
+  expect(
+    host.querySelector('a[href="/calls"][aria-current="page"]'),
+  ).not.toBeNull();
   expect(host.textContent).toContain("Analysis in progress");
   expect(host.textContent).toContain("Report ready");
   expect(fetchMock).toHaveBeenCalledOnce();
