@@ -121,9 +121,7 @@ async def test_guest_recording_owner_allows_retained_non_login_principal() -> No
     recording = _recording()
     database = Mock()
     database.scalar = AsyncMock(side_effect=_guest_rows(recording))
-    service = ConversationReviewService(
-        _application(database), operations_tenant_id=uuid4()
-    )
+    service = ConversationReviewService(_application(database), operations_tenant_id=uuid4())
 
     await service._recording_owner(recording)  # type: ignore[arg-type]
 
@@ -135,9 +133,7 @@ async def test_guest_recording_owner_allows_authenticated_account_usage() -> Non
     recording = _recording()
     database = Mock()
     database.scalar = AsyncMock(side_effect=_account_rows(recording))
-    service = ConversationReviewService(
-        _application(database), operations_tenant_id=uuid4()
-    )
+    service = ConversationReviewService(_application(database), operations_tenant_id=uuid4())
 
     await service._recording_owner(recording)  # type: ignore[arg-type]
 
@@ -155,9 +151,7 @@ async def test_guest_recording_owner_denies_revoked_processing_principal() -> No
     )
     database = Mock()
     database.scalar = AsyncMock(side_effect=rows)
-    service = ConversationReviewService(
-        _application(database), operations_tenant_id=uuid4()
-    )
+    service = ConversationReviewService(_application(database), operations_tenant_id=uuid4())
 
     with pytest.raises(ConversationDenied, match="source owner"):
         await service._recording_owner(recording)  # type: ignore[arg-type]
@@ -170,9 +164,7 @@ async def test_guest_recording_owner_denies_suspended_authenticated_owner() -> N
     rows[11] = SimpleNamespace(status="suspended", email_verified_at=NOW)
     database = Mock()
     database.scalar = AsyncMock(side_effect=rows)
-    service = ConversationReviewService(
-        _application(database), operations_tenant_id=uuid4()
-    )
+    service = ConversationReviewService(_application(database), operations_tenant_id=uuid4())
 
     with pytest.raises(ConversationDenied, match="source owner"):
         await service._recording_owner(recording)  # type: ignore[arg-type]
@@ -185,9 +177,7 @@ async def test_guest_recording_owner_denies_revoked_visitor() -> None:
     rows[11] = SimpleNamespace(id=uuid4(), expires_at=NOW, revoked_at=NOW)
     database = Mock()
     database.scalar = AsyncMock(side_effect=rows)
-    service = ConversationReviewService(
-        _application(database), operations_tenant_id=uuid4()
-    )
+    service = ConversationReviewService(_application(database), operations_tenant_id=uuid4())
 
     with pytest.raises(ConversationDenied, match="source owner"):
         await service._recording_owner(recording)  # type: ignore[arg-type]
@@ -204,9 +194,7 @@ async def test_guest_recording_owner_denies_foreign_recording_link() -> None:
     )
     database = Mock()
     database.scalar = AsyncMock(return_value=guest)
-    service = ConversationReviewService(
-        _application(database), operations_tenant_id=uuid4()
-    )
+    service = ConversationReviewService(_application(database), operations_tenant_id=uuid4())
 
     with pytest.raises(ConversationDenied, match="source owner"):
         await service._guest_source_owner(recording, guest)  # type: ignore[arg-type]
@@ -226,9 +214,7 @@ async def test_unverified_non_guest_learner_stays_on_verified_member_path() -> N
             SimpleNamespace(status="active", ended_at=None),
         ]
     )
-    service = ConversationReviewService(
-        _application(database), operations_tenant_id=uuid4()
-    )
+    service = ConversationReviewService(_application(database), operations_tenant_id=uuid4())
 
     with pytest.raises(ConversationDenied, match="verified AC workspace member"):
         await service._recording_owner(recording)  # type: ignore[arg-type]
@@ -241,9 +227,7 @@ async def test_evidence_rejects_erased_recording_before_owner_admission() -> Non
     run, recording = _run_and_recording("deleted")
     database = Mock()
     database.scalar = AsyncMock(side_effect=[run, recording])
-    service = ConversationReviewService(
-        _application(database), operations_tenant_id=uuid4()
-    )
+    service = ConversationReviewService(_application(database), operations_tenant_id=uuid4())
 
     with pytest.raises(ConversationConflict, match="no longer available"):
         await service._evidence(run.id, NOW)
@@ -258,9 +242,7 @@ async def test_evidence_rejects_revoked_permission_after_guest_admission() -> No
     database.scalar = AsyncMock(
         side_effect=[run, recording, *_guest_rows(recording), SimpleNamespace(revoked_at=NOW)]
     )
-    service = ConversationReviewService(
-        _application(database), operations_tenant_id=uuid4()
-    )
+    service = ConversationReviewService(_application(database), operations_tenant_id=uuid4())
 
     with pytest.raises(ConversationDenied, match="exact recording"):
         await service._evidence(run.id, NOW)
