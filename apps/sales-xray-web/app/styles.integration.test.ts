@@ -34,7 +34,7 @@ describe("integrated Sales Xray boundary", () => {
 
   it("uses the real learner route without query supplied scope", () => {
     expect(route).toContain(
-      '<CallStudio homeHref="/home" variant="embedded" />',
+      '<AcquisitionStudio homeHref="/home" variant="embedded" />',
     );
     expect(route).not.toMatch(/searchParams|tenantId|workspaceId|scopeId/);
     expect(routeLayout).toContain('"../../../sales-xray-web/app/styles.css"');

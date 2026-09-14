@@ -2,8 +2,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactNode } from "react";
 import { expect, it, vi } from "vitest";
 
-vi.mock("../../../sales-xray-web/app/call-studio", () => ({
-  CallStudio: ({
+vi.mock("../../../sales-xray-web/app/acquisition-studio", () => ({
+  AcquisitionStudio: ({
     homeHref,
     variant,
   }: {
@@ -11,9 +11,18 @@ vi.mock("../../../sales-xray-web/app/call-studio", () => ({
     variant: string;
   }) => (
     <div data-home-href={homeHref} data-variant={variant}>
-      Call Studio
+      Acquisition Studio
     </div>
   ),
+}));
+vi.mock("../../../sales-xray-web/app/standalone-studio", () => ({
+  StandaloneStudio: ({
+    children,
+    variant,
+  }: {
+    children: ReactNode;
+    variant: string;
+  }) => <div data-access-variant={variant}>{children}</div>,
 }));
 vi.mock("../components/site-shell", () => ({
   LearnerShell: ({
@@ -35,7 +44,10 @@ it("keeps the LMS route inside the Academy shell with an internal return path", 
   expect(markup).toContain('class="learner-main"');
   expect(markup).toContain('data-home-href="/home"');
   expect(markup).toContain('data-variant="embedded"');
-  expect(markup).toContain("Call Studio");
+  expect(markup).toContain("Acquisition Studio");
+  expect(markup).toContain('data-access-variant="embedded"');
+  expect(markup).toContain('href="/sales-xray/calls"');
+  expect(markup).toContain('href="/sales-xray/recordings"');
   expect(markup).not.toContain("http://");
   expect(markup).not.toContain("https://");
 });

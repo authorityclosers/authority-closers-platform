@@ -54,7 +54,15 @@ function submissionState(submission: LibrarySubmission) {
     : (STATE_COPY[submission.state] ?? "Saved call");
 }
 
-export function CallsLibrary() {
+export function CallsLibrary({
+  variant = "standalone",
+  studioHref = "/",
+}: {
+  variant?: "standalone" | "embedded";
+  studioHref?: "/" | "/sales-xray";
+}) {
+  const embedded = variant === "embedded";
+  const Main = embedded ? "div" : "main";
   const access = useWorkspaceAccess();
   const [submissions, setSubmissions] = useState<LibrarySubmission[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -201,25 +209,34 @@ export function CallsLibrary() {
     if (opening) return;
     setOpening(true);
     rememberSubmission(submission.id);
-    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- Explicit row activation opens the existing acquisition studio in a fresh document.
-    window.location.assign("/");
+    // Explicit row activation opens the selected studio in a fresh document.
+    window.location.assign(studioHref);
   }
 
   return (
-    <div className="xray-app simple-app calls-library-app" data-theme="light">
-      <header className="studio-header calls-library-header">
-        <Link href="/" aria-label="Sales Xray home">
-          <span className="studio-mark">
-            <BrandMark />
-          </span>
-          <span>
-            Dipak’s <strong>Sales Xray</strong>
-            <small>AUTHORITY CLOSERS</small>
-          </span>
-        </Link>
-        <AccountNavigation />
-      </header>
-      <main id="main" className="studio-main calls-library-main">
+    <div
+      className="xray-app simple-app calls-library-app"
+      data-theme="light"
+      data-variant={variant}
+    >
+      {!embedded && (
+        <header className="studio-header calls-library-header">
+          <Link href={studioHref} aria-label="Sales Xray home">
+            <span className="studio-mark">
+              <BrandMark />
+            </span>
+            <span>
+              Dipak’s <strong>Sales Xray</strong>
+              <small>AUTHORITY CLOSERS</small>
+            </span>
+          </Link>
+          <AccountNavigation />
+        </header>
+      )}
+      <Main
+        id={embedded ? undefined : "main"}
+        className="studio-main calls-library-main"
+      >
         <div className="calls-library-intro">
           <p className="eyebrow">YOUR AC ACCOUNT</p>
           <h1>Saved calls</h1>
@@ -266,7 +283,7 @@ export function CallsLibrary() {
             <AudioLines size={26} aria-hidden="true" />
             <h2 id="calls-library-empty">No saved calls yet.</h2>
             <p>Upload a call from the Sales Xray home page to begin.</p>
-            <Link href="/" className="secondary-button">
+            <Link href={studioHref} className="secondary-button">
               Analyse a call <ArrowRight size={16} aria-hidden="true" />
             </Link>
           </section>
@@ -344,7 +361,7 @@ export function CallsLibrary() {
             ) : null}
           </section>
         )}
-      </main>
+      </Main>
     </div>
   );
 }

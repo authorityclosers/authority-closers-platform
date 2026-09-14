@@ -19,6 +19,7 @@ import {
   CallStudio,
   parseProcessingPlan,
   type ProcessingPlan,
+  type CallStudioVariant,
 } from "./call-studio";
 import { AccountNavigation } from "./account-navigation";
 import { DipakOverview } from "./dipak-overview";
@@ -124,7 +125,15 @@ export function remainingAllowanceLabel(
   return "Remaining analysis time · checking…";
 }
 
-export function AcquisitionStudio() {
+export function AcquisitionStudio({
+  variant = "standalone",
+  homeHref = "/",
+}: {
+  variant?: CallStudioVariant;
+  homeHref?: string;
+}) {
+  const embedded = variant === "embedded";
+  const Main = embedded ? "div" : "main";
   const [entry, setEntry] = useState<Entry | null>(null);
   const [policy, setPolicy] = useState<UploadPolicy | null>(null);
   const [allowance, setAllowance] = useState<Allowance | null>(null);
@@ -188,10 +197,13 @@ export function AcquisitionStudio() {
         try {
           current = record(await acquisition("/session", { signal }));
         } catch (error) {
+          if (embedded) throw error;
           if (!(error instanceof AcquisitionError && error.status === 401))
             throw error;
         }
         if (signal.aborted) return;
+        if (embedded && (!current || current.state === "guest"))
+          throw new AcquisitionError(401);
         setPolicy(terms);
         setSession(current !== null);
         if (current) {
@@ -241,7 +253,7 @@ export function AcquisitionStudio() {
       }
     })();
     return () => abort.abort();
-  }, [attempt]);
+  }, [attempt, embedded]);
 
   useEffect(() => {
     const sync = setTimeout(
@@ -405,6 +417,7 @@ export function AcquisitionStudio() {
 
   async function upload() {
     if (!file || !policy || !consent || (!session && !token)) return;
+    if (embedded && !session) return;
     const selected = file;
     await operation("Uploading and checking your call…", async (signal) => {
       if (!session) {
@@ -606,7 +619,8 @@ export function AcquisitionStudio() {
       );
   }
 
-  if (entry && !entry.enabled) return <CallStudio />;
+  if (entry && !entry.enabled)
+    return <CallStudio variant={variant} homeHref={homeHref} />;
   const report = result?.report;
   const currentStage =
     progress?.stages.findLast((stage) => stage.state === "running") ??
@@ -639,20 +653,26 @@ export function AcquisitionStudio() {
     : audioUrl;
 
   return (
-    <div className={`xray-app simple-app ${styles.app}`} data-theme="light">
-      <header className={`studio-header ${styles.header}`}>
-        <Link href="/" aria-label="Sales Xray home">
-          <span className="studio-mark">
-            <BrandMark />
-          </span>
-          <span>
-            Dipak’s <strong>Sales Xray</strong>
-            <small>AUTHORITY CLOSERS</small>
-          </span>
-        </Link>
-        <AccountNavigation />
-      </header>
-      <main id="main" className="studio-main">
+    <div
+      className={`xray-app simple-app ${styles.app}`}
+      data-theme="light"
+      data-variant={variant}
+    >
+      {!embedded && (
+        <header className={`studio-header ${styles.header}`}>
+          <Link href={homeHref} aria-label="Sales Xray home">
+            <span className="studio-mark">
+              <BrandMark />
+            </span>
+            <span>
+              Dipak’s <strong>Sales Xray</strong>
+              <small>AUTHORITY CLOSERS</small>
+            </span>
+          </Link>
+          <AccountNavigation />
+        </header>
+      )}
+      <Main id={embedded ? undefined : "main"} className="studio-main">
         <nav className="studio-steps" aria-label="Analysis steps">
           {["Your call", "Your analysis", "Your next step"].map(
             (label, index) => (
@@ -864,14 +884,17 @@ export function AcquisitionStudio() {
                   I have permission to analyse this call and accept these upload
                   terms.
                 </label>
-                {!session && entry?.site_key && entry.challenge_action && (
-                  <UploadCheck
-                    key={checkKey}
-                    siteKey={entry.site_key}
-                    action={entry.challenge_action}
-                    onToken={onToken}
-                  />
-                )}
+                {!embedded &&
+                  !session &&
+                  entry?.site_key &&
+                  entry.challenge_action && (
+                    <UploadCheck
+                      key={checkKey}
+                      siteKey={entry.site_key}
+                      action={entry.challenge_action}
+                      onToken={onToken}
+                    />
+                  )}
                 <button
                   type="button"
                   className="primary-button studio-wide"
@@ -1262,7 +1285,7 @@ export function AcquisitionStudio() {
             </details>
           </section>
         )}
-      </main>
+      </Main>
     </div>
   );
 }

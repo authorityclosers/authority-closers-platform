@@ -1,12 +1,10 @@
-import { CallStudio } from "../../../sales-xray-web/app/call-studio";
-import { LearnerShell } from "../components/site-shell";
+import { AcquisitionStudio } from "../../../sales-xray-web/app/acquisition-studio";
+import { SalesXrayShell } from "./sales-xray-shell";
 
 export default function SalesXrayPage() {
   return (
-    <LearnerShell current="sales-xray">
-      <main id="main-content" className="learner-main" tabIndex={-1}>
-        <CallStudio homeHref="/home" variant="embedded" />
-      </main>
-    </LearnerShell>
+    <SalesXrayShell current="analyse">
+      <AcquisitionStudio homeHref="/home" variant="embedded" />
+    </SalesXrayShell>
   );
 }

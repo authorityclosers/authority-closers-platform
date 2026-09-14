@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
+import Link from "next/link";
 
 import { CallStudio } from "./call-studio";
 import { AccountNavigation } from "./account-navigation";
@@ -142,9 +143,13 @@ async function selectWorkspace(tenantId: string, signal: AbortSignal) {
 
 export function StandaloneStudio({
   children = <CallStudio />,
+  variant = "standalone",
 }: {
   children?: ReactNode;
+  variant?: "standalone" | "embedded";
 }) {
+  const embedded = variant === "embedded";
+  const Main = embedded ? "div" : "main";
   const [attempt, setAttempt] = useState(0);
   const [view, setView] = useState<ViewState>({ kind: "loading" });
   const generation = useRef(0);
@@ -245,7 +250,7 @@ export function StandaloneStudio({
           : null,
     retry,
   };
-  if (view.kind === "ready" || view.kind === "unauthenticated")
+  if (view.kind === "ready" || (!embedded && view.kind === "unauthenticated"))
     return (
       <WorkspaceAccessProvider value={accessValue}>
         {children}
@@ -258,37 +263,53 @@ export function StandaloneStudio({
       ? "No workspace is ready yet."
       : view.kind === "loading"
         ? "Checking workspace access."
-        : "Workspace access needs attention.";
+        : view.kind === "unauthenticated"
+          ? "Sign in to analyse your calls."
+          : "Workspace access needs attention.";
 
   return (
     <WorkspaceAccessProvider value={accessValue}>
-      <main
+      <Main
         className="xray-app simple-app"
         data-theme="light"
-        style={shellStyle}
+        data-variant={variant}
+        style={
+          embedded
+            ? {
+                ...shellStyle,
+                minHeight: "auto",
+                padding: "24px 0",
+                background: "transparent",
+              }
+            : shellStyle
+        }
         aria-busy={view.kind === "loading" || view.kind === "selecting"}
       >
-        <div className="standalone-account-navigation">
-          <AccountNavigation compact />
-        </div>
+        {!embedded && (
+          <div className="standalone-account-navigation">
+            <AccountNavigation compact />
+          </div>
+        )}
         <section
           style={cardStyle}
           aria-labelledby="sales-xray-workspace-heading"
         >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 11,
-              marginBottom: 22,
-              color: "var(--mint)",
-              fontSize: 13,
-              fontWeight: 650,
-            }}
-          >
-            <ShieldCheck size={20} aria-hidden="true" />
-            <span>Authority Closers · Sales Xray</span>
-          </div>
+          {!embedded && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 11,
+                marginBottom: 22,
+                color: "var(--mint)",
+                fontSize: 13,
+                fontWeight: 650,
+              }}
+            >
+              <ShieldCheck size={20} aria-hidden="true" />
+              <span>Authority Closers · Sales Xray</span>
+            </div>
+          )}
           <h1
             id="sales-xray-workspace-heading"
             style={{ margin: "0 0 10px", fontSize: 30, letterSpacing: -0.7 }}
@@ -299,6 +320,16 @@ export function StandaloneStudio({
             <p style={{ margin: 0, color: "var(--muted)" }}>
               Confirming the workspace assigned to your session…
             </p>
+          ) : view.kind === "unauthenticated" ? (
+            <>
+              <p>
+                Use your AC account to keep your calls, reports and remaining
+                minutes together.
+              </p>
+              <Link href="/login" className="primary-button">
+                Sign in <ArrowRight size={16} aria-hidden="true" />
+              </Link>
+            </>
           ) : chooser ? (
             <>
               <p style={{ margin: "0 0 22px", color: "var(--muted)" }}>
@@ -384,7 +415,7 @@ export function StandaloneStudio({
             </>
           )}
         </section>
-      </main>
+      </Main>
     </WorkspaceAccessProvider>
   );
 }
