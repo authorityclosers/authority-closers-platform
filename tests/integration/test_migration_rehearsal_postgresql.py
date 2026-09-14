@@ -28,7 +28,6 @@ from ac_platform.conversation_intelligence.models import (
     ConversationRecording,
 )
 from ac_platform.identity.models import Person
-from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.tenancy.models import Membership, Tenant
 
 ROOT = Path(__file__).parents[2]
@@ -430,23 +429,29 @@ def _seed_populated_0032(engine: Engine) -> None:
     metadata = MetaData()
     plans = Table("conversation_processing_plans", metadata, autoload_with=engine)
     authorizations = Table("conversation_plan_stage_authorizations", metadata, autoload_with=engine)
+    # The fixture runs at0032, before Session.audience exists. Use the actual
+    # historical table, as for plans/authorizations, without changing its DDL.
+    sessions = Table("sessions", metadata, autoload_with=engine)
+    assert "audience" not in sessions.c
     with Session(engine) as database:
         tenant_id = database.scalar(select(Tenant.id).order_by(Tenant.slug))
         person_id = database.scalar(select(Person.id).order_by(Person.email))
         assert tenant_id is not None and person_id is not None
         permission_id, recording_id, scope_id, quote_id, session_id = (uuid4() for _ in range(5))
         now = datetime.now(UTC)
+        database.execute(
+            sessions.insert().values(
+                id=session_id,
+                person_id=person_id,
+                token_hash=b"r" * 32,
+                created_at=now,
+                expires_at=now + timedelta(days=1),
+                selected_tenant_id=tenant_id,
+                revision=0,
+            )
+        )
         database.add_all(
             [
-                IdentitySession(
-                    id=session_id,
-                    person_id=person_id,
-                    token_hash=b"r" * 32,
-                    created_at=now,
-                    expires_at=now + timedelta(days=1),
-                    selected_tenant_id=tenant_id,
-                    revision=0,
-                ),
                 ConversationPermission(
                     id=permission_id,
                     tenant_id=tenant_id,
