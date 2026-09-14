@@ -181,6 +181,86 @@ def test_fact_result_validates_chunk_evidence_and_returns_fresh_json() -> None:
         )
 
 
+def test_fact_result_derives_canonical_evidence_from_segment_selector() -> None:
+    transcript = _transcript(count=1)
+    transcript["segments"][0]["text"] = "मला price — timing समजावून सांगा."
+    prepared = prepare_fact_inputs(transcript)[0]
+    result = _result(
+        {
+            "overview": "A source-bound question is present.",
+            "observations": [{"fact": "The buyer asks about timing.", "segment_id": "s1"}],
+            "uncertainties": [],
+        },
+        provider="groq",
+        model=prepared.model,
+        input_sha256=prepared.input_sha256,
+    )
+
+    normalized = validate_fact_result(result, prepared, transcript)
+    evidence = normalized.data()["observations"][0]["evidence"][0]
+    assert evidence["quote"] == transcript["segments"][0]["text"]
+    assert (evidence["start_ms"], evidence["end_ms"]) == (0, 800)
+
+
+def test_gemini_fact_result_derives_canonical_evidence_from_segment_selector() -> None:
+    transcript = _transcript(count=1)
+    transcript["segments"][0]["text"] = "मला price — timing समजावून सांगा."
+    prepared = prepare_fact_inputs(transcript, provider="gemini", model="gemini-3.8-flash")[0]
+    body = prepared.as_provider_body()
+    system = body["systemInstruction"]["parts"][0]["text"]
+    user = body["contents"][0]["parts"][0]["text"]
+    assert "server retrieves the canonical segment text" in system
+    assert transcript["source_sha256"] in user
+
+    native = {
+        "candidates": [
+            {
+                "finishReason": "STOP",
+                "content": {
+                    "role": "model",
+                    "parts": [
+                        {
+                            "text": json.dumps(
+                                {
+                                    "overview": "A source-bound question is present.",
+                                    "observations": [
+                                        {
+                                            "fact": "The buyer asks about timing.",
+                                            "segment_id": "s1",
+                                        }
+                                    ],
+                                    "uncertainties": [],
+                                },
+                                ensure_ascii=False,
+                            )
+                        }
+                    ],
+                },
+            }
+        ],
+        "usageMetadata": {
+            "promptTokenCount": 10,
+            "candidatesTokenCount": 10,
+            "totalTokenCount": 20,
+        },
+    }
+    raw = canonical(native)
+    result = ProviderResult(
+        provider="gemini",
+        model=prepared.model,
+        request_id="synthetic-gemini-selector",
+        response_sha256=hashlib.sha256(raw).hexdigest(),
+        raw_json=raw,
+        data=native,
+        usage=native["usageMetadata"],
+        input_sha256=prepared.input_sha256,
+    )
+
+    normalized = validate_fact_result(result, prepared, transcript)
+    evidence = normalized.data()["observations"][0]["evidence"][0]
+    assert evidence["quote"] == transcript["segments"][0]["text"]
+
+
 def test_coaching_envelope_uses_profile_revision_and_withholds_numeric_output() -> None:
     transcript = _transcript(count=1)
     fact_input = prepare_fact_inputs(transcript)[0]

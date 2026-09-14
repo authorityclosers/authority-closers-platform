@@ -323,3 +323,94 @@ def test_groq_envelope_parser_keeps_raw_response_out_of_draft() -> None:
     draft = parse_groq_response(response, transcript)
     assert "usage" not in draft.model_dump()
     assert draft.source_label.startswith("Scribe transcript revision")
+
+
+def test_fact_prompt_binds_evidence_to_canonical_segment_selectors() -> None:
+    transcript = _transcript(count=1)
+    prompt = build_fact_groq_prompts(transcript)[0]
+    system = prompt["messages"][0]["content"]
+
+    assert "return only segment_id" in system
+    assert "server retrieves the canonical segment text" in system
+    assert '"segment_id":"..."' in system
+
+
+def test_fact_packet_derives_exact_canonical_evidence_from_segment_selector() -> None:
+    transcript = _transcript(count=1)
+    transcript["segments"][0]["text"] = "मला price — timing समजावून सांगा."
+    packet = parse_fact_packet(
+        {
+            "overview": "The source contains a buyer question.",
+            "observations": [
+                {
+                    "fact": "The buyer asks about timing.",
+                    "segment_id": "s1",
+                }
+            ],
+            "uncertainties": [],
+        },
+        transcript,
+    )
+
+    evidence = packet.observations[0].evidence[0]
+    assert evidence.quote == transcript["segments"][0]["text"]
+    assert (evidence.start_ms, evidence.end_ms) == (0, 900)
+
+
+def test_fact_packet_keeps_fabricated_quotes_rejected() -> None:
+    transcript = _transcript(count=1)
+    with pytest.raises(ReportError, match="report_evidence_quote_mismatch"):
+        parse_fact_packet(
+            {
+                "overview": "The source contains a buyer question.",
+                "observations": [
+                    {
+                        "fact": "The buyer asks about timing.",
+                        "segment_id": "s1",
+                        "quote": "invented text",
+                    }
+                ],
+                "uncertainties": [],
+            },
+            transcript,
+        )
+
+
+def test_fact_packet_requires_bounded_literal_for_long_segment_selector() -> None:
+    transcript = _transcript(count=1)
+    transcript["segments"][0]["text"] = "x" * 2_001
+    with pytest.raises(ReportError, match="fact_observation_evidence_missing"):
+        parse_fact_packet(
+            {
+                "overview": "The source contains a long segment.",
+                "observations": [{"fact": "A bounded fact.", "segment_id": "s1"}],
+                "uncertainties": [],
+            },
+            transcript,
+        )
+
+
+def test_fact_packet_selector_rejects_unknown_or_out_of_chunk_ids() -> None:
+    transcript = _transcript(count=2)
+    with pytest.raises(ReportError, match="report_evidence_segment_invalid"):
+        parse_fact_packet(
+            {
+                "overview": "Unknown source selector.",
+                "observations": [{"fact": "Unsupported.", "segment_id": "missing"}],
+                "uncertainties": [],
+            },
+            transcript,
+        )
+
+    chunks = plan_transcript_chunks(transcript, max_input_chars=220)
+    assert len(chunks) == 2
+    with pytest.raises(ReportError, match="fact_evidence_outside_chunk"):
+        parse_fact_packet(
+            {
+                "overview": "Cross chunk selector.",
+                "observations": [{"fact": "Outside this chunk.", "segment_id": "s2"}],
+                "uncertainties": [],
+            },
+            transcript,
+            chunk=chunks[0],
+        )

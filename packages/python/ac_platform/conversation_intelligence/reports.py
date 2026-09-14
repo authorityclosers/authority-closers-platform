@@ -34,6 +34,7 @@ MAX_TPM_TOKENS = 8_000
 MAX_COMPLETION_TOKENS = 1_800
 DEFAULT_INPUT_CHARS = 16_000
 MAX_PROFILE_PROMPT_CHARS = 16_000
+_MAX_EVIDENCE_QUOTE_CHARS = 2_000
 REVIEW_STATUS = "draft_not_dipak_adjudicated"
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _FORBIDDEN_NUMERIC_KEY = re.compile(
@@ -66,7 +67,7 @@ class ReportEvidence(_StrictModel):
     """A model proposed quote whose source binding is checked by the parser."""
 
     segment_id: str = Field(min_length=1, max_length=128)
-    quote: str = Field(min_length=1, max_length=2_000)
+    quote: str = Field(min_length=1, max_length=_MAX_EVIDENCE_QUOTE_CHARS)
     start_ms: int = Field(ge=0)
     end_ms: int = Field(gt=0)
 
@@ -412,14 +413,17 @@ def build_fact_groq_prompts(
     system = (
         "Extract style-independent, source-bound conversation facts from the supplied native "
         "Scribe segment chunk. Return JSON only with keys overview, observations and "
-        "uncertainties. Each observation must have a concise fact and one or more evidence "
-        "entries. Evidence quote must be a "
-        "literal substring of its segment and start_ms/end_ms must equal that segment's native "
-        "bounds. Preserve uncertainty, unverified speaker labels and missing context. Do not "
-        "coach, score, grade, infer motive, personality, identity or stable tonality. Do not "
-        "invent facts outside this chunk.\n"
-        '{"overview":"...","observations":[{"fact":"...","segment_id":"...",'
-        '"quote":"..."}],"uncertainties":["..."]}'
+        "uncertainties. Each observation must have a concise fact and exactly one source "
+        "segment_id. For normal compact observations, return only segment_id: do not write, "
+        "paraphrase, translate, normalize or copy a quote. The server retrieves the canonical "
+        "segment text and native start_ms/end_ms from that identifier. If an exact excerpt is "
+        "needed for a segment longer than the bounded evidence field, quote must be copied "
+        "literally from that segment and must be a substring; never invent or alter it. Preserve "
+        "uncertainty, unverified speaker labels and missing context. Do not coach, score, grade, "
+        "infer motive, personality, identity or stable tonality. Do not invent facts outside this "
+        "chunk.\n"
+        '{"overview":"...","observations":[{"fact":"...","segment_id":"..."}],'
+        '"uncertainties":["..."]}'
     )
     system_tokens = _estimate_tokens(system)
     available_input_tokens = MAX_TPM_TOKENS - max_completion_tokens - system_tokens - 128
@@ -838,16 +842,25 @@ def _normalise_fact_observation(value: Any, transcript: Mapping[str, Any]) -> di
     if "statement" not in item and "fact" in item:
         item["statement"] = item.pop("fact")
     if "evidence" not in item:
-        if "segment_id" not in item or "quote" not in item:
+        if "segment_id" not in item:
             raise ReportError("fact_observation_evidence_missing")
         segment_id = item.pop("segment_id")
-        quote = item.pop("quote")
+        has_quote = "quote" in item
+        quote = item.pop("quote", None)
         segment = next(
             (candidate for candidate in transcript["segments"] if candidate["id"] == segment_id),
             None,
         )
         if segment is None:
             raise ReportError("report_evidence_segment_invalid")
+        if not has_quote:
+            # The compact C4 contract lets the model identify a canonical source
+            # segment without copying text. Rebind the evidence to the exact
+            # server-owned segment; long segments still require an explicit,
+            # bounded literal excerpt so ReportEvidence remains size-limited.
+            if len(segment["text"]) > _MAX_EVIDENCE_QUOTE_CHARS:
+                raise ReportError("fact_observation_evidence_missing")
+            quote = segment["text"]
         item["evidence"] = [
             {
                 "segment_id": segment_id,
