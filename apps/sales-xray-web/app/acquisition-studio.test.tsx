@@ -36,6 +36,7 @@ let existing: boolean,
   lookupUnavailable: boolean,
   deletionDenied: boolean;
 let reportBody: unknown;
+let progressOverride: unknown;
 const response = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value), {
     status,
@@ -95,6 +96,7 @@ beforeEach(() => {
   lookupUnavailable = false;
   deletionDenied = false;
   reportBody = envelope;
+  progressOverride = undefined;
   localStorage.clear();
   container = document.createElement("div");
   document.body.append(container);
@@ -161,6 +163,12 @@ beforeEach(() => {
         claimed = false;
         return response({ state: "claimed", allowance });
       }
+      if (
+        path.endsWith(`/submissions/${submissionId}`) &&
+        init.method !== "DELETE" &&
+        progressOverride
+      )
+        return response(progressOverride);
       if (path.endsWith(`/submissions/${submissionId}`))
         return init.method === "DELETE"
           ? deletionDenied
@@ -186,8 +194,9 @@ beforeEach(() => {
                   : processingMode === "running"
                     ? {
                         ...progress,
-                        state: "running",
-                        local_state: "running",
+                        state: "active",
+                        local_state: "completed",
+                        automatic_progression: true,
                         has_report: false,
                         stages: [
                           { stage: "C2", state: "running" },
@@ -292,7 +301,9 @@ it("shows the live processing stages without inventing a percentage", async () =
   processingMode = "running";
   localStorage.setItem("ac.xray.submission.v1", submissionId);
   await mount();
-  expect(container.textContent).toContain("Your call is moving through review");
+  expect(container.querySelector('[role="status"] h3')?.textContent).toBe(
+    "Transcribing your call",
+  );
   expect(
     container.querySelector('[aria-label="Processing stages"]'),
   ).not.toBeNull();
@@ -315,9 +326,16 @@ it("shows saved completed work when an uncertain stage pauses processing", async
   localStorage.setItem("ac.xray.submission.v1", submissionId);
   await mount();
   expect(container.textContent).toContain(
-    "We paused at Checking the conversation",
+    "We paused while checking the conversation",
   );
-  expect(container.textContent).toContain("Your completed work is safe");
+  expect(container.textContent).not.toContain("YOUR NEXT CALL CAN BE BETTER");
+  expect(container.textContent).not.toContain("WHAT YOU’LL GET");
+  expect(container.textContent).toContain(
+    "This stage needs checking before analysis can continue",
+  );
+  expect(container.textContent).toContain(
+    "Some conversation analysis is saved with this call",
+  );
   expect(container.textContent).toContain(
     "The completed transcript stays attached",
   );
@@ -333,6 +351,84 @@ it("shows saved completed work when an uncertain stage pauses processing", async
   expect(container.textContent).not.toContain("fresh plan");
   expect(container.textContent).not.toContain("Upload the recording again");
   expect(container.querySelector('[data-paused="true"]')).not.toBeNull();
+});
+
+it.each(["failed", "cancelled"])(
+  "keeps a %s source check static and never claims a transcript",
+  async (state) => {
+    existing = true;
+    localStorage.setItem("ac.xray.submission.v1", submissionId);
+    progressOverride = {
+      ...progress,
+      state,
+      local_state: state,
+      has_report: false,
+      stages: [],
+    };
+    await mount();
+    expect(container.querySelector('[role="status"] h3')?.textContent).toBe(
+      "Your call needs attention",
+    );
+    expect(container.querySelector('svg[data-paused="true"]')).not.toBeNull();
+    expect(container.textContent).toContain(
+      "A completed transcript has not been confirmed yet",
+    );
+    expect(container.textContent).not.toContain(
+      "The completed transcript stays attached",
+    );
+  },
+);
+
+it("keeps an uncertain transcription honest about missing completed work", async () => {
+  existing = true;
+  localStorage.setItem("ac.xray.submission.v1", submissionId);
+  progressOverride = {
+    ...progress,
+    state: "held",
+    local_state: "completed",
+    has_report: false,
+    stages: [{ stage: "C2", state: "uncertain" }],
+  };
+  await mount();
+  expect(container.querySelector('[data-stage="C2"] small')?.textContent).toBe(
+    "Paused · needs attention",
+  );
+  expect(container.textContent).toContain(
+    "A completed transcript has not been confirmed yet",
+  );
+  expect(container.textContent).not.toContain(
+    "The completed transcript stays attached",
+  );
+  expect(
+    calls.some(
+      (call) => call.path.endsWith("/plan") && call.init.method === "POST",
+    ),
+  ).toBe(false);
+});
+
+it("describes completed C4 chunks as saved work without claiming the entire stage is finished", async () => {
+  existing = true;
+  localStorage.setItem("ac.xray.submission.v1", submissionId);
+  progressOverride = {
+    ...progress,
+    state: "active",
+    local_state: "completed",
+    has_report: false,
+    automatic_progression: true,
+    stages: [
+      { stage: "C2", state: "completed" },
+      { stage: "C4", state: "uncertain" },
+      { stage: "C4", state: "completed" },
+    ],
+  };
+  await mount();
+  expect(container.querySelector('[data-stage="C4"] small')?.textContent).toBe(
+    "Work saved",
+  );
+  expect(container.querySelector('svg[data-paused="true"]')).toBeNull();
+  expect(container.textContent).toContain(
+    "Some conversation analysis is saved with this call",
+  );
 });
 
 it("retry keeps the same submission and source instead of a second charge", async () => {

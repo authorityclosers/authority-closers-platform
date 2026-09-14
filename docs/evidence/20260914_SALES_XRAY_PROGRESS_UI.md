@@ -21,3 +21,38 @@ Branch: `codex/sales-xray-progress-20260914`
 - TypeScript typecheck (`tsc --noEmit`): passed.
 - Prettier check: passed for the three changed acquisition files.
 - `git diff --check`: passed.
+
+## Coordinator integration and browser verification
+
+Integrated with the personal report/quota leaf in
+`authority-closers-xray-personal-report-20260914`. Conflict resolution retains
+both confirmed/unknown quota handling and the stage rail.
+
+Review corrections: failed/cancelled source checks and uncertain processing stay
+static; an unconfirmed C2 result never claims a completed transcript. Running
+stages take precedence over future queued work. Older uncertain rows do not
+override a later returned state for the same stage. A completed C4 chunk without
+evidence of the next stage is labelled `Work saved`, not full-stage completion.
+Partial work is described as `Some conversation analysis is saved`.
+
+The stage markers shown to users are 1/2/3. Internal C2/C4/C5 names remain in
+the API/data attributes. Once submitted, the onboarding hero and promotional
+aside give way to a single focused processing panel. No provider retry, purchase,
+new upload or automatic recovery was added.
+
+- Combined UI suite: 133 passed, 17 files, 12.60s; actual
+  `D:/AC-authority-closers-release-audit/personal-report-20260914/ui-integrated-final.xml`.
+- After the final focused layout change: all 17 mounted acquisition tests passed;
+  `progress-layout-final.xml` in that directory. The initial integration run's
+  16 passes/one failure are retained separately: its running fixture incorrectly
+  said automatic progression was disabled and was corrected to the API's active
+  plan shape. No production contract was relaxed.
+- Final optimized build and TypeScript phase passed; `build-progress-layout-final.log`.
+- Real browser + local fixture HTTP checks cover running C4, partial held C4,
+  uncertain C2, exact remaining allowance, hidden onboarding after upload,
+  paused SVG motion, reduced-motion and 390px fit. See `progress-browser-final.json`,
+  `progress-held-desktop.png`, `progress-held-mobile.png`, and
+  `progress-running-desktop.png` beside the JUnit. Browser state scenarios are
+  explicitly synthetic and make zero provider calls.
+- Source/model/runtime fixes and authenticated live deployment tests remain owned
+  by the release task; this is not a successful hosted inference receipt.

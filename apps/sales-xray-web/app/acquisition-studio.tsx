@@ -72,10 +72,13 @@ function latestStage(progress: Progress | null, stage: ProcessingStage) {
 
 function stageStatusLabel(status: string | null) {
   if (status === "completed") return "Complete";
+  if (status === "saved") return "Work saved";
   if (status === "running") return "In progress";
   if (status === "uncertain") return "Paused · needs attention";
   if (status === "queued" || status === "pending") return "Queued";
-  return "Not started";
+  if (status === "cancelled") return "Cancelled";
+  if (status === "failed" || status === "held") return "Needs attention";
+  return status === null ? "Not started" : "Status needs checking";
 }
 
 function ProcessingSignal({ paused }: { paused: boolean }) {
@@ -605,16 +608,31 @@ export function AcquisitionStudio() {
 
   if (entry && !entry.enabled) return <CallStudio />;
   const report = result?.report;
-  const currentStage = progress?.stages.findLast(
-    (stage) => stage.state !== "completed",
-  );
-  const pausedStage =
-    progress?.stages.findLast((stage) => stage.state === "uncertain") ??
-    currentStage;
+  const currentStage =
+    progress?.stages.findLast((stage) => stage.state === "running") ??
+    progress?.stages.find(
+      (stage) => stage.state === "queued" || stage.state === "pending",
+    ) ??
+    progress?.stages.findLast((stage) => stage.state !== "completed");
+  const uncertainStage = processingStages
+    .map((stage) => latestStage(progress, stage))
+    .find((stage) => stage?.state === "uncertain");
+  const pausedStage = uncertainStage ?? currentStage;
   const processingPaused = Boolean(
-    progress &&
-      (progress.state === "held" ||
-        progress.stages.some((stage) => stage.state === "uncertain")),
+    progress && (progress.state === "held" || uncertainStage),
+  );
+  const processingNeedsAttention = Boolean(
+    processingPaused ||
+      error ||
+      (progress &&
+        (["failed", "cancelled"].includes(progress.local_state ?? "") ||
+          ["cancelled", "completed"].includes(progress.state))),
+  );
+  const hasSavedTranscript = progress?.stages.some(
+    (stage) => stage.stage === "C2" && stage.state === "completed",
+  );
+  const hasSavedAnalysis = progress?.stages.some(
+    (stage) => stage.stage === "C4" && stage.state === "completed",
   );
   const source = submission
     ? `${ACQUISITION}${submissionPath(submission.id)}/source`
@@ -653,7 +671,7 @@ export function AcquisitionStudio() {
             ),
           )}
         </nav>
-        {!report && (
+        {!submission && !report && (
           <div className="studio-intro">
             <p className="eyebrow">YOUR NEXT CALL CAN BE BETTER</p>
             <h1>
@@ -698,7 +716,9 @@ export function AcquisitionStudio() {
             </button>
           </aside>
         )}
-        <div className={`${styles.layout} ${report ? styles.withReport : ""}`}>
+        <div
+          className={`${styles.layout} ${report ? styles.withReport : submission ? styles.withProcessing : ""}`}
+        >
           <section
             className={`panel studio-upload ${styles.upload}`}
             aria-label="Your call"
@@ -936,33 +956,37 @@ export function AcquisitionStudio() {
             {submission && !report && (!plan || plan.accepted) && (
               <div
                 className={`studio-progress ${styles.processingPanel}`}
-                data-paused={processingPaused}
+                data-paused={processingNeedsAttention}
                 role="status"
                 aria-live="polite"
               >
-                <ProcessingSignal paused={processingPaused} />
+                <ProcessingSignal paused={processingNeedsAttention} />
                 <div className={styles.progressCopy}>
                   <p className={styles.progressKicker}>
                     {processingPaused
                       ? "SAVED WORK · PAUSED"
-                      : "PRIVATE PROCESSING"}
+                      : processingNeedsAttention
+                        ? "STATUS NEEDS ATTENTION"
+                        : "PRIVATE PROCESSING"}
                   </p>
                   <h3>
                     {processingPaused
-                      ? `We paused at ${
+                      ? `We paused while ${
                           pausedStage
-                            ? stageNames[pausedStage.stage]
-                            : "the current stage"
+                            ? stageNames[pausedStage.stage].toLowerCase()
+                            : "processing your call"
                         }`
-                      : progress?.local_state !== "completed"
-                        ? "Your call is moving through review"
-                        : currentStage
-                          ? stageNames[currentStage.stage]
-                          : "Preparing your analysis"}
+                      : processingNeedsAttention
+                        ? "Your call needs attention"
+                        : progress?.local_state !== "completed"
+                          ? "Checking your recording"
+                          : currentStage
+                            ? stageNames[currentStage.stage]
+                            : "Preparing your analysis"}
                   </h3>
                   <p>
-                    {processingPaused
-                      ? "Your completed work is safe. We will keep this call private while this stage is checked."
+                    {processingNeedsAttention
+                      ? "This stage needs checking before analysis can continue. Your call stays private while it is retained."
                       : "Your call is saved privately. You can leave this page and return in this browser while it is retained."}
                   </p>
                 </div>
@@ -970,8 +994,16 @@ export function AcquisitionStudio() {
                   className={styles.progressRail}
                   aria-label="Processing stages"
                 >
-                  {processingStages.map((stage) => {
-                    const status = latestStage(progress, stage)?.state ?? null;
+                  {processingStages.map((stage, index) => {
+                    const latestStatus =
+                      latestStage(progress, stage)?.state ?? null;
+                    // C4 can have more chunks than the API currently exposes.
+                    const status =
+                      stage === "C4" &&
+                      latestStatus === "completed" &&
+                      !latestStage(progress, "C5")
+                        ? "saved"
+                        : latestStatus;
                     return (
                       <div
                         key={stage}
@@ -981,7 +1013,11 @@ export function AcquisitionStudio() {
                         aria-label={`${stageNames[stage]}: ${stageStatusLabel(status)}`}
                       >
                         <span aria-hidden="true">
-                          {status === "completed" ? <Check size={13} /> : stage}
+                          {status === "completed" ? (
+                            <Check size={13} />
+                          ) : (
+                            index + 1
+                          )}
                         </span>
                         <p>
                           {stageNames[stage]}
@@ -993,16 +1029,25 @@ export function AcquisitionStudio() {
                 </div>
                 <div className={styles.progressGuidance}>
                   <p className="eyebrow">
-                    {processingPaused ? "YOUR SAVED WORK" : "WHILE YOU WAIT"}
+                    {processingNeedsAttention
+                      ? "YOUR SAVED WORK"
+                      : "WHILE YOU WAIT"}
                   </p>
                   <ul>
                     <li>
-                      {processingPaused
-                        ? "The completed transcript stays attached to this call."
+                      {processingNeedsAttention
+                        ? hasSavedTranscript
+                          ? "The completed transcript stays attached to this call."
+                          : "A completed transcript has not been confirmed yet."
                         : "Keep this tab open or return later from this browser."}
                     </li>
+                    {hasSavedAnalysis && (
+                      <li>
+                        Some conversation analysis is saved with this call.
+                      </li>
+                    )}
                     <li>
-                      {processingPaused
+                      {processingNeedsAttention
                         ? "You do not need to upload the recording again."
                         : "Listen back for one moment you want to practise next."}
                     </li>
@@ -1048,7 +1093,7 @@ export function AcquisitionStudio() {
               </div>
             )}
           </section>
-          {!report && (
+          {!submission && !report && (
             <aside className={`panel ${styles.expect}`}>
               <p className="eyebrow">WHAT YOU’LL GET</p>
               <h2>

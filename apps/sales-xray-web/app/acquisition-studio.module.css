@@ -302,6 +302,22 @@
 .withReport {
   grid-template-columns: 1fr;
 }
+.withProcessing {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 860px;
+  margin-inline: auto;
+}
+.withProcessing .upload {
+  padding: 24px;
+}
+.withProcessing .processingPanel {
+  margin-top: 18px;
+  border-radius: 14px;
+  border-color: var(--border);
+}
+.withProcessing .progressRail {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
 .withReport .upload {
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(260px, 0.8fr);
@@ -351,6 +367,12 @@
   gap: 16px;
 }
 @media (max-width: 760px) {
+  .withProcessing .upload {
+    padding: 18px;
+  }
+  .withProcessing .progressRail {
+    grid-template-columns: 1fr;
+  }
   .layout {
     grid-template-columns: 1fr;
     gap: 16px;
