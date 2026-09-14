@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import shlex
 from pathlib import Path
 
@@ -17,9 +18,15 @@ HISTORICAL_CONTROLLER = (
 
 def _validation_job(name: str) -> dict:
     workflow = yaml.safe_load((WORKFLOWS / name).read_text(encoding="utf-8"))
-    job = workflow["jobs"]["validate"]
+    job_id = "validate-python-gates" if name == "application.yml" else "validate"
+    job = workflow["jobs"][job_id]
     assert "if" not in job and not job.get("continue-on-error", False)
     return job
+
+
+def _workflow_job(name: str, job_id: str) -> dict:
+    workflow = yaml.safe_load((WORKFLOWS / name).read_text(encoding="utf-8"))
+    return workflow["jobs"][job_id]
 
 
 def _required_step(job: dict, name: str) -> dict:
@@ -153,13 +160,15 @@ def test_historical_and_codec_proofs_cannot_silently_lose_prerequisites() -> Non
         ["ffmpeg", "-version"],
         ["ffprobe", "-version"],
     ]
-    validate = _required_step(application, "Validate application")
-    assert application["steps"].index(codec) < application["steps"].index(validate)
+    browser = _required_step(
+        application, "Prove registration consent and server-rendered readiness"
+    )
+    assert application["steps"].index(codec) < application["steps"].index(browser)
 
 
 def test_sales_xray_static_preview_is_built_before_application_validation() -> None:
-    job = _validation_job("application.yml")
-    preview = _required_step(job, "PRE-VALIDATION: Build Sales Xray static preview")
+    frontend = _workflow_job("application.yml", "validate-frontend")
+    preview = _required_step(frontend, "PRE-VALIDATION: Build Sales Xray static preview")
     assert preview["env"] == {
         "AC_SALES_XRAY_STATIC_PREVIEW": "1",
         "NEXT_TELEMETRY_DISABLED": "1",
@@ -170,9 +179,13 @@ def test_sales_xray_static_preview_is_built_before_application_validation() -> N
         "@ac/sales-xray-web",
         "build",
     ]
-    install = _required_step(job, "Install locked dependencies")
-    validate = _required_step(job, "Validate application")
-    assert job["steps"].index(install) < job["steps"].index(preview) < job["steps"].index(validate)
+    install = _required_step(frontend, "Install locked Node dependencies")
+    assert frontend["steps"].index(install) < frontend["steps"].index(preview)
+
+    python_tests = _workflow_job("application.yml", "validate-python-tests")
+    shard_preview = _required_step(python_tests, "PRE-VALIDATION: Build Sales Xray static preview")
+    shard_install = _required_step(python_tests, "Install locked dependencies")
+    assert python_tests["steps"].index(shard_install) < python_tests["steps"].index(shard_preview)
 
 
 def test_conversation_native_build_is_verified_before_application_validation() -> None:
@@ -193,5 +206,23 @@ def test_conversation_native_build_is_verified_before_application_validation() -
         ],
     ]
     install = _required_step(job, "Install locked dependencies")
-    validate = _required_step(job, "Validate application")
-    assert job["steps"].index(install) < job["steps"].index(native) < job["steps"].index(validate)
+    assert job["steps"].index(install) < job["steps"].index(native)
+
+
+def test_python_shard_exclusions_match_every_explicit_gate_file() -> None:
+    gate = _validation_job("application.yml")
+    explicit_paths = sorted(
+        {
+            path
+            for step in gate["steps"]
+            for path in re.findall(r"tests/[^\s]+\.py", step.get("run", ""))
+        }
+    )
+    exclusions = sorted(
+        line.strip()
+        for line in (ROOT / "scripts/ci/python-test-exclusions.txt")
+        .read_text(encoding="utf-8")
+        .splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    )
+    assert exclusions == explicit_paths
