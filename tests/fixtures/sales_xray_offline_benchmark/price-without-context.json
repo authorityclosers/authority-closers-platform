@@ -1,0 +1,76 @@
+{
+  "as_of_ms": 1000,
+  "counterevidence_ids": [],
+  "critical_ids": [
+    "s1"
+  ],
+  "data_class": "synthetic_fixture",
+  "expected_applicability": {
+    "AC.EVIDENCE.RELEVANCE": "insufficient_context",
+    "AC.PRICE.DIAGNOSE": "applicable",
+    "AC.STOP.RESPECT": "insufficient_context"
+  },
+  "expected_outcome": "accepted",
+  "expected_rejection_stage": null,
+  "expected_slots": {
+    "affordability": {
+      "status": "unknown",
+      "value": null
+    },
+    "consent_to_continue": {
+      "status": "unknown",
+      "value": null
+    },
+    "evidence_concern": {
+      "status": "unknown",
+      "value": null
+    },
+    "price_objection": {
+      "status": "supported",
+      "value": true
+    }
+  },
+  "observations": [
+    {
+      "available_at_ms": 1000,
+      "evidence": {
+        "end_char": 23,
+        "end_ms": 1000,
+        "quote": "That price sounds high.",
+        "recording_id": "fixture-f430568a4a04bf38",
+        "segment_id": "s1",
+        "source_revision": "fixture-source-v1",
+        "source_sha256": "f430568a4a04bf382adfa0ee526d6430b4a2d0d50dec63e9b67062ffbb9f2012",
+        "speaker_id": "fixture-buyer",
+        "start_char": 0,
+        "start_ms": 0,
+        "tenant_id": "synthetic-benchmark-tenant",
+        "timebase_id": "fixture-source-ms",
+        "timing_scope": "segment",
+        "transcript_revision": "fixture-transcript-v1"
+      },
+      "id": "o1",
+      "polarity": "supports",
+      "slot": "price_objection",
+      "value": true
+    }
+  ],
+  "transcript": {
+    "duration_ms": 1000,
+    "recording_id": "fixture-f430568a4a04bf38",
+    "revision": "fixture-transcript-v1",
+    "segments": [
+      {
+        "end_ms": 1000,
+        "id": "s1",
+        "speaker_id": "fixture-buyer",
+        "start_ms": 0,
+        "text": "That price sounds high."
+      }
+    ],
+    "source_revision": "fixture-source-v1",
+    "source_sha256": "f430568a4a04bf382adfa0ee526d6430b4a2d0d50dec63e9b67062ffbb9f2012",
+    "tenant_id": "synthetic-benchmark-tenant",
+    "timebase_id": "fixture-source-ms"
+  }
+}

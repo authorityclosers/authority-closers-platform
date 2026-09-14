@@ -12,9 +12,9 @@ document thresholds.
 
 ## Source basis and authority
 
-The controlled ZIP is the authority for the constraints below. Section names are
-quoted so a future revision can be reconciled rather than silently blended with this
-plan.
+The supplied ZIP is source evidence for the constraints below. Current user
+instructions and current AC security/release contracts remain authoritative.
+Section names are quoted so revisions can be reconciled rather than silently blended.
 
 | Source | Exact section | Constraint used here |
 | --- | --- | --- |
@@ -316,13 +316,22 @@ reference must match. Publication is a pointer to an immutable candidate; rollba
 selects the prior approved pointer and records a new receipt. It does not overwrite
 history, alter source data, or change provider billing state.
 
-The following is a **proposed future SSH operator command shape**, included for
-workflow design only. It is not an implemented command and must not be run until the
-benchmark CLI, host, checkout, manifest, and approvals exist:
+The synthetic context/profile replay runner is now implemented. From a checkout
+with the project Python runtime installed, this command runs the checked-in
+fixture recipe and writes a fresh UUID-named result outside Git:
 
 ```powershell
-ssh <approved-staging-host> "cd <approved-checkout> && `$env:AC_ALLOW_PAID='0'; `$env:PYTHONPATH='<checkout>/packages/python'; python -m <future-benchmark-cli> run --stage offline --manifest <manifest> --run-id <run-id> --receipt-dir <external-receipts>"
+$env:PYTHONPATH = 'packages/python'
+python -m ac_platform.conversation_intelligence.benchmark_cli `
+  --manifest tests/fixtures/sales_xray_offline_benchmark/manifest.json `
+  --receipt-root D:/AC-authority-closers-release-audit/offline-context-benchmarks
 ```
+
+This first adapter replays fixture-authored context and qualitative applicability
+against identical retained transcripts. It does not execute ASR, AudioAtlas,
+semantic extraction, model inference, human-quality evaluation or hosted jobs.
+See [the runner contract](../contracts/SALES_XRAY_OFFLINE_BENCHMARK_V1.md) for
+bounded metadata, immutable receipts, failure reproduction and remaining adapters.
 
 For the future restricted-staging stage, the operator would first present the exact
 recipe, allowed case IDs, source permissions, provider terms, and integer-paise quote

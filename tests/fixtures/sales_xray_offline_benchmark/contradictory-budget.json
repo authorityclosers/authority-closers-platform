@@ -1,0 +1,107 @@
+{
+  "as_of_ms": 2000,
+  "counterevidence_ids": [],
+  "critical_ids": [
+    "s1",
+    "s2"
+  ],
+  "data_class": "synthetic_fixture",
+  "expected_applicability": {
+    "AC.EVIDENCE.RELEVANCE": "insufficient_context",
+    "AC.PRICE.DIAGNOSE": "insufficient_context",
+    "AC.STOP.RESPECT": "insufficient_context"
+  },
+  "expected_outcome": "accepted",
+  "expected_rejection_stage": null,
+  "expected_slots": {
+    "affordability": {
+      "status": "conflicted",
+      "value": null
+    },
+    "consent_to_continue": {
+      "status": "unknown",
+      "value": null
+    },
+    "evidence_concern": {
+      "status": "unknown",
+      "value": null
+    },
+    "price_objection": {
+      "status": "unknown",
+      "value": null
+    }
+  },
+  "observations": [
+    {
+      "available_at_ms": 1000,
+      "evidence": {
+        "end_char": 24,
+        "end_ms": 1000,
+        "quote": "The budget is available.",
+        "recording_id": "fixture-8577d011027e0971",
+        "segment_id": "s1",
+        "source_revision": "fixture-source-v1",
+        "source_sha256": "8577d011027e09712681092c494be73d831fc9b5aa4dd1790e29d5da882b6644",
+        "speaker_id": "fixture-buyer",
+        "start_char": 0,
+        "start_ms": 0,
+        "tenant_id": "synthetic-benchmark-tenant",
+        "timebase_id": "fixture-source-ms",
+        "timing_scope": "segment",
+        "transcript_revision": "fixture-transcript-v1"
+      },
+      "id": "o1",
+      "polarity": "supports",
+      "slot": "affordability",
+      "value": "available"
+    },
+    {
+      "available_at_ms": 2000,
+      "evidence": {
+        "end_char": 26,
+        "end_ms": 2000,
+        "quote": "The budget is unavailable.",
+        "recording_id": "fixture-8577d011027e0971",
+        "segment_id": "s2",
+        "source_revision": "fixture-source-v1",
+        "source_sha256": "8577d011027e09712681092c494be73d831fc9b5aa4dd1790e29d5da882b6644",
+        "speaker_id": "fixture-buyer",
+        "start_char": 0,
+        "start_ms": 1000,
+        "tenant_id": "synthetic-benchmark-tenant",
+        "timebase_id": "fixture-source-ms",
+        "timing_scope": "segment",
+        "transcript_revision": "fixture-transcript-v1"
+      },
+      "id": "o2",
+      "polarity": "supports",
+      "slot": "affordability",
+      "value": "unavailable"
+    }
+  ],
+  "transcript": {
+    "duration_ms": 2000,
+    "recording_id": "fixture-8577d011027e0971",
+    "revision": "fixture-transcript-v1",
+    "segments": [
+      {
+        "end_ms": 1000,
+        "id": "s1",
+        "speaker_id": "fixture-buyer",
+        "start_ms": 0,
+        "text": "The budget is available."
+      },
+      {
+        "end_ms": 2000,
+        "id": "s2",
+        "speaker_id": "fixture-buyer",
+        "start_ms": 1000,
+        "text": "The budget is unavailable."
+      }
+    ],
+    "source_revision": "fixture-source-v1",
+    "source_sha256": "8577d011027e09712681092c494be73d831fc9b5aa4dd1790e29d5da882b6644",
+    "tenant_id": "synthetic-benchmark-tenant",
+    "timebase_id": "fixture-source-ms"
+  }
+}
