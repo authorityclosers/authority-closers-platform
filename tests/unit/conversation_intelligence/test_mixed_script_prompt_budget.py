@@ -213,8 +213,11 @@ def test_other_model_report_limits_are_unchanged(provider: str, model: str) -> N
 
 
 @pytest.mark.asyncio
-async def test_gemini_broker_and_reconstruction_enforce_the_same_byte_envelope() -> None:
-    transcript, packet = _many_fact_case()
+@pytest.mark.parametrize("full_call", [False, True])
+async def test_gemini_broker_and_reconstruction_enforce_the_same_byte_envelope(
+    full_call: bool,
+) -> None:
+    transcript, packet = _full_call_c5_case() if full_call else _many_fact_case()
     task = prepare_coaching_input(
         transcript,
         [packet],
@@ -290,7 +293,7 @@ def test_gemini_report_exact_byte_boundary_and_stage_cannot_be_overridden() -> N
     body = task.as_provider_body()
     system = body["systemInstruction"]["parts"][0]["text"]
     part = body["contents"][0]["parts"][0]
-    part["text"] += " " * (32000 - 1800 - 128 - len((system + part["text"]).encode("utf-8")))
+    part["text"] += " " * (48000 - 1800 - 128 - len((system + part["text"]).encode("utf-8")))
     view = gemini_prompt_view(body, model=task.model, maximum=1800, task="coaching")
     assert prepare_gemini_body(view, task="coaching") == body
     raw = canonical(body)
@@ -303,3 +306,78 @@ def test_gemini_report_exact_byte_boundary_and_stage_cannot_be_overridden() -> N
     view["messages"][1]["content"] += "x"
     with pytest.raises(GeminiTaskError, match="report_prompt_budget_exceeded"):
         prepare_gemini_body(view, task="coaching")
+
+
+def _full_call_c5_case() -> tuple[dict[str, Any], Any]:
+    transcript = _transcript(count=152)
+    for index, segment in enumerate(transcript["segments"]):
+        segment.update(
+            start_ms=index * 8000,
+            end_ms=index * 8000 + 7900,
+            text=f"Synthetic {index}: " + "कल timing discuss करूया. " * 13,
+        )
+    transcript["duration_ms"] = 152 * 8000
+    packet = parse_fact_packet(
+        {
+            "overview": "Synthetic full-call facts for a byte-budget regression.",
+            "observations": [
+                {
+                    "fact": f"A synthetic scheduling statement at segment {i + 1}.",
+                    "segment_id": f"s{i + 1}",
+                }
+                for i in range(0, 152, 4)
+            ],
+            "uncertainties": ["Synthetic test only; anonymous speaker labels remain unverified."],
+        },
+        transcript,
+    )
+    return transcript, packet
+
+
+@pytest.mark.parametrize("maximum", [1800, 3200, 4000])
+def test_full_call_exceeding_old_c5_limit_preserves_every_fact_and_profile(maximum: int) -> None:
+    transcript, packet = _full_call_c5_case()
+    before = deepcopy(transcript), packet.model_dump_json()
+    task = prepare_coaching_input(
+        transcript,
+        [packet],
+        provider="gemini",
+        model="gemini-3.8-flash",
+        max_completion_tokens=maximum,
+    )
+    body = task.as_provider_body()
+    system = body["systemInstruction"]["parts"][0]["text"]
+    user = body["contents"][0]["parts"][0]["text"]
+    assert 32000 < len((system + user).encode("utf8")) + maximum + 128 <= 48000
+    facts = json.loads(user.split("\n", 1)[1])
+    assert facts["observations"] == [item.model_dump(mode="json") for item in packet.observations]
+    assert len(facts["observations"]) == 38
+    assert facts["covered_segment_ids"] == [s["id"] for s in transcript["segments"]]
+    assert facts["overview"] == packet.overview
+    assert facts["uncertainties"] == packet.uncertainties
+    assert (
+        json.loads(system.rsplit("Profile:\n", 1)[1])["dimensions"]
+        == load_report_profile()["dimensions"]
+    )
+    assert body["generationConfig"]["maxOutputTokens"] == maximum
+    assert type(task).from_dict(task.as_dict(), payload=task.payload) == task
+    assert before == (transcript, packet.model_dump_json())
+
+
+def test_larger_c5_envelope_stays_inside_existing_five_rupee_pricing_basis() -> None:
+    from ac_platform.conversation_intelligence.admin_pricing import estimate_provider_usage
+    from ac_platform.conversation_intelligence.gemini_tasks import GEMINI_FLASH_COACHING_TOTAL_LIMIT
+
+    assert GEMINI_FLASH_COACHING_TOTAL_LIMIT == 48000
+    # Test every legal output cap. Include the 128-unit overhead as billable
+    # input to remain conservative; this is planning evidence, not settlement.
+    for maximum in range(256, 4001):
+        estimate = estimate_provider_usage(
+            "gemini",
+            "gemini-3.8-flash",
+            {
+                "promptTokenCount": GEMINI_FLASH_COACHING_TOTAL_LIMIT - maximum,
+                "candidatesTokenCount": maximum,
+            },
+        )
+        assert estimate["paise"] <= 500

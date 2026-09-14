@@ -16,7 +16,7 @@ from ac_platform.conversation_intelligence.checkpoints import canonical
 GEMINI_TASK_MODELS = frozenset({"gemini-3.8-flash", "gemini-3.1-pro-preview"})
 _MARKER = "AC_TASK_ADAPTER: gemini-json-v1\nMODEL: "
 _MAX_RESPONSE_BYTES = 4 * 1024 * 1024
-GEMINI_FLASH_COACHING_TOTAL_LIMIT = 32_000
+GEMINI_FLASH_COACHING_TOTAL_LIMIT = 48_000
 
 
 class GeminiTaskError(ValueError):
@@ -44,6 +44,10 @@ def _require_prompt_budget(system: str, user: str, *, model: str, task: str, max
         # One input byte per token is a conservative allowance, not an actual
         # provider token count. This bounds the full report input without using
         # Groq's historical TPM limit or increasing the approved output cap.
+        # The 48k envelope admits the complete retained 20-minute call. At the
+        # frozen $0.75/$3.75 per-million input/output rates and INR100/USD,
+        # even the maximum 4000 output allocation stays below the existing
+        # INR5 C5 reservation on this conservative byte-as-token basis.
         used = input_bytes + maximum + 128
         limit = GEMINI_FLASH_COACHING_TOTAL_LIMIT
     else:
