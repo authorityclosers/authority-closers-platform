@@ -29,6 +29,7 @@ class PricingSnapshot:
     evidence_sha256: str
     source_url: str
     rate_basis: str
+    evidence_release_sha: str = _EVIDENCE_RELEASE_SHA
     usd_per_hour: Decimal | None = None
     input_usd_per_million_tokens: Decimal | None = None
     output_usd_per_million_tokens: Decimal | None = None
@@ -38,7 +39,7 @@ class PricingSnapshot:
             "schema": _SNAPSHOT_SCHEMA,
             # This is the release that supplied the immutable pricing evidence;
             # it is not a claim about the release currently serving the API.
-            "evidence_release_sha": _EVIDENCE_RELEASE_SHA,
+            "evidence_release_sha": self.evidence_release_sha,
             "provider": self.provider_id,
             "model": self.model_id,
             "currency": "INR",
@@ -90,6 +91,7 @@ PRICING_SNAPSHOTS: dict[tuple[str, str], PricingSnapshot] = {
         evidence_sha256="6adde7cf988414764bea2ce84160ef38afb91d95ba7ae2816433bf310cd1bb1d",
         source_url="https://ai.google.dev/gemini-api/docs/pricing#gemini-31-pro-preview",
         rate_basis="per_million_tokens",
+        evidence_release_sha="33d81894488d812b2f09023e23e6b0bd706ca0e0",
         input_usd_per_million_tokens=Decimal("2"),
         output_usd_per_million_tokens=Decimal("12"),
     ),
