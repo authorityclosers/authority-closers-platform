@@ -707,3 +707,170 @@
     margin: 0;
   }
 }
+
+/* Customer-facing acquisition and report type scale. Keep the primary copy
+   readable while using spacing and compact support labels to protect the
+   processing card at desktop and mobile widths. */
+.app :global(.studio-upload),
+.app .processingPanel,
+.app :global(.studio-report) {
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+.app :global(.studio-upload) h2,
+.app :global(.studio-report) h2 {
+  font-size: clamp(24px, 2.8vw, 28px);
+  line-height: 1.2;
+}
+
+.app .processingPanel h3 {
+  font-size: clamp(22px, 2.6vw, 28px);
+  line-height: 1.2;
+}
+
+.app :global(.studio-report) h1 {
+  font-size: clamp(30px, 3.8vw, 42px);
+  line-height: 1.15;
+}
+
+.app :global(.studio-upload) p,
+.app .processingPanel p,
+.app :global(.studio-report) article p {
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.app :global(.studio-file) h2 {
+  font-size: clamp(24px, 2.8vw, 28px);
+  line-height: 1.2;
+}
+
+.app :global(.studio-file) p,
+.app :global(.studio-consent) p {
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+.app :global(.studio-upload) p.small-text,
+.app :global(.studio-upload) p.freeBadge,
+.app :global(.studio-upload) p.dropHint,
+.app :global(.studio-upload) p.allowance {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.app :global(.studio-consent) label {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.app[data-variant="standalone"] :global(.studio-intro > p:last-child) {
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.app .stepHeader strong {
+  font-size: 14px;
+}
+
+.app .stepHeader small,
+.app .dropHint,
+.app .freeBadge,
+.app .privacyDetails,
+.app .privacyDetails summary,
+.app .allowance,
+.app .claim p,
+.app .callActions p,
+.app .privacyActions {
+  font-size: 13px;
+}
+
+.app .privacyDetails summary {
+  line-height: 1.4;
+}
+
+.app .processingPanel {
+  gap: 6px 14px;
+  padding: 22px 24px;
+}
+
+.app .uploadProgress {
+  min-height: 250px;
+}
+
+.app .processingPanel p.progressKicker {
+  margin-bottom: 6px;
+  font-size: 12px;
+  letter-spacing: 1.45px;
+}
+
+.app .progressCopy > p:last-child {
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+.app .progressRail {
+  gap: 7px;
+  margin-top: 14px;
+}
+
+.app .progressRail > div {
+  min-height: 46px;
+  padding: 7px 10px;
+}
+
+.app .progressRail p {
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.app .progressRail small,
+.app .progressGuidance .eyebrow {
+  font-size: 13px;
+}
+
+.app .progressGuidance {
+  margin-top: 14px;
+  padding-top: 13px;
+}
+
+.app .progressGuidance ul,
+.app .processingPanel p.coachingCopy {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.app :global(.studio-report-summary) {
+  font-size: 18px;
+  line-height: 1.6;
+}
+
+.app :global(.studio-report) details,
+.app :global(.studio-report) details p,
+.app :global(.studio-report) .studio-report-details {
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+@media (max-width: 760px) {
+  .app :global(.studio-upload) h2,
+  .app :global(.studio-report) h2,
+  .app :global(.studio-file) h2 {
+    font-size: 24px;
+  }
+
+  .app .processingPanel h3 {
+    font-size: 22px;
+  }
+
+  .app .processingPanel {
+    gap: 6px 12px;
+    padding: 20px 16px;
+  }
+
+  .app .progressRail > div {
+    min-height: 44px;
+    padding: 7px 9px;
+  }
+}
