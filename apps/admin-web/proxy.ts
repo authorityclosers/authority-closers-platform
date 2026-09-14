@@ -96,10 +96,19 @@ export async function proxy(request: NextRequest) {
   }
 
   const runtime = normalizeAdminRuntime(process.env.NODE_ENV);
+  const serverContext =
+    runtime === "production" && request.nextUrl.pathname !== "/platform"
+      ? await resolveAdminServerContext({
+          cookieHeader: request.headers.get("cookie"),
+          internalApiUrl: process.env.AC_INTERNAL_API_URL,
+          internalApiHost: process.env.AC_INTERNAL_API_HOST,
+        })
+      : null;
   if (
     runtime === "production" &&
     (request.nextUrl.pathname === "/platform" ||
-      request.nextUrl.pathname === "/")
+      (request.nextUrl.pathname === "/" &&
+        !serverContext?.permissions.includes("admin_surface")))
   ) {
     const platform = await resolvePlatformServerContext({
       cookieHeader: request.headers.get("cookie"),
@@ -116,14 +125,6 @@ export async function proxy(request: NextRequest) {
     if (request.nextUrl.pathname === "/platform")
       return sameOriginRedirect(request, "/login");
   }
-  const serverContext =
-    runtime === "production"
-      ? await resolveAdminServerContext({
-          cookieHeader: request.headers.get("cookie"),
-          internalApiUrl: process.env.AC_INTERNAL_API_URL,
-          internalApiHost: process.env.AC_INTERNAL_API_HOST,
-        })
-      : null;
   const decision = evaluateAdminAccess({
     runtime,
     localPreviewEnabled:

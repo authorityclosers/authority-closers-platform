@@ -1,0 +1,33 @@
+{
+  "environment": "compiled local Next /login; synthetic API interception",
+  "checks": [
+    "dual-access account remains on login selector",
+    "no implicit context mutation",
+    "only server-listed academy is selectable",
+    "explicit platform navigation is available",
+    "keyboard selection and button focus order",
+    "390px document reflow",
+    "zero browser runtime errors"
+  ],
+  "requests": [
+    {
+      "method": "GET",
+      "path": "/v1/me/workspaces"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/me"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/context"
+    },
+    {
+      "method": "GET",
+      "path": "/v1/me/platform-access"
+    }
+  ],
+  "browser_errors": [],
+  "hosted_authentication_tested": false,
+  "provider_calls": 0
+}
