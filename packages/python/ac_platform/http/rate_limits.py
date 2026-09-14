@@ -393,11 +393,23 @@ class RateLimitMiddleware:
         trusted_proxy_addresses: frozenset[
             ipaddress.IPv4Address | ipaddress.IPv6Address
         ] = frozenset(),
+        exemption: Callable[[Scope, str], Awaitable[bool]] | None = None,
     ) -> None:
         self.app = app
         self.rules = rules
         self.limiter = limiter or InMemoryTokenBucketLimiter()
         self.trusted_proxy_addresses = trusted_proxy_addresses
+        self.exemption = exemption
+
+    async def _is_exempt(self, scope: Scope, rule_name: str) -> bool:
+        if self.exemption is None:
+            return False
+        try:
+            return await self.exemption(scope, rule_name)
+        except Exception:
+            # An unavailable identity/policy lookup never weakens the coarse
+            # abuse shield; the ordinary IP bucket remains active.
+            return False
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope.get("type") != "http":
@@ -405,6 +417,9 @@ class RateLimitMiddleware:
             return
         rule = _rule_for(scope, self.rules)
         if rule is None:
+            await self.app(scope, receive, send)
+            return
+        if await self._is_exempt(scope, rule.name):
             await self.app(scope, receive, send)
             return
         identity = client_identity(

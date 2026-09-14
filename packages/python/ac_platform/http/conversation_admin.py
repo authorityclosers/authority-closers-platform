@@ -20,6 +20,7 @@ from ac_platform.conversation_intelligence.application import (
     ConversationError,
 )
 from ac_platform.conversation_intelligence.hosted_runtime import load_pinned_approval
+from ac_platform.conversation_intelligence.internal_tester import internal_tester_view
 from ac_platform.conversation_intelligence.provider_admin import ConversationProviderAdmin
 from ac_platform.conversation_intelligence.provider_registry import (
     TASK_CONTRACTS,
@@ -116,6 +117,21 @@ def install_conversation_admin_http(
             "max_paid_paise": 0,
             "approved_budget_cap_paise": None if bundle is None else bundle.budget_cap_paise,
             "execution_activated": bool(current and current.get("activation")),
+            "internal_tester_policy": internal_tester_view(bundle)
+            if bundle is not None
+            else {
+                "enabled": False,
+                "accounts": [],
+                "scopes": [],
+                "source": "hash_pinned_hosted_approval",
+                "bundle_digest": None,
+                "limits_remaining_bounded": [
+                    "provider_stage_approval",
+                    "provider_budget_and_usage",
+                    "source_size_and_retention_storage",
+                    "guest_session_ip_rate_limit_without_named_account_session",
+                ],
+            },
             "message": (
                 "Settings are saved as revisions. Activate a pinned-approved revision "
                 "for new plans; provider calls remain worker-owned."

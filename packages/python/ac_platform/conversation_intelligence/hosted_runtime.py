@@ -23,6 +23,7 @@ from ac_platform.conversation_intelligence.activation_contract import (
 from ac_platform.conversation_intelligence.application import AUDIOATLAS_HOSTED_RECIPE
 from ac_platform.conversation_intelligence.authority import ConversationAuthority
 from ac_platform.conversation_intelligence.intake import IntakePolicy
+from ac_platform.conversation_intelligence.internal_tester import InternalTesterPolicy
 from ac_platform.conversation_intelligence.storage import PrivateLocalRecordingStorage
 
 if TYPE_CHECKING:
@@ -155,10 +156,15 @@ def compose_hosted_intake(settings: HostedConversationSettings) -> ConversationI
         settings.operations_tenant_id,
     )
     bundle = loader()
+    tester_policy = InternalTesterPolicy(loader, settings.environment)
+    public_learner_tenant_id = getattr(settings, "public_learner_tenant_id", None)
+    if not isinstance(public_learner_tenant_id, UUID):
+        public_learner_tenant_id = None
     authority = ConversationAuthority(
         loader,
         environment=settings.environment,
         operations_tenant_id=settings.operations_tenant_id,
+        tester_policy=tester_policy,
     )
     storage_path, scratch_path = (
         Path(settings.sales_xray_storage_root or ""),
@@ -172,6 +178,11 @@ def compose_hosted_intake(settings: HostedConversationSettings) -> ConversationI
             tenant_ids=frozenset(
                 {
                     *(item.tenant_id for item in bundle.allowances),
+                    *(
+                        ()
+                        if not bundle.internal_tester_accounts or public_learner_tenant_id is None
+                        else (public_learner_tenant_id,)
+                    ),
                     *(
                         ()
                         if bundle.acquisition_policy is None

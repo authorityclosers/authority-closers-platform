@@ -194,6 +194,29 @@ describe("acquisition source-bound presentation", () => {
       available_seconds: 0,
     });
   });
+  it("accepts the explicit unlimited internal tester allowance", () => {
+    expect(
+      parseAllowance({
+        allowance_seconds: 3600,
+        committed_seconds: 7200,
+        available_seconds: 0,
+        unlimited: true,
+      }),
+    ).toEqual({
+      allowance_seconds: 3600,
+      committed_seconds: 7200,
+      available_seconds: 0,
+      unlimited: true,
+    });
+    expect(() =>
+      parseAllowance({
+        allowance_seconds: 3600,
+        committed_seconds: 7200,
+        available_seconds: 0,
+        unlimited: "true",
+      }),
+    ).toThrow();
+  });
   it("accepts the authenticated learner entry without enabling a guest challenge", () => {
     const accountEntry = {
       ...entry,

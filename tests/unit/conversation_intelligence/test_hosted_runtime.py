@@ -89,6 +89,28 @@ def test_complete_pinned_runtime_loads_and_rechecks_artifact(tmp_path: Path) -> 
         runtime.authority.current(datetime.now(UTC))
 
 
+def test_internal_tester_bundle_mounts_the_configured_public_tenant(tmp_path: Path) -> None:
+    data = approval_data()
+    public_tenant = UUID(data["provider_control_tenant_id"])
+    data["internal_tester_accounts"] = [
+        {
+            "id": str(uuid4()),
+            "email": "admin@authorityclosers.com",
+            "authorization_ref": "ref:synthetic/tester",
+            "scopes": ["account_minutes", "analysis_count", "ip_session_issuance"],
+            "reason": "Approved internal tester exemption",
+        }
+    ]
+    settings = settings_for(tmp_path, data).model_copy(
+        update={"public_learner_tenant_id": public_tenant}
+    )
+
+    runtime = compose_hosted_intake(settings)
+
+    assert runtime is not None
+    assert runtime.policy.tenant_ids == frozenset({public_tenant})
+
+
 @pytest.mark.parametrize(
     "field",
     [

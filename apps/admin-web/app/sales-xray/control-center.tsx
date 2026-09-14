@@ -119,6 +119,14 @@ export function ControlCenterPanel() {
   const activation = current?.activation;
   const approvedChoices = current?.activation_options.length ?? 0;
   const budgetCeiling = state.payload.approved_budget_cap_paise;
+  const testerPolicy = state.payload.internal_tester_policy ?? {
+    enabled: false,
+    accounts: [],
+    scopes: [],
+    source: "hash_pinned_hosted_approval" as const,
+    bundle_digest: null,
+    limits_remaining_bounded: [],
+  };
 
   return (
     <div className={styles.page}>
@@ -185,6 +193,15 @@ export function ControlCenterPanel() {
           </strong>
           <small>
             Shared processing limit · not spend or remaining balance
+          </small>
+        </div>
+        <div className={styles.summaryCard}>
+          <span>Internal tester access</span>
+          <strong>{testerPolicy.enabled ? "Enabled" : "Disabled"}</strong>
+          <small>
+            {testerPolicy.enabled
+              ? `${testerPolicy.accounts.length} named account${testerPolicy.accounts.length === 1 ? "" : "s"} · ${testerPolicy.scopes.length} scope${testerPolicy.scopes.length === 1 ? "" : "s"}`
+              : "No hash-pinned tester exemptions"}
           </small>
         </div>
       </div>

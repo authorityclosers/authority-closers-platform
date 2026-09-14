@@ -409,3 +409,35 @@ def test_two_requests_must_reload_shared_budget_after_first_commit():
             committed.minutes, committed.budget, "r2", second_value, permission(second_value), 200
         )
     assert committed.budget.available_paise == 500
+
+
+def test_internal_tester_minute_account_bypasses_finite_grant_without_bypassing_budget():
+    minutes = MinuteAccount("tenant-a", "account-a", unlimited=True)
+    _, budget = accounts(seconds=0, cap=3000)
+    value = quote(entitlement_seconds=86_400, max_cost_paise=2500)
+
+    committed = reserve(minutes, budget, "tester-reserve", value, permission(value), 200)
+
+    assert committed.minutes.unlimited is True
+    assert committed.budget.available_paise == 500
+
+
+def test_replacing_tester_exemption_with_finite_grant_clears_unlimited_flag():
+    minutes = MinuteAccount("tenant-a", "account-a", unlimited=True)
+    bounded = replace(minutes, unlimited=False)
+
+    granted = grant_minutes(
+        bounded,
+        MinuteGrant(
+            "tenant-a",
+            "account-a",
+            "finite-grant",
+            600,
+            "explicit-grant",
+            "authorized-actor",
+            "pilot",
+        ),
+    )
+
+    assert granted.unlimited is False
+    assert granted.available_seconds == 600

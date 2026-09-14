@@ -14,6 +14,10 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from ac_platform import __version__
 from ac_platform.application.settings import Settings, get_settings
 from ac_platform.conversation_intelligence.hosted_runtime import compose_hosted_intake
+from ac_platform.conversation_intelligence.internal_tester import (
+    InternalTesterPolicy,
+    tester_rate_limit_resolver,
+)
 from ac_platform.db.session import engine, session_factory
 from ac_platform.http.admin_diagnosis import install_admin_diagnosis_http
 from ac_platform.http.admin_learning import install_admin_learning_http
@@ -156,6 +160,15 @@ def create_app(
         resolved_conversation = None
         logger.warning("sales_xray_composition_unavailable")
     application.state.sales_xray_intake_configured = resolved_conversation is not None
+    tester_policy = (
+        None
+        if resolved_conversation is None or resolved_conversation.authority is None
+        else InternalTesterPolicy(
+            resolved_conversation.authority.loader,
+            settings.environment,
+        )
+    )
+    application.state.internal_tester_policy = tester_policy
     try:
         resolved_acquisition = compose_acquisition(settings, resolved_conversation)
     except (ValueError, OSError):
@@ -324,6 +337,15 @@ def create_app(
     application.add_middleware(
         RateLimitMiddleware,
         trusted_proxy_addresses=settings.rate_limit_trusted_proxy_addresses,
+        exemption=(
+            None
+            if tester_policy is None
+            else tester_rate_limit_resolver(
+                settings=settings,
+                sessions=session_factory,
+                policy=tester_policy,
+            )
+        ),
     )
     application.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts)
     application.add_middleware(CoachSurfaceMiddleware, settings=settings)

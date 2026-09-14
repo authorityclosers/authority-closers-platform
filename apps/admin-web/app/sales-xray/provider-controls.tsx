@@ -185,6 +185,17 @@ const responseSchema = z
       .nullable()
       .default(null),
     execution_activated: z.boolean().default(false),
+    internal_tester_policy: z
+      .object({
+        enabled: z.boolean(),
+        accounts: z.array(z.string().min(3)),
+        scopes: z.array(z.string().min(1)),
+        source: z.literal("hash_pinned_hosted_approval"),
+        bundle_digest: z.string().regex(SHA256).nullable(),
+        limits_remaining_bounded: z.array(z.string().min(1)),
+      })
+      .strict()
+      .optional(),
     message: z.string().min(1),
   })
   .strict();

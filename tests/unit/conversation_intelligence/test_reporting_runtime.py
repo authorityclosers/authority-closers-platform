@@ -14,6 +14,7 @@ from ac_platform.application.settings import Settings
 from ac_platform.conversation_intelligence.activation_contract import (
     HOSTED_APPROVAL_SCHEMA,
     HostedApprovalBundle,
+    InternalTesterApproval,
     StageApproval,
 )
 from ac_platform.conversation_intelligence.application import ConversationDenied
@@ -145,6 +146,21 @@ def test_bootstrap_approval_boundary_requires_empty_free_bundle() -> None:
     runtime_module.validate_bootstrap_approval(inert)
     with pytest.raises(ValueError, match="worker_bootstrap_approval_not_empty"):
         runtime_module.validate_bootstrap_approval(_current_bundle())
+    tester_bundle = inert.model_copy(
+        update={
+            "internal_tester_accounts": (
+                InternalTesterApproval(
+                    id=UUID("50000000-0000-4000-8000-000000000005"),
+                    email="admin@authorityclosers.com",
+                    authorization_ref="ref:tester/bootstrap",
+                    scopes=("account_minutes",),
+                    reason="Approved internal tester exemption",
+                ),
+            )
+        }
+    )
+    with pytest.raises(ValueError, match="worker_bootstrap_approval_not_empty"):
+        runtime_module.validate_bootstrap_approval(tester_bundle)
 
 
 def _launcher(provider: str) -> InfisicalLauncher:

@@ -22,6 +22,7 @@ from ac_platform.conversation_intelligence.acquisition_challenge import (
 from ac_platform.conversation_intelligence.acquisition_sessions import AcquisitionSessions
 from ac_platform.conversation_intelligence.acquisition_source import NativeUploadPreflight
 from ac_platform.conversation_intelligence.acquisition_usage import ALLOWANCE_SECONDS
+from ac_platform.conversation_intelligence.internal_tester import InternalTesterPolicy
 from ac_platform.conversation_intelligence.native_runtime import SocketNativeRuntime
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor
 from ac_platform.http.conversation_acquisition import install_acquisition_http
@@ -66,6 +67,7 @@ class AcquisitionRuntime:
     preflight: NativeUploadPreflight
     site_key: str
     policy_revision: str
+    tester_policy: InternalTesterPolicy | None = None
 
 
 def compose_acquisition(
@@ -107,6 +109,7 @@ def compose_acquisition(
         NativeUploadPreflight(native),
         settings.sales_xray_challenge_site_key,
         settings.sales_xray_acquisition_policy_revision,
+        None if intake.authority is None else intake.authority.tester_policy,
     )
 
 
@@ -177,7 +180,10 @@ def install_acquisition_runtime(
         if tenant is None:
             raise RuntimeError("The configured public Academy is required.")
         return AcquisitionSessions(
-            database, tenant_id=tenant, policy_revision=runtime.policy_revision
+            database,
+            tenant_id=tenant,
+            policy_revision=runtime.policy_revision,
+            tester_policy=runtime.tester_policy,
         )
 
     install_acquisition_http(

@@ -11,6 +11,7 @@ from ac_platform.conversation_intelligence.activation_contract import (
     ActivationContractError,
     AllowanceApproval,
     HostedApprovalBundle,
+    InternalTesterApproval,
     StageApproval,
     load_hosted_approval_bundle,
 )
@@ -100,6 +101,7 @@ def _bundle(
     expires_at_epoch: int = 2_000,
     budget_cap_paise: int = 0,
     paid_approval_ref: str | None = None,
+    internal_tester_accounts: tuple[InternalTesterApproval, ...] = (),
 ) -> HostedApprovalBundle:
     return HostedApprovalBundle(
         schema_id=HOSTED_APPROVAL_SCHEMA,
@@ -119,6 +121,7 @@ def _bundle(
         max_stored_source_bytes=1_073_741_824,
         allowances=allowances,
         stages=(_stage(),) if stages is None else stages,
+        internal_tester_accounts=internal_tester_accounts,
     )
 
 

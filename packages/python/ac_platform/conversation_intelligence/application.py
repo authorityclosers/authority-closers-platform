@@ -579,11 +579,15 @@ class ConversationApplication:
             self.database, tenant_id=recording.tenant_id, person_id=actor.person_id
         )
         account = MinuteAccount.from_dict(minute_row.snapshot)
-        if acquisition_used and (
-            acquisition_used
-            + sum(item.committed_seconds for item in account.reservations)
-            + quote.entitlement_seconds
-            > ALLOWANCE_SECONDS
+        if (
+            not account.unlimited
+            and acquisition_used
+            and (
+                acquisition_used
+                + sum(item.committed_seconds for item in account.reservations)
+                + quote.entitlement_seconds
+                > ALLOWANCE_SECONDS
+            )
         ):
             raise ConversationDenied("Your 60 trial minutes are used. Contact AC for more access.")
         identifier = uuid4()

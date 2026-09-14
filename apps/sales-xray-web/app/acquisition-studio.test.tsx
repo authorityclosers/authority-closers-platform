@@ -497,6 +497,21 @@ it.each([
   ).toBe(expected);
 });
 
+it("renders an explicit unlimited tester allowance", () => {
+  expect(
+    remainingAllowanceLabel(
+      {
+        allowance_seconds: 3600,
+        committed_seconds: 7200,
+        available_seconds: 0,
+        unlimited: true,
+      },
+      3600,
+      false,
+    ),
+  ).toBe("Unlimited testing");
+});
+
 it("shows the live processing stages without inventing a percentage", async () => {
   existing = true;
   processingMode = "running";

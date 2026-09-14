@@ -371,6 +371,7 @@ def _reservations(value: Any) -> tuple[Reservation, ...]:
 class MinuteAccount(Snapshot):
     tenant_id: str
     account_id: str
+    unlimited: bool = False
     grants: tuple[MinuteGrant, ...] = ()
     reservations: tuple[Reservation, ...] = ()
 
@@ -379,8 +380,25 @@ class MinuteAccount(Snapshot):
         "reservations": _reservations,
     }
 
+    def as_dict(self) -> dict[str, Any]:
+        value = super().as_dict()
+        # The tester flag was added as a backward-compatible extension. Keep
+        # ordinary legacy snapshots byte-for-byte stable until explicitly
+        # activated by the pinned approval.
+        if not self.unlimited:
+            value.pop("unlimited", None)
+        return value
+
+    @classmethod
+    def from_dict(cls, value: Any) -> Self:
+        if isinstance(value, dict) and "unlimited" not in value:
+            value = {**value, "unlimited": False}
+        return super().from_dict(value)
+
     def __post_init__(self) -> None:
         _strings(self, ("tenant_id", "account_id"))
+        if type(self.unlimited) is not bool:
+            raise ValueError("invalid unlimited minute-account flag")
         if type(self.grants) is not tuple or type(self.reservations) is not tuple:
             raise ValueError("account history must be immutable tuples")
         if any(not isinstance(grant, MinuteGrant) for grant in self.grants):
@@ -403,7 +421,7 @@ class MinuteAccount(Snapshot):
             for r in self.reservations
             if r.state == "reconciliation_required"
         )
-        if self.available_seconds + observed_excess < 0:
+        if not self.unlimited and self.available_seconds + observed_excess < 0:
             raise ValueError("minute snapshot overdraws explicit grants")
 
     @property
@@ -587,7 +605,7 @@ def reserve(
     _live_permission(quote, permission, now_epoch)
     if minutes.has_overrun or budget.has_overrun:
         raise ValueError("unresolved overrun holds further execution")
-    if quote.entitlement_seconds > minutes.available_seconds:
+    if not minutes.unlimited and quote.entitlement_seconds > minutes.available_seconds:
         raise ValueError("insufficient explicit minute grant")
     if quote.max_cost_paise > budget.available_paise:
         raise ValueError("shared project budget exhausted")

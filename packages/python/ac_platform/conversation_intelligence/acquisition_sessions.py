@@ -37,6 +37,7 @@ from ac_platform.conversation_intelligence.application import (
     ConversationError,
     utc,
 )
+from ac_platform.conversation_intelligence.internal_tester import InternalTesterPolicy
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.tenancy.models import Tenant
 
@@ -86,6 +87,7 @@ class AcquisitionSessions:
         policy_revision: str,
         lifetime: timedelta = timedelta(days=1),
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+        tester_policy: InternalTesterPolicy | None = None,
     ) -> None:
         if (
             type(tenant_id) is not UUID
@@ -95,6 +97,7 @@ class AcquisitionSessions:
             raise ValueError("Invalid acquisition policy.")
         self.database, self.tenant_id = database, tenant_id
         self.policy_revision, self.lifetime, self.clock = policy_revision, lifetime, clock
+        self.tester_policy = tester_policy
 
     async def _admit(self, *, mutation: bool = False) -> datetime:
         transaction = self.database.get_transaction()
@@ -240,15 +243,23 @@ class AcquisitionSessions:
 
     async def allowance(
         self, *, token: str | None = None, actor: ActorContext | None = None
-    ) -> dict[str, int]:
+    ) -> dict[str, int | bool | None]:
         now = await self._admit()
         owner = await self._owner(token, actor, now)
         used = await self._used(*owner)
-        return {
+        value: dict[str, int | bool | None] = {
             "allowance_seconds": ALLOWANCE_SECONDS,
             "committed_seconds": used,
             "available_seconds": max(0, ALLOWANCE_SECONDS - used),
         }
+        tester = (
+            None
+            if self.tester_policy is None or actor is None
+            else await self.tester_policy.for_actor(self.database, actor, "account_minutes")
+        )
+        if tester is not None:
+            value["unlimited"] = True
+        return value
 
     async def reserve(
         self,
@@ -263,6 +274,11 @@ class AcquisitionSessions:
             await ConversationApplication(self.database, clock=self.clock).admit(actor)
         now = await self._admit(mutation=True)
         visitor_id, person_id = await self._owner(token, actor, now)
+        tester = (
+            None
+            if self.tester_policy is None or actor is None
+            else await self.tester_policy.for_actor(self.database, actor, "account_minutes")
+        )
         previous = await self.database.scalar(
             select(ConversationAcquisitionUsage).where(
                 ConversationAcquisitionUsage.tenant_id == self.tenant_id,
@@ -283,7 +299,10 @@ class AcquisitionSessions:
             ):
                 raise ConversationConflict("This upload belongs to a different source receipt.")
             return previous.id
-        if await self._used(visitor_id, person_id) + source.seconds > ALLOWANCE_SECONDS:
+        if (
+            tester is None
+            and await self._used(visitor_id, person_id) + source.seconds > ALLOWANCE_SECONDS
+        ):
             raise ConversationDenied("Your 60 trial minutes are used. Contact AC for more access.")
         identifier = uuid4()
         self.database.add(

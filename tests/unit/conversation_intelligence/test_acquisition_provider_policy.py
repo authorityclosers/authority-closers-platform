@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID, uuid4
 
@@ -11,17 +12,21 @@ from ac_platform.conversation_intelligence.activation_contract import (
     AcquisitionProviderPolicy,
     AcquisitionProviderProfile,
     AcquisitionStagePolicy,
+    AllowanceApproval,
     HostedApprovalBundle,
+    InternalTesterApproval,
 )
 from ac_platform.conversation_intelligence.application import ConversationDenied
 from ac_platform.conversation_intelligence.authority import ConversationAuthority
 from ac_platform.conversation_intelligence.broker_router import FixedProviderRouter
 from ac_platform.conversation_intelligence.checkpoints import SourceBinding
+from ac_platform.conversation_intelligence.contracts import IntakeIntent
 from ac_platform.conversation_intelligence.entitlements import (
     ExecutionPermission,
     Quote,
     Reservation,
 )
+from ac_platform.conversation_intelligence.internal_tester import InternalTesterPolicy
 from ac_platform.conversation_intelligence.limits import MAX_AUDIO_BYTES
 from ac_platform.conversation_intelligence.models import (
     ConversationBudgetAccount,
@@ -330,6 +335,85 @@ async def test_processing_actor_initializes_shared_budget_without_minute_grant()
     added = [call.args[0] for call in app.database.add.call_args_list]
     assert [item for item in added if isinstance(item, ConversationBudgetAccount)]
     assert not any(isinstance(item, ConversationMinuteAccount) for item in added)
+
+
+@pytest.mark.asyncio
+async def test_tester_analysis_scope_bypasses_count_but_keeps_bound_allowance_caps() -> None:
+    allowance = AllowanceApproval(
+        id=uuid4(),
+        tenant_id=TENANT_ID,
+        person_id=PROCESSING_PERSON_ID,
+        seconds=86_400,
+        authorization_ref="ref:approval/finite-tester",
+        granted_by=CONTROL_PERSON_ID,
+        reason="Approved internal testing allowance",
+        max_recordings=4,
+        max_source_bytes=MAX_AUDIO_BYTES,
+        max_stored_source_bytes=536_870_912,
+    )
+    tester = InternalTesterApproval(
+        id=uuid4(),
+        email="admin@authorityclosers.com",
+        authorization_ref="ref:approval/tester-exemption",
+        scopes=("account_minutes", "analysis_count", "ip_session_issuance"),
+        reason="Approved internal tester exemption",
+    )
+    bundle = HostedApprovalBundle(
+        schema="ac.sales-xray.hosted-approval/1",
+        environment="test",
+        provider_control_tenant_id=TENANT_ID,
+        deployment_ref="ref:deployment/tester-exemption",
+        issued_at_epoch=1_000,
+        expires_at_epoch=2_000,
+        budget_scope_id=uuid4(),
+        budget_authorization_ref="ref:budget/tester-exemption",
+        budget_owner_id=CONTROL_PERSON_ID,
+        intake_authorization_ref="ref:intake/tester-exemption",
+        intake_retention_ref="ref:retention/tester-exemption",
+        retention_days=7,
+        max_stored_source_bytes=1_073_741_824,
+        allowances=(allowance,),
+        stages=(),
+        internal_tester_accounts=(tester,),
+    )
+
+    class _Application:
+        def __init__(self) -> None:
+            self.database = MagicMock()
+            self.database.scalar = AsyncMock(
+                side_effect=[
+                    SimpleNamespace(
+                        status="active",
+                        email="admin@authorityclosers.com",
+                        email_verified_at=datetime.now(UTC),
+                    ),
+                    SimpleNamespace(status="active", role="learner", ended_at=None),
+                    0,
+                ]
+            )
+            self.database.execute = AsyncMock(
+                side_effect=[None, SimpleNamespace(one=lambda: (4, 0))]
+            )
+
+        async def admit(self, _: ActorContext) -> datetime:
+            return datetime.fromtimestamp(1_100, UTC)
+
+    authority = ConversationAuthority(
+        lambda: bundle,
+        environment="test",
+        operations_tenant_id=TENANT_ID,
+        tester_policy=InternalTesterPolicy(lambda: bundle, "test"),
+    )
+    actor = ActorContext(PROCESSING_PERSON_ID, uuid4(), TENANT_ID)
+    intent = IntakeIntent(
+        source_sha256=SOURCE_SHA,
+        source_bytes=1,
+        content_type="audio/mpeg",
+        duration_ms=1_000,
+        purpose="internal_analysis",
+    )
+
+    await authority.admit_upload(_Application(), actor, intent)
 
 
 def test_policy_expiry_and_stage_configuration_are_bound() -> None:

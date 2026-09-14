@@ -17,6 +17,7 @@ export type Allowance = {
   allowance_seconds: number;
   committed_seconds: number;
   available_seconds: number;
+  unlimited?: true;
 };
 export type UploadPolicy = {
   policy_sha256: string;
@@ -199,9 +200,14 @@ export function parseAllowance(value: unknown): Allowance {
   const allowance_seconds = integer(item.allowance_seconds, 6000),
     committed_seconds = integer(item.committed_seconds, 2147483647),
     available_seconds = integer(item.available_seconds, 6000);
-  if (available_seconds !== Math.max(0, allowance_seconds - committed_seconds))
+  const unlimited = item.unlimited === true;
+  if (item.unlimited !== undefined && item.unlimited !== true && item.unlimited !== false)
     throw new ReportContractError("acquisition_allowance");
-  return { allowance_seconds, committed_seconds, available_seconds };
+  if (!unlimited && available_seconds !== Math.max(0, allowance_seconds - committed_seconds))
+    throw new ReportContractError("acquisition_allowance");
+  return unlimited
+    ? { allowance_seconds, committed_seconds, available_seconds, unlimited: true }
+    : { allowance_seconds, committed_seconds, available_seconds };
 }
 export function parsePolicy(value: unknown): UploadPolicy {
   const item = record(value);

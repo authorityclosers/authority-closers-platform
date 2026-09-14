@@ -306,7 +306,12 @@ def install_submission_http(
         # open during network streaming or isolated native decoding.
         async with asynccontextmanager(current_owner)(request) as owner:
             allowance = await owner.ownership.sessions.allowance(**owner.arguments)
-            if allowance["available_seconds"] <= 0:
+            available_seconds = allowance["available_seconds"]
+            if (
+                not allowance.get("unlimited")
+                and isinstance(available_seconds, int)
+                and available_seconds <= 0
+            ):
                 try:
                     existing = await owner.ownership.require_submission_owner(
                         submission_id, **owner.arguments

@@ -8,6 +8,7 @@ must match the current admin registry. Quote issuance never accepts the quote.
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import datetime
 from typing import Any, cast
 from uuid import UUID, uuid4
@@ -42,6 +43,7 @@ from ac_platform.conversation_intelligence.inference import (
     ServicePlan,
     binding_for,
 )
+from ac_platform.conversation_intelligence.internal_tester import InternalTesterPolicy
 from ac_platform.conversation_intelligence.models import (
     ConversationBudgetAccount,
     ConversationInferenceTask,
@@ -77,12 +79,18 @@ ApprovalLoader = Callable[[], HostedApprovalBundle]
 
 class ConversationAuthority:
     def __init__(
-        self, loader: ApprovalLoader, *, environment: str, operations_tenant_id: UUID
+        self,
+        loader: ApprovalLoader,
+        *,
+        environment: str,
+        operations_tenant_id: UUID,
+        tester_policy: InternalTesterPolicy | None = None,
     ) -> None:
         if not isinstance(operations_tenant_id, UUID):
             raise ValueError("hosted_operations_tenant_required")
         self.loader, self.environment = loader, environment
         self.operations_tenant_id = operations_tenant_id
+        self.tester_policy = tester_policy
 
     def current(self, now: datetime) -> HostedApprovalBundle:
         try:
@@ -127,7 +135,21 @@ class ConversationAuthority:
         self, app: ConversationApplication, actor: ConversationActor
     ) -> HostedApprovalBundle:
         bundle = self.current(await app.admit(actor))
-        self.recipient(bundle, actor)
+        if isinstance(actor, ProcessingActor) or any(
+            item.tenant_id == actor.tenant_id and item.person_id == actor.person_id
+            for item in bundle.allowances
+        ):
+            self.recipient(bundle, actor)
+        else:
+            tester = (
+                None
+                if self.tester_policy is None
+                else await self.tester_policy.for_actor(
+                    app.database, actor, "account_minutes", bundle=bundle
+                )
+            )
+            if tester is None:
+                raise ConversationDenied("This account has no approved processing allowance.")
         return bundle
 
     async def require_execution_enabled(self, app: ConversationApplication) -> None:
@@ -194,11 +216,21 @@ class ConversationAuthority:
             # needs to exist so a later paid provider plan can reserve against
             # its approved project cap.
             return
-        approval = next(
-            item
-            for item in bundle.allowances
-            if (item.tenant_id, item.person_id) == (actor.tenant_id, actor.person_id)
+        tester = (
+            None
+            if self.tester_policy is None
+            else await self.tester_policy.for_actor(db, actor, "account_minutes", bundle=bundle)
         )
+        approval = next(
+            (
+                item
+                for item in bundle.allowances
+                if (item.tenant_id, item.person_id) == (actor.tenant_id, actor.person_id)
+            ),
+            None,
+        )
+        if approval is None and tester is None:
+            raise ConversationDenied("This account has no approved processing allowance.")
         row = await db.scalar(
             select(ConversationMinuteAccount)
             .where(
@@ -213,19 +245,26 @@ class ConversationAuthority:
             if row is None
             else MinuteAccount.from_dict(row.snapshot)
         )
-        grant = MinuteGrant(
-            str(actor.tenant_id),
-            str(actor.person_id),
-            str(approval.id),
-            approval.seconds,
-            approval.authorization_ref,
-            str(approval.granted_by),
-            approval.reason,
-        )
-        try:
-            after = grant_minutes(before, grant)
-        except ValueError:
-            raise ConversationConflict("The immutable allowance approval changed.") from None
+        if tester is not None:
+            after = replace(before, unlimited=True)
+        else:
+            assert approval is not None
+            grant = MinuteGrant(
+                str(actor.tenant_id),
+                str(actor.person_id),
+                str(approval.id),
+                approval.seconds,
+                approval.authorization_ref,
+                str(approval.granted_by),
+                approval.reason,
+            )
+            try:
+                # A tester approval can be revoked or superseded by a finite
+                # allowance.  Do not let the old derived flag survive that
+                # transition and silently keep bypassing the finite grant.
+                after = grant_minutes(replace(before, unlimited=False), grant)
+            except ValueError:
+                raise ConversationConflict("The immutable allowance approval changed.") from None
         if row is None:
             db.add(
                 ConversationMinuteAccount(
@@ -238,15 +277,26 @@ class ConversationAuthority:
         elif after != before:
             row.snapshot, row.revision = after.as_dict(), row.revision + 1
         await db.flush()
-        intent = grant.as_dict()
-        key = f"hosted-allowance:{approval.id}"
+        if tester is not None:
+            intent = {
+                "tester_approval_id": str(tester.id),
+                "scope": "account_minutes",
+                "policy_digest": bundle.digest,
+            }
+            key = f"hosted-tester-allowance:{tester.id}"
+            result_id = tester.id
+        else:
+            assert approval is not None
+            intent = grant.as_dict()
+            key = f"hosted-allowance:{approval.id}"
+            result_id = approval.id
         if await app._replay(actor, key, "allowance_claimed", intent) is None:
             await app._receipt(
                 actor,
                 key,
                 "allowance_claimed",
                 intent,
-                approval.id,
+                result_id,
                 app.clock(),
                 resource_type="conversation_minute_account",
             )
@@ -269,15 +319,37 @@ class ConversationAuthority:
             max_recordings = policy.max_recordings
             max_source_bytes = policy.max_source_bytes
             max_stored_source_bytes = policy.max_stored_source_bytes
+            tester = None
         else:
             approval = next(
-                item
-                for item in bundle.allowances
-                if (item.tenant_id, item.person_id) == (actor.tenant_id, actor.person_id)
+                (
+                    item
+                    for item in bundle.allowances
+                    if (item.tenant_id, item.person_id) == (actor.tenant_id, actor.person_id)
+                ),
+                None,
             )
-            max_recordings = approval.max_recordings
-            max_source_bytes = approval.max_source_bytes
-            max_stored_source_bytes = approval.max_stored_source_bytes
+            tester = (
+                None
+                if self.tester_policy is None
+                else await self.tester_policy.for_actor(
+                    app.database, actor, "analysis_count", bundle=bundle
+                )
+            )
+            if approval is None:
+                if tester is None:
+                    raise ConversationDenied("This account has no approved processing allowance.")
+                max_recordings = None
+                max_source_bytes = MAX_AUDIO_BYTES
+                max_stored_source_bytes = bundle.max_stored_source_bytes
+            else:
+                # A named tester's analysis_count scope bypasses the finite
+                # recording count even when a legacy allowance is also bound
+                # to the same account.  Keep that allowance's byte/storage
+                # caps and all provider checks below.
+                max_recordings = None if tester is not None else approval.max_recordings
+                max_source_bytes = approval.max_source_bytes
+                max_stored_source_bytes = approval.max_stored_source_bytes
         # Reserve space by counting the immutable source-size registration in
         # the same transaction. Awaiting/deleting records still consume capacity.
         # This conservative global count protects a shared root across tenants.
@@ -305,7 +377,7 @@ class ConversationAuthority:
         ).one()
         if (
             intent.source_bytes > max_source_bytes
-            or count >= max_recordings
+            or (max_recordings is not None and count >= max_recordings)
             or owner_bytes + intent.source_bytes > max_stored_source_bytes
             or int(total or 0) + intent.source_bytes > bundle.max_stored_source_bytes
         ):
@@ -326,7 +398,23 @@ class ConversationAuthority:
             operations_tenant_id=self.operations_tenant_id,
         )
         bundle = self.current(now)
-        self.recipient(bundle, actor)
+        # Named testers may bypass the finite account allowance and recording
+        # count, but they still need a current identity and the exact stage,
+        # route, provider budget, and source permissions below.  Keep the
+        # ordinary recipient check for every other actor.
+        if (
+            isinstance(actor, ProcessingActor)
+            or any(
+                item.tenant_id == actor.tenant_id and item.person_id == actor.person_id
+                for item in bundle.allowances
+            )
+            or self.tester_policy is None
+            or await self.tester_policy.for_actor(
+                app.database, actor, "analysis_count", bundle=bundle
+            )
+            is None
+        ):
+            self.recipient(bundle, actor)
         approved_default_configuration_sha256 = self._approved_default_configuration_sha256(
             bundle,
             actor,

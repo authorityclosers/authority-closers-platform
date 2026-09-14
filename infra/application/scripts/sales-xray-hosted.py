@@ -330,8 +330,12 @@ def _validate_service_mode(
     if bootstrap_only:
         if providers:
             raise _fail("bootstrap service must not configure providers")
-        if approval.get("allowances") != [] or approval.get("stages") != []:
-            raise _fail("bootstrap approval must have empty allowances and stages")
+        if (
+            approval.get("allowances") != []
+            or approval.get("internal_tester_accounts") != []
+            or approval.get("stages") != []
+        ):
+            raise _fail("bootstrap approval must have empty allowances, testers and stages")
         if policy is not None:
             raise _fail("bootstrap approval must not contain an acquisition policy")
         if approval.get("budget_cap_paise", 0) != 0:

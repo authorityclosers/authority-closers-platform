@@ -119,6 +119,7 @@ export function remainingAllowanceLabel(
   unknown: boolean,
 ): string {
   if (allowance) {
+    if (allowance.unlimited) return "Unlimited testing";
     const minutes = Math.floor(allowance.available_seconds / 60);
     const remainder = String(allowance.available_seconds % 60).padStart(2, "0");
     return allowance.available_seconds === 0
@@ -1155,7 +1156,7 @@ export function AcquisitionStudio({
                       !consent ||
                       (!session && !token) ||
                       !!busy ||
-                      allowance?.available_seconds === 0
+                      (allowance?.available_seconds === 0 && !allowance?.unlimited)
                     }
                     onClick={() => void upload()}
                   >

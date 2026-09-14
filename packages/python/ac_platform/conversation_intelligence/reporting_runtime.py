@@ -52,6 +52,7 @@ def validate_bootstrap_approval(bundle: HostedApprovalBundle) -> None:
 
     if (
         bundle.allowances
+        or bundle.internal_tester_accounts
         or bundle.stages
         or bundle.acquisition_policy is not None
         or bundle.budget_cap_paise != 0

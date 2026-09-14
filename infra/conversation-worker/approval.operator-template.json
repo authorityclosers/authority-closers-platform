@@ -13,5 +13,6 @@
   "retention_days": "REPLACE_WITH_APPROVED_INTEGER_1_TO_7",
   "max_stored_source_bytes": "REPLACE_WITH_APPROVED_INTEGER_STORAGE_CAP",
   "allowances": [],
+  "internal_tester_accounts": [],
   "stages": []
 }

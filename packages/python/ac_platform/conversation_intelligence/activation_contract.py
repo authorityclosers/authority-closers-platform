@@ -37,6 +37,7 @@ HOSTED_APPROVAL_SCHEMA: Literal["ac.sales-xray.hosted-approval/1"] = (
 MAX_APPROVAL_BUNDLE_BYTES = 512 * 1024
 MAX_ALLOWANCES = 64
 MAX_STAGES = 192
+MAX_INTERNAL_TESTER_ACCOUNTS = 8
 ACQUISITION_POLICY_SCHEMA: Literal["ac.sales-xray.acquisition-provider-policy/1"] = (
     "ac.sales-xray.acquisition-provider-policy/1"
 )
@@ -51,6 +52,7 @@ _SENSITIVE = re.compile(
     r"(?:bearer|basic)\s+\S+|(?:api[_-]?key|token|password|secret)\s*[:=])",
     re.IGNORECASE,
 )
+_EMAIL = re.compile(r"^[^@\s]{1,254}@[^@\s]{1,254}$")
 
 
 class ActivationContractError(ValueError):
@@ -119,6 +121,42 @@ class AllowanceApproval(_StrictFrozenModel):
     def validate_capacity_bounds(self) -> Self:
         if self.max_source_bytes > self.max_stored_source_bytes:
             raise ValueError("allowance_source_bytes_exceed_stored_cap")
+        return self
+
+
+class InternalTesterApproval(_StrictFrozenModel):
+    """One exact, release-approved human tester exemption.
+
+    This is deliberately separate from provider and minute allowances.  The
+    identity is re-resolved from the current verified Person record before a
+    scope is applied; the approval itself only travels in the hash-pinned
+    hosted release bundle.
+    """
+
+    id: UUID
+    email: str = Field(min_length=3, max_length=320)
+    authorization_ref: str = Field(min_length=6, max_length=256)
+    scopes: tuple[Literal["account_minutes", "analysis_count", "ip_session_issuance"], ...] = Field(
+        min_length=1, max_length=3
+    )
+    reason: Literal["Approved internal tester exemption"]
+
+    _authorization_ref = field_validator("authorization_ref")(_validate_reference)
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        normalized = value.strip().casefold()
+        if _EMAIL.fullmatch(normalized) is None:
+            raise ValueError("internal_tester_email_invalid")
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_scopes(self) -> Self:
+        if len(set(self.scopes)) != len(self.scopes):
+            raise ValueError("duplicate_internal_tester_scope")
+        if tuple(sorted(self.scopes)) != self.scopes:
+            raise ValueError("internal_tester_scopes_unordered")
         return self
 
 
@@ -475,6 +513,9 @@ class HostedApprovalBundle(_StrictFrozenModel):
     max_stored_source_bytes: StrictInt = Field(ge=1, le=34_359_738_368)
     allowances: tuple[AllowanceApproval, ...] = Field(max_length=MAX_ALLOWANCES)
     stages: tuple[StageApproval, ...] = Field(max_length=MAX_STAGES)
+    internal_tester_accounts: tuple[InternalTesterApproval, ...] = Field(
+        default=(), max_length=MAX_INTERNAL_TESTER_ACCOUNTS
+    )
     acquisition_policy: AcquisitionProviderPolicy | None = None
 
     _deployment_ref = field_validator("deployment_ref")(_validate_reference)
@@ -495,6 +536,13 @@ class HostedApprovalBundle(_StrictFrozenModel):
         approval_ids = [approval.id for approval in approvals]
         if len(approval_ids) != len(set(approval_ids)):
             raise ValueError("duplicate_approval_id")
+
+        tester_ids = [approval.id for approval in self.internal_tester_accounts]
+        if len(tester_ids) != len(set(tester_ids)) or set(tester_ids) & set(approval_ids):
+            raise ValueError("duplicate_approval_id")
+        tester_emails = [approval.email for approval in self.internal_tester_accounts]
+        if len(tester_emails) != len(set(tester_emails)):
+            raise ValueError("duplicate_internal_tester_email")
 
         allowance_recipients = [
             (approval.tenant_id, approval.person_id) for approval in self.allowances
@@ -597,6 +645,10 @@ class HostedApprovalBundle(_StrictFrozenModel):
             # The optional field is omitted when empty so an existing /1
             # bundle keeps its exact canonical bytes and digest.
             value["acquisition_policy"].pop("profiles", None)
+        if not self.internal_tester_accounts:
+            # Existing /1 artifacts retain byte-for-byte canonical form until
+            # an operator explicitly issues a tester exemption approval.
+            value.pop("internal_tester_accounts", None)
         for stage in value["stages"]:
             if stage.get("max_cost_paise") == 0:
                 stage.pop("max_cost_paise", None)
@@ -705,6 +757,8 @@ __all__ = [
     "AllowanceApproval",
     "HOSTED_APPROVAL_SCHEMA",
     "HostedApprovalBundle",
+    "InternalTesterApproval",
+    "MAX_INTERNAL_TESTER_ACCOUNTS",
     "MAX_APPROVAL_BUNDLE_BYTES",
     "MAX_ALLOWANCES",
     "MAX_STAGES",
