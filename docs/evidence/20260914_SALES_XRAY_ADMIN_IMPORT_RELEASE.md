@@ -52,3 +52,12 @@ configuration details, and partial guest report previews with account unlock.
 These changes require the actual mounted UI and server projection to agree;
 hidden report content must never be sent and merely obscured by CSS. API keys,
 private call payloads and immutable operational receipts stay outside Git.
+
+The source-owned upload notice now describes the complete transcription and
+coaching journey, the once-per-recording free allowance use, bounded retention
+and email deletion request. Its content hash changes with the revised notice;
+old upload terms cannot silently admit a new upload. This does not dispatch a
+provider from the intake transaction: a separate exact plan acceptance still
+supplies its fingerprint, expiry, privacy revision and budget checks. Focused
+upload-policy regression and Ruff passed. The matching UI must carry consent
+only for its current selected submission, never a restored or different file.

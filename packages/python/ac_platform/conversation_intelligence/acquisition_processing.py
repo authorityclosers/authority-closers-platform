@@ -28,13 +28,15 @@ def upload_policy(policy: IntakePolicy) -> dict[str, Any]:
         "maximum_call_seconds": 1800,
         "max_cost_paise": 0,
         "retention_days": policy.retention_days,
-        "title": "Upload and measure your call privately",
+        "title": "Upload your call and get your report",
         "description": (
-            "Upload only a call you have permission to analyse. AC verifies its length "
-            "and uses that many seconds of your displayed free allowance once. "
-            f"Your original recording stays private for up to {policy.retention_days} days, "
-            "or until you delete it. This step costs ₹0 and does not send audio to an AI "
-            "provider. You will see and approve the separate provider plan before transcription."
+            "Upload only a call you have permission to analyse. AC checks its length, "
+            "then uses its AI service providers to transcribe the recording and prepare "
+            "your coaching report. The call uses its length from your displayed free "
+            "allowance once; you will not be charged a payment. "
+            f"Your recording and report stay private for up to {policy.retention_days} days. "
+            "You can request deletion at admin@authorityclosers.com. "
+            "Review the privacy details before starting your analysis."
         ),
     }
     return {**view, "policy_sha256": content_hash(view)}
@@ -67,8 +69,9 @@ class AcquisitionProcessing:
             processing, upload.intent, key=f"acquisition-intake:{upload.source.submission_id}"
         )
         # The explicit upload action accepted this policy for these original
-        # bytes. Provider quote/plan consent is a separate HTTP action and is
-        # never accepted here. Both receipts stay bound to the measured source.
+        # bytes. The UI can carry this upload's affirmative processing choice
+        # into a separate exact provider-plan acceptance action. That action is
+        # never accepted here; both receipts stay bound to the measured source.
         consent_key = f"acquisition-consent:{upload.source.submission_id}"
         consent_action = "acquisition_private_upload_consent"
         consent = {
