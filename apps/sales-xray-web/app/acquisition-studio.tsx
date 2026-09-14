@@ -102,7 +102,7 @@ function ProcessingSignal({ paused }: { paused: boolean }) {
 }
 const message = (error: unknown) =>
   error instanceof AcquisitionError
-    ? error.message
+    ? error
     : "This result could not be verified. Try again; your completed work stays saved.";
 
 export function remainingAllowanceLabel(
@@ -143,7 +143,7 @@ export function AcquisitionStudio() {
   const [planExpired, setPlanExpired] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
   const [busy, setBusy] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState<string | AcquisitionError>("");
   const [attempt, setAttempt] = useState(0);
   const [pollAttempt, setPollAttempt] = useState(0);
   const [moment, setMoment] = useState<ReportEvidence | null>(null);
@@ -1138,7 +1138,7 @@ export function AcquisitionStudio() {
         </div>
         {error && (
           <div className={`notice error ${styles.error}`} role="alert">
-            <p>{error}</p>
+            <p>{error instanceof AcquisitionError ? error.message : error}</p>
             <div className={styles.errorActions}>
               <button
                 className="secondary-button"
@@ -1162,9 +1162,11 @@ export function AcquisitionStudio() {
                   Request a fresh plan
                 </button>
               )}
-              <Link className="text-button" href="/login">
-                Sign in
-              </Link>
+              {error instanceof AcquisitionError && error.status === 401 && (
+                <Link className="text-button" href="/login">
+                  Sign in
+                </Link>
+              )}
             </div>
           </div>
         )}

@@ -37,6 +37,7 @@ let existing: boolean,
   deletionDenied: boolean;
 let reportBody: unknown;
 let progressOverride: unknown;
+let planFailure: { status: number; body: unknown } | null;
 const response = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value), {
     status,
@@ -97,6 +98,7 @@ beforeEach(() => {
   deletionDenied = false;
   reportBody = envelope;
   progressOverride = undefined;
+  planFailure = null;
   localStorage.clear();
   container = document.createElement("div");
   document.body.append(container);
@@ -151,6 +153,7 @@ beforeEach(() => {
             );
       if (path.endsWith("/plan/quote")) return response(plan, 201);
       if (path.endsWith("/plan")) {
+        if (planFailure) return response(planFailure.body, planFailure.status);
         accepted = true;
         return response(
           { ...plan, accepted: true, state: "active", current_stage: "C2" },
@@ -265,6 +268,64 @@ it("the actual page requires both consents, then shows the fourteen-point report
   await click("Transcript & moments");
   expect(container.textContent).toContain("कल timing discuss करूया.");
 });
+
+it.each([
+  [
+    403,
+    { detail: "This recording's approved provider allowance is used." },
+    "approved analysis allowance has been used",
+  ],
+  [
+    403,
+    { detail: "private-provider-context" },
+    "Analysis approval is unavailable",
+  ],
+  [401, { detail: "private-provider-context" }, "Sign in again"],
+])(
+  "preserves the uploaded call after plan denial %s %# and offers the right recovery",
+  async (status, body, expected) => {
+    planFailure = { status, body };
+    await mount();
+    await select();
+    await consent();
+    await click("Complete upload check");
+    await click("Upload my call");
+    await consent();
+    await click("Analyse my call");
+    const alert = container.querySelector('[role="alert"]')!;
+    expect(alert.textContent).toContain(expected);
+    expect(alert.textContent).not.toContain("private-provider-context");
+    expect(alert.querySelector('a[href="/login"]') !== null).toBe(
+      status === 401,
+    );
+    if (status === 403) expect(alert.textContent).not.toContain("Sign in");
+    expect(container.textContent).toContain(
+      "Remaining analysis time · 99m 55s",
+    );
+    expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
+    expect(container.querySelector("audio")?.getAttribute("src")).toContain(
+      submissionId,
+    );
+    expect(
+      container.querySelector('[aria-label="Sales call report"]'),
+    ).toBeNull();
+    const mutations = () =>
+      calls.filter(({ init }) =>
+        ["POST", "PUT", "DELETE"].includes(init.method ?? ""),
+      );
+    const before = mutations().length;
+    await act(async () => vi.advanceTimersByTimeAsync(12000));
+    await flush();
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+      expected,
+    );
+    await click("Check again");
+    expect(mutations()).toHaveLength(before);
+    expect(calls.filter(({ path }) => path.endsWith("/plan"))).toHaveLength(1);
+    expect(calls.filter(({ init }) => init.method === "PUT")).toHaveLength(1);
+    expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
+  },
+);
 
 it("shows the advertised trial allowance for a clean visitor", async () => {
   await mount();

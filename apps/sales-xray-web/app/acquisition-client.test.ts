@@ -1,6 +1,8 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { parseAcquisitionReport, parseTranscript } from "./report-contract";
 import {
+  acquisition,
+  AcquisitionError,
   parseAllowance,
   parseEntry,
   parsePolicy,
@@ -20,7 +22,97 @@ import {
   transcript,
 } from "../tests/acquisition-fixture";
 
-afterEach(() => localStorage.clear());
+afterEach(() => {
+  localStorage.clear();
+  vi.unstubAllGlobals();
+});
+describe("acquisition permission recovery", () => {
+  const path = `/submissions/${submissionId}/plan`;
+  const allowanceDetail =
+    "This recording's approved provider allowance is used.";
+
+  it("keeps sign-in recovery specific to 401", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(new Response("", { status: 401 })),
+    );
+    await expect(acquisition(path)).rejects.toMatchObject({
+      status: 401,
+      message: expect.stringContaining("Sign in again"),
+    });
+  });
+
+  it.each(["", "/quote"])(
+    "translates the exact plan%s allowance denial",
+    async (suffix) => {
+      const fetch = vi
+        .fn()
+        .mockResolvedValue(
+          new Response(JSON.stringify({ detail: allowanceDetail }), {
+            status: 403,
+          }),
+        );
+      vi.stubGlobal("fetch", fetch);
+      await expect(
+        acquisition(path + suffix, { method: "POST" }),
+      ).rejects.toMatchObject({
+        status: 403,
+        message: expect.stringContaining(
+          "approved analysis allowance has been used",
+        ),
+      });
+      expect(fetch).toHaveBeenCalledOnce();
+      expect(fetch).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          credentials: "same-origin",
+          cache: "no-store",
+          redirect: "error",
+          method: "POST",
+        }),
+      );
+    },
+  );
+
+  it.each([
+    JSON.stringify({ detail: "private-provider-context" }),
+    JSON.stringify({ detail: `${allowanceDetail} private-provider-context` }),
+    JSON.stringify([{ detail: allowanceDetail }]),
+    "<html>private-provider-context</html>",
+    "null",
+  ])(
+    "uses controlled plan copy for an unknown or malformed denial %#",
+    async (body) => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue(new Response(body, { status: 403 })),
+      );
+      await expect(acquisition(path)).rejects.toMatchObject({
+        status: 403,
+        message: new AcquisitionError(403, "plan_permission").message,
+      });
+    },
+  );
+
+  it("does not infer an allowance denial outside the plan endpoints", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(JSON.stringify({ detail: allowanceDetail }), {
+            status: 403,
+          }),
+        ),
+    );
+    await expect(
+      acquisition(`/submissions/${submissionId}`),
+    ).rejects.toMatchObject({
+      status: 403,
+      message: new AcquisitionError(403).message,
+    });
+  });
+});
 describe("acquisition source-bound presentation", () => {
   it("preserves the full overview and mixed-script evidence through the v2 projection", () => {
     const parsed = parseAcquisitionReport(
