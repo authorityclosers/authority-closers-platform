@@ -773,7 +773,9 @@ class AdminConversationRecordings:
             provider_stages = [
                 _provider_stage_view(
                     candidate,
-                    jobs_by_id.get(getattr(candidate, "job_id", None)),
+                    jobs_by_id.get(job_id)
+                    if isinstance(job_id := getattr(candidate, "job_id", None), UUID)
+                    else None,
                     duration_ms=duration_ms,
                 )
                 for candidate in sorted(
