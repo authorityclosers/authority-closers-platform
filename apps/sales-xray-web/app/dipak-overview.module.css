@@ -487,7 +487,7 @@
   outline-offset: 4px;
   box-shadow: 0 0 0 5px rgba(49, 80, 200, 0.12);
 }
-@media (prefers-reduced-motion: no-preference) {
+@media screen and (prefers-reduced-motion: no-preference) {
   .block {
     animation: overview-rise 360ms ease both;
   }
@@ -580,7 +580,8 @@
   }
 }
 @media print {
-  .shortcuts {
+  .shortcuts,
+  .expand {
     display: none;
   }
   .block {

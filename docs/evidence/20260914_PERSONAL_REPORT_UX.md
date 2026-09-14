@@ -80,6 +80,23 @@ CSS-only follow-up to the integrated 133-test UI run and 17-test layout follow-u
 Use the viewport screenshots for visual review: this in-app browser's full-page
 captures showed repeated paint regions despite single matching DOM nodes.
 
+## Chrome PDF export follow-up
+
+Chrome's actual PDF export reproduced a different defect: opening collapsed
+overview sections for printing started their fade-in animations, so their text
+was captured while transparent. Restricting these animations to screen media
+fixes the exported content; print also hides the accordion expansion icon.
+The optimized build passed (`build-print-final.log`). The regenerated seven-page
+PDF is 199,867 bytes. All pages were rendered with Poppler and visually inspected;
+text extraction confirms the golden-moment, missed-opportunity, practice and final
+verdict bodies are present. Overview folds return to their prior closed state.
+
+Receipts in the same audit directory: `synthetic-report-chrome-final.pdf`,
+`pdf-final-contact-sheet.png`, `pdf-export-final-receipt.json`. The earlier broken
+PDF is retained for reproduction. This verifies a local synthetic report export,
+not provider report quality or hosted user authorization. Full transcripts remain
+excluded by the existing transcript print policy; source evidence quotes print.
+
 The owner also requested visible remaining minutes and a cost analysis for
 100 students within INR10,000. Quota/identity/abuse enforcement is being checked
 separately against current source and runtime evidence. This note does not change
