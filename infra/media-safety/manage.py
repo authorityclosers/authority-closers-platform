@@ -40,7 +40,9 @@ DOCKER_HOST = "unix:///var/run/docker.sock"
 DIGEST = "sha256:5a7c486fc98339860373284f48a670b74b1f25f15812b327fbe5b684061cf42f"
 IMAGE = f"clamav/clamav@{DIGEST}"
 PREFIX = "infra/media-safety/"
-FILES = {"manage.py", "compose.yaml", "clamd.conf", "freshclam.conf"}
+ENTRYPOINT_FILE = "entrypoint.sh"
+ENTRYPOINT_DESTINATION = "/usr/local/bin/ac-media-safety-entrypoint"
+FILES = {"manage.py", "compose.yaml", "clamd.conf", "freshclam.conf", ENTRYPOINT_FILE}
 MIB = 1024 * 1024
 HEALTH_COMMAND = "echo PING | nc 127.0.0.1 3310 | grep -qx PONG"
 HEALTH_TEST = ["CMD-SHELL", HEALTH_COMMAND]
@@ -49,16 +51,19 @@ LEGACY_HEALTH_TEST = ["CMD", "clamdcheck.sh"]
 # It may be validated only as a named transition source or emergency rollback
 # target; it can never mint a new readiness proof under this controller.
 LEGACY_HEALTH_RELEASES = frozenset({"3eb24da05caced66f15dcfe58ffc086014da8b0d"})
+LEGACY_FILES = FILES - {ENTRYPOINT_FILE}
 HEALTH_TIMEOUT_SECONDS = 7 * 60
 HEALTH_POLL_SECONDS = 2
 EXPECTED_BIND_DESTINATIONS = {
     "/etc/clamav/clamd.conf",
     "/etc/clamav/freshclam.conf",
+    ENTRYPOINT_DESTINATION,
     "/var/lib/clamav",
     "/run/ac-media-safety",
     "/var/lib/ac-media-safety-tmp",
 }
 LEGACY_BIND_DESTINATIONS = EXPECTED_BIND_DESTINATIONS - {
+    ENTRYPOINT_DESTINATION,
     "/run/ac-media-safety",
     "/var/lib/ac-media-safety-tmp",
 }
@@ -90,6 +95,12 @@ def sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def release_files(release: str) -> set[str]:
+    """Return the exact archive shape for a current or named legacy release."""
+
+    return LEGACY_FILES if release in LEGACY_HEALTH_RELEASES else FILES
+
+
 def archive_files(raw: bytes, release: str, checksum: str) -> dict[str, bytes]:
     require(bool(re.fullmatch(r"[0-9a-f]{40}", release)), "Invalid release identity")
     require(bool(re.fullmatch(r"[0-9a-f]{64}", checksum)), "Invalid archive checksum")
@@ -106,13 +117,16 @@ def archive_files(raw: bytes, release: str, checksum: str) -> dict[str, bytes]:
                 continue
             require(member.isfile() and member.name.startswith(PREFIX), "Unsafe archive member")
             name = member.name.removeprefix(PREFIX)
-            require(name in FILES and name not in result, "Unexpected or duplicate archive file")
+            require(
+                name in release_files(release) and name not in result,
+                "Unexpected or duplicate archive file",
+            )
             require(0 < member.size <= MIB, "Archive member size")
             stream = archive.extractfile(member)
             assert stream is not None
             result[name] = stream.read(MIB + 1)
         require(archive.pax_headers.get("comment") == release, "Not the named Git archive")
-    require(set(result) == FILES, "Incomplete scanner release")
+    require(set(result) == release_files(release), "Incomplete scanner release")
     return result
 
 
@@ -184,8 +198,15 @@ def validate_container(
     verify_running_mounts: bool = True,
 ) -> None:
     require(value["Config"]["Image"] == IMAGE, "Unexpected scanner image")
+    legacy_entrypoint = allow_legacy_health and release in LEGACY_HEALTH_RELEASES
     require(
-        value["Config"]["Entrypoint"] == ["/init-unprivileged"] and not value["Config"]["Cmd"],
+        value["Config"]["Entrypoint"]
+        == (
+            ["/init-unprivileged"]
+            if legacy_entrypoint
+            else ["/bin/sh", ENTRYPOINT_DESTINATION]
+        )
+        and not value["Config"]["Cmd"],
         "Scanner command drift",
     )
     environment = dict(item.split("=", 1) for item in value["Config"]["Env"])
@@ -267,6 +288,8 @@ def validate_container(
         if socket_required
         else LEGACY_BIND_DESTINATIONS
     )
+    if legacy_entrypoint:
+        expected_mounts = expected_mounts - {ENTRYPOINT_DESTINATION}
     require(
         set(mounts) == expected_mounts,
         "Unexpected scanner mounts",
@@ -297,6 +320,20 @@ def validate_container(
                 run("docker", "exec", CONTAINER, "sha256sum", f"/etc/clamav/{name}").split()[0]
                 == sha((installed / name).read_bytes()),
                 "Running config mismatch",
+            )
+    if not legacy_entrypoint:
+        entrypoint_mount = mounts[ENTRYPOINT_DESTINATION]
+        require(
+            entrypoint_mount.get("Type") == "bind"
+            and entrypoint_mount.get("Source") == str(installed / ENTRYPOINT_FILE)
+            and entrypoint_mount.get("RW") is False,
+            "Scanner entrypoint mount drift",
+        )
+        if verify_running_mounts:
+            require(
+                run("docker", "exec", CONTAINER, "sha256sum", ENTRYPOINT_DESTINATION).split()[0]
+                == sha((installed / ENTRYPOINT_FILE).read_bytes()),
+                "Running entrypoint mismatch",
             )
     database_mount = mounts["/var/lib/clamav"]
     require(
@@ -700,7 +737,10 @@ def validate_installed_release(release: str, checksum: str) -> tuple[Path, dict[
     files = archive_files(raw, release, checksum)
     installed = ROOT / "releases" / release
     trusted(installed, immutable=True)
-    require({path.name for path in installed.iterdir()} == FILES, "Release file drift")
+    require(
+        {path.name for path in installed.iterdir()} == release_files(release),
+        "Release file drift",
+    )
     for name, body in files.items():
         target = installed / name
         trusted(target, directory=False, immutable=True)
@@ -910,7 +950,10 @@ def main() -> None:
                 target.chmod(0o444)
             installed.chmod(0o555)
         trusted(installed, immutable=True)
-        require({path.name for path in installed.iterdir()} == FILES, "Release file drift")
+        require(
+            {path.name for path in installed.iterdir()} == release_files(args.release),
+            "Release file drift",
+        )
         for name, body in files.items():
             target = installed / name
             trusted(target, directory=False, immutable=True)

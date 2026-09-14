@@ -70,7 +70,7 @@ def _archive(
 def _installed(tmp_path: Path, name: str = "release") -> Path:
     installed = tmp_path / name
     installed.mkdir()
-    for name in ("clamd.conf", "compose.yaml", "freshclam.conf"):
+    for name in ("clamd.conf", "compose.yaml", "freshclam.conf", "entrypoint.sh"):
         (installed / name).write_bytes((SAFETY / name).read_bytes())
     return installed
 
@@ -80,7 +80,7 @@ def _container(module: ModuleType, installed: Path) -> dict:
         "Id": "container-id",
         "Config": {
             "Image": module.IMAGE,
-            "Entrypoint": ["/init-unprivileged"],
+            "Entrypoint": ["/bin/sh", module.ENTRYPOINT_DESTINATION],
             "Cmd": [],
             "Env": [
                 "CLAMAV_NO_MILTERD=true",
@@ -130,6 +130,12 @@ def _container(module: ModuleType, installed: Path) -> dict:
             },
             {
                 "Type": "bind",
+                "Source": str(installed / "entrypoint.sh"),
+                "Destination": module.ENTRYPOINT_DESTINATION,
+                "RW": False,
+            },
+            {
+                "Type": "bind",
                 "Source": str(module.DATABASE),
                 "Destination": "/var/lib/clamav",
                 "RW": True,
@@ -155,6 +161,8 @@ def _hash_command(module: ModuleType, installed: Path):
     def fake_run(*command: str, **_: object) -> str:
         assert command[:3] == ("docker", "exec", module.CONTAINER)
         name = Path(command[-1]).name
+        if command[-1] == module.ENTRYPOINT_DESTINATION:
+            name = module.ENTRYPOINT_FILE
         return f"{hashlib.sha256((installed / name).read_bytes()).hexdigest()}  {command[-1]}"
 
     return fake_run
@@ -166,6 +174,21 @@ def test_archive_accepts_exact_release_and_file_set(safety_module: ModuleType) -
     assert safety_module.archive_files(raw, RELEASE, hashlib.sha256(raw).hexdigest()) == {
         name: (SAFETY / name).read_bytes() for name in safety_module.FILES
     }
+
+
+def test_archive_accepts_named_legacy_release_without_socket_bridge(
+    safety_module: ModuleType,
+) -> None:
+    legacy = next(iter(safety_module.LEGACY_HEALTH_RELEASES))
+    entries = [
+        (f"{PREFIX}{name}", (SAFETY / name).read_bytes(), "file")
+        for name in sorted(safety_module.LEGACY_FILES)
+    ]
+    raw = _archive(safety_module, entries, comment=legacy)
+
+    assert set(safety_module.archive_files(raw, legacy, hashlib.sha256(raw).hexdigest())) == (
+        safety_module.LEGACY_FILES
+    )
 
 
 @pytest.mark.parametrize(
@@ -266,6 +289,23 @@ def test_compose_healthcheck_targets_exact_ipv4_scanner(safety_module: ModuleTyp
     assert "nc 127.0.0.1 3310" in compose
     assert "test: [CMD, clamdcheck.sh]" not in compose
     assert safety_module.expected_health_test(SAFETY) == safety_module.HEALTH_TEST
+
+
+def test_entrypoint_bridges_image_socket_wait_to_shared_socket(
+    safety_module: ModuleType,
+) -> None:
+    wrapper = (SAFETY / safety_module.ENTRYPOINT_FILE).read_text(encoding="utf-8")
+    compose = (SAFETY / "compose.yaml").read_text(encoding="utf-8")
+
+    assert "rm -f /run/ac-media-safety/clamd.sock" in wrapper
+    assert "rm -f /tmp/clamd.sock" in wrapper
+    assert "ln -s /run/ac-media-safety/clamd.sock /tmp/clamd.sock" in wrapper
+    assert "exec /init-unprivileged \"$@\"" in wrapper
+    assert 'entrypoint: ["/bin/sh", "/usr/local/bin/ac-media-safety-entrypoint"]' in compose
+    assert "./entrypoint.sh:/usr/local/bin/ac-media-safety-entrypoint:ro" in compose
+    assert "LocalSocket /run/ac-media-safety/clamd.sock" in (
+        SAFETY / "clamd.conf"
+    ).read_text(encoding="utf-8")
 
 
 def test_socket_root_clears_parent_setgid_and_keeps_exact_fixed_contract(
@@ -437,8 +477,14 @@ def test_only_named_legacy_release_can_be_a_transition_source(
     container["Mounts"] = [
         item
         for item in container["Mounts"]
-        if item["Destination"] not in {"/run/ac-media-safety", "/var/lib/ac-media-safety-tmp"}
+        if item["Destination"]
+        not in {
+            safety_module.ENTRYPOINT_DESTINATION,
+            "/run/ac-media-safety",
+            "/var/lib/ac-media-safety-tmp",
+        }
     ]
+    container["Config"]["Entrypoint"] = ["/init-unprivileged"]
     container["Config"]["Labels"]["ac.release"] = legacy
     container["Config"]["Healthcheck"]["Test"] = safety_module.LEGACY_HEALTH_TEST
     monkeypatch.setattr(safety_module, "run", _hash_command(safety_module, installed))
@@ -449,10 +495,10 @@ def test_only_named_legacy_release_can_be_a_transition_source(
         installed,
         allow_legacy_health=True,
     )
-    with pytest.raises(ValueError, match="health"):
+    with pytest.raises(ValueError, match="command|health"):
         safety_module.validate_container(container, legacy, installed)
     container["Config"]["Labels"]["ac.release"] = RELEASE
-    with pytest.raises(ValueError, match="health"):
+    with pytest.raises(ValueError, match="command|health"):
         safety_module.validate_container(
             container,
             RELEASE,
