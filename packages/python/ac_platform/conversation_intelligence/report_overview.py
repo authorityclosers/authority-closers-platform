@@ -154,14 +154,27 @@ def normalize_overview(
     findings: Mapping[str, Any],
     normalize_evidence: Callable[[Any], dict[str, Any]],
 ) -> DetailedOverview:
-    """Resolve every quote through native source validation and check references."""
+    """Resolve every quote through native source validation and check references.
+
+    Some retained provider responses used one evidence object for a singular
+    citation. Accept that exact, lossless shape as a one-element collection;
+    never change its source fields or relax the final strict overview model.
+    The caller's raw response remains untouched.
+    """
+
+    evidence_fields = {"segment_id", "quote", "start_ms", "end_ms"}
+
+    def evidence_collection(value: Any) -> Any:
+        if isinstance(value, Mapping) and set(value) == evidence_fields:
+            value = [value]
+        if isinstance(value, list):
+            return [normalize_evidence(item) for item in value]
+        return walk(value)
 
     def walk(value: Any) -> Any:
         if isinstance(value, Mapping):
             return {
-                key: [normalize_evidence(item) for item in child]
-                if key == "evidence" and isinstance(child, list)
-                else walk(child)
+                key: evidence_collection(child) if key == "evidence" else walk(child)
                 for key, child in value.items()
             }
         if isinstance(value, list):
