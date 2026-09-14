@@ -233,6 +233,45 @@ describe("provider control contract", () => {
     ).toThrow("non-secret profile JSON");
   });
 
+  it("does not restore a stale import preview after text changes during digesting", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(payload()));
+    await renderPanel();
+
+    let releaseDigest: ((value: ArrayBuffer) => void) | undefined;
+    const digest = vi.spyOn(crypto.subtle, "digest").mockImplementation(
+      () =>
+        new Promise<ArrayBuffer>((resolve) => {
+          releaseDigest = resolve;
+        }),
+    );
+    const textarea = host.querySelector(
+      'textarea[aria-label="Reviewed provider configuration JSON"]',
+    ) as HTMLTextAreaElement;
+    setTextareaValue(textarea, JSON.stringify(importedConfiguration));
+
+    await act(async () => {
+      [...host.querySelectorAll("button")]
+        .find((button) => button.textContent?.includes("Check profile"))!
+        .click();
+      await Promise.resolve();
+    });
+    expect(host.textContent).toContain("Checking…");
+
+    await act(async () => {
+      setTextareaValue(textarea, "{");
+      await Promise.resolve();
+    });
+    expect(host.textContent).not.toContain("Local contract check passed");
+
+    await act(async () => {
+      releaseDigest?.(new ArrayBuffer(32));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(host.textContent).not.toContain("Local contract check passed");
+    digest.mockRestore();
+  });
+
   it("previews and saves an imported profile through the current revision", async () => {
     const saved = {
       id: "imported-registry",

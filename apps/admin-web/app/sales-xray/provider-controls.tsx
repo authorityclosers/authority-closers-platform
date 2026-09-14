@@ -832,11 +832,25 @@ export function ProviderControlsPanel() {
 
   async function readImportedFile(file: File | undefined) {
     if (!file) return;
+    const sequence = ++importSequence.current;
+    setImportBusy(true);
+    setImportError("");
+    setImportedProfile(null);
+    if (file.size > MAX_IMPORT_BYTES) {
+      setImportBusy(false);
+      setImportError(
+        "Configuration JSON is larger than the 512 KB import limit.",
+      );
+      return;
+    }
     try {
       const text = await file.text();
+      if (sequence !== importSequence.current) return;
       setImportText(text);
       await validateImportedText(text);
     } catch {
+      if (sequence !== importSequence.current) return;
+      setImportBusy(false);
       setImportedProfile(null);
       setImportError("The selected profile file could not be read.");
     }
@@ -987,7 +1001,7 @@ export function ProviderControlsPanel() {
   async function submitConfiguration(
     configuration: RegistryConfiguration,
     successMessage: string,
-    markImported = false,
+    importedDigest?: string,
   ) {
     if (state.status !== "ready" || saveState === "saving") return;
     const expectedRevision = state.current?.revision ?? 0;
@@ -1014,9 +1028,11 @@ export function ProviderControlsPanel() {
       setDraft(draftFromConfiguration(saved.configuration));
       setSaveState("saved");
       setActivationState("idle");
-      if (markImported) {
+      if (importedDigest) {
         setImportedProfile((previous) =>
-          previous ? { ...previous, savedRevision: saved.revision } : previous,
+          previous?.digest === importedDigest
+            ? { ...previous, savedRevision: saved.revision }
+            : previous,
         );
       }
       setMessage(successMessage);
@@ -1085,7 +1101,7 @@ export function ProviderControlsPanel() {
     await submitConfiguration(
       importedProfile.configuration,
       "Imported revision saved. Activate it separately only when the server lists it as approved.",
-      true,
+      importedProfile.digest,
     );
   }
 
@@ -1258,8 +1274,10 @@ export function ProviderControlsPanel() {
             aria-label="Reviewed provider configuration JSON"
             value={importText}
             onChange={(event) => {
+              importSequence.current += 1;
               setImportText(event.target.value);
               setImportedProfile(null);
+              setImportBusy(false);
               setImportError("");
             }}
             placeholder='{"schema":"ac.sales_xray.provider_registry_config/1", ...}'
