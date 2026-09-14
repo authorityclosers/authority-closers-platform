@@ -149,6 +149,13 @@ describe("acquisition source-bound presentation", () => {
   it("rejects forged quota, paid upload policy and mismatched progress", () => {
     expect(parseAllowance(allowance).available_seconds).toBe(6000);
     expect(parsePolicy(policy).maximum_file_bytes).toBe(32 * 1024 ** 2);
+    expect(
+      parsePolicy({
+        ...policy,
+        privacy_details:
+          "Approved service providers may process the recording.",
+      }).privacy_details,
+    ).toContain("Approved service providers");
     expect(() =>
       parsePolicy({ ...policy, maximum_file_bytes: 32 * 1024 ** 2 + 1 }),
     ).toThrow();

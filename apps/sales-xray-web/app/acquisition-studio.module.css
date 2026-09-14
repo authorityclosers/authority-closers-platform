@@ -71,6 +71,47 @@
   font-size: 11px;
   text-align: center;
 }
+.freeBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 10px;
+  color: var(--mint);
+  font-size: 12px;
+  font-weight: 700;
+}
+.freeBadge span {
+  display: inline-grid;
+  width: 21px;
+  height: 21px;
+  place-items: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--mint) 13%, var(--surface));
+  animation: badge-pop 520ms ease-out both;
+}
+.privacyDetails {
+  margin: 12px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--canvas) 55%, var(--surface));
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+.privacyDetails summary {
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+.privacyDetails p,
+.privacyDetails ul {
+  margin: 9px 0 0;
+}
+.privacyDetails ul {
+  padding-left: 17px;
+}
 .upload h2 {
   overflow-wrap: anywhere;
 }
@@ -176,6 +217,30 @@
       transparent 44%
     ),
     var(--surface);
+}
+.uploadProgress {
+  grid-column: 1 / -1;
+  min-height: 270px;
+  align-content: center;
+  border-color: color-mix(in srgb, var(--action) 24%, var(--border));
+  background:
+    radial-gradient(
+      circle at 100% 0,
+      color-mix(in srgb, var(--action) 11%, transparent),
+      transparent 48%
+    ),
+    var(--surface);
+}
+.uploadProgress .progressKicker {
+  color: var(--action);
+}
+.uploadProgress .progressRail > div[data-state="running"] {
+  border-color: color-mix(in srgb, var(--action) 32%, var(--border));
+  background: color-mix(in srgb, var(--action) 7%, var(--canvas));
+}
+.uploadProgress .progressRail > div[data-state="running"] > span {
+  background: var(--action);
+  color: #fff;
 }
 .processingSignal {
   width: 58px;
@@ -325,6 +390,19 @@
 @keyframes signal-orbit {
   to {
     transform: rotate(360deg);
+  }
+}
+@keyframes badge-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.74);
+  }
+  70% {
+    transform: scale(1.08);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
   }
 }
 .claim {
@@ -490,6 +568,9 @@
     transition: none;
   }
   .signalOrbit {
+    animation: none;
+  }
+  .freeBadge span {
     animation: none;
   }
 }

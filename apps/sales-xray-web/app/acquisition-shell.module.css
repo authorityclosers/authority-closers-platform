@@ -119,9 +119,11 @@
   background: #eef7f4;
   color: var(--shell-mint);
 }
-.brandMark svg {
+.brandMark svg,
+.brandMark img {
   width: 1.75rem;
   height: 1.75rem;
+  object-fit: contain;
 }
 .dipakArt {
   display: block;
@@ -173,32 +175,64 @@
   color: var(--shell-action);
 }
 .sidebarNote {
+  position: relative;
+  min-height: 11.5rem;
+  overflow: hidden;
   display: grid;
   gap: 0.45rem;
   margin-top: 1.25rem;
   padding: 1rem;
-  border: 1px solid #d3e6e0;
+  border: 1px solid #163447;
   border-radius: 0.8rem;
-  background: linear-gradient(135deg, #f1faf7, #fbfdfc);
+  align-content: end;
+  background: #102231;
+  color: #ffffff;
+}
+.sidebarNote::after {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  content: "";
+  background:
+    linear-gradient(180deg, #07131db8 0%, #07131d45 35%, #07131de8 100%),
+    linear-gradient(90deg, #07131dc7 0%, transparent 80%);
+  pointer-events: none;
 }
 .noteIcon {
+  position: relative;
+  z-index: 1;
   display: grid;
   width: 2rem;
   height: 2rem;
   place-items: center;
   border-radius: 0.6rem;
-  background: #dcefe9;
-  color: var(--shell-mint);
+  background: #d4f2e633;
+  color: #c9f2df;
 }
 .sidebarNote strong {
+  position: relative;
+  z-index: 1;
   font-size: 0.82rem;
   line-height: 1.35;
 }
 .sidebarNote p {
+  position: relative;
+  z-index: 1;
   margin: 0;
-  color: var(--shell-muted);
+  color: #d5e7ed;
   font-size: 0.72rem;
   line-height: 1.5;
+}
+.sidebarNote .dipakArt {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  object-fit: cover;
+  object-position: 68% center;
 }
 .sidebarAccount {
   display: grid;
@@ -429,7 +463,8 @@
     height: 2rem;
     flex-basis: 2rem;
   }
-  .mobileBrand .brandMark svg {
+  .mobileBrand .brandMark svg,
+  .mobileBrand .brandMark img {
     width: 1.35rem;
     height: 1.35rem;
   }

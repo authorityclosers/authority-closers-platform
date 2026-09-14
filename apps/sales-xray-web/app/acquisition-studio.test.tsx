@@ -234,7 +234,7 @@ afterEach(async () => {
   localStorage.clear();
 });
 
-it("the actual page requires both consents, then shows the fourteen-point report", async () => {
+it("uses one upload consent, auto-accepts the same call's quote, then shows the report", async () => {
   await mount();
   expect(
     container.querySelector('[aria-label="Sales Xray navigation"]'),
@@ -267,10 +267,10 @@ it("the actual page requires both consents, then shows the fourteen-point report
   await click("Complete upload check");
   await click("Upload my call");
   expect(calls.filter((call) => call.init.method === "PUT")).toHaveLength(1);
-  expect(button("Analyse my call").disabled).toBe(true);
-  expect(calls.some((call) => call.path.endsWith("/plan"))).toBe(false);
-  await consent();
-  await click("Analyse my call");
+  expect(
+    calls.filter((call) => call.path.endsWith("/plan/quote")),
+  ).toHaveLength(1);
+  expect(calls.filter((call) => call.path.endsWith("/plan"))).toHaveLength(1);
   await flush();
   expect(
     container.querySelector('[aria-label="Sales call report"]'),
@@ -331,8 +331,7 @@ it.each([
     await consent();
     await click("Complete upload check");
     await click("Upload my call");
-    await consent();
-    await click("Analyse my call");
+    await flush();
     const alert = container.querySelector('[role="alert"]')!;
     expect(alert.textContent).toContain(expected);
     expect(alert.textContent).not.toContain("private-provider-context");
@@ -372,6 +371,33 @@ it("shows the advertised trial allowance for a clean visitor", async () => {
   await mount();
   expect(container.textContent).toContain("Up to 100m trial allowance");
   expect(container.textContent).not.toContain("unavailable until your session");
+});
+
+it("clears consent when the selected file changes", async () => {
+  await mount();
+  await select();
+  await consent();
+
+  const input =
+    container.querySelector<HTMLInputElement>('input[type="file"]')!;
+  const changed = new File(["different synthetic call"], "Second call.m4a", {
+    type: "audio/mp4",
+  });
+  Object.defineProperty(changed, "arrayBuffer", {
+    value: async () => new ArrayBuffer(12),
+  });
+  Object.defineProperty(input, "files", {
+    configurable: true,
+    value: [changed],
+  });
+  await act(async () =>
+    input.dispatchEvent(new Event("change", { bubbles: true })),
+  );
+  await flush();
+
+  expect(button("Upload my call").disabled).toBe(true);
+  expect(calls.filter(({ init }) => init.method === "PUT")).toHaveLength(0);
+  expect(calls.filter(({ path }) => path.endsWith("/plan"))).toHaveLength(0);
 });
 
 it("rejects an audio file above the provider limit before creating a session", async () => {
@@ -479,7 +505,7 @@ it("shows saved completed work when an uncertain stage pauses processing", async
     "Not started",
   );
   expect(container.textContent).not.toContain("fresh plan");
-  expect(container.textContent).not.toContain("Review a new analysis plan");
+  expect(container.textContent).not.toContain("Review and continue analysis");
   expect(container.textContent).not.toContain("Upload the recording again");
   expect(container.querySelector('[data-paused="true"]')).not.toBeNull();
 });
@@ -509,7 +535,7 @@ it("lets a reloaded held call request one quote, then requires explicit approval
   await act(async () => vi.advanceTimersByTimeAsync(12000));
   await flush();
   expect(calls.filter(({ init }) => init.method === "POST")).toHaveLength(0);
-  const review = button("Review a new analysis plan");
+  const review = button("Review and continue analysis");
   await act(async () => {
     review.click();
     review.click();
@@ -522,19 +548,18 @@ it("lets a reloaded held call request one quote, then requires explicit approval
   );
   expect(quotes[0].init.method).toBe("POST");
   expect(quotes[0].init.body).toBeUndefined();
-  expect(container.textContent).toContain(plan.cost_label);
+  expect(container.textContent).not.toContain(plan.cost_label);
+  expect(container.textContent).not.toContain(plan.stages[0].provider);
+  expect(container.textContent).not.toContain(plan.stages[0].model);
   expect(container.textContent).toContain(plan.stages[0].privacy_notice);
-  expect(button("Analyse my call").disabled).toBe(true);
-  await click("Analyse my call");
-  expect(calls.filter(({ path }) => path.endsWith("/plan"))).toHaveLength(0);
+  expect(button("Continue analysis").disabled).toBe(false);
+  await click("Continue analysis");
+  const starts = calls.filter(({ path }) => path.endsWith("/plan"));
+  expect(starts).toHaveLength(1);
   expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
   expect(container.querySelector("audio")?.getAttribute("src")).toContain(
     `/submissions/${submissionId}/source`,
   );
-  await consent();
-  await click("Analyse my call");
-  const starts = calls.filter(({ path }) => path.endsWith("/plan"));
-  expect(starts).toHaveLength(1);
   expect(starts[0].path).toBe(
     `/v1/conversation/acquisition/submissions/${submissionId}/plan`,
   );
@@ -560,7 +585,7 @@ it("keeps a reloaded held call and its allowance when a new quote is denied", as
     (element) => element.textContent?.includes("Remaining analysis time"),
   )?.textContent;
   expect(allowanceBefore).toBe("Remaining analysis time · 100m 00s");
-  await click("Review a new analysis plan");
+  await click("Review and continue analysis");
   const alert = container.querySelector('[role="alert"]');
   expect(alert).not.toBeNull();
   expect(alert?.textContent).not.toContain("private-provider-context");
@@ -576,12 +601,24 @@ it("keeps a reloaded held call and its allowance when a new quote is denied", as
   expect(calls.filter(({ init }) => init.method === "PUT")).toHaveLength(0);
 });
 
+it("keeps an expired held quote explicit and does not accept it", async () => {
+  reloadHeldCall();
+  vi.setSystemTime(new Date(4102444800 * 1000 + 1_000));
+  await mount();
+  await click("Review and continue analysis");
+  await flush();
+
+  expect(container.textContent).toContain("This step is available until");
+  expect(button("Continue analysis").disabled).toBe(true);
+  expect(calls.filter(({ path }) => path.endsWith("/plan"))).toHaveLength(0);
+});
+
 it("disables recovery for a reloaded held call while analysis is paused", async () => {
   reloadHeldCall();
   analysisPaused = true;
   await mount();
-  expect(button("Review a new analysis plan").disabled).toBe(true);
-  await click("Review a new analysis plan");
+  expect(button("Review and continue analysis").disabled).toBe(true);
+  await click("Review and continue analysis");
   expect(calls.filter(({ init }) => init.method === "POST")).toHaveLength(0);
 });
 
@@ -614,7 +651,7 @@ it.each([
     stages,
   };
   await mount();
-  expect(container.textContent).not.toContain("Review a new analysis plan");
+  expect(container.textContent).not.toContain("Review and continue analysis");
   expect(calls.filter(({ init }) => init.method === "POST")).toHaveLength(0);
 });
 
@@ -664,7 +701,7 @@ it("keeps an uncertain transcription honest about missing completed work", async
   expect(container.textContent).not.toContain(
     "The completed transcript stays attached",
   );
-  expect(container.textContent).not.toContain("Review a new analysis plan");
+  expect(container.textContent).not.toContain("Review and continue analysis");
   expect(
     calls.some(
       (call) => call.path.endsWith("/plan") && call.init.method === "POST",

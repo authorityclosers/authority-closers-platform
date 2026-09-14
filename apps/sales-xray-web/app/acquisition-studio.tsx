@@ -156,7 +156,13 @@ export function AcquisitionStudio({
   const [submission, setSubmission] = useState<Submission | null>(null);
   const [progress, setProgress] = useState<Progress | null>(null);
   const [plan, setPlan] = useState<ProcessingPlan | null>(null);
-  const [planConsent, setPlanConsent] = useState(false);
+  // Upload consent is deliberately ephemeral. It is only eligible to approve
+  // the quote for the submission created from the currently selected file.
+  // Reloaded/held work must take the explicit recovery path below.
+  const [consentedSubmissionId, setConsentedSubmissionId] = useState<
+    string | null
+  >(null);
+  const [planRequiresAction, setPlanRequiresAction] = useState(false);
   const [planExpired, setPlanExpired] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
   const [busy, setBusy] = useState("");
@@ -305,6 +311,44 @@ export function AcquisitionStudio({
     );
   }
 
+  const acceptPlanRequest = useCallback(
+    async (bound: Submission, shown: ProcessingPlan, signal: AbortSignal) => {
+      if (analysisPaused) {
+        setPlanRequiresAction(true);
+        return;
+      }
+      if (shown.expires_at_epoch * 1000 <= Date.now()) {
+        setPlanExpired(true);
+        setPlanRequiresAction(true);
+        return;
+      }
+      const accepted = parseProcessingPlan(
+        await acquisition(`${submissionPath(bound.id)}/plan`, {
+          method: "POST",
+          signal,
+          headers: {
+            "Content-Type": "application/json",
+            "Idempotency-Key": `accept-plan:${shown.id}`,
+          },
+          body: JSON.stringify({
+            plan_id: shown.id,
+            plan_fingerprint: shown.plan_fingerprint,
+            privacy_revision: shown.privacy_revision,
+            accepted: true,
+          }),
+        }),
+        bound.recordingId,
+      );
+      if (!signal.aborted) {
+        setPlan(accepted);
+        setPlanRequiresAction(false);
+        setPlanExpired(false);
+        setPollAttempt((n) => n + 1);
+      }
+    },
+    [analysisPaused],
+  );
+
   useEffect(() => {
     if (!submission || result) return;
     const abort = new AbortController();
@@ -363,7 +407,22 @@ export function AcquisitionStudio({
           const approved = await getPlan(bound, abort.signal);
           if (!abort.signal.aborted) {
             setPlan(approved);
-            setPlanConsent(false);
+            setPlanExpired(approved.expires_at_epoch * 1000 <= Date.now());
+            const canAutoApprove =
+              consentedSubmissionId === bound.id &&
+              !planRequiresAction &&
+              !analysisPaused &&
+              approved.expires_at_epoch * 1000 > Date.now();
+            if (canAutoApprove) {
+              try {
+                await acceptPlanRequest(bound, approved, abort.signal);
+              } catch (error) {
+                setPlanRequiresAction(true);
+                throw error;
+              }
+            } else {
+              setPlanRequiresAction(true);
+            }
           }
         }
         failures = 0;
@@ -386,7 +445,15 @@ export function AcquisitionStudio({
       abort.abort();
       if (timer) clearTimeout(timer);
     };
-  }, [submission, result, pollAttempt]);
+  }, [
+    analysisPaused,
+    acceptPlanRequest,
+    consentedSubmissionId,
+    planRequiresAction,
+    submission,
+    result,
+    pollAttempt,
+  ]);
 
   useEffect(() => {
     if (
@@ -415,7 +482,8 @@ export function AcquisitionStudio({
     setError("");
     setDeleted(false);
     setConsent(false);
-    setPlanConsent(false);
+    setConsentedSubmissionId(null);
+    setPlanRequiresAction(false);
     if (
       !policy ||
       !/\.(mp3|mpeg|wav|m4a|ogg|flac)$/i.test(next.name) ||
@@ -513,43 +581,27 @@ export function AcquisitionStudio({
       setAllowanceUnknown(false);
       setSubmission(bound);
       setConsent(false);
+      setConsentedSubmissionId(bound.id);
+      setPlanRequiresAction(false);
     });
   }
 
   async function approvePlan() {
     if (
+      analysisPaused ||
       !submission ||
       !plan ||
-      !planConsent ||
       plan.expires_at_epoch * 1000 <= Date.now()
-    )
+    ) {
+      if (plan && plan.expires_at_epoch * 1000 <= Date.now())
+        setPlanExpired(true);
       return;
-    const bound = submission,
-      shown = plan;
-    await operation("Starting your report…", async (signal) => {
-      const accepted = parseProcessingPlan(
-        await acquisition(`${submissionPath(bound.id)}/plan`, {
-          method: "POST",
-          signal,
-          headers: {
-            "Content-Type": "application/json",
-            "Idempotency-Key": `accept-plan:${shown.id}`,
-          },
-          body: JSON.stringify({
-            plan_id: shown.id,
-            plan_fingerprint: shown.plan_fingerprint,
-            privacy_revision: shown.privacy_revision,
-            accepted: true,
-          }),
-        }),
-        bound.recordingId,
-      );
-      if (!signal.aborted) {
-        setPlan(accepted);
-        setPlanConsent(false);
-        setPollAttempt((n) => n + 1);
-      }
-    });
+    }
+    const bound = submission;
+    const shown = plan;
+    await operation("Starting your report…", (signal) =>
+      acceptPlanRequest(bound, shown, signal),
+    );
   }
 
   async function freshPlan() {
@@ -560,7 +612,8 @@ export function AcquisitionStudio({
       const next = await getPlan(bound, signal);
       if (!signal.aborted) {
         setPlan(next);
-        setPlanConsent(false);
+        setPlanExpired(next.expires_at_epoch * 1000 <= Date.now());
+        setPlanRequiresAction(true);
         setPollAttempt((n) => n + 1);
       }
     });
@@ -578,7 +631,8 @@ export function AcquisitionStudio({
     setPlan(null);
     setResult(null);
     setConsent(false);
-    setPlanConsent(false);
+    setConsentedSubmissionId(null);
+    setPlanRequiresAction(false);
     setMoment(null);
     setPlaybackMessage("");
     setError("");
@@ -823,7 +877,49 @@ export function AcquisitionStudio({
                 </small>
               </span>
             </div>
-            {deletionOnlyId && !file && !submission ? (
+            {busy && !submission ? (
+              <div
+                className={`studio-progress ${styles.processingPanel} ${styles.uploadProgress}`}
+                role="status"
+                aria-live="polite"
+              >
+                <ProcessingSignal paused={false} />
+                <div className={styles.progressCopy}>
+                  <p className={styles.progressKicker}>UPLOAD IN PROGRESS</p>
+                  <h3>Checking your recording</h3>
+                  <p>
+                    We’re uploading the selected file and checking its format
+                    and duration. A transcript or report is not confirmed yet.
+                  </p>
+                </div>
+                <div
+                  className={styles.progressRail}
+                  aria-label="Upload and analysis stages"
+                >
+                  <div data-state="running">
+                    <span aria-hidden="true">1</span>
+                    <p>
+                      Upload + recording check
+                      <small>In progress</small>
+                    </p>
+                  </div>
+                  <div data-state="not-started">
+                    <span aria-hidden="true">2</span>
+                    <p>
+                      Private analysis
+                      <small>Starts after the check</small>
+                    </p>
+                  </div>
+                  <div data-state="not-started">
+                    <span aria-hidden="true">3</span>
+                    <p>
+                      Coaching report
+                      <small>Shown when ready</small>
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : deletionOnlyId && !file && !submission ? (
               <>
                 <span className="studio-upload-icon">
                   <FileText size={30} />
@@ -953,8 +1049,26 @@ export function AcquisitionStudio({
             )}
             {file && !deletionOnlyId && policy && !submission && (
               <div className="studio-consent">
-                <h3>Upload privately · ₹0</h3>
+                <h3>Upload privately</h3>
+                <p className={styles.freeBadge}>
+                  <span aria-hidden="true">
+                    <Check size={13} />
+                  </span>
+                  Free analysis · included in your trial
+                </p>
                 <p>{policy.description}</p>
+                <p className="small-text">
+                  Your recording is retained for {policy.retention_days} days so
+                  this review can finish and remain available. You can request
+                  deletion from Privacy &amp; support.
+                </p>
+                <details className={styles.privacyDetails}>
+                  <summary>Privacy details</summary>
+                  <p>
+                    {policy.privacy_details ||
+                      "Approved service providers may process this recording to prepare the transcript and coaching report. The recording and report remain private for the retention period above."}
+                  </p>
+                </details>
                 <label>
                   <input
                     type="checkbox"
@@ -962,8 +1076,8 @@ export function AcquisitionStudio({
                     disabled={!!busy}
                     onChange={(event) => setConsent(event.target.checked)}
                   />
-                  I have permission to analyse this call and accept these upload
-                  terms.
+                  I have permission to analyse this call and understand that it
+                  will be processed privately and retained for the period above.
                 </label>
                 {!embedded &&
                   !session &&
@@ -998,46 +1112,27 @@ export function AcquisitionStudio({
             )}
             {submission && !report && plan && !plan.accepted && (
               <div className="studio-consent">
-                <h3>Ready to analyse your call</h3>
-                <div className="studio-cost">
-                  <span>Maximum processing cost</span>
-                  <strong>{plan.cost_label}</strong>
-                </div>
+                <h3>Ready to continue</h3>
                 <p>
-                  Your audio minutes are already reserved. Review where your
-                  call will be processed, then start your report.
+                  Your saved call is ready for the next review step. Continue
+                  with this same recording to start the analysis.
                 </p>
-                <ul className={styles.providers}>
-                  {plan.stages.map((stage) => (
-                    <li key={stage.stage}>
-                      <strong>{stageNames[stage.stage]}</strong>
-                      <span>
-                        {stage.provider} · {stage.model}
-                      </span>
-                      <p>{stage.privacy_notice}</p>
-                    </li>
-                  ))}
-                </ul>
                 <p className="small-text">
-                  This plan expires{" "}
+                  This step is available until{" "}
                   {new Date(plan.expires_at_epoch * 1000).toLocaleString()}.
                 </p>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={planConsent}
-                    onChange={(event) => setPlanConsent(event.target.checked)}
-                    disabled={!!busy}
-                  />
-                  I approve this exact provider plan, its privacy terms and the
-                  displayed cost limit.
-                </label>
+                <details className={styles.privacyDetails}>
+                  <summary>Privacy details</summary>
+                  <ul>
+                    {plan.stages.map((stage) => (
+                      <li key={stage.stage}>{stage.privacy_notice}</li>
+                    ))}
+                  </ul>
+                </details>
                 <button
                   type="button"
                   className="primary-button studio-wide"
-                  disabled={
-                    !planConsent || !!busy || planExpired || analysisPaused
-                  }
+                  disabled={!!busy || planExpired || analysisPaused}
                   onClick={() => void approvePlan()}
                 >
                   {busy ? (
@@ -1045,7 +1140,7 @@ export function AcquisitionStudio({
                   ) : (
                     <AudioLines size={17} />
                   )}
-                  {busy || "Analyse my call"}
+                  {busy || "Continue analysis"}
                 </button>
                 {planExpired && (
                   <button
@@ -1165,7 +1260,8 @@ export function AcquisitionStudio({
                     <div>
                       <p>
                         Your saved transcript stays attached. Nothing starts
-                        until you approve the new provider plan and cost limit.
+                        until you choose to continue analysis with this same
+                        recording.
                       </p>
                       <button
                         className="secondary-button"
@@ -1178,7 +1274,7 @@ export function AcquisitionStudio({
                         ) : (
                           <FileText size={17} />
                         )}
-                        {busy || "Review a new analysis plan"}
+                        {busy || "Review and continue analysis"}
                       </button>
                     </div>
                   )}

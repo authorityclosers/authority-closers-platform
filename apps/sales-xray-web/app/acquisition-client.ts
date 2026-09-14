@@ -22,6 +22,7 @@ export type UploadPolicy = {
   policy_sha256: string;
   title: string;
   description: string;
+  privacy_details?: string;
   maximum_file_bytes: number;
   maximum_call_seconds: number;
   retention_days: number;
@@ -204,6 +205,14 @@ export function parsePolicy(value: unknown): UploadPolicy {
     ),
     maximum_call_seconds = integer(item.maximum_call_seconds, 1800),
     retention_days = integer(item.retention_days, 7);
+  const privacy_details =
+    typeof item.privacy_details === "string"
+      ? item.privacy_details
+      : Array.isArray(item.privacy_details)
+        ? item.privacy_details
+            .filter((value): value is string => typeof value === "string")
+            .join(" ")
+        : "";
   if (
     !maximum_file_bytes ||
     maximum_file_bytes > MAX_ACQUISITION_FILE_BYTES ||
@@ -215,6 +224,7 @@ export function parsePolicy(value: unknown): UploadPolicy {
     policy_sha256: item.policy_sha256,
     title: item.title,
     description: item.description,
+    privacy_details,
     maximum_file_bytes,
     maximum_call_seconds,
     retention_days,

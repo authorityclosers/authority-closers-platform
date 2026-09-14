@@ -13,7 +13,6 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { BrandMark } from "@ac/ui";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { AccountNavigation } from "./account-navigation";
@@ -65,7 +64,13 @@ export function AcquisitionShell({
             aria-label="Sales Xray home"
           >
             <span className={styles.brandMark} aria-hidden="true">
-              <BrandMark />
+              <Image
+                src="/brand/ac-v0.1/symbol.svg"
+                alt=""
+                width={512}
+                height={512}
+                priority
+              />
             </span>
             <span>
               <strong>Sales Xray</strong>
@@ -126,7 +131,7 @@ export function AcquisitionShell({
           <Image
             className={styles.dipakArt}
             src="/media/dipak-learning-hero-v1.webp"
-            alt="Dipak learning artwork"
+            alt=""
             width={640}
             height={360}
             sizes="208px"
@@ -172,7 +177,13 @@ export function AcquisitionShell({
             aria-label="Sales Xray home"
           >
             <span className={styles.brandMark} aria-hidden="true">
-              <BrandMark />
+              <Image
+                src="/brand/ac-v0.1/symbol.svg"
+                alt=""
+                width={512}
+                height={512}
+                priority
+              />
             </span>
             <span>
               <strong>Sales Xray</strong>
