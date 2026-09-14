@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import subprocess
 import sys
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -94,7 +95,20 @@ def _store(
     )
 
 
-def test_rotation_updates_store_file_and_role_without_secret_receipt(tmp_path: Path) -> None:
+@pytest.fixture
+def synthetic_rotation_lock(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep memory-only lifecycle tests independent of the host lock path."""
+
+    @contextmanager
+    def no_op_lock() -> Any:
+        yield
+
+    monkeypatch.setattr(rotation, "_rotation_lock", no_op_lock)
+
+
+def test_rotation_updates_store_file_and_role_without_secret_receipt(
+    synthetic_rotation_lock: None, tmp_path: Path
+) -> None:
     path = tmp_path / "database-url"
     path.write_text(RUNTIME_URL, encoding="utf-8")
     store = _store()
@@ -129,7 +143,9 @@ def test_rotation_updates_store_file_and_role_without_secret_receipt(tmp_path: P
     assert new_password not in repr(receipt)
 
 
-def test_rotation_rolls_database_and_file_back_when_store_update_fails(tmp_path: Path) -> None:
+def test_rotation_rolls_database_and_file_back_when_store_update_fails(
+    synthetic_rotation_lock: None, tmp_path: Path
+) -> None:
     path = tmp_path / "database-url"
     path.write_text(RUNTIME_URL, encoding="utf-8")
     store = _store()
@@ -150,7 +166,9 @@ def test_rotation_rolls_database_and_file_back_when_store_update_fails(tmp_path:
     assert database.altered[-1] == OLD_PASSWORD
 
 
-def test_rotation_marks_database_attempt_before_applied_write_failure(tmp_path: Path) -> None:
+def test_rotation_marks_database_attempt_before_applied_write_failure(
+    synthetic_rotation_lock: None, tmp_path: Path
+) -> None:
     path = tmp_path / "database-url"
     path.write_text(RUNTIME_URL, encoding="utf-8")
     database = FakeDatabase(apply_then_raise=True)
@@ -173,7 +191,9 @@ def test_rotation_marks_database_attempt_before_applied_write_failure(tmp_path: 
     assert path.read_text(encoding="utf-8") == RUNTIME_URL
 
 
-def test_rotation_verifies_store_rollback_when_patch_applies_then_raises(tmp_path: Path) -> None:
+def test_rotation_verifies_store_rollback_when_patch_applies_then_raises(
+    synthetic_rotation_lock: None, tmp_path: Path
+) -> None:
     path = tmp_path / "database-url"
     path.write_text(RUNTIME_URL, encoding="utf-8")
     store = _store()
@@ -200,7 +220,7 @@ def test_rotation_verifies_store_rollback_when_patch_applies_then_raises(tmp_pat
 
 
 def test_rotation_verifies_file_rollback_when_replace_applies_then_raises(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    synthetic_rotation_lock: None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     path = tmp_path / "database-url"
     path.write_text(RUNTIME_URL, encoding="utf-8")
