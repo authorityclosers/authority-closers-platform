@@ -306,7 +306,24 @@ def test_psql_password_change_uses_stdin_not_argv(
     assert new_password.encode("utf-8") not in captured["input"]
     assert b"SCRAM-SHA-256$" in captured["input"]
     assert b"SET LOCAL log_statement = 'none';" in captured["input"]
+    assert b"SET LOCAL log_min_duration_statement = -1;" in captured["input"]
+    assert b"SET LOCAL log_min_duration_sample = -1;" in captured["input"]
+    assert b"SET LOCAL log_min_error_statement = 'panic';" in captured["input"]
     assert captured["input"].startswith(OWNER_PASSWORD.encode("utf-8") + b"\n")
+
+
+def test_private_parent_allows_source_owned_acops_group_without_write_bits(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeGroup:
+        @staticmethod
+        def getgrnam(name: str) -> Any:
+            assert name == "acops"
+            return type("Group", (), {"gr_gid": 1234})()
+
+    monkeypatch.setattr(rotation.os, "name", "posix")
+    monkeypatch.setattr(rotation, "grp", FakeGroup)
+    assert rotation._allowed_parent_group_ids() == {rotation.ROOT_GID, 1234}
 
 
 @pytest.mark.parametrize(

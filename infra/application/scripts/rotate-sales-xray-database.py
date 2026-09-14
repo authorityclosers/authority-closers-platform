@@ -38,6 +38,11 @@ try:
 except ImportError:  # pragma: no cover - Windows development host
     fcntl = None  # type: ignore[assignment]
 
+try:
+    import grp
+except ImportError:  # pragma: no cover - Windows development host
+    grp = None  # type: ignore[assignment]
+
 STAGING_ENVIRONMENT = "staging"
 PRODUCTION_ENVIRONMENT = "prod"
 INFISICAL_PROJECT_ID = "b421c44e-4599-4394-8df6-758ed8aedfed"
@@ -185,6 +190,16 @@ def _scram_verifier(password: str) -> str:
     return f"SCRAM-SHA-256${iterations}:{encode(salt)}${encode(stored_key)}:{encode(server_key)}"
 
 
+def _allowed_parent_group_ids() -> set[int]:
+    """Return root plus the source-owned read/lock operator group when present."""
+
+    allowed = {ROOT_GID}
+    if os.name == "posix" and grp is not None:
+        with contextlib.suppress(KeyError):
+            allowed.add(grp.getgrnam("acops").gr_gid)
+    return allowed
+
+
 def _check_private_parent(path: Path, *, require_owner: bool) -> None:
     if not path.is_absolute() or ".." in path.parts:
         raise _refuse()
@@ -197,7 +212,9 @@ def _check_private_parent(path: Path, *, require_owner: bool) -> None:
         if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
             raise _refuse()
         if require_owner and (
-            info.st_uid != ROOT_UID or info.st_gid != ROOT_GID or stat.S_IMODE(info.st_mode) & 0o022
+            info.st_uid != ROOT_UID
+            or info.st_gid not in _allowed_parent_group_ids()
+            or stat.S_IMODE(info.st_mode) & 0o022
         ):
             raise _refuse()
         if cursor.parent == cursor:
@@ -501,6 +518,9 @@ class PsqlDatabase:
         sql = (
             "BEGIN;\n"
             "SET LOCAL log_statement = 'none';\n"
+            "SET LOCAL log_min_duration_statement = -1;\n"
+            "SET LOCAL log_min_duration_sample = -1;\n"
+            "SET LOCAL log_min_error_statement = 'panic';\n"
             f"ALTER ROLE ac_runtime PASSWORD '{verifier}';\n"
             "COMMIT;\n"
         )
