@@ -717,12 +717,9 @@ def test_processing_ownership_parity_contract_tracks_0037_tables() -> None:
 
 
 def test_provider_activation_parity_contract_tracks_0039_table() -> None:
-    assert restore_drill.parity_contract_for_head("20260914_0039") == (
-        "ac-postgres-parity-v19"
-    )
+    assert restore_drill.parity_contract_for_head("20260914_0039") == ("ac-postgres-parity-v19")
     assert restore_drill.parity_tables_for_head("20260914_0039") == (
-        restore_drill.REVIEWER_IDENTITY_PARITY_TABLES
-        + ("conversation_provider_activations",)
+        restore_drill.REVIEWER_IDENTITY_PARITY_TABLES + ("conversation_provider_activations",)
     )
     assert (
         restore_drill.PROVIDER_ACTIVATION_REHEARSAL_SOURCE_HEAD,
