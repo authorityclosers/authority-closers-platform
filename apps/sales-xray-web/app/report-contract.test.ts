@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   encodeConversationId,
+  parseAcquisitionReport,
   parseJobResponse,
   parseSavedRecordings,
   parseTranscript,
@@ -9,6 +10,7 @@ import {
   type ReportCitation,
   type SalesReport,
 } from "./report-contract";
+import overviewFixture from "../tests/fixtures/dipak-overview.json";
 
 const sourceSha256 = "00".repeat(32);
 const binding = { sourceSha256, durationMs: 4_000 };
@@ -194,5 +196,195 @@ describe("CallStudio report contract", () => {
     expect(() => encodeConversationId("../../other", "recording_id")).toThrow(
       "recording_id_invalid",
     );
+  });
+});
+
+function previewEnvelope() {
+  const {
+    report_sections: _sections,
+    source_sha256,
+    transcript_revision,
+    source_label,
+    review_status,
+    ...content
+  } = validReport();
+  void _sections;
+  content.strengths = ["First visible strength", "Second visible strength"].map(
+    (title) => ({
+      title,
+      explanation: "A complete explanation.",
+      evidence: [
+        {
+          segment_id: "s1",
+          quote: "Let us agree on the next step.",
+          start_ms: 1000,
+          end_ms: 2200,
+        },
+      ],
+    }),
+  );
+  const zero = { visible_count: 0, total_count: 0, hidden_count: 0 };
+  return {
+    schema: "ac.sales-xray.report-envelope/2",
+    submission_id: "submission-1",
+    recording_id: "recording-1",
+    run_id: "run-1",
+    source_sha256,
+    transcript_revision,
+    source_label,
+    report: {
+      schema: "ac.sales-xray.report-access/2",
+      access: "guest_preview",
+      review_status,
+      numeric_publication: false,
+      content: { ...content, next_action: null },
+      sections: [],
+      unlock: null,
+      preview: {
+        version: "guest-findings-v1",
+        sections: {
+          strengths: { visible_count: 2, total_count: 3, hidden_count: 1 },
+          improvements: { ...zero },
+          missed_opportunities: { ...zero },
+          objection_analysis: { ...zero },
+          closing_analysis: { ...zero },
+          golden_moments: { ...zero },
+          prospect_interpretations: { ...zero },
+          rewatch: { ...zero },
+          ethics_notes: { ...zero },
+        },
+      },
+    },
+  };
+}
+const expectedSubmission = {
+  submissionId: "submission-1",
+  recordingId: "recording-1",
+};
+
+describe("server-withheld guest report preview", () => {
+  it("keeps complete source evidence and exact remaining counts without creating hidden findings", () => {
+    const value = parseAcquisitionReport(
+      previewEnvelope(),
+      expectedSubmission,
+      transcript,
+    );
+    expect(value.claimed).toBe(false);
+    expect(value.report.strengths).toHaveLength(2);
+    expect(value.report.preview?.sections.strengths.hidden_count).toBe(1);
+    expect(value.report.strengths[0].evidence[0].quote).toBe(
+      transcript.segments[0].text,
+    );
+    expect(value.report.report_sections).toEqual([]);
+  });
+
+  it.each([
+    { visible_count: 1, total_count: 3, hidden_count: 2 },
+    { visible_count: 2, total_count: 3, hidden_count: 2 },
+    { visible_count: 2, total_count: 2, hidden_count: 0 },
+    { visible_count: 2, total_count: 4, hidden_count: 2 },
+    { visible_count: 2, total_count: 3, hidden_count: -1 },
+    { visible_count: 2, total_count: 3, hidden_count: 1.5 },
+  ])("rejects forged or inconsistent preview counts %j", (counts) => {
+    const envelope = previewEnvelope();
+    envelope.report.preview.sections.strengths = counts;
+    expect(() =>
+      parseAcquisitionReport(envelope, expectedSubmission, transcript),
+    ).toThrow();
+  });
+
+  it("rejects unknown metadata, missing section counts and invented overview counts", () => {
+    const unknown = previewEnvelope();
+    Object.assign(unknown.report.preview, { hidden_findings: ["Not allowed"] });
+    expect(() =>
+      parseAcquisitionReport(unknown, expectedSubmission, transcript),
+    ).toThrow("unknown_field");
+    const missing = previewEnvelope();
+    Reflect.deleteProperty(missing.report.preview.sections, "rewatch");
+    expect(() =>
+      parseAcquisitionReport(missing, expectedSubmission, transcript),
+    ).toThrow();
+    const invented = previewEnvelope();
+    invented.report.preview.sections.golden_moments = {
+      visible_count: 0,
+      total_count: 1,
+      hidden_count: 1,
+    };
+    expect(() =>
+      parseAcquisitionReport(invented, expectedSubmission, transcript),
+    ).toThrow("report_preview_count_mismatch");
+  });
+
+  it("keeps account reports complete and rejects a claimed projection carrying preview limits", () => {
+    const envelope = previewEnvelope();
+    envelope.report.access = "claimed_account";
+    expect(() =>
+      parseAcquisitionReport(envelope, expectedSubmission, transcript),
+    ).toThrow("report_preview_account_invalid");
+    Object.assign(envelope.report, { preview: null });
+    envelope.report.content.strengths.push({
+      ...envelope.report.content.strengths[0],
+      title: "Third account strength",
+    });
+    const value = parseAcquisitionReport(
+      envelope,
+      expectedSubmission,
+      transcript,
+    );
+    expect(value.claimed).toBe(true);
+    expect(value.report.strengths).toHaveLength(3);
+    expect(value.report.preview).toBeUndefined();
+  });
+
+  it("retains historical envelope compatibility without making up remaining counts", () => {
+    const envelope = previewEnvelope();
+    Reflect.deleteProperty(envelope.report, "preview");
+    expect(
+      parseAcquisitionReport(envelope, expectedSubmission, transcript).report
+        .preview,
+    ).toBeUndefined();
+  });
+
+  it("does not let preview metadata bypass quote or source validation", () => {
+    const wrongQuote = previewEnvelope();
+    wrongQuote.report.content.strengths[0].evidence[0].quote = "Invented words";
+    expect(() =>
+      parseAcquisitionReport(wrongQuote, expectedSubmission, transcript),
+    ).toThrow("quote_mismatch");
+    const wrongSource = previewEnvelope();
+    wrongSource.source_sha256 = "ff".repeat(32);
+    expect(() =>
+      parseAcquisitionReport(wrongSource, expectedSubmission, transcript),
+    ).toThrow("report_envelope_binding");
+  });
+
+  it("still rejects dangling overview references after projection", () => {
+    const envelope = previewEnvelope();
+    envelope.transcript_revision = overviewFixture.transcript.revision;
+    const {
+      report_sections: _sections,
+      source_sha256: _source,
+      transcript_revision: _revision,
+      source_label: _label,
+      review_status: _status,
+      ...content
+    } = overviewFixture.report;
+    void [_sections, _source, _revision, _label, _status];
+    Object.assign(envelope.report, { content, preview: null });
+    Object.assign(envelope.report.content, {
+      overview: {
+        ...structuredClone(content.overview),
+        golden_moments: [
+          { ...content.overview.golden_moments[0], strength_index: 2 },
+        ],
+      },
+    });
+    expect(() =>
+      parseAcquisitionReport(
+        envelope,
+        expectedSubmission,
+        overviewFixture.transcript,
+      ),
+    ).toThrow("report_overview_invalid");
   });
 });

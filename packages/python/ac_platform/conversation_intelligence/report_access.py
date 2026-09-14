@@ -1,9 +1,9 @@
-"""Explicit projections for the free, source-bound Dipak report overview.
+"""Explicit projections for a source-bound guest preview and full account report.
 
 Ownership and claim authorization must be resolved before calling this pure
 projector. An access value from a request body/query is never accepted here.
-The founder-approved fourteen-point overview is free to its guest owner. Account
-access adds saved history and continuity, not withholding its useful conclusions.
+Guests receive whole findings, with additional insights available after claim.
+The canonical report is never shortened or mutated by this presentation boundary.
 Internal provenance and future private fields never cross this explicit boundary.
 """
 
@@ -21,6 +21,64 @@ from ac_platform.conversation_intelligence.reports import ReportDraft
 class ReportAccess(StrEnum):
     GUEST = "guest_preview"
     ACCOUNT = "claimed_account"
+
+
+_FINDING_LISTS = (
+    "strengths",
+    "improvements",
+    "missed_opportunities",
+    "objection_analysis",
+    "closing_analysis",
+)
+_OVERVIEW_LISTS = ("golden_moments", "prospect_interpretations", "rewatch", "ethics_notes")
+
+
+def _preview_size(total: int) -> int:
+    # Keep one-item sections useful. Round to whole findings, reserving at least
+    # one additional insight when there are two or more; never slice a quotation.
+    return total if total < 2 else min(total - 1, (3 * total + 4) // 5)
+
+
+def _guest_preview(content: dict[str, Any]) -> dict[str, Any]:
+    counts: dict[str, dict[str, int]] = {}
+
+    def record(name: str, total: int, visible: int) -> None:
+        counts[name] = {
+            "visible_count": visible,
+            "total_count": total,
+            "hidden_count": total - visible,
+        }
+
+    for name in _FINDING_LISTS:
+        original = content[name]
+        content[name] = original[: _preview_size(len(original))]
+        record(name, len(original), len(content[name]))
+    detail = content.get("overview")
+    for name in _OVERVIEW_LISTS:
+        original = detail[name] if detail is not None else []
+        eligible = original
+        if name == "golden_moments":
+            eligible = [
+                moment
+                for moment in original
+                if moment["strength_index"] < len(content["strengths"])
+            ]
+        visible = eligible[: _preview_size(len(original))]
+        if detail is not None:
+            detail[name] = visible
+        record(name, len(original), len(visible))
+    if detail is not None:
+        for name, collection in (
+            ("strength_details", "strengths"),
+            ("improvement_details", "improvements"),
+            ("missed_details", "missed_opportunities"),
+        ):
+            # Prefix selection preserves the original zero-based indices. Drop
+            # linked explanations as well as the finding they would disclose.
+            detail[name] = [
+                item for item in detail[name] if item["finding_index"] < len(content[collection])
+            ]
+    return {"version": "guest-findings-v1", "sections": counts}
 
 
 @dataclass(frozen=True)
@@ -97,12 +155,14 @@ def project_report(report: ReportDraft, *, access: ReportAccess) -> dict[str, An
     }
     if report.overview is not None:
         fields["overview"] = report.overview.model_dump(mode="json")
+    preview = None if account else _guest_preview(fields)
     return {
         "schema": "ac.sales-xray.report-access/2",
         "access": access.value,
         "review_status": report.review_status,
         "numeric_publication": False,
         "content": fields,
+        "preview": preview,
         "sections": [
             {"id": "overview", "label": "Overview", "access": "available"},
             {"id": "moments", "label": "Call moments", "access": "available"},
@@ -121,8 +181,10 @@ def project_report(report: ReportDraft, *, access: ReportAccess) -> dict[str, An
         "unlock": None
         if account
         else {
-            "title": "Keep your report with your AC account",
-            "description": ("Your call overview is free. Sign in to return to your saved calls."),
-            "action": "Save with a free account",
+            "title": "Unlock remaining insights with a free account"
+            if any(item["hidden_count"] for item in preview["sections"].values())
+            else "Keep your report with your AC account",
+            "description": "Sign in to see your full report and return to your saved calls.",
+            "action": "Continue with a free account",
         },
     }

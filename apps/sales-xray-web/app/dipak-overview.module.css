@@ -641,3 +641,65 @@
 .fold > summary > div {
   min-width: 0;
 }
+
+.unlock {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 20px;
+  margin: 20px 0;
+  border: 1px solid var(--border, #d9e1ef);
+  border-radius: 16px;
+  background: linear-gradient(
+    120deg,
+    var(--surface, #fff),
+    var(--surface-soft, #f2f5ff)
+  );
+  break-inside: avoid;
+}
+.unlockIcon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  color: var(--action, #3150c8);
+  background: var(--action-soft, #edf1ff);
+}
+.unlock > div {
+  flex: 1;
+  min-width: 180px;
+}
+.unlock strong {
+  font-size: 15px;
+}
+.unlock p {
+  font-size: 13px;
+  margin: 5px 0 0;
+  color: var(--muted, #617085);
+}
+.unlock button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 44px;
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 16px;
+  background: var(--action, #3150c8);
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.unlock button:focus-visible {
+  outline: 3px solid var(--action, #3150c8);
+  outline-offset: 4px;
+}
+@media print {
+  .unlock button {
+    display: none;
+  }
+}

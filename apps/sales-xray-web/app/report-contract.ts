@@ -54,6 +54,8 @@ export type ReportSection = {
 };
 
 export type SalesReport = {
+  /** Server projection counts only; withheld findings are never supplied here. */
+  preview?: GuestReportPreview;
   overview?: DetailedOverview;
   summary: string;
   strengths: Finding[];
@@ -69,6 +71,86 @@ export type SalesReport = {
   dimensions: ReportDimension[];
   report_sections: ReportSection[];
 };
+
+const PREVIEW_LIMITS = {
+  strengths: 3,
+  improvements: 3,
+  missed_opportunities: 10,
+  objection_analysis: 8,
+  closing_analysis: 8,
+  golden_moments: 3,
+  prospect_interpretations: 3,
+  rewatch: 3,
+  ethics_notes: 3,
+} as const;
+export type PreviewSection = keyof typeof PREVIEW_LIMITS;
+export type GuestReportPreview = {
+  version: "guest-findings-v1";
+  sections: Record<
+    PreviewSection,
+    {
+      visible_count: number;
+      total_count: number;
+      hidden_count: number;
+    }
+  >;
+};
+
+function parsePreview(value: unknown, report: SalesReport): GuestReportPreview {
+  const preview = object(value, "report_preview");
+  keys(preview, ["version", "sections"], "report_preview");
+  if (preview.version !== "guest-findings-v1")
+    throw new ReportContractError("report_preview_version_invalid");
+  const sections = object(preview.sections, "report_preview_sections");
+  keys(sections, Object.keys(PREVIEW_LIMITS), "report_preview_sections");
+  const counts = {} as GuestReportPreview["sections"];
+  for (const name of Object.keys(PREVIEW_LIMITS) as PreviewSection[]) {
+    const count = object(sections[name], "report_preview_count");
+    keys(
+      count,
+      ["visible_count", "total_count", "hidden_count"],
+      "report_preview_count",
+    );
+    const total = integer(
+      count.total_count,
+      "report_preview_total",
+      0,
+      PREVIEW_LIMITS[name],
+    );
+    const visible = integer(
+      count.visible_count,
+      "report_preview_visible",
+      0,
+      total,
+    );
+    const hidden = integer(
+      count.hidden_count,
+      "report_preview_hidden",
+      0,
+      total,
+    );
+    const collection =
+      name in report
+        ? report[name as keyof SalesReport]
+        : report.overview?.[name as keyof DetailedOverview];
+    const length = Array.isArray(collection) ? collection.length : 0;
+    const expected =
+      total < 2 ? total : Math.min(total - 1, Math.ceil((total * 3) / 5));
+    if (
+      visible !== length ||
+      hidden + visible !== total ||
+      (name === "golden_moments" ? visible > expected : visible !== expected) ||
+      (!(name in report) && !report.overview && total !== 0)
+    )
+      throw new ReportContractError("report_preview_count_mismatch");
+    counts[name] = {
+      visible_count: visible,
+      total_count: total,
+      hidden_count: hidden,
+    };
+  }
+  return { version: "guest-findings-v1", sections: counts };
+}
 
 export type Job = {
   id: string;
@@ -512,6 +594,7 @@ export function parseAcquisitionReport(
       "content",
       "sections",
       "unlock",
+      "preview",
     ],
     "report_projection",
   );
@@ -540,24 +623,30 @@ export function parseAcquisitionReport(
   );
   const { next_action: _nextAction, ...findings } = content;
   void _nextAction;
-  return {
-    claimed: projection.access === "claimed_account",
-    report: parseReport(
-      {
-        ...findings,
-        review_status: projection.review_status,
-        source_label: envelope.source_label,
-        source_sha256: envelope.source_sha256,
-        transcript_revision: envelope.transcript_revision,
-      },
-      {
-        sourceSha256: transcript.source_sha256,
-        durationMs: transcript.duration_ms,
-        transcript,
-      },
-      true,
-    ),
-  };
+  const claimed = projection.access === "claimed_account";
+  const report = parseReport(
+    {
+      ...findings,
+      review_status: projection.review_status,
+      source_label: envelope.source_label,
+      source_sha256: envelope.source_sha256,
+      transcript_revision: envelope.transcript_revision,
+    },
+    {
+      sourceSha256: transcript.source_sha256,
+      durationMs: transcript.duration_ms,
+      transcript,
+    },
+    true,
+  );
+  // Older envelopes may omit preview. Counts can never redefine the report's
+  // evidence rules, and an account projection cannot advertise hidden content.
+  if (projection.preview !== undefined && projection.preview !== null) {
+    if (claimed)
+      throw new ReportContractError("report_preview_account_invalid");
+    report.preview = parsePreview(projection.preview, report);
+  }
+  return { claimed, report };
 }
 
 export function parseJobResponse(

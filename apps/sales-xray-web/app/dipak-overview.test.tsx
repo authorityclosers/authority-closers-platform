@@ -4,7 +4,11 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { DipakOverview } from "./dipak-overview";
 import fixture from "../tests/fixtures/dipak-overview.json";
 import { parseJobResponse } from "./report-contract";
-import type { Finding, SalesReport } from "./report-contract";
+import type {
+  Finding,
+  GuestReportPreview,
+  SalesReport,
+} from "./report-contract";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -328,4 +332,87 @@ it("prints every review point and nested quote then restores both disclosure sta
   await act(async () => window.dispatchEvent(new Event("afterprint")));
   expect(folds.filter((detail) => detail.open)).toEqual([folds[0]]);
   expect(evidence.filter((detail) => detail.open)).toEqual([evidence[0]]);
+});
+
+it("shows real remaining counts and opens account access without fabricating blurred content", async () => {
+  const value = report();
+  value.strengths = value.strengths.slice(0, 1);
+  value.improvements = value.improvements.slice(0, 2);
+  const zero = { visible_count: 0, total_count: 0, hidden_count: 0 };
+  value.preview = {
+    version: "guest-findings-v1",
+    sections: {
+      strengths: { visible_count: 1, total_count: 2, hidden_count: 1 },
+      improvements: { visible_count: 2, total_count: 3, hidden_count: 1 },
+      missed_opportunities: {
+        visible_count: 1,
+        total_count: 1,
+        hidden_count: 0,
+      },
+      objection_analysis: zero,
+      closing_analysis: zero,
+      golden_moments: zero,
+      prospect_interpretations: zero,
+      rewatch: zero,
+      ethics_notes: zero,
+    },
+  } satisfies GuestReportPreview;
+  const unlock = vi.fn();
+  await act(async () =>
+    root.render(
+      <DipakOverview
+        report={value}
+        onSelectEvidence={select}
+        onUnlock={unlock}
+      />,
+    ),
+  );
+  const cards = [
+    ...container.querySelectorAll<HTMLElement>("[data-preview-section]"),
+  ];
+  expect(cards.map((card) => card.dataset.previewSection)).toEqual([
+    "strengths",
+    "improvements",
+  ]);
+  expect(
+    cards.every((card) => card.textContent?.includes("1 more insight")),
+  ).toBe(true);
+  expect(
+    cards.every((card) =>
+      card.textContent?.includes(
+        "Unlock remaining insights with a free account",
+      ),
+    ),
+  ).toBe(true);
+  expect(container.textContent).not.toContain("Keep this");
+  expect(container.textContent).not.toContain("Check understanding");
+  await act(async () =>
+    cards[0].querySelector<HTMLButtonElement>("button")!.click(),
+  );
+  expect(unlock).toHaveBeenCalledOnce();
+  expect(select).not.toHaveBeenCalled();
+});
+
+it("shows no unlock cards for complete accounts or single/empty guest sections", async () => {
+  await render();
+  expect(container.querySelector("[data-preview-section]")).toBeNull();
+  expect(container.textContent).not.toContain("Unlock remaining insights");
+});
+
+it("renders retained objection and closing findings with their actual source controls", async () => {
+  const value = report();
+  value.objection_analysis = [finding("Clarify the concern", 1000)];
+  value.closing_analysis = [finding("Agree a next step", 2000)];
+  await render(value);
+  const closing = container.querySelector<HTMLElement>(
+    '[aria-label="Closing and next steps"]',
+  )!;
+  expect(closing.textContent).toContain("Agree a next step");
+  await act(async () =>
+    closing.querySelector<HTMLButtonElement>("button")!.click(),
+  );
+  expect(select).toHaveBeenCalledWith(
+    value.closing_analysis[0].evidence[0],
+    "Agree a next step",
+  );
 });

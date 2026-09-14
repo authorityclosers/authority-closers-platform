@@ -1,14 +1,27 @@
 "use client";
 
 import { useId, useEffect, useRef, type ReactNode } from "react";
-import { ArrowUpRight, Gem, Play, Target, TrendingUp } from "lucide-react";
-import type { Finding, ReportEvidence, SalesReport } from "./report-contract";
+import {
+  ArrowUpRight,
+  Gem,
+  LockKeyhole,
+  Play,
+  Target,
+  TrendingUp,
+} from "lucide-react";
+import type {
+  Finding,
+  PreviewSection,
+  ReportEvidence,
+  SalesReport,
+} from "./report-contract";
 import { FindingEvidence } from "./finding-evidence";
 import styles from "./dipak-overview.module.css";
 
 type Props = {
   report: SalesReport;
   onSelectEvidence: (evidence: ReportEvidence, title: string) => void;
+  onUnlock?: () => void;
 };
 
 const time = (ms: number) =>
@@ -87,7 +100,7 @@ function ReviewBlock({
 }
 
 /** A source-preserving presentation of Dipak's template, not a second judge. */
-export function DipakOverview({ report, onSelectEvidence }: Props) {
+export function DipakOverview({ report, onSelectEvidence, onUnlock }: Props) {
   const overview = useRef<HTMLDivElement>(null);
   useEffect(() => {
     let previous: Map<HTMLDetailsElement, boolean> | null = null;
@@ -236,6 +249,30 @@ export function DipakOverview({ report, onSelectEvidence }: Props) {
     );
   }
 
+  function unlock(section: PreviewSection) {
+    const remaining = report.preview?.sections[section].hidden_count ?? 0;
+    if (!remaining) return null;
+    return (
+      <aside className={styles.unlock} data-preview-section={section}>
+        <span className={styles.unlockIcon} aria-hidden="true">
+          <LockKeyhole size={19} />
+        </span>
+        <div>
+          <strong>
+            {remaining} more {remaining === 1 ? "insight" : "insights"} in your
+            report
+          </strong>
+          <p>Unlock remaining insights with a free account.</p>
+        </div>
+        {onUnlock && (
+          <button type="button" onClick={onUnlock}>
+            Continue free <ArrowUpRight size={15} aria-hidden="true" />
+          </button>
+        )}
+      </aside>
+    );
+  }
+
   return (
     <div
       ref={overview}
@@ -337,6 +374,7 @@ export function DipakOverview({ report, onSelectEvidence }: Props) {
             This report did not identify a supported strength.
           </p>
         )}
+        {unlock("strengths")}
       </ReviewBlock>
 
       <div id={fixesId} className={styles.anchor}>
@@ -393,6 +431,7 @@ export function DipakOverview({ report, onSelectEvidence }: Props) {
             This report has no supported improvement to prioritise yet.
           </p>
         )}
+        {unlock("improvements")}
       </div>
 
       <ReviewBlock
@@ -420,9 +459,12 @@ export function DipakOverview({ report, onSelectEvidence }: Props) {
           </div>
         ) : (
           <p className={styles.empty}>
-            No source-linked strength is available to replay yet.
+            {report.preview?.sections.golden_moments.hidden_count
+              ? "More selected moments are available in your full report."
+              : "No source-linked strength is available to replay yet."}
           </p>
         )}
+        {unlock("golden_moments")}
       </ReviewBlock>
 
       <ReviewBlock
@@ -456,6 +498,7 @@ export function DipakOverview({ report, onSelectEvidence }: Props) {
             No missed opportunity was identified in this report.
           </p>
         )}
+        {unlock("missed_opportunities")}
       </ReviewBlock>
 
       <ReviewBlock number="07" title="What the prospect may have meant">
@@ -481,6 +524,7 @@ export function DipakOverview({ report, onSelectEvidence }: Props) {
             supporting evidence.
           </p>
         )}
+        {unlock("prospect_interpretations")}
       </ReviewBlock>
 
       <div id={rewatchId} className={styles.anchor}>
@@ -516,6 +560,7 @@ export function DipakOverview({ report, onSelectEvidence }: Props) {
               No source-linked moments were produced for this report.
             </p>
           )}
+          {unlock("rewatch")}
         </ReviewBlock>
       </div>
 
@@ -557,6 +602,7 @@ export function DipakOverview({ report, onSelectEvidence }: Props) {
               {sourceNote(note, "Ethics observation · for human review")}
             </div>
           ))}
+          {unlock("ethics_notes")}
         </section>
       ) : null}
 
@@ -639,6 +685,23 @@ export function DipakOverview({ report, onSelectEvidence }: Props) {
           )
         )}
       </ReviewBlock>
+      {(
+        [
+          ["objection_analysis", "Objections in your call"],
+          ["closing_analysis", "Closing and next steps"],
+        ] as const
+      ).map(
+        ([section, title]) =>
+          report[section].length > 0 && (
+            <section key={section} className={styles.block} aria-label={title}>
+              <div className={styles.blockHeading}>
+                <h3>{title}</h3>
+              </div>
+              {report[section].map(findingCard)}
+              {unlock(section)}
+            </section>
+          ),
+      )}
     </div>
   );
 }
