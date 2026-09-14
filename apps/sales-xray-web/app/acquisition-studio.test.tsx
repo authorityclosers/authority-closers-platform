@@ -104,6 +104,13 @@ beforeEach(() => {
     "fetch",
     vi.fn(async (path: string, init: RequestInit = {}) => {
       calls.push({ path, init });
+      if (path === "/v1/me/workspaces")
+        return response({
+          person_id: "person-1",
+          session_id: "session-1",
+          selected_tenant_id: "tenant-1",
+          workspaces: [{ tenant_id: "tenant-1", name: "Synthetic Academy" }],
+        });
       if (path.endsWith("/entry")) return response(entry);
       if (path.endsWith("/upload-policy")) return response(policy);
       if (path.endsWith("/session")) {

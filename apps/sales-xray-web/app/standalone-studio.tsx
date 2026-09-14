@@ -10,6 +10,11 @@ import {
 } from "react";
 
 import { CallStudio } from "./call-studio";
+import { AccountNavigation } from "./account-navigation";
+import {
+  WorkspaceAccessProvider,
+  type WorkspaceAccessValue,
+} from "./workspace-access";
 
 type Workspace = Readonly<{
   tenant_id: string;
@@ -223,12 +228,29 @@ export function StandaloneStudio({
     }
   }
 
-  if (view.kind === "ready" || view.kind === "unauthenticated") return children;
-
   const retry = () => {
     setView({ kind: "loading" });
     setAttempt((value) => value + 1);
   };
+  const accessValue: WorkspaceAccessValue = {
+    status: view.kind,
+    authenticated:
+      view.kind === "chooser" ||
+      view.kind === "selecting" ||
+      view.kind === "ready" ||
+      view.kind === "empty"
+        ? true
+        : view.kind === "unauthenticated"
+          ? false
+          : null,
+    retry,
+  };
+  if (view.kind === "ready" || view.kind === "unauthenticated")
+    return (
+      <WorkspaceAccessProvider value={accessValue}>
+        {children}
+      </WorkspaceAccessProvider>
+    );
   const chooser = view.kind === "chooser" || view.kind === "selecting";
   const heading = chooser
     ? "Choose your Sales Xray workspace."
@@ -239,114 +261,130 @@ export function StandaloneStudio({
         : "Workspace access needs attention.";
 
   return (
-    <main
-      className="xray-app simple-app"
-      data-theme="light"
-      style={shellStyle}
-      aria-busy={view.kind === "loading" || view.kind === "selecting"}
-    >
-      <section style={cardStyle} aria-labelledby="sales-xray-workspace-heading">
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 11,
-            marginBottom: 22,
-            color: "var(--mint)",
-            fontSize: 13,
-            fontWeight: 650,
-          }}
-        >
-          <ShieldCheck size={20} aria-hidden="true" />
-          <span>Authority Closers · Sales Xray</span>
+    <WorkspaceAccessProvider value={accessValue}>
+      <main
+        className="xray-app simple-app"
+        data-theme="light"
+        style={shellStyle}
+        aria-busy={view.kind === "loading" || view.kind === "selecting"}
+      >
+        <div className="standalone-account-navigation">
+          <AccountNavigation compact />
         </div>
-        <h1
-          id="sales-xray-workspace-heading"
-          style={{ margin: "0 0 10px", fontSize: 30, letterSpacing: -0.7 }}
+        <section
+          style={cardStyle}
+          aria-labelledby="sales-xray-workspace-heading"
         >
-          {heading}
-        </h1>
-        {view.kind === "loading" ? (
-          <p style={{ margin: 0, color: "var(--muted)" }}>
-            Confirming the workspace assigned to your session…
-          </p>
-        ) : chooser ? (
-          <>
-            <p style={{ margin: "0 0 22px", color: "var(--muted)" }}>
-              Select a workspace to open its calls and reports.
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 11,
+              marginBottom: 22,
+              color: "var(--mint)",
+              fontSize: 13,
+              fontWeight: 650,
+            }}
+          >
+            <ShieldCheck size={20} aria-hidden="true" />
+            <span>Authority Closers · Sales Xray</span>
+          </div>
+          <h1
+            id="sales-xray-workspace-heading"
+            style={{ margin: "0 0 10px", fontSize: 30, letterSpacing: -0.7 }}
+          >
+            {heading}
+          </h1>
+          {view.kind === "loading" ? (
+            <p style={{ margin: 0, color: "var(--muted)" }}>
+              Confirming the workspace assigned to your session…
             </p>
-            {view.error ? (
-              <p
-                role="alert"
-                style={{
-                  margin: "0 0 18px",
-                  padding: "11px 13px",
-                  border: "1px solid var(--danger)",
-                  borderRadius: 7,
-                  background: "var(--danger-bg)",
-                  color: "var(--danger)",
-                  fontSize: 12,
-                }}
-              >
-                {view.error}
+          ) : chooser ? (
+            <>
+              <p style={{ margin: "0 0 22px", color: "var(--muted)" }}>
+                Select a workspace to open its calls and reports.
               </p>
-            ) : null}
-            <div style={{ display: "grid", gap: 10 }}>
-              {view.choices.workspaces.map((workspace) => (
-                <button
-                  key={workspace.tenant_id}
-                  type="button"
-                  className="secondary-button"
-                  data-tenant-id={workspace.tenant_id}
-                  disabled={view.kind === "selecting"}
-                  onClick={() =>
-                    void chooseWorkspace(view.choices, workspace.tenant_id)
-                  }
+              {view.error ? (
+                <p
+                  role="alert"
                   style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    width: "100%",
-                    textAlign: "left",
+                    margin: "0 0 18px",
+                    padding: "11px 13px",
+                    border: "1px solid var(--danger)",
+                    borderRadius: 7,
+                    background: "var(--danger-bg)",
+                    color: "var(--danger)",
+                    fontSize: 12,
                   }}
                 >
-                  <span>{workspace.name}</span>
-                  {view.kind === "selecting" &&
-                  view.selectedTenantId === workspace.tenant_id ? (
-                    <span aria-live="polite">Opening…</span>
-                  ) : (
-                    <ArrowRight size={17} aria-hidden="true" />
-                  )}
-                </button>
-              ))}
-            </div>
-          </>
-        ) : view.kind === "empty" ? (
-          <>
-            <p style={{ margin: "0 0 22px", color: "var(--muted)" }}>
-              Your account has no Sales Xray workspace assignment yet. Contact
-              your administrator, then try again.
-            </p>
-            <button type="button" className="secondary-button" onClick={retry}>
-              <RefreshCw size={16} aria-hidden="true" /> Try again
-            </button>
-          </>
-        ) : (
-          <>
-            <p
-              role={view.kind === "unavailable" ? "alert" : undefined}
-              style={{ margin: "0 0 22px", color: "var(--muted)" }}
-            >
-              {view.kind === "unavailable"
-                ? view.message
-                : "Workspace access is unavailable right now."}
-            </p>
-            <button type="button" className="secondary-button" onClick={retry}>
-              <RefreshCw size={16} aria-hidden="true" /> Try again
-            </button>
-          </>
-        )}
-      </section>
-    </main>
+                  {view.error}
+                </p>
+              ) : null}
+              <div style={{ display: "grid", gap: 10 }}>
+                {view.choices.workspaces.map((workspace) => (
+                  <button
+                    key={workspace.tenant_id}
+                    type="button"
+                    className="secondary-button"
+                    data-tenant-id={workspace.tenant_id}
+                    disabled={view.kind === "selecting"}
+                    onClick={() =>
+                      void chooseWorkspace(view.choices, workspace.tenant_id)
+                    }
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      width: "100%",
+                      textAlign: "left",
+                    }}
+                  >
+                    <span>{workspace.name}</span>
+                    {view.kind === "selecting" &&
+                    view.selectedTenantId === workspace.tenant_id ? (
+                      <span aria-live="polite">Opening…</span>
+                    ) : (
+                      <ArrowRight size={17} aria-hidden="true" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : view.kind === "empty" ? (
+            <>
+              <p style={{ margin: "0 0 22px", color: "var(--muted)" }}>
+                Your account has no Sales Xray workspace assignment yet. Contact
+                your administrator, then try again.
+              </p>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={retry}
+              >
+                <RefreshCw size={16} aria-hidden="true" /> Try again
+              </button>
+            </>
+          ) : (
+            <>
+              <p
+                role={view.kind === "unavailable" ? "alert" : undefined}
+                style={{ margin: "0 0 22px", color: "var(--muted)" }}
+              >
+                {view.kind === "unavailable"
+                  ? view.message
+                  : "Workspace access is unavailable right now."}
+              </p>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={retry}
+              >
+                <RefreshCw size={16} aria-hidden="true" /> Try again
+              </button>
+            </>
+          )}
+        </section>
+      </main>
+    </WorkspaceAccessProvider>
   );
 }

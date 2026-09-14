@@ -20,7 +20,7 @@ import {
   parseProcessingPlan,
   type ProcessingPlan,
 } from "./call-studio";
-import { StandaloneStudio } from "./standalone-studio";
+import { AccountNavigation } from "./account-navigation";
 import { DipakOverview } from "./dipak-overview";
 import { ReportExplorer } from "./report-explorer";
 import { ReportFactors } from "./report-factors";
@@ -539,12 +539,7 @@ export function AcquisitionStudio() {
       );
   }
 
-  if (entry && !entry.enabled)
-    return (
-      <StandaloneStudio>
-        <CallStudio />
-      </StandaloneStudio>
-    );
+  if (entry && !entry.enabled) return <CallStudio />;
   const blocked =
     progress &&
     (["failed", "cancelled"].includes(progress.local_state || "") ||
@@ -574,9 +569,7 @@ export function AcquisitionStudio() {
             <small>AUTHORITY CLOSERS</small>
           </span>
         </Link>
-        <Link href="/login" className="text-button">
-          My AC account <ArrowRight size={15} />
-        </Link>
+        <AccountNavigation />
       </header>
       <main id="main" className="studio-main">
         <nav className="studio-steps" aria-label="Analysis steps">
