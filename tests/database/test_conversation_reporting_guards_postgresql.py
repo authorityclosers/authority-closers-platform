@@ -273,7 +273,16 @@ def test_malformed_c5_keeps_private_raw_response_without_c6_or_report(
                 job = None if task is None else await db.get(Job, task.job_id)
                 assert task is not None and task.state == "uncertain"
                 assert run_row is not None and run_row.state == "failed"
-                assert job is not None and job.provider_receipt is None
+                assert job is not None and job.provider_receipt is not None
+                assert job.provider_receipt["schema"] == "ac.sales-xray.provider-receipt/1"
+                assert job.provider_receipt["provider"] == "groq"
+                assert job.provider_receipt["response_sha256"] == broker.response_sha256
+                assert job.provider_receipt["usage"] == {"total_tokens": 0}
+                assert job.provider_receipt["validation_state"] == "provider_returned"
+                assert job.provider_receipt["cost_state"] == "reconciliation_required"
+                assert job.provider_receipt["actual_cost_paise"] is None
+                assert job.provider_receipt["checkpoint_id"] is None
+                assert job.provider_receipt["checkpoint_manifest_sha256"] is None
                 assert (
                     await db.scalar(
                         select(func.count())
