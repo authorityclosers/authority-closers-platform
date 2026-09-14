@@ -37,6 +37,7 @@ from ac_platform.conversation_intelligence.report_store import ConversationRepor
 from ac_platform.http.auth import install_identity_http
 from ac_platform.http.conversation import install_conversation_http
 from ac_platform.http.conversation_acquisition_runtime import install_acquisition_runtime
+from ac_platform.http.conversation_execution_control import install_execution_control_http
 from ac_platform.http.conversation_intake import ConversationIntakeRuntime
 from ac_platform.http.problem import register_problem_handlers
 from ac_platform.identity.models import PasswordCredential, Person
@@ -189,6 +190,7 @@ def _make_backend(
         coach_app_url="http://coach.test",
         api_url="http://api.test",
         sales_xray_app_url=origin,
+        operations_tenant_id=account.own_tenant_id,
         session_token_pepper=uuid4().hex + uuid4().hex,
         oauth_transaction_secret=uuid4().hex + uuid4().hex,
         email_challenge_secret=uuid4().hex + uuid4().hex,
@@ -215,6 +217,12 @@ def _make_backend(
                 sessions=sessions,
                 require_actor=require_actor,
                 runtime=None,
+            )
+            install_execution_control_http(
+                application,
+                settings=settings,
+                sessions=sessions,
+                require_actor=require_actor,
             )
             application.mount("/", StaticFiles(directory=exported, html=True))
             server = uvicorn.Server(
@@ -347,7 +355,17 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
 
         page.on("response", record)
         try:
-            page.goto(backend.origin, wait_until="networkidle")
+            with page.expect_response(
+                lambda response: (
+                    urlsplit(response.url).path == "/v1/conversation/acquisition/availability"
+                    and response.status == 200
+                )
+            ) as availability_response:
+                page.goto(backend.origin, wait_until="networkidle")
+            availability = availability_response.value
+            assert availability.json() == {"paused": False}
+            assert availability.header_value("cache-control") == "no-store"
+            checks.append("real-public-availability-boolean-no-store")
             expect(page.get_by_role("link", name="Sign in with AC")).to_be_visible()
             expect(page.locator(".recording-history-item")).to_have_count(0)
             assert not any(item["path"] == "/v1/conversation/recordings" for item in network)

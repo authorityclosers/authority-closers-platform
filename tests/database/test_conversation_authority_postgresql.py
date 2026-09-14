@@ -48,6 +48,7 @@ from ac_platform.conversation_intelligence.models import (
     ConversationCheckpoint,
     ConversationInferenceTask,
     ConversationMinuteAccount,
+    ConversationQuote,
     ConversationQuoteAcceptance,
     ConversationRecording,
     ConversationRun,
@@ -833,8 +834,13 @@ def test_hosted_intake_http_rejects_capacity_after_existing_recording(
                 )
             assert response.status_code == 409, response.text
             assert "capacity" in response.text.lower()
-            assert oversized.status_code == 403
-            assert "32 MB" in oversized.text
+            assert oversized.status_code == 422
+            assert any(
+                error["loc"] == ["body", "source_bytes"]
+                and error["type"] == "less_than_equal"
+                and error["ctx"]["le"] == 32 * 1024 * 1024
+                for error in oversized.json()["detail"]
+            )
             assert setup.broker.calls == 0
             async with setup.sessions() as database:
                 assert (
@@ -854,7 +860,7 @@ def test_hosted_intake_http_rejects_capacity_after_existing_recording(
     run(exercise())
 
 
-def test_authority_rejects_config_change_expired_or_unavailable_bundle_before_dispatch(
+def test_authority_pins_saved_draft_and_rejects_changed_expired_or_unavailable_approval(
     postgres_harness: Any, tmp_path: Path
 ) -> None:
     async def exercise() -> None:
@@ -869,8 +875,37 @@ def test_authority_rejects_config_change_expired_or_unavailable_bundle_before_di
                     expected_revision=1,
                     key="hosted-config-v2",
                 )
-            with pytest.raises(ConversationDenied, match="approved"):
-                await _start(setup, quote, key="hosted-stale-start")
+            # Saving a draft must not activate it or invalidate an approved quote.
+            fresh_quote = await _issue(setup, key="hosted-after-draft-quote")
+            run_view = await _start(setup, quote, key="hosted-pinned-start")
+            async with setup.sessions() as database:
+                for issued in (quote, fresh_quote):
+                    row = await database.get(ConversationQuote, UUID(issued["id"]))
+                    assert row is not None
+                    assert (
+                        row.quote["provider_configuration_sha256"]
+                        == setup.config_view["configuration_sha256"]
+                        != changed["configuration_sha256"]
+                    )
+                task = await database.get(ConversationInferenceTask, UUID(run_view["id"]))
+                assert task is not None and task.quote_id == UUID(quote["id"])
+                assert task.state == "queued"
+            assert await _counts(setup) == (1, 1, 1)
+
+            # Removing the pinned route from the current approval is different:
+            # even the existing queued quote must be revalidated and refused.
+            setup.bundle_box["bundle"] = setup.bundle.model_copy(
+                update={
+                    "stages": tuple(
+                        stage.model_copy(
+                            update={"configuration_sha256": changed["configuration_sha256"]}
+                        )
+                        for stage in setup.bundle.stages
+                    )
+                }
+            )
+            with pytest.raises(ConversationDenied, match="need current approval"):
+                await _start(setup, quote, key="hosted-changed-approval-start")
             expired = _bundle(
                 setup.prepared.state,
                 setup.prepared.state.source_sha256,
@@ -900,7 +935,7 @@ def test_authority_rejects_config_change_expired_or_unavailable_bundle_before_di
                     authority=unavailable_authority,
                 )
             assert setup.broker.calls == 0
-            assert await _counts(setup) == (0, 0, 0)
+            assert await _counts(setup) == (1, 1, 1)
         finally:
             await setup.engine.dispose()
 
