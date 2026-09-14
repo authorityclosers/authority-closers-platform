@@ -202,8 +202,13 @@ def install_submission_http(
     async def current_owner(request: Request) -> AsyncIterator[_Owner]:
         host = guard(request, Response(), write=request.method not in {"GET", "HEAD"})
         if host == "learner":
-            async with learner_account(request) as auth:
-                yield _Owner(ownership(auth.database), None, auth.resolved.actor)
+            try:
+                async with learner_account(request) as auth:
+                    yield _Owner(ownership(auth.database), None, auth.resolved.actor)
+            except ConversationError as error:
+                # Unwind the owner transaction before translating an endpoint's
+                # domain denial, just as the standalone account/guest paths do.
+                raise fail(error.status, str(error)) from None
             return
         try:
             current = _single_raw_cookie(request, name=cookie_name, pattern=_TOKEN, required=False)
