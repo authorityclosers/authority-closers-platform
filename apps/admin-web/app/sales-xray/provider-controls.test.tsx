@@ -389,6 +389,68 @@ describe("provider control contract", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("surfaces the approved stage data paths while keeping technical editors advanced", async () => {
+    const current = {
+      id: "registry-proof",
+      revision: 4,
+      configuration_sha256: "a".repeat(64),
+      configuration: importedConfiguration,
+      created_at: "2026-09-14T00:00:00Z",
+      execution_activated: false,
+      activation: null,
+      activation_options: [],
+    };
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        ...payload(current),
+        tasks: [
+          ...tasks,
+          {
+            schema: "ac.sales_xray.task_contract/1",
+            task: "asr" as const,
+            input_stage: "C0" as const,
+            reuse_stage: null,
+            profile_required: false,
+          },
+          {
+            schema: "ac.sales_xray.task_contract/1",
+            task: "coaching" as const,
+            input_stage: "C4" as const,
+            reuse_stage: "C4" as const,
+            profile_required: true,
+          },
+        ],
+      }),
+    );
+
+    await renderPanel();
+
+    expect(host.querySelector("#workflow-title")?.textContent).toContain(
+      "What each approved route does",
+    );
+    expect(host.textContent).toContain("Transcription");
+    expect(host.textContent).toContain("Analysis");
+    expect(host.textContent).toContain("Report style");
+    expect(host.textContent).toContain("Spending and future plans");
+    expect(host.textContent).toContain(
+      "Destination: Groq open weights via groq_openai_compatible_https (hosted).",
+    );
+
+    const advanced = [...host.querySelectorAll("details")];
+    expect(
+      advanced.find((entry) =>
+        entry.textContent?.includes("import a reviewed provider JSON profile"),
+      )?.open,
+    ).toBe(false);
+    expect(
+      advanced.find((entry) =>
+        entry.textContent?.includes(
+          "provider bindings and technical references",
+        ),
+      )?.open,
+    ).toBe(false);
+  });
+
   it("activates only a server-listed approved revision for future plans", async () => {
     const current = {
       id: "registry-proof",

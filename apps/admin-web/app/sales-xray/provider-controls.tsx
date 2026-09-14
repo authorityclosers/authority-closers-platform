@@ -738,34 +738,140 @@ function RouteEditor({
             ))}
           </select>
         </label>
-        <label className={styles.field}>
-          <span className={styles.fieldLabel}>Recipe revision</span>
-          <input
-            value={route.recipe_revision}
-            onChange={(event) =>
-              onChange({ recipe_revision: event.target.value })
-            }
-          />
-        </label>
-        <label className={styles.field}>
-          <span className={styles.fieldLabel}>Profile revision</span>
-          <input
-            value={route.profile_revision}
-            onChange={(event) =>
-              onChange({ profile_revision: event.target.value })
-            }
-          />
-        </label>
-        <label className={styles.field}>
-          <span className={styles.fieldLabel}>Prompt revision</span>
-          <input
-            value={route.prompt_revision}
-            onChange={(event) =>
-              onChange({ prompt_revision: event.target.value })
-            }
-          />
-        </label>
       </div>
+      <details className={styles.advanced}>
+        <summary>Technical references and source gates</summary>
+        <div className={styles.routeGridAdvanced}>
+          <label className={styles.field}>
+            <span className={styles.fieldLabel}>Recipe revision</span>
+            <input
+              value={route.recipe_revision}
+              onChange={(event) =>
+                onChange({ recipe_revision: event.target.value })
+              }
+            />
+          </label>
+          <label className={styles.field}>
+            <span className={styles.fieldLabel}>Profile revision</span>
+            <input
+              value={route.profile_revision}
+              onChange={(event) =>
+                onChange({ profile_revision: event.target.value })
+              }
+            />
+          </label>
+          <label className={styles.field}>
+            <span className={styles.fieldLabel}>Prompt revision</span>
+            <input
+              value={route.prompt_revision}
+              onChange={(event) =>
+                onChange({ prompt_revision: event.target.value })
+              }
+            />
+          </label>
+        </div>
+      </details>
+    </article>
+  );
+}
+
+type StageSummaryProps = {
+  title: string;
+  eyebrow: string;
+  task: "asr" | "facts" | "coaching";
+  route: RouteConfig | undefined;
+  providers: ProviderConfig[];
+  catalog: CatalogEntry[];
+  dataPath: string;
+  note?: string;
+};
+
+function StageSummary({
+  title,
+  eyebrow,
+  task,
+  route,
+  providers,
+  catalog,
+  dataPath,
+  note,
+}: StageSummaryProps) {
+  const provider = route
+    ? providers.find((entry) => bindingKey(entry) === bindingKey(route))
+    : undefined;
+  const catalogProvider = provider
+    ? providerFor(catalog, provider.provider_id)
+    : undefined;
+  const model = provider
+    ? modelFor(catalogProvider, provider.model_id)
+    : undefined;
+  const implemented =
+    catalogProvider?.status === "implemented" &&
+    model?.transport_status === "implemented";
+  const status = !route
+    ? "Not configured"
+    : implemented
+      ? "Implemented"
+      : catalogProvider?.status === "planned" ||
+          model?.transport_status === "planned"
+        ? "Planned · dormant"
+        : "Needs catalog review";
+
+  return (
+    <article
+      className={styles.stageCard}
+      aria-labelledby={`${task}-stage-title`}
+    >
+      <div className={styles.stageHeader}>
+        <div>
+          <span className={styles.eyebrow}>{eyebrow}</span>
+          <h2 id={`${task}-stage-title`}>{title}</h2>
+        </div>
+        <span
+          className={implemented ? styles.stageStatus : styles.stageStatusMuted}
+        >
+          {status}
+        </span>
+      </div>
+      {route ? (
+        <div className={styles.stageRoute}>
+          <div>
+            <span className={styles.stageLabel}>Provider</span>
+            <strong>
+              {catalogProvider?.display_name ?? route.provider_id}
+            </strong>
+          </div>
+          <div>
+            <span className={styles.stageLabel}>Model</span>
+            <strong>{route.model_id || "Model not selected"}</strong>
+          </div>
+          <div>
+            <span className={styles.stageLabel}>Task</span>
+            <strong>{task}</strong>
+          </div>
+        </div>
+      ) : (
+        <p className={styles.stageEmpty}>
+          No saved {task} route yet. Add or edit one in Advanced provider
+          routing below.
+        </p>
+      )}
+      <p className={styles.stageData}>
+        <strong>Data sent:</strong> {dataPath}
+        {catalogProvider ? (
+          <>
+            {" "}
+            Destination: {catalogProvider.display_name} via{" "}
+            {catalogProvider.protocol} ({catalogProvider.deployment}).
+          </>
+        ) : null}
+      </p>
+      {note ? <small className={styles.stageNote}>{note}</small> : null}
+      {route && model?.readiness ? (
+        <small className={styles.stageNote}>
+          Catalog readiness: {model.readiness}
+        </small>
+      ) : null}
     </article>
   );
 }
@@ -878,7 +984,12 @@ export function ProviderControlsPanel() {
               },
         );
         setActivationRevision(
-          payload.current?.activation?.revision ??
+          payload.current?.activation_options.find(
+            (option) =>
+              option.revision === payload.current?.activation?.revision,
+          )?.revision ??
+            payload.current?.activation_options[0]?.revision ??
+            payload.current?.activation?.revision ??
             payload.current?.revision ??
             null,
         );
@@ -1249,142 +1360,194 @@ export function ProviderControlsPanel() {
       </div>
 
       <section
-        className={styles.section}
-        aria-labelledby="approved-profile-import-title"
+        className={styles.workflowSection}
+        aria-labelledby="workflow-title"
       >
         <div className={styles.sectionHeader}>
           <div>
-            <span className={styles.eyebrow}>Approved profile import</span>
-            <h2 id="approved-profile-import-title">
-              Load a reviewed provider configuration.
-            </h2>
+            <span className={styles.eyebrow}>Release path</span>
+            <h2 id="workflow-title">What each approved route does</h2>
             <p>
-              Paste or choose the non-secret JSON prepared for this AC release.
-              It is validated locally, then saved through the same revision and
-              approval checks as the settings editor. Credentials stay in the
-              server environment.
+              Review the real provider and model used by each stage. These cards
+              describe the data path; they do not start a provider call.
             </p>
           </div>
           <ShieldCheck size={20} aria-hidden="true" />
         </div>
-        <label className={styles.field}>
-          <span className={styles.fieldLabel}>
-            Reviewed provider configuration JSON
-          </span>
-          <textarea
-            aria-label="Reviewed provider configuration JSON"
-            value={importText}
-            onChange={(event) => {
-              importSequence.current += 1;
-              setImportText(event.target.value);
-              setImportedProfile(null);
-              setImportBusy(false);
-              setImportError("");
-            }}
-            placeholder='{"schema":"ac.sales_xray.provider_registry_config/1", ...}'
-            spellCheck={false}
-            rows={8}
+        <div className={styles.stageGrid}>
+          <StageSummary
+            eyebrow="01 · Transcription"
+            title="Transcription"
+            task="asr"
+            route={draft.routes.find((route) => route.task === "asr")}
+            providers={draft.providers}
+            catalog={catalog}
+            dataPath="The uploaded recording is sent for speech-to-text transcription."
           />
-          <small>
-            JSON only, up to 512 KB. Use opaque ref:... values; never paste
-            credentials, passwords, tokens, or credential contents.
-          </small>
-        </label>
-        <div className={styles.buttonRow}>
-          <button
-            className="button button-primary"
-            type="button"
-            onClick={() => void validateImportedText(importText)}
-            disabled={importBusy || !importText.trim()}
-          >
-            {importBusy ? "Checking…" : "Check profile"}
-          </button>
-          <label className="button button-secondary">
-            Choose JSON file
-            <input
-              className={styles.srOnly}
-              type="file"
-              accept="application/json,.json"
-              aria-label="Choose reviewed provider configuration JSON file"
-              onChange={(event) =>
-                void readImportedFile(event.target.files?.[0])
-              }
-            />
-          </label>
+          <StageSummary
+            eyebrow="02 · Analysis"
+            title="Analysis"
+            task="facts"
+            route={draft.routes.find((route) => route.task === "facts")}
+            providers={draft.providers}
+            catalog={catalog}
+            dataPath="The saved transcript is sent for structured facts and checkpoints."
+          />
+          <StageSummary
+            eyebrow="03 · Report style"
+            title="Report style"
+            task="coaching"
+            route={draft.routes.find((route) => route.task === "coaching")}
+            providers={draft.providers}
+            catalog={catalog}
+            dataPath="Source-bound transcript facts and checkpoints are sent for coaching/report drafting."
+            note="Report profile and detail length are controlled in Analysis settings above."
+          />
         </div>
-        {importError ? (
-          <div className={styles.error} role="alert">
-            <p>{importError}</p>
-          </div>
-        ) : null}
-        {importedProfile ? (
-          <div className={styles.card} role="status">
-            <div className={styles.cardHeader}>
-              <div>
-                <span className={styles.eyebrow}>
-                  Local contract check passed
-                </span>
-                <h3>{importedProfile.configuration.revision}</h3>
-              </div>
-              <span className={styles.status}>
-                {importedProfile.savedRevision
-                  ? `saved revision #${importedProfile.savedRevision}`
-                  : "ready to save"}
-              </span>
-            </div>
-            <p>
-              Digest <code>{importedProfile.digest}</code>. The server still
-              decides whether this exact revision is approved for activation.
-            </p>
-            <div className={styles.providerList}>
-              {importedProfile.configuration.providers.map((provider) => (
-                <div
-                  className={styles.routeMeta}
-                  key={`${provider.provider_id}::${provider.model_id}`}
-                >
-                  <strong>
-                    {provider.provider_id}/{provider.model_id}
-                  </strong>
-                  <span>
-                    {provider.max_cost_paise == null
-                      ? "cost ceiling unavailable"
-                      : `₹${(provider.max_cost_paise / 100).toFixed(2)} per dispatch ceiling`}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <div className={styles.routeMeta}>
-              <span>
-                Routes:{" "}
-                {importedProfile.configuration.routes
-                  .map(
-                    (route) =>
-                      `${route.task} → ${route.provider_id}/${route.model_id}`,
-                  )
-                  .join(" · ") || "none"}
-              </span>
-            </div>
-            <div className={styles.buttonRow}>
-              <button
-                className="button button-primary"
-                type="button"
-                onClick={() => void saveImportedProfile()}
-                disabled={
-                  saveState === "saving" ||
-                  saveState === "conflict" ||
-                  Boolean(importedProfile.savedRevision)
-                }
-              >
-                {saveState === "saving" ? "Saving…" : "Save imported revision"}
-              </button>
-              <small>
-                Uses current revision {current?.revision ?? 0}; a stale revision
-                is rejected and must be reloaded.
-              </small>
-            </div>
-          </div>
-        ) : null}
       </section>
+
+      <details className={styles.advancedPanel}>
+        <summary>Advanced: import a reviewed provider JSON profile</summary>
+        <section
+          className={styles.section}
+          aria-labelledby="approved-profile-import-title"
+        >
+          <div className={styles.sectionHeader}>
+            <div>
+              <span className={styles.eyebrow}>Approved profile import</span>
+              <h2 id="approved-profile-import-title">
+                Load a reviewed provider configuration.
+              </h2>
+              <p>
+                Paste or choose the non-secret JSON prepared for this AC
+                release. It is validated locally, then saved through the same
+                revision and approval checks as the settings editor. Credentials
+                stay in the server environment.
+              </p>
+            </div>
+            <ShieldCheck size={20} aria-hidden="true" />
+          </div>
+          <label className={styles.field}>
+            <span className={styles.fieldLabel}>
+              Reviewed provider configuration JSON
+            </span>
+            <textarea
+              aria-label="Reviewed provider configuration JSON"
+              value={importText}
+              onChange={(event) => {
+                importSequence.current += 1;
+                setImportText(event.target.value);
+                setImportedProfile(null);
+                setImportBusy(false);
+                setImportError("");
+              }}
+              placeholder='{"schema":"ac.sales_xray.provider_registry_config/1", ...}'
+              spellCheck={false}
+              rows={8}
+            />
+            <small>
+              JSON only, up to 512 KB. Use opaque ref:... values; never paste
+              credentials, passwords, tokens, or credential contents.
+            </small>
+          </label>
+          <div className={styles.buttonRow}>
+            <button
+              className="button button-primary"
+              type="button"
+              onClick={() => void validateImportedText(importText)}
+              disabled={importBusy || !importText.trim()}
+            >
+              {importBusy ? "Checking…" : "Check profile"}
+            </button>
+            <label className="button button-secondary">
+              Choose JSON file
+              <input
+                className={styles.srOnly}
+                type="file"
+                accept="application/json,.json"
+                aria-label="Choose reviewed provider configuration JSON file"
+                onChange={(event) =>
+                  void readImportedFile(event.target.files?.[0])
+                }
+              />
+            </label>
+          </div>
+          {importError ? (
+            <div className={styles.error} role="alert">
+              <p>{importError}</p>
+            </div>
+          ) : null}
+          {importedProfile ? (
+            <div className={styles.card} role="status">
+              <div className={styles.cardHeader}>
+                <div>
+                  <span className={styles.eyebrow}>
+                    Local contract check passed
+                  </span>
+                  <h3>{importedProfile.configuration.revision}</h3>
+                </div>
+                <span className={styles.status}>
+                  {importedProfile.savedRevision
+                    ? `saved revision #${importedProfile.savedRevision}`
+                    : "ready to save"}
+                </span>
+              </div>
+              <p>
+                Digest <code>{importedProfile.digest}</code>. The server still
+                decides whether this exact revision is approved for activation.
+              </p>
+              <div className={styles.providerList}>
+                {importedProfile.configuration.providers.map((provider) => (
+                  <div
+                    className={styles.routeMeta}
+                    key={`${provider.provider_id}::${provider.model_id}`}
+                  >
+                    <strong>
+                      {provider.provider_id}/{provider.model_id}
+                    </strong>
+                    <span>
+                      {provider.max_cost_paise == null
+                        ? "cost ceiling unavailable"
+                        : `₹${(provider.max_cost_paise / 100).toFixed(2)} per dispatch ceiling`}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className={styles.routeMeta}>
+                <span>
+                  Routes:{" "}
+                  {importedProfile.configuration.routes
+                    .map(
+                      (route) =>
+                        `${route.task} → ${route.provider_id}/${route.model_id}`,
+                    )
+                    .join(" · ") || "none"}
+                </span>
+              </div>
+              <div className={styles.buttonRow}>
+                <button
+                  className="button button-primary"
+                  type="button"
+                  onClick={() => void saveImportedProfile()}
+                  disabled={
+                    saveState === "saving" ||
+                    saveState === "conflict" ||
+                    Boolean(importedProfile.savedRevision)
+                  }
+                >
+                  {saveState === "saving"
+                    ? "Saving…"
+                    : "Save imported revision"}
+                </button>
+                <small>
+                  Uses current revision {current?.revision ?? 0}; a stale
+                  revision is rejected and must be reloaded.
+                </small>
+              </div>
+            </div>
+          ) : null}
+        </section>
+      </details>
 
       {message ? (
         <div
@@ -1414,19 +1577,17 @@ export function ProviderControlsPanel() {
       ) : null}
 
       <section
-        className={styles.section}
+        className={styles.workflowSection}
         aria-labelledby="provider-activation-title"
       >
         <div className={styles.sectionHeader}>
           <div>
-            <span className={styles.eyebrow}>Next-plan activation</span>
-            <h2 id="provider-activation-title">
-              Choose the approved route for new plans.
-            </h2>
+            <span className={styles.eyebrow}>04 · Spending</span>
+            <h2 id="provider-activation-title">Spending and future plans.</h2>
             <p>
-              Activation is limited to saved revisions already covered by the
-              pinned approval. It changes future plan quotes; underway plans
-              keep their provider, model, recipe and approval references.
+              The approved ceiling is enforced by the server. Select a saved
+              revision only when it is already covered by release approval;
+              existing plans keep their saved provider route.
             </p>
           </div>
           <ShieldCheck size={20} aria-hidden="true" />
@@ -1483,168 +1644,177 @@ export function ProviderControlsPanel() {
         )}
       </section>
 
-      <section
-        className={styles.section}
-        aria-labelledby="provider-bindings-title"
-      >
-        <div className={styles.sectionHeader}>
-          <div>
-            <span className={styles.eyebrow}>Provider bindings</span>
-            <h2 id="provider-bindings-title">Choose providers and models.</h2>
-            <p>
-              Implemented catalog entries keep their server endpoint. Planned
-              entries may hold manual metadata, but remain dormant and do not
-              become Ready.
-            </p>
+      <details className={styles.advancedPanel}>
+        <summary>Advanced: provider bindings and technical references</summary>
+        <section
+          className={styles.section}
+          aria-labelledby="provider-bindings-title"
+        >
+          <div className={styles.sectionHeader}>
+            <div>
+              <span className={styles.eyebrow}>Provider bindings</span>
+              <h2 id="provider-bindings-title">Choose providers and models.</h2>
+              <p>
+                Implemented catalog entries keep their server endpoint. Planned
+                entries may hold manual metadata, but remain dormant and do not
+                become Ready.
+              </p>
+            </div>
+            <button
+              className="button button-secondary"
+              type="button"
+              onClick={addProvider}
+            >
+              <Plus size={15} aria-hidden="true" /> Add model
+            </button>
           </div>
-          <button
-            className="button button-secondary"
-            type="button"
-            onClick={addProvider}
-          >
-            <Plus size={15} aria-hidden="true" /> Add model
-          </button>
-        </div>
-        {draft.providers.length === 0 ? (
-          <div className={styles.empty}>
-            <p>
-              No provider model is configured yet. Add one to create a dormant
-              binding.
-            </p>
-          </div>
-        ) : (
-          <div className={styles.providerList}>
-            {draft.providers.map((provider, index) => (
-              <ProviderEditor
-                key={`${bindingKey(provider)}-${index}`}
-                catalog={catalog}
-                provider={provider}
-                index={index}
-                onChange={(patch) =>
-                  setDraft((previous) => ({
-                    ...previous,
-                    providers: previous.providers.map((entry, currentIndex) =>
-                      currentIndex === index ? { ...entry, ...patch } : entry,
-                    ),
-                  }))
-                }
-                onRemove={() =>
-                  setDraft((previous) => {
-                    const removed = previous.providers[index];
-                    if (!removed) return previous;
-                    const removedKey = bindingKey(removed);
-                    return {
+          {draft.providers.length === 0 ? (
+            <div className={styles.empty}>
+              <p>
+                No provider model is configured yet. Add one to create a dormant
+                binding.
+              </p>
+            </div>
+          ) : (
+            <div className={styles.providerList}>
+              {draft.providers.map((provider, index) => (
+                <ProviderEditor
+                  key={`${bindingKey(provider)}-${index}`}
+                  catalog={catalog}
+                  provider={provider}
+                  index={index}
+                  onChange={(patch) =>
+                    setDraft((previous) => ({
                       ...previous,
-                      providers: previous.providers.filter(
+                      providers: previous.providers.map(
+                        (entry, currentIndex) =>
+                          currentIndex === index
+                            ? { ...entry, ...patch }
+                            : entry,
+                      ),
+                    }))
+                  }
+                  onRemove={() =>
+                    setDraft((previous) => {
+                      const removed = previous.providers[index];
+                      if (!removed) return previous;
+                      const removedKey = bindingKey(removed);
+                      return {
+                        ...previous,
+                        providers: previous.providers.filter(
+                          (_, currentIndex) => currentIndex !== index,
+                        ),
+                        routes: previous.routes.filter(
+                          (route) => bindingKey(route) !== removedKey,
+                        ),
+                      };
+                    })
+                  }
+                />
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className={styles.section} aria-labelledby="task-routes-title">
+          <div className={styles.sectionHeader}>
+            <div>
+              <span className={styles.eyebrow}>
+                Task routing / analysis revisions
+              </span>
+              <h2 id="task-routes-title">
+                Choose analysis parameters by revision.
+              </h2>
+              <p>
+                Recipe, profile, and prompt values are revision identifiers for
+                a future approved run. They select configuration; they do not
+                train a model or start analysis.
+              </p>
+            </div>
+            <button
+              className="button button-secondary"
+              type="button"
+              onClick={addRoute}
+              disabled={draft.providers.length === 0}
+            >
+              <Plus size={15} aria-hidden="true" /> Add task
+            </button>
+          </div>
+          {draft.routes.length === 0 ? (
+            <div className={styles.empty}>
+              <p>
+                No task route is configured. Routes remain optional while
+                references and approvals are gathered.
+              </p>
+            </div>
+          ) : (
+            <div className={styles.routeList}>
+              {draft.routes.map((route, index) => (
+                <RouteEditor
+                  key={`${route.task}-${index}`}
+                  route={route}
+                  index={index}
+                  providers={draft.providers}
+                  catalog={catalog}
+                  tasks={tasks}
+                  onChange={(patch) =>
+                    setDraft((previous) => ({
+                      ...previous,
+                      routes: previous.routes.map((entry, currentIndex) =>
+                        currentIndex === index ? { ...entry, ...patch } : entry,
+                      ),
+                    }))
+                  }
+                  onRemove={() =>
+                    setDraft((previous) => ({
+                      ...previous,
+                      routes: previous.routes.filter(
                         (_, currentIndex) => currentIndex !== index,
                       ),
-                      routes: previous.routes.filter(
-                        (route) => bindingKey(route) !== removedKey,
-                      ),
-                    };
-                  })
-                }
-              />
+                    }))
+                  }
+                />
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className={styles.section} aria-labelledby="catalog-title">
+          <div className={styles.catalogHeader}>
+            <div>
+              <span className={styles.eyebrow}>Available providers</span>
+              <h2 id="catalog-title">Provider options and status.</h2>
+              <p>
+                Status describes catalog metadata; it does not mean this page
+                can call a provider.
+              </p>
+            </div>
+            <span className={styles.dormant}>catalog metadata only</span>
+          </div>
+          <div className={styles.catalogList}>
+            {catalog.map((provider) => (
+              <article
+                className={styles.catalogItem}
+                key={provider.provider_id}
+              >
+                <div className={styles.catalogHeader}>
+                  <strong>{provider.display_name}</strong>
+                  <span className={styles.status}>{provider.status}</span>
+                </div>
+                <span className={styles.catalogStatus}>
+                  {provider.protocol} · {provider.readiness}
+                </span>
+                <p>{provider.note || "No catalog note supplied."}</p>
+                <small>
+                  {provider.models.length
+                    ? `${provider.models.length} model${provider.models.length === 1 ? "" : "s"} listed`
+                    : "Model selection is planned metadata"}
+                </small>
+              </article>
             ))}
           </div>
-        )}
-      </section>
-
-      <section className={styles.section} aria-labelledby="task-routes-title">
-        <div className={styles.sectionHeader}>
-          <div>
-            <span className={styles.eyebrow}>
-              Task routing / analysis revisions
-            </span>
-            <h2 id="task-routes-title">
-              Choose analysis parameters by revision.
-            </h2>
-            <p>
-              Recipe, profile, and prompt values are revision identifiers for a
-              future approved run. They select configuration; they do not train
-              a model or start analysis.
-            </p>
-          </div>
-          <button
-            className="button button-secondary"
-            type="button"
-            onClick={addRoute}
-            disabled={draft.providers.length === 0}
-          >
-            <Plus size={15} aria-hidden="true" /> Add task
-          </button>
-        </div>
-        {draft.routes.length === 0 ? (
-          <div className={styles.empty}>
-            <p>
-              No task route is configured. Routes remain optional while
-              references and approvals are gathered.
-            </p>
-          </div>
-        ) : (
-          <div className={styles.routeList}>
-            {draft.routes.map((route, index) => (
-              <RouteEditor
-                key={`${route.task}-${index}`}
-                route={route}
-                index={index}
-                providers={draft.providers}
-                catalog={catalog}
-                tasks={tasks}
-                onChange={(patch) =>
-                  setDraft((previous) => ({
-                    ...previous,
-                    routes: previous.routes.map((entry, currentIndex) =>
-                      currentIndex === index ? { ...entry, ...patch } : entry,
-                    ),
-                  }))
-                }
-                onRemove={() =>
-                  setDraft((previous) => ({
-                    ...previous,
-                    routes: previous.routes.filter(
-                      (_, currentIndex) => currentIndex !== index,
-                    ),
-                  }))
-                }
-              />
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className={styles.section} aria-labelledby="catalog-title">
-        <div className={styles.catalogHeader}>
-          <div>
-            <span className={styles.eyebrow}>Available providers</span>
-            <h2 id="catalog-title">Provider options and status.</h2>
-            <p>
-              Status describes catalog metadata; it does not mean this page can
-              call a provider.
-            </p>
-          </div>
-          <span className={styles.dormant}>catalog metadata only</span>
-        </div>
-        <div className={styles.catalogList}>
-          {catalog.map((provider) => (
-            <article className={styles.catalogItem} key={provider.provider_id}>
-              <div className={styles.catalogHeader}>
-                <strong>{provider.display_name}</strong>
-                <span className={styles.status}>{provider.status}</span>
-              </div>
-              <span className={styles.catalogStatus}>
-                {provider.protocol} · {provider.readiness}
-              </span>
-              <p>{provider.note || "No catalog note supplied."}</p>
-              <small>
-                {provider.models.length
-                  ? `${provider.models.length} model${provider.models.length === 1 ? "" : "s"} listed`
-                  : "Model selection is planned metadata"}
-              </small>
-            </article>
-          ))}
-        </div>
-      </section>
+        </section>
+      </details>
 
       <section className={styles.section} aria-labelledby="save-title">
         <div className={styles.sectionHeader}>

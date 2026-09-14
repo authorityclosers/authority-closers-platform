@@ -165,6 +165,136 @@
   background: var(--panel);
 }
 
+.workflowSection {
+  display: grid;
+  gap: 17px;
+  padding: 20px;
+  border: 1px solid color-mix(in srgb, var(--signal) 28%, var(--line));
+  background: var(--panel);
+}
+
+.stageGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.stageCard {
+  display: grid;
+  gap: 13px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  background: var(--panel-raised);
+}
+
+.stageHeader,
+.stageRoute {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.stageHeader h2 {
+  margin: 4px 0 0;
+  font-size: 1.05rem;
+}
+
+.stageStatus,
+.stageStatusMuted {
+  flex: 0 0 auto;
+  padding: 5px 7px;
+  border: 1px solid var(--info);
+  color: var(--info);
+  font-family: var(--font-mono), monospace;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.stageStatusMuted {
+  border-color: var(--line-strong);
+  color: var(--quiet);
+}
+
+.stageRoute {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.stageRoute > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.stageRoute > div:first-child {
+  flex: 1 1 145px;
+}
+
+.stageRoute > div:nth-child(2) {
+  flex: 1 1 145px;
+}
+
+.stageLabel {
+  color: var(--quiet);
+  font-family: var(--font-mono), monospace;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.stageRoute strong {
+  overflow-wrap: anywhere;
+  font-size: 0.88rem;
+}
+
+.stageData,
+.stageEmpty,
+.stageNote {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.stageData strong {
+  color: var(--text);
+}
+
+.advancedPanel {
+  display: grid;
+  gap: 14px;
+  order: 8;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.advancedPanel summary {
+  padding: 15px 18px;
+  color: var(--signal);
+  cursor: pointer;
+  font-weight: 700;
+  list-style-position: inside;
+}
+
+.advancedPanel > .section {
+  margin: 0 18px 18px;
+}
+
+.advancedPanel[open] > summary {
+  border-bottom: 1px solid var(--line);
+}
+
+.routeGridAdvanced {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
 .sectionHeader,
 .cardHeader,
 .routeHeader,
@@ -361,11 +491,13 @@
 
 @media (max-width: 880px) {
   .summaryGrid,
+  .stageGrid,
   .catalogList {
     grid-template-columns: 1fr;
   }
 
-  .routeGrid {
+  .routeGrid,
+  .routeGridAdvanced {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -376,7 +508,8 @@
   }
 
   .fieldGrid,
-  .routeGrid {
+  .routeGrid,
+  .routeGridAdvanced {
     grid-template-columns: 1fr;
   }
 
