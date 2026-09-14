@@ -24,3 +24,31 @@ for offline diagnosis; no completed report or end-to-end launch approval is
 claimed. Production Admin displayed this guest recording, stage states and a
 partial usage estimate distinctly from reservation ceilings and unsettled actual
 charges. Private call content and identifiers are excluded from this repository.
+
+The next integrated core run `34865939866` failed one Admin test: its assertion
+ran before the asynchronous model-configuration digest completed. The app's
+request and revision contract were unchanged. Commit `606806d` waits for the
+actual POST inside React `act`; the full Node 24 Admin suite then passed all
+823 tests, with lint and formatting passing. This supersedes the failed local
+timing assumption; the failed CI run remains evidence and is not a release.
+
+Production new-analysis execution was paused through the authenticated Admin
+control after the failed real report. Existing recordings, completed C2/C4,
+review inventory and budget holds remain intact. Resume is required after the
+corrected source passes CI and the canonical installer, followed by a new
+bounded plan and an actual report readback. The complete C5 audit and prompt
+correction are recorded in `20260914_SALES_XRAY_C5_ROOT_TYPES.md`.
+
+The launch acceptance includes the standalone and embedded learner journeys,
+source-bound report/evidence playback, Admin call inventory and provider
+configuration, and a visible distinction between reserved ceilings and actual
+settled costs. Cached transcription reuse and explicit approved-profile changes
+are implemented; automatic provider failover is not. A catalog entry alone is
+not a working provider, and a local design preview is not a production result.
+
+Latest user direction requests one-consent upload progression, stronger truthful
+loading feedback, original AC/Dipak assets, customer-facing copy without model
+configuration details, and partial guest report previews with account unlock.
+These changes require the actual mounted UI and server projection to agree;
+hidden report content must never be sent and merely obscured by CSS. API keys,
+private call payloads and immutable operational receipts stay outside Git.
