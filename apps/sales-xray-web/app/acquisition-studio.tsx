@@ -93,6 +93,7 @@ export function AcquisitionStudio() {
   const [playbackMessage, setPlaybackMessage] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleted, setDeleted] = useState(false);
+  const [deletionOnlyId, setDeletionOnlyId] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const audio = useRef<HTMLAudioElement>(null);
   const controller = useRef<AbortController | null>(null);
@@ -149,12 +150,32 @@ export function AcquisitionStudio() {
         }
         const saved = savedSubmissionId();
         if (saved) {
-          const loaded = await acquisition(submissionPath(saved), { signal });
-          if (signal.aborted) return;
-          const bound = parseSubmission(loaded);
-          if (bound.id !== saved) throw new Error("submission_mismatch");
-          setSubmission(bound);
-          setProgress(parseProgress(loaded, bound));
+          try {
+            const loaded = await acquisition(submissionPath(saved), { signal });
+            if (signal.aborted) return;
+            const bound = parseSubmission(loaded);
+            if (bound.id !== saved) throw new Error("submission_mismatch");
+            setSubmission(bound);
+            setProgress(parseProgress(loaded, bound));
+            setDeletionOnlyId(null);
+          } catch (error) {
+            if (signal.aborted) return;
+            // A retained submission can stop being readable when its
+            // permission expires. Keep only the opaque selector so the owner
+            // still has an explicit, server-authorized deletion path; do not
+            // render or infer any private content from the failed lookup.
+            if (
+              error instanceof AcquisitionError &&
+              (error.status === 403 || error.status === 404)
+            ) {
+              setDeletionOnlyId(saved);
+              setError(
+                "This saved call cannot be opened here. If you own it, you can still delete it.",
+              );
+              return;
+            }
+            throw error;
+          }
         }
       } catch (error) {
         if (!signal.aborted) setError(message(error));
@@ -444,6 +465,7 @@ export function AcquisitionStudio() {
     setPlaybackMessage("");
     setError("");
     setDeleteConfirm(false);
+    setDeletionOnlyId(null);
     chosenId.current = "";
     requestedPlan.current = "";
     quoteKey.current = "";
@@ -468,18 +490,20 @@ export function AcquisitionStudio() {
   }
 
   async function erase() {
-    if (!submission || !deleteConfirm) return;
+    const deletionId = submission?.id ?? deletionOnlyId;
+    if (!deletionId || !deleteConfirm) return;
     await operation("Deleting this call…", async (signal) => {
       const deleted = record(
-        await acquisition(submissionPath(submission.id), {
+        await acquisition(submissionPath(deletionId), {
           method: "DELETE",
           signal,
-          headers: { "Idempotency-Key": `delete:${submission.id}` },
+          headers: { "Idempotency-Key": `delete:${deletionId}` },
         }),
       );
       if (
-        deleted.id !== submission.recordingId ||
-        !["deleting", "deleted"].includes(String(deleted.state))
+        typeof deleted.id !== "string" ||
+        !["deleting", "deleted"].includes(String(deleted.state)) ||
+        (submission !== null && deleted.id !== submission.recordingId)
       )
         throw new Error("delete_unconfirmed");
       if (!signal.aborted) {
@@ -614,7 +638,18 @@ export function AcquisitionStudio() {
             className={`panel studio-upload ${styles.upload}`}
             aria-label="Your call"
           >
-            {!file && !submission ? (
+            {deletionOnlyId && !file && !submission ? (
+              <>
+                <span className="studio-upload-icon">
+                  <FileText size={30} />
+                </span>
+                <h2>Saved call unavailable</h2>
+                <p>
+                  This saved call cannot be opened here. If you own it, you can
+                  permanently delete it.
+                </p>
+              </>
+            ) : !file && !submission ? (
               <>
                 <span className="studio-upload-icon">
                   <Upload size={30} />
@@ -703,10 +738,10 @@ export function AcquisitionStudio() {
               type="file"
               accept=".mp3,.mpeg,.wav,.m4a,.ogg,.flac"
               aria-label="Choose sales call audio"
-              disabled={!policy || !!busy || !!submission}
+              disabled={!policy || !!busy || !!submission || !!deletionOnlyId}
               onChange={(event) => choose(event.target.files?.[0])}
             />
-            {!submission && policy && (
+            {!submission && !deletionOnlyId && policy && (
               <div className={styles.allowance}>
                 <ShieldCheck size={16} />
                 <span>
@@ -716,7 +751,7 @@ export function AcquisitionStudio() {
                 </span>
               </div>
             )}
-            {file && policy && !submission && (
+            {file && !deletionOnlyId && policy && !submission && (
               <div className="studio-consent">
                 <h3>Upload privately · ₹0</h3>
                 <p>{policy.description}</p>
@@ -870,7 +905,7 @@ export function AcquisitionStudio() {
                 </div>
               </div>
             )}
-            {submission && (
+            {(submission || deletionOnlyId) && (
               <div className={styles.callActions}>
                 {!deleteConfirm ? (
                   <button

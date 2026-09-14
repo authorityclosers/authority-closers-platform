@@ -29,7 +29,8 @@ let calls: Array<{ path: string; init: RequestInit }>;
 let existing: boolean,
   accepted: boolean,
   claimed: boolean,
-  failedUpload: boolean;
+  failedUpload: boolean,
+  lookupUnavailable: boolean;
 let reportBody: unknown;
 const response = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value), {
@@ -85,6 +86,7 @@ beforeEach(() => {
   accepted = false;
   claimed = false;
   failedUpload = false;
+  lookupUnavailable = false;
   reportBody = envelope;
   localStorage.clear();
   container = document.createElement("div");
@@ -147,11 +149,13 @@ beforeEach(() => {
       if (path.endsWith(`/submissions/${submissionId}`))
         return init.method === "DELETE"
           ? response({ id: recordingId, state: "deleting" }, 202)
-          : response({
-              ...progress,
-              has_report: accepted,
-              state: accepted ? "report_ready" : "ready",
-            });
+          : lookupUnavailable
+            ? response({}, 404)
+            : response({
+                ...progress,
+                has_report: accepted,
+                state: accepted ? "report_ready" : "ready",
+              });
       throw new Error("Unexpected test request");
     }),
   );
@@ -246,6 +250,30 @@ it("requires explicit deletion and waits for server acceptance", async () => {
   await click("Delete this call");
   expect(calls.some((call) => call.init.method === "DELETE")).toBe(false);
   await click("Delete recording and report");
+  expect(localStorage.getItem("ac.xray.submission.v1")).toBeNull();
+  expect(container.textContent).toContain("Deletion requested");
+});
+
+it("keeps an explicit deletion-only recovery when a saved call is unavailable", async () => {
+  existing = true;
+  lookupUnavailable = true;
+  localStorage.setItem("ac.xray.submission.v1", submissionId);
+  await mount();
+  expect(
+    container.querySelector('[aria-label="Sales call report"]'),
+  ).toBeNull();
+  expect(container.textContent).toContain("Saved call unavailable");
+  expect(container.textContent).not.toContain(envelope.report.content.summary);
+  await click("Delete this call");
+  expect(calls.some((call) => call.init.method === "DELETE")).toBe(false);
+  await click("Delete recording and report");
+  expect(
+    calls.some(
+      (call) =>
+        call.init.method === "DELETE" &&
+        call.path.endsWith(`/submissions/${submissionId}`),
+    ),
+  ).toBe(true);
   expect(localStorage.getItem("ac.xray.submission.v1")).toBeNull();
   expect(container.textContent).toContain("Deletion requested");
 });
