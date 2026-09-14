@@ -34,7 +34,6 @@ from ac_platform.conversation_intelligence.entitlements import (
     MinuteAccount,
     MinuteGrant,
     Quote,
-    grant_minutes,
     reserve,
 )
 from ac_platform.conversation_intelligence.execution_control import require_execution_enabled
@@ -261,8 +260,21 @@ class ConversationAuthority:
             try:
                 # A tester approval can be revoked or superseded by a finite
                 # allowance.  Do not let the old derived flag survive that
-                # transition and silently keep bypassing the finite grant.
-                after = grant_minutes(replace(before, unlimited=False), grant)
+                # transition and silently keep bypassing the finite grant. Add
+                # the replacement grant in the same immutable construction so
+                # an unlimited account with existing reservations does not
+                # fail validation in an impossible intermediate state.
+                existing = next(
+                    (item for item in before.grants if item.grant_id == grant.grant_id),
+                    None,
+                )
+                if existing is not None and existing != grant:
+                    raise ValueError("immutable grant idempotency conflict")
+                after = replace(
+                    before,
+                    unlimited=False,
+                    grants=before.grants if existing is not None else (*before.grants, grant),
+                )
             except ValueError:
                 raise ConversationConflict("The immutable allowance approval changed.") from None
         if row is None:
