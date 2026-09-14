@@ -99,37 +99,172 @@
 .providers p {
   margin: 0;
 }
+.processingPanel {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px 16px;
+  text-align: left;
+  padding: 26px;
+  border: 1px solid color-mix(in srgb, var(--mint) 28%, var(--border));
+  background:
+    radial-gradient(
+      circle at 100% 0,
+      color-mix(in srgb, var(--mint) 10%, transparent),
+      transparent 44%
+    ),
+    var(--surface);
+}
+.processingPanel[data-paused="true"] {
+  border-color: color-mix(in srgb, var(--ink) 20%, var(--border));
+  background:
+    radial-gradient(
+      circle at 100% 0,
+      color-mix(in srgb, var(--ink) 7%, transparent),
+      transparent 44%
+    ),
+    var(--surface);
+}
+.processingSignal {
+  width: 58px;
+  height: 58px;
+  margin-top: 4px;
+  color: var(--mint);
+  overflow: visible;
+}
+.processingSignal[data-paused="true"] {
+  color: var(--ink);
+}
+.signalHalo {
+  fill: color-mix(in srgb, currentColor 7%, transparent);
+  stroke: color-mix(in srgb, currentColor 17%, transparent);
+  stroke-width: 1;
+}
+.signalOrbit {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-width: 2;
+  stroke-dasharray: 34 66;
+  transform-origin: 32px 32px;
+  animation: signal-orbit 3.8s linear infinite;
+}
+.signalCore {
+  fill: currentColor;
+  opacity: 0.84;
+}
+.signalDot {
+  fill: currentColor;
+  opacity: 0.6;
+}
+.processingSignal[data-paused="true"] .signalOrbit {
+  animation-play-state: paused;
+  opacity: 0.5;
+}
+.progressCopy {
+  min-width: 0;
+}
+.progressKicker {
+  margin: 0 0 7px;
+  color: var(--mint);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.6px;
+}
+.processingPanel[data-paused="true"] .progressKicker {
+  color: var(--ink);
+}
+.progressCopy h3 {
+  margin: 0 0 7px;
+  font-size: clamp(18px, 2vw, 22px);
+  line-height: 1.2;
+}
+.progressCopy > p:last-child {
+  max-width: 54ch;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.65;
+}
 .progressRail {
   display: grid;
-  gap: 14px;
-  text-align: left;
-  margin-top: 24px;
+  grid-column: 1 / -1;
+  gap: 8px;
+  margin-top: 18px;
 }
 .progressRail > div {
   display: flex;
   align-items: center;
   gap: 12px;
+  min-height: 48px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--canvas) 52%, transparent);
+}
+.progressRail > div[data-state="completed"] {
+  border-color: color-mix(in srgb, var(--mint) 30%, var(--border));
+  background: color-mix(in srgb, var(--mint) 7%, var(--canvas));
+}
+.progressRail > div[data-state="uncertain"] {
+  border-color: color-mix(in srgb, var(--ink) 28%, var(--border));
+  background: color-mix(in srgb, var(--ink) 5%, var(--canvas));
 }
 .progressRail > div > span {
-  background: var(--canvas);
-  width: 28px;
+  flex: 0 0 34px;
+  width: 34px;
   height: 28px;
-  border-radius: 50%;
+  border-radius: 6px;
   display: grid;
   place-items: center;
+  color: var(--muted);
+  background: var(--canvas);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
 }
-.progressRail > div[data-complete="true"] > span {
+.progressRail > div[data-state="completed"] > span {
   background: var(--mint);
   color: white;
+}
+.progressRail > div[data-state="uncertain"] > span {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--ink) 12%, var(--canvas));
 }
 .progressRail p {
   margin: 0;
   font-size: 12px;
+  line-height: 1.35;
 }
 .progressRail small {
   display: block;
   color: var(--muted);
-  margin-top: 2px;
+  margin-top: 3px;
+  font-size: 11px;
+}
+.progressGuidance {
+  grid-column: 1 / -1;
+  margin-top: 16px;
+  padding-top: 15px;
+  border-top: 1px solid var(--border);
+}
+.progressGuidance .eyebrow {
+  margin-bottom: 7px;
+}
+.progressGuidance ul {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding-left: 17px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+@keyframes signal-orbit {
+  to {
+    transform: rotate(360deg);
+  }
 }
 .claim {
   display: flex;
@@ -253,6 +388,23 @@
   .withReport .upload .allowance {
     margin-top: 8px;
     padding-top: 8px;
+  }
+  .processingPanel {
+    grid-template-columns: auto minmax(0, 1fr);
+    padding: 22px 18px;
+  }
+  .processingSignal {
+    width: 46px;
+    height: 46px;
+  }
+  .progressRail > div {
+    min-height: 44px;
+    padding: 7px 9px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .signalOrbit {
+    animation: none;
   }
 }
 @media print {

@@ -32,6 +32,7 @@ let existing: boolean,
   claimed: boolean,
   failedUpload: boolean,
   sessionUnauthorized: boolean,
+  processingMode: "running" | "held" | null,
   lookupUnavailable: boolean,
   deletionDenied: boolean;
 let reportBody: unknown;
@@ -90,6 +91,7 @@ beforeEach(() => {
   claimed = false;
   failedUpload = false;
   sessionUnauthorized = false;
+  processingMode = null;
   lookupUnavailable = false;
   deletionDenied = false;
   reportBody = envelope;
@@ -166,11 +168,38 @@ beforeEach(() => {
             : response({ id: recordingId, state: "deleting" }, 202)
           : lookupUnavailable
             ? response({}, 404)
-            : response({
-                ...progress,
-                has_report: accepted,
-                state: accepted ? "report_ready" : "ready",
-              });
+            : response(
+                processingMode === "held"
+                  ? {
+                      ...progress,
+                      state: "held",
+                      local_state: "failed",
+                      has_report: false,
+                      current_stage: "C4",
+                      failure_code: "stage_uncertain",
+                      stages: [
+                        { stage: "C2", state: "completed" },
+                        { stage: "C4", state: "completed" },
+                        { stage: "C4", state: "uncertain" },
+                      ],
+                    }
+                  : processingMode === "running"
+                    ? {
+                        ...progress,
+                        state: "running",
+                        local_state: "running",
+                        has_report: false,
+                        stages: [
+                          { stage: "C2", state: "running" },
+                          { stage: "C4", state: "queued" },
+                        ],
+                      }
+                    : {
+                        ...progress,
+                        has_report: accepted,
+                        state: accepted ? "report_ready" : "ready",
+                      },
+              );
       throw new Error("Unexpected test request");
     }),
   );
@@ -256,6 +285,54 @@ it.each([
   expect(
     remainingAllowanceLabel(confirmed, allowance.allowance_seconds, false),
   ).toBe(expected);
+});
+
+it("shows the live processing stages without inventing a percentage", async () => {
+  existing = true;
+  processingMode = "running";
+  localStorage.setItem("ac.xray.submission.v1", submissionId);
+  await mount();
+  expect(container.textContent).toContain("Your call is moving through review");
+  expect(
+    container.querySelector('[aria-label="Processing stages"]'),
+  ).not.toBeNull();
+  expect(container.querySelector('[data-stage="C2"] small')?.textContent).toBe(
+    "In progress",
+  );
+  expect(container.querySelector('[data-stage="C4"] small')?.textContent).toBe(
+    "Queued",
+  );
+  expect(container.querySelector('[data-stage="C5"] small')?.textContent).toBe(
+    "Not started",
+  );
+  expect(container.textContent).not.toMatch(/\b\d+%\b/);
+  expect(container.textContent).not.toMatch(/\b\d+\s*\/\s*\d+\b/);
+});
+
+it("shows saved completed work when an uncertain stage pauses processing", async () => {
+  existing = true;
+  processingMode = "held";
+  localStorage.setItem("ac.xray.submission.v1", submissionId);
+  await mount();
+  expect(container.textContent).toContain(
+    "We paused at Checking the conversation",
+  );
+  expect(container.textContent).toContain("Your completed work is safe");
+  expect(container.textContent).toContain(
+    "The completed transcript stays attached",
+  );
+  expect(container.querySelector('[data-stage="C2"] small')?.textContent).toBe(
+    "Complete",
+  );
+  expect(container.querySelector('[data-stage="C4"] small')?.textContent).toBe(
+    "Paused · needs attention",
+  );
+  expect(container.querySelector('[data-stage="C5"] small')?.textContent).toBe(
+    "Not started",
+  );
+  expect(container.textContent).not.toContain("fresh plan");
+  expect(container.textContent).not.toContain("Upload the recording again");
+  expect(container.querySelector('[data-paused="true"]')).not.toBeNull();
 });
 
 it("retry keeps the same submission and source instead of a second charge", async () => {

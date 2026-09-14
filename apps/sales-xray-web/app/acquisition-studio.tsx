@@ -63,6 +63,40 @@ const stageNames: Record<string, string> = {
   C4: "Checking the conversation",
   C5: "Writing your coaching report",
 };
+const processingStages = ["C2", "C4", "C5"] as const;
+type ProcessingStage = (typeof processingStages)[number];
+
+function latestStage(progress: Progress | null, stage: ProcessingStage) {
+  return progress?.stages.findLast((row) => row.stage === stage) ?? null;
+}
+
+function stageStatusLabel(status: string | null) {
+  if (status === "completed") return "Complete";
+  if (status === "running") return "In progress";
+  if (status === "uncertain") return "Paused · needs attention";
+  if (status === "queued" || status === "pending") return "Queued";
+  return "Not started";
+}
+
+function ProcessingSignal({ paused }: { paused: boolean }) {
+  return (
+    <svg
+      className={styles.processingSignal}
+      data-paused={paused}
+      viewBox="0 0 64 64"
+      aria-hidden="true"
+    >
+      <circle className={styles.signalHalo} cx="32" cy="32" r="23" />
+      <path
+        className={styles.signalOrbit}
+        d="M32 9a23 23 0 1 1-16.26 6.74"
+        pathLength="100"
+      />
+      <circle className={styles.signalCore} cx="32" cy="32" r="7" />
+      <circle className={styles.signalDot} cx="32" cy="9" r="3" />
+    </svg>
+  );
+}
 const message = (error: unknown) =>
   error instanceof AcquisitionError
     ? error.message
@@ -278,9 +312,14 @@ export function AcquisitionStudio() {
           next.local_state === "cancelled" ||
           ["held", "cancelled", "completed"].includes(next.state)
         ) {
-          setError(
-            "This analysis needs attention. Your call is saved; request a fresh plan to continue from completed work.",
-          );
+          const paused =
+            next.state === "held" ||
+            next.stages.some((stage) => stage.state === "uncertain");
+          if (paused) setError("");
+          else
+            setError(
+              "This analysis needs attention. Your call is saved; completed work remains available.",
+            );
           return;
         }
         if (
@@ -565,13 +604,17 @@ export function AcquisitionStudio() {
   }
 
   if (entry && !entry.enabled) return <CallStudio />;
-  const blocked =
-    progress &&
-    (["failed", "cancelled"].includes(progress.local_state || "") ||
-      ["held", "cancelled", "completed"].includes(progress.state));
   const report = result?.report;
   const currentStage = progress?.stages.findLast(
     (stage) => stage.state !== "completed",
+  );
+  const pausedStage =
+    progress?.stages.findLast((stage) => stage.state === "uncertain") ??
+    currentStage;
+  const processingPaused = Boolean(
+    progress &&
+      (progress.state === "held" ||
+        progress.stages.some((stage) => stage.state === "uncertain")),
   );
   const source = submission
     ? `${ACQUISITION}${submissionPath(submission.id)}/source`
@@ -891,53 +934,79 @@ export function AcquisitionStudio() {
               </div>
             )}
             {submission && !report && (!plan || plan.accepted) && (
-              <div className="studio-progress" role="status">
-                {blocked || error ? (
-                  <FileText size={26} />
-                ) : (
-                  <LoaderCircle size={26} className="spin" />
-                )}
-                <h3>
-                  {blocked
-                    ? "Your call needs attention"
-                    : progress?.local_state !== "completed"
-                      ? "Checking your recording"
-                      : currentStage
-                        ? stageNames[currentStage.stage]
-                        : "Preparing your analysis"}
-                </h3>
-                <p>
-                  {blocked
-                    ? "Completed work remains saved."
-                    : "Your call is saved privately. You can leave this page and return in this browser while it is retained."}
-                </p>
-                <div className={styles.progressRail}>
-                  {["C2", "C4", "C5"].map((stage, index) => {
-                    const status = progress?.stages
-                      .filter((row) => row.stage === stage)
-                      .at(-1)?.state;
+              <div
+                className={`studio-progress ${styles.processingPanel}`}
+                data-paused={processingPaused}
+                role="status"
+                aria-live="polite"
+              >
+                <ProcessingSignal paused={processingPaused} />
+                <div className={styles.progressCopy}>
+                  <p className={styles.progressKicker}>
+                    {processingPaused
+                      ? "SAVED WORK · PAUSED"
+                      : "PRIVATE PROCESSING"}
+                  </p>
+                  <h3>
+                    {processingPaused
+                      ? `We paused at ${
+                          pausedStage
+                            ? stageNames[pausedStage.stage]
+                            : "the current stage"
+                        }`
+                      : progress?.local_state !== "completed"
+                        ? "Your call is moving through review"
+                        : currentStage
+                          ? stageNames[currentStage.stage]
+                          : "Preparing your analysis"}
+                  </h3>
+                  <p>
+                    {processingPaused
+                      ? "Your completed work is safe. We will keep this call private while this stage is checked."
+                      : "Your call is saved privately. You can leave this page and return in this browser while it is retained."}
+                  </p>
+                </div>
+                <div
+                  className={styles.progressRail}
+                  aria-label="Processing stages"
+                >
+                  {processingStages.map((stage) => {
+                    const status = latestStage(progress, stage)?.state ?? null;
                     return (
-                      <div key={stage} data-complete={status === "completed"}>
-                        <span>
-                          {status === "completed" ? (
-                            <Check size={13} />
-                          ) : (
-                            index + 1
-                          )}
+                      <div
+                        key={stage}
+                        data-stage={stage}
+                        data-state={status ?? "not-started"}
+                        data-complete={status === "completed"}
+                        aria-label={`${stageNames[stage]}: ${stageStatusLabel(status)}`}
+                      >
+                        <span aria-hidden="true">
+                          {status === "completed" ? <Check size={13} /> : stage}
                         </span>
                         <p>
                           {stageNames[stage]}
-                          <small>
-                            {status === "completed"
-                              ? "Complete"
-                              : status === "running"
-                                ? "In progress"
-                                : "Waiting"}
-                          </small>
+                          <small>{stageStatusLabel(status)}</small>
                         </p>
                       </div>
                     );
                   })}
+                </div>
+                <div className={styles.progressGuidance}>
+                  <p className="eyebrow">
+                    {processingPaused ? "YOUR SAVED WORK" : "WHILE YOU WAIT"}
+                  </p>
+                  <ul>
+                    <li>
+                      {processingPaused
+                        ? "The completed transcript stays attached to this call."
+                        : "Keep this tab open or return later from this browser."}
+                    </li>
+                    <li>
+                      {processingPaused
+                        ? "You do not need to upload the recording again."
+                        : "Listen back for one moment you want to practise next."}
+                    </li>
+                  </ul>
                 </div>
               </div>
             )}
