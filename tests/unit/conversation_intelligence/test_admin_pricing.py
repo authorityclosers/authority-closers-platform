@@ -31,6 +31,25 @@ def test_gemini_estimate_uses_receipt_tokens_and_release_snapshot() -> None:
     }
 
 
+def test_gemini_pro_estimate_uses_pinned_pricing_evidence() -> None:
+    estimate = estimate_provider_usage(
+        "gemini",
+        "gemini-3.1-pro-preview",
+        {"promptTokenCount": 1_000, "candidatesTokenCount": 200},
+    )
+
+    assert estimate["paise"] == 44
+    assert estimate["state"] == "available"
+    snapshot = estimate["pricing_snapshot"]
+    assert snapshot["pricing_ref"] == "ref:pricing/gemini-31-pro-preview-20260914"
+    assert (
+        snapshot["evidence_sha256"]
+        == "6adde7cf988414764bea2ce84160ef38afb91d95ba7ae2816433bf310cd1bb1d"
+    )
+    assert snapshot["input_usd_per_million_tokens"] == 2.0
+    assert snapshot["output_usd_per_million_tokens"] == 12.0
+
+
 def test_elevenlabs_estimate_uses_native_duration_and_hourly_snapshot() -> None:
     estimate = estimate_provider_usage(
         "elevenlabs",

@@ -83,6 +83,16 @@ PRICING_SNAPSHOTS: dict[tuple[str, str], PricingSnapshot] = {
         input_usd_per_million_tokens=Decimal("0.75"),
         output_usd_per_million_tokens=Decimal("3.75"),
     ),
+    ("gemini", "gemini-3.1-pro-preview"): PricingSnapshot(
+        provider_id="gemini",
+        model_id="gemini-3.1-pro-preview",
+        pricing_ref="ref:pricing/gemini-31-pro-preview-20260914",
+        evidence_sha256="6adde7cf988414764bea2ce84160ef38afb91d95ba7ae2816433bf310cd1bb1d",
+        source_url="https://ai.google.dev/gemini-api/docs/pricing#gemini-31-pro-preview",
+        rate_basis="per_million_tokens",
+        input_usd_per_million_tokens=Decimal("2"),
+        output_usd_per_million_tokens=Decimal("12"),
+    ),
 }
 
 
