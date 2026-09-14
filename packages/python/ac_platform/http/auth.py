@@ -176,6 +176,12 @@ class LearnerConsentRenewalDenied(DomainError):
     status = 403
 
 
+class LearnerConsentVersionConflict(DomainError):
+    code = "learner_consent_version_conflict"
+    title = "The learner consent document changed"
+    status = 409
+
+
 @dataclass(slots=True)
 class AuthenticatedTransaction:
     database: AsyncSession
@@ -223,6 +229,17 @@ class LearnerConsentRenewalRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     accepted: Literal[True]
+    expected_version: str = Field(min_length=1, max_length=64)
+
+    @model_validator(mode="before")
+    @classmethod
+    def require_json_true(cls, value: object) -> object:
+        # Pydantic's Literal[True] accepts the integer 1.  The wire contract
+        # is an explicit JSON boolean so numeric/string coercion cannot turn
+        # an unintended payload into a consent decision.
+        if not isinstance(value, Mapping) or value.get("accepted") is not True:
+            raise ValueError("accepted must be the JSON boolean true")
+        return value
 
 
 class GoogleLinkResponse(BaseModel):
@@ -1763,6 +1780,10 @@ def install_identity_http(
             raise LearnerConsentRenewalUnavailable(
                 "The current learner consent document is not configured."
             )
+        if body.expected_version != version:
+            raise LearnerConsentVersionConflict(
+                "The learner consent document changed. Reload it before accepting."
+            )
         actor = auth.resolved.actor
         person = await auth.database.scalar(
             select(Person).where(Person.id == actor.person_id).with_for_update()
@@ -1790,6 +1811,7 @@ def install_identity_http(
                 await auth.database.scalars(
                     select(AuditEvent)
                     .where(
+                        AuditEvent.tenant_id == tenant_id,
                         AuditEvent.actor_person_id == actor.person_id,
                         AuditEvent.action == action,
                         AuditEvent.resource_type == "person_consent",
@@ -1808,13 +1830,14 @@ def install_identity_http(
             ),
             None,
         )
-        if existing is not None:
+        if (
+            existing is not None
+            and person.consent_version == version
+            and person.consented_at is not None
+            and existing.occurred_at == person.consented_at
+        ):
             # A retried acceptance is a read of the original durable decision.
             # Do not append a second history entry or refresh its timestamp.
-            if person.consent_version != version or person.consented_at is None:
-                person.consent_version = version
-                person.consented_at = existing.occurred_at
-                person.revision += 1
             return await _learner_consent_response(
                 auth,
                 response=response,
@@ -2380,6 +2403,7 @@ __all__ = [
     "ContextResponse",
     "GoogleLinkResponse",
     "LearnerConsentRequired",
+    "LearnerConsentVersionConflict",
     "MeResponse",
     "PasswordChallengeRejected",
     "PasswordCredentialsRejected",

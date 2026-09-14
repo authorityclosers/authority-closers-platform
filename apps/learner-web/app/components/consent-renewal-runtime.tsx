@@ -61,19 +61,35 @@ export function ConsentRenewalRuntime({
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!accepted) return;
+    if (!accepted || !consent) return;
+    const expectedVersion = consent.document.version;
     setSaving(true);
     setError(null);
     try {
-      const updated = await api.renewConsent();
+      const updated = await api.renewConsent(expectedVersion);
       setConsent(updated);
       router.replace(returnHref);
     } catch (reason: unknown) {
-      setError(
-        reason instanceof ApiError && reason.status === 403
-          ? "Only an active, email-verified learner account can renew consent."
-          : "The consent update could not be saved. Please try again.",
-      );
+      if (reason instanceof ApiError && reason.status === 409) {
+        try {
+          const refreshed = await api.consent();
+          setConsent(refreshed);
+          setAccepted(false);
+          setError(
+            "The consent document changed while you were reviewing it. Please review the current version before accepting.",
+          );
+        } catch {
+          setError(
+            "The current consent document could not be loaded. Please try again.",
+          );
+        }
+      } else {
+        setError(
+          reason instanceof ApiError && reason.status === 403
+            ? "Only an active, email-verified learner account can renew consent."
+            : "The consent update could not be saved. Please try again.",
+        );
+      }
     } finally {
       setSaving(false);
     }

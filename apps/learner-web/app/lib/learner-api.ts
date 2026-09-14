@@ -1210,11 +1210,11 @@ export function createLearnerApi(
         ...options,
         cache: "no-store",
       }),
-    renewConsent: () =>
+    renewConsent: (expectedVersion: string) =>
       logicalJsonMutation<LearnerConsentResponse>(
         "learner-consent-renewal",
         "/v1/me/consent/renew",
-        { accepted: true },
+        { accepted: true, expected_version: expectedVersion },
       ),
     listPrograms: (limit = 50, options: LearnerReadOptions = {}) =>
       request<ProgramCollectionResponse>(`/v1/programs?limit=${limit}`, {

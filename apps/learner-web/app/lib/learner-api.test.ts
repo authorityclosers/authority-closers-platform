@@ -39,7 +39,7 @@ function offlineCache(
 }
 
 describe("learner API adapter", () => {
-  it("loads server-selected consent and never submits a client policy version", async () => {
+  it("loads server-selected consent and binds renewal to that version", async () => {
     const fetcher = vi.fn(
       async (input: RequestInfo | URL, init?: RequestInit) => {
         const path = String(input);
@@ -61,7 +61,10 @@ describe("learner API adapter", () => {
         }
         expect(path).toBe("/v1/me/consent/renew");
         expect(init?.method).toBe("POST");
-        expect(JSON.parse(String(init?.body))).toEqual({ accepted: true });
+        expect(JSON.parse(String(init?.body))).toEqual({
+          accepted: true,
+          expected_version: "server-current-v2",
+        });
         return response({
           status: "current",
           current_version: "server-current-v2",
@@ -85,7 +88,7 @@ describe("learner API adapter", () => {
       current_version: "server-current-v2",
       recorded_version: "old-v1",
     });
-    await expect(api.renewConsent()).resolves.toMatchObject({
+    await expect(api.renewConsent("server-current-v2")).resolves.toMatchObject({
       status: "current",
       current_version: "server-current-v2",
     });

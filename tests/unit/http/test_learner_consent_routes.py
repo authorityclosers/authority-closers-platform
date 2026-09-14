@@ -130,7 +130,7 @@ def test_renewal_uses_server_version_and_appends_prior_projection_metadata(
     response = client.post(
         "/v1/me/consent/renew",
         headers={"Origin": "https://app.authorityclosers.test"},
-        json={"accepted": True},
+        json={"accepted": True, "expected_version": CURRENT_VERSION},
     )
 
     assert response.status_code == 200
@@ -158,12 +158,12 @@ def test_current_consent_get_is_current_and_repeated_acceptance_replays(
     first = client.post(
         "/v1/me/consent/renew",
         headers={"Origin": "https://app.authorityclosers.test"},
-        json={"accepted": True},
+        json={"accepted": True, "expected_version": CURRENT_VERSION},
     )
     second = client.post(
         "/v1/me/consent/renew",
         headers={"Origin": "https://app.authorityclosers.test"},
-        json={"accepted": True},
+        json={"accepted": True, "expected_version": CURRENT_VERSION},
     )
 
     assert first.status_code == second.status_code == 200
@@ -178,7 +178,11 @@ def test_renewal_rejects_client_version_tampering_and_unverified_people(
     tampered = client.post(
         "/v1/me/consent/renew",
         headers={"Origin": "https://app.authorityclosers.test"},
-        json={"accepted": True, "consent_version": "attacker-version"},
+        json={
+            "accepted": True,
+            "expected_version": CURRENT_VERSION,
+            "consent_version": "attacker-version",
+        },
     )
     assert tampered.status_code == 422
     assert database.person.consent_version == OLD_VERSION
@@ -191,11 +195,110 @@ def test_renewal_rejects_client_version_tampering_and_unverified_people(
     denied = unverified_client.post(
         "/v1/me/consent/renew",
         headers={"Origin": "https://app.authorityclosers.test"},
-        json={"accepted": True},
+        json={"accepted": True, "expected_version": CURRENT_VERSION},
     )
     assert denied.status_code == 403
     assert unverified_database.person.consent_version == OLD_VERSION
     assert unverified_database.audit_events == []
+
+
+def test_renewal_rejects_a_stale_server_document_version(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, database = _client(_person(version=OLD_VERSION), monkeypatch)
+
+    response = client.post(
+        "/v1/me/consent/renew",
+        headers={"Origin": "https://app.authorityclosers.test"},
+        json={"accepted": True, "expected_version": OLD_VERSION},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "learner_consent_version_conflict"
+    assert database.person.consent_version == OLD_VERSION
+    assert database.audit_events == []
+
+
+def test_renewal_preserves_same_origin_csrf_guard(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, database = _client(_person(version=OLD_VERSION), monkeypatch)
+
+    response = client.post(
+        "/v1/me/consent/renew",
+        headers={"Origin": "https://attacker.example.test"},
+        json={"accepted": True, "expected_version": CURRENT_VERSION},
+    )
+
+    assert response.status_code == 403
+    assert database.audit_events == []
+
+
+def test_renewal_does_not_replay_a_matching_event_after_projection_clear(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, database = _client(_person(version=None), monkeypatch)
+    old_timestamp = datetime(2026, 9, 12, 10, tzinfo=UTC)
+    database.audit_events.append(
+        SimpleNamespace(
+            payload={"consent_version": CURRENT_VERSION},
+            occurred_at=old_timestamp,
+        )
+    )
+
+    response = client.post(
+        "/v1/me/consent/renew",
+        headers={"Origin": "https://app.authorityclosers.test"},
+        json={"accepted": True, "expected_version": CURRENT_VERSION},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["replayed"] is False
+    assert len(database.audit_events) == 2
+    assert database.person.consented_at is not None
+    assert database.person.consented_at != old_timestamp
+
+
+def test_renewal_does_not_replay_an_older_matching_event_timestamp(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, database = _client(_person(version=CURRENT_VERSION), monkeypatch)
+    old_timestamp = datetime(2026, 9, 12, 10, tzinfo=UTC)
+    assert database.person.consented_at is not None
+    database.audit_events.append(
+        SimpleNamespace(
+            payload={"consent_version": CURRENT_VERSION},
+            occurred_at=old_timestamp,
+        )
+    )
+
+    response = client.post(
+        "/v1/me/consent/renew",
+        headers={"Origin": "https://app.authorityclosers.test"},
+        json={"accepted": True, "expected_version": CURRENT_VERSION},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["replayed"] is False
+    assert len(database.audit_events) == 2
+    assert database.person.consented_at != old_timestamp
+
+
+@pytest.mark.parametrize("accepted", [1, "true", "True", False])
+def test_renewal_requires_literal_json_true(
+    monkeypatch: pytest.MonkeyPatch,
+    accepted: object,
+) -> None:
+    client, database = _client(_person(version=OLD_VERSION), monkeypatch)
+
+    response = client.post(
+        "/v1/me/consent/renew",
+        headers={"Origin": "https://app.authorityclosers.test"},
+        json={"accepted": accepted, "expected_version": CURRENT_VERSION},
+    )
+
+    assert response.status_code == 422
+    assert database.audit_events == []
 
 
 def test_renewal_requires_authentication() -> None:
@@ -209,6 +312,6 @@ def test_renewal_requires_authentication() -> None:
     response = TestClient(app, base_url="https://app.authorityclosers.test").post(
         "/v1/me/consent/renew",
         headers={"Origin": "https://app.authorityclosers.test"},
-        json={"accepted": True},
+        json={"accepted": True, "expected_version": CURRENT_VERSION},
     )
     assert response.status_code == 401
