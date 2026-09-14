@@ -752,7 +752,7 @@
   line-height: 1.55;
 }
 
-.app :global(.studio-upload) p.small-text,
+.app :global(.studio-upload) p:global(.small-text),
 .app :global(.studio-upload) p.freeBadge,
 .app :global(.studio-upload) p.dropHint,
 .app :global(.studio-upload) p.allowance {
@@ -848,7 +848,7 @@
 
 .app :global(.studio-report) details,
 .app :global(.studio-report) details p,
-.app :global(.studio-report) .studio-report-details {
+.app :global(.studio-report) :global(.studio-report-details) {
   font-size: 14px;
   line-height: 1.6;
 }
