@@ -5,10 +5,11 @@ from __future__ import annotations
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
 from ac_platform.application.settings import Settings
+from ac_platform.conversation_intelligence.admin_recordings import AdminConversationRecordings
 from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
     ConversationError,
@@ -57,6 +58,15 @@ def install_conversation_admin_http(
             raise HTTPException(422, "Provider settings use your current AC workspace.")
         response.headers["Cache-Control"] = "private, no-store"
 
+    def recordings_surface(request: Request, response: Response) -> None:
+        require_admin_surface(request, settings)
+        response.headers["Cache-Control"] = "private, no-store"
+        allowed = {"limit", "cursor", "q"}
+        if set(request.query_params) - allowed or any(
+            len(request.query_params.getlist(name)) != 1 for name in request.query_params
+        ):
+            raise HTTPException(422, "Recordings accepts one bounded limit, cursor, and search.")
+
     @router.get("/providers")
     async def providers(
         request: Request, response: Response, auth: AuthenticatedTransaction = dependency
@@ -83,6 +93,31 @@ def install_conversation_admin_http(
                 "Settings are saved as revisions. Provider tests and activation are separate."
             ),
         }
+
+    @router.get("/recordings")
+    async def recordings(
+        request: Request,
+        response: Response,
+        limit: Annotated[int, Query(ge=1, le=50)] = 25,
+        cursor: Annotated[str | None, Query(min_length=1, max_length=256)] = None,
+        search: Annotated[str | None, Query(alias="q", max_length=120)] = None,
+        auth: AuthenticatedTransaction = dependency,
+    ) -> dict[str, Any]:
+        recordings_surface(request, response)
+        operations_tenant_id = settings.operations_tenant_id
+        if operations_tenant_id is None:
+            raise HTTPException(503, "Conversation recordings are not configured.")
+        try:
+            return await AdminConversationRecordings(
+                ConversationApplication(auth.database), operations_tenant_id
+            ).list(
+                auth.resolved.actor,
+                limit=limit,
+                cursor=cursor,
+                search=search,
+            )
+        except ConversationError as error:
+            raise HTTPException(error.status, str(error)) from None
 
     @router.post("/providers", status_code=201)
     async def save_providers(

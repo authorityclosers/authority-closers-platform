@@ -31,6 +31,7 @@ import {
 } from "./review-api";
 import styles from "./review-workspace.module.css";
 import { AdminReviewDetails } from "./admin-review-details";
+import { RecordingsInventory } from "./recordings-inventory";
 import {
   ReviewInvitationPanel,
   REVIEWER_INVITATIONS_AVAILABLE,
@@ -297,6 +298,7 @@ export function ReviewWorkspace({
     items: [],
   });
   const [runId, setRunId] = useState("");
+  const [inventoryRunId, setInventoryRunId] = useState<string | null>(null);
   const [reviewerPersonId, setReviewerPersonId] = useState("");
   const [allowedLenses, setAllowedLenses] = useState<ReviewMode[]>([
     ...reviewLenses,
@@ -560,9 +562,16 @@ export function ReviewWorkspace({
           <AdminReviewDetails assignmentId={assignmentId} />
         ) : null}
 
+        <RecordingsInventory
+          onSelectRun={(selectedRunId) => {
+            setInventoryRunId(selectedRunId);
+            setRunId(selectedRunId);
+          }}
+        />
+
         <ReviewInvitationPanel
-          key={assignmentId ?? "queue"}
-          initialRunId={selectedAssignment?.run_id}
+          key={`${assignmentId ?? "queue"}:${inventoryRunId ?? ""}`}
+          initialRunId={inventoryRunId ?? selectedAssignment?.run_id}
           runs={queue.items}
         />
         <div className={styles.layout}>

@@ -145,6 +145,52 @@
   line-height: 1.5;
 }
 
+.searchRow {
+  display: flex;
+  gap: 0.65rem;
+  align-items: center;
+  margin-top: 1rem;
+}
+
+.searchField {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 0.55rem;
+  align-items: center;
+  min-width: 0;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid #cbd8e7;
+  border-radius: 0.55rem;
+  color: #6a7f98;
+  background: #fff;
+}
+
+.searchField:focus-within {
+  border-color: #3974b6;
+  outline: 3px solid rgb(57 116 182 / 14%);
+}
+
+.searchField input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  color: #1b3551;
+  background: transparent;
+  font: inherit;
+  font-size: 0.84rem;
+}
+
+.pagination {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 1rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid #e5ebf3;
+}
+
 .queueState {
   display: grid;
   place-items: center;
