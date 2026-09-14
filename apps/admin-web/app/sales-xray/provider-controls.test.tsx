@@ -8,6 +8,7 @@ import {
   buildConfiguration,
   prepareConfiguration,
   parseProviderControlsPayload,
+  parseImportedConfiguration,
   ProviderControlsPanel,
   type RegistryConfiguration,
 } from "./provider-controls";
@@ -90,6 +91,48 @@ const tasks = [
   },
 ];
 
+const importedConfiguration: RegistryConfiguration = {
+  ...template,
+  revision: "sales-xray-reviewed-groq-facts-v1",
+  policy: {
+    ...template.policy,
+    allow_paid: true,
+    paid_approval_ref: "ref:approval/reviewed-groq-facts",
+  },
+  providers: [
+    {
+      schema: "ac.sales_xray.provider_config/1",
+      provider_id: "groq",
+      model_id: "openai/gpt-oss-120b",
+      endpoint: "https://api.groq.com/openai/v1/chat/completions",
+      endpoint_sha256:
+        "dfd2a15f09373fda210f3abc40f9c258363058225f1ec5b33ce607d37ff1ae57",
+      credential_ref: "ref:credential/groq",
+      provider_terms_ref: "ref:provider-terms/groq",
+      privacy_ref: "ref:privacy/groq",
+      pricing_ref: "ref:pricing/groq",
+      free_allowance_ref: null,
+      permission_ref: "ref:permission/facts",
+      endpoint_approval_ref: "ref:approval/groq-endpoint",
+      local_endpoint_approval_ref: null,
+      max_cost_paise: 700,
+    },
+  ],
+  routes: [
+    {
+      schema: "ac.sales_xray.route_config/1",
+      task: "facts",
+      provider_id: "groq",
+      model_id: "openai/gpt-oss-120b",
+      recipe_revision: "reviewed-facts-v1",
+      profile_revision: "reviewed-profile-v1",
+      prompt_revision: "reviewed-prompt-v1",
+      required_input_stage: "C2",
+      reuses_checkpoint_stage: "C2",
+    },
+  ],
+};
+
 function payload(current: null | Record<string, unknown> = null) {
   return {
     catalog,
@@ -121,6 +164,15 @@ async function renderPanel() {
     await Promise.resolve();
     await Promise.resolve();
   });
+}
+
+function setTextareaValue(textarea: HTMLTextAreaElement, value: string) {
+  const setter = Object.getOwnPropertyDescriptor(
+    HTMLTextAreaElement.prototype,
+    "value",
+  )?.set;
+  setter?.call(textarea, value);
+  textarea.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
 afterEach(async () => {
@@ -167,6 +219,109 @@ describe("provider control access boundaries", () => {
 });
 
 describe("provider control contract", () => {
+  it("validates a reviewed non-secret registry import before saving", async () => {
+    expect(
+      parseImportedConfiguration(JSON.stringify(importedConfiguration)),
+    ).toEqual(importedConfiguration);
+    expect(() =>
+      parseImportedConfiguration(
+        JSON.stringify({
+          ...importedConfiguration,
+          api_key: "should-not-appear",
+        }),
+      ),
+    ).toThrow("non-secret profile JSON");
+  });
+
+  it("previews and saves an imported profile through the current revision", async () => {
+    const saved = {
+      id: "imported-registry",
+      revision: 3,
+      configuration_sha256: "b".repeat(64),
+      configuration: importedConfiguration,
+      created_at: "2026-09-14T00:00:00Z",
+      execution_activated: false,
+      activation: null,
+      activation_options: [],
+    };
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(payload()))
+      .mockResolvedValueOnce(jsonResponse(saved));
+
+    await renderPanel();
+    const textarea = host.querySelector(
+      'textarea[aria-label="Reviewed provider configuration JSON"]',
+    ) as HTMLTextAreaElement;
+    setTextareaValue(textarea, JSON.stringify(importedConfiguration));
+    await act(async () => {
+      [...host.querySelectorAll("button")]
+        .find((button) => button.textContent?.includes("Check profile"))!
+        .click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(host.textContent).toContain("Local contract check passed");
+    expect(host.textContent).toContain("groq/openai/gpt-oss-120b");
+    expect(host.textContent).toContain("₹7.00 per dispatch ceiling");
+    expect(host.textContent).toContain(importedConfiguration.revision);
+
+    await act(async () => {
+      [...host.querySelectorAll("button")]
+        .find((button) =>
+          button.textContent?.includes("Save imported revision"),
+        )!
+        .click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const request = fetchMock.mock.calls.find(
+      ([, init]) => init?.method === "POST",
+    );
+    expect(request?.[0]).toBe("/v1/admin/conversation/providers");
+    expect(request?.[1]?.headers).toEqual(
+      expect.objectContaining({ "idempotency-key": expect.any(String) }),
+    );
+    expect(JSON.parse(request?.[1]?.body as string)).toEqual({
+      expected_revision: 0,
+      configuration: importedConfiguration,
+    });
+    expect(host.textContent).toContain("Imported revision saved");
+  });
+
+  it("keeps an imported profile pending when the saved revision is stale", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(payload()))
+      .mockResolvedValueOnce(jsonResponse({ detail: "stale" }, 409));
+
+    await renderPanel();
+    const textarea = host.querySelector(
+      'textarea[aria-label="Reviewed provider configuration JSON"]',
+    ) as HTMLTextAreaElement;
+    setTextareaValue(textarea, JSON.stringify(importedConfiguration));
+    await act(async () => {
+      [...host.querySelectorAll("button")]
+        .find((button) => button.textContent?.includes("Check profile"))!
+        .click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await act(async () => {
+      [...host.querySelectorAll("button")]
+        .find((button) =>
+          button.textContent?.includes("Save imported revision"),
+        )!
+        .click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(host.textContent).toContain("Provider settings changed");
+    expect(host.textContent).toContain("Reload the current revision");
+    expect(host.textContent).toContain("ready to save");
+  });
+
   it("renders the complete catalog returned by the deployed API", async () => {
     fetchMock.mockResolvedValue(jsonResponse(liveCatalogFixture));
     await renderPanel();

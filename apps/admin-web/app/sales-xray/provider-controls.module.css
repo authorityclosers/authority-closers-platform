@@ -236,7 +236,8 @@
 }
 
 .field input,
-.field select {
+.field select,
+.field textarea {
   width: 100%;
   min-height: 44px;
   padding: 9px 10px;
@@ -247,8 +248,17 @@
 }
 
 .field input:focus,
-.field select:focus {
+.field select:focus,
+.field textarea:focus {
   border-color: var(--focus);
+}
+
+.field textarea {
+  min-height: 170px;
+  resize: vertical;
+  font-family: var(--font-mono), monospace;
+  font-size: 0.78rem;
+  line-height: 1.5;
 }
 
 .field input[readonly] {

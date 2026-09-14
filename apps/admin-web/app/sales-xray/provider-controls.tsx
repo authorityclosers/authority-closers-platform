@@ -23,6 +23,12 @@ const TASK_NAMES = [
 const CHECKPOINT_STAGES = ["C0", "C1", "C2", "C3", "C4", "C5", "C6"] as const;
 const SHA256 = /^[0-9a-f]{64}$/;
 const EXTERNAL_REFERENCE = /^ref:[A-Za-z][A-Za-z0-9_.:/-]{0,255}$/;
+const REGISTRY_CONFIG_SCHEMA = "ac.sales_xray.provider_registry_config/1";
+const MAX_IMPORT_BYTES = 512 * 1024;
+const SENSITIVE_IMPORT_FIELD =
+  /"(?:api[_-]?key|access[_-]?token|password|private[_-]?key|secret(?:[_-]value)?)"\s*:/i;
+const SENSITIVE_IMPORT_VALUE =
+  /(?:AIza[0-9A-Za-z_-]{16,}|(?:sk|gsk|xai)-[0-9A-Za-z_-]{12,}|Bearer\s+\S+|Basic\s+\S+)/i;
 
 const taskSchema = z
   .object({
@@ -198,6 +204,63 @@ export type DraftState = {
 
 const PROVIDER_CONFIG_SCHEMA = "ac.sales_xray.provider_config/1";
 const ROUTE_SCHEMA = "ac.sales_xray.route_config/1";
+
+type ImportedProfile = {
+  configuration: RegistryConfiguration;
+  digest: string;
+  savedRevision?: number;
+};
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => canonicalJson(item)).join(",")}]`;
+  }
+  if (value !== null && typeof value === "object") {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+      .map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+async function configurationDigest(configuration: RegistryConfiguration) {
+  const bytes = new TextEncoder().encode(canonicalJson(configuration));
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+export function parseImportedConfiguration(
+  text: string,
+): RegistryConfiguration {
+  if (!text.trim())
+    throw new Error("Paste the reviewed configuration JSON first.");
+  if (new TextEncoder().encode(text).byteLength > MAX_IMPORT_BYTES) {
+    throw new Error(
+      "Configuration JSON is larger than the 512 KB import limit.",
+    );
+  }
+  if (SENSITIVE_IMPORT_FIELD.test(text) || SENSITIVE_IMPORT_VALUE.test(text)) {
+    throw new Error(
+      "Use the reviewed non-secret profile JSON. Credentials stay in the server environment.",
+    );
+  }
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    throw new Error("Configuration must be valid JSON.");
+  }
+  const parsed = registrySchema.safeParse(value);
+  if (!parsed.success || parsed.data.schema !== REGISTRY_CONFIG_SCHEMA) {
+    throw new Error(
+      "Use a provider registry configuration from the reviewed AC profile format.",
+    );
+  }
+  return parsed.data;
+}
 
 const referenceFields = [
   [
@@ -738,6 +801,46 @@ export function ProviderControlsPanel() {
   const [activationRevision, setActivationRevision] = useState<number | null>(
     null,
   );
+  const [importText, setImportText] = useState("");
+  const [importedProfile, setImportedProfile] =
+    useState<ImportedProfile | null>(null);
+  const [importError, setImportError] = useState("");
+  const [importBusy, setImportBusy] = useState(false);
+  const importSequence = useRef(0);
+
+  async function validateImportedText(text: string) {
+    const sequence = ++importSequence.current;
+    setImportBusy(true);
+    setImportError("");
+    setImportedProfile(null);
+    try {
+      const configuration = parseImportedConfiguration(text);
+      const digest = await configurationDigest(configuration);
+      if (sequence !== importSequence.current) return;
+      setImportedProfile({ configuration, digest });
+    } catch (error: unknown) {
+      if (sequence !== importSequence.current) return;
+      setImportError(
+        error instanceof Error
+          ? error.message
+          : "The provider profile could not be validated.",
+      );
+    } finally {
+      if (sequence === importSequence.current) setImportBusy(false);
+    }
+  }
+
+  async function readImportedFile(file: File | undefined) {
+    if (!file) return;
+    try {
+      const text = await file.text();
+      setImportText(text);
+      await validateImportedText(text);
+    } catch {
+      setImportedProfile(null);
+      setImportError("The selected profile file could not be read.");
+    }
+  }
 
   useEffect(() => {
     const controller = new AbortController();
@@ -881,24 +984,16 @@ export function ProviderControlsPanel() {
     return null;
   }
 
-  async function save() {
+  async function submitConfiguration(
+    configuration: RegistryConfiguration,
+    successMessage: string,
+    markImported = false,
+  ) {
     if (state.status !== "ready" || saveState === "saving") return;
-    const validationError = validateDraft();
-    if (validationError) {
-      setMessage(validationError);
-      setSaveState("idle");
-      return;
-    }
     const expectedRevision = state.current?.revision ?? 0;
     setSaveState("saving");
     setMessage("");
     try {
-      const configuration = await prepareConfiguration(
-        draft,
-        state.current?.configuration ?? state.payload.configuration_template,
-        catalog,
-        expectedRevision,
-      );
       const value = await requestJson("/v1/admin/conversation/providers", {
         method: "POST",
         headers: {
@@ -919,9 +1014,12 @@ export function ProviderControlsPanel() {
       setDraft(draftFromConfiguration(saved.configuration));
       setSaveState("saved");
       setActivationState("idle");
-      setMessage(
-        "Saved as a new immutable revision. Activate an approved revision for new plans.",
-      );
+      if (markImported) {
+        setImportedProfile((previous) =>
+          previous ? { ...previous, savedRevision: saved.revision } : previous,
+        );
+      }
+      setMessage(successMessage);
     } catch (error: unknown) {
       if (error instanceof Error && error.message === "http_409") {
         setSaveState("conflict");
@@ -951,6 +1049,44 @@ export function ProviderControlsPanel() {
         );
       }
     }
+  }
+
+  async function save() {
+    if (state.status !== "ready" || saveState === "saving") return;
+    const validationError = validateDraft();
+    if (validationError) {
+      setMessage(validationError);
+      setSaveState("idle");
+      return;
+    }
+    let configuration: RegistryConfiguration;
+    try {
+      configuration = await prepareConfiguration(
+        draft,
+        state.current?.configuration ?? state.payload.configuration_template,
+        catalog,
+        state.current?.revision ?? 0,
+      );
+    } catch {
+      setSaveState("idle");
+      setMessage(
+        "The configuration could not be prepared. Review the fields and try again.",
+      );
+      return;
+    }
+    await submitConfiguration(
+      configuration,
+      "Saved as a new immutable revision. Activate an approved revision for new plans.",
+    );
+  }
+
+  async function saveImportedProfile() {
+    if (!importedProfile || state.status !== "ready") return;
+    await submitConfiguration(
+      importedProfile.configuration,
+      "Imported revision saved. Activate it separately only when the server lists it as approved.",
+      true,
+    );
   }
 
   async function activate() {
@@ -1094,6 +1230,142 @@ export function ProviderControlsPanel() {
           </small>
         </div>
       </div>
+
+      <section
+        className={styles.section}
+        aria-labelledby="approved-profile-import-title"
+      >
+        <div className={styles.sectionHeader}>
+          <div>
+            <span className={styles.eyebrow}>Approved profile import</span>
+            <h2 id="approved-profile-import-title">
+              Load a reviewed provider configuration.
+            </h2>
+            <p>
+              Paste or choose the non-secret JSON prepared for this AC release.
+              It is validated locally, then saved through the same revision and
+              approval checks as the settings editor. Credentials stay in the
+              server environment.
+            </p>
+          </div>
+          <ShieldCheck size={20} aria-hidden="true" />
+        </div>
+        <label className={styles.field}>
+          <span className={styles.fieldLabel}>
+            Reviewed provider configuration JSON
+          </span>
+          <textarea
+            aria-label="Reviewed provider configuration JSON"
+            value={importText}
+            onChange={(event) => {
+              setImportText(event.target.value);
+              setImportedProfile(null);
+              setImportError("");
+            }}
+            placeholder='{"schema":"ac.sales_xray.provider_registry_config/1", ...}'
+            spellCheck={false}
+            rows={8}
+          />
+          <small>
+            JSON only, up to 512 KB. Use opaque ref:... values; never paste
+            credentials, passwords, tokens, or credential contents.
+          </small>
+        </label>
+        <div className={styles.buttonRow}>
+          <button
+            className="button button-primary"
+            type="button"
+            onClick={() => void validateImportedText(importText)}
+            disabled={importBusy || !importText.trim()}
+          >
+            {importBusy ? "Checking…" : "Check profile"}
+          </button>
+          <label className="button button-secondary">
+            Choose JSON file
+            <input
+              className={styles.srOnly}
+              type="file"
+              accept="application/json,.json"
+              aria-label="Choose reviewed provider configuration JSON file"
+              onChange={(event) =>
+                void readImportedFile(event.target.files?.[0])
+              }
+            />
+          </label>
+        </div>
+        {importError ? (
+          <div className={styles.error} role="alert">
+            <p>{importError}</p>
+          </div>
+        ) : null}
+        {importedProfile ? (
+          <div className={styles.card} role="status">
+            <div className={styles.cardHeader}>
+              <div>
+                <span className={styles.eyebrow}>
+                  Local contract check passed
+                </span>
+                <h3>{importedProfile.configuration.revision}</h3>
+              </div>
+              <span className={styles.status}>
+                {importedProfile.savedRevision
+                  ? `saved revision #${importedProfile.savedRevision}`
+                  : "ready to save"}
+              </span>
+            </div>
+            <p>
+              Digest <code>{importedProfile.digest}</code>. The server still
+              decides whether this exact revision is approved for activation.
+            </p>
+            <div className={styles.providerList}>
+              {importedProfile.configuration.providers.map((provider) => (
+                <div
+                  className={styles.routeMeta}
+                  key={`${provider.provider_id}::${provider.model_id}`}
+                >
+                  <strong>
+                    {provider.provider_id}/{provider.model_id}
+                  </strong>
+                  <span>
+                    {provider.max_cost_paise == null
+                      ? "cost ceiling unavailable"
+                      : `₹${(provider.max_cost_paise / 100).toFixed(2)} per dispatch ceiling`}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div className={styles.routeMeta}>
+              <span>
+                Routes:{" "}
+                {importedProfile.configuration.routes
+                  .map(
+                    (route) =>
+                      `${route.task} → ${route.provider_id}/${route.model_id}`,
+                  )
+                  .join(" · ") || "none"}
+              </span>
+            </div>
+            <div className={styles.buttonRow}>
+              <button
+                className="button button-primary"
+                type="button"
+                onClick={() => void saveImportedProfile()}
+                disabled={
+                  saveState === "saving" ||
+                  saveState === "conflict" ||
+                  Boolean(importedProfile.savedRevision)
+                }
+              >
+                {saveState === "saving" ? "Saving…" : "Save imported revision"}
+              </button>
+              <small>
+                Uses current revision {current?.revision ?? 0}; a stale revision
+                is rejected and must be reloaded.
+              </small>
+            </div>
+          </div>
+        ) : null}
+      </section>
 
       {message ? (
         <div
