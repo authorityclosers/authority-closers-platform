@@ -50,12 +50,45 @@ Sources reviewed:
 - https://developers.deepgram.com/reference/speech-to-text/listen-pre-recorded
 - https://deepgram.com/terms
 
+## Bounded public connectivity test
+
+On 2026-09-14, one non-customer request was sent through the Infisical
+Development path above to Deepgram's official public `spacewalk.wav` sample.
+The request used Nova-3, `language=multi`, `mip_opt_out=true`, smart format,
+punctuation, diarization, utterances, paragraphs, and a non-customer test tag.
+The raw response was handled outside Git and is not retained in this evidence
+file.
+
+Measured result:
+
+```text
+HTTP status: 200
+Wall latency: 2355 ms
+Provider/model: Deepgram Nova-3
+Audio duration: 25.933313 s
+Utterances: 8
+Speakers detected: 1
+Estimated charge at $0.0052/min: $0.002248
+```
+
+This proves credential injection, endpoint reachability, request authentication,
+and response normalization at the provider boundary. It does not prove that
+the frozen hosted staging release has been activated or that the real approved
+customer recording is cleared for external processing.
+
 ## Verification
 
 Synthetic tests passed:
 
 ```text
 145 passed, 17 skipped
+```
+
+Latest focused provider/inference tests after the retention opt-out hardening:
+
+```text
+40 passed
+Ruff: All checks passed
 ```
 
 The tests cover the provider catalog, binary request shape, query parameters,
