@@ -104,6 +104,7 @@ _STABLE_ERROR_CODES = frozenset(
 # The parent never copies any of them into its own command or request frame.
 _CREDENTIAL_ENV = {
     "elevenlabs": "ELEVENLABS_API_KEY",
+    "deepgram": "DEEPGRAM_API_KEY",
     "gemini": "GEMINI_API_KEY",
     "groq": "GROQ_API_KEY",
 }
@@ -807,7 +808,11 @@ def _request_header(reservation: Reservation, payload: bytes) -> dict[str, Any]:
     quote = reservation.quote
     if reservation.state != "in_flight" or not reservation.attempt_id:
         raise InferenceBrokerError("broker_reservation_not_in_flight")
-    if quote.operation not in {"transcribe_scribe_v2", "extract_context_evidence"}:
+    if quote.operation not in {
+        "transcribe_scribe_v2",
+        "transcribe_deepgram_nova3",
+        "extract_context_evidence",
+    }:
         raise InferenceBrokerError("broker_operation_not_supported")
     if type(payload) is not bytes or not 0 < len(payload) <= MAX_AUDIO_BYTES:
         raise InferenceBrokerError("broker_input_too_large")
@@ -1075,7 +1080,11 @@ def _child_execute(frame: bytes) -> bytes:
         model = _identifier(header.get("model"), "model")
         operation = _identifier(header.get("operation"), "operation")
         assert provider is not None and model is not None and operation is not None
-        if operation not in {"transcribe_scribe_v2", "extract_context_evidence"}:
+        if operation not in {
+            "transcribe_scribe_v2",
+            "transcribe_deepgram_nova3",
+            "extract_context_evidence",
+        }:
             raise InferenceBrokerError("broker_operation_not_supported")
         reservation_value = header.get("reservation")
         reservation = Reservation.from_dict(reservation_value)
@@ -1115,7 +1124,7 @@ def _child_execute(frame: bytes) -> bytes:
         adapter = BoundedProviders(credentials={provider: credential}, authorize=authorize)
         result = (
             adapter.transcribe(reservation, payload)
-            if operation == "transcribe_scribe_v2"
+            if operation in {"transcribe_scribe_v2", "transcribe_deepgram_nova3"}
             else adapter.generate(reservation, cast(dict[str, Any], body))
         )
         response_sha = hashlib.sha256(result.raw_json).hexdigest()

@@ -63,6 +63,7 @@ from ac_platform.conversation_intelligence.provider_admin import (
 )
 from ac_platform.conversation_intelligence.provider_registry import (
     DispatchRequest,
+    ProviderRegistryError,
     parse_registry_config,
     resolve_dispatch,
 )
@@ -450,6 +451,27 @@ class ConversationAuthority:
             .execution_options(populate_existing=True)
         )
         return cast(ConversationProviderConfiguration | None, value)
+
+    async def selected_asr_route(
+        self, app: ConversationApplication
+    ) -> tuple[str, str] | None:
+        """Return the active approved ASR binding for a new transcription plan.
+
+        A saved configuration is not enough to change routing.  Only the
+        append-only activation row is eligible here; the later approval check
+        still binds the route to the release approval and exact recording.
+        """
+        configuration = await self._provider_configuration(app)
+        if configuration is None:
+            return None
+        try:
+            config = parse_registry_config(configuration.configuration)
+            if config.digest != configuration.configuration_sha256:
+                raise ValueError
+            route = next(item for item in config.routes if item.task == "asr")
+            return route.provider_id, route.model_id
+        except (ProviderRegistryError, StopIteration, TypeError, ValueError):
+            raise ConversationDenied("The active provider configuration is invalid.") from None
 
     @staticmethod
     def _approved_default_configuration_sha256(

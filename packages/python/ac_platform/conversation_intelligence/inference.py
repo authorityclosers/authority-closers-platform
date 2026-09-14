@@ -218,10 +218,17 @@ class ConversationInference:
             or payload.get("source_sha256") != recording.source_sha256
         ):
             raise ConversationConflict("The recording needs a verified duration.")
+        provider, model = "elevenlabs", "scribe_v2"
+        if self.authority is not None:
+            selected = await self.authority.selected_asr_route(self.application)
+            if selected is not None:
+                provider, model = selected
         prepared = prepare_scribe_input(
             source_sha256=recording.source_sha256,
             duration_ms=duration,
             content_type=recording.content_type,
+            provider=provider,
+            model=model,
         )
         template = build_checkpoint(
             binding,

@@ -23,6 +23,15 @@
       "token_file_ref": "/run/ac-sales-xray/identities/elevenlabs/token"
     },
     {
+      "credential_ref": "REPLACE_WITH_APPROVED_DEEPGRAM_CREDENTIAL_REF",
+      "provider_id": "deepgram",
+      "executable": "/opt/infisical",
+      "project_ref": "b421c44e-4599-4394-8df6-758ed8aedfed",
+      "environment_ref": "dev",
+      "secret_path_ref": "/sales-xray-test/deepgram",
+      "token_file_ref": "/run/ac-sales-xray/identities/deepgram/token"
+    },
+    {
       "credential_ref": "REPLACE_WITH_APPROVED_GROQ_CREDENTIAL_REF",
       "provider_id": "groq",
       "executable": "/opt/infisical",

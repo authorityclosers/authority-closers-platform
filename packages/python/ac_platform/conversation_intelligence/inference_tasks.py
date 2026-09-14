@@ -27,6 +27,7 @@ from ac_platform.conversation_intelligence.providers import (
     MAX_JSON_BYTES,
     ProviderError,
     ProviderResult,
+    deepgram_transcript,
     scribe_transcript,
 )
 from ac_platform.conversation_intelligence.report_overview import OVERVIEW_MARKER
@@ -65,6 +66,11 @@ _ALLOWED_CONTENT_TYPES = frozenset(
 )
 _TEXT_OPERATION = "extract_context_evidence"
 _SCRIBE_OPERATION = "transcribe_scribe_v2"
+_DEEPGRAM_OPERATION = "transcribe_deepgram_nova3"
+_ASR_ROUTES = {
+    ("elevenlabs", "scribe_v2"): _SCRIBE_OPERATION,
+    ("deepgram", "nova-3"): _DEEPGRAM_OPERATION,
+}
 _MAX_METADATA_BYTES = 4_096
 _MAX_TEXT_PAYLOAD_BYTES = 512 * 1024
 _MAX_DURATION_MS = 7_200_000
@@ -304,11 +310,14 @@ class PreparedTaskInput:
         if not isinstance(payload_value, dict) or payload_canonical != self.payload:
             _fail("task_payload_not_canonical")
         if self.task == "asr":
-            if self.payload_kind != "source_reference" or self.provider != "elevenlabs":
+            if self.payload_kind != "source_reference":
                 _fail("scribe_input_invalid")
-            if self.model != "scribe_v2":
+            if _ASR_ROUTES.get((self.provider, self.model)) != self.operation:
                 _fail("scribe_input_invalid")
-            if self.operation != _SCRIBE_OPERATION or self.transcript_revision is not None:
+            if (
+                self.operation not in {_SCRIBE_OPERATION, _DEEPGRAM_OPERATION}
+                or self.transcript_revision is not None
+            ):
                 _fail("scribe_input_invalid")
             if self.profile_revision is not None or self.max_completion_tokens is not None:
                 _fail("scribe_input_invalid")
@@ -656,6 +665,9 @@ def prepare_scribe_input(
     duration = _duration(duration_ms)
     if content_type not in _ALLOWED_CONTENT_TYPES:
         _fail("invalid_content_type")
+    operation = _ASR_ROUTES.get((provider, model))
+    if operation is None:
+        _fail("scribe_input_invalid")
     metadata = {
         "schema": "ac.sales_xray.c2_scribe_input/1",
         "source_sha256": source,
@@ -668,7 +680,7 @@ def prepare_scribe_input(
         checkpoint="C2",
         provider=provider,
         model=model,
-        operation=_SCRIBE_OPERATION,
+        operation=operation,
         source_sha256=source,
         transcript_revision=None,
         profile_revision=None,
@@ -691,8 +703,8 @@ def validate_scribe_result(
     _validate_result_metadata(
         result,
         task_input,
-        expected_provider="elevenlabs",
-        expected_operation=_SCRIBE_OPERATION,
+        expected_provider=task_input.provider,
+        expected_operation=task_input.operation,
     )
     duration = _duration(duration_ms)
     try:
@@ -702,10 +714,9 @@ def validate_scribe_result(
     if not isinstance(source_metadata, dict) or source_metadata.get("duration_ms") != duration:
         _fail("scribe_duration_mismatch")
     try:
-        transcript = scribe_transcript(
-            result,
-            duration_ms=duration,
-            source_sha256=task_input.source_sha256,
+        normalizer = deepgram_transcript if task_input.provider == "deepgram" else scribe_transcript
+        transcript = normalizer(
+            result, duration_ms=duration, source_sha256=task_input.source_sha256
         )
     except ProviderError as exc:
         raise InferenceTaskError(str(exc)) from None

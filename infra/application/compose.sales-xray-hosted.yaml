@@ -94,6 +94,12 @@ services:
         bind:
           create_host_path: false
       - type: bind
+        source: ${AC_XRAY_DEEPGRAM_IDENTITY_DIR:?directory containing only Deepgram identity required}
+        target: /run/ac-sales-xray/identities/deepgram
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
         source: ${AC_XRAY_GROQ_IDENTITY_DIR:?directory containing only Groq identity required}
         target: /run/ac-sales-xray/identities/groq
         read_only: true

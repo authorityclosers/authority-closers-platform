@@ -348,12 +348,14 @@ class FixedProviderRouter:
         ):
             if getattr(quote, quote_field) != getattr(approval, approval_field):
                 raise ProviderRouterError("broker_router_authorization_mismatch")
-        expected_operation = (
-            "transcribe_scribe_v2" if approval.stage == "C2" else "extract_context_evidence"
+        expected_operations = (
+            {"transcribe_scribe_v2", "transcribe_deepgram_nova3"}
+            if approval.stage == "C2"
+            else {"extract_context_evidence"}
         )
-        if quote.operation != expected_operation:
+        if quote.operation not in expected_operations:
             raise ProviderRouterError("broker_router_route_mismatch")
-        if approval.stage == "C2" and approval.provider_id != "elevenlabs":
+        if approval.stage == "C2" and approval.provider_id not in {"elevenlabs", "deepgram"}:
             raise ProviderRouterError("broker_router_route_mismatch")
         if approval.stage in {"C4", "C5"} and approval.provider_id not in {"groq", "gemini"}:
             raise ProviderRouterError("broker_router_route_mismatch")

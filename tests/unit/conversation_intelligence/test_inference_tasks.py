@@ -127,6 +127,54 @@ def test_scribe_result_is_source_bound_and_preserves_raw_receipt() -> None:
         )
 
 
+def test_deepgram_result_is_normalized_through_the_same_c2_contract() -> None:
+    source_sha256 = hashlib.sha256(b"synthetic-audio").hexdigest()
+    prepared = prepare_scribe_input(
+        source_sha256,
+        2_000,
+        content_type="audio/ogg",
+        provider="deepgram",
+        model="nova-3",
+    )
+    assert prepared.operation == "transcribe_deepgram_nova3"
+    result = _result(
+        {
+            "results": {
+                "channels": [
+                    {
+                        "alternatives": [
+                            {
+                                "transcript": "hello there",
+                                "words": [
+                                    {
+                                        "word": "hello",
+                                        "start": 0.0,
+                                        "end": 0.5,
+                                        "speaker": 0,
+                                    },
+                                    {
+                                        "word": "there",
+                                        "start": 0.5,
+                                        "end": 1.0,
+                                        "speaker": 0,
+                                    },
+                                ],
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        provider="deepgram",
+        model="nova-3",
+        input_sha256=source_sha256,
+    )
+    normalized = validate_scribe_result(result, prepared, duration_ms=2_000)
+    assert normalized.raw_json == result.raw_json
+    assert normalized.data()["raw_text"] == "hello there"
+    assert normalized.data()["segments"][0]["speaker_id"] == "speaker_0"
+
+
 def test_fact_envelopes_cover_complete_chunks_without_profile() -> None:
     transcript = _transcript(count=6)
     prepared = prepare_fact_inputs(transcript, max_input_chars=220)

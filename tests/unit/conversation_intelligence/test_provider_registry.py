@@ -124,7 +124,9 @@ def _dispatch_request(config: RegistryConfig, *, task: TaskName = "asr") -> Disp
 def test_catalog_distinguishes_current_transport_from_planned_provider_options() -> None:
     view = {entry["provider_id"]: entry for entry in catalog_public_view()}
     assert DEFAULT_PROVIDER_CATALOG.digest
-    assert {view[name]["status"] for name in ("gemini", "groq", "elevenlabs")} == {"implemented"}
+    assert {
+        view[name]["status"] for name in ("gemini", "groq", "elevenlabs", "deepgram")
+    } == {"implemented"}
     planned = (
         "openai",
         "deepseek",
@@ -144,6 +146,11 @@ def test_catalog_distinguishes_current_transport_from_planned_provider_options()
         model for model in view["elevenlabs"]["models"] if model["model_id"] == "scribe_v2"
     )
     assert {item["task"]: item["status"] for item in scribe["task_support"]} == {
+        "asr": "implemented"
+    }
+    nova = next(model for model in view["deepgram"]["models"] if model["model_id"] == "nova-3")
+    assert nova["endpoint"] == "https://api.deepgram.com/v1/listen"
+    assert {item["task"]: item["status"] for item in nova["task_support"]} == {
         "asr": "implemented"
     }
     gemini = next(

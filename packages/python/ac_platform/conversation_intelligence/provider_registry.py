@@ -32,6 +32,7 @@ type ImplementationStatus = Literal["implemented", "planned"]
 type TaskSupportStatus = Literal["implemented", "contract_only", "planned", "unavailable"]
 type ProviderProtocol = Literal[
     "elevenlabs_https",
+    "deepgram_https",
     "gemini_https",
     "groq_openai_compatible_https",
     "openai_https",
@@ -297,6 +298,7 @@ class ProviderCatalogEntry:
         _text(self.display_name, "display_name", allow_spaces=True)
         if self.protocol not in {
             "elevenlabs_https",
+            "deepgram_https",
             "gemini_https",
             "groq_openai_compatible_https",
             "openai_https",
@@ -390,7 +392,7 @@ def _model(
 
 
 DEFAULT_PROVIDER_CATALOG = ProviderCatalog(
-    revision="provider-catalog-20260913-v1",
+    revision="provider-catalog-20260914-v1",
     providers=(
         ProviderCatalogEntry(
             "local",
@@ -477,6 +479,24 @@ DEFAULT_PROVIDER_CATALOG = ProviderCatalog(
             (
                 "Scribe native transcript normalization is implemented; speaker identity "
                 "remains unverified."
+            ),
+        ),
+        ProviderCatalogEntry(
+            "deepgram",
+            "Deepgram",
+            "deepgram_https",
+            "implemented",
+            (
+                _model(
+                    "nova-3",
+                    "https://api.deepgram.com/v1/listen",
+                    ("asr", "implemented"),
+                ),
+            ),
+            (
+                "Nova-3 prerecorded transcription is implemented with bounded word timing "
+                "and provider speaker labels. Speaker identity and alignment to AudioAtlas "
+                "remain unverified; hosted activation still requires the exact approval bundle."
             ),
         ),
         ProviderCatalogEntry(

@@ -61,7 +61,7 @@ class StrictConfig(BaseModel):
 
 class ProviderLauncherConfig(StrictConfig):
     credential_ref: Annotated[str, Field(pattern=r"^ref:[A-Za-z0-9_./:-]{1,200}$")]
-    provider_id: Literal["elevenlabs", "groq", "gemini"]
+    provider_id: Literal["elevenlabs", "deepgram", "groq", "gemini"]
     executable: str
     project_ref: str
     environment_ref: str
@@ -87,7 +87,7 @@ class WorkerServiceConfig(StrictConfig):
     database_url_file: str
     native_socket_path: str
     native_image_ref: Annotated[str, Field(pattern=r"^(?:[A-Za-z0-9._/-]+@)?sha256:[0-9a-f]{64}$")]
-    providers: Annotated[list[ProviderLauncherConfig], Field(min_length=0, max_length=3)]
+    providers: Annotated[list[ProviderLauncherConfig], Field(min_length=0, max_length=4)]
 
     @field_validator("operations_tenant_id", mode="before")
     @classmethod

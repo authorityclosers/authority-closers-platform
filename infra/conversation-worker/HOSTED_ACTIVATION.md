@@ -92,6 +92,7 @@ AC_XRAY_STORAGE_ROOT=/srv/authority-closers/sales-xray/staging/storage
 AC_XRAY_SCRATCH_ROOT=/srv/authority-closers/sales-xray/staging/scratch
 AC_XRAY_NATIVE_SOCKET_DIR=/run/ac-sales-xray/staging
 AC_XRAY_ELEVENLABS_IDENTITY_DIR=/etc/authority-closers/secrets/sales-xray/identities/elevenlabs
+AC_XRAY_DEEPGRAM_IDENTITY_DIR=/etc/authority-closers/secrets/sales-xray/identities/deepgram
 AC_XRAY_GROQ_IDENTITY_DIR=/etc/authority-closers/secrets/sales-xray/identities/groq
 AC_XRAY_GEMINI_IDENTITY_DIR=/etc/authority-closers/secrets/sales-xray/identities/gemini
 AC_XRAY_INFISICAL_BINARY=/usr/local/bin/infisical

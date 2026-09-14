@@ -17,6 +17,7 @@ from ac_platform.conversation_intelligence.limits import MAX_AUDIO_BYTES
 from ac_platform.conversation_intelligence.providers import (
     BoundedProviders,
     ProviderError,
+    deepgram_transcript,
     scribe_transcript,
 )
 
@@ -64,7 +65,11 @@ def body():
 
 def client(handler, authorize=lambda _: None):
     return BoundedProviders(
-        credentials={"gemini": "fake-never-real", "elevenlabs": "fake-never-real"},
+        credentials={
+            "gemini": "fake-never-real",
+            "elevenlabs": "fake-never-real",
+            "deepgram": "fake-never-real",
+        },
         authorize=authorize,
         clock=lambda: 200,
         transport=httpx.MockTransport(handler),
@@ -315,6 +320,80 @@ def test_scribe_native_text_and_unverified_identity_preserved():
     # Provider speaker labels are not physical channel assignments. The adapter
     # must keep the distinction explicit instead of inventing a channel mapping.
     assert all("channel" not in segment for segment in transcript["segments"])
+
+
+def test_deepgram_nova3_uses_bounded_binary_request_and_normalizes_labels():
+    audio = b"synthetic-audio"
+    g = grant(audio, provider="deepgram", model="nova-3", operation="transcribe_deepgram_nova3")
+    seen = []
+
+    def handler(request):
+        seen.append(request)
+        assert request.headers["authorization"] == "Token fake-never-real"
+        assert request.headers["content-type"] == "application/octet-stream"
+        assert dict(request.url.params) == {
+            "model": "nova-3",
+            "language": "multi",
+            "smart_format": "true",
+            "punctuate": "true",
+            "diarize": "true",
+            "utterances": "true",
+            "paragraphs": "true",
+        }
+        assert request.read() == audio
+        return httpx.Response(
+            200,
+            json={
+                "results": {
+                    "channels": [
+                        {
+                            "alternatives": [
+                                {
+                                    "transcript": "Hello, world.",
+                                    "words": [
+                                        {
+                                            "word": "hello",
+                                            "punctuated_word": "Hello,",
+                                            "start": 0.0,
+                                            "end": 0.5,
+                                            "speaker": 0,
+                                        },
+                                        {
+                                            "word": "world",
+                                            "punctuated_word": "world.",
+                                            "start": 0.5,
+                                            "end": 1.0,
+                                            "speaker": 0,
+                                        },
+                                    ],
+                                }
+                            ]
+                        }
+                    ]
+                }
+            },
+        )
+
+    result = client(handler).transcribe(g, audio)
+    transcript = deepgram_transcript(
+        result,
+        duration_ms=1000,
+        source_sha256=g.quote.source.source_sha256,
+    )
+    assert len(seen) == 1
+    assert transcript["raw_text"] == "Hello, world."
+    assert transcript["segments"] == [
+        {
+            "id": "s1",
+            "speaker_id": "speaker_0",
+            "start_ms": 0,
+            "end_ms": 1000,
+            "text": "Hello, world.",
+        }
+    ]
+    assert transcript["timebase_id"] == "deepgram-native-seconds"
+    assert transcript["alignment_to_audioatlas"] == "unverified"
+    assert transcript["speaker_identity"] == "unverified_provider_labels"
 
 
 def _scribe_from_response(payload, *, duration_ms=1000):

@@ -85,6 +85,9 @@ class BoundedProviders:
         json_body: dict[str, Any] | None = None,
         audio: bytes | None = None,
         input_sha256: str = "",
+        params: dict[str, str] | None = None,
+        binary_audio: bool = False,
+        audio_content_type: str = "application/octet-stream",
     ) -> ProviderResult:
         fields = {
             "model_id": "scribe_v2",
@@ -105,11 +108,15 @@ class BoundedProviders:
                     "POST",
                     url,
                     headers=headers,
+                    params=params,
                     json=json_body,
-                    data=fields if audio is not None else None,
-                    files={"file": ("recording.audio", audio, "application/octet-stream")}
-                    if audio is not None
-                    else None,
+                    data=fields if audio is not None and not binary_audio else None,
+                    content=audio if audio is not None and binary_audio else None,
+                    files=(
+                        {"file": ("recording.audio", audio, audio_content_type)}
+                        if audio is not None and not binary_audio
+                        else None
+                    ),
                 ) as response,
             ):
                 if self._monotonic() > deadline:
@@ -192,20 +199,45 @@ class BoundedProviders:
         if (
             type(audio) is not bytes
             or not 0 < len(audio) <= MAX_AUDIO_BYTES
-            or reservation.quote.provider_model != "scribe_v2"
         ):
             raise ProviderError("provider_audio_or_model_invalid")
         if reservation.quote.input_sha256 != reservation.quote.source.source_sha256:
             raise ProviderError("provider_source_binding_mismatch")
-        self._admit(reservation, "elevenlabs", "transcribe_scribe_v2", audio)
-        return self._post(
-            "elevenlabs",
-            "scribe_v2",
-            "https://api.elevenlabs.io/v1/speech-to-text",
-            headers={"xi-api-key": self._credentials["elevenlabs"]},
-            audio=audio,
-            input_sha256=reservation.quote.input_sha256,
-        )
+        provider, model = reservation.quote.provider_id, reservation.quote.provider_model
+        if provider == "elevenlabs" and model == "scribe_v2":
+            self._admit(reservation, provider, "transcribe_scribe_v2", audio)
+            return self._post(
+                provider,
+                model,
+                "https://api.elevenlabs.io/v1/speech-to-text",
+                headers={"xi-api-key": self._credentials[provider]},
+                audio=audio,
+                input_sha256=reservation.quote.input_sha256,
+            )
+        if provider == "deepgram" and model == "nova-3":
+            self._admit(reservation, provider, "transcribe_deepgram_nova3", audio)
+            return self._post(
+                provider,
+                model,
+                "https://api.deepgram.com/v1/listen",
+                headers={
+                    "Authorization": "Token " + self._credentials[provider],
+                    "Content-Type": "application/octet-stream",
+                },
+                params={
+                    "model": model,
+                    "language": "multi",
+                    "smart_format": "true",
+                    "punctuate": "true",
+                    "diarize": "true",
+                    "utterances": "true",
+                    "paragraphs": "true",
+                },
+                audio=audio,
+                binary_audio=True,
+                input_sha256=reservation.quote.input_sha256,
+            )
+        raise ProviderError("provider_model_not_supported")
 
     def generate(self, reservation: Reservation, body: dict[str, Any]) -> ProviderResult:
         encoded = canonical(body)
@@ -313,6 +345,96 @@ def scribe_transcript(
         "raw_text": result.data["text"],
         "raw_response_sha256": result.response_sha256,
         "timebase_id": "elevenlabs-scribe-native-seconds",
+        "alignment_to_audioatlas": "unverified",
+        "speaker_identity": "unverified_provider_labels",
+        "overlap_observed": overlap_observed,
+        "segments": segments,
+    }
+
+
+def deepgram_transcript(
+    result: ProviderResult, *, duration_ms: int, source_sha256: str
+) -> dict[str, Any]:
+    """Normalize Deepgram's channel/word response without asserting identity."""
+    if result.provider != "deepgram" or result.input_sha256 != source_sha256:
+        raise ProviderError("deepgram_transcript_invalid")
+    results = result.data.get("results")
+    if not isinstance(results, dict):
+        raise ProviderError("deepgram_transcript_invalid")
+    channels = results.get("channels")
+    if not isinstance(channels, list) or len(channels) != 1:
+        raise ProviderError("deepgram_channels_invalid")
+    channel = channels[0]
+    if not isinstance(channel, dict):
+        raise ProviderError("deepgram_channel_invalid")
+    alternatives = channel.get("alternatives")
+    if not isinstance(alternatives, list) or not alternatives:
+        raise ProviderError("deepgram_alternatives_invalid")
+    alternative = alternatives[0]
+    if not isinstance(alternative, dict) or not isinstance(alternative.get("transcript"), str):
+        raise ProviderError("deepgram_transcript_invalid")
+    words = alternative.get("words")
+    if not isinstance(words, list) or len(words) > 50000:
+        raise ProviderError("deepgram_words_invalid")
+    segments: list[dict[str, Any]] = []
+    last_start = -1.0
+    furthest_end = -1.0
+    overlap_observed = False
+    for word in words:
+        if not isinstance(word, dict):
+            raise ProviderError("deepgram_word_invalid")
+        text = word.get("punctuated_word", word.get("word"))
+        if not isinstance(text, str):
+            raise ProviderError("deepgram_word_invalid")
+        native_start, native_end = word.get("start"), word.get("end")
+        if type(native_start) not in {int, float} or type(native_end) not in {int, float}:
+            raise ProviderError("deepgram_timing_invalid")
+        start, end = float(cast(float, native_start)), float(cast(float, native_end))
+        if (
+            not math.isfinite(start)
+            or not math.isfinite(end)
+            or start < 0
+            or end < start
+            or end * 1000 > duration_ms + 1000
+            or start < last_start
+        ):
+            raise ProviderError("deepgram_timing_invalid")
+        last_start = start
+        overlap_observed = overlap_observed or start < furthest_end
+        furthest_end = max(furthest_end, end)
+        if not text.strip() or start == end:
+            continue
+        speaker_value = word.get("speaker")
+        if speaker_value is None:
+            speaker = "unattributed"
+        elif type(speaker_value) is int and speaker_value >= 0:
+            speaker = f"speaker_{speaker_value}"
+        else:
+            raise ProviderError("deepgram_speaker_invalid")
+        if (
+            segments
+            and segments[-1]["speaker_id"] == speaker
+            and start * 1000 - segments[-1]["end_ms"] <= 1500
+            and len(segments[-1]["text"]) < 700
+        ):
+            segments[-1]["text"] += " " + text
+            segments[-1]["end_ms"] = max(segments[-1]["end_ms"], round(end * 1000))
+        else:
+            segments.append(
+                {
+                    "id": f"s{len(segments) + 1}",
+                    "speaker_id": speaker,
+                    "start_ms": round(start * 1000),
+                    "end_ms": round(end * 1000),
+                    "text": text,
+                }
+            )
+    return {
+        "source_sha256": source_sha256,
+        "revision": result.response_sha256,
+        "raw_text": alternative["transcript"],
+        "raw_response_sha256": result.response_sha256,
+        "timebase_id": "deepgram-native-seconds",
         "alignment_to_audioatlas": "unverified",
         "speaker_identity": "unverified_provider_labels",
         "overlap_observed": overlap_observed,
