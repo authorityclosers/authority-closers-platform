@@ -84,7 +84,24 @@ class ReportingBroker(FakeBroker):
             }
         else:
             facts = json.loads(user.split("\n", 1)[1])
-            evidence = facts["observations"][0]["evidence"]
+            # C5 receives lossless source rows plus compact C4 quote ranges.
+            # A provider must emit literal output spans, not echo those input
+            # references into the report's different evidence contract.
+            context = facts["source_context"]
+            by_id = {
+                row[0]: dict(zip(context["columns"], row, strict=True)) for row in context["rows"]
+            }
+            evidence = []
+            for reference in facts["observations"][0]["evidence"]:
+                segment = by_id[reference["segment_id"]]
+                evidence.append(
+                    {
+                        "segment_id": segment["id"],
+                        "quote": segment["text"][reference["quote_start"] : reference["quote_end"]],
+                        "start_ms": segment["start_ms"],
+                        "end_ms": segment["end_ms"],
+                    }
+                )
             finding = {
                 "title": "A greeting is present",
                 "explanation": "This is a literal quote.",

@@ -160,6 +160,30 @@ def _many_fact_case() -> tuple[dict[str, Any], Any]:
     return transcript, packet
 
 
+def _assert_lossless_coaching_context(
+    facts: dict[str, Any], transcript: dict[str, Any], packet: Any
+) -> None:
+    context = facts["source_context"]
+    segments = [dict(zip(context["columns"], row, strict=True)) for row in context["rows"]]
+    assert segments == transcript["segments"]
+    by_id = {segment["id"]: segment for segment in segments}
+    recovered = []
+    for observation in facts["observations"]:
+        evidence = []
+        for reference in observation["evidence"]:
+            segment = by_id[reference["segment_id"]]
+            evidence.append(
+                {
+                    "segment_id": segment["id"],
+                    "quote": segment["text"][reference["quote_start"] : reference["quote_end"]],
+                    "start_ms": segment["start_ms"],
+                    "end_ms": segment["end_ms"],
+                }
+            )
+        recovered.append({"statement": observation["statement"], "evidence": evidence})
+    assert recovered == [item.model_dump(mode="json") for item in packet.observations]
+
+
 def test_gemini_report_keeps_all_sixty_four_facts_and_full_overview() -> None:
     transcript, packet = _many_fact_case()
     task = prepare_coaching_input(
@@ -173,14 +197,14 @@ def test_gemini_report_keeps_all_sixty_four_facts_and_full_overview() -> None:
     system = body["systemInstruction"]["parts"][0]["text"]
     user = body["contents"][0]["parts"][0]["text"]
     facts = json.loads(user.split("\n", 1)[1])
-    assert facts["observations"] == [item.model_dump(mode="json") for item in packet.observations]
+    _assert_lossless_coaching_context(facts, transcript, packet)
     assert facts["uncertainties"] == packet.uncertainties
     assert facts["covered_segment_ids"] == [segment["id"] for segment in transcript["segments"]]
     assert OVERVIEW_MARKER in system
     profile = json.loads(system.rsplit("Profile:\n", 1)[1])
     assert profile["dimensions"] == load_report_profile()["dimensions"]
     assert body["generationConfig"]["maxOutputTokens"] == 1800
-    assert len((system + user).encode("utf-8")) + 1800 + 128 <= 32000
+    assert 32000 < len((system + user).encode("utf-8")) + 1800 + 128 <= 48000
     assert len(facts["observations"]) == 64
     assert type(task).from_dict(task.as_dict(), payload=task.payload) == task
     draft = _payload(transcript)
@@ -217,13 +241,15 @@ def test_other_model_report_limits_are_unchanged(provider: str, model: str) -> N
 async def test_gemini_broker_and_reconstruction_enforce_the_same_byte_envelope(
     full_call: bool,
 ) -> None:
-    transcript, packet = _full_call_c5_case() if full_call else _many_fact_case()
+    transcript, packet = _full_call_c5_case(repetitions=6) if full_call else _many_fact_case()
+    maximum = 8000 if full_call else 1800
+    cost = 1000 if full_call else 500
     task = prepare_coaching_input(
         transcript,
         [packet],
         provider="gemini",
         model="gemini-3.8-flash",
-        max_completion_tokens=1800,
+        max_completion_tokens=maximum,
     )
     profile = load_report_profile()
     stage = _stage(
@@ -236,8 +262,8 @@ async def test_gemini_broker_and_reconstruction_enforce_the_same_byte_envelope(
     value = _bundle(stage).model_dump(mode="json")
     value.update(budget_cap_paise=10000, paid_approval_ref="ref:owner/synthetic-test")
     value["stages"][0].update(
-        max_cost_paise=500,
-        max_completion_tokens=1800,
+        max_cost_paise=cost,
+        max_completion_tokens=maximum,
         zero_cost_basis="paid_pricing_evidence",
         free_allowance_ref=None,
     )
@@ -251,7 +277,7 @@ async def test_gemini_broker_and_reconstruction_enforce_the_same_byte_envelope(
         input_sha256=task.input_sha256,
         entitlement_seconds=0,
     )
-    quote = replace(reservation.quote, max_cost_paise=500)
+    quote = replace(reservation.quote, max_cost_paise=cost)
     reservation = replace(
         reservation,
         quote=quote,
@@ -261,11 +287,11 @@ async def test_gemini_broker_and_reconstruction_enforce_the_same_byte_envelope(
     router = _router({"bundle": bundle}, child)
     await router.execute(reservation, task.payload)
     assert len(child.calls) == 1
-    assert child.calls[0][0].quote.max_cost_paise == 500
+    assert child.calls[0][0].quote.max_cost_paise == cost
 
     body = task.as_provider_body()
     # A fresh matching digest must not allow an oversized native request.
-    body["contents"][0]["parts"][0]["text"] += " " * 32000
+    body["contents"][0]["parts"][0]["text"] += " " * (96000 if full_call else 48000)
     oversized = canonical(body)
     digest = hashlib.sha256(oversized).hexdigest()
     with pytest.raises(InferenceTaskError, match="report_prompt_budget_exceeded"):
@@ -308,13 +334,13 @@ def test_gemini_report_exact_byte_boundary_and_stage_cannot_be_overridden() -> N
         prepare_gemini_body(view, task="coaching")
 
 
-def _full_call_c5_case() -> tuple[dict[str, Any], Any]:
+def _full_call_c5_case(*, repetitions: int = 13) -> tuple[dict[str, Any], Any]:
     transcript = _transcript(count=152)
     for index, segment in enumerate(transcript["segments"]):
         segment.update(
             start_ms=index * 8000,
             end_ms=index * 8000 + 7900,
-            text=f"Synthetic {index}: " + "कल timing discuss करूया. " * 13,
+            text=f"Synthetic {index}: " + "कल timing discuss करूया. " * repetitions,
         )
     transcript["duration_ms"] = 152 * 8000
     packet = parse_fact_packet(
@@ -334,10 +360,28 @@ def _full_call_c5_case() -> tuple[dict[str, Any], Any]:
     return transcript, packet
 
 
-@pytest.mark.parametrize("maximum", [1800, 3200, 4000])
-def test_full_call_exceeding_old_c5_limit_preserves_every_fact_and_profile(maximum: int) -> None:
+@pytest.mark.parametrize("maximum", [1800, 3200, 4000, 8000])
+def test_oversized_full_call_is_refused_without_losing_source_or_facts(maximum: int) -> None:
     transcript, packet = _full_call_c5_case()
     before = deepcopy(transcript), packet.model_dump_json()
+    # Keep the original 152-turn/13-repetition fixture. It used to fit only
+    # because C5 omitted most source text. Complete C2 coverage exceeds the
+    # unchanged allowance, including the explicitly approved extended route.
+    with pytest.raises(InferenceTaskError, match="report_prompt_budget_exceeded"):
+        prepare_coaching_input(
+            transcript,
+            [packet],
+            provider="gemini",
+            model="gemini-3.8-flash",
+            max_completion_tokens=maximum,
+        )
+    assert before == (transcript, packet.model_dump_json())
+
+
+def test_admitted_full_call_preserves_every_turn_fact_and_profile() -> None:
+    transcript, packet = _full_call_c5_case(repetitions=6)
+    before = deepcopy(transcript), packet.model_dump_json()
+    maximum = 8000
     task = prepare_coaching_input(
         transcript,
         [packet],
@@ -348,9 +392,9 @@ def test_full_call_exceeding_old_c5_limit_preserves_every_fact_and_profile(maxim
     body = task.as_provider_body()
     system = body["systemInstruction"]["parts"][0]["text"]
     user = body["contents"][0]["parts"][0]["text"]
-    assert 32000 < len((system + user).encode("utf8")) + maximum + 128 <= 48000
+    assert 48000 < len((system + user).encode("utf8")) + maximum + 128 <= 96000
     facts = json.loads(user.split("\n", 1)[1])
-    assert facts["observations"] == [item.model_dump(mode="json") for item in packet.observations]
+    _assert_lossless_coaching_context(facts, transcript, packet)
     assert len(facts["observations"]) == 38
     assert facts["covered_segment_ids"] == [s["id"] for s in transcript["segments"]]
     assert facts["overview"] == packet.overview
