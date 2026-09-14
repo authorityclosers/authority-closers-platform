@@ -31,6 +31,7 @@ from ac_platform.conversation_intelligence.inference import (
     ConversationInference,
     ServicePlan,
 )
+from ac_platform.conversation_intelligence.inference_tasks import InferenceTaskError
 from ac_platform.conversation_intelligence.models import (
     ConversationBudgetAccount,
     ConversationCommand,
@@ -833,7 +834,7 @@ class ProcessingPlanScheduler:
                     if row is None or row.state != "active":
                         return False
                     await ConversationProcessingPlans(app, self.authority).advance(actor, row)
-            except ConversationError:
+            except (ConversationError, InferenceTaskError):
                 # Roll back partial enqueue/quote work, retain the accepted
                 # intent and a content-free hold. Never retry an uncertain call.
                 row = await db.get(

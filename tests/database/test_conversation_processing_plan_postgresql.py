@@ -32,6 +32,7 @@ from ac_platform.conversation_intelligence.entitlements import (
     reserve,
     settle,
 )
+from ac_platform.conversation_intelligence.inference_tasks import InferenceTaskError
 from ac_platform.conversation_intelligence.models import (
     ConversationBudgetAccount,
     ConversationCheckpoint,
@@ -594,6 +595,36 @@ def test_processing_plan_acceptance_and_scheduler_restart_do_not_duplicate_effec
                 == 1
             )
             assert setup.broker.calls == 1
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_scheduler_holds_strict_c5_input_failure_without_killing_worker(
+    postgres_harness: Any, tmp_path: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            quote = await _quote(setup, "processing-plan-c5-budget-quote")
+            await _accept(setup, quote, "processing-plan-c5-budget-accept")
+            plan_id = UUID(quote["id"])
+            await _make_due(setup, plan_id)
+
+            async def fail_c5_input(self: Any, actor: Any, row: Any) -> None:
+                raise InferenceTaskError("report_prompt_budget_exceeded")
+
+            monkeypatch.setattr(ConversationProcessingPlans, "advance", fail_c5_input)
+            scheduler = ProcessingPlanScheduler(setup.sessions, setup.authority)
+            assert await scheduler.step() is True
+            view = await _view(setup)
+            assert view["state"] == "held"
+            assert view["progress"] == {
+                "failure_code": "processing_authorization_or_input_unavailable"
+            }
+            assert await _count(setup, ConversationInferenceTask) == 0
+            assert await scheduler.step() is False
         finally:
             await setup.engine.dispose()
 
