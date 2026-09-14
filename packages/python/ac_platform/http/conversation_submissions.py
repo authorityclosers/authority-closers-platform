@@ -19,6 +19,7 @@ from uuid import UUID
 import anyio
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Request, Response
 from pydantic import ValidationError
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from starlette.requests import ClientDisconnect
 from starlette.responses import StreamingResponse
@@ -85,6 +86,12 @@ class _Owner:
     @property
     def arguments(self) -> dict[str, Any]:
         return {"token": self.token, "actor": self.actor}
+
+
+def _is_postgres_deadlock(error: DBAPIError) -> bool:
+    """Recognize only PostgreSQL's serialization code for a deadlock."""
+
+    return getattr(error.orig, "sqlstate", None) == "40P01"
 
 
 def _preflight_with_deadline(
@@ -218,6 +225,27 @@ def install_submission_http(
 
     dependency = Depends(current_owner, scope="function")
     streaming_dependency = Depends(current_owner, scope="request")
+
+    async def progress_with_deadlock_retry(
+        submission_id: UUID, owner: _Owner
+    ) -> dict[str, Any]:
+        """Retry one complete progress read after a PostgreSQL deadlock rollback."""
+
+        try:
+            return await AcquisitionReports(owner.ownership).progress(
+                submission_id, **owner.arguments
+            )
+        except DBAPIError as error:
+            if not _is_postgres_deadlock(error):
+                raise
+            # The dependency owns the current transaction. Roll it back before
+            # opening the one bounded retry so no failed transaction is reused.
+            await owner.ownership.database.rollback()
+            async with sessions() as database, database.begin():
+                retry_owner = _Owner(ownership(database), owner.token, owner.actor)
+                return await AcquisitionReports(retry_owner.ownership).progress(
+                    submission_id, **retry_owner.arguments
+                )
 
     @router.get("/submissions")
     async def saved_calls(
@@ -377,7 +405,7 @@ def install_submission_http(
         submission_id: UUID, request: Request, response: Response, owner: _Owner = dependency
     ) -> dict[str, Any]:
         guard(request, response)
-        return await AcquisitionReports(owner.ownership).progress(submission_id, **owner.arguments)
+        return await progress_with_deadlock_retry(submission_id, owner)
 
     @router.get("/submissions/{submission_id}/report")
     async def report(

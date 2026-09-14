@@ -19,6 +19,7 @@ import pytest
 from fastapi import FastAPI
 from pydantic import SecretStr
 from sqlalchemy import func, select, update
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from ac_platform.application.settings import Settings
@@ -27,6 +28,7 @@ from ac_platform.conversation_intelligence.acquisition_models import (
     ConversationAcquisitionSettlement,
     ConversationAcquisitionUsage,
 )
+from ac_platform.conversation_intelligence.acquisition_reports import AcquisitionReports
 from ac_platform.conversation_intelligence.acquisition_sessions import (
     AcquisitionSessions,
     MeasuredSource,
@@ -234,6 +236,98 @@ async def _headers(client: httpx.AsyncClient, data: bytes) -> dict[str, str]:
         "X-Upload-Policy": terms.json()["policy_sha256"],
         "X-Upload-Consent": "accepted",
     }
+
+
+class _DeadlockOrigin(Exception):
+    sqlstate = "40P01"
+
+
+class _OtherDatabaseErrorOrigin(Exception):
+    sqlstate = "XX000"
+
+
+def _database_error(origin: object) -> DBAPIError:
+    return DBAPIError("SELECT", {}, origin, False)
+
+
+async def _upload_for_read_test(setup: Any, client: httpx.AsyncClient) -> tuple[str, UUID]:
+    data, submission = _wav_one_second_48k(), uuid4()
+    path = f"{PREFIX}/submissions/{submission}"
+    uploaded = await client.put(
+        path + "/source", content=data, headers=await _headers(client, data)
+    )
+    assert uploaded.status_code == 202, uploaded.text
+    return path, submission
+
+
+def test_progress_retries_one_deadlock_in_a_fresh_owner_transaction(
+    postgres_harness: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                client.cookies.set("ac_xray_guest", setup.guest.token)
+                path, _ = await _upload_for_read_test(setup, client)
+                original = AcquisitionReports.recording
+                calls = 0
+
+                async def flaky_recording(self: Any, *args: Any, **kwargs: Any) -> Any:
+                    nonlocal calls
+                    calls += 1
+                    if calls == 1:
+                        raise _database_error(_DeadlockOrigin())
+                    return await original(self, *args, **kwargs)
+
+                monkeypatch.setattr(AcquisitionReports, "recording", flaky_recording)
+                progress = await client.get(path)
+                assert progress.status_code == 200, progress.text
+                assert calls == 2
+                assert progress.json()["submission_id"] == path.rsplit("/", 1)[-1]
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+@pytest.mark.parametrize(
+    ("origin", "expected_calls"),
+    [(_DeadlockOrigin(), 2), (_OtherDatabaseErrorOrigin(), 1)],
+)
+def test_progress_deadlock_retry_is_bounded_and_code_specific(
+    postgres_harness: Any,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    origin: object,
+    expected_calls: int,
+) -> None:
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app, raise_app_exceptions=False),
+                base_url=ORIGIN,
+            ) as client:
+                client.cookies.set("ac_xray_guest", setup.guest.token)
+                path, _ = await _upload_for_read_test(setup, client)
+                calls = 0
+
+                async def always_fails(self: Any, *args: Any, **kwargs: Any) -> Any:
+                    nonlocal calls
+                    calls += 1
+                    raise _database_error(origin)
+
+                monkeypatch.setattr(AcquisitionReports, "recording", always_fails)
+                failed = await client.get(path)
+                assert failed.status_code == 500
+                assert calls == expected_calls
+                assert setup.guest.token not in failed.text
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
 
 
 def test_original_upload_worker_and_expired_lease_playback_are_owner_bound(
