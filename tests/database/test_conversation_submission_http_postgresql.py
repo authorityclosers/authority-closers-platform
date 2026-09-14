@@ -255,12 +255,12 @@ def test_original_upload_worker_and_expired_lease_playback_are_owner_bound(
                 result = uploaded.json()
                 assert result["duration_ms"] == 1000
                 assert result["source_sha256"] == hashlib.sha256(data).hexdigest()
-                assert result["allowance"]["available_seconds"] == 5999
+                assert result["allowance"]["available_seconds"] == 3599
                 assert setup.native.calls == 1
                 repeat = await client.put(path + "/source", content=data, headers=headers)
                 assert repeat.status_code == 202, repeat.text
                 assert repeat.json()["recording_id"] == result["recording_id"]
-                assert repeat.json()["allowance"]["available_seconds"] == 5999
+                assert repeat.json()["allowance"]["available_seconds"] == 3599
                 async with setup.sessions() as db:
                     assert (
                         await db.scalar(
@@ -397,7 +397,7 @@ def test_exact_owned_upload_retry_survives_exhausted_allowance(
                 # it creates no recording/job or external provider execution.
                 async with setup.sessions() as db, db.begin():
                     await setup.factory(db).reserve(
-                        MeasuredSource(uuid4(), "a" * 64, 5999 * 1000, "b" * 64),
+                        MeasuredSource(uuid4(), "a" * 64, 3599 * 1000, "b" * 64),
                         token=setup.guest.token,
                     )
                 replay = await client.put(path, content=data, headers=headers)
@@ -503,7 +503,7 @@ def test_create_app_mounts_guest_flow_and_streams_more_than_generic_body_limit(
                 )
                 assert uploaded.status_code == 202, uploaded.text
                 assert uploaded.json()["duration_ms"] == 12000
-                assert uploaded.json()["allowance"]["available_seconds"] == 5988
+                assert uploaded.json()["allowance"]["available_seconds"] == 3588
                 pending = await client.get(f"{PREFIX}/submissions/{submission}")
                 assert pending.json()["local_state"] == "queued"
                 # The new byte exemption applies only to its explicit UUID PUT,
@@ -656,7 +656,7 @@ def test_upload_boundary_rejects_selector_cookie_origin_and_source_tampering(
                 for changed, url, expected in [
                     ({"Origin": "https://foreign.example.test"}, path, 403),
                     ({}, path + "?tenant_id=" + str(setup.state.tenant_id), 422),
-                    ({"Host": "learner.example.test"}, path, 404),
+                    ({"Host": "learner.example.test"}, path, 403),
                     ({"X-Upload-Consent": "false"}, path, 422),
                     ({"X-Upload-Policy": "0" * 64}, path, 422),
                     (
