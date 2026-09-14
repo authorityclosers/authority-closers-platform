@@ -54,3 +54,20 @@ External receipts:
 The application workflow also runs the complete provisioner pytest file in its
 existing root-owned activation validation step. That new CI invocation is pending
 the combined release run; the local six-case harness is not reported as CI pytest.
+
+## Staging runtime credential rotation
+
+The source-owned staging rotation command is `scripts/rotate-sales-xray-database.py`. It is staging-only and requires the existing root Infisical machine identity plus the fixed `/application` path. It reads current values in process, validates private runtime and migrator URL shapes, snapshots the `ac_runtime` role attributes and grants, changes only that role's password through the owner connection, and verifies a new runtime login with the same privilege snapshot. It then updates `AC_DB_RUNTIME_PASSWORD` and `AC_DATABASE_URL` in Infisical and atomically replaces the existing staging worker credential file. The production runtime password is compared in memory only; production is never updated.
+
+Run it from the exact immutable release directory after reviewing the staging window:
+
+```sh
+AC_INFISICAL_ENVIRONMENT=staging AC_INFISICAL_PATH=/application \
+  /usr/local/sbin/ac-infisical-run -- \
+  python3 /srv/authority-closers/application/releases/<reviewed-release-sha>/scripts/rotate-sales-xray-database.py
+```
+
+The command refuses a missing or mismatched existing worker file, a foreign URL/role/host, an unsafe path, a concurrent rotation, or any privilege drift. It rolls the role, Infisical values, and worker file back on an update failure; if rollback itself cannot be proven, it fails closed with a generic message. It prints no URL, password, digest, exception body, or database result. A successful rotation still requires a separately reviewed Compose restart and candidate health proof before the old connection path is considered retired.
+
+Validation of the rotation path: tests/infra/test_sales_xray_database_rotation.py passed 6 focused cases on the Windows development host. The tests use synthetic credentials and fake Infisical/database adapters, covering strict URL scope, no-secret argv, unchanged privilege snapshots, atomic file replacement, and rollback after a store failure. No actual Infisical, database, VPS, /etc, or provider target was touched.
+The focused rotation file and existing provisioner file together passed 23 cases with 7 expected POSIX-only skips on Windows. The POSIX root-only path and the real Infisical/database operation remain pending operator review; this branch has performed no staging or production mutation.
