@@ -609,6 +609,8 @@ def test_scheduler_holds_strict_c5_input_failure_without_killing_worker(
         try:
             quote = await _quote(setup, "processing-plan-c5-budget-quote")
             await _accept(setup, quote, "processing-plan-c5-budget-accept")
+            before_tasks = await _count(setup, ConversationInferenceTask)
+            assert before_tasks == 1
             plan_id = UUID(quote["id"])
             await _make_due(setup, plan_id)
 
@@ -620,10 +622,14 @@ def test_scheduler_holds_strict_c5_input_failure_without_killing_worker(
             assert await scheduler.step() is True
             view = await _view(setup)
             assert view["state"] == "held"
-            assert view["progress"] == {
-                "failure_code": "processing_authorization_or_input_unavailable"
-            }
-            assert await _count(setup, ConversationInferenceTask) == 0
+            async with setup.sessions() as database:
+                stored = await database.get(ConversationProcessingPlan, plan_id)
+                assert stored is not None
+                assert stored.progress == {
+                    "failure_code": "processing_authorization_or_input_unavailable"
+                }
+            # The failed scheduler attempt must not append another task.
+            assert await _count(setup, ConversationInferenceTask) == before_tasks
             assert await scheduler.step() is False
         finally:
             await setup.engine.dispose()

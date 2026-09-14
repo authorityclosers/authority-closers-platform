@@ -78,8 +78,11 @@ ORIGIN = "https://salesxray.example.test"
 PREFIX = "/v1/conversation/acquisition"
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def postgres_harness() -> Any:
+    # Each test gives its worker a different private storage root. Keep the
+    # queue isolated too so an eligible retry from an earlier test cannot be
+    # claimed against a later test's storage root.
     yield from _postgres_harness.__wrapped__()
 
 
