@@ -722,6 +722,13 @@ describe("provider control contract", () => {
       await Promise.resolve();
       await Promise.resolve();
     });
+    await act(async () => {
+      await vi.waitFor(() => {
+        expect(
+          fetchMock.mock.calls.some(([, init]) => init?.method === "POST"),
+        ).toBe(true);
+      });
+    });
     const request = fetchMock.mock.calls.find(
       ([, init]) => init?.method === "POST",
     );
