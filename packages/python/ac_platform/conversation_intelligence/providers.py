@@ -227,6 +227,7 @@ class BoundedProviders:
                 params={
                     "model": model,
                     "language": "multi",
+                    "mip_opt_out": "true",
                     "smart_format": "true",
                     "punctuate": "true",
                     "diarize": "true",

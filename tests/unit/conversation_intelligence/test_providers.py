@@ -334,6 +334,7 @@ def test_deepgram_nova3_uses_bounded_binary_request_and_normalizes_labels():
         assert dict(request.url.params) == {
             "model": "nova-3",
             "language": "multi",
+            "mip_opt_out": "true",
             "smart_format": "true",
             "punctuate": "true",
             "diarize": "true",

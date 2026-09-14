@@ -1,6 +1,7 @@
 # Deepgram Sales Xray integration evidence — 2026-09-14
 
-Status: isolated staging candidate only. No production files, secrets, or
+Status: isolated staging candidate only. The provider key is stored in the
+approved Infisical Development project path; no production files, secrets, or
 provider calls were changed by this work.
 
 ## Implemented path
@@ -23,6 +24,32 @@ provider calls were changed by this work.
   Deepgram identity mount. No key value is present in source, tests, this
   evidence file, or logs.
 
+## Credential and data-handling packet
+
+- Infisical: project `AC Infrastructure Secrets`, environment `dev`, path
+  `/sales-xray-test/deepgram`, key name `DEEPGRAM_API_KEY`. The parent-folder
+  duplicate was removed after the provider-scoped copy was verified masked.
+- Request policy: every Deepgram pre-recorded request sets
+  `mip_opt_out=true`; Deepgram documents that opted-out request data is
+  retained only for the duration necessary to process the request.
+- Provider terms gate: the real approved call remains blocked until AC records
+  consent, provenance, retention, professional review, provider authorization,
+  and an allowance/budget reference in a superseding staging approval.
+- Pricing input reviewed 2026-09-14: Deepgram lists Nova-3 Multilingual
+  pre-recorded at `$0.0052/min` Pay-As-You-Go. A 60-second probe therefore has
+  an estimated provider charge of `$0.000087` before taxes or account-specific
+  terms; exact billing must be confirmed from the provider usage record.
+- Account read-only check: the Deepgram console showed the Authority Closers
+  project with `$200.00` credit, Nova 3, and Multilingual access. This is not a
+  claim that the staging worker is activated.
+
+Sources reviewed:
+
+- https://deepgram.com/pricing
+- https://developers.deepgram.com/docs/the-deepgram-model-improvement-partnership-program
+- https://developers.deepgram.com/reference/speech-to-text/listen-pre-recorded
+- https://deepgram.com/terms
+
 ## Verification
 
 Synthetic tests passed:
@@ -44,5 +71,5 @@ Deepgram credential reference. Therefore this candidate must not send the real
 approved recording to Deepgram yet. A superseding staging approval must bind
 the provider terms, privacy/retention, professional gate, pricing/allowance,
 credential reference, model, and budget before the existing Admin activation
-command can select it. The user-supplied key was not persisted; it should be
-rotated because it was exposed in chat.
+command can select it. The key should be rotated after testing because it was
+exposed in chat.
