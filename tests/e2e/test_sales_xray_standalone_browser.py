@@ -9,6 +9,7 @@ mocked, and the proof never contacts Google or an external host.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 import re
@@ -16,7 +17,7 @@ import socket
 import threading
 import time
 from collections.abc import Iterator
-from contextlib import ExitStack
+from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -291,6 +292,72 @@ def _metric_value(page: Any, label: str, unit: str) -> float:
     return float(match.group(1))
 
 
+@contextmanager
+def _navigation_window(page: Any, windows: list[dict[str, Any]]) -> Iterator[None]:
+    window = {"started_at": time.monotonic(), "from": urlsplit(page.url).path}
+    yield
+    # The caller must verify the destination and its UI inside the window.
+    window.update(completed_at=time.monotonic(), to=urlsplit(page.url).path)
+    windows.append(window)
+
+
+def _verify_cancelled_chunk(
+    failure: dict[str, Any],
+    *,
+    origin: str,
+    exported: Path,
+    http: Any,
+    windows: list[dict[str, Any]],
+    navigations: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    """Accept only a navigation-bound script cancellation with independent byte proof."""
+    if (
+        failure["method"] != "GET"
+        or failure["error"] != "net::ERR_ABORTED"
+        or not failure["same_origin"]
+        or failure["resource_type"] != "script"
+        or not failure["main_frame"]
+        or not re.fullmatch(r"/_next/static/chunks/[A-Za-z0-9_-]{8,80}\.js", failure["path"])
+    ):
+        return None
+    window = next(
+        (
+            item
+            for item in windows
+            if item["started_at"] <= failure["failed_at"] <= item["completed_at"]
+            and any(
+                item["started_at"] <= navigation["at"] <= item["completed_at"]
+                and navigation["path"] == item["to"]
+                for navigation in navigations
+            )
+        ),
+        None,
+    )
+    if window is None:
+        return None
+    local = (exported / failure["path"].lstrip("/")).resolve()
+    assert exported.resolve() in local.parents and local.is_file(), "Cancelled chunk is missing."
+    response = http.get(origin + failure["path"], max_redirects=0)
+    try:
+        assert response.status == 200, "Cancelled chunk did not independently return HTTP 200."
+        content_type = response.headers.get("content-type", "").split(";", 1)[0].strip()
+        assert content_type in ("application/javascript", "text/javascript"), content_type
+        served_hash = hashlib.sha256(response.body()).hexdigest()
+        local_hash = hashlib.sha256(local.read_bytes()).hexdigest()
+        assert served_hash == local_hash, "Cancelled chunk bytes differ from the static export."
+        return {
+            "failure": failure["summary"],
+            "path": failure["path"],
+            "navigation": window,
+            "status": response.status,
+            "content_type": content_type,
+            "served_sha256": served_hash,
+            "exported_sha256": local_hash,
+        }
+    finally:
+        response.dispose()
+
+
 def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
     receipt_path = evidence / "standalone-auth-browser.json"
     assert not receipt_path.exists(), "Use a fresh standalone browser evidence directory."
@@ -298,6 +365,9 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
     external: list[str] = []
     browser_errors: list[str] = []
     request_failures: list[str] = []
+    failure_details: list[dict[str, Any]] = []
+    navigation_windows: list[dict[str, Any]] = []
+    navigations: list[dict[str, Any]] = []
     checks: list[str] = []
     proof: dict[str, Any] = {
         "transport": "Chromium real TCP HTTP -> AC password cookie -> disposable PostgreSQL",
@@ -311,6 +381,9 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
         "external_requests": external,
         "browser_errors": browser_errors,
         "request_failures": request_failures,
+        "request_failure_details": failure_details,
+        "completed_navigation_windows": navigation_windows,
+        "main_frame_navigations": navigations,
         "passed": False,
     }
     with sync_playwright() as playwright, ExitStack() as cleanup:
@@ -333,16 +406,39 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
         context.route("**/*", boundary)
         page = context.new_page()
         page.on("pageerror", lambda error: browser_errors.append(str(error)[:300]))
+
+        def failed_request(failed: Any) -> None:
+            parsed = urlsplit(failed.url)
+            summary = f"{failed.method} {parsed.path}: {failed.failure}"
+            request_failures.append(summary)
+            failure_details.append(
+                {
+                    "summary": summary,
+                    "method": failed.method,
+                    "path": parsed.path,
+                    "error": failed.failure,
+                    "same_origin": failed.url.startswith(backend.origin + "/")
+                    and not parsed.query
+                    and not parsed.fragment,
+                    "resource_type": failed.resource_type,
+                    "main_frame": failed.frame == page.main_frame,
+                    "failed_at": time.monotonic(),
+                }
+            )
+
+        page.on("requestfailed", failed_request)
         page.on(
-            "requestfailed",
-            lambda failed: request_failures.append(
-                f"{failed.method} {urlsplit(failed.url).path}: {failed.failure}"
+            "framenavigated",
+            lambda frame: (
+                navigations.append({"at": time.monotonic(), "path": urlsplit(frame.url).path})
+                if frame == page.main_frame
+                else None
             ),
         )
 
         def record(response: Any) -> None:
             path = urlsplit(response.url).path
-            if path.startswith("/v1/"):
+            if path.startswith(("/v1/", "/_next/static/")):
                 network.append(
                     {
                         "method": response.request.method,
@@ -402,15 +498,17 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
             page.screenshot(path=str(evidence / "anonymous-home.png"), full_page=True)
             checks.append("Anonymous home shows AC sign-in and no private history request.")
 
-            page.get_by_role("link", name="Sign in with AC").click()
-            expect(page).to_have_url(re.compile(re.escape(f"{backend.origin}/login") + r"/?$"))
-            expect(page.get_by_role("heading", name="Welcome back.")).to_be_visible()
+            with _navigation_window(page, navigation_windows):
+                page.get_by_role("link", name="Sign in with AC").click()
+                expect(page).to_have_url(re.compile(re.escape(f"{backend.origin}/login") + r"/?$"))
+                expect(page.get_by_role("heading", name="Welcome back.")).to_be_visible()
             page.screenshot(path=str(evidence / "login.png"), full_page=True)
             page.get_by_label("Email address").fill(backend.account.email)
             page.get_by_label("Password").fill(backend.account.password)
-            page.get_by_role("button", name="Sign in").click()
-            expect(page).to_have_url(f"{backend.origin}/")
-            page.wait_for_load_state("networkidle")
+            with _navigation_window(page, navigation_windows):
+                page.get_by_role("button", name="Sign in").click()
+                expect(page).to_have_url(f"{backend.origin}/")
+                page.wait_for_load_state("networkidle")
             checks.append("Correct password login navigates the standalone host to /.")
 
             expect(
@@ -624,8 +722,9 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
                 "After logout, saved measurements and source playback return 401; "
                 "the authorized read was private/no-store."
             )
-            page.reload(wait_until="networkidle")
-            expect(page.get_by_role("link", name="Sign in with AC")).to_be_visible()
+            with _navigation_window(page, navigation_windows):
+                page.reload(wait_until="networkidle")
+                expect(page.get_by_role("link", name="Sign in with AC")).to_be_visible()
             expect(page.locator(".recording-history-item")).to_have_count(0)
             assert not any(
                 item["path"] == "/v1/conversation/recordings" for item in network[before_logout:]
@@ -682,6 +781,12 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
             )
             assert not external
             assert not browser_errors
+            proof["static_response_errors"] = [
+                item
+                for item in network
+                if item["path"].startswith("/_next/static/") and item["status"] not in (200, 304)
+            ]
+            assert not proof["static_response_errors"]
             # Next's navigation probe and a completed authentication response can
             # be cancelled when a full document navigation replaces the page.
             # Preserve every event in the receipt; only accept API
@@ -726,11 +831,24 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
             proof["component_unmount_cancellations"] = [
                 failure for failure in request_failures if failure in unmount_aborts
             ]
-            unexpected_failures = [
-                failure
-                for failure in request_failures
-                if failure not in accepted_aborts and failure not in unmount_aborts
-            ]
+            verified_chunks: list[dict[str, Any]] = []
+            unexpected_failures: list[str] = []
+            proof["verified_static_asset_cancellations"] = verified_chunks
+            for failure in failure_details:
+                if failure["summary"] in accepted_aborts | unmount_aborts:
+                    continue
+                verified = _verify_cancelled_chunk(
+                    failure,
+                    origin=backend.origin,
+                    exported=ROOT / "apps/sales-xray-web/out",
+                    http=context.request,
+                    windows=navigation_windows,
+                    navigations=navigations,
+                )
+                if verified is None:
+                    unexpected_failures.append(failure["summary"])
+                else:
+                    verified_chunks.append(verified)
             proof["unexpected_request_failures"] = unexpected_failures
             assert not unexpected_failures
             proof["passed"] = True
