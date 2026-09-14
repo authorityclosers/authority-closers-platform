@@ -64,6 +64,9 @@ def _public_page_responses(
     recording: Any, processor_id: UUID, *, run_id: UUID, quote_id: UUID
 ) -> list[list[Any]]:
     created_at = recording.created_at + timedelta(seconds=1)
+    second_run_id, third_run_id = uuid4(), uuid4()
+    second_quote_id, third_quote_id = uuid4(), uuid4()
+    plan_created_at = recording.created_at + timedelta(seconds=10)
     guest = SimpleNamespace(
         recording_id=recording.id,
         tenant_id=PUBLIC_TENANT,
@@ -92,25 +95,65 @@ def _public_page_responses(
         tenant_id=PUBLIC_TENANT,
         state="held",
         generation=1,
-        created_at=created_at,
+        created_at=plan_created_at,
         erased_at=None,
     )
-    task = SimpleNamespace(
+    first_task = SimpleNamespace(
         run_id=run_id,
         recording_id=recording.id,
         tenant_id=PUBLIC_TENANT,
         person_id=processor_id,
         quote_id=quote_id,
+        stage="C2",
         generation=1,
         created_at=created_at,
         erased_at=None,
     )
+    second_task = SimpleNamespace(
+        run_id=second_run_id,
+        recording_id=recording.id,
+        tenant_id=PUBLIC_TENANT,
+        person_id=processor_id,
+        quote_id=second_quote_id,
+        stage="C4",
+        generation=1,
+        created_at=recording.created_at + timedelta(seconds=11),
+        erased_at=None,
+    )
+    third_task = SimpleNamespace(
+        run_id=third_run_id,
+        recording_id=recording.id,
+        tenant_id=PUBLIC_TENANT,
+        person_id=processor_id,
+        quote_id=third_quote_id,
+        stage="C5",
+        generation=1,
+        created_at=recording.created_at + timedelta(seconds=12),
+        erased_at=None,
+    )
+    scope_id = uuid4()
     quote = SimpleNamespace(
         id=quote_id,
         tenant_id=PUBLIC_TENANT,
-        budget_scope_id=uuid4(),
+        budget_scope_id=scope_id,
         quote={"max_cost_paise": 720},
     )
+    second_quote = SimpleNamespace(
+        id=second_quote_id,
+        tenant_id=PUBLIC_TENANT,
+        budget_scope_id=scope_id,
+        quote={"max_cost_paise": 720},
+    )
+    third_quote = SimpleNamespace(
+        id=third_quote_id,
+        tenant_id=PUBLIC_TENANT,
+        budget_scope_id=scope_id,
+        quote={"max_cost_paise": 720},
+    )
+    stage_authorizations = [
+        SimpleNamespace(plan_id=plan.id, quote_id=second_quote_id, tenant_id=PUBLIC_TENANT),
+        SimpleNamespace(plan_id=plan.id, quote_id=third_quote_id, tenant_id=PUBLIC_TENANT),
+    ]
     minute = SimpleNamespace(
         tenant_id=PUBLIC_TENANT,
         person_id=processor_id,
@@ -131,9 +174,10 @@ def _public_page_responses(
         [],
         [run],
         [plan],
-        [task],
-        [quote],
-        [],
+        [first_task, second_task, third_task],
+        stage_authorizations,
+        [quote, second_quote, third_quote],
+        [SimpleNamespace(scope_id=scope_id, snapshot={})],
         [minute],
         [checkpoint],
         [],
@@ -165,22 +209,26 @@ async def test_admin_recordings_http_maps_public_guest_rows_and_paginates(
     operations_recording = _recording(OPS_TENANT, uuid4(), now - timedelta(seconds=1))
     unrelated_recording = _recording(UNRELATED_TENANT, uuid4(), now - timedelta(seconds=2))
     run_id, quote_id = uuid4(), uuid4()
+    public_page_responses = _public_page_responses(
+        public_recording, processor_id, run_id=run_id, quote_id=quote_id
+    )
     database = _Database(
         [
             [public_recording, operations_recording, unrelated_recording],
-            *_public_page_responses(
-                public_recording, processor_id, run_id=run_id, quote_id=quote_id
-            ),
+            *public_page_responses,
         ]
     )
 
     fake_quote = SimpleNamespace(max_cost_paise=720)
-    fake_reservation = SimpleNamespace(
-        reservation_id=str(run_id),
-        state="settled",
-        quote=SimpleNamespace(max_cost_paise=720),
-        settlement=SimpleNamespace(actual_paise=410),
-    )
+    fake_reservations = [
+        SimpleNamespace(
+            reservation_id=str(task.run_id),
+            state="settled",
+            quote=SimpleNamespace(max_cost_paise=720),
+            settlement=SimpleNamespace(actual_paise=410),
+        )
+        for task in public_page_responses[6]
+    ]
     monkeypatch.setattr(
         admin_recordings.Quote,
         "from_dict",
@@ -189,12 +237,12 @@ async def test_admin_recordings_http_maps_public_guest_rows_and_paginates(
     monkeypatch.setattr(
         admin_recordings.BudgetAccount,
         "from_dict",
-        classmethod(lambda _cls, _value: SimpleNamespace(reservations=[])),
+        classmethod(lambda _cls, _value: SimpleNamespace(reservations=fake_reservations)),
     )
     monkeypatch.setattr(
         admin_recordings.MinuteAccount,
         "from_dict",
-        classmethod(lambda _cls, _value: SimpleNamespace(reservations=[fake_reservation])),
+        classmethod(lambda _cls, _value: SimpleNamespace(reservations=fake_reservations)),
     )
 
     async def admit(_self: ConversationProviderAdmin, _actor: ActorContext) -> None:
@@ -257,9 +305,10 @@ async def test_admin_recordings_http_maps_public_guest_rows_and_paginates(
     assert item["processing_plan"]["state"] == "held"
     assert item["cost"] == {
         "currency": "INR",
-        "reservation_paise": 720,
-        "estimate_paise": 720,
-        "actual_paise": 410,
+        "scope": "recording_total",
+        "reservation_paise": 2160,
+        "estimate_paise": 2160,
+        "actual_paise": 1230,
         "reservation_state": "settled",
         "actual_state": "settled",
     }

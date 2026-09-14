@@ -36,6 +36,7 @@ from ac_platform.conversation_intelligence.models import (
     ConversationCheckpoint,
     ConversationInferenceTask,
     ConversationMinuteAccount,
+    ConversationPlanStageAuthorization,
     ConversationProcessingPlan,
     ConversationQuote,
     ConversationRecording,
@@ -185,17 +186,22 @@ def _cost_view(
     minute_row: ConversationMinuteAccount | None,
     *,
     plan_tasks: Iterable[ConversationInferenceTask] | None = None,
+    plan_quote_ids: Iterable[UUID] | None = None,
     quote_rows: Mapping[UUID, ConversationQuote] | None = None,
     budget_rows: Mapping[UUID, ConversationBudgetAccount] | None = None,
+    scope: str = "recording_total",
 ) -> dict[str, Any]:
     tasks = list(plan_tasks) if plan_tasks is not None else ([] if task is None else [task])
     quote_by_id = dict(quote_rows or {})
     if task is not None and quote_row is not None:
         quote_by_id.setdefault(task.quote_id, quote_row)
 
+    estimate_quote_ids = (
+        set(plan_quote_ids) if plan_quote_ids is not None else {item.quote_id for item in tasks}
+    )
     estimates: list[int] = []
-    for item in tasks:
-        row = quote_by_id.get(item.quote_id)
+    for quote_id in estimate_quote_ids:
+        row = quote_by_id.get(quote_id)
         if row is None:
             continue
         try:
@@ -252,6 +258,7 @@ def _cost_view(
         state = next(iter(states))
     return {
         "currency": "INR",
+        "scope": scope,
         "reservation_paise": reservation_paise,
         "estimate_paise": sum(estimates) if estimates else None,
         "actual_paise": actual,
@@ -463,8 +470,26 @@ class AdminConversationRecordings:
                 )
             )
         ).all()
-        latest_tasks = _latest(tasks, lambda row: row.recording_id)
+        plan_ids = {row.id for row in latest_plans.values()}
+        plan_stage_rows = (
+            (
+                await self.database.scalars(
+                    select(ConversationPlanStageAuthorization).where(
+                        ConversationPlanStageAuthorization.tenant_id.in_(self.recording_tenant_ids),
+                        ConversationPlanStageAuthorization.plan_id.in_(plan_ids),
+                    )
+                )
+            ).all()
+            if plan_ids
+            else []
+        )
+        plan_quote_ids: dict[UUID, set[UUID]] = {}
+        for stage_row in plan_stage_rows:
+            plan_quote_ids.setdefault(stage_row.plan_id, set()).add(stage_row.quote_id)
         quote_ids = [row.quote_id for row in tasks]
+        for stage_quote_ids in plan_quote_ids.values():
+            quote_ids.extend(stage_quote_ids)
+        quote_ids = list(set(quote_ids))
         quote_rows = (
             (
                 await self.database.scalars(
@@ -556,6 +581,30 @@ class AdminConversationRecordings:
             provider_run_ids = frozenset(
                 candidate.run_id for candidate in tasks if hasattr(candidate, "run_id")
             )
+            current_plan_quote_ids = (
+                plan_quote_ids.get(plan.id, set()) if plan is not None else None
+            )
+            recording_tasks = [
+                candidate for candidate in tasks if candidate.recording_id == recording.id
+            ]
+            current_plan_tasks = (
+                [candidate for candidate in tasks if candidate.quote_id in current_plan_quote_ids]
+                if current_plan_quote_ids is not None
+                else recording_tasks
+            )
+            plan_is_complete = (
+                plan is not None
+                and current_plan_quote_ids is not None
+                and all(
+                    candidate.quote_id in current_plan_quote_ids for candidate in recording_tasks
+                )
+            )
+            cost_tasks = current_plan_tasks if plan_is_complete else recording_tasks
+            cost_quote_ids = (
+                current_plan_quote_ids
+                if plan_is_complete
+                else {candidate.quote_id for candidate in recording_tasks}
+            )
             review_eligible = bool(
                 has_report
                 and report_run is not None
@@ -624,32 +673,14 @@ class AdminConversationRecordings:
                         "invite_eligible": review_eligible,
                     },
                     "cost": _cost_view(
-                        latest_tasks.get(recording.id),
-                        quotes.get(latest_tasks[recording.id].quote_id)
-                        if latest_tasks.get(recording.id) is not None
-                        else None,
+                        cost_tasks[-1] if cost_tasks else None,
+                        quotes.get(cost_tasks[-1].quote_id) if cost_tasks else None,
                         minutes.get((recording.tenant_id, recording.person_id)),
-                        plan_tasks=(
-                            [
-                                candidate
-                                for candidate in tasks
-                                if candidate.recording_id == recording.id
-                                and (
-                                    plan is None
-                                    or (
-                                        candidate.generation == plan.generation
-                                        and utc(candidate.created_at) >= utc(plan.created_at)
-                                    )
-                                )
-                            ]
-                            or (
-                                [latest_tasks[recording.id]]
-                                if latest_tasks.get(recording.id)
-                                else []
-                            )
-                        ),
+                        plan_tasks=cost_tasks,
+                        plan_quote_ids=cost_quote_ids,
                         quote_rows=quotes,
                         budget_rows=budgets,
+                        scope="current_plan" if plan_is_complete else "recording_total",
                     ),
                 }
             )

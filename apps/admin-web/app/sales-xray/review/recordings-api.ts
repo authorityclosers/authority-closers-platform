@@ -89,6 +89,7 @@ const recordingSchema = z
     cost: z
       .object({
         currency: z.literal("INR"),
+        scope: z.enum(["current_plan", "recording_total"]),
         reservation_paise: z.number().int().nonnegative().nullable(),
         estimate_paise: z.number().int().nonnegative().nullable(),
         actual_paise: z.number().int().nonnegative().nullable(),

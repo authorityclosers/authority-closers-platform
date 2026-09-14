@@ -52,6 +52,7 @@ const payload = {
       },
       cost: {
         currency: "INR",
+        scope: "current_plan",
         reservation_paise: null,
         estimate_paise: 500,
         actual_paise: null,

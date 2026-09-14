@@ -92,6 +92,14 @@ function InventoryRow({
           </dd>
         </div>
         <div>
+          <dt>Cost basis</dt>
+          <dd>
+            {recording.cost.scope === "current_plan"
+              ? "Current plan"
+              : "Recording total"}
+          </dd>
+        </div>
+        <div>
           <dt>Reserved</dt>
           <dd>{formatCost(recording.cost.reservation_paise)}</dd>
         </div>
@@ -110,7 +118,9 @@ function InventoryRow({
         <div>
           <dt>Report</dt>
           <dd>
-            {recording.report.available ? "Ready for review" : "Not ready"}
+            {recording.report.review_eligible
+              ? "Ready for review"
+              : "Not ready"}
           </dd>
         </div>
       </dl>
