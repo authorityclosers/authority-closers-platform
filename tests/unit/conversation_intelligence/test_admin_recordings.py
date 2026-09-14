@@ -148,6 +148,43 @@ def test_provider_receipt_exposes_allowlisted_usage_without_invoice_claim() -> N
     }
 
 
+def test_provider_returned_receipt_exposes_usage_without_invoice_claim() -> None:
+    task = SimpleNamespace(
+        stage="C5",
+        state="uncertain",
+        run_id=UUID("44444444-4444-4444-8444-444444444444"),
+    )
+    job = SimpleNamespace(
+        provider_receipt={
+            "provider": "gemini",
+            "model": "gemini-3.8-flash",
+            "provider_request_id": "request-2",
+            "usage": {
+                "promptTokenCount": 8_972,
+                "candidatesTokenCount": 3_196,
+                "totalTokenCount": 12_168,
+            },
+            "validation_state": "provider_returned",
+            "cost_state": "reconciliation_required",
+            "actual_cost_paise": None,
+        }
+    )
+
+    view = _provider_stage_view(task, job)
+
+    assert view["provider"] == "gemini"
+    assert view["model"] == "gemini-3.8-flash"
+    assert view["usage"] == {
+        "promptTokenCount": 8_972,
+        "candidatesTokenCount": 3_196,
+        "totalTokenCount": 12_168,
+    }
+    # Keep the public Admin enum compatible with the existing web client; the
+    # job/task state and reconciliation cost state carry the pending distinction.
+    assert view["receipt_state"] == "recorded"
+    assert view["cost_state"] == "reconciliation_required"
+
+
 def test_usage_estimate_requires_a_source_backed_rate() -> None:
     task = SimpleNamespace(
         run_id=uuid4(),

@@ -578,7 +578,13 @@ def test_malformed_native_result_retains_raw_receipt_without_c2_publication(
                 assert task is not None and task.state == "uncertain"
                 job = await database.get(Job, run_row.job_id)
                 assert job is not None and job.status == "dead_letter"
-                assert job.provider_receipt is None
+                assert job.provider_receipt is not None
+                assert job.provider_receipt["provider"] == "elevenlabs"
+                assert job.provider_receipt["model"] == "scribe_v2"
+                assert job.provider_receipt["usage"] == {"total_tokens": 0}
+                assert job.provider_receipt["validation_state"] == "provider_returned"
+                assert job.provider_receipt["cost_state"] == "reconciliation_required"
+                assert job.provider_receipt["actual_cost_paise"] is None
                 assert (
                     await database.scalar(
                         select(func.count())

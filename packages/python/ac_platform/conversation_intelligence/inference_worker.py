@@ -8,6 +8,7 @@ No HTTP 200 is treated as a settled invoice or as human quality approval.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any, Protocol, cast
@@ -81,6 +82,96 @@ _VALIDATION_LABELS = {
     "C4": "facts_schema_and_source_binding",
     "C5": "coaching_schema_and_source_binding",
 }
+
+_RECEIPT_USAGE_KEYS = frozenset(
+    {
+        "promptTokenCount",
+        "candidatesTokenCount",
+        "thoughtsTokenCount",
+        "cachedContentTokenCount",
+        "totalTokenCount",
+        "prompt_tokens",
+        "completion_tokens",
+        "total_tokens",
+        "input_tokens",
+        "output_tokens",
+    }
+)
+
+
+def _safe_receipt_identifier(value: Any) -> str | None:
+    """Keep provider/model metadata bounded and content-free in a receipt."""
+
+    if not isinstance(value, str) or not 1 <= len(value) <= 128:
+        return None
+    if not value[0].isalpha() or any(
+        character not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.:/-"
+        for character in value
+    ):
+        return None
+    return value
+
+
+def _safe_receipt_request_id(value: Any) -> str | None:
+    if not isinstance(value, str) or not 1 <= len(value) <= 128:
+        return None
+    if not all(character.isalnum() or character in "_-:" for character in value):
+        return None
+    return value
+
+
+def _safe_receipt_digest(value: Any) -> str | None:
+    if not isinstance(value, str) or len(value) != 64:
+        return None
+    if not all(character in "0123456789abcdef" for character in value):
+        return None
+    return value
+
+
+def _safe_receipt_usage(value: Any) -> dict[str, int]:
+    if not isinstance(value, Mapping):
+        return {}
+    return {
+        key: amount
+        for key, amount in value.items()
+        if isinstance(key, str)
+        and key in _RECEIPT_USAGE_KEYS
+        and type(amount) is int
+        and 0 <= amount <= 1_000_000_000
+    }
+
+
+def _is_provisional_receipt(value: Any) -> bool:
+    return isinstance(value, Mapping) and value.get("validation_state") == "provider_returned"
+
+
+def _provider_returned_receipt(
+    result: ProviderResult,
+    *,
+    idempotency_key: str,
+    run_id: UUID,
+    stage: str,
+) -> dict[str, Any]:
+    """Build bounded evidence before strict response validation can fail."""
+
+    return {
+        "schema": "ac.sales-xray.provider-receipt/1",
+        "idempotency_key": idempotency_key,
+        "provider": _safe_receipt_identifier(result.provider),
+        "model": _safe_receipt_identifier(result.model),
+        "input_sha256": _safe_receipt_digest(result.input_sha256),
+        "response_sha256": _safe_receipt_digest(result.response_sha256),
+        "provider_request_id": _safe_receipt_request_id(result.request_id),
+        "checkpoint_id": None,
+        "checkpoint_manifest_sha256": None,
+        "raw_blob_id": str(run_id),
+        "usage": _safe_receipt_usage(result.usage),
+        "cost_state": "reconciliation_required",
+        "actual_cost_paise": None,
+        "validation": _VALIDATION_LABELS[stage],
+        "validation_state": "provider_returned",
+        "human_approved": False,
+    }
 
 # Persist operationally useful categories, never arbitrary exception messages:
 # provider errors can contain a response body, transcript or credential URL.
@@ -354,13 +445,42 @@ class ConversationInferenceWorker:
             expected_bytes=len(result.raw_json),
         )
 
+    async def _record_provider_returned_receipt(
+        self,
+        work: Work,
+        *,
+        result: ProviderResult,
+        idempotency_key: str,
+        run_id: UUID,
+        stage: str,
+    ) -> None:
+        """Commit provider metadata before response validation can roll back."""
+
+        receipt = _provider_returned_receipt(
+            result,
+            idempotency_key=idempotency_key,
+            run_id=run_id,
+            stage=stage,
+        )
+        async with self.sessions() as db, db.begin():
+            job = await JobRepository(db).lock_for_dispatch(
+                work.job_id,
+                work.lease_token,
+                recovery_generation=work.recovery_generation,
+                provider_idempotency_key=idempotency_key,
+            )
+            await JobRepository(db).record_receipt(job, work.lease_token, receipt)
+
     async def _dispatch(self, work: Work) -> None:
         # Both media erasure and inference hold this fence BEFORE locking DB rows.
         async with _FencedExecutor(self.storage.root) as fenced:
             async with self.sessions() as db, db.begin():
                 job = await self._locked_job(db, work)
                 if job.provider_receipt is not None:
-                    # Receipt + checkpoint + completed run were committed together.
+                    if _is_provisional_receipt(job.provider_receipt):
+                        raise ConversationConflict("provider receipt validation is pending")
+                    # A validated receipt means the checkpoint and run were
+                    # committed together; only acknowledgement may be left.
                     await JobRepository(db).complete(job, work.lease_token)
                     return
                 if job.dispatch_started_at is not None:
@@ -409,6 +529,10 @@ class ConversationInferenceWorker:
                 scope.task.state = scope.run.state = "running"
                 reservation = transition.reservation
 
+            # Keep the durable effect fence across the provider call and raw
+            # response write, but end that transaction before committing the
+            # provider-returned receipt. Validation must never be able to roll
+            # that evidence back.
             async with self.sessions() as db, db.begin():
                 job = await JobRepository(db).lock_for_dispatch(
                     work.job_id,
@@ -432,6 +556,30 @@ class ConversationInferenceWorker:
                 async with asyncio.timeout(_EFFECT_SECONDS):
                     result = await self.broker.execute(reservation, payload)
                 await fenced.run(self._save_raw, scope, result)
+
+            await self._record_provider_returned_receipt(
+                work,
+                result=result,
+                idempotency_key=key,
+                run_id=scope.task.run_id,
+                stage=scope.task.stage,
+            )
+
+            async with self.sessions() as db, db.begin():
+                job = await JobRepository(db).lock_for_dispatch(
+                    work.job_id,
+                    work.lease_token,
+                    recovery_generation=work.recovery_generation,
+                    provider_idempotency_key=key,
+                )
+                if self.authority is None:
+                    scope = await self._scope(db, job)
+                else:
+                    with already_started_effect(
+                        environment=self.authority.environment,
+                        operations_tenant_id=self.authority.operations_tenant_id,
+                    ):
+                        scope = await self._scope(db, job)
                 output = self._validate(scope, result)
                 normalized = output.data()
                 checkpoint = replace(scope.plan.checkpoint, payload_sha256=content_hash(normalized))
@@ -479,9 +627,15 @@ class ConversationInferenceWorker:
                     "cost_state": "reconciliation_required",
                     "actual_cost_paise": None,
                     "validation": _VALIDATION_LABELS[scope.task.stage],
+                    "validation_state": "validated",
                     "human_approved": False,
                 }
-                await JobRepository(db).record_receipt(job, work.lease_token, receipt)
+                await JobRepository(db).record_receipt(
+                    job,
+                    work.lease_token,
+                    receipt,
+                    allow_provisional_upgrade=True,
+                )
                 minutes, budget = await service.accounts(scope.recording, scope.quoted)
                 transition = mark_uncertain(
                     MinuteAccount.from_dict(minutes.snapshot),
@@ -500,7 +654,11 @@ class ConversationInferenceWorker:
     ) -> None:
         async with self.sessions() as db, db.begin():
             job = await self._locked_job(db, work)
-            if job.provider_receipt is not None:
+            if job.provider_receipt is not None and not _is_provisional_receipt(
+                job.provider_receipt
+            ):
+                # A validated receipt means the checkpoint and run were
+                # committed; an acknowledgement retry is safe and idempotent.
                 await JobRepository(db).complete(job, work.lease_token)
                 return
             ambiguous = job.dispatch_started_at is not None

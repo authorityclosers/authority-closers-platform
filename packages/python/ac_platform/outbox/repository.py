@@ -1845,8 +1845,14 @@ class JobRepository:
         receipt: Mapping[str, Any],
         *,
         now: datetime | None = None,
+        allow_provisional_upgrade: bool = False,
     ) -> Job:
-        """Persist canonical provider evidence even if acknowledgement later loses its lease."""
+        """Persist canonical provider evidence even if acknowledgement later loses its lease.
+
+        A worker may first persist a bounded ``provider_returned`` receipt before
+        strict output validation.  Only that marker may be upgraded to the final
+        validated receipt, and only when the caller opts in explicitly.
+        """
 
         row = await self._get_job(job)
         normalized_receipt = dict(receipt)
@@ -1857,9 +1863,33 @@ class JobRepository:
             )
         receipt_digest = canonical_receipt_digest(normalized_receipt)
         if row.provider_receipt_digest is not None:
-            if row.provider_receipt_digest != receipt_digest:
+            if row.provider_receipt_digest == receipt_digest:
+                return row
+            existing = row.provider_receipt
+            if (
+                not allow_provisional_upgrade
+                or not isinstance(existing, Mapping)
+                or existing.get("validation_state") != "provider_returned"
+                or existing.get("idempotency_key") != receipt_key
+            ):
                 raise DuplicateIntentError("provider returned conflicting receipt evidence")
-            return row
+            current_time = _as_utc(now or utc_now())
+            locked = await self._get_job_for_update(row.id)
+            await self._require_lease(locked, lease_token, now=current_time)
+            locked_existing = locked.provider_receipt
+            if (
+                locked.provider_receipt_digest != row.provider_receipt_digest
+                or not isinstance(locked_existing, Mapping)
+                or locked_existing.get("validation_state") != "provider_returned"
+                or locked_existing.get("idempotency_key") != receipt_key
+            ):
+                raise DuplicateIntentError("provider returned conflicting receipt evidence")
+            locked.provider_receipt = normalized_receipt
+            locked.provider_receipt_digest = receipt_digest
+            locked.receipt_recorded_at = current_time
+            locked.updated_at = current_time
+            await self._session.flush()
+            return locked
         result = await self._session.execute(
             build_job_receipt_statement(
                 job_id=row.id,
