@@ -428,12 +428,21 @@ def _exercise_browser(backend: BrowserBackend, evidence: Path) -> None:
                 f"/v1/conversation/recordings/{backend.recording_id}/source"
             )
             assert page.locator("audio").evaluate("audio => audio.duration") == 1
-            page.locator("audio").evaluate("audio => { audio.currentTime = 0.5; }")
+            # Keep the real media clock slow enough to observe a seek after
+            # playback begins. A running clock cannot remain exactly at zero.
+            page.locator("audio").evaluate(
+                "audio => { audio.pause(); audio.playbackRate = 0.1; audio.currentTime = 0.5; }"
+            )
+            page.wait_for_function(
+                "(() => { const audio = document.querySelector('audio'); "
+                "return audio && !audio.seeking && audio.currentTime === 0.5; })()"
+            )
             page.get_by_role("tab", name="Call moments", exact=True).click()
             page.get_by_role("region", name="Sales call report").locator(
                 "button.studio-moment"
             ).first.click()
-            assert page.locator("audio").evaluate("audio => audio.currentTime") == 0
+            page.wait_for_function("document.querySelector('audio')?.paused === false")
+            assert 0 <= page.locator("audio").evaluate("audio => audio.currentTime") < 0.05
             source = context.request.get(
                 backend.origin + f"/v1/conversation/recordings/{backend.recording_id}/source",
                 headers={"Range": "bytes=4-99"},
