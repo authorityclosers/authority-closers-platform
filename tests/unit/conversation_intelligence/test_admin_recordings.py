@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
+from ac_platform.conversation_intelligence import admin_recordings
 from ac_platform.conversation_intelligence.admin_recordings import (
     _cost_view,
     _cursor,
@@ -50,14 +51,32 @@ def test_owner_view_does_not_expose_guest_visitor_identity() -> None:
     assert "visitor_id" not in view
 
 
-def test_status_prioritizes_verified_report_and_preserves_failed_run() -> None:
+def test_status_prioritizes_new_held_plan_over_old_report() -> None:
     recording = SimpleNamespace(state="ready")
     run = SimpleNamespace(state="failed")
     plan = SimpleNamespace(state="held")
 
-    assert _status(recording, run, plan, has_report=True) == "completed"
+    assert _status(recording, run, plan, has_report=True) == "held"
     assert _status(recording, run, plan, has_report=False) == "held"
     assert _status(recording, run, None, has_report=False) == "failed"
+
+
+def test_status_keeps_report_for_newer_native_zero_cost_run() -> None:
+    recording = SimpleNamespace(state="ready")
+    run = SimpleNamespace(id=uuid4(), state="running")
+    report_run_id = uuid4()
+
+    assert (
+        _status(
+            recording,
+            run,
+            None,
+            has_report=True,
+            report_run_id=report_run_id,
+            provider_run_ids=frozenset(),
+        )
+        == "completed"
+    )
 
 
 def test_cost_view_never_invents_actual_cost_without_settlement() -> None:
@@ -66,6 +85,62 @@ def test_cost_view_never_invents_actual_cost_without_settlement() -> None:
     assert view["reservation_paise"] is None
     assert view["estimate_paise"] is None
     assert view["actual_paise"] is None
+    assert view["actual_state"] == "not_settled"
+
+
+def test_cost_view_aggregates_latest_plan_stages_from_shared_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    first_run, second_run = uuid4(), uuid4()
+    first_quote, second_quote, scope_id = uuid4(), uuid4(), uuid4()
+    first_task = SimpleNamespace(run_id=first_run, quote_id=first_quote)
+    second_task = SimpleNamespace(run_id=second_run, quote_id=second_quote)
+    quote_rows = {
+        first_quote: SimpleNamespace(quote={"max_cost_paise": 1_100}),
+        second_quote: SimpleNamespace(quote={"max_cost_paise": 500}),
+    }
+    first_reservation = SimpleNamespace(
+        reservation_id=str(first_run),
+        state="reserved",
+        quote=SimpleNamespace(max_cost_paise=1_100),
+        settlement=None,
+    )
+    second_reservation = SimpleNamespace(
+        reservation_id=str(second_run),
+        state="reserved",
+        quote=SimpleNamespace(max_cost_paise=500),
+        settlement=None,
+    )
+    monkeypatch.setattr(
+        admin_recordings.Quote,
+        "from_dict",
+        classmethod(lambda _cls, value: SimpleNamespace(max_cost_paise=value["max_cost_paise"])),
+    )
+    monkeypatch.setattr(
+        admin_recordings.BudgetAccount,
+        "from_dict",
+        classmethod(
+            lambda _cls, _value: SimpleNamespace(
+                reservations=(first_reservation, second_reservation)
+            )
+        ),
+    )
+
+    view = _cost_view(
+        second_task,
+        quote_rows[second_quote],
+        None,
+        plan_tasks=(first_task, second_task),
+        quote_rows=quote_rows,
+        budget_rows={
+            scope_id: SimpleNamespace(scope_id=scope_id, snapshot={}),
+        },
+    )
+
+    assert view["reservation_paise"] == 1_600
+    assert view["estimate_paise"] == 1_600
+    assert view["actual_paise"] is None
+    assert view["reservation_state"] == "reserved"
     assert view["actual_state"] == "not_settled"
 
 

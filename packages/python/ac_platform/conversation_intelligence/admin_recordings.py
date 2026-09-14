@@ -9,7 +9,7 @@ immutable reservation contains a settlement receipt.
 from __future__ import annotations
 
 import base64
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping, Sequence
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
@@ -29,9 +29,10 @@ from ac_platform.conversation_intelligence.application import (
     ConversationError,
     utc,
 )
-from ac_platform.conversation_intelligence.entitlements import MinuteAccount, Quote
+from ac_platform.conversation_intelligence.entitlements import BudgetAccount, MinuteAccount, Quote
 from ac_platform.conversation_intelligence.guest_models import ConversationGuestSubmission
 from ac_platform.conversation_intelligence.models import (
+    ConversationBudgetAccount,
     ConversationCheckpoint,
     ConversationInferenceTask,
     ConversationMinuteAccount,
@@ -154,11 +155,19 @@ def _status(
     plan: ConversationProcessingPlan | None,
     *,
     has_report: bool,
+    report_run_id: UUID | None = None,
+    provider_run_ids: frozenset[UUID] = frozenset(),
 ) -> str:
-    if has_report:
-        return "completed"
     if plan is not None and plan.state == "held":
         return "held"
+    if plan is not None and plan.state == "active":
+        return "processing"
+    if plan is not None and plan.state == "cancelled":
+        return "cancelled"
+    # A native C1 run can be newer than a verified report without invalidating
+    # that report. Provider runs, and an explicitly newer plan, do supersede it.
+    if has_report and (run is None or run.id == report_run_id or run.id not in provider_run_ids):
+        return "completed"
     if run is not None:
         if run.state == "running":
             return "processing"
@@ -174,42 +183,77 @@ def _cost_view(
     task: ConversationInferenceTask | None,
     quote_row: ConversationQuote | None,
     minute_row: ConversationMinuteAccount | None,
+    *,
+    plan_tasks: Iterable[ConversationInferenceTask] | None = None,
+    quote_rows: Mapping[UUID, ConversationQuote] | None = None,
+    budget_rows: Mapping[UUID, ConversationBudgetAccount] | None = None,
 ) -> dict[str, Any]:
-    estimate: int | None = None
-    quote: Quote | None = None
-    if quote_row is not None:
-        try:
-            quote = Quote.from_dict(quote_row.quote)
-        except (TypeError, ValueError, KeyError):
-            quote = None
-        if quote is not None:
-            estimate = quote.max_cost_paise
+    tasks = list(plan_tasks) if plan_tasks is not None else ([] if task is None else [task])
+    quote_by_id = dict(quote_rows or {})
+    if task is not None and quote_row is not None:
+        quote_by_id.setdefault(task.quote_id, quote_row)
 
-    reservation = None
-    if task is not None and minute_row is not None:
+    estimates: list[int] = []
+    for item in tasks:
+        row = quote_by_id.get(item.quote_id)
+        if row is None:
+            continue
         try:
-            account = MinuteAccount.from_dict(minute_row.snapshot)
-            reservation = next(
-                (item for item in account.reservations if item.reservation_id == str(task.run_id)),
-                None,
-            )
+            quote = Quote.from_dict(row.quote)
         except (TypeError, ValueError, KeyError):
-            reservation = None
+            continue
+        estimates.append(quote.max_cost_paise)
 
-    actual: int | None = None
-    reservation_paise: int | None = None
-    state: str | None = None
-    if reservation is not None:
-        state = reservation.state
-        # Keep the immutable reserved cap visible after settlement/release;
-        # reservation_state tells the operator whether it is still held.
-        reservation_paise = reservation.quote.max_cost_paise
-        if reservation.settlement is not None:
-            actual = reservation.settlement.actual_paise
+    reservations: dict[str, Any] = {}
+    for budget_row in (budget_rows or {}).values():
+        try:
+            budget_account = BudgetAccount.from_dict(budget_row.snapshot)
+        except (TypeError, ValueError, KeyError):
+            continue
+        reservations.update({item.reservation_id: item for item in budget_account.reservations})
+    if minute_row is not None:
+        try:
+            minute_account = MinuteAccount.from_dict(minute_row.snapshot)
+            for reservation in minute_account.reservations:
+                reservations.setdefault(reservation.reservation_id, reservation)
+        except (TypeError, ValueError, KeyError):
+            pass
+
+    task_reservations = [reservations.get(str(item.run_id)) for item in tasks]
+    complete_reservations = bool(tasks) and all(item is not None for item in task_reservations)
+    reservation_values = [item for item in task_reservations if item is not None]
+    reservation_paise = (
+        sum(item.quote.max_cost_paise for item in reservation_values)
+        if complete_reservations
+        else None
+    )
+    settlement_values = [item.settlement for item in reservation_values]
+    actual = (
+        sum(item.actual_paise for item in settlement_values if item is not None)
+        if complete_reservations and all(item is not None for item in settlement_values)
+        else None
+    )
+    states = {item.state for item in reservation_values}
+    if not complete_reservations:
+        state: str | None = None
+    elif len(states) == 1:
+        state = next(iter(states))
+    elif "reconciliation_required" in states:
+        state = "reconciliation_required"
+    elif states & {"in_flight", "uncertain"}:
+        state = "uncertain" if "uncertain" in states else "in_flight"
+    elif "reserved" in states:
+        state = "reserved"
+    elif "settled" in states:
+        state = "settled"
+    elif "released" in states:
+        state = "released"
+    else:
+        state = next(iter(states))
     return {
         "currency": "INR",
         "reservation_paise": reservation_paise,
-        "estimate_paise": estimate,
+        "estimate_paise": sum(estimates) if estimates else None,
         "actual_paise": actual,
         "reservation_state": state,
         "actual_state": (
@@ -225,10 +269,20 @@ def _cost_view(
 class AdminConversationRecordings:
     """Operations-tenant recording inventory with immutable read scope."""
 
-    def __init__(self, application: ConversationApplication, operations_tenant_id: UUID) -> None:
+    def __init__(
+        self,
+        application: ConversationApplication,
+        operations_tenant_id: UUID,
+        *,
+        recording_tenant_ids: Sequence[UUID] | None = None,
+    ) -> None:
         self.application = application
         self.database: AsyncSession = application.database
         self.operations_tenant_id = operations_tenant_id
+        candidates = (operations_tenant_id, *(recording_tenant_ids or ()))
+        if any(type(identifier) is not UUID for identifier in candidates):
+            raise ValueError("recording tenant scope must contain UUIDs")
+        self.recording_tenant_ids = tuple(dict.fromkeys(candidates))
 
     async def _admit(self, actor: ActorContext) -> None:
         if actor.tenant_id != self.operations_tenant_id:
@@ -269,27 +323,27 @@ class AdminConversationRecordings:
                 guest,
                 and_(
                     guest.recording_id == ConversationRecording.id,
-                    guest.tenant_id == self.operations_tenant_id,
+                    guest.tenant_id == ConversationRecording.tenant_id,
                 ),
             )
             .outerjoin(
                 usage,
                 and_(
                     usage.id == guest.usage_id,
-                    usage.tenant_id == self.operations_tenant_id,
+                    usage.tenant_id == guest.tenant_id,
                 ),
             )
             .outerjoin(
                 claim,
                 and_(
                     claim.visitor_id == usage.visitor_id,
-                    claim.tenant_id == self.operations_tenant_id,
+                    claim.tenant_id == usage.tenant_id,
                 ),
             )
             .outerjoin(guest_person, guest_person.id == usage.person_id)
             .outerjoin(claim_person, claim_person.id == claim.person_id)
             .where(
-                ConversationRecording.tenant_id == self.operations_tenant_id,
+                ConversationRecording.tenant_id.in_(self.recording_tenant_ids),
                 ConversationRecording.state != "deleted",
             )
             .distinct()
@@ -337,7 +391,7 @@ class AdminConversationRecordings:
         guest_rows = (
             await self.database.scalars(
                 select(ConversationGuestSubmission).where(
-                    ConversationGuestSubmission.tenant_id == self.operations_tenant_id,
+                    ConversationGuestSubmission.tenant_id.in_(self.recording_tenant_ids),
                     ConversationGuestSubmission.recording_id.in_(recording_ids),
                 )
             )
@@ -348,7 +402,7 @@ class AdminConversationRecordings:
             (
                 await self.database.scalars(
                     select(ConversationAcquisitionUsage).where(
-                        ConversationAcquisitionUsage.tenant_id == self.operations_tenant_id,
+                        ConversationAcquisitionUsage.tenant_id.in_(self.recording_tenant_ids),
                         ConversationAcquisitionUsage.id.in_(usage_ids),
                     )
                 )
@@ -362,7 +416,7 @@ class AdminConversationRecordings:
             (
                 await self.database.scalars(
                     select(ConversationVisitorClaim).where(
-                        ConversationVisitorClaim.tenant_id == self.operations_tenant_id,
+                        ConversationVisitorClaim.tenant_id.in_(self.recording_tenant_ids),
                         ConversationVisitorClaim.visitor_id.in_(visitor_ids),
                     )
                 )
@@ -384,7 +438,7 @@ class AdminConversationRecordings:
         runs = (
             await self.database.scalars(
                 select(ConversationRun).where(
-                    ConversationRun.tenant_id == self.operations_tenant_id,
+                    ConversationRun.tenant_id.in_(self.recording_tenant_ids),
                     ConversationRun.recording_id.in_(recording_ids),
                 )
             )
@@ -393,7 +447,7 @@ class AdminConversationRecordings:
         plans = (
             await self.database.scalars(
                 select(ConversationProcessingPlan).where(
-                    ConversationProcessingPlan.tenant_id == self.operations_tenant_id,
+                    ConversationProcessingPlan.tenant_id.in_(self.recording_tenant_ids),
                     ConversationProcessingPlan.recording_id.in_(recording_ids),
                     ConversationProcessingPlan.erased_at.is_(None),
                 )
@@ -403,7 +457,7 @@ class AdminConversationRecordings:
         tasks = (
             await self.database.scalars(
                 select(ConversationInferenceTask).where(
-                    ConversationInferenceTask.tenant_id == self.operations_tenant_id,
+                    ConversationInferenceTask.tenant_id.in_(self.recording_tenant_ids),
                     ConversationInferenceTask.recording_id.in_(recording_ids),
                     ConversationInferenceTask.erased_at.is_(None),
                 )
@@ -415,7 +469,7 @@ class AdminConversationRecordings:
             (
                 await self.database.scalars(
                     select(ConversationQuote).where(
-                        ConversationQuote.tenant_id == self.operations_tenant_id,
+                        ConversationQuote.tenant_id.in_(self.recording_tenant_ids),
                         ConversationQuote.id.in_(quote_ids),
                     )
                 )
@@ -424,19 +478,34 @@ class AdminConversationRecordings:
             else []
         )
         quotes = {row.id: row for row in quote_rows}
+        budget_scope_ids = {
+            row.budget_scope_id for row in quote_rows if row.budget_scope_id is not None
+        }
+        budget_rows = (
+            (
+                await self.database.scalars(
+                    select(ConversationBudgetAccount).where(
+                        ConversationBudgetAccount.scope_id.in_(budget_scope_ids)
+                    )
+                )
+            ).all()
+            if budget_scope_ids
+            else []
+        )
+        budgets = {row.scope_id: row for row in budget_rows}
         minute_rows = (
             await self.database.scalars(
                 select(ConversationMinuteAccount).where(
-                    ConversationMinuteAccount.tenant_id == self.operations_tenant_id,
+                    ConversationMinuteAccount.tenant_id.in_(self.recording_tenant_ids),
                     ConversationMinuteAccount.person_id.in_({row.person_id for row in page}),
                 )
             )
         ).all()
-        minutes = {row.person_id: row for row in minute_rows}
+        minutes = {(row.tenant_id, row.person_id): row for row in minute_rows}
         checkpoints = (
             await self.database.scalars(
                 select(ConversationCheckpoint).where(
-                    ConversationCheckpoint.tenant_id == self.operations_tenant_id,
+                    ConversationCheckpoint.tenant_id.in_(self.recording_tenant_ids),
                     ConversationCheckpoint.recording_id.in_(recording_ids),
                     ConversationCheckpoint.stage == "C1",
                     ConversationCheckpoint.erased_at.is_(None),
@@ -447,7 +516,7 @@ class AdminConversationRecordings:
         drafts = (
             await self.database.scalars(
                 select(ConversationReportDraft).where(
-                    ConversationReportDraft.tenant_id == self.operations_tenant_id,
+                    ConversationReportDraft.tenant_id.in_(self.recording_tenant_ids),
                     ConversationReportDraft.recording_id.in_(recording_ids),
                     ConversationReportDraft.erased_at.is_(None),
                 )
@@ -484,6 +553,9 @@ class AdminConversationRecordings:
                 (candidate for candidate in runs if candidate.id == report_run_id),
                 None,
             )
+            provider_run_ids = frozenset(
+                candidate.run_id for candidate in tasks if hasattr(candidate, "run_id")
+            )
             review_eligible = bool(
                 has_report
                 and report_run is not None
@@ -519,7 +591,14 @@ class AdminConversationRecordings:
                         ),
                         "source": duration_source,
                     },
-                    "status": _status(recording, run, plan, has_report=has_report),
+                    "status": _status(
+                        recording,
+                        run,
+                        plan,
+                        has_report=has_report,
+                        report_run_id=report_run_id,
+                        provider_run_ids=provider_run_ids,
+                    ),
                     "latest_run": (
                         None
                         if run is None
@@ -549,7 +628,28 @@ class AdminConversationRecordings:
                         quotes.get(latest_tasks[recording.id].quote_id)
                         if latest_tasks.get(recording.id) is not None
                         else None,
-                        minutes.get(recording.person_id),
+                        minutes.get((recording.tenant_id, recording.person_id)),
+                        plan_tasks=(
+                            [
+                                candidate
+                                for candidate in tasks
+                                if candidate.recording_id == recording.id
+                                and (
+                                    plan is None
+                                    or (
+                                        candidate.generation == plan.generation
+                                        and utc(candidate.created_at) >= utc(plan.created_at)
+                                    )
+                                )
+                            ]
+                            or (
+                                [latest_tasks[recording.id]]
+                                if latest_tasks.get(recording.id)
+                                else []
+                            )
+                        ),
+                        quote_rows=quotes,
+                        budget_rows=budgets,
                     ),
                 }
             )

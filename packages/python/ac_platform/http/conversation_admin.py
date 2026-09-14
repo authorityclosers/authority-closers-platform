@@ -108,8 +108,15 @@ def install_conversation_admin_http(
         if operations_tenant_id is None:
             raise HTTPException(503, "Conversation recordings are not configured.")
         try:
+            recording_tenant_ids = (
+                (settings.public_learner_tenant_id,)
+                if settings.public_learner_tenant_id is not None
+                else ()
+            )
             return await AdminConversationRecordings(
-                ConversationApplication(auth.database), operations_tenant_id
+                ConversationApplication(auth.database),
+                operations_tenant_id,
+                recording_tenant_ids=recording_tenant_ids,
             ).list(
                 auth.resolved.actor,
                 limit=limit,
