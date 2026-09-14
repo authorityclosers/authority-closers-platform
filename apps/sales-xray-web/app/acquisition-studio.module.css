@@ -50,7 +50,9 @@
   border-radius: 9px;
   background: #edf2ff;
   color: var(--action);
-  font: 700 11px/1 ui-monospace, monospace;
+  font:
+    700 11px/1 ui-monospace,
+    monospace;
 }
 .stepHeader > span:last-child {
   display: grid;

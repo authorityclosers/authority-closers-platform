@@ -34,7 +34,9 @@ export function AcquisitionShell({
   const toggleRef = useRef<HTMLButtonElement>(null);
   const hasToggled = useRef(false);
   const accountHref = authenticated ? "/calls" : "/login";
-  const accountLabel = authenticated ? "Account & saved calls" : "Profile & account";
+  const accountLabel = authenticated
+    ? "Account & saved calls"
+    : "Profile & account";
   const breadcrumbLabel = active === "calls" ? "Saved calls" : "Analyse a call";
 
   useEffect(() => {
@@ -57,7 +59,11 @@ export function AcquisitionShell({
         aria-label="Sales Xray navigation"
       >
         <div className={styles.sidebarTop}>
-          <Link className={styles.brand} href={homeHref} aria-label="Sales Xray home">
+          <Link
+            className={styles.brand}
+            href={homeHref}
+            aria-label="Sales Xray home"
+          >
             <span className={styles.brandMark} aria-hidden="true">
               <BrandMark />
             </span>
@@ -138,7 +144,11 @@ export function AcquisitionShell({
           </span>
           <span className={styles.accountCopy}>
             <strong>{authenticated ? "AC account" : "Guest workspace"}</strong>
-            <small>{authenticated ? "Account and saved calls" : "Private browser session"}</small>
+            <small>
+              {authenticated
+                ? "Account and saved calls"
+                : "Private browser session"}
+            </small>
           </span>
           {authenticated ? (
             <AccountNavigation compact />
@@ -156,7 +166,11 @@ export function AcquisitionShell({
       </aside>
       <div className={styles.content}>
         <header className={styles.mobileHeader}>
-          <Link className={styles.mobileBrand} href={homeHref} aria-label="Sales Xray home">
+          <Link
+            className={styles.mobileBrand}
+            href={homeHref}
+            aria-label="Sales Xray home"
+          >
             <span className={styles.brandMark} aria-hidden="true">
               <BrandMark />
             </span>
@@ -168,13 +182,17 @@ export function AcquisitionShell({
           <AccountNavigation compact />
         </header>
         <div className={styles.breadcrumb} aria-label="Current location">
-          Sales Xray <ChevronRight size={13} aria-hidden="true" /> <span>{breadcrumbLabel}</span>
+          Sales Xray <ChevronRight size={13} aria-hidden="true" />{" "}
+          <span>{breadcrumbLabel}</span>
         </div>
         <main id="main-content" className={styles.main}>
           {children}
         </main>
       </div>
-      <nav className={styles.bottomNav} aria-label="Mobile Sales Xray navigation">
+      <nav
+        className={styles.bottomNav}
+        aria-label="Mobile Sales Xray navigation"
+      >
         <Link
           className={`${styles.bottomLink} ${active === "analyse" ? styles.bottomActive : ""}`}
           href={homeHref}

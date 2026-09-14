@@ -32,8 +32,13 @@
   top: 1rem;
 }
 .sidebar {
+  position: sticky;
+  top: 0;
+  align-self: start;
   display: flex;
-  min-height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow-y: auto;
   flex-direction: column;
   gap: 1.5rem;
   padding: 1.5rem 1.15rem 1.2rem;
@@ -409,7 +414,11 @@
     min-height: 4.25rem;
     padding: 0.75rem 1rem;
     border-bottom: 1px solid var(--shell-border);
-    background: color-mix(in srgb, var(--shell-surface) 94%, var(--shell-canvas));
+    background: color-mix(
+      in srgb,
+      var(--shell-surface) 94%,
+      var(--shell-canvas)
+    );
   }
   .mobileBrand {
     min-width: 0;
@@ -471,9 +480,14 @@
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 0.25rem;
-    padding: 0.45rem max(0.65rem, env(safe-area-inset-left)) max(0.5rem, env(safe-area-inset-bottom));
+    padding: 0.45rem max(0.65rem, env(safe-area-inset-left))
+      max(0.5rem, env(safe-area-inset-bottom));
     border-top: 1px solid var(--shell-border);
-    background: color-mix(in srgb, var(--shell-surface) 96%, var(--shell-canvas));
+    background: color-mix(
+      in srgb,
+      var(--shell-surface) 96%,
+      var(--shell-canvas)
+    );
     box-shadow: 0 -0.5rem 1.5rem #10233a10;
   }
   .bottomLink {

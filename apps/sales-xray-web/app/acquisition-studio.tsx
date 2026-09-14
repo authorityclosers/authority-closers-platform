@@ -400,7 +400,13 @@ export function AcquisitionStudio({
       7000,
     );
     return () => window.clearInterval(timer);
-  }, [hasUncertainStage, progress?.state, progressStageKey, result, submission]);
+  }, [
+    hasUncertainStage,
+    progress?.state,
+    progressStageKey,
+    result,
+    submission,
+  ]);
 
   function choose(next: File | undefined) {
     if (!next || inFlight.current || submission) return;
@@ -708,22 +714,18 @@ export function AcquisitionStudio({
             "Your call",
             "Your analysis",
             reportReady ? "Report ready" : "Your next step",
-          ].map(
-            (label, index) => (
-              <span
-                key={label}
-                aria-current={
-                  (report ? 2 : submission ? 1 : 0) === index
-                    ? "step"
-                    : undefined
-                }
-              >
-                <b>{index + 1}</b>
-                {label}
-                {index < 2 && <ChevronDown size={15} />}
-              </span>
-            ),
-          )}
+          ].map((label, index) => (
+            <span
+              key={label}
+              aria-current={
+                (report ? 2 : submission ? 1 : 0) === index ? "step" : undefined
+              }
+            >
+              <b>{index + 1}</b>
+              {label}
+              {index < 2 && <ChevronDown size={15} />}
+            </span>
+          ))}
         </nav>
         {!submission && !report && (
           <div className="studio-intro">
@@ -779,9 +781,7 @@ export function AcquisitionStudio({
             }}
             onDragOver={(event) => event.preventDefault()}
             onDragLeave={(event) => {
-              if (
-                !event.currentTarget.contains(event.relatedTarget as Node)
-              )
+              if (!event.currentTarget.contains(event.relatedTarget as Node))
                 setDragActive(false);
             }}
             onDrop={(event) => {
@@ -791,7 +791,10 @@ export function AcquisitionStudio({
                 choose(event.dataTransfer.files?.[0]);
             }}
           >
-            <div className={styles.stepHeader} aria-label="Current analysis step">
+            <div
+              className={styles.stepHeader}
+              aria-label="Current analysis step"
+            >
               <span className={styles.stepNumber}>
                 {reportReady ? "03" : submission ? "02" : "01"}
               </span>
@@ -850,9 +853,7 @@ export function AcquisitionStudio({
                 >
                   <Upload size={18} /> Choose audio file
                 </label>
-                <p className={styles.dropHint}>
-                  Or drop an audio file here
-                </p>
+                <p className={styles.dropHint}>Or drop an audio file here</p>
                 <p className="muted">
                   MP3, MPEG, WAV, M4A, OGG or FLAC
                   <br />
